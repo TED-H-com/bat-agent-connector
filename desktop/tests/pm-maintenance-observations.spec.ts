@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
@@ -54,7 +55,7 @@ function explanations(f:ReturnType<typeof fixture>){
 }
 for(const native of [false,true])test.describe(native?'Native maintenance evidence':'Web maintenance evidence',()=>{
   test('incomplete zero counts never claim idle and actions use exact current versions',async({page})=>{
-    const f=fixture();f.add();f.add('workload');await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();f.add();f.add('workload');await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');
     await expect(section(page)).toContainText('These counts are partial; zero does not establish that no work exists.');
     await expect(section(page)).toContainText('Not enough evidence to determine workload');expect(f.state.writes).toHaveLength(0);
     await section(page).getByText('Review blockers and coverage gaps',{exact:true}).click();
@@ -66,14 +67,14 @@ for(const native of [false,true])test.describe(native?'Native maintenance eviden
     expect(f.state.writes[1].body.action).toBe('pm.workload.capture');expect(f.parent.base.state.writes).toHaveLength(0);
   });
   test('lost response retains the original key across new policy versions',async({page})=>{
-    const f=fixture();f.state.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();f.state.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');
     await section(page).getByRole('button',{name:'Read GitHub workload',exact:true}).click();await expect(section(page)).toContainText('Observation reply unavailable');
-    f.parent.addPolicy();await page.reload();await request(page,'pm.github.observe').getByRole('button',{name:'Check original request',exact:true}).click();
+    f.parent.addPolicy();await page.reload();await openPmSection(page, 'dependencies' , 'ui_policy');await request(page,'pm.github.observe').getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(2);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);expect(f.state.ops.size).toBe(1);
   });
   test('source revocation clears evidence and a late read cannot restore it',async({page})=>{
-    const f=fixture();f.add();explanations(f);await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();f.add();explanations(f);await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');
     await expect(section(page)).toContainText('Incomplete coverage');let release!:()=>void;f.state.defer=new Promise(resolve=>{release=resolve;});
     const before=f.state.reads.length;await section(page).getByRole('button',{name:'Refresh saved observations',exact:true}).click();
     await expect.poll(()=>f.state.reads.length).toBeGreaterThan(before);
@@ -84,13 +85,13 @@ for(const native of [false,true])test.describe(native?'Native maintenance eviden
     await expect(section(page).getByRole('button',{name:'Read GitHub workload',exact:true})).toBeDisabled();
   });
   test('hidden latest evidence differs from no observation and readers cannot create evidence',async({page})=>{
-    const f=fixture();f.state.hidden=true;f.parent.base.state.role='reader';await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();f.state.hidden=true;f.parent.base.state.role='reader';await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');
     await expect(section(page)).toContainText('latest evidence is outside your current source access');
     await expect(section(page)).not.toContainText('No saved observation');await expect(section(page).getByRole('button',{name:'Read GitHub workload',exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(0);
   });
   test('mismatched sources refuse capture and expired idle evidence is qualified',async({page})=>{
     const f=fixture(),row=f.add('workload');row.document.classification='idle_candidate';row.document.expires_at=1;
-    await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await expect(section(page)).toContainText('This observation is expired');
+    await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');await expect(section(page)).toContainText('This observation is expired');
     f.state.mismatch=true;await section(page).getByRole('button',{name:'Refresh saved observations',exact:true}).click();
     await expect(section(page)).toContainText('Observation evidence does not match this workspace');
     await expect(section(page).locator('[data-observation-kind]')).toHaveCount(0);await expect(section(page).getByRole('button',{name:'Capture saved workload',exact:true})).toBeDisabled();
@@ -98,7 +99,7 @@ for(const native of [false,true])test.describe(native?'Native maintenance eviden
 });
 for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`workload explanations ${native?'Tauri':'Web'} ${locale} keep completion and manual blockers distinct`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale}),page=await context.newPage();try{
-    const f=fixture();explanations(f);await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);
+    const f=fixture();explanations(f);await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');
     const box=section(page),exclusions=box.locator('[data-workload-exclusions]');
     await expect(box).toContainText(locale==='en'?'This workload observation does not assess quality.':'這份工作量觀察不做品質評估。');
     await expect(box).toContainText(locale==='en'?'Not enough evidence to determine workload':'證據不足，無法判定工作量');
@@ -115,12 +116,12 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`worklo
 });
 test('unknown public exclusion reasons remain literal and do not infer completed work',async({page})=>{
   const f=fixture(),row=explanations(f);row.document.exclusions=[{kind:'session',id:'fixture-bat/<img src=x onerror=alert(1)>',reason:'future_observation_reason'}];
-  await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);const box=section(page),excluded=box.locator('[data-workload-exclusions]');await excluded.locator('summary').click();
+  await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');const box=section(page),excluded=box.locator('[data-workload-exclusions]');await excluded.locator('summary').click();
   await expect(excluded).toContainText('future_observation_reason');await expect(excluded).toContainText('fixture-bat/<img src=x onerror=alert(1)>');await expect(excluded.locator('img')).toHaveCount(0);
   await expect(excluded).not.toContainText('recorded completion evidence');await expect(box).toContainText('Not enough evidence to determine workload');expect(f.state.writes).toEqual([]);
 });
 test('malformed exclusion source clears the whole saved projection instead of hiding only that fact',async({page})=>{
-  const f=fixture(),row=explanations(f);await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);
+  const f=fixture(),row=explanations(f);await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');
   await expect(section(page).locator('[data-workload-exclusions]')).toHaveCount(1);row.document.exclusions[0].id={unknown:'not an original source identity'};
   await section(page).getByRole('button',{name:'Refresh saved observations',exact:true}).click();
   await expect(section(page)).toContainText('Observation evidence does not match this workspace');await expect(section(page).locator('[data-observation-kind]')).toHaveCount(0);
@@ -128,7 +129,7 @@ test('malformed exclusion source clears the whole saved projection instead of hi
 });
 for(const language of ['en','zh-TW'])for(const width of [390,768,1440])test(`maintenance evidence ${language} ${width}`,async({browser,baseURL},testInfo)=>{
   const context=await browser.newContext({baseURL,locale:language,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();f.add();explanations(f);
-  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);
+  const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');
   await expect(section(page)).toContainText(language==='en'?'These counts are partial':'這些數量只有部分涵蓋');
   await section(page).locator('[data-workload-exclusions] > summary').click();
   await section(page).getByText(language==='en'?'Review blockers and coverage gaps':'檢視阻止原因與涵蓋缺口',{exact:true}).click();

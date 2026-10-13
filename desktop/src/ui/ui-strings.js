@@ -19,7 +19,7 @@ export const statusVocabulary = Object.freeze({
   historical: {en: 'Historical', 'zh-TW': '歷史', tone: 'neutral'},
 });
 export const uiStrings = {
-  en: {ui_close: 'Close', ui_back: 'Back', ui_retry: 'Retry', ui_remove: 'Remove {text}', ui_loading: 'Loading',
+  en: {ui_report_versions: 'Versions', ui_save_snapshot: 'Save snapshot', ui_compare: 'Compare', ui_print: 'Print', ui_export_brief: 'Export brief', ui_close: 'Close', ui_back: 'Back', ui_retry: 'Retry', ui_remove: 'Remove {text}', ui_loading: 'Loading',
     ui_more: 'More actions', ui_expand: 'Expand {title}', ui_collapse: 'Collapse {title}',
     ui_overview: 'Overview', ui_discussions: 'Discussions', ui_requirements: 'Requirements', ui_schedule: 'Schedule',
     ui_dependencies: 'Dependencies', ui_issues: 'Issues & changes', ui_agents: 'Agents', ui_board: 'Board',
@@ -35,7 +35,7 @@ export const uiStrings = {
     ui_meetings: 'Meetings', ui_sprints: 'Sprints', ui_follow_up: 'Follow-ups', ui_repairs: 'Maintenance repairs',
     ui_maintenance_review: 'Maintenance review', ui_policy: 'Maintenance policy', ui_baselines: 'Release baselines',
     ui_batches: 'Work batches', ui_observations: 'AHP observations', ui_deliveries: 'Work deliveries'},
-  'zh-TW': {ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
+  'zh-TW': {ui_report_versions: '版本', ui_save_snapshot: '儲存快照', ui_compare: '比較', ui_print: '列印', ui_export_brief: '匯出摘要', ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
     ui_more: '更多操作', ui_expand: '展開{title}', ui_collapse: '收合{title}',
     ui_overview: '專案總覽', ui_discussions: '討論', ui_requirements: '需求', ui_schedule: '時程',
     ui_dependencies: '技術相依', ui_issues: '問題與變更', ui_agents: 'Agent 資源', ui_board: '工作看板',

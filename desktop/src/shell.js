@@ -11,6 +11,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   const workTitle = h('h2', {class: 'shell-nav-label'}, t('ui_work'));
   aside.prepend(workspaceBlock, projectNav, workTitle);
   let workspace = null, workspaces = [], views = [], currentView = '', currentRoute = '', disposed = false, serial = 0;
+  let renderSignature = null;
   let menus = [], creator = null, phase = null;
   const media = matchMedia('(min-width: 1000px)');
   const scrim = h('div', {class: 'shell-scrim', hidden: true, onclick: () => closeDrawer()});
@@ -51,6 +52,8 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     menus.push(control); return control;
   }
   function render() {
+    const signature = JSON.stringify([workspace, workspaces, views, currentView, currentRoute, phase, threadCount, threadMore]);
+    if (signature === renderSignature) return; renderSignature = signature;
     for (const control of menus) control.dispose(); menus = [];
     workspaceBlock.replaceChildren(); projectNav.replaceChildren(); crumb.replaceChildren();
     aside.classList.toggle('has-pm-context', Boolean(workspace)); workTitle.hidden = !workspace;

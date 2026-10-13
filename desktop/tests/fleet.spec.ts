@@ -102,7 +102,7 @@ test("Fleet control unavailable on other platforms", async ({page}) => {
 test("delayed settings status cannot mount Fleet into a later route", async ({page}) => {
   await setup(page, {connected: true, delayStatus: true});
   await expect.poll(() => page.evaluate(() => typeof (window as any).__fleet.releaseStatus)).toBe("function");
-  await page.locator(".workspace-tools > summary").click();
+  await page.getByRole('button', {name: 'Tools', exact: true}).click();
   await page.getByRole("link", {name: "Sessions", exact: true}).click();
   await expect(page.getByRole("heading", {name: "Sessions", exact: true})).toBeVisible();
   await page.evaluate(async () => {(window as any).__fleet.releaseStatus(); await new Promise(resolve => requestAnimationFrame(resolve));});

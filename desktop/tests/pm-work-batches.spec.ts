@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {mkdir} from 'node:fs/promises';
@@ -9,9 +10,9 @@ const fill=async(page:any)=>{await start(page).getByLabel('Reason for this reque
 const evidence=async(page:any,f:any)=>{await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await proof(page).getByLabel('Delivered integration receipt',{exact:true}).selectOption(f.state.deliveries[0].operation_id+':1');await proof(page).getByLabel('Saved GitHub observation',{exact:true}).selectOption(f.state.observations[0].observation_id);await proof(page).getByLabel('Reason for this request',{exact:true}).fill('Match the original delivered revision');};
 
 for(const native of [false,true])test(`mounted ${native?'native':'browser'} workspace selects and starts one fixed batch`,async({page})=>{
-  const f=batchFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);
+  const f=batchFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);await openPmSection(page,'requirements','ui_packages');
   await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
-  await handoff(page).locator('details>summary').first().click();await add(page);await fill(page);await start(page).locator('button[type=submit]').click();
+  await openPmSection(page,'requirements','ui_handoff');await handoff(page).locator('details>summary').first().click();await openPmSection(page,'board','ui_batches');await add(page);await fill(page);await start(page).locator('button[type=submit]').click();
   await expect(panel(page).getByRole('heading',{name:'Original batch and result evidence',exact:true})).toBeVisible();
   expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.action).toBe(START);expect(f.base.state.writes).toHaveLength(0);
   f.state.historyDeny=true;f.base.fixture.base.state.cursor++;

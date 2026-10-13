@@ -100,7 +100,7 @@ for (const native of [false,true]) {
     const {dispatch}=conversationFixture(); await mountConversation(page,native,dispatch);
     await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>new Promise((_,reject)=>Object.assign(window,{rejectCopy:reject}))}}));
     await page.goto('/dashboard/#/session/demo/session-1'); await page.getByRole('button',{name:'Copy original',exact:true}).last().click();
-    await page.locator('.workspace-tools > summary').click();
+    await page.getByRole('button', {name: 'Tools', exact: true}).click();
     await page.getByRole('link',{name:'Sessions',exact:true}).click();
     await expect(page.locator('.conversation')).toHaveCount(0);
     await page.evaluate(()=>(window as any).rejectCopy(new Error('denied')));

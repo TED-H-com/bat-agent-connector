@@ -3581,7 +3581,7 @@ function mountWorkspace(name) {
   document.getElementById("main").className = ["session", "work"].includes(name) ? "session-view" : name === "pm" ? "pm-view" : "";
   document.getElementById("workspace-menu").hidden = !state.token;
   shell?.setRoute(name); workspaceNav?.select(location.hash || "#/home");
-  if (!state.token) document.getElementById('nav').replaceChildren(h('a', {href: '#/settings'}, t('ui_settings')));
+  if (!state.token) document.getElementById('nav').replaceChildren(h('a', {href: '#/settings', class: 'on'}, t('ui_settings')));
 }
 let teardown = null;
 let generation = 0;

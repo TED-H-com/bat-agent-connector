@@ -29,9 +29,9 @@ export function workspaceCharter({h, t, api, alive, workspaceId, permitted, form
   const previous = h('button', {type: 'button', class: 'secondary', 'aria-label': t('wb_previous'), onclick: () => move(-1)}, '←');
   const next = h('button', {type: 'button', class: 'secondary', 'aria-label': t('wb_next'), onclick: () => move(1)}, '→');
   const picker = h('select', {'aria-label': t('wb_history'), onchange: () => void select(picker.value)});
-  const compare = h('button', {type: 'button', class: 'secondary', onclick: () => void comparePrevious()}, t('wb_compare'));
+  const compare = h('button', {'data-report-compare': '', type: 'button', class: 'secondary', onclick: () => void comparePrevious()}, t('wb_compare'));
   const more = h('button', {type: 'button', class: 'secondary', onclick: () => void loadMore()}, t('wb_history_more'));
-  const print = h('button', {type: 'button', class: 'secondary', onclick: () => window.print()}, t('wb_print'));
+  const print = h('button', {'data-report-print': '', type: 'button', class: 'secondary', onclick: () => window.print()}, t('wb_print'));
   const box = h('section', {class: 'pm-charter', 'data-pm-charter': ''},
     h('header', {class: 'pm-heading'}, h('h2', {}, t('wb_charter')),
       h('button', {type: 'button', class: 'primary', onclick: () => onDiscuss(snapshot)}, t('wb_discuss'))),

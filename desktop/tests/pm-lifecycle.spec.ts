@@ -1,3 +1,4 @@
+import {openPmPanel} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId,pmRoute} from './pm-fixture.ts';
@@ -69,7 +70,7 @@ async function edit(page:any,kind:string){
 for(const native of [false,true])test.describe(native?'native lifecycle':'web lifecycle',()=>{
   test('initial thread mount retains lifecycle forms until the complete read can enable them',async({page})=>{
     const f=fixture();let release:()=>void=()=>{};f.state.readGate=new Promise<void>(resolve=>release=resolve);
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     const editor=await edit(page,'pause'),reason=editor.getByLabel('Reason and retained context');
     try{await expect(reason).toBeDisabled();expect(f.state.writes).toHaveLength(0);}finally{release();}
     await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
@@ -79,7 +80,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     expect(f.state.writes[0].body.preconditions).toEqual({expected_lifecycle_revision:0});
   });
   test('Idea remains a readable stage without dispatching or changing its discussion',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Idea');await expect(activity(page)).toContainText('Discussions, Sprint commitments');
     const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('planning');
     await editor.getByLabel('Reason and retained context').fill('Organize the selected direction; keep other ideas open.');
@@ -89,7 +90,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     expect(f.base.state.thread.mode).toBe('idea');expect(f.base.state.writes).toHaveLength(0);await expect(page.getByRole('tab')).toHaveCount(0);
   });
   test('pause distinguishes unknown in-flight results and explicit retention does not restart them',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     const editor=await edit(page,'pause');await editor.getByLabel('Reason and retained context').fill('Pause new investment.');
     await editor.getByRole('button',{name:'Pause new work',exact:true}).click();
     await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Paused for new work · existing work needs reconciliation');
@@ -103,7 +104,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     expect(f.base.state.writes).toHaveLength(0);
   });
   test('lost pause acknowledgement recovers the same key and original revision',async({page})=>{
-    const f=fixture();f.state.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.state.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     const editor=await edit(page,'pause');await editor.getByLabel('Reason and retained context').fill('Keep this exact stop intent.');
     await editor.getByRole('button',{name:'Pause new work',exact:true}).click();await expect(editor).toContainText('Reply unavailable');
     f.base.state.cursor++;await expect(activity(page).locator('.pm-lifecycle-stage')).toContainText('Paused for new work',{timeout:10000});
@@ -112,7 +113,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);expect(f.state.ops.size).toBe(1);
   });
   test('a changed revision preserves the draft until the owner explicitly reviews the new state',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     const editor=await edit(page,'close');await editor.getByLabel('Reason and retained context').fill('Preserve this closure rationale.');
     f.state.revision++;f.base.state.cursor++;await expect(editor).toContainText('Your draft still uses the earlier version',{timeout:10000});
     await expect(editor.getByRole('button',{name:'Close this management workspace',exact:true})).toBeDisabled();
@@ -123,7 +124,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     expect(f.state.writes.some(call=>call.body.action.includes('archive'))).toBe(false);
   });
   test('reopening explicitly selects a stage without replaying stopped requests',async({page})=>{
-    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     const editor=await edit(page,'reopen');await editor.getByLabel('Management stage').selectOption('development');
     await editor.getByLabel('Reason and retained context').fill('Resume selected development; review old work separately.');
     await editor.getByRole('button',{name:'Reopen workspace',exact:true}).click();await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Development');
@@ -131,7 +132,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     expect(f.state.inflight[0].operation_status).toBe('unknown');
   });
   test('legacy and filtered states do not infer missing decisions or hide an effective stop',async({page})=>{
-    const f=fixture();f.state.stage=null;f.state.status='unclassified';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.state.stage=null;f.state.status='unclassified';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Its previous work has not been reclassified.');
     f.stop();f.state.filtered=true;f.base.state.cursor++;
     await expect(activity(page).locator('.pm-lifecycle-stage')).toContainText('Paused for new work',{timeout:10000});
@@ -140,26 +141,26 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     expect(f.state.writes).toHaveLength(0);
   });
   test('source read failure clears prior facts and blocks new investment',async({page})=>{
-    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Keep the released version');f.state.failed=true;f.base.state.cursor++;
     await expect(activity(page)).toContainText('Activity controls are unavailable',{timeout:10000});
     await expect(activity(page)).not.toContainText('Keep the released version');await expect(activity(page).locator('[data-pm-lifecycle-operation]')).toHaveCount(0);
     const editor=await edit(page,'reopen');await expect(editor.getByRole('button',{name:'Reopen workspace',exact:true})).toBeDisabled();
   });
   test('a withdrawn historical source removes its metadata and any late private detail',async({page})=>{
-    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await activity(page).locator('[data-pm-lifecycle-history]>summary').click();
     f.state.historyDenied=true;await activity(page).locator('[data-pm-lifecycle-history] details>summary').click();
     await expect(activity(page)).toContainText('Original transition source unavailable');
     await expect(activity(page)).not.toContainText('Keep the released version');
   });
   test('a non-owner observes the effective stage without management authority',async({page})=>{
-    const f=fixture();f.base.state.role='contributor';f.state.admin=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.base.state.role='contributor';f.state.admin=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Only the current workspace owner');
     const editor=await edit(page,'pause');await expect(editor.getByRole('button',{name:'Pause new work',exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(0);
   });
   test('new execution preparation stays gated while manual notes remain available',async({page})=>{
-    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page).locator('.pm-lifecycle-stage')).toContainText('Paused for new work');
     await expect(page.locator('[data-pm-action="pm.run.prepare"] button[type=submit]')).toBeDisabled();
     await expect(page.locator('[data-pm-action="pm.message.append"] button[type=submit]')).toBeEnabled();
@@ -167,7 +168,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   });
   test('filtered inflight pages and withdrawn retention reasons remain visibly incomplete',async({page})=>{
     const f=fixture();f.stop();f.state.pageFiltered=true;f.state.inflight[0].disposition='retained';f.state.inflight[0].retention_visibility_filtered=true;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     const row=activity(page).locator('[data-pm-lifecycle-operation]');await row.locator('summary').click();
     await expect(row).toContainText('Some records are outside your current source access');
     await expect(activity(page).getByText('Some records are outside your current source access. Visible rows are not a complete project total.',{exact:true})).toHaveCount(2);
@@ -175,7 +176,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
 });
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`lifecycle layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();f.stop();
-  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await expect(activity(page).locator('.pm-lifecycle-stage')).toBeVisible();
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');await expect(activity(page).locator('.pm-lifecycle-stage')).toBeVisible();
   await activity(page).locator('[data-pm-lifecycle-controls]>summary').click();await activity(page).locator('[data-pm-lifecycle-intent="reopen"]>summary').click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.evaluate(()=>scrollTo(0,0));
@@ -184,19 +185,19 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`li
 
 for(const native of [false,true])test(`fixed Maintain evidence survives unknown reply ${native?'IPC':'browser'}`,async({page})=>{
   const f=fixture();f.state.stage='development';f.state.maintenance={policy_id:'pmmp_'+'1'.repeat(32),policy_version:1,baseline_id:'pmrb_'+'2'.repeat(32),snapshot_id:'pmwl_'+'3'.repeat(32),snapshot_digest:'4'.repeat(64)};
-  await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+  await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
   const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('maintain');
   await editor.getByLabel('Reason and retained context').fill('Use the original complete workload');
   f.state.lost=true;await editor.getByRole('button',{name:'Record stage',exact:true}).click();
   await expect(editor).toContainText('Reply unavailable');const original=structuredClone(f.state.writes[0]);
   expect(original.body.params.maintenance_ref).toEqual(f.state.maintenance);
   f.state.maintenance.snapshot_digest='5'.repeat(64);f.state.stage='paused';f.state.revision++;
-  await page.reload();await edit(page,'set_stage');await action(page,'set_stage').getByRole('button',{name:'Check original request',exact:true}).click();
+  await page.reload();await openPmPanel(page, 'ui_change_phase');await edit(page,'set_stage');await action(page,'set_stage').getByRole('button',{name:'Check original request',exact:true}).click();
   await expect.poll(()=>f.state.writes.length).toBe(2);expect(f.state.writes[1]).toEqual(original);
 });
 test('a newer Maintain observation requires explicit review before a fresh decision',async({page})=>{
   const f=fixture();f.state.stage='development';f.state.maintenance={policy_id:'pmmp_'+'1'.repeat(32),policy_version:1,baseline_id:'pmrb_'+'2'.repeat(32),snapshot_id:'pmwl_'+'3'.repeat(32),snapshot_digest:'4'.repeat(64)};
-  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
   const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('maintain');await editor.getByLabel('Reason and retained context').fill('Review this observed idle state');
   f.state.maintenance.snapshot_digest='6'.repeat(64);f.base.state.cursor++;
   await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeDisabled({timeout:10000});

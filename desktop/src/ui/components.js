@@ -90,7 +90,7 @@ export function menu({button: trigger, items}) {
   const panel = h('div', {class: 'ui-menu-panel', role: 'menu', id: uid(), hidden: true});
   const root = h('div', {class: 'ui-menu'}, trigger, panel);
   trigger.setAttribute('aria-haspopup', 'menu'); trigger.setAttribute('aria-controls', panel.id); trigger.setAttribute('aria-expanded', 'false');
-  const controls = items.map(item => h(item.href ? 'a' : 'button', {type: item.href ? null : 'button', href: item.href, role: 'menuitem',
+  const controls = items.map(item => h(item.href ? 'a' : 'button', {type: item.href ? null : 'button', href: item.href, role: 'menuitem', 'data-menu-key': item.key,
     tabindex: -1, disabled: item.disabled, onclick: () => {close(); item.onSelect?.();}}, nodeIcon(item.icon), item.label));
   panel.append(...controls);
   function close(restore = true) {panel.hidden = true; trigger.setAttribute('aria-expanded', 'false');

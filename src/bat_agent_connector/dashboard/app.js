@@ -125,6 +125,11 @@ var statusVocabulary = Object.freeze({
 });
 var uiStrings = {
 	en: {
+		ui_report_versions: "Versions",
+		ui_save_snapshot: "Save snapshot",
+		ui_compare: "Compare",
+		ui_print: "Print",
+		ui_export_brief: "Export brief",
 		ui_close: "Close",
 		ui_back: "Back",
 		ui_retry: "Retry",
@@ -186,6 +191,11 @@ var uiStrings = {
 		ui_deliveries: "Work deliveries"
 	},
 	"zh-TW": {
+		ui_report_versions: "版本",
+		ui_save_snapshot: "儲存快照",
+		ui_compare: "比較",
+		ui_print: "列印",
+		ui_export_brief: "匯出摘要",
 		ui_close: "關閉",
 		ui_back: "返回",
 		ui_retry: "重試",
@@ -8422,6 +8432,23 @@ function iconButton({ icon, label, ...attrs }) {
 function pageHeader({ title, pill, meta, actions = [], overflow } = {}) {
 	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, h$1("h1", {}, title), pill), meta ? h$1("p", { class: "ui-meta" }, meta) : null), h$1("div", { class: "ui-header-actions" }, ...actions, overflow));
 }
+function sectionCard({ title, actions = [], body } = {}) {
+	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
+}
+var disclosures = new Map();
+function disclosure({ label, body, open = false, key }) {
+	const root = h$1("details", {
+		class: "ui-disclosure",
+		open: key && disclosures.has(key) ? disclosures.get(key) : open
+	}, h$1("summary", {}, icon("chevron-right"), label), body);
+	root.addEventListener("toggle", () => {
+		if (!key || !root.isConnected) return;
+		disclosures.delete(key);
+		disclosures.set(key, root.open);
+		if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);
+	});
+	return root;
+}
 function menu({ button: trigger, items }) {
 	const panel = h$1("div", {
 		class: "ui-menu-panel",
@@ -8437,6 +8464,7 @@ function menu({ button: trigger, items }) {
 		type: item.href ? null : "button",
 		href: item.href,
 		role: "menuitem",
+		"data-menu-key": item.key,
 		tabindex: -1,
 		disabled: item.disabled,
 		onclick: () => {
@@ -8698,6 +8726,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	const workTitle = h$1("h2", { class: "shell-nav-label" }, t("ui_work"));
 	aside.prepend(workspaceBlock, projectNav, workTitle);
 	let workspace = null, workspaces = [], views = [], currentView = "", currentRoute = "", disposed = false, serial = 0;
+	let renderSignature = null;
 	let menus = [], creator = null, phase = null;
 	const media = matchMedia("(min-width: 1000px)");
 	const scrim = h$1("div", {
@@ -8810,6 +8839,18 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 		return control;
 	}
 	function render() {
+		const signature = JSON.stringify([
+			workspace,
+			workspaces,
+			views,
+			currentView,
+			currentRoute,
+			phase,
+			threadCount,
+			threadMore
+		]);
+		if (signature === renderSignature) return;
+		renderSignature = signature;
 		for (const control of menus) control.dispose();
 		menus = [];
 		workspaceBlock.replaceChildren();
@@ -9100,9 +9141,25 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	};
 }
 //#endregion
+//#region src/ui/view-state.js
+var states$1 = new Map();
+function viewState(namespace, workspaceId, view) {
+	const key = JSON.stringify([
+		namespace,
+		workspaceId,
+		view
+	]);
+	const value = states$1.get(key) || {};
+	states$1.delete(key);
+	states$1.set(key, value);
+	if (states$1.size > 40) states$1.delete(states$1.keys().next().value);
+	return value;
+}
+//#endregion
 //#region src/pm-resources.js
-function workspaceResources({ h, t, api, alive, workspaceId, errorBox }) {
-	let serial = 0, active = false, busy = false, paused = false, timer = null, data = null, selected = null, signature = "";
+function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox }) {
+	const preference = viewState(namespace, workspaceId, "agents");
+	let serial = 0, active = false, busy = false, paused = Boolean(preference.paused), timer = null, data = null, selected = preference.selected || null, signature = "";
 	const body = h("tbody"), status = h("div", { role: "status" }), count = h("p", { class: "muted" }), observed = h("p", { class: "muted" });
 	const detail = h("aside", {
 		class: "pm-rtm-detail",
@@ -9145,6 +9202,10 @@ function workspaceResources({ h, t, api, alive, workspaceId, errorBox }) {
 			else refresh();
 		}
 	}, t("res_pause"));
+	filter.value = preference.filter || "";
+	windowSelect.value = preference.period || "7";
+	pause.textContent = t(paused ? "res_resume" : "res_pause");
+	pause.setAttribute("aria-pressed", String(paused));
 	const table = h("div", {
 		class: "pm-rtm-table",
 		role: "region",
@@ -9344,6 +9405,12 @@ function workspaceResources({ h, t, api, alive, workspaceId, errorBox }) {
 			}
 		},
 		dispose() {
+			Object.assign(preference, {
+				selected,
+				paused,
+				filter: filter.value,
+				period: windowSelect.value
+			});
 			active = false;
 			clearTimeout(timer);
 			withdraw();
@@ -10458,6 +10525,7 @@ function workspaceCharter({ h, t, api, alive, workspaceId, permitted, form, inpu
 		onchange: () => void select(picker.value)
 	});
 	const compare = h("button", {
+		"data-report-compare": "",
 		type: "button",
 		class: "secondary",
 		onclick: () => void comparePrevious()
@@ -10468,6 +10536,7 @@ function workspaceCharter({ h, t, api, alive, workspaceId, permitted, form, inpu
 		onclick: () => void loadMore()
 	}, t("wb_history_more"));
 	const print = h("button", {
+		"data-report-print": "",
 		type: "button",
 		class: "secondary",
 		onclick: () => window.print()
@@ -10820,15 +10889,16 @@ function requirementReviews(plan, requirement, reviews) {
 	if (!ids.length || ids.some((id) => !id) || !plan.document_digest || !plan.adoption?.scope_revision) return [];
 	return reviews.filter((row) => row.qualified === true && row.applicable === true && row.assessment?.document?.qualified === true && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption?.scope_revision && ids.every((id) => row.assessment.document.criteria?.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === "accepted")));
 }
-function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }) {
+function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps, errorBox }) {
+	const preference = viewState(namespace, workspaceId, "requirements");
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
-	let selected = null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = "", renderedDetail = "", deliveryPages = 1;
+	let selected = preference.selected || null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = "", renderedDetail = "", deliveryPages = 1;
 	const pages = {
 		work: 1,
 		issues: 1,
 		reviews: 1
-	}, cursors = {}, expanded = new Set(), order = [];
+	}, cursors = {}, expanded = new Set(preference.expanded || []), order = [];
 	const status = h("div", { role: "status" }), count = h("p", { class: "muted" }), tableBody = h("tbody");
 	const filter = h("input", {
 		type: "search",
@@ -10836,6 +10906,7 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 		placeholder: t("wb_filter"),
 		oninput: () => renderTable()
 	});
+	filter.value = preference.filter || "";
 	const detail = h("aside", {
 		class: "pm-rtm-detail",
 		"data-rtm-detail": "",
@@ -11246,6 +11317,14 @@ function workspaceTraceability({ h, t, api, alive, workspaceId, caps, errorBox }
 		element,
 		refresh,
 		withdraw,
+		dispose: () => {
+			Object.assign(preference, {
+				selected,
+				expanded: [...expanded],
+				filter: filter.value
+			});
+			withdraw();
+		},
 		activate: async () => {
 			if (!active) {
 				active = true;
@@ -25301,7 +25380,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			view: threadId ? "discussions" : workbench?.selected() || view || "discussions",
 			views: threadId ? availableProjectViews(caps()) : workbench?.views || (workspace ? ["discussions"] : []),
 			create: showCreate,
-			phase: lifecycle?.phase?.() ? t("ui_phase_" + lifecycle.phase()) : null,
+			phase: lifecycle?.phase?.() && [
+				"idea",
+				"planning",
+				"development",
+				"maintain",
+				"paused",
+				"closed"
+			].includes(lifecycle.phase()) ? t("ui_phase_" + lifecycle.phase()) : null,
 			threadCount: lastThreadList?.threads?.length ?? null,
 			threadMore: Boolean(lastThreadList?.next_cursor)
 		});
@@ -25675,6 +25761,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
 		caps,
 		errorBox
@@ -25685,87 +25772,205 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
 		errorBox
 	}) : null;
 	if (resources) body.insertBefore(resources.element, content);
+	const drawersHome = h("div", { hidden: true }), phasePill = h("span", {
+		class: "ui-pill tone-neutral",
+		hidden: true
+	});
+	body.append(drawersHome);
+	heading.querySelector(".ui-title-row").append(phasePill);
+	let detailPanel = null;
+	function openPanel(label, node) {
+		if (!node || !loaded) return;
+		detailPanel?.close();
+		const home = node.parentNode, next = node.nextSibling;
+		detailPanel = inspector({
+			title: label,
+			onClose: () => {
+				home.insertBefore(node, next?.parentNode === home ? next : null);
+				detailPanel = null;
+			}
+		});
+		node.hidden = false;
+		detailPanel.body.append(node);
+		main.append(detailPanel);
+	}
+	if (lifecycle) drawersHome.append(lifecycle.element);
+	const headerActions = heading.querySelector(".ui-header-actions");
+	const primary = brief?.box.querySelector(":scope > header .primary");
+	if (primary) {
+		headerActions.prepend(primary);
+		brief.box.querySelector(":scope > header")?.remove();
+	}
+	const reportTools = h("div", {
+		class: "pm-report-tools",
+		"data-pm-report-tools": ""
+	});
 	if (charter && brief) {
+		for (const node of brief.box.querySelectorAll(":scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]")) reportTools.append(node);
+		drawersHome.append(reportTools);
+	}
+	const reportMenu = reportTools.children.length ? menu({
+		button: button({
+			label: t("ui_report"),
+			"data-pm-report-menu": "",
+			icon: "chevron-down"
+		}),
+		items: [
+			{
+				key: "versions",
+				label: t("ui_report_versions"),
+				onSelect: () => openPanel(t("ui_report"), reportTools)
+			},
+			{
+				label: t("ui_save_snapshot"),
+				onSelect: () => openPanel(t("ui_report"), reportTools)
+			},
+			{
+				label: t("ui_compare"),
+				onSelect: () => reportTools.querySelector("button[data-report-compare]")?.click()
+			},
+			{
+				label: t("ui_print"),
+				onSelect: () => reportTools.querySelector("button[data-report-print]")?.click()
+			},
+			{
+				label: t("ui_export_brief"),
+				onSelect: () => openPanel(t("ui_report"), reportTools)
+			}
+		]
+	}) : null;
+	if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
+	const overflow = menu({
+		button: iconButton({
+			icon: "more-horizontal",
+			label: t("ui_more"),
+			"data-pm-overflow": ""
+		}),
+		items: [...lifecycle ? [{
+			key: "phase",
+			label: t("ui_change_phase"),
+			onSelect: () => openPanel(t("ui_change_phase"), lifecycle.element)
+		}] : [], ...evidence ? [{
+			key: "settings",
+			label: t("ui_workspace_settings"),
+			onSelect: () => openPanel(t("ui_workspace_settings"), evidence.box)
+		}] : []]
+	});
+	if (lifecycle || evidence) headerActions.append(overflow);
+	function secondary(label, node) {
+		if (!node) return null;
+		const card = sectionCard({ body: disclosure({
+			label: t(label),
+			key: JSON.stringify([
+				namespace,
+				workspaceId,
+				label
+			]),
+			body: node
+		}) });
+		card.dataset.pmSection = label;
+		node.classList.add("pm-secondary-content");
+		return card;
+	}
+	const groups = [];
+	if (workspaceId && !threadId) {
+		const definitions = [
+			[
+				"overview",
+				brief?.box || (lifecycle ? h("div") : null),
+				[]
+			],
+			[
+				"discussions",
+				content,
+				[["ui_meetings", meetings?.element]]
+			],
+			[
+				"requirements",
+				traceability?.element,
+				[
+					["ui_quality", qualityReviews?.element],
+					["ui_evidence", evidence?.box],
+					["ui_deliveries", deliveries?.element],
+					["ui_specs", specifications?.element],
+					["ui_materialization", materialization?.element],
+					["ui_packages", engineering?.element],
+					["ui_handoff", handoff?.element],
+					["ui_publication", issues?.element]
+				]
+			],
+			[
+				"schedule",
+				roadmap?.box,
+				[["ui_sprints", sprints?.box]]
+			],
+			[
+				"dependencies",
+				null,
+				[["ui_policy", maintenancePolicy?.element], ["ui_baselines", releaseBaselines?.element]]
+			],
+			[
+				"issues",
+				governance?.element,
+				[
+					["ui_repairs", maintenanceRepairs?.element],
+					["ui_maintenance_review", maintenanceReview?.element],
+					["ui_follow_up", followUp?.element]
+				]
+			],
+			[
+				"agents",
+				resources?.element,
+				[["ui_observations", ahp?.element]]
+			],
+			[
+				"board",
+				kanban?.element,
+				[["ui_batches", workBatches?.element]]
+			]
+		];
+		for (const [id, primarySection, secondaries] of definitions) {
+			const sections = [primarySection, ...secondaries.map(([label, node]) => secondary(label, node))].filter(Boolean);
+			if (!sections.length) continue;
+			const region = h("div", { "data-pm-region": id }, ...sections);
+			body.append(region);
+			if (primarySection) {
+				primarySection.classList.add("pm-primary-content");
+				for (const repeated of primarySection.querySelectorAll(":scope > h2, :scope > header h2")) repeated.hidden = true;
+			}
+			groups.push({
+				id,
+				sections: [region]
+			});
+		}
 		workbench = projectViews({
 			h,
 			t,
 			namespace,
 			workspaceId,
 			view,
-			groups: [
-				{
-					id: "charter",
-					sections: [brief.box]
-				},
-				{
-					id: "agents",
-					sections: [resources?.element]
-				},
-				{
-					id: "rtm",
-					sections: [traceability?.element]
-				},
-				{
-					id: "board",
-					sections: [kanban?.element]
-				},
-				{
-					id: "planning",
-					sections: [
-						roadmap?.box,
-						sprints?.box,
-						meetings?.element,
-						qualityReviews?.element,
-						followUp?.element
-					]
-				},
-				{
-					id: "governance",
-					sections: [governance?.element]
-				},
-				{
-					id: "workspace",
-					sections: [
-						content,
-						lifecycle?.element,
-						evidence?.box,
-						engineering?.element,
-						materialization?.element,
-						handoff?.element,
-						workBatches?.element,
-						issues?.element,
-						specifications?.element,
-						ahp?.element
-					]
-				},
-				{
-					id: "maintenance",
-					sections: [
-						releaseBaselines?.element,
-						maintenancePolicy?.element,
-						maintenanceRepairs?.element,
-						maintenanceReview?.element
-					]
-				}
-			].map((group) => ({
-				...group,
-				sections: group.sections.filter(Boolean)
-			})),
+			groups,
 			onSelect: (id) => {
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
 				if (id === "requirements") traceability?.activate();
+				detailPanel?.close();
+				if (primary) primary.hidden = id !== "overview";
+				if (reportMenu) reportMenu.hidden = id !== "overview";
 				publishContext();
 			}
 		});
-		body.insertBefore(content, status.nextSibling);
 		workbench.apply();
+		if (primary) primary.hidden = workbench.selected() !== "overview";
+		if (reportMenu) reportMenu.hidden = workbench.selected() !== "overview";
 	}
 	const sourceSections = () => [
+		...groups.flatMap((group) => group.sections),
 		content,
 		resources?.element,
 		traceability?.element,
@@ -26482,6 +26687,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			nativeAnalysis?.update(runs?.runs || []);
 			for (const section of sourceSections()) section.hidden = false;
 			workbench?.apply();
+			const stage = lifecycle?.phase?.();
+			phasePill.hidden = !stage;
+			phasePill.textContent = stage && [
+				"idea",
+				"planning",
+				"development",
+				"maintain",
+				"paused",
+				"closed"
+			].includes(stage) ? t("ui_phase_" + stage) : "";
 			publishContext();
 			if (workbench?.selected() === "requirements") await traceability?.activate();
 			resources?.setActive(workbench?.selected() === "agents");
@@ -26508,6 +26723,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				maintenancePolicy?.withdraw();
 				maintenanceRepairs?.withdraw();
 				maintenanceReview?.withdraw();
+				detailPanel?.close();
+				phasePill.hidden = true;
 				title.textContent = t("pm_title");
 				workspaceList.replaceChildren();
 				lastThreadList = null;
@@ -26612,7 +26829,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		sequence++;
 		off();
 		createPanel?.close();
-		traceability?.withdraw();
+		detailPanel?.close();
+		reportMenu?.dispose();
+		overflow.dispose();
+		traceability?.dispose();
 		resources?.dispose();
 		proposalReview?.dispose();
 		ahp?.dispose();
@@ -40988,7 +41208,10 @@ function mountWorkspace(name) {
 	document.getElementById("workspace-menu").hidden = !state.token;
 	shell?.setRoute(name);
 	workspaceNav?.select(location.hash || "#/home");
-	if (!state.token) document.getElementById("nav").replaceChildren(h("a", { href: "#/settings" }, t("ui_settings")));
+	if (!state.token) document.getElementById("nav").replaceChildren(h("a", {
+		href: "#/settings",
+		class: "on"
+	}, t("ui_settings")));
 }
 var teardown = null;
 var generation = 0;

@@ -1,3 +1,4 @@
+import {openPmPanel} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
@@ -8,9 +9,9 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toBeVisible();await expect(charter(page).locator('[data-charter-section]')).toHaveCount(6);
     await expect(page.locator('[data-pm-kanban]')).toBeHidden();await expect(charter(page)).toContainText('Recovery progress');
-    await charter(page).getByRole('button',{name:'Compare with previous summary',exact:true}).click();
+    await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare with previous summary',exact:true}).click();
     await expect(charter(page)).toContainText('Summary changes');await expect(charter(page).locator('.pm-charter-comparison')).toContainText('Login PR merge recorded');
-    await charter(page).getByRole('button',{name:'Previous summary',exact:true}).click();
+    await page.getByRole('button',{name:'Previous summary',exact:true}).click();await page.getByRole('button',{name:'Close',exact:true}).click();
     await expect(charter(page)).toContainText('Scope agreed');await expect(charter(page)).not.toContainText('Login PR merge recorded');
     f.plan.document.sections.scope.statements[0].value='A later live plan statement';f.base.state.cursor++;
     await expect.poll(()=>f.state.reads.filter(path=>path.includes('/snapshots/')).length).toBeGreaterThan(4);
@@ -22,7 +23,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   test('partial and empty Charter remain usable without fabricated quota or adopted direction',async({page})=>{
     const f=workbenchFixture();f.state.snapshots=[];await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toContainText('Incomplete information is welcome');
-    await charter(page).getByRole('button',{name:'Discuss with PM',exact:true}).click();
+    await page.getByRole('button',{name:'Discuss with PM',exact:true}).click();
     await expect(page.locator('[data-pm-action="pm.thread.create"]')).toBeVisible();
     expect(f.base.state.writes).toHaveLength(0);
   });
@@ -40,18 +41,18 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   });
   test('snapshot lost reply recovers its original request and expected plan version',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);f.state.lost=true;
-    const form=charter(page).locator('[data-pm-action="pm.snapshot.create"]');
+    await openPmPanel(page,'ui_report');const form=page.locator('[data-pm-action="pm.snapshot.create"]');
     await form.getByRole('button',{name:'Save project snapshot',exact:true}).click();await expect(form).toContainText('Reply unavailable');
-    f.base.state.planHead.version=5;await page.reload();await form.getByRole('button',{name:'Check original request',exact:true}).click();
-    await expect(charter(page).getByLabel('Summary version')).toHaveValue('pmsnap_'+'3'.repeat(32));
+    f.base.state.planHead.version=5;await page.reload();await openPmPanel(page,'ui_report');await form.getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect(page.getByLabel('Summary version')).toHaveValue('pmsnap_'+'3'.repeat(32));
     expect(f.state.writes).toHaveLength(2);expect(f.state.writes[1]).toEqual(f.state.writes[0]);expect(f.state.snapshots).toHaveLength(3);
   });
   test('comparison withdrawal removes both summary and comparison facts',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toContainText('Recovery progress');f.state.denySnapshot=true;
-    await charter(page).getByRole('button',{name:'Compare with previous summary',exact:true}).click();
+    await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare with previous summary',exact:true}).click();
     await expect(charter(page)).toContainText('Your token lacks this scope');await expect(charter(page)).not.toContainText('Members can reliably');
-    await expect(charter(page).getByRole('button',{name:'Print summary',exact:true})).toBeDisabled();
+    await expect(page.getByRole('button',{name:'Print summary',exact:true})).toBeDisabled();
   });
   test('RTM uses exact revisions, distinct work and an Issue with two PRs and three attempts',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);

@@ -1,4 +1,4 @@
-import {pageHeader, iconButton, inspector, statusPill} from './ui/components.js';
+import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu} from './ui/components.js';
 import {projectViews, rememberProjectView, availableProjectViews} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
 import {workspaceCharter} from './pm-charter.js';
@@ -243,7 +243,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   function publishContext() {
     onContext({workspace, workspaces: lastList, view: threadId ? 'discussions' : workbench?.selected() || view || 'discussions',
       views: threadId ? availableProjectViews(caps()) : workbench?.views || (workspace ? ['discussions'] : []), create: showCreate,
-      phase: lifecycle?.phase?.() ? t('ui_phase_' + lifecycle.phase()) : null,
+      phase: lifecycle?.phase?.() && ['idea','planning','development','maintain','paused','closed'].includes(lifecycle.phase()) ? t('ui_phase_' + lifecycle.phase()) : null,
       threadCount: lastThreadList?.threads?.length ?? null, threadMore: Boolean(lastThreadList?.next_cursor)});
   }
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
@@ -329,29 +329,84 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       onSelectionChange:(id,ref)=>{if(ref)qualitySelections.set(id,ref);else qualitySelections.delete(id);}}) : null;
   if(qualityReviews)body.insertBefore(qualityReviews.element,sprints?.box||content);
   const traceability = charter && brief && kanban
-    ? workspaceTraceability({h, t, api, alive, workspaceId, caps, errorBox}) : null;
+    ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
   const resources = !threadId && caps()?.features?.pm_resources
-    ? workspaceResources({h, t, api, alive, workspaceId, errorBox}) : null;
+    ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox}) : null;
   if (resources) body.insertBefore(resources.element, content);
-  if (charter && brief) {
-    workbench = projectViews({h, t, namespace, workspaceId, view, groups: [
-      {id: 'charter', sections: [brief.box]},
-      {id: 'agents', sections: [resources?.element]},
-      {id: 'rtm', sections: [traceability?.element]},
-      {id: 'board', sections: [kanban?.element]},
-      {id: 'planning', sections: [roadmap?.box, sprints?.box, meetings?.element, qualityReviews?.element, followUp?.element]},
-      {id: 'governance', sections: [governance?.element]},
-      {id: 'workspace', sections: [content, lifecycle?.element, evidence?.box, engineering?.element, materialization?.element,
-        handoff?.element, workBatches?.element, issues?.element, specifications?.element, ahp?.element]},
-      {id: 'maintenance', sections: [releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element]},
-    ].map(group => ({...group, sections: group.sections.filter(Boolean)})),
-    onSelect: id => {title.textContent = t('ui_' + id); resources?.setActive(id === 'agents'); if (id === 'requirements') void traceability?.activate(); publishContext();}});
-
-    body.insertBefore(content, status.nextSibling);
-    workbench.apply();
+  const drawersHome = h('div', {hidden: true}), phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
+  body.append(drawersHome); heading.querySelector('.ui-title-row').append(phasePill);
+  let detailPanel = null;
+  function openPanel(label, node) {
+    if (!node || !loaded) return;
+    detailPanel?.close();
+    const home = node.parentNode, next = node.nextSibling;
+    detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null;}});
+    node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
   }
-  const sourceSections = () => [content, resources?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
+  if (lifecycle) drawersHome.append(lifecycle.element);
+  const headerActions = heading.querySelector('.ui-header-actions');
+  const primary = brief?.box.querySelector(':scope > header .primary');
+  if (primary) {headerActions.prepend(primary); brief.box.querySelector(':scope > header')?.remove();}
+  const reportTools = h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
+  if (charter && brief) {
+    for (const node of brief.box.querySelectorAll(':scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]')) reportTools.append(node);
+    drawersHome.append(reportTools);
+  }
+  const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down'}), items: [
+    {key: 'versions', label: t('ui_report_versions'), onSelect: () => openPanel(t('ui_report'), reportTools)},
+    {label: t('ui_save_snapshot'), onSelect: () => openPanel(t('ui_report'), reportTools)},
+    {label: t('ui_compare'), onSelect: () => reportTools.querySelector('button[data-report-compare]')?.click()},
+    {label: t('ui_print'), onSelect: () => reportTools.querySelector('button[data-report-print]')?.click()},
+    {label: t('ui_export_brief'), onSelect: () => openPanel(t('ui_report'), reportTools)},
+  ]}) : null;
+  if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
+  const overflow = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-overflow': ''}), items: [
+    ...(lifecycle ? [{key: 'phase', label: t('ui_change_phase'), onSelect: () => openPanel(t('ui_change_phase'), lifecycle.element)}] : []),
+    ...(evidence ? [{key: 'settings', label: t('ui_workspace_settings'), onSelect: () => openPanel(t('ui_workspace_settings'), evidence.box)}] : []),
+  ]});
+  if (lifecycle || evidence) headerActions.append(overflow);
+  function secondary(label, node) {
+    if (!node) return null;
+    const card = sectionCard({body: disclosure({label: t(label), key: JSON.stringify([namespace, workspaceId, label]), body: node})});
+    card.dataset.pmSection = label; node.classList.add('pm-secondary-content'); return card;
+  }
+  const groups = [];
+  if (workspaceId && !threadId) {
+    const definitions = [
+      ['overview', brief?.box || (lifecycle ? h('div') : null), []],
+      ['discussions', content, [['ui_meetings', meetings?.element]]],
+      ['requirements', traceability?.element, [['ui_quality', qualityReviews?.element], ['ui_evidence', evidence?.box],
+        ['ui_deliveries', deliveries?.element], ['ui_specs', specifications?.element], ['ui_materialization', materialization?.element],
+        ['ui_packages', engineering?.element], ['ui_handoff', handoff?.element], ['ui_publication', issues?.element]]],
+      ['schedule', roadmap?.box, [['ui_sprints', sprints?.box]]],
+      ['dependencies', null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
+      ['issues', governance?.element, [['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
+      ['agents', resources?.element, [['ui_observations', ahp?.element]]],
+      ['board', kanban?.element, [['ui_batches', workBatches?.element]]],
+    ];
+    for (const [id, primarySection, secondaries] of definitions) {
+      const sections = [primarySection, ...secondaries.map(([label, node]) => secondary(label, node))].filter(Boolean);
+      if (!sections.length) continue;
+      const region = h('div', {'data-pm-region': id}, ...sections); body.append(region);
+      if (primarySection) {
+        primarySection.classList.add('pm-primary-content');
+        for (const repeated of primarySection.querySelectorAll(':scope > h2, :scope > header h2')) repeated.hidden = true;
+      }
+      groups.push({id, sections: [region]});
+    }
+    workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
+      title.textContent = t('ui_' + id); resources?.setActive(id === 'agents');
+      if (id === 'requirements') void traceability?.activate();
+      detailPanel?.close(); if (primary) primary.hidden = id !== 'overview';
+      if (reportMenu) reportMenu.hidden = id !== 'overview';
+      publishContext();
+    }});
+    workbench.apply();
+    if (primary) primary.hidden = workbench.selected() !== 'overview';
+    if (reportMenu) reportMenu.hidden = workbench.selected() !== 'overview';
+  }
+  const sourceSections = () => [...groups.flatMap(group => group.sections), content, resources?.element, traceability?.element, ahp?.element, lifecycle?.element, evidence?.box, brief?.box, releaseBaselines?.element, maintenancePolicy?.element, maintenanceRepairs?.element, maintenanceReview?.element, qualityReviews?.element, roadmap?.box, kanban?.element, sprints?.box, meetings?.element, governance?.element, specifications?.element, followUp?.element, engineering?.element,materialization?.element,handoff?.element,workBatches?.element,issues?.element].filter(Boolean);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
   const canSelectSources = () => permitted(true) && threadData?.capabilities?.decide
@@ -708,7 +763,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       nativeAnalysis?.update(runs?.runs || []);
       for (const section of sourceSections()) section.hidden = false;
-      workbench?.apply(); publishContext();
+      workbench?.apply();
+      const stage = lifecycle?.phase?.(); phasePill.hidden = !stage;
+      phasePill.textContent = stage && ['idea','planning','development','maintain','paused','closed'].includes(stage) ? t('ui_phase_' + stage) : '';
+      publishContext();
       if (workbench?.selected() === 'requirements') await traceability?.activate();
       resources?.setActive(workbench?.selected() === 'agents');
       updateForms();
@@ -717,6 +775,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         loaded = false; workspace = null; threadData = null;
         brief?.withdraw();traceability?.withdraw();resources?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
+        detailPanel?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
@@ -756,8 +815,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       threadDisclosures.delete(disclosureKey); threadDisclosures.set(disclosureKey, disclosures);
       if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
     }
-    disposed = true; sequence++; off(); createPanel?.close();
-    traceability?.withdraw();resources?.dispose();
+    disposed = true; sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
+    traceability?.dispose();resources?.dispose();
     proposalReview?.dispose();ahp?.dispose();
     for (const value of forms) value.dispose();
   };

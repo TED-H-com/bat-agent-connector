@@ -1,3 +1,4 @@
+import {viewState} from './ui/view-state.js';
 import {qualityFact} from './pm-quality-projections.js';
 
 // Join only central identities, including the exact adopted plan and acceptance inputs.
@@ -12,13 +13,15 @@ export function requirementReviews(plan, requirement, reviews) {
       && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === 'accepted')));
 }
 
-export function workspaceTraceability({h, t, api, alive, workspaceId, caps, errorBox}) {
+export function workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox}) {
+  const preference = viewState(namespace, workspaceId, 'requirements');
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
-  let selected = null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = '', renderedDetail = '', deliveryPages = 1;
-  const pages = {work: 1, issues: 1, reviews: 1}, cursors = {}, expanded = new Set(), order = [];
+  let selected = preference.selected || null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = '', renderedDetail = '', deliveryPages = 1;
+  const pages = {work: 1, issues: 1, reviews: 1}, cursors = {}, expanded = new Set(preference.expanded || []), order = [];
   const status = h('div', {role: 'status'}), count = h('p', {class: 'muted'}), tableBody = h('tbody');
   const filter = h('input', {type: 'search', 'aria-label': t('wb_filter'), placeholder: t('wb_filter'), oninput: () => renderTable()});
+  filter.value = preference.filter || '';
   const detail = h('aside', {class: 'pm-rtm-detail', 'data-rtm-detail': '', hidden: true});
   const refreshButton = h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, t('wb_apply_update'));
   const moreButtons = Object.fromEntries(['work', 'issues', 'reviews'].map(kind => [kind, h('button', {type: 'button', class: 'secondary', hidden: true,
@@ -238,5 +241,5 @@ export function workspaceTraceability({h, t, api, alive, workspaceId, caps, erro
     if (detailBusy || deliveryCursor === null || !selected) return;
     deliveryPages++; await select(selected);
   }
-  controls(); return {element, refresh, withdraw, activate: async () => {if (!active) {active = true; await refresh();}}};
+  controls(); return {element, refresh, withdraw, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate: async () => {if (!active) {active = true; await refresh();}}};
 }

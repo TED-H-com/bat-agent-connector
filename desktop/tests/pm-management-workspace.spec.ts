@@ -79,7 +79,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});await draft.fill('Keep this unsent direction');
     f.base.state.failRead=true;f.publish('pm_workspace');
     await expect(region).toBeHidden({timeout:10000});await expect(page.locator('[data-pm-kanban]')).toBeHidden();await expect(page.locator('[data-pm-meetings]')).toBeHidden();
-    await expect(page.locator('.pm-heading h1')).not.toContainText('Library refresh');
+    await expect(page.locator('.shell-workspace-block')).not.toContainText('Library refresh');
     f.base.state.failRead=false;f.publish('pm_workspace');await expect(region).toBeVisible({timeout:10000});
     await expect(draft).toHaveValue('Keep this unsent direction');expect(f.sprint.state.writes).toHaveLength(0);
   });

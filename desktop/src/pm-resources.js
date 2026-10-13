@@ -1,6 +1,8 @@
+import {viewState} from './ui/view-state.js';
 // Reads the central collector projection; opening a view never scans logs or calls a model.
-export function workspaceResources({h, t, api, alive, workspaceId, errorBox}) {
-  let serial = 0, active = false, busy = false, paused = false, timer = null, data = null, selected = null, signature = '';
+export function workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox}) {
+  const preference = viewState(namespace, workspaceId, 'agents');
+  let serial = 0, active = false, busy = false, paused = Boolean(preference.paused), timer = null, data = null, selected = preference.selected || null, signature = '';
   const body = h('tbody'), status = h('div', {role: 'status'}), count = h('p', {class: 'muted'}), observed = h('p', {class: 'muted'});
   const detail = h('aside', {class: 'pm-rtm-detail', 'data-resource-detail': '', hidden: true});
   const quota = h('div', {'data-resource-quota': ''});
@@ -12,6 +14,8 @@ export function workspaceResources({h, t, api, alive, workspaceId, errorBox}) {
     paused = !paused; pause.textContent = t(paused ? 'res_resume' : 'res_pause'); pause.setAttribute('aria-pressed', String(paused));
     if (paused) clearTimeout(timer); else void refresh();
   }}, t('res_pause'));
+  filter.value = preference.filter || ''; windowSelect.value = preference.period || '7';
+  pause.textContent = t(paused ? 'res_resume' : 'res_pause'); pause.setAttribute('aria-pressed', String(paused));
   const table = h('div', {class: 'pm-rtm-table', role: 'region', tabindex: '0', 'aria-label': t('res_title')}, h('table', {},
     h('thead', {}, h('tr', {}, ...['res_source', 'res_model', 'res_role', 'res_total', 'res_state'].map(key => h('th', {scope: 'col'}, t(key))))), body));
   const element = h('section', {'data-pm-resources': ''}, h('header', {class: 'pm-heading'}, h('h2', {}, t('res_title')),
@@ -117,5 +121,5 @@ export function workspaceResources({h, t, api, alive, workspaceId, errorBox}) {
   return {element, refresh, withdraw, setActive(value) {
     active = value; clearTimeout(timer);
     if (active) {if (!busy) void refresh();} else {serial++; busy = false; update.disabled = false;}
-  }, dispose() {active = false; clearTimeout(timer); withdraw();}};
+  }, dispose() {Object.assign(preference, {selected, paused, filter: filter.value, period: windowSelect.value}); active = false; clearTimeout(timer); withdraw();}};
 }

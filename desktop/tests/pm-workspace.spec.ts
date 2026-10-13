@@ -31,17 +31,17 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   });
   test('workspace and Idea creation use explicit central records',async({page})=>{
     const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm');
-    await page.getByText('New workspace',{exact:true}).click();
+    await page.getByRole('button',{name:'New workspace',exact:true}).click();
     await page.getByLabel('Workspace name',{exact:true}).fill('Review space');
     await page.getByText('Repositories (optional)',{exact:true}).click();
     await page.getByLabel('Repositories, separated by commas',{exact:true}).fill('example/library, example/docs');
     await page.getByRole('button',{name:'Create workspace',exact:true}).click();
     await expect(page).toHaveURL(new RegExp('#/pm/ws_'+'5'.repeat(32)+'$'));
     expect(f.state.writes[0].body).toEqual({action:'pm.workspace.create',target:{},params:{name:'Review space',repositories:['example/library','example/docs']},preconditions:{}});
-    await page.goto(`/dashboard/#/pm/${workspaceId}`);
+    await page.goto(`/dashboard/#/pm/${workspaceId}/discussions`);
     await page.getByLabel('Discussion title',{exact:true}).fill('Try a focused first screen');
     await page.getByRole('button',{name:'Start discussion',exact:true}).click();
-    await expect(page).toHaveURL(new RegExp('#/pm/'+workspaceId+'/'+threadId+'$'));
+    await expect(page).toHaveURL(new RegExp('#/pm/'+workspaceId+'/discussions/'+threadId+'$'));
     expect(f.state.writes[1].body).toEqual({action:'pm.thread.create',target:{workspace_id:workspaceId},params:{title:'Try a focused first screen'},preconditions:{expected_version:1}});
   });
   for(const original of [false,true])test(`initial section reads preserve the ${original?'original uncertain intent':'saved draft'} until submission is available`,async({page})=>{
@@ -60,7 +60,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
       if(path===`/pm/workspaces/${workspaceId}/plans/head`)return {status:200,data:{head:structuredClone(f.state.planHead)}};
       return result;
     };
-    await mountConversation(page,native,dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);
+    await mountConversation(page,native,dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}/discussions`);
     const form=action(page,'pm.thread.create'),field=form.getByLabel('Discussion title',{exact:true});
     await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
     await field.fill('Retain the original discussion draft');
@@ -82,7 +82,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     await expect(form.getByRole('button',{name:label,exact:true})).toBeEnabled();
     await expect(field).toHaveValue('Retain the original discussion draft');
     await form.getByRole('button',{name:label,exact:true}).click();
-    await expect(page).toHaveURL(new RegExp('#/pm/'+workspaceId+'/'+threadId+'$'));
+    await expect(page).toHaveURL(new RegExp('#/pm/'+workspaceId+'/discussions/'+threadId+'$'));
     expect(f.state.writes).toHaveLength(expectedWrites+1);
     expect(new Set(f.state.writes.map(input=>input.idempotency_key)).size).toBe(1);
     if(original)expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
