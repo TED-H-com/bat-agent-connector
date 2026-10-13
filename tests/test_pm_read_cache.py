@@ -54,7 +54,7 @@ def test_nested_scope_joins_and_outer_exit_discards_values(db, reader):
             assert read(db) == expected
             assert len(calls) == 1
             inherited = copy_context()
-            current = pm_read_cache._CURRENT.get()
+            current = pm_read_cache._CURRENT.get().scope
         assert current.values == {} and not current.active
         assert inherited.run(read, db) == expected
         with pm_read_cache.scope(db, OWNER):
@@ -101,6 +101,8 @@ def test_distinct_databases_have_distinct_scopes_and_restore_outer(db, reader, t
                 read(other)
                 with pm_read_cache.scope(db):
                     assert read(db)['rows'] == ['original']
+                    with pm_read_cache.scope(other):
+                        assert read(other)['rows'] == ['other']
             assert read(db)['rows'] == ['original']
     finally:
         other.close()
@@ -180,7 +182,7 @@ def test_write_clears_all_entries_and_bypasses_rest_of_scope(db, reader, rollbac
     with _snapshot(db), pm_read_cache.scope(db):
         read(db, 'first')
         read(db, 'second')
-        current = pm_read_cache._CURRENT.get()
+        current = pm_read_cache._CURRENT.get().scope
         db.execute('SAVEPOINT write_test')
         db.execute("UPDATE records SET value='changed'")
         if rollback:
@@ -213,7 +215,7 @@ def test_write_during_load_cannot_repopulate_cache(db, fails):
                     pm_read_cache.remember('write', 'row', load)
             else:
                 assert pm_read_cache.remember('write', 'row', load) == 'changed'
-        assert pm_read_cache._CURRENT.get().values == {}
+        assert pm_read_cache._CURRENT.get().scope.values == {}
     assert len(calls) == 2
 
 
@@ -344,7 +346,7 @@ def test_decorator_preserves_keyword_calls_and_argument_errors(db):
 def test_scope_exception_clears_values_and_rolls_back_snapshot(db):
     with pytest.raises(ValueError), _snapshot(db), pm_read_cache.scope(db):
         pm_read_cache.remember('one', 'id', lambda: 1)
-        current = pm_read_cache._CURRENT.get()
+        current = pm_read_cache._CURRENT.get().scope
         raise ValueError('Read failed')
     assert current.values == {} and not current.active
     assert pm_read_cache._CURRENT.get() is None

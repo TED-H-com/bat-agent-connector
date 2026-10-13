@@ -11,7 +11,6 @@ from inspect import signature
 from .api_auth import Principal
 
 _CURRENT = ContextVar('pm_read_cache', default=None)
-_PRINCIPAL = ContextVar('pm_read_principal', default=None)
 
 
 def _task():
@@ -24,7 +23,6 @@ def _task():
 @dataclass
 class _Scope:
     db: object
-    parent: object = None
     thread: object = field(default_factory=threading.current_thread)
     task: object = field(default_factory=_task)
     values: dict = field(default_factory=dict)
@@ -44,6 +42,13 @@ class _Scope:
             self.values.clear()
             self.disabled = True
         return not self.disabled
+
+
+@dataclass(frozen=True)
+class _Frame:
+    scope: _Scope
+    principal: object
+    parent: object = None
 
 
 def _key(value):
@@ -68,18 +73,16 @@ def scope(db, principal=None):
     A nested scope can select another principal without changing the owner's
     memo. A scope entered without a transaction stays disabled throughout.
     """
-    parent = current = _CURRENT.get()
-    while current is not None and current.db is not db:
-        current = current.parent
-    opened = current is None
-    identity = _PRINCIPAL.get() if principal is None and not opened else _key(principal)
-    current = _Scope(db, parent=parent) if opened else current
-    token = _CURRENT.set(current)
-    principal_token = _PRINCIPAL.set(identity)
+    parent = frame = _CURRENT.get()
+    while frame is not None and frame.scope.db is not db:
+        frame = frame.parent
+    opened = frame is None
+    identity = frame.principal if principal is None and not opened else _key(principal)
+    current = _Scope(db) if opened else frame.scope
+    token = _CURRENT.set(_Frame(current, identity, parent))
     try:
         yield
     finally:
-        _PRINCIPAL.reset(principal_token)
         if opened:
             current.active = False
             current.values.clear()
@@ -92,11 +95,12 @@ def remember(kind, key, load):
     The selected scope principal is also part of every key. Unsupported key
     types bypass caching, preserving the underlying reader's validation.
     """
-    current = _CURRENT.get()
-    if current is None or not current.usable():
+    frame = _CURRENT.get()
+    if frame is None or not frame.scope.usable():
         return load()
+    current = frame.scope
     try:
-        identity = (kind, _PRINCIPAL.get(), _key(key))
+        identity = (kind, frame.principal, _key(key))
     except TypeError:
         return load()
     if identity not in current.values:
@@ -127,7 +131,7 @@ def memoized(fn):
         first = args[0] if args else kwargs.get(first_name)
         current = _CURRENT.get()
         db = getattr(first, 'db', first)
-        if current is None or current.db is not db:
+        if current is None or current.scope.db is not db:
             return fn(*args, **kwargs)
         key = (args[1:], sorted(kwargs.items())) if args else (
             (), sorted((name, value) for name, value in kwargs.items() if name != first_name))
