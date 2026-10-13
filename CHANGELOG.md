@@ -5,9 +5,12 @@
 - Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
   Each row keeps its source record's identity and canonical status. Totals, open-item age, the
   last 12 weeks and blocking reasons are included only when every source that matches the active
-  type filter was read completely. A hidden or oversized record is left out of that page; it does
-  not fail the register or change the counts. Row ids are path-safe (`governance.pmgov_…`) and
-  cursors are opaque sequence tokens. The projection adds no write actions.
+  type filter was read completely. One skipped 409 or 413 record stays out of that source and
+  marks it partial, so the totals and the summary are null; the other readable records stay
+  listed. A withdrawn source leaves the remaining rows and the counts together. A hidden row is
+  omitted from rows, counts and summary together and does not fail the page. Row ids are
+  path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds
+  no write actions.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,

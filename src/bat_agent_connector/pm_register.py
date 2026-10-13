@@ -84,6 +84,48 @@ def _conflict(exc):
     return isinstance(exc, OperationError) and exc.status in (409, 413)
 
 
+def _next_sequence(ops, sql, params):
+    """Sequence of the next source stub strictly after ``after``, from that source's own query."""
+
+    def lookup(after):
+        try:
+            row = ops.db.execute(sql, (*params, after)).fetchone()
+        except sqlite3.OperationalError as exc:
+            if _missing(exc):
+                return None
+            raise
+        if row is None or row[0] is None:
+            return None
+        return int(row[0])
+
+    return lookup
+
+
+def _workspace_stub(ops, table, workspace_id):
+    sql = {
+        "pm_governance_records": "SELECT sequence FROM pm_governance_records WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT 1",
+        "pm_maintenance_repairs": "SELECT sequence FROM pm_maintenance_repairs WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT 1",
+        "pm_meetings": "SELECT sequence FROM pm_meetings WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT 1",
+        "pm_maintenance_reviews": "SELECT sequence FROM pm_maintenance_reviews WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT 1",
+        "pm_follow_up_intakes": "SELECT sequence FROM pm_follow_up_intakes WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT 1",
+        "pm_conversation_proposals": "SELECT sequence FROM pm_conversation_proposals WHERE workspace_id=? AND sequence>? ORDER BY sequence LIMIT 1",
+    }[table]
+    return _next_sequence(ops, sql, (workspace_id,))
+
+
+def _isolate(size, page_limit, after, seen, next_sequence):
+    """Retry a conflicting page one record at a time, then skip that record's sequence."""
+    if size != 1:
+        return 1, after
+    if next_sequence is None:
+        return None
+    nxt = next_sequence(after)
+    if nxt is None or nxt <= after or nxt in seen:
+        return None
+    seen.add(nxt)
+    return min(PAGE, page_limit), nxt
+
+
 def _iso(value):
     if isinstance(value, str):
         text = value[:-1] + "+00:00" if value.endswith("Z") else value
@@ -320,13 +362,23 @@ def _governance_history(ops, principal, workspace_id, record_id):
     steps, seen, proposals, adopted = [], set(), [], set()
     after, truncated, bad = 0, False, False
     window, cursors = deque(), set()
+    page_limit = min(PAGE, max(cap, 1))
+    size = page_limit
+    stub = _next_sequence(ops, "SELECT sequence FROM pm_governance_revisions WHERE record_id=? AND sequence>? "
+                           "ORDER BY sequence LIMIT 1", (record_id,))
     while True:
         try:
-            page = list_history(ops, principal, workspace_id, record_id, after=after, limit=min(PAGE, max(cap, 1)))
+            page = list_history(ops, principal, workspace_id, record_id, after=after, limit=size)
         except OperationError as exc:
-            if _conflict(exc):
-                return steps, True, True
-            raise
+            if not _conflict(exc):
+                raise
+            truncated, bad = True, True
+            isolated = _isolate(size, page_limit, after, cursors, stub)
+            if isolated is None:
+                break
+            size, after = isolated
+            continue
+        size = page_limit
         for revision in page["revisions"]:
             window.append(revision)
             if len(window) > cap:
@@ -371,17 +423,23 @@ def _governance_history(ops, principal, workspace_id, record_id):
     return steps, truncated, bad
 
 
-def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limit=100):
-    """Keep the newest ``cap`` visible records. Hidden rows are already absent from ``fetch``."""
+def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limit=100, next_sequence=None):
+    """Keep the newest ``cap`` visible records. One 409/413 record is skipped; the source stays partial."""
     size = min(PAGE, page_limit)
-    after, kept, truncated, seen = 0, deque(), False, set()
+    after, kept, truncated, bad, seen = 0, deque(), False, False, set()
     while True:
         try:
             page = fetch(after, size)
         except OperationError as exc:
-            if _conflict(exc):
+            if not _conflict(exc):
+                raise
+            truncated, bad = True, True
+            isolated = _isolate(size, page_limit, after, seen, next_sequence)
+            if isolated is None:
                 return list(kept), True, True
-            raise
+            size, after = isolated
+            continue
+        size = min(PAGE, page_limit)
         for item in list(page.get(key) or []):
             kept.append(item)
             if len(kept) > cap:
@@ -389,9 +447,9 @@ def _newest(fetch, key, cap, *, cursors=("next_cursor", "next_after"), page_limi
                 truncated = True
         cursor = next((page[name] for name in cursors if page.get(name) is not None), None)
         if cursor is None:
-            return list(kept), truncated, False
+            return list(kept), truncated, bad
         if cursor == after or cursor in seen:
-            return list(kept), True, False
+            return list(kept), True, bad
         seen.add(cursor)
         after = cursor
 
@@ -545,8 +603,10 @@ def _collect_repairs(ops, principal, workspace_id):
     from .pm_maintenance_repairs import list_repairs
     if not _table(ops.db, "pm_maintenance_repairs"):
         return [], False, False
-    records, truncated, bad = _newest(lambda after, limit: list_repairs(ops, principal, workspace_id, after=after, limit=limit),
-                                      "repairs", MAX_SCAN, cursors=("next_after",), page_limit=50)
+    records, truncated, bad = _newest(
+        lambda after, limit: list_repairs(ops, principal, workspace_id, after=after, limit=limit),
+        "repairs", MAX_SCAN, cursors=("next_after",), page_limit=50,
+        next_sequence=_workspace_stub(ops, "pm_maintenance_repairs", workspace_id))
     rows = []
     for repair in records:
         row = _repair_row(ops, workspace_id, repair)
@@ -732,8 +792,9 @@ def _collect_meetings(ops, principal, workspace_id):
     if not _table(ops.db, "pm_meetings"):
         return [], False, False
     history = HISTORY_MEETING
-    stubs, truncated, bad = _newest(lambda after, limit: list_meetings(ops, principal, workspace_id, after=after, limit=limit),
-                                    "meetings", DETAIL_CAP)
+    stubs, truncated, bad = _newest(
+        lambda after, limit: list_meetings(ops, principal, workspace_id, after=after, limit=limit),
+        "meetings", DETAIL_CAP, next_sequence=_workspace_stub(ops, "pm_meetings", workspace_id))
 
     def load(stub):
         after, older = _follow_up_cutoff(ops, stub["meeting_id"])
@@ -747,14 +808,24 @@ def _collect_meetings(ops, principal, workspace_id):
 def _review_events(ops, principal, workspace_id, review_id):
     from .pm_maintenance_review import list_events
     cap = HISTORY_REVIEW
-    after, kept, truncated, seen = 0, deque(), False, set()
+    page_limit = min(100, max(cap, 1))
+    after, kept, truncated, bad, seen = 0, deque(), False, False, set()
+    size = page_limit
+    stub = _next_sequence(ops, "SELECT sequence FROM pm_maintenance_review_events WHERE workspace_id=? "
+                           "AND review_id=? AND sequence>? ORDER BY sequence LIMIT 1", (workspace_id, review_id))
     while True:
         try:
-            page = list_events(ops, principal, workspace_id, review_id, after=after, limit=min(100, max(cap, 1)))
+            page = list_events(ops, principal, workspace_id, review_id, after=after, limit=size)
         except OperationError as exc:
-            if _conflict(exc):
+            if not _conflict(exc):
+                raise
+            truncated, bad = True, True
+            isolated = _isolate(size, page_limit, after, seen, stub)
+            if isolated is None:
                 return list(kept), True, True
-            raise
+            size, after = isolated
+            continue
+        size = page_limit
         for event in page.get("events") or []:
             kept.append(event)
             if len(kept) > cap:
@@ -762,9 +833,9 @@ def _review_events(ops, principal, workspace_id, review_id):
                 truncated = True
         cursor = page.get("next_cursor")
         if cursor is None:
-            return list(kept), truncated, False
+            return list(kept), truncated, bad
         if cursor == after or cursor in seen:
-            return list(kept), True, False
+            return list(kept), True, bad
         seen.add(cursor)
         after = cursor
 
@@ -773,18 +844,20 @@ def _collect_reviews(ops, principal, workspace_id):
     from .pm_maintenance_review import get_review, list_reviews
     if not _table(ops.db, "pm_maintenance_reviews"):
         return [], False, False
-    stubs, truncated, bad = _newest(lambda after, limit: list_reviews(ops, principal, workspace_id, after=after, limit=limit),
-                                    "reviews", DETAIL_CAP)
+    stubs, truncated, bad = _newest(
+        lambda after, limit: list_reviews(ops, principal, workspace_id, after=after, limit=limit),
+        "reviews", DETAIL_CAP, next_sequence=_workspace_stub(ops, "pm_maintenance_reviews", workspace_id))
+    skipped = []
 
     def load(stub):
         events, more, event_bad = _review_events(ops, principal, workspace_id, stub["review_id"])
         if event_bad:
-            raise OperationError("PM_REGISTER_SOURCE_INCOMPLETE", "A review event is unreadable", 409)
+            skipped.append(stub["review_id"])
         detail = get_review(ops, principal, workspace_id, stub["review_id"], history_limit=1)
         detail = {**detail, "events": events, "next_cursor": 1 if more else None}
         return _review_rows(ops, workspace_id, {**stub, **detail["review"]}, detail)
     found, more, expand_bad = _expand(stubs, load)
-    return found, truncated or more, bad or expand_bad
+    return found, truncated or more or bool(skipped), bad or expand_bad or bool(skipped)
 
 
 def _intake_row(ops, workspace_id, intake):
@@ -809,8 +882,9 @@ def _collect_intakes(ops, principal, workspace_id):
     from .pm_follow_up import get_intake, list_intakes
     if not _table(ops.db, "pm_follow_up_intakes"):
         return [], False, False
-    stubs, truncated, bad = _newest(lambda after, limit: list_intakes(ops, principal, workspace_id, after=after, limit=limit),
-                                    "intakes", DETAIL_CAP)
+    stubs, truncated, bad = _newest(
+        lambda after, limit: list_intakes(ops, principal, workspace_id, after=after, limit=limit),
+        "intakes", DETAIL_CAP, next_sequence=_workspace_stub(ops, "pm_follow_up_intakes", workspace_id))
 
     def load(stub):
         intake = get_intake(ops, principal, workspace_id, stub["intake_id"])["intake"]
@@ -845,8 +919,9 @@ def _collect_proposals(ops, principal, workspace_id):
     from .pm_conversation_proposals import get_proposal, list_proposals
     if not _table(ops.db, "pm_conversation_proposals"):
         return [], False, False
-    stubs, truncated, bad = _newest(lambda after, limit: list_proposals(ops, principal, workspace_id, after=after, limit=limit),
-                                    "proposals", DETAIL_CAP)
+    stubs, truncated, bad = _newest(
+        lambda after, limit: list_proposals(ops, principal, workspace_id, after=after, limit=limit),
+        "proposals", DETAIL_CAP, next_sequence=_workspace_stub(ops, "pm_conversation_proposals", workspace_id))
 
     def load(stub):
         proposal = get_proposal(ops, principal, workspace_id, stub["proposal_id"])["proposal"]
@@ -982,8 +1057,11 @@ def _collect_mappings(ops, principal, workspace_id):
     from .pm_issue_mappings import list_mappings
     if not _table(ops.db, "pm_issue_revisions"):
         return [], False, False
-    currents, truncated, bad = _newest(lambda after, limit: list_mappings(ops, principal, workspace_id, after=after, limit=limit),
-                                       "mappings", MAX_SCAN)
+    currents, truncated, bad = _newest(
+        lambda after, limit: list_mappings(ops, principal, workspace_id, after=after, limit=limit), "mappings", MAX_SCAN,
+        next_sequence=_next_sequence(ops, "SELECT MIN(sequence) FROM pm_issue_revisions WHERE workspace_id=? "
+                                      "GROUP BY mapping_id HAVING MIN(sequence)>? ORDER BY MIN(sequence) LIMIT 1",
+                                      (workspace_id,)))
     ids = [row["mapping_id"] for row in currents if isinstance(row.get("mapping_id"), str)]
     created, sequences = {}, {}
     if ids:
@@ -1004,8 +1082,9 @@ def _collect_governance(ops, principal, workspace_id):
     from .pm_governance import list_records
     if not _table(ops.db, "pm_governance_records"):
         return [], False, False
-    views, truncated, bad = _newest(lambda after, limit: list_records(ops, principal, workspace_id, after=after, limit=limit),
-                                    "records", MAX_SCAN)
+    views, truncated, bad = _newest(
+        lambda after, limit: list_records(ops, principal, workspace_id, after=after, limit=limit), "records", MAX_SCAN,
+        next_sequence=_workspace_stub(ops, "pm_governance_records", workspace_id))
     return [row for row in (_governance_row(ops, workspace_id, view) for view in views) if row], truncated, bad
 
 

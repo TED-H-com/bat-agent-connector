@@ -15,6 +15,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from bat_agent_connector import (
     controller_authority,
     mcp_server,
+    pm_governance,
     pm_maintenance_checks,
     pm_maintenance_findings,
     pm_maintenance_policy,
@@ -982,3 +983,127 @@ async def test_lineage_page_survives_a_hidden_row_and_pages_at_the_root_budget(s
         assert quoted_status == 200 and quoted["rows"][0]["row_id"] == row_id
     finally:
         await fleet.close()
+
+
+async def test_one_unverifiable_governance_record_keeps_the_readable_rows(ops, monkeypatch):
+    data = await prepared(ops)
+    older = await record(ops, data, title="Older risk", root_cause_key="older")
+    broken = await record(ops, data, title="Unverifiable risk", root_cause_key="broken",
+                          source_refs=[{"kind": "plan_input", "id": data["confirmed"]}])
+    newer = await record(ops, data, title="Newer risk", root_cause_key="newer",
+                         source_refs=[{"kind": "requirement", "id": "login"}])
+    bad_revision = pm_governance.get_record(ops, OWNER, data["wid"], broken["record_id"])["revision"]["revision_id"]
+    real = pm_governance._revision
+
+    def revision(db, revision_id):
+        if revision_id == bad_revision:
+            raise OperationError("PM_GOVERNANCE_UNAVAILABLE", "Original governance revision cannot be verified", 409)
+        return real(db, revision_id)
+
+    monkeypatch.setattr(pm_governance, "_revision", revision)
+    view = pm_register.list_register(ops, OWNER, data["wid"])
+    gov = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "governance"]
+    assert older["record_id"] in gov and newer["record_id"] in gov
+    assert broken["record_id"] not in gov
+    assert view["coverage"]["complete"] is False
+    assert view["coverage"]["partial_reason"] == "source_incomplete"
+    assert view["total_by_type"] is None and view["summary"] is None
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    risk_ids = [row["source"]["id"] for row in risks["rows"]]
+    assert older["record_id"] in risk_ids and newer["record_id"] in risk_ids
+    assert risks["total_by_type"] is None and risks["summary"] is None
+
+
+async def test_oversized_first_repair_keeps_the_newer_records(ops, monkeypatch):
+    data = await prepared(ops)
+    pm_maintenance_repairs.schema(ops.journal)
+    context = {"repair": "page"}
+    digest = pm_maintenance_checks._digest(context)
+    for index in (1, 2):
+        ops.db.execute("""INSERT INTO pm_maintenance_repairs(
+            repair_id,operation_id,workspace_id,policy_id,finding_id,work_item_id,context,context_digest,
+            created_at,deadline_at,budget_period) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            (f"pmrp_{index:032x}", f"op_{index:032x}", data["wid"], "pmmp_" + "a" * 32, f"finding-{index}",
+             f"wi_{index:020x}", json.dumps(context), digest, 1, 2, 0))
+    stored = list(ops.db.execute("SELECT repair_id, sequence FROM pm_maintenance_repairs WHERE workspace_id=? ORDER BY sequence",
+                                 (data["wid"],)))
+    oversized_id, newer_id = stored[0]["repair_id"], stored[1]["repair_id"]
+    records = [{"repair_id": row["repair_id"], "sequence": row["sequence"], "operation_status": "running",
+                "created_at": 1_760_000_000.0, "finished_at": None, "finding_id": None, "work_item_id": None,
+                "deadline_at": None} for row in stored]
+
+    def list_repairs(service, principal, workspace_id, *, after=0, limit=20):
+        visible = [row for row in records if row["sequence"] > after]
+        if visible and visible[0]["repair_id"] == oversized_id:
+            raise OperationError("PM_REPAIR_READ_TOO_LARGE", "One whole repair record exceeds the read bound", 413)
+        page = visible[:limit]
+        return {"repairs": page, "next_after": page[-1]["sequence"] if len(visible) > limit else None}
+
+    monkeypatch.setattr(pm_maintenance_repairs, "list_repairs", list_repairs)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="action")
+    listed = [row["source"]["id"] for row in view["rows"]]
+    assert newer_id in listed and oversized_id not in listed
+    assert view["coverage"]["complete"] is False
+    assert view["coverage"]["partial_reason"] == "source_incomplete"
+    assert view["total_by_type"] is None and view["summary"] is None
+
+
+async def test_one_unverifiable_governance_revision_keeps_later_steps(ops, monkeypatch):
+    data = await prepared(ops)
+    first = await record(ops, data, kind="change", title="Direction")
+    await change(ops, first, "decide", disposition="rejected", rationale="Not this direction")
+    rejected = pm_governance.get_record(ops, OWNER, data["wid"], first["record_id"])["revision"]["revision_id"]
+    await change(ops, first, "decide", disposition="adopted_direction", rationale="Choose this direction")
+    real = pm_governance._revision
+
+    def revision(db, revision_id):
+        if revision_id == rejected:
+            raise OperationError("PM_GOVERNANCE_UNAVAILABLE", "Original governance revision cannot be verified", 409)
+        return real(db, revision_id)
+
+    monkeypatch.setattr(pm_governance, "_revision", revision)
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "governance." + first["record_id"])
+    statuses = [step["status"] for step in detail["timeline"] if step["step"] == "decision"]
+    assert "adopted_direction" in statuses
+    assert "rejected" not in statuses
+    assert detail["timeline_coverage"]["partial_reason"] == "source_incomplete"
+    assert "governance" in detail["timeline_coverage"]["sources"]
+
+
+async def test_one_unreadable_review_event_keeps_the_newer_candidate(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    _force_table(monkeypatch, "pm_maintenance_reviews")
+    data = await prepared(ops)
+    review_id = "pmrevw_" + "b" * 32
+    ops.db.execute("""CREATE TABLE pm_maintenance_review_events (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL,
+        review_id TEXT NOT NULL, workspace_id TEXT NOT NULL)""")
+    events = []
+    for index, title in ((1, "Older"), (2, "Broken"), (3, "Newer")):
+        event_id = f"pmrve_{index:032x}"
+        ops.db.execute("INSERT INTO pm_maintenance_review_events(event_id, review_id, workspace_id) VALUES(?,?,?)",
+                       (event_id, review_id, data["wid"]))
+        sequence = ops.db.execute("SELECT sequence FROM pm_maintenance_review_events WHERE event_id=?", (event_id,)).fetchone()[0]
+        events.append({"event_id": event_id, "kind": "candidate.record", "sequence": sequence, "created_at": index,
+                       "document": {"disposition": "proposal", "title": title}})
+    broken = events[1]["sequence"]
+
+    def list_events(service, principal, workspace_id, review, *, after=0, limit=20):
+        visible = [row for row in events if row["sequence"] > after]
+        page = visible[:limit]
+        if any(row["sequence"] == broken for row in page):
+            raise OperationError("PM_MAINTENANCE_REVIEW_TOO_LARGE", "One whole review event exceeds the read bound", 413)
+        return {"events": page, "next_cursor": page[-1]["sequence"] if len(visible) > limit else None}
+
+    review = {"review_id": review_id, "sequence": 4, "status": "completed", "title": "Review", "created_at": 1}
+    monkeypatch.setattr(pm_maintenance_review, "list_reviews", lambda *args, **kwargs: {"reviews": [review], "next_cursor": None})
+    monkeypatch.setattr(pm_maintenance_review, "list_events", list_events)
+    monkeypatch.setattr(pm_maintenance_review, "get_review", lambda *args, **kwargs: {
+        "review": review, "completion": {"actor": OWNER.actor, "created_at": 2, "document": {
+            "direction": "accepted", "follow_ups": []}}, "events": []})
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="change")
+    assert [row["source"]["id"] for row in view["rows"]] == [events[2]["event_id"], events[0]["event_id"]]
+    assert view["coverage"]["partial_reason"] == "source_incomplete"
+    assert view["total_by_type"] is None and view["summary"] is None
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "review" not in risks["coverage"]["sources"]

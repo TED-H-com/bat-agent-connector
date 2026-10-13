@@ -1572,7 +1572,10 @@ or dispatch. Pass the opaque `next_cursor` back as `after`; it is a base64url se
 token with no padding. A row id is path-safe, for example `governance.pmgov_…`, and is
 passed without percent-encoding. Totals and the summary are present only when
 `coverage.complete` is true for the sources that match the active type filter. A hidden
-row is omitted from rows, counts and summary together. One hidden or oversized record
-does not fail the page. Blocked rows without a stored reason are counted in
+row is omitted from rows, counts and summary together. One skipped 409 or 413 record
+stays out of the list and marks that source partial, so the totals and the summary are
+null; the other readable records stay listed. A withdrawn source leaves the remaining
+rows and the counts together. One hidden record does not fail the page. Blocked rows
+without a stored reason are counted in
 `coverage.blocked_without_reason`. Do not invent links the timeline does not return.
 See `docs/design/pm-register.md` for the record mapping.
