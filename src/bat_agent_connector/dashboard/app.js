@@ -2176,8 +2176,18 @@ var dependencyStrings = {
 		dep_verified: "Verified",
 		dep_declared: "Declared",
 		dep_inferred: "Inferred",
-		dep_show_all: "Show all",
+		dep_filter_relation: "Relation",
+		dep_filter_evidence: "Evidence",
+		dep_show_transitive: "Show transitive",
 		dep_show_direct: "Direct only",
+		dep_show_all_rows: "Show all ({n})",
+		dep_show_fewer: "Show fewer",
+		dep_legend_verified: "Solid verified",
+		dep_legend_declared: "Outline declared",
+		dep_legend_inferred: "Dashed inferred",
+		dep_capture_manage: "Capture needs manage access.",
+		dep_capture_no_source: "This capture has no repository to read.",
+		dep_capture_not_ready: "This projection is not ready to capture again.",
 		dep_loaded: "Loaded",
 		dep_loaded_count: "{n} loaded",
 		dep_kind_runtime_library: "Runtime / library",
@@ -2245,8 +2255,18 @@ var dependencyStrings = {
 		dep_verified: "已核對",
 		dep_declared: "已宣告",
 		dep_inferred: "推測",
-		dep_show_all: "顯示全部",
+		dep_filter_relation: "關係",
+		dep_filter_evidence: "證據",
+		dep_show_transitive: "顯示間接相依",
 		dep_show_direct: "只顯示直接",
+		dep_show_all_rows: "顯示全部（{n}）",
+		dep_show_fewer: "少顯示一些",
+		dep_legend_verified: "實線為已核對",
+		dep_legend_declared: "外框為已宣告",
+		dep_legend_inferred: "虛線為推測",
+		dep_capture_manage: "再次擷取需要管理權限。",
+		dep_capture_no_source: "這次擷取沒有可讀的儲存庫。",
+		dep_capture_not_ready: "這份投影還不能再次擷取。",
 		dep_loaded: "已載入",
 		dep_loaded_count: "已載入 {n}",
 		dep_kind_runtime_library: "執行期／函式庫",
@@ -10058,8 +10078,10 @@ var LETTERS = {
 	build: "B",
 	test: "T",
 	contract: "C",
-	reference: "F"
+	reference: "Ref"
 };
+var COLUMN_LIMIT = 12;
+var ROW_LIMIT = 12;
 var MISS = new Set([
 	"dependency_omitted",
 	"capture_budget",
@@ -10071,7 +10093,6 @@ var FILE_STATUS = {
 	too_large: "dep_file_too_large",
 	unparsable: "dep_file_unparsable"
 };
-var COLUMN_LIMIT = 6;
 var SVG = "http://www.w3.org/2000/svg";
 var NODE_W = 148;
 var NODE_H = 36;
@@ -10115,6 +10136,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	let relationFilter = Array.isArray(preference.relations) ? preference.relations.filter((value) => RELATIONS.includes(value)) : [...RELATIONS];
 	let evidenceFilter = Array.isArray(preference.evidence) ? preference.evidence.filter((value) => EVIDENCE.includes(value)) : [...EVIDENCE];
 	let showAll = preference.showAll === true;
+	let showAllRows = preference.showAllRows === true;
 	let selection = preference.selection && typeof preference.selection === "object" ? preference.selection : null;
 	let focusId = typeof preference.focus === "string" ? preference.focus : "";
 	let zoom = Number.isFinite(preference.zoom) ? Math.min(1.8, Math.max(.6, preference.zoom)) : 1;
@@ -10126,6 +10148,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		evidence: [...evidenceFilter],
 		query: search.value,
 		showAll,
+		showAllRows,
 		selection,
 		focus: focusId,
 		zoom
@@ -10208,7 +10231,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		remember();
 		render();
 	});
-	const searchWrap = h("label", { class: "dep-search" }, icon("search"), search);
+	const searchWrap = h("div", { class: "dep-search" }, icon("search", { size: 16 }), search);
 	const relationChips = RELATIONS.map((value) => makeChip("relation", value));
 	const evidenceChips = EVIDENCE.map((value) => makeChip("evidence", value));
 	function makeChip(kind, value) {
@@ -10236,7 +10259,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		};
 	}
 	const showAllButton = button({
-		label: t("dep_show_all"),
+		label: t("dep_show_transitive"),
 		"data-dep-show-all": ""
 	});
 	showAllButton.classList.add("dep-show-all");
@@ -10245,7 +10268,17 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		remember();
 		render();
 	});
-	const toolbar = h("div", { class: "dep-toolbar" }, segmented({
+	const showRowsButton = button({
+		label: t("dep_show_all_rows", { n: 0 }),
+		"data-dep-show-rows": ""
+	});
+	showRowsButton.classList.add("dep-show-rows");
+	showRowsButton.addEventListener("click", () => {
+		showAllRows = !showAllRows;
+		remember();
+		render();
+	});
+	const modeSwitch = segmented({
 		label: t("ui_dependencies"),
 		value: mode,
 		options: [{
@@ -10260,7 +10293,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			remember();
 			render();
 		}
-	}), h("div", { class: "dep-chips" }, ...relationChips.map((chip) => chip.node)), h("div", { class: "dep-chips" }, ...evidenceChips.map((chip) => chip.node)), searchWrap, showAllButton);
+	});
+	const filterGroup = (name, chips) => h("div", { class: "dep-filter" }, h("span", { class: "dep-filter-label" }, t(name)), h("div", { class: "dep-chips" }, ...chips.map((chip) => chip.node)));
+	const toolbar = h("div", { class: "dep-toolbar" }, modeSwitch, h("div", { class: "dep-filters" }, filterGroup("dep_filter_relation", relationChips), filterGroup("dep_filter_evidence", evidenceChips)), searchWrap, showAllButton, showRowsButton);
 	const statusBox = h("div", { role: "status" });
 	const matrixScroll = h("div", {
 		class: "dep-matrix-scroll",
@@ -10273,7 +10308,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		class: "dep-list",
 		"data-dep-list": ""
 	});
-	const matrixHost = h("div", { "data-dep-matrix-host": "" }, matrixScroll, listHost);
+	const legend = h("div", {
+		class: "dep-legend",
+		"data-dep-legend": "",
+		hidden: true
+	});
+	const matrixHost = h("div", { "data-dep-matrix-host": "" }, legend, matrixScroll, listHost);
 	const graphScroll = h("div", {
 		class: "dep-graph-scroll",
 		"data-dep-graph": ""
@@ -10282,12 +10322,14 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		size: "sm",
 		label: "−",
 		"aria-label": t("dep_zoom_out"),
+		title: t("dep_zoom_out"),
 		onClick: () => setZoom(zoom - .2)
 	});
 	const zoomIn = button({
 		size: "sm",
 		label: "+",
 		"aria-label": t("dep_zoom_in"),
+		title: t("dep_zoom_in"),
 		onClick: () => setZoom(zoom + .2)
 	});
 	const loaded = h("span", {
@@ -10399,6 +10441,36 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const next = node && selectionFromNode(node);
 		if (next) choose(next, true);
 	});
+	const captureHint = h("p", {
+		id: "dep-capture-reason",
+		class: "dep-capture-hint",
+		"data-dep-capture-reason": "",
+		hidden: true
+	});
+	let captureButton = null;
+	function captureHintText() {
+		if (!active || !data || !captureButton?.disabled) return "";
+		if (captureForm.locked() && permitted(false) && ready()) return "";
+		if (!permitted(false)) return t("dep_capture_manage");
+		if (!data.source?.repository || !data.source.commit_sha) return t("dep_capture_no_source");
+		if (!ready()) return t("dep_capture_not_ready");
+		return t("dep_capture_manage");
+	}
+	function syncCapture() {
+		if (!captureButton) return;
+		const reason = captureHintText();
+		captureButton.className = captureButton.disabled ? "ui-button secondary ui-md" : "ui-button primary ui-md";
+		captureHint.textContent = reason;
+		captureHint.hidden = !active || !reason;
+		if (reason) {
+			captureButton.setAttribute("aria-describedby", captureHint.id);
+			captureButton.title = reason;
+		} else {
+			captureButton.removeAttribute("aria-describedby");
+			captureButton.removeAttribute("title");
+		}
+		if (captureButton.parentElement) captureButton.after(captureHint);
+	}
 	const captureForm = form({
 		action: "pm.dependencies.capture",
 		target: { workspace_id: workspaceId },
@@ -10410,14 +10482,15 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}),
 		preconditions,
 		permitted: () => permitted(false) && ready(),
-		onSaved: () => refresh()
+		onSaved: () => refresh(),
+		onStateChange: () => syncCapture()
 	});
 	captureForm.box.id = "dep-capture-form";
-	const captureButton = captureForm.box.querySelector("button[type=submit]");
-	captureButton.className = "ui-button primary ui-md";
+	captureButton = captureForm.box.querySelector("button[type=submit]");
 	captureButton.setAttribute("data-dep-capture", "");
 	captureButton.setAttribute("form", captureForm.box.id);
 	captureButton.hidden = true;
+	syncCapture();
 	const componentSelect = h("select", { "aria-label": t("dep_component") });
 	const nameInput = h("input", {
 		"aria-label": t("dep_name"),
@@ -10612,9 +10685,20 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		return joinLabel([
 			dependencyName(edge.dependency_key),
 			t("dep_" + edge.relation),
-			levelText(edge.evidence_level),
-			versionLabel(edge)
+			versionLabel(edge),
+			levelText(edge.evidence_level)
 		]);
+	}
+	function paintLegend() {
+		const swatch = (relation, level, text) => h("span", {
+			class: `dep-mark dep-rel-${relation} evidence-${level}`,
+			"aria-hidden": "true"
+		}, text);
+		const item = (mark, label) => h("span", { class: "dep-legend-item" }, mark, label);
+		legend.replaceChildren(...RELATIONS.map((relation) => item(swatch(relation, "verified", LETTERS[relation]), t("dep_" + relation))), h("span", {
+			class: "dep-legend-gap",
+			"aria-hidden": "true"
+		}), item(swatch("runtime", "verified", "\xA0"), t("dep_legend_verified")), item(swatch("runtime", "declared", "\xA0"), t("dep_legend_declared")), item(swatch("runtime", "inferred", "\xA0"), t("dep_legend_inferred")));
 	}
 	function syncChrome() {
 		if (header?.meta) {
@@ -10644,6 +10728,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			header.pills.replaceChildren(...marks);
 			header.pills.hidden = !marks.length;
 		}
+		syncCapture();
 	}
 	function syncImpact() {
 		const key = active ? selectedKey() : "";
@@ -10981,8 +11066,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const names = new Map();
 		for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
 		showAllButton.hidden = mode !== "matrix" || names.size <= COLUMN_LIMIT;
-		showAllButton.textContent = t(showAll ? "dep_show_direct" : "dep_show_all");
+		showAllButton.textContent = t(showAll ? "dep_show_direct" : "dep_show_transitive");
 		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
+		showRowsButton.hidden = mode !== "matrix" || components.length <= ROW_LIMIT;
+		showRowsButton.textContent = showAllRows ? t("dep_show_fewer") : t("dep_show_all_rows", { n: components.length });
+		const visibleRows = !showAllRows && components.length > ROW_LIMIT ? components.slice(0, ROW_LIMIT) : components;
 		if (!focusId || !components.some((row) => row.component_id === focusId)) focusId = components[0]?.component_id || focusId;
 		let columns = [...names.keys()];
 		if (mode === "matrix" && !showAll && columns.length > COLUMN_LIMIT && focusId) {
@@ -10995,7 +11083,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			...dependencyByKey().get(key) || { name: key }
 		}));
 		columnDeps.sort((a, b) => KINDS.findIndex((kind) => (a.kinds || []).includes(kind)) - KINDS.findIndex((kind) => (b.kinds || []).includes(kind)) || String(a.name).localeCompare(String(b.name)));
-		const visibleRows = components.filter((row) => columnDeps.some((dep) => edges.some((edge) => edge.component_id === row.component_id && edge.dependency_key === dep.key)));
+		legend.hidden = mode !== "matrix" || !visibleRows.length;
+		if (!legend.hidden) paintLegend();
 		if (!data || !visibleRows.length) {
 			const reason = data?.reason === "not_captured" ? t("dep_not_captured") : data && data.capture?.status === "complete" && data.counts?.components === 0 ? t("dep_empty") : data?.reason ? reasonText(t, data.reason) : data ? t("dep_no_match") : "";
 			matrixScroll.replaceChildren(reason ? emptyState({ title: reason }) : "");

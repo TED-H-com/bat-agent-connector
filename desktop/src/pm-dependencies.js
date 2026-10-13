@@ -9,10 +9,11 @@ import {joinLabel} from './label-text.js';
 const RELATIONS = ['runtime', 'build', 'test', 'contract', 'reference'];
 const EVIDENCE = ['verified', 'declared', 'inferred'];
 const KINDS = ['runtime_library', 'api_schema', 'build_test_toolchain', 'external_service'];
-const LETTERS = {runtime: 'R', build: 'B', test: 'T', contract: 'C', reference: 'F'};
+const LETTERS = {runtime: 'R', build: 'B', test: 'T', contract: 'C', reference: 'Ref'};
+const COLUMN_LIMIT = 12, ROW_LIMIT = 12;
 const MISS = new Set(['dependency_omitted', 'capture_budget', 'dependency_not_observed']);
 const FILE_STATUS = {read: 'dep_file_read', missing: 'dep_file_missing', too_large: 'dep_file_too_large', unparsable: 'dep_file_unparsable'};
-const COLUMN_LIMIT = 6;
+
 const SVG = 'http://www.w3.org/2000/svg';
 const NODE_W = 148, NODE_H = 36, GAP_X = 72, GAP_Y = 18, PAD = 20;
 
@@ -47,12 +48,13 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   let relationFilter = Array.isArray(preference.relations) ? preference.relations.filter(value => RELATIONS.includes(value)) : [...RELATIONS];
   let evidenceFilter = Array.isArray(preference.evidence) ? preference.evidence.filter(value => EVIDENCE.includes(value)) : [...EVIDENCE];
   let showAll = preference.showAll === true;
+  let showAllRows = preference.showAllRows === true;
   let selection = preference.selection && typeof preference.selection === 'object' ? preference.selection : null;
   let focusId = typeof preference.focus === 'string' ? preference.focus : '';
   let zoom = Number.isFinite(preference.zoom) ? Math.min(1.8, Math.max(0.6, preference.zoom)) : 1;
   let panel = null;
   const levelText = level => EVIDENCE.includes(level) ? t('dep_' + level) : reasonText(t, level);
-  const remember = () => Object.assign(preference, {mode, relations: [...relationFilter], evidence: [...evidenceFilter], query: search.value, showAll, selection, focus: focusId, zoom});
+  const remember = () => Object.assign(preference, {mode, relations: [...relationFilter], evidence: [...evidenceFilter], query: search.value, showAll, showAllRows, selection, focus: focusId, zoom});
   const ready = () => Boolean(data?.source?.repository && data.source.commit_sha && data.source.binding_digest && Number.isInteger(data.version) && Number.isInteger(data.workspace_version));
   const preconditions = () => ({expected_version: data.version, expected_workspace_version: data.workspace_version, expected_binding_digest: data.source.binding_digest});
   const dependencyName = key => dependencyByKey().get(key)?.name || '';
@@ -107,7 +109,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const search = h('input', {type: 'search', 'aria-label': t('dep_search'), placeholder: t('dep_search')});
   search.value = typeof preference.query === 'string' ? preference.query : '';
   search.addEventListener('input', () => {remember(); render();});
-  const searchWrap = h('label', {class: 'dep-search'}, icon('search'), search);
+  const searchWrap = h('div', {class: 'dep-search'}, icon('search', {size: 16}), search);
   const relationChips = RELATIONS.map(value => makeChip('relation', value));
   const evidenceChips = EVIDENCE.map(value => makeChip('evidence', value));
   function makeChip(kind, value) {
@@ -122,18 +124,23 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     });
     return {node, label, value};
   }
-  const showAllButton = button({label: t('dep_show_all'), 'data-dep-show-all': ''});
+  const showAllButton = button({label: t('dep_show_transitive'), 'data-dep-show-all': ''});
   showAllButton.classList.add('dep-show-all');
   showAllButton.addEventListener('click', () => {showAll = !showAll; remember(); render();});
+  const showRowsButton = button({label: t('dep_show_all_rows', {n: 0}), 'data-dep-show-rows': ''});
+  showRowsButton.classList.add('dep-show-rows');
+  showRowsButton.addEventListener('click', () => {showAllRows = !showAllRows; remember(); render();});
   const modeSwitch = segmented({label: t('ui_dependencies'), value: mode, options: [{value: 'matrix', label: t('dep_matrix')}, {value: 'graph', label: t('dep_graph')}], onChange: value => {mode = value; remember(); render();}});
-  const toolbar = h('div', {class: 'dep-toolbar'}, modeSwitch, h('div', {class: 'dep-chips'}, ...relationChips.map(chip => chip.node)), h('div', {class: 'dep-chips'}, ...evidenceChips.map(chip => chip.node)), searchWrap, showAllButton);
+  const filterGroup = (name, chips) => h('div', {class: 'dep-filter'}, h('span', {class: 'dep-filter-label'}, t(name)), h('div', {class: 'dep-chips'}, ...chips.map(chip => chip.node)));
+  const toolbar = h('div', {class: 'dep-toolbar'}, modeSwitch, h('div', {class: 'dep-filters'}, filterGroup('dep_filter_relation', relationChips), filterGroup('dep_filter_evidence', evidenceChips)), searchWrap, showAllButton, showRowsButton);
   const statusBox = h('div', {role: 'status'});
   const matrixScroll = h('div', {class: 'dep-matrix-scroll', 'data-dep-matrix': '', tabindex: '0', role: 'grid', 'aria-label': t('dep_matrix')});
   const listHost = h('div', {class: 'dep-list', 'data-dep-list': ''});
-  const matrixHost = h('div', {'data-dep-matrix-host': ''}, matrixScroll, listHost);
+  const legend = h('div', {class: 'dep-legend', 'data-dep-legend': '', hidden: true});
+  const matrixHost = h('div', {'data-dep-matrix-host': ''}, legend, matrixScroll, listHost);
   const graphScroll = h('div', {class: 'dep-graph-scroll', 'data-dep-graph': ''});
-  const zoomOut = button({size: 'sm', label: '−', 'aria-label': t('dep_zoom_out'), onClick: () => setZoom(zoom - 0.2)});
-  const zoomIn = button({size: 'sm', label: '+', 'aria-label': t('dep_zoom_in'), onClick: () => setZoom(zoom + 0.2)});
+  const zoomOut = button({size: 'sm', label: '−', 'aria-label': t('dep_zoom_out'), title: t('dep_zoom_out'), onClick: () => setZoom(zoom - 0.2)});
+  const zoomIn = button({size: 'sm', label: '+', 'aria-label': t('dep_zoom_in'), title: t('dep_zoom_in'), onClick: () => setZoom(zoom + 0.2)});
   const loaded = h('span', {class: 'dep-loaded', 'data-dep-loaded': ''}, t('dep_loaded'));
   const graphHost = h('div', {'data-dep-graph-host': ''}, h('div', {class: 'dep-graph-bar'}, loaded, zoomOut, zoomIn), graphScroll);
   const detailBody = h('div');
@@ -196,14 +203,39 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     if (next) choose(next, true);
   });
 
+  const captureHint = h('p', {id: 'dep-capture-reason', class: 'dep-capture-hint', 'data-dep-capture-reason': '', hidden: true});
+  let captureButton = null;
+  function captureHintText() {
+    if (!active || !data || !captureButton?.disabled) return '';
+    if (captureForm.locked() && permitted(false) && ready()) return '';
+    if (!permitted(false)) return t('dep_capture_manage');
+    if (!data.source?.repository || !data.source.commit_sha) return t('dep_capture_no_source');
+    if (!ready()) return t('dep_capture_not_ready');
+    return t('dep_capture_manage');
+  }
+  function syncCapture() {
+    if (!captureButton) return;
+    const reason = captureHintText();
+    captureButton.className = captureButton.disabled ? 'ui-button secondary ui-md' : 'ui-button primary ui-md';
+    captureHint.textContent = reason;
+    captureHint.hidden = !active || !reason;
+    if (reason) {
+      captureButton.setAttribute('aria-describedby', captureHint.id);
+      captureButton.title = reason;
+    } else {
+      captureButton.removeAttribute('aria-describedby');
+      captureButton.removeAttribute('title');
+    }
+    if (captureButton.parentElement) captureButton.after(captureHint);
+  }
   const captureForm = form({action: 'pm.dependencies.capture', target: {workspace_id: workspaceId}, fields: {}, label: 'dep_capture',
-    params: () => ({repository: data.source.repository, commit_sha: data.source.commit_sha}), preconditions, permitted: () => permitted(false) && ready(), onSaved: () => refresh()});
+    params: () => ({repository: data.source.repository, commit_sha: data.source.commit_sha}), preconditions, permitted: () => permitted(false) && ready(), onSaved: () => refresh(), onStateChange: () => syncCapture()});
   captureForm.box.id = 'dep-capture-form';
-  const captureButton = captureForm.box.querySelector('button[type=submit]');
-  captureButton.className = 'ui-button primary ui-md';
+  captureButton = captureForm.box.querySelector('button[type=submit]');
   captureButton.setAttribute('data-dep-capture', '');
   captureButton.setAttribute('form', captureForm.box.id);
   captureButton.hidden = true;
+  syncCapture();
   const componentSelect = h('select', {'aria-label': t('dep_component')});
   const nameInput = h('input', {'aria-label': t('dep_name'), maxlength: 200, required: true});
   const ecosystemInput = h('input', {'aria-label': t('dep_ecosystem'), maxlength: 80, required: true});
@@ -305,7 +337,17 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     return joinLabel([pinned, range]);
   }
   function edgeLabel(edge) {
-    return joinLabel([dependencyName(edge.dependency_key), t('dep_' + edge.relation), levelText(edge.evidence_level), versionLabel(edge)]);
+    return joinLabel([dependencyName(edge.dependency_key), t('dep_' + edge.relation), versionLabel(edge), levelText(edge.evidence_level)]);
+  }
+  function paintLegend() {
+    const swatch = (relation, level, text) => h('span', {class: `dep-mark dep-rel-${relation} evidence-${level}`, 'aria-hidden': 'true'}, text);
+    const item = (mark, label) => h('span', {class: 'dep-legend-item'}, mark, label);
+    legend.replaceChildren(
+      ...RELATIONS.map(relation => item(swatch(relation, 'verified', LETTERS[relation]), t('dep_' + relation))),
+      h('span', {class: 'dep-legend-gap', 'aria-hidden': 'true'}),
+      item(swatch('runtime', 'verified', '\u00a0'), t('dep_legend_verified')),
+      item(swatch('runtime', 'declared', '\u00a0'), t('dep_legend_declared')),
+      item(swatch('runtime', 'inferred', '\u00a0'), t('dep_legend_inferred')));
   }
   function syncChrome() {
     if (header?.meta) {header.meta.hidden = true; header.meta.textContent = '';}
@@ -320,6 +362,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     if (data.stale === true) marks.push(statusPill('stale'));
     if (data.partial === true) marks.push(statusPill('partial'));
     if (header?.pills) {header.pills.replaceChildren(...marks); header.pills.hidden = !marks.length;}
+    syncCapture();
   }
   function syncImpact() {
     const key = active ? selectedKey() : '';
@@ -525,8 +568,11 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     const names = new Map();
     for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
     showAllButton.hidden = mode !== 'matrix' || names.size <= COLUMN_LIMIT;
-    showAllButton.textContent = t(showAll ? 'dep_show_direct' : 'dep_show_all');
+    showAllButton.textContent = t(showAll ? 'dep_show_direct' : 'dep_show_transitive');
     const components = [...(data?.components || [])].filter(row => edges.some(edge => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
+    showRowsButton.hidden = mode !== 'matrix' || components.length <= ROW_LIMIT;
+    showRowsButton.textContent = showAllRows ? t('dep_show_fewer') : t('dep_show_all_rows', {n: components.length});
+    const visibleRows = !showAllRows && components.length > ROW_LIMIT ? components.slice(0, ROW_LIMIT) : components;
     if (!focusId || !components.some(row => row.component_id === focusId)) focusId = components[0]?.component_id || focusId;
     let columns = [...names.keys()];
     if (mode === 'matrix' && !showAll && columns.length > COLUMN_LIMIT && focusId) {
@@ -536,7 +582,8 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     }
     const columnDeps = columns.map(key => ({key, ...(dependencyByKey().get(key) || {name: key})}));
     columnDeps.sort((a, b) => KINDS.findIndex(kind => (a.kinds || []).includes(kind)) - KINDS.findIndex(kind => (b.kinds || []).includes(kind)) || String(a.name).localeCompare(String(b.name)));
-    const visibleRows = components.filter(row => columnDeps.some(dep => edges.some(edge => edge.component_id === row.component_id && edge.dependency_key === dep.key)));
+    legend.hidden = mode !== 'matrix' || !visibleRows.length;
+    if (!legend.hidden) paintLegend();
     if (!data || !visibleRows.length) {
       const reason = data?.reason === 'not_captured' ? t('dep_not_captured') : data && data.capture?.status === 'complete' && data.counts?.components === 0 ? t('dep_empty') : data?.reason ? reasonText(t, data.reason) : data ? t('dep_no_match') : '';
       matrixScroll.replaceChildren(reason ? emptyState({title: reason}) : '');
