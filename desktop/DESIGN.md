@@ -206,8 +206,9 @@ Omit the chart when the projection has no buckets.
 The question on this view is which checks have to be run again if one dependency changes.
 It reads the current dependency projection, its revisions, and one impact query. Capture,
 declare, and retract stay the durable dependency actions, using the projection version,
-the workspace version, and the source binding digest. Capture again is the only primary
-action in the page header. Maintenance policy, release baselines, maintenance checks, and
+the workspace version, and the source binding digest. Capture again is the header action.
+It is primary only when this member can run it. Otherwise it is a secondary button with the
+blocking reason beside it. Maintenance policy, release baselines, maintenance checks, and
 workload observations stay in the secondary cards.
 
 The header names the capture commit and its UTC date. A Stale pill is shown only when
@@ -216,12 +217,17 @@ stated once under Details. A Partial pill and the omitted total describe the ret
 capture, not a repository-wide total. Relation counts do the same, and they are omitted
 when the projection has no count object.
 
-The matrix groups dependency columns by kind. A cell shows relation letters: verified
-is solid, declared is an outline, and inferred is dashed. The version is the accessible
-name and the tooltip. More than six columns start as the focused component's direct
-dependencies, with Show all. At 800px and below the same rows become a list. The graph
-is a left-to-right drawing of the loaded capture. It is labelled Loaded and is not a
-fleet-wide graph. Selecting a node keeps its upstream and downstream visible.
+The matrix lists every captured component. More than twelve rows start with the first
+twelve and Show all (M). Columns group dependencies by kind. A capture of twelve
+columns or fewer shows every dependency, so a second component is not an empty row.
+More than twelve columns start as the focused component's direct dependencies, with
+Show transitive. A cell mark is
+R, B, T, C, or Ref. A legend above the matrix names those marks and the evidence styles:
+solid verified, outline declared, dashed inferred. The accessible name is the dependency,
+relation, version, and evidence. At 800px and below the same rows become a list. The graph
+uses the width of the view and centres a drawing that is narrower than that width. It is
+labelled Loaded and is not a fleet-wide graph. Selecting a node keeps its upstream and
+downstream visible.
 
 The inspector shows a pinned version only when this capture resolved one, plus the
 allowed range, the evidence location, and the maintenance owner or the recorded reason.
