@@ -56,13 +56,14 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   });
   test('RTM uses exact revisions, distinct work and an Issue with two PRs and three attempts',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
-    await page.locator('[data-pm-view="requirements"]').click();await expect(rtm(page)).toContainText('2 requirements · 3 distinct loaded work items');
+    await page.locator('[data-pm-view="requirements"]').click();await expect(page.locator('[data-pm-work-meta]')).toContainText('2 requirements');
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Expand Members can recover access',exact:true}).click();
     await expect(rtm(page).locator(`[data-rtm-work="${workId(1)}"]`)).toHaveCount(2);
     await expect(rtm(page).locator('[data-rtm-unassigned-issue]')).toContainText('Unassigned export request');
     await rtm(page).locator(`[data-rtm-select="${workId(1)}"]`).first().click();
     const detail=rtm(page).locator('[data-rtm-detail]');await expect(detail.locator('[data-rtm-pr]')).toHaveCount(2);
+    await detail.locator('[data-work-section=details] > summary').click();
     for(const n of [1,2,3])await expect(detail).toContainText('command-'+n);
     await expect(detail).toContainText('Historical deployment');await expect(detail).toContainText('product-owner');
     await expect(rtm(page).locator('[data-rtm-requirement="membership.login"]')).toContainText('Not assessed');
@@ -74,10 +75,10 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="requirements"]').click();
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('PR #10');
-    f.state.denyIssues=true;await rtm(page).getByRole('button',{name:'Refresh records',exact:true}).click();
+    f.state.denyIssues=true;await page.locator('[data-pm-refresh]').click();
     await expect(rtm(page)).toContainText('Your token lacks this scope');await expect(rtm(page)).not.toContainText('PR #10');
     await expect(rtm(page)).not.toContainText('Members can sign in');await expect(rtm(page)).not.toContainText('3 distinct');
-    f.state.denyIssues=false;await rtm(page).getByRole('button',{name:'Refresh records',exact:true}).click();
+    f.state.denyIssues=false;await page.locator('[data-pm-refresh]').click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toBeVisible();await expect(rtm(page)).toContainText('PR #10');
   });
   test('pagination rereads earlier receipts and retains unassigned Issues',async({page})=>{
@@ -100,7 +101,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('Reading the selected work');
     f.state.denyIssues=true;
-    try{await rtm(page).getByRole('button',{name:'Refresh records',exact:true}).click();await expect(rtm(page)).toContainText('Your token lacks this scope');}
+    try{await page.locator('[data-pm-refresh]').click();await expect(rtm(page)).toContainText('Your token lacks this scope');}
     finally{release();}
     await expect(rtm(page).locator('[data-rtm-detail]')).toBeHidden();await expect(rtm(page)).not.toContainText('PR #10');
   });
@@ -110,8 +111,8 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     const toggle=rtm(page).locator('[data-rtm-toggle="membership.login"]');await toggle.focus();await page.keyboard.press('Enter');
     await expect(toggle).toBeFocused();await expect(toggle).toHaveAttribute('aria-expanded','true');
     const work=rtm(page).getByRole('button',{name:'Member login',exact:true});await work.focus();await page.keyboard.press('Enter');
-    await expect(rtm(page).locator('[data-rtm-detail] h3')).toBeFocused();
-    await rtm(page).getByRole('button',{name:'Close details',exact:true}).click();await expect(work).toBeFocused();
+    await expect(rtm(page).locator('[data-rtm-detail] > header > .ui-icon-button')).toBeFocused();
+    await page.keyboard.press('Escape');await expect(work).toBeFocused();
   });
   test('unchanged background reads preserve the open plan, reading rows and detail focus',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
@@ -119,13 +120,13 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await page.locator('[data-pm-view="requirements"]').click();
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
-    const heading=rtm(page).locator('[data-rtm-detail] h3');await expect(heading).toBeFocused();
+    const heading=rtm(page).locator('[data-rtm-detail] > header > .ui-icon-button');await expect(heading).toBeFocused();
     await heading.evaluate(element=>element.setAttribute('data-reading-marker','detail'));
     await rtm(page).locator('[data-rtm-requirement="membership.login"]').evaluate(element=>element.setAttribute('data-reading-marker','row'));
     const reads=f.state.reads.filter(path=>path.includes('/deliveries?')).length;
     f.board.state.time++;f.board.state.cards[0].flow.age_seconds++;f.base.state.cursor++;
     await expect.poll(()=>f.state.reads.filter(path=>path.includes('/deliveries?')).length).toBeGreaterThan(reads);
-    await expect(rtm(page).getByRole('button',{name:'Refresh records',exact:true})).toBeEnabled();
+    await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
     await expect(heading).toHaveAttribute('data-reading-marker','detail');await expect(heading).toBeFocused();
     await expect(rtm(page).locator('[data-reading-marker="row"]')).toHaveCount(1);
     f.state.issues[0].document.issue.number=84;f.base.state.cursor++;
@@ -142,7 +143,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`workb
   const out=process.env.BATC_WORKBENCH_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/charter-${locale}-${width}.png`,fullPage:true});}
   if(width<1000)await page.locator('#workspace-menu').click();
   await page.locator('[data-pm-view="requirements"]').click();await expect(rtm(page).locator('[data-rtm-requirement]')).toHaveCount(2);
-  await rtm(page).locator('[data-rtm-requirement]').first().getByRole('button').click();await rtm(page).locator('[data-rtm-select]').first().click();
+  const row=rtm(page).locator('[data-rtm-requirement]').first();await (width<800?row:row.getByRole('button')).click();await rtm(page).locator('[data-rtm-work] [data-rtm-select]').first().click();
   await expect(rtm(page).locator('[data-rtm-pr]')).toHaveCount(2);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(await rtm(page).innerText()).not.toMatch(/\b(?:undefined|null|wb_\w+)\b/);

@@ -1,6 +1,7 @@
 import {expect, type Page} from '@playwright/test';
 // Exercise the real shell and disclosures; never force clicks into a hidden view.
 export async function openPmSection(page: Page, view: string, section?: string) {
+  if (await page.locator('.ui-inspector[aria-modal=true]:visible').count()) await page.keyboard.press('Escape');
   await expect(page.locator('.pm-main > .ui-page-header')).toBeVisible();
   await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
   const entry = page.locator(`[data-pm-view="${view}"]`);
@@ -9,12 +10,20 @@ export async function openPmSection(page: Page, view: string, section?: string) 
   await entry.click();
   // A thread route remounts the workspace asynchronously before its sections exist.
   await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
+  if (section && await page.locator(`[data-pm-view-tools="${view}"]`).count()) {
+    await page.locator(`[data-pm-view-tools="${view}"]`).click();
+    const item = page.locator(`[data-menu-key="${section}"]:visible`);
+    if (await item.count()) await item.click();
+    else await page.keyboard.press('Escape');
+    return;
+  }
   if (section) {
     const details = page.locator(`[data-pm-section="${section}"] > details`);
     if (await details.count() && !await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator(':scope > summary').click();
   }
 }
 export async function openPmPanel(page: Page, item: 'ui_change_phase' | 'ui_report' | 'ui_workspace_settings') {
+  if (await page.locator('.ui-inspector:visible').count()) await page.keyboard.press('Escape');
   await expect(page.locator('.pm-main > .ui-page-header')).toBeVisible();
   if (item === 'ui_report') {
     await page.locator('[data-pm-report-menu]').click();
@@ -29,7 +38,10 @@ export async function openPmPanel(page: Page, item: 'ui_change_phase' | 'ui_repo
 export async function expectPmWithdrawn(page: Page, view: string, selector: string, section?: string, facts: string[] = []) {
   await page.evaluate(view => {const parts = location.hash.split('/'); const target = parts.slice(0, 3).join('/') + '/' + view; if (location.hash === target) window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = target;}, view);
   await expect(page.locator(`[data-pm-region="${view}"]`)).toHaveJSProperty('hidden', false);
-  if (section) {
+  if (section && await page.locator(`[data-pm-view-tools="${view}"]`).count()) {
+    await page.locator(`[data-pm-view-tools="${view}"]`).click();
+    await page.locator(`[data-menu-key="${section}"]:visible`).click();
+  } else if (section) {
     const fold = page.locator(`[data-pm-section="${section}"] > details`);
     if (!await fold.evaluate(node => (node as HTMLDetailsElement).open)) await fold.locator(':scope > summary').click();
   }

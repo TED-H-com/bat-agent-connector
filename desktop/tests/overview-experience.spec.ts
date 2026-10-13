@@ -251,8 +251,7 @@ test('report pages survive refresh and comparisons reauthorize both snapshots', 
 
 
 test('event bursts coalesce projection reads without rebuilding publication', async ({page}) => {
-  const f = fixture(); await boot(page, f); await openPmSection(page, 'requirements');
-  await page.locator('[data-pm-section="ui_publication"] > details > summary').click();
+  const f = fixture(); await boot(page, f); await openPmSection(page, 'requirements', 'ui_publication');
   const mappings = page.locator('[data-pm-issue-mappings]'); await expect(mappings).toBeVisible();
   await mappings.evaluate(node => { (window as any).removedMappings = 0;
     new MutationObserver(changes => {for (const change of changes) (window as any).removedMappings += change.removedNodes.length;}).observe(node, {childList: true, subtree: true}); });
@@ -404,17 +403,23 @@ test('cached attention ages advance without moving the reading row', async ({pag
 test('390px navigation selects visible requirement and work after an earlier visit', async ({page}) => {
   await page.setViewportSize({width: 390, height: 844}); const f = fixture();
   f.state.data.attention[0].ref = {kind: 'requirement', id: f.ids.requirements.unlock, revision_id: f.ids.planV3};
-  await boot(page, f); await openPmSection(page, 'requirements'); await expect(page.locator('[data-rtm-toggle]').first()).toBeVisible();
+  await boot(page, f); await openPmSection(page, 'requirements'); await expect(page.locator('[data-rtm-requirement]').first()).toBeVisible();
   await openPmSection(page, 'overview'); await root(page).locator('[data-overview-open]').first().click();
   const row = page.locator(`[data-rtm-requirement="${f.ids.requirements.unlock}"]`);
-  await expect(row).toHaveAttribute('aria-current', 'true'); await expect(row.locator('button')).toBeInViewport({ratio: 1});
+  await expect(row).toHaveAttribute('aria-current', 'true'); await expect(row).toBeInViewport({ratio: 1});
   const bounds = (await row.boundingBox())!; expect(bounds.y).toBeGreaterThanOrEqual(0); expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
   expect(await row.evaluate(node => getComputedStyle(node).boxShadow)).not.toBe('none');
-  await expect(row.locator('button')).toBeFocused();
+  await expect(row).toBeFocused();
   await openPmSection(page, 'overview'); await root(page).locator('[data-overview-delivery] button').first().click();
-  await expect(page.locator('[data-rtm-detail] h3')).toBeFocused(); await expect(page.locator('[data-rtm-detail] h3')).toBeInViewport({ratio: 1});
-  const heading = (await page.locator('[data-rtm-detail] h3').boundingBox())!, topbar = (await page.locator('.top').boundingBox())!;
-  expect(heading.y).toBeGreaterThanOrEqual(topbar.y + topbar.height);
+  await expect(page.locator('[data-rtm-detail] > header h2')).toBeFocused(); await expect(page.locator('[data-rtm-detail] > header h2')).toBeInViewport({ratio: 1});
+  // The shared mobile sheet overlays the shell. Its focused title must be
+  // unobscured, rather than positioned below the shell's old inline top bar.
+  const detail = page.locator('[data-rtm-detail]');
+  await expect(detail).toHaveAttribute('aria-modal', 'true');
+  expect(await detail.locator(':scope > header h2').evaluate(node => {
+    const box = node.getBoundingClientRect();
+    return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest('[data-rtm-detail]') === node.closest('[data-rtm-detail]');
+  })).toBe(true);
   expect(f.state.writes).toEqual([]);
 });
 

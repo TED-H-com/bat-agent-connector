@@ -259,6 +259,136 @@ var scheduleStrings = {
 	}
 };
 //#endregion
+//#region src/pm-work-view-strings.js
+var workViewStrings = {
+	en: {
+		wv_open_requirement: "Open requirement",
+		wv_not_recorded: "Not recorded",
+		wv_compact_prs_unknown: "PRs unknown",
+		wv_compact_work: "{n} work",
+		wv_compact_prs: "{n} PRs",
+		wv_compact_work_loaded: "{n} work loaded",
+		wv_compact_prs_loaded: "{n} PRs loaded",
+		wv_requirements_unavailable: "Requirement records unavailable",
+		wv_board_unavailable: "Work records unavailable",
+		wv_blocked_one: "1 recorded blocker",
+		wv_issue: "Issue #{number}",
+		wv_search: "Search requirements or issues",
+		wv_group: "Group by",
+		wv_none: "None",
+		wv_milestone: "Milestone",
+		wv_phase: "Phase",
+		wv_status: "Status",
+		wv_requirements_count: "{n} requirements",
+		wv_work_count: "{n} work items",
+		wv_loaded: "{n} loaded",
+		wv_accepted_count: "{n} accepted",
+		wv_blocked_count: "{n} recorded blockers",
+		wv_work: "Work",
+		wv_requirement: "Requirement",
+		wv_pr: "PR",
+		wv_acceptance: "Acceptance",
+		wv_deploy: "Deploy",
+		wv_next_blocker: "Next blocker",
+		wv_no_milestone: "No milestone",
+		wv_unassigned: "Unassigned ({n})",
+		wv_criteria: "Acceptance criteria",
+		wv_attempts: "{n} visible attempts",
+		wv_served: "Requirements served",
+		wv_status_owner: "Status & ownership",
+		wv_result: "Latest result",
+		wv_blocker: "Blocker & next step",
+		wv_delivery: "Delivery",
+		wv_details: "Details",
+		wv_owner: "Owner",
+		wv_agent: "Agent",
+		wv_all_requirements: "All requirements",
+		wv_all_agents: "All agents",
+		wv_session: "Open session",
+		wv_discuss: "Discuss",
+		wv_no_result: "No result recorded",
+		wv_no_delivery: "No delivery recorded",
+		wv_start_end: "Start – end",
+		wv_unknown_times: "Start and end are not recorded",
+		wv_merge: "Merge",
+		wv_ci: "CI",
+		wv_next: "Next step",
+		wv_no_requirement: "No requirement assigned",
+		wv_phase_unknown: "Phase not recorded",
+		wv_task_blocked: "A linked task is blocked",
+		wv_reason_unknown: "Blocker reason not recorded",
+		wv_blocker_unknown: "Blockers unknown",
+		wv_work_details: "Open work details",
+		wv_content_approved: "Content approved",
+		wv_read_only: "Read-only",
+		wv_source_details: "Sources and original records",
+		wv_refresh: "Refresh"
+	},
+	"zh-TW": {
+		wv_open_requirement: "開啟需求",
+		wv_not_recorded: "未記錄",
+		wv_compact_prs_unknown: "PR 未知",
+		wv_compact_work: "{n} 項工作",
+		wv_compact_prs: "{n} 個 PR",
+		wv_compact_work_loaded: "已載入 {n} 項工作",
+		wv_compact_prs_loaded: "已載入 {n} 個 PR",
+		wv_requirements_unavailable: "無法取得需求紀錄",
+		wv_board_unavailable: "無法取得工作紀錄",
+		wv_blocked_one: "1 項已記錄阻礙",
+		wv_issue: "議題 #{number}",
+		wv_search: "搜尋需求或議題",
+		wv_group: "分組方式",
+		wv_none: "不分組",
+		wv_milestone: "里程碑",
+		wv_phase: "階段",
+		wv_status: "狀態",
+		wv_requirements_count: "{n} 項需求",
+		wv_work_count: "{n} 項工作",
+		wv_loaded: "已載入 {n} 筆",
+		wv_accepted_count: "{n} 項已驗收",
+		wv_blocked_count: "{n} 項已記錄阻礙",
+		wv_work: "工作",
+		wv_requirement: "需求",
+		wv_pr: "PR",
+		wv_acceptance: "驗收",
+		wv_deploy: "部署",
+		wv_next_blocker: "待解阻礙",
+		wv_no_milestone: "未指定里程碑",
+		wv_unassigned: "未指派（{n}）",
+		wv_criteria: "驗收條件",
+		wv_attempts: "可見的 {n} 次嘗試",
+		wv_served: "對應需求",
+		wv_status_owner: "狀態與負責人",
+		wv_result: "最新成果",
+		wv_blocker: "阻礙與下一步",
+		wv_delivery: "交付",
+		wv_details: "詳細資料",
+		wv_owner: "負責人",
+		wv_agent: "Agent",
+		wv_all_requirements: "所有需求",
+		wv_all_agents: "所有 Agent",
+		wv_session: "開啟工作階段",
+		wv_discuss: "討論",
+		wv_no_result: "尚無成果紀錄",
+		wv_no_delivery: "尚無交付紀錄",
+		wv_start_end: "開始 – 結束",
+		wv_unknown_times: "尚無開始與結束時間紀錄",
+		wv_merge: "合併",
+		wv_ci: "CI",
+		wv_next: "下一步",
+		wv_no_requirement: "未指定需求",
+		wv_phase_unknown: "尚無階段紀錄",
+		wv_task_blocked: "連結的任務受阻",
+		wv_reason_unknown: "尚無阻礙原因紀錄",
+		wv_blocker_unknown: "阻礙狀態未知",
+		wv_work_details: "開啟工作詳情",
+		wv_content_approved: "內容已核准",
+		wv_read_only: "唯讀",
+		wv_source_details: "來源與原始紀錄",
+		wv_refresh: "重新整理"
+	}
+};
+//#endregion
 //#region src/ui/ui-strings.js
 var statusVocabulary = Object.freeze({
 	not_started: {
@@ -507,6 +637,7 @@ var uiStrings = {
 };
 for (const lang of ["en", "zh-TW"]) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]["ui_status_" + key] = row[lang];
 var reasonLabels = Object.freeze({
+	creator_is_not_assignee: ["Owner not recorded", "尚未記錄負責人"],
 	not_on_current_revision: ["Not on this revision", "不在這個版本"],
 	repository_name_not_stored: ["Repository name was not stored", "沒有儲存儲存庫名稱"],
 	host_unreachable: ["Host unreachable", "主機連不上"],
@@ -6651,6 +6782,7 @@ var STRINGS = {
 		...overviewStrings["zh-TW"],
 		...scheduleStrings["zh-TW"],
 		...globalStrings["zh-TW"],
+		...workViewStrings["zh-TW"],
 		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
 		...pmQualityReviewsStrings["zh-TW"],
@@ -8120,6 +8252,7 @@ var STRINGS = {
 		...overviewStrings.en,
 		...scheduleStrings.en,
 		...globalStrings.en,
+		...workViewStrings.en,
 		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
 		...pmQualityReviewsStrings.en,
@@ -10237,24 +10370,35 @@ function inspector({ title, onClose = () => {}, returnFocus } = {}) {
 		dispose: close
 	});
 }
-function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, rowAttrs } = {}) {
-	const tbody = h$1("tbody");
-	const root = h$1("div", {
-		class: "ui-data-table",
-		tabindex: 0
-	}, h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
+function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, rowAttrs } = {}) {
+	const compact = () => compactRow && matchMedia("(max-width: 799px)").matches;
+	const keyFor = (row) => typeof rowKey === "function" ? rowKey(row) : row[rowKey];
+	const hasSelection = rows.some((row) => keyFor(row) === selected);
+	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
 		scope: "col",
+		"data-column": column.key,
 		class: column.numeric ? "numeric" : ""
-	}, column.label)))), tbody)), controls = [];
+	}, column.label)))), tbody);
+	const root = h$1("div", {
+		class: "ui-data-table" + (compactRow ? " ui-data-table-responsive" : ""),
+		tabindex: compactRow ? null : 0
+	}, table), controls = [];
 	rows.forEach((row, i) => {
-		const key = typeof rowKey === "function" ? rowKey(row) : row[rowKey], active = key === selected, none = !selected;
+		const key = keyFor(row), active = key === selected;
+		const extra = typeof rowAttrs === "function" ? rowAttrs(row) || {} : {};
+		let toggleExpansion;
 		const tr = h$1("tr", {
-			...typeof rowAttrs === "function" ? rowAttrs(row) || {} : {},
+			...extra,
 			"data-row-key": key,
-			tabindex: active || none && i === 0 ? 0 : -1,
+			tabindex: active || !hasSelection && i === 0 ? 0 : -1,
 			"aria-selected": String(active),
 			onclick: (event) => {
-				if (!event.target.closest("button, a, input, select")) select();
+				if (!event.target.closest("button, a, input, select")) {
+					if (compact() && toggleExpansion) {
+						tr.focus();
+						toggleExpansion();
+					} else select();
+				}
 			}
 		});
 		function select() {
@@ -10265,26 +10409,46 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 			onSelect(key, row);
 		}
 		if (expandable) {
-			const detail = h$1("tr", { hidden: true }, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
+			const open = expanded.has(key);
+			const detail = h$1("tr", {
+				hidden: !open,
+				class: "ui-data-table-detail"
+			}, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
+			toggleExpansion = (open = detail.hidden) => {
+				detail.hidden = !open;
+				toggle.setAttribute("aria-expanded", String(open));
+				if (compactRow) tr.setAttribute("aria-expanded", String(open));
+				toggle.setAttribute("aria-label", t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }));
+				onToggle(key, open);
+			};
 			const toggle = iconButton({
 				icon: "chevron-right",
-				label: t("ui_expand", { title: row.title || key }),
-				"aria-expanded": "false",
-				onClick: () => {
-					detail.hidden = !detail.hidden;
-					toggle.setAttribute("aria-expanded", String(!detail.hidden));
-					toggle.setAttribute("aria-label", t(detail.hidden ? "ui_expand" : "ui_collapse", { title: row.title || key }));
-				}
+				label: t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }),
+				"aria-expanded": String(open),
+				onClick: () => toggleExpansion()
 			});
+			if (compactRow) tr.setAttribute("aria-expanded", String(open));
 			tr.append(h$1("td", {}, toggle));
 			tbody.append(tr, detail);
 		} else tbody.append(tr);
-		tr.append(...columns.map((column) => h$1("td", { class: column.numeric ? "numeric" : "" }, column.render ? column.render(row) : row[column.key] ?? "—")));
+		tr.append(...columns.map((column) => h$1("td", {
+			"data-column": column.key,
+			class: column.numeric ? "numeric" : ""
+		}, column.render ? column.render(row) : row[column.key] ?? "—")));
+		if (compactRow) tr.append(h$1("td", {
+			class: "ui-data-table-compact",
+			colspan: columns.length + (expandable ? 1 : 0)
+		}, expandable ? icon("chevron-right") : null, compactRow(row)));
 		tr.addEventListener("keydown", (event) => {
 			if (event.target !== tr) return;
 			if (["Enter", " "].includes(event.key)) {
 				event.preventDefault();
-				select();
+				if (compact() && toggleExpansion) toggleExpansion();
+				else select();
+			}
+			if (compact() && toggleExpansion && ["ArrowRight", "ArrowLeft"].includes(event.key)) {
+				event.preventDefault();
+				toggleExpansion(event.key === "ArrowRight");
 			}
 			if ([
 				"ArrowDown",
@@ -10300,6 +10464,9 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 				controls[next]?.focus();
 			}
 		});
+		tr.addEventListener("focus", () => controls.forEach((node) => {
+			node.tabIndex = node === tr ? 0 : -1;
+		}));
 		controls.push(tr);
 	});
 	root.addEventListener("keydown", (event) => {
@@ -17113,107 +17280,378 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 	};
 }
 //#endregion
+//#region src/pm-work-inspector.js
+var workStatus = (card) => ({
+	backlog: "not_started",
+	in_progress: "in_progress",
+	waiting: "waiting",
+	review: "in_review",
+	accepted: "done",
+	archived: "historical"
+})[typeof card?.column === "string" ? card.column : ""] || "unknown";
+var blockedWork = (card) => card?.flow?.blocked === true || card?.execution?.tasks?.some((task) => task.state === "blocked") === true;
+var blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason) : blockedWork(card) ? t("wv_task_blocked") : t("wv_blocker_unknown");
+var workAgents = (source) => [...new Set((source?.sessions || []).map((row) => labelSegment(row.agent_kind)).filter(Boolean))];
+function prGroups(deliveries = []) {
+	const groups = new Map();
+	for (const row of deliveries) {
+		const target = row.target;
+		if (!target?.provider_origin || !Number.isSafeInteger(target.repository_id) || !Number.isSafeInteger(target.pull_number)) continue;
+		const key = JSON.stringify([
+			target.provider_origin,
+			target.repository_id,
+			target.pull_number
+		]);
+		if (!groups.has(key)) groups.set(key, {
+			target,
+			rows: []
+		});
+		groups.get(key).rows.push(row);
+	}
+	return [...groups.values()];
+}
+function prPills(source) {
+	return prGroups(source?.deliveries).map(({ target, rows }) => h$1("span", {
+		class: "pm-work-pr",
+		title: labelSegment(target.repository)
+	}, contextChip({ text: `PR #${target.pull_number}` }), rows.some((row) => row.merge?.merged === true) ? statusPill("merged") : statusPill("unknown")));
+}
+function checkDelivery(data, workspaceId, id, after, t) {
+	if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
+	for (const row of data.deliveries) if (!/^op_[0-9a-f]{32}$/.test(row.operation_id || "") || row.requirement_acceptance !== "not_evaluated_by_delivery") throw Error(t("pm_scope_mismatch"));
+	return data;
+}
+async function readWorkSources({ api, workspaceId, cards, caps, valid, t, deliveryPages = 1 }) {
+	const result = new Map(), sessions = new Map();
+	async function read(card) {
+		const id = card.work_item_id, source = {
+			deliveries: [],
+			next: null,
+			filtered: false,
+			sessions: []
+		};
+		if (caps?.features?.pm_workspaces?.engineering_delivery) {
+			let after = 0;
+			for (let index = 0; index < deliveryPages; index++) {
+				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${id}/deliveries?after=${after}&limit=20`), workspaceId, id, after, t);
+				if (!valid()) return;
+				source.deliveries.push(...data.deliveries);
+				source.filtered ||= Boolean(data.source_visibility_filtered);
+				source.next = data.next_after ?? null;
+				if (source.next === null) break;
+				after = source.next;
+			}
+		}
+		if (caps) for (const ref of card.execution?.sessions || []) {
+			const resource = labelSegment(ref.resource_id), slash = resource.indexOf("/");
+			if (slash < 1 || !resource.slice(slash + 1)) continue;
+			const host = resource.slice(0, slash), id = resource.slice(slash + 1);
+			if (!sessions.has(resource)) sessions.set(resource, api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(id)}`).then((data) => {
+				if (data.session?.host !== host || data.session.session_id !== id) throw Error(t("pm_scope_mismatch"));
+				return data.session;
+			}));
+			const session = await sessions.get(resource);
+			if (!valid()) return;
+			source.sessions.push(session);
+		}
+		result.set(id, source);
+	}
+	const queue = [...cards];
+	await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+		while (queue.length && valid()) await read(queue.shift());
+	}));
+	return result;
+}
+function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [] }) {
+	let panel = null, actions = null, signature = "", selection = null;
+	const unknown = () => statusPill("unknown");
+	const paragraph = (...nodes) => h$1("p", {}, ...nodes);
+	const stamp = (value) => {
+		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
+		return date && Number.isFinite(date.valueOf()) ? h$1("time", { datetime: date.toISOString() }, date.toISOString().replace("T", " ").replace(".000Z", " UTC")) : "—";
+	};
+	function close() {
+		panel?.close();
+	}
+	function show(data) {
+		selection = data;
+		if (!panel) {
+			panel = inspector({
+				title: data.title || t("ui_work_item"),
+				onClose: () => {
+					actions?.dispose();
+					actions = null;
+					panel = null;
+					selection = null;
+					signature = "";
+					onClose();
+				}
+			});
+			panel.classList.add("pm-work-inspector");
+			panel.dataset.workInspector = "";
+			panel.dataset.rtmDetail = "";
+			mount.append(panel);
+		}
+		const next = JSON.stringify(data);
+		if (signature === next) return;
+		signature = next;
+		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
+		panel.querySelector("h2").textContent = data.title || t("ui_work_item");
+		const { card, plan, requirement, requirements = [], source = {}, issues = [] } = data;
+		const href = discussHref({
+			workspaceId,
+			refs: card ? [{
+				kind: "work_item",
+				id: card.work_item_id
+			}] : requirement && plan ? [{
+				kind: "requirement",
+				id: requirement.id,
+				revision_id: plan.revision_id
+			}] : [],
+			title: data.title,
+			from
+		});
+		actions?.dispose();
+		panel.querySelector("[data-work-actions]")?.remove();
+		actions = menu({
+			button: iconButton({
+				icon: "more-horizontal",
+				label: t("ui_more")
+			}),
+			items: tools()
+		});
+		const actionRow = h$1("div", {
+			class: "pm-work-inspector-actions",
+			"data-work-actions": ""
+		}, h$1("a", {
+			href,
+			class: "ui-button primary",
+			"data-work-discuss": ""
+		}, t("wv_discuss")), tools().length ? actions : null);
+		panel.querySelector(":scope > header").append(actionRow);
+		const sections = [
+			["requirements", "wv_served"],
+			["status", "wv_status_owner"],
+			["result", "wv_result"],
+			["blocker", "wv_blocker"],
+			["delivery", "wv_delivery"]
+		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
+		const [served, state, result, blocker, delivery] = sections;
+		const requirementRows = requirement ? [requirement] : requirements;
+		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "ui_reason_unavailable" : "wv_no_requirement"))]);
+		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
+		if (card) {
+			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
+			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
+			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
+			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
+			if (card.quality?.selected_assessment) result.append(qualityFact({
+				h: h$1,
+				t,
+				fact: card.quality,
+				current: true
+			}));
+			else result.append(paragraph(t("pm_kanban_quality_unknown")));
+			const capture = card.latest_capture;
+			if (capture) {
+				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
+				if (card.capture_matches_binding === false || card.capture_matches_work_version === false) result.append(paragraph(t("pm_kanban_capture_different")));
+				result.append(...(capture.evidence || []).map((row) => paragraph(t("pm_kanban_fact"), " · ", ...Object.entries(row.assessment || {}).map(([key, value]) => {
+					const label = t("pm_kanban_field_" + key), state = t("pm_kanban_state_" + labelSegment(value));
+					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
+				}))));
+			} else result.append(paragraph(t("wv_no_result")));
+			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
+			const groups = prGroups(source.deliveries);
+			for (const { target, rows } of groups) delivery.append(h$1("div", {
+				class: "pm-work-delivery",
+				"data-rtm-pr": target.pull_number
+			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), h$1("span", {}, t("wv_ci")), unknown()), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
+			for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t("wv_deploy"), " · ", statusPill(row.deployment?.verified === true ? "deployed" : "unknown")));
+			if (!(source.deliveries || []).length) delivery.append(paragraph(t("wv_no_delivery")));
+			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
+			if (source.next != null && data.onMore) delivery.append(button({
+				label: t("wb_receipts_more"),
+				onClick: data.onMore
+			}));
+			delivery.append(h$1("h4", {}, t("wb_attempts")), paragraph(t("wv_start_end")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
+				class: "pm-work-attempt",
+				"data-work-attempt": row.attempt_id
+			}, paragraph(row.accepted === true ? t("pm_kanban_accepted") : t("pm_kanban_accept_unknown"), " · ", t("pm_kanban_state_" + labelSegment(row.status)).startsWith("pm_kanban_") ? t("ui_status_unknown") : t("pm_kanban_state_" + labelSegment(row.status))), paragraph(h$1("span", { title: t("wv_unknown_times") }, "— – —")))));
+		} else {
+			state.append(statusPill(data.accepted ? "accepted" : "not_assessed"));
+			result.append(paragraph(t("wv_no_result")));
+			blocker.append(data.blocker ? paragraph(statusPill("blocked"), " ", data.blocker) : unknown());
+			delivery.append(paragraph(t("wb_acceptance_separate")));
+		}
+		const details = disclosure({
+			label: t("wv_details"),
+			body: h$1("div", {}, plan?.adoption ? paragraph(t("wb_approved_by", { actor: labelSegment(plan.adoption.adopted_by) }), " · ", stamp(plan.adoption.created_at)) : null, card ? paragraph(t("pm_kanban_attempts", { count: Number.isSafeInteger(card.execution?.accepted_attempts) ? card.execution.accepted_attempts : t("ui_status_unknown") })) : null, card?.flow?.history !== "available_central_events" ? paragraph(t("pm_kanban_history_unknown")) : null, card ? paragraph(t("pm_kanban_age"), ": ", typeof card.flow?.age_seconds === "number" ? String(card.flow.age_seconds) : t("ui_status_unknown")) : null, card?.execution?.coverage?.unavailable_sources || card?.latest_capture?.coverage?.inaccessible_sources ? paragraph(t("pm_kanban_missing")) : null, card?.execution?.coverage?.truncated ? paragraph(t("pm_kanban_truncated")) : null, paragraph(t("pm_kanban_execution")), ...[
+				"tasks",
+				"operations",
+				"sessions",
+				"attempts"
+			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), h$1("pre", { class: "mono" }, JSON.stringify({
+				plan_revision: plan?.revision_id || card?.binding?.plan_revision_id,
+				binding: card?.binding,
+				work: card?.work,
+				execution: card?.execution,
+				flow: card?.flow,
+				capture: card?.latest_capture,
+				issues,
+				deliveries: source.deliveries,
+				quality: card?.quality
+			}, (key, value) => value === null ? "—" : value, 2))),
+			open: panel.body.querySelector("[data-work-section=\"details\"]")?.open || false
+		});
+		details.dataset.workSection = "details";
+		for (const node of [...sections, details]) {
+			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
+			if (!previous) panel.body.append(node);
+			else if (!previous.isEqualNode(node)) {
+				if (node.dataset.workSection === "details") previous.querySelector("div").replaceWith(node.querySelector("div"));
+				else previous.replaceChildren(...node.childNodes);
+			}
+		}
+	}
+	return {
+		show,
+		close,
+		dispose: close,
+		get element() {
+			return panel;
+		},
+		get selection() {
+			return selection;
+		}
+	};
+}
+//#endregion
 //#region src/pm-traceability.js
 function requirementReviews(plan, requirement, reviews) {
 	const ids = (requirement.acceptance || []).map((row) => row.source_input_id);
 	if (!ids.length || ids.some((id) => !id) || !plan.document_digest || !plan.adoption?.scope_revision) return [];
 	return reviews.filter((row) => row.qualified === true && row.applicable === true && row.assessment?.document?.qualified === true && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption?.scope_revision && ids.every((id) => row.assessment.document.criteria?.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === "accepted")));
 }
-function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps, errorBox }) {
-	const preference = viewState(namespace, workspaceId, "requirements");
-	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let serial = 0, detailSerial = 0, active = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [];
-	let pendingFocus = null;
-	let selected = preference.selected || null, detailCard = null, deliveryRows = [], deliveryCursor = null, detailBusy = false, signature = "", renderedDetail = "", deliveryPages = 1;
+function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
+	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map();
+	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
+	let selected = preference.selected || null, signature = "", deliveryPages = 1, preserveSelection = false, tools = () => [];
 	const pages = {
 		work: 1,
 		issues: 1,
 		reviews: 1
 	}, cursors = {}, expanded = new Set(preference.expanded || []), order = [];
-	const status = h("div", { role: "status" }), count = h("p", { class: "muted" }), tableBody = h("tbody");
-	const filter = h("input", {
+	const status = h$1("div", { role: "status" }), meta = h$1("span"), tables = h$1("div", { class: "pm-requirements-tables" });
+	const filter = h$1("input", {
 		type: "search",
-		"aria-label": t("wb_filter"),
-		placeholder: t("wb_filter"),
-		oninput: () => renderTable()
+		"aria-label": t("wv_search"),
+		placeholder: t("wv_search"),
+		oninput: () => {
+			preference.filter = filter.value;
+			renderTable();
+		}
 	});
 	filter.value = preference.filter || "";
-	const detail = h("aside", {
-		class: "pm-rtm-detail",
-		"data-rtm-detail": "",
-		hidden: true
-	});
-	const refreshButton = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
-	}, t("wb_apply_update"));
+	const group = h$1("select", {
+		"aria-label": t("wv_group"),
+		onchange: () => {
+			preference.group = group.value;
+			renderTable();
+		}
+	}, ...[
+		"milestone",
+		"phase",
+		"none"
+	].map((value) => h$1("option", { value }, t("wv_" + value))));
+	group.value = preference.group || "none";
+	const layout = h$1("div", { class: "pm-work-layout" }, tables);
 	const moreButtons = Object.fromEntries([
 		"work",
 		"issues",
 		"reviews"
-	].map((kind) => [kind, h("button", {
+	].map((kind) => [kind, h$1("button", {
 		type: "button",
-		class: "secondary",
+		class: "ui-button secondary",
 		hidden: true,
 		onclick: () => {
 			pages[kind]++;
 			refresh();
 		}
 	}, t(kind === "work" ? "wb_more" : kind === "issues" ? "wb_more_issues" : "wb_more_reviews"))]));
-	const table = h("div", {
-		class: "pm-rtm-table",
-		tabindex: "0",
-		role: "region",
-		"aria-label": t("wb_rtm")
-	}, h("table", {}, h("thead", {}, h("tr", {}, ...[
-		"wb_requirements",
-		"wb_milestone",
-		"wb_work",
-		"wb_acceptance"
-	].map((key) => h("th", { scope: "col" }, t(key))))), tableBody));
-	const element = h("section", { "data-pm-rtm": "" }, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_rtm")), refreshButton), h("div", { class: "pm-workbench-toolbar" }, filter, count), status, h("div", { class: "pm-rtm-layout" }, table, detail), h("div", { class: "actions" }, ...Object.values(moreButtons)), h("details", {}, h("summary", {}, t("wb_sources")), h("p", {}, t("wb_acceptance_separate")), h("p", {}, t("wb_no_phase"))));
+	const element = h$1("section", {
+		"data-pm-rtm": "",
+		class: "pm-requirements"
+	}, h$1("div", { class: "pm-requirements-toolbar" }, h$1("label", { class: "pm-work-search" }, icon("search"), filter), h$1("label", {}, t("wv_group"), group)), status, layout, h$1("div", { class: "actions" }, ...Object.values(moreButtons)), disclosure({
+		label: t("wb_sources"),
+		body: h$1("div", {}, h$1("p", {}, t("wb_acceptance_separate")), h$1("p", {}, t("wb_no_phase")))
+	}));
+	const detail = workInspector({
+		t,
+		workspaceId,
+		from: "requirements",
+		mount: layout,
+		tools: () => tools(),
+		onClose: () => {
+			detailSerial++;
+			if (!preserveSelection) {
+				const id = selected;
+				selected = null;
+				preference.selected = null;
+				markSelection();
+				if (id) selectionTarget(id)?.focus({ preventScroll: true });
+				const [path, query] = location.hash.split("?"), params = new URLSearchParams(query);
+				params.delete("select");
+				history.replaceState(null, "", path + (params.size ? "?" + params : ""));
+			}
+		}
+	});
+	const feature = (name) => caps()?.features?.pm_workspaces?.[name];
 	const scope = (data) => {
 		if (data?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 		return data;
 	};
-	const label = (prefix, value) => {
-		if (!value) return t("wb_unknown");
-		const key = prefix + value;
-		return t(key) === key ? String(value).replaceAll("_", " ") : t(key);
-	};
-	const code = (value) => h("code", { class: "pm-source" }, value || t("wb_unknown"));
-	const time = (value) => Number.isFinite(value) ? new Date(value * 1e3).toLocaleString() : t("wb_unknown");
-	const feature = (name) => caps()?.features?.pm_workspaces?.[name];
 	const cardCheck = (row, id = row?.work_item_id) => {
 		if (!/^wi_[0-9a-f]{20}$/.test(id || "") || row?.work_item_id !== id || row.work?.work_item_id !== id || row.binding?.workspace_id !== workspaceId || row.binding.work_item_id !== id || !/^pmwb_[0-9a-f]{32}$/.test(row.binding.binding_id)) throw Error(t("pm_scope_mismatch"));
+		if (row.latest_capture && (row.latest_capture.workspace_id !== workspaceId || row.latest_capture.work_item_id !== id)) throw Error(t("pm_scope_mismatch"));
 		return row;
 	};
 	const issuesFor = (card) => issues.filter((row) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id);
-	const detailSignature = () => JSON.stringify([
-		detailCard && [
-			detailCard.work.title,
-			detailCard.column,
-			detailCard.binding,
-			detailCard.quality,
-			detailCard.execution,
-			detailCard.latest_capture,
-			issuesFor(detailCard)
-		],
-		plan?.revision_id,
-		plan?.adoption,
-		deliveryRows,
-		deliveryCursor
-	]);
+	const linked = (req) => cards.filter((card) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id));
+	const deliverySource = (req) => ({ deliveries: [...new Map(linked(req).flatMap((card) => sources.get(card.work_item_id)?.deliveries || []).map((row) => [row.operation_id, row])).values()] });
+	const milestoneFor = (req) => milestones.filter((row) => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
+	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wv_issue", { number: row.document.issue.number })]);
+	const acceptancePill = (req) => statusPill(requirementReviews(plan, req, reviews).length ? "accepted" : "not_assessed");
+	const deployPill = (req) => {
+		const groups = prGroups(deliverySource(req).deliveries), deployed = groups.filter((group) => group.rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true)).length;
+		return statusPill(deployed && deployed === groups.length ? "deployed" : deployed ? "partial" : "unknown");
+	};
+	const milestoneLabel = (req) => {
+		const label = milestoneFor(req).map((row) => labelSegment(row.title)).filter(Boolean).join(" · ");
+		return h$1("span", {
+			class: "pm-requirement-milestone",
+			title: label || t("wv_no_milestone"),
+			"aria-label": label || t("wv_no_milestone")
+		}, label || "—");
+	};
+	const selectionTarget = (id) => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find((node) => node.getClientRects().length);
 	function controls() {
-		refreshButton.disabled = busy;
 		for (const [kind, button] of Object.entries(moreButtons)) {
 			button.disabled = busy;
 			button.hidden = cursors[kind] == null;
 		}
 	}
+	function closeRetaining() {
+		preserveSelection = true;
+		detail.close();
+		preserveSelection = false;
+	}
 	function withdraw() {
 		pendingFocus = null;
+		pendingNavigation = null;
+		currentRequirement = null;
+		scrollGeneration++;
 		serial++;
 		detailSerial++;
 		busy = false;
@@ -17222,16 +17660,11 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		issues = [];
 		reviews = [];
 		milestones = [];
+		sources.clear();
 		signature = "";
-		detailCard = null;
-		deliveryRows = [];
-		deliveryCursor = null;
-		detailBusy = false;
-		renderedDetail = "";
-		tableBody.replaceChildren();
-		detail.replaceChildren();
-		detail.hidden = true;
-		count.replaceChildren();
+		closeRetaining();
+		tables.replaceChildren();
+		meta.replaceChildren();
 		status.replaceChildren();
 		for (const kind of Object.keys(pages)) cursors[kind] = null;
 		controls();
@@ -17246,65 +17679,169 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		withdraw();
 		status.replaceChildren(errorBox(error));
 	}
-	function workButton(card) {
-		return h("button", {
+	function markSelection() {
+		for (const row of tables.querySelectorAll("[data-row-key]")) {
+			row.setAttribute("aria-selected", String(row.dataset.rowKey === selected));
+			if (row.dataset.rowKey === currentRequirement) row.setAttribute("aria-current", "true");
+			else row.removeAttribute("aria-current");
+		}
+		for (const node of tables.querySelectorAll("[data-rtm-select]")) node.setAttribute("aria-pressed", String(node.dataset.rtmSelect === selected));
+	}
+	function workRow(card) {
+		const source = sources.get(card.work_item_id);
+		const attempts = card.execution?.attempts?.length;
+		const count = (card.execution?.coverage?.unavailable_sources || card.execution?.coverage?.truncated) && !attempts ? "—" : attempts ?? "—";
+		return h$1("div", {
+			"data-rtm-work": card.work_item_id,
+			class: "pm-requirement-work"
+		}, h$1("button", {
 			type: "button",
-			class: "secondary pm-rtm-work",
+			class: "ui-button ghost pm-rtm-work",
 			"data-rtm-select": card.work_item_id,
 			"aria-pressed": String(selected === card.work_item_id),
-			onclick: () => void select(card.work_item_id, true)
-		}, card.work.title);
+			onclick: () => void select(card.work_item_id)
+		}, firstLabel(card.work.title, t("ui_work_item"))), h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark), h$1("span", {
+			class: "ui-meta",
+			title: t("wv_attempts", { n: count })
+		}, `×${count}`), ...prPills(source)), ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
 	}
 	function renderTable() {
-		const focused = tableBody.contains(document.activeElement) ? ["data-rtm-select", "data-rtm-toggle"].map((attribute) => [attribute, document.activeElement?.getAttribute(attribute)]).find(([, value]) => value) : null;
-		tableBody.replaceChildren();
+		const focused = tables.contains(document.activeElement) ? [
+			"data-rtm-select",
+			"data-rtm-toggle",
+			"data-row-key"
+		].map((attribute) => [attribute, document.activeElement?.getAttribute(attribute)]).find(([, value]) => value) : null;
+		const scrolls = [...tables.querySelectorAll(".ui-data-table")].map((node) => node.scrollLeft);
 		const query = filter.value.trim().toLocaleLowerCase(), requirements = plan?.document?.requirements || [];
-		const linked = (req) => cards.filter((card) => card.binding.plan_revision_id === plan.revision_id && card.binding.requirement_ids?.includes(req.id));
-		const matches = (req, work) => !query || [
+		const matches = (req, work) => !query || joinLabel([
 			req?.text,
 			req?.id,
-			...work.flatMap((card) => [card.work.title, ...issuesFor(card).map((row) => `${row.document.issue.repository} #${row.document.issue.number}`)])
-		].join(" ").toLocaleLowerCase().includes(query);
+			...work.flatMap((card) => [card.work.title, ...issuesFor(card).flatMap((row) => [
+				row.document.selected?.public_title,
+				row.document.issue?.repository,
+				Number.isSafeInteger(row.document.issue?.number) ? `#${row.document.issue.number}` : ""
+			])])
+		], " ").toLocaleLowerCase().includes(query);
 		const displayed = requirements.filter((req) => matches(req, linked(req)));
 		for (const req of displayed) if (!order.includes(req.id)) order.push(req.id);
 		displayed.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+		const groups = new Map();
 		for (const req of displayed) {
-			const work = linked(req), open = expanded.has(req.id), qualified = requirementReviews(plan, req, reviews);
-			const toggle = h("button", {
-				type: "button",
-				class: "secondary pm-rtm-toggle",
-				"aria-expanded": String(open),
-				"data-rtm-toggle": req.id,
-				"aria-label": t(open ? "wb_collapse" : "wb_open", { name: req.text }),
-				onclick: () => {
-					if (expanded.has(req.id)) expanded.delete(req.id);
-					else expanded.add(req.id);
-					renderTable();
-				}
-			}, open ? "−" : "+");
-			const milestone = milestones.filter((row) => row.plan_revision_id === plan.revision_id && row.requirement_ids?.includes(req.id));
-			tableBody.append(h("tr", { "data-rtm-requirement": req.id }, h("th", { scope: "row" }, toggle, h("span", {}, req.text), code(req.id)), h("td", {}, milestone.length ? milestone.map((row) => row.title).join(" · ") : t("wb_no_milestone")), h("td", {}, String(work.length)), h("td", {}, t(qualified.length ? "pq_qualified" : "wb_not_assessed"))));
-			if (open) {
-				tableBody.append(h("tr", { class: "pm-rtm-criteria" }, h("td", { colspan: 4 }, h("ul", {}, ...(req.acceptance || []).map((row) => h("li", {}, row.text))), ...qualified.map((row) => h("details", {}, h("summary", {}, t("pq_original")), code(row.review_id), h("p", {}, t("wb_approved_by", { actor: row.assessment.actor })), code(row.context.native_result?.candidate_commit))))));
-				if (!work.length) tableBody.append(h("tr", {}, h("td", {
-					colspan: 4,
-					class: "muted"
-				}, t("wb_no_work"))));
-				for (const card of work) tableBody.append(workRow(card));
+			const key = group.value === "milestone" ? milestoneFor(req).map((row) => row.title).join(" · ") : group.value === "phase" ? t("wv_phase_unknown") : "";
+			if (!groups.has(key)) groups.set(key, []);
+			groups.get(key).push(req);
+		}
+		const tableFor = (requirements) => {
+			const table = dataTable({
+				rows: requirements.map((req) => ({
+					...req,
+					title: req.text
+				})),
+				rowKey: "id",
+				selected,
+				expanded,
+				onToggle: (id, open) => {
+					if (open) expanded.add(id);
+					else expanded.delete(id);
+					preference.expanded = [...expanded];
+				},
+				onSelect: (id, row) => {
+					tables.querySelector(`[data-row-key="${CSS.escape(id)}"]`)?.focus();
+					select(id);
+				},
+				expandable: (req) => h$1("div", { class: "pm-requirement-expanded" }, h$1("h3", {}, t("wv_criteria")), h$1("ul", {}, ...(req.acceptance || []).map((row) => h$1("li", {}, labelSegment(row.text)))), h$1("button", {
+					type: "button",
+					class: "ui-button ghost pm-requirement-open",
+					"data-rtm-select": req.id,
+					onclick: () => void select(req.id)
+				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? h$1("p", { class: "ui-meta" }, t("wb_no_work")) : null),
+				compactRow: (req) => {
+					const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
+					const partialPRs = work.some((card) => sources.get(card.work_item_id)?.filtered || sources.get(card.work_item_id)?.next != null);
+					return h$1("div", { class: "pm-requirement-summary" }, h$1("span", {
+						class: "pm-requirement-title",
+						title: labelSegment(req.text)
+					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", { "aria-label": t("wv_acceptance") }, acceptancePill(req)), h$1("span", { "aria-label": t("wv_deploy") }, deployPill(req)), h$1("span", {}, t(cursors.work != null ? "wv_compact_work_loaded" : "wv_compact_work", { n: work.length })), h$1("span", {}, t(!feature("engineering_delivery") ? "wv_compact_prs_unknown" : partialPRs ? "wv_compact_prs_loaded" : "wv_compact_prs", { n: prGroups(source.deliveries).length })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
+				},
+				columns: [
+					{
+						key: "title",
+						label: t("wv_requirement")
+					},
+					{
+						key: "milestone",
+						label: t("wv_milestone"),
+						render: milestoneLabel
+					},
+					{
+						key: "work",
+						label: t("wv_work"),
+						numeric: true,
+						render: (req) => cursors.work != null ? t("wv_loaded", { n: linked(req).length }) : String(linked(req).length)
+					},
+					{
+						key: "pr",
+						label: t("wv_pr"),
+						render: (req) => h$1("div", { class: "pm-work-inline" }, ...prPills(deliverySource(req)))
+					},
+					{
+						key: "acceptance",
+						label: t("wv_acceptance"),
+						render: acceptancePill
+					},
+					{
+						key: "deploy",
+						label: t("wv_deploy"),
+						render: deployPill
+					},
+					{
+						key: "blocker",
+						label: t("wv_next_blocker"),
+						render: (req) => {
+							const card = linked(req).find(blockedWork);
+							return card ? blockerText(t, card) : h$1("span", { class: "ui-meta" }, t("ui_status_unknown"));
+						}
+					}
+				]
+			});
+			for (const row of table.querySelectorAll("[data-row-key]")) {
+				row.dataset.rtmRequirement = row.dataset.rowKey;
+				row.querySelector("button").dataset.rtmToggle = row.dataset.rowKey;
 			}
+			return table;
+		};
+		tables.replaceChildren();
+		for (const [label, rows] of [...groups].sort(([a], [b]) => a ? b ? 0 : -1 : b ? 1 : 0)) {
+			if (group.value !== "none") tables.append(h$1("h2", { class: "pm-requirement-group" }, label || t("wv_unassigned", { n: rows.length })));
+			tables.append(tableFor(rows));
 		}
 		const unassigned = cards.filter((card) => !requirements.some((req) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id))).filter((card) => matches(null, [card]));
-		const orphanIssues = issues.filter((row) => !cards.some((card) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id)).filter((row) => !query || `${row.document.selected?.public_title} ${row.document.issue?.repository} #${row.document.issue?.number}`.toLocaleLowerCase().includes(query));
-		if (unassigned.length || orphanIssues.length) tableBody.append(h("tr", { class: "pm-rtm-group" }, h("th", {
-			scope: "rowgroup",
-			colspan: 4
-		}, t("wb_unassigned"))), ...unassigned.map(workRow), ...orphanIssues.map((row) => h("tr", { "data-rtm-unassigned-issue": row.mapping_id }, h("td", { colspan: 4 }, row.document.selected?.public_title || t("wb_work"), " · ", issueLabel(row)))));
-		if (!displayed.length && !unassigned.length && !orphanIssues.length) tableBody.append(h("tr", {}, h("td", { colspan: 4 }, t(query ? "wb_no_match" : "wb_no_requirements"))));
-		if (focused) tableBody.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({ preventScroll: true });
-	}
-	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wb_issue", { number: row.document.issue.number })]);
-	function workRow(card) {
-		return h("tr", { "data-rtm-work": card.work_item_id }, h("td", { colspan: 2 }, workButton(card), h("span", { class: "muted" }, label("pm_kanban_state_", card.column))), h("td", {}, ...issuesFor(card).map((row) => h("div", {}, issueLabel(row))), !issuesFor(card).length ? "—" : ""), h("td", {}, h("span", { class: "muted" }, t("wb_details"))));
+		const orphanIssues = issues.filter((row) => !cards.some((card) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id)).filter((row) => !query || joinLabel([
+			row.document.selected?.public_title,
+			row.document.issue?.repository,
+			row.document.issue?.number
+		], " ").toLocaleLowerCase().includes(query));
+		if (unassigned.length || orphanIssues.length) {
+			const fold = disclosure({
+				label: t("wv_unassigned", { n: unassigned.length + orphanIssues.length }),
+				open: preference.unassigned !== false,
+				body: h$1("div", {}, ...unassigned.map(workRow), ...orphanIssues.map((row) => h$1("p", { "data-rtm-unassigned-issue": row.mapping_id }, firstLabel(row.document.selected?.public_title, t("wb_work")), " · ", issueLabel(row))))
+			});
+			fold.dataset.rtmUnassigned = "";
+			fold.addEventListener("toggle", () => {
+				preference.unassigned = fold.open;
+			});
+			tables.append(fold);
+		}
+		if (!displayed.length && !unassigned.length && !orphanIssues.length) tables.append(emptyState({ title: t(query ? "wb_no_match" : "wb_no_requirements") }));
+		[...tables.querySelectorAll(".ui-data-table")].forEach((node, i) => {
+			node.scrollLeft = scrolls[i] || preference.tableScroll || 0;
+			node.addEventListener("scroll", () => {
+				preference.tableScroll = node.scrollLeft;
+			});
+		});
+		markSelection();
+		if (focused) tables.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({ preventScroll: true });
 	}
 	async function catalogue(kind, ticket) {
 		const config = {
@@ -17335,7 +17872,6 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		if (!active) return;
 		const ticket = ++serial;
 		detailSerial++;
-		detailBusy = true;
 		busy = true;
 		controls();
 		try {
@@ -17351,19 +17887,31 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			]);
 			alive();
 			if (ticket !== serial) return;
-			const end = await api("GET", `${endpoint}/plans/head`);
-			alive();
-			if (ticket !== serial) return;
-			if (end.head?.workspace_id !== workspaceId || end.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("wb_plan_changed"));
 			work.rows.forEach((row) => cardCheck(row));
 			if (new Set(work.rows.map((row) => row.work_item_id)).size !== work.rows.length) throw Error(t("pm_scope_mismatch"));
 			for (const row of mappings?.rows || []) if (row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.work_item_id !== row.work_item_id || row.document.relation?.work_item_id !== row.work_item_id || !row.document.issue?.repository || !Number.isSafeInteger(row.document.issue.number)) throw Error(t("pm_scope_mismatch"));
 			for (const row of quality?.rows || []) if (row.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 			if (roadmap) scope(roadmap);
+			const read = await readWorkSources({
+				api,
+				workspaceId,
+				cards: work.rows,
+				caps: caps(),
+				t,
+				valid: () => {
+					alive();
+					return ticket === serial;
+				}
+			});
+			const end = await api("GET", `${endpoint}/plans/head`);
+			alive();
+			if (ticket !== serial) return;
+			if (end.head?.workspace_id !== workspaceId || end.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("wb_plan_changed"));
 			plan = accepted.plan;
 			cards = work.rows;
 			issues = mappings?.rows || [];
 			reviews = quality?.rows || [];
+			sources = read;
 			milestones = roadmap?.baseline?.document?.milestones || [];
 			for (const [kind, data] of Object.entries({
 				work,
@@ -17376,35 +17924,44 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 					card.work_item_id,
 					card.binding,
 					card.work.title,
-					card.column
+					card.column,
+					card.execution?.attempts?.length,
+					blockedWork(card)
 				]),
 				issues,
 				reviews,
-				milestones
+				milestones,
+				[...sources].map(([id, source]) => [
+					id,
+					source.deliveries,
+					workAgents(source)
+				])
 			]);
 			if (next !== signature) {
 				signature = next;
 				renderTable();
 			}
-			count.textContent = t("wb_catalogue", {
-				requirements: plan?.document?.requirements?.length || 0,
-				work: cards.length
-			});
-			status.replaceChildren(...[
+			const requirements = plan?.document?.requirements || [], partial = [
 				work,
 				mappings,
 				quality
-			].some((row) => row?.filtered || row?.next != null) ? [h("p", { class: "muted" }, t("wb_partial"))] : []);
-			if (selected && cards.some((card) => card.work_item_id === selected)) await select(selected, false, true);
-			else {
-				detailCard = null;
-				deliveryRows = [];
-				detail.replaceChildren();
-				detail.hidden = true;
-				detailBusy = false;
-				renderedDetail = "";
+			].some((row) => row?.filtered || row?.next != null) || [...sources.values()].some((row) => row.filtered || row.next != null);
+			meta.textContent = !plan ? t("ui_status_unknown") : partial ? t("wv_loaded", { n: requirements.length }) : joinLabel([
+				t("wv_requirements_count", { n: requirements.length }),
+				feature("quality_reviews") ? t("wv_accepted_count", { n: requirements.filter((req) => requirementReviews(plan, req, reviews).length).length }) : null,
+				requirements.some((req) => linked(req).some(blockedWork)) ? t(requirements.filter((req) => linked(req).some(blockedWork)).length === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: requirements.filter((req) => linked(req).some(blockedWork)).length }) : null
+			]);
+			status.replaceChildren(...partial ? [h$1("span", { class: "ui-meta" }, t("wb_partial"))] : []);
+			const routeSelection = new URLSearchParams(location.hash.split("?")[1]).get("select");
+			if (visible && routeSelection && routeSelection !== selected) await select(routeSelection, true);
+			else if (visible && selected) await select(selected, false, true);
+			busy = false;
+			if (pendingFocus) await applyPending();
+			if (pendingNavigation) {
+				const ref = pendingNavigation;
+				pendingNavigation = null;
+				await openRef(ref);
 			}
-			applyPending();
 		} catch (error) {
 			fail(error, ticket);
 		} finally {
@@ -17414,167 +17971,106 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			}
 		}
 	}
-	function deliveryCheck(data, id, after) {
-		scope(data);
-		if (data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
-		return data;
-	}
-	function renderDetail() {
-		const card = detailCard;
-		if (!card) return;
-		const close = h("button", {
-			type: "button",
-			class: "secondary",
-			onclick: () => {
-				const id = selected;
-				detailSerial++;
-				selected = null;
-				detailCard = null;
-				deliveryRows = [];
-				renderedDetail = "";
-				detail.replaceChildren();
-				detail.hidden = true;
-				renderTable();
-				tableBody.querySelector(`[data-rtm-select="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
-			}
-		}, t("wb_close"));
-		detail.replaceChildren(h("header", { class: "pm-heading" }, h("h3", { tabindex: "-1" }, card.work.title), close), h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wb_open_work")), h("p", {}, label("pm_kanban_state_", card.column)), h("h4", {}, t("wb_version")), code(card.binding.plan_revision_id), card.binding.plan_revision_id === plan?.revision_id && plan.adoption ? h("details", {}, h("summary", {}, t("wb_approval")), h("p", {}, t("wb_approved_by", { actor: plan.adoption.adopted_by })), h("p", {}, time(plan.adoption.created_at)), h("p", {}, plan.adoption.rationale), code(plan.adoption.commit_sha)) : "", qualityFact({
-			h,
-			t,
-			fact: card.quality?.selected_assessment ? card.quality : null,
-			current: true
-		}), h("h4", {}, t("wb_attempts")), ...[
-			"sessions",
-			"attempts",
-			"operations"
-		].flatMap((kind) => (card.execution?.[kind] || []).map((row) => h("p", {}, code(row.resource_id || row.attempt_id || row.operation_id), label("pm_kanban_state_", row.runtime_status || row.status), " · ", time(row.observed_at)))), h("h4", {}, t("wb_delivery")));
-		const groups = new Map();
-		for (const row of deliveryRows) {
-			const target = row.target || {}, key = target.provider_origin && Number.isSafeInteger(target.repository_id) && Number.isSafeInteger(target.pull_number) ? JSON.stringify([
-				target.provider_origin,
-				target.repository_id,
-				target.pull_number
-			]) : row.operation_id;
-			if (!groups.has(key)) groups.set(key, []);
-			groups.get(key).push(row);
+	async function select(id, scroll = false, retain = false) {
+		const card = cards.find((row) => row.work_item_id === id), requirement = plan?.document?.requirements?.find((row) => row.id === id);
+		if (!card && !requirement) {
+			closeRetaining();
+			return;
 		}
-		for (const rows of groups.values()) {
-			const target = rows[0].target || {};
-			detail.append(h("section", {
-				class: "pm-rtm-delivery",
-				"data-rtm-pr": target.pull_number || ""
-			}, h("h4", {}, target.pull_number ? `${target.repository} · PR #${target.pull_number}` : t("wb_delivery")), ...rows.map((row) => h("div", {}, h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, label("wd_action_", row.action)), h("span", { class: "muted" }, " · ", label("wd_status_", row.status)), row.merge ? h("p", {}, t(row.merge.merged === true ? "wb_merged" : "wb_merge_unknown"), code(row.merge.merged_sha)) : "", row.integration ? h("p", {}, code(row.integration.new_head)) : "", row.deployment ? h("p", {}, row.deployment.environment, " · ", t(row.deployment.verified === true ? "wb_deployed" : "wb_deployment_unknown"), " · ", t(row.deployment.is_current === true ? "wb_current_environment" : row.deployment.is_current === false ? "wb_historical_deployment" : "wb_unknown"), code(row.deployment.source_sha)) : ""))));
-		}
-		if (!deliveryRows.length) detail.append(h("p", { class: "muted" }, t("wb_no_delivery")));
-		if (deliveryCursor !== null) detail.append(h("button", {
-			type: "button",
-			class: "secondary",
-			disabled: detailBusy,
-			onclick: () => void moreDeliveries()
-		}, t("wb_receipts_more")));
-		detail.append(h("details", {}, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
-			binding: card.binding,
-			coverage: card.execution?.coverage,
-			capture: card.latest_capture,
-			issues: issuesFor(card),
-			deliveries: deliveryRows
-		}, null, 2))));
-		renderedDetail = detailSignature();
-	}
-	async function select(id, focus = false, retain = false) {
-		const card = cards.find((row) => row.work_item_id === id);
-		if (!card) return;
 		if (selected !== id) deliveryPages = 1;
-		const previous = retain ? renderedDetail : null;
-		const ticket = ++detailSerial, generation = serial;
 		selected = id;
-		detailBusy = true;
-		if (!retain) {
-			detailCard = null;
-			deliveryRows = [];
-			deliveryCursor = null;
-			renderedDetail = "";
-			detail.hidden = false;
-			detail.replaceChildren(h("p", { role: "status" }, t("wb_detail_loading")));
+		preference.selected = id;
+		if (scroll) {
+			scrollGeneration++;
+			filter.value = "";
+			preference.filter = "";
+			if (card) {
+				for (const req of plan?.document?.requirements || []) if (linked(req).includes(card)) expanded.add(req.id);
+			}
 			renderTable();
 		}
+		const opener = selectionTarget(id);
+		if (scroll) {
+			opener?.scrollIntoView({ block: "center" });
+			opener?.focus({ preventScroll: true });
+		}
+		markSelection();
+		const ticket = ++detailSerial, generation = serial;
+		if (!retain) {
+			detail.show({ title: firstLabel(card?.work.title, requirement?.text) });
+			detail.element.body.replaceChildren(h$1("p", { role: "status" }, t("wb_detail_loading")));
+		}
+		if (requirement) {
+			const blocked = linked(requirement).find(blockedWork);
+			detail.show({
+				title: requirement.text,
+				plan,
+				requirement,
+				milestones: milestoneFor(requirement),
+				blocker: blocked ? blockerText(t, blocked) : null,
+				accepted: requirementReviews(plan, requirement, reviews).length > 0
+			});
+			return;
+		}
 		try {
-			const [data, deliveries] = await Promise.all([api("GET", `${endpoint}/kanban/${id}`), feature("engineering_delivery") ? readDeliveries(id, ticket, generation) : null]);
+			const data = scope(await api("GET", `${endpoint}/kanban/${id}`));
 			alive();
 			if (ticket !== detailSerial || generation !== serial) return;
-			scope(data);
 			cardCheck(data.card, id);
 			if (data.card.binding.binding_id !== card.binding.binding_id) throw Error(t("wb_plan_changed"));
-			detailCard = data.card;
-			deliveryRows = deliveries?.deliveries || [];
-			deliveryCursor = deliveries?.next_after ?? null;
-			detailBusy = false;
-			detail.hidden = false;
-			if (previous !== detailSignature()) renderDetail();
-			detail.querySelector("[data-rtm-filtered]")?.remove();
-			if (deliveries?.source_visibility_filtered) detail.append(h("p", {
-				class: "muted",
-				"data-rtm-filtered": ""
-			}, t("wb_partial")));
-			if (focus) {
-				const heading = detail.querySelector("h3");
-				if (matchMedia("(max-width: 1100px)").matches) {
-					detail.scrollIntoView({ block: "start" });
-					heading?.focus();
-				} else heading?.focus({ preventScroll: true });
-			}
+			const read = await readWorkSources({
+				api,
+				workspaceId,
+				cards: [data.card],
+				caps: caps(),
+				t,
+				deliveryPages,
+				valid: () => {
+					alive();
+					return ticket === detailSerial && generation === serial;
+				}
+			});
+			alive();
+			if (ticket !== detailSerial || generation !== serial) return;
+			const changed = JSON.stringify(sources.get(id)) !== JSON.stringify(read.get(id));
+			sources.set(id, read.get(id));
+			if (changed) renderTable();
+			detail.show({
+				title: data.card.work.title,
+				card: data.card,
+				source: read.get(id),
+				plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : null,
+				issues: issuesFor(data.card),
+				milestones: milestones.filter((row) => row.plan_revision_id === data.card.binding.plan_revision_id && row.requirement_ids?.some((id) => data.card.binding.requirement_ids?.includes(id))),
+				requirements: plan?.document?.requirements?.filter((req) => data.card.binding.plan_revision_id === plan.revision_id && data.card.binding.requirement_ids?.includes(req.id)) || [],
+				onMore: () => {
+					deliveryPages++;
+					select(id, false, true);
+				}
+			});
 		} catch (error) {
 			if (ticket === detailSerial) fail(error, generation);
 		}
 	}
-	async function readDeliveries(id, ticket, generation) {
-		let after = 0, next = null, filtered = false;
-		const rows = new Map();
-		for (let page = 0; page < deliveryPages; page++) {
-			const data = deliveryCheck(await api("GET", `${endpoint}/work/${id}/deliveries?after=${after}&limit=20`), id, after);
-			alive();
-			if (ticket !== detailSerial || generation !== serial) return null;
-			for (const row of data.deliveries) rows.set(row.operation_id, row);
-			filtered ||= Boolean(data.source_visibility_filtered);
-			next = data.next_after ?? null;
-			if (next === null) break;
-			after = next;
-		}
-		return {
-			deliveries: [...rows.values()],
-			next_after: next,
-			source_visibility_filtered: filtered
-		};
-	}
-	async function moreDeliveries() {
-		if (detailBusy || deliveryCursor === null || !selected) return;
-		deliveryPages++;
-		await select(selected);
-	}
-	async function openRef(ref) {
-		if (!active || !plan) {
-			active = true;
-			await refresh();
-		}
-		if (ref.kind === "work_item") {
-			for (const card of cards.filter((row) => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
-			renderTable();
-			await select(ref.id, true);
-			if (!detail.hidden && matchMedia("(max-width: 1100px)").matches) {
-				detail.scrollIntoView({ block: "start" });
-				window.scrollBy(0, -Math.max(0, document.querySelector(".top")?.getBoundingClientRect().bottom || 0));
+	function setActive(value) {
+		if (visible === value) {
+			if (value) {
+				const id = new URLSearchParams(location.hash.split("?")[1]).get("select");
+				if (id && id !== selected) select(id, true);
 			}
 			return;
 		}
-		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id) return;
-		expanded.add(ref.id);
-		filter.value = "";
-		renderTable();
-		const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
-		if (row) {
-			row.setAttribute("aria-current", "true");
-			row.querySelector("button")?.focus();
-			row.scrollIntoView({ block: "nearest" });
+		visible = value;
+		if (!value) {
+			preference.scroll = window.scrollY;
+			closeRetaining();
+		} else {
+			const generation = ++scrollGeneration;
+			activate();
+			if (selected && cards.length) select(selected, false, true);
+			requestAnimationFrame(() => {
+				if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);
+			});
 		}
 	}
 	async function activate() {
@@ -17582,6 +18078,35 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			active = true;
 			await refresh();
 		}
+	}
+	async function openRef(ref) {
+		scrollGeneration++;
+		if (!active || !plan || busy) {
+			pendingNavigation = ref;
+			if (!active) await activate();
+			return;
+		}
+		if (ref.kind === "work_item") {
+			await select(ref.id, true);
+			const target = matchMedia("(max-width: 1199px)").matches ? detail.element?.querySelector(":scope > header h2") : selectionTarget(ref.id);
+			if (target) {
+				target.tabIndex = target.matches("h2") ? -1 : target.tabIndex;
+				target.focus({ preventScroll: true });
+				target.scrollIntoView({ block: "nearest" });
+			}
+			return;
+		}
+		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id || !plan.document?.requirements?.some((row) => row.id === ref.id)) return;
+		closeRetaining();
+		currentRequirement = ref.id;
+		expanded.add(ref.id);
+		preference.expanded = [...expanded];
+		filter.value = "";
+		preference.filter = "";
+		renderTable();
+		const row = tables.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
+		(matchMedia("(max-width: 799px)").matches ? row : row?.querySelector("[data-rtm-toggle]"))?.focus({ preventScroll: true });
+		row?.scrollIntoView({ block: "nearest" });
 	}
 	function focusWork(id) {
 		pendingFocus = {
@@ -17603,48 +18128,30 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		const pending = pendingFocus;
 		if (!pending || !plan) return;
 		pendingFocus = null;
-		if (pending.kind === "work_item" && !cards.some((row) => row.work_item_id === pending.id)) return;
-		if (pending.kind === "requirement" && !plan.document?.requirements?.some((row) => row.id === pending.id)) return;
-		filter.value = "";
 		await openRef({
 			...pending,
 			revision_id: plan.revision_id
 		});
-		if (pending.kind === "work_item") {
-			if (matchMedia("(max-width: 1100px)").matches) {
-				detail.scrollIntoView({ block: "start" });
-				detail.querySelector("h3")?.focus();
-			} else {
-				const target = tableBody.querySelector(`[data-rtm-select="${CSS.escape(pending.id)}"]`);
-				target?.focus({ preventScroll: true });
-				target?.scrollIntoView({ block: "nearest" });
-			}
-		} else if (pending.kind === "requirement") {
-			const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(pending.id)}"]`);
-			row?.querySelector("button")?.focus();
-			row?.scrollIntoView({ block: "nearest" });
-		}
 	}
 	function labelFor(kind, id) {
-		if (kind === "requirement") {
-			const text = plan?.document?.requirements?.find((row) => row.id === id)?.text;
-			return typeof text === "string" ? text : "";
-		}
-		if (kind === "work_item") {
-			const title = cards.find((row) => row.work_item_id === id)?.work?.title;
-			return typeof title === "string" ? title : "";
-		}
-		return "";
+		const value = kind === "requirement" ? plan?.document?.requirements?.find((row) => row.id === id)?.text : kind === "work_item" ? cards.find((row) => row.work_item_id === id)?.work?.title : "";
+		return typeof value === "string" ? value : "";
 	}
-	controls();
 	return {
 		element,
+		meta,
 		refresh,
 		withdraw,
 		openRef,
 		focusWork,
 		focusRequirement,
 		labelFor,
+		setActive,
+		hideInspector: closeRetaining,
+		activate,
+		setTools: (value) => {
+			tools = value;
+		},
 		dispose: () => {
 			Object.assign(preference, {
 				selected,
@@ -17652,8 +18159,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 				filter: filter.value
 			});
 			withdraw();
-		},
-		activate
+		}
 	};
 }
 //#endregion
@@ -19192,7 +19698,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 	const op = (value) => h("a", { href: `#/op/${encodeURIComponent(value)}` }, t("pm_operation"));
 	function update() {
 		refreshButton.disabled = !selected;
-		summary.textContent = selected ? `${selected.document.title} · ${t("ph_preparation")} ${selected.sequence}` : t("psm_select");
+		summary.textContent = selected ? joinLabel([selected.document.title, joinLabel([t("ph_preparation"), selected.sequence], " ")]) : t("psm_select");
 		for (const value of editors.values()) value.update();
 	}
 	function clear() {
@@ -22054,7 +22560,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 	function update() {
 		review.disabled = !active || reading || !write() || !hostReady(active);
 		availabilityNotice.hidden = !active || Boolean(write() && hostReady(active));
-		if (active) summary.textContent = `${active.document.title} · ${t("ph_preparation")} ${active.sequence}`;
+		if (active) summary.textContent = joinLabel([active.document.title, active.sequence == null ? "" : joinLabel([t("ph_preparation"), active.sequence], " ")]);
 		else summary.textContent = t("ph_select");
 		if (editor) editor.update();
 		onReviewChange();
@@ -24462,7 +24968,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 			disabled: busy,
 			"aria-pressed": selected === row.package_id,
 			onclick: () => void select(row.package_id)
-		}, row.document.title + " · " + t("wp_preparation") + " " + row.sequence))));
+		}, joinLabel([row.document.title, joinLabel([t("wp_preparation"), row.sequence], " ")])))));
 		if (!rows.length) list.append(h("p", { class: "muted" }, t("wp_empty")));
 	}
 	function render(row, readiness) {
@@ -26194,23 +26700,27 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 }
 //#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = null, pageSize = 20 }) {
-	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/kanban`;
+function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
-	let serial = 0, next = null, reading = false, rows = new Map(), page = null;
-	const status = h("div", { role: "status" }), metrics = h("div", { class: "pm-kanban-summary" }), list = h("div", { class: "pm-kanban-list" });
-	const more = h("button", {
+	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, milestones = [], pages = 1;
+	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1;
+	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", {
+		class: "pm-kanban-list",
+		"aria-label": t("ui_board")
+	}), boardInfo = h$1("div");
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("wv_refresh"),
+		onClick: () => void refresh()
+	});
+	const more = h$1("button", {
 		type: "button",
-		class: "secondary",
+		class: "ui-button secondary",
 		hidden: true,
 		onclick: () => void loadMore()
 	}, t("pm_kanban_more"));
-	const refreshButton = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
-	}, t("pm_kanban_refresh"));
 	const columns = [
 		"backlog",
 		"in_progress",
@@ -26218,31 +26728,69 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		"review",
 		"accepted"
 	];
-	const boardInfo = h("div");
-	const info = h("details", { class: "pm-kanban-info" }, h("summary", {}, t("pm_kanban_board_details")), boardInfo, h("p", { class: "pm-kanban-note" }, t("pm_kanban_wip_basis")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_quality")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_limits")));
-	const element = h("section", {
-		class: "panel pm-kanban",
+	const search = h$1("input", {
+		type: "search",
+		placeholder: t("ui_search_work"),
+		"aria-label": t("ui_search_work"),
+		oninput: () => {
+			preference.search = search.value;
+			renderColumns(true);
+		}
+	});
+	search.value = preference.search || "";
+	const requirementFilter = h$1("select", {
+		"aria-label": t("wv_requirement"),
+		onchange: () => {
+			preference.requirement = requirementFilter.value;
+			renderColumns(true);
+		}
+	});
+	const agentFilter = h$1("select", {
+		"aria-label": t("wv_agent"),
+		onchange: () => {
+			preference.agent = agentFilter.value;
+			renderColumns(true);
+		}
+	});
+	const group = h$1("select", {
+		"aria-label": t("wv_group"),
+		onchange: () => {
+			preference.group = group.value;
+			renderColumns(true);
+		}
+	}, ...["status", "milestone"].map((value) => h$1("option", { value }, t("wv_" + value))));
+	group.value = preference.group || "status";
+	const content = h$1("div", { class: "pm-board-content" }, list), layout = h$1("div", { class: "pm-work-layout" }, content);
+	const element = h$1("section", {
+		class: "pm-kanban",
 		"data-pm-kanban": ""
-	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_kanban_title")), refreshButton), status, metrics, list, h("footer", { class: "pm-kanban-footer" }, more, info));
-	const note = (key, args, warning = false) => h("p", { class: warning ? "pm-kanban-notice" : "pm-kanban-note" }, t(key, args));
-	const code = (value) => h("code", { class: "pm-source" }, value || t("pm_kanban_unassigned"));
-	const state = (value) => {
-		if (typeof value === "boolean") return t(value ? "pm_kanban_yes" : "pm_kanban_no");
-		if (!value) return t("pm_kanban_unknown");
-		const key = "pm_kanban_state_" + value, translated = t(key);
-		return translated === key ? String(value).replaceAll("_", " ") : translated;
-	};
-	const stamp = (value) => {
-		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
-		if (!date || !Number.isFinite(date.getTime())) return t("pm_kanban_unknown");
-		const iso = date.toISOString();
-		return h("time", {
-			datetime: iso,
-			title: iso
-		}, iso.replace("T", " ").replace(/\.\d+Z$/, " UTC"));
-	};
+	}, !embedded ? pageHeader({
+		title: t("ui_board"),
+		meta,
+		actions: [refreshButton]
+	}) : null, h$1("div", { class: "pm-board-toolbar" }, h$1("label", { class: "pm-work-search" }, icon("search"), search), requirementFilter, agentFilter, h$1("label", {}, t("wv_group"), group)), status, layout, h$1("footer", { class: "pm-kanban-footer" }, more, disclosure({
+		label: t("pm_kanban_board_details"),
+		body: h$1("div", {}, boardInfo, h$1("p", {}, t("pm_kanban_wip_basis")), h$1("p", {}, t("pm_kanban_quality")), h$1("p", {}, t("pm_kanban_limits")))
+	})));
+	const detail = workInspector({
+		t,
+		workspaceId,
+		from: "board",
+		mount: layout,
+		tools: () => toolItems(),
+		onClose: () => {
+			detailSerial++;
+			if (!preserveSelection) {
+				selected = null;
+				preference.selected = null;
+				markSelection();
+			}
+			requestAnimationFrame(updateEdges);
+		}
+	});
+	const note = (key) => h$1("p", { class: "ui-meta" }, t(key));
 	const elapsed = (value) => {
-		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return t("pm_kanban_unknown");
+		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
 		if (value < 60) return t("pm_kanban_seconds");
 		const [key, divisor] = value < 3600 ? ["minutes", 60] : value < 86400 ? ["hours", 3600] : ["days", 86400];
 		return t("pm_kanban_" + key, { count: Math.floor(value / divisor) });
@@ -26250,6 +26798,7 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 	function checkCard(card, expectedId = null) {
 		if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || "") || expectedId && card.work_item_id !== expectedId || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t("pm_kanban_scope_error"));
 		if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
+		for (const item of card.latest_capture?.evidence || []) if (item.workspace_id && item.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
 		return card;
 	}
 	function checkPage(data, after) {
@@ -26267,179 +26816,342 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 		if (data.next_cursor != null && (!data.cards.length || data.next_cursor < data.cards.at(-1).binding.sequence)) throw Error(t("pm_kanban_scope_error"));
 		return data;
 	}
-	function notices(coverage) {
-		const out = [];
-		if (coverage?.unavailable_sources || coverage?.inaccessible_sources) out.push(note("pm_kanban_missing", {}, true));
-		if (coverage?.truncated) out.push(note("pm_kanban_truncated", {}, true));
-		if (coverage?.unsupported_sources) out.push(note("pm_kanban_unsupported"));
-		return out;
+	function closeRetaining() {
+		preserveSelection = true;
+		detail.close();
+		preserveSelection = false;
 	}
-	function unavailable(error) {
+	function withdraw() {
 		++serial;
+		++detailSerial;
 		reading = false;
 		rows.clear();
+		sources.clear();
 		page = null;
 		next = null;
+		plan = null;
+		milestones = [];
+		closeRetaining();
 		list.replaceChildren();
-		metrics.replaceChildren();
+		meta.replaceChildren();
 		boardInfo.replaceChildren();
 		more.hidden = true;
 		more.disabled = false;
 		element.removeAttribute("aria-busy");
-		status.replaceChildren(errorBox ? errorBox(error) : h("p", { class: "error" }, error.message), h("button", {
+	}
+	function unavailable(error) {
+		withdraw();
+		status.replaceChildren(errorBox ? errorBox(error) : h$1("p", { class: "error" }, error.message), h$1("button", {
 			type: "button",
-			class: "secondary",
-			onclick: () => void refresh()
+			class: "ui-button secondary",
+			onclick: () => {
+				pages = 1;
+				refresh();
+			}
 		}, t("pm_kanban_retry")));
 	}
+	function requirements(card) {
+		return (plan?.document?.requirements || []).filter((row) => card.binding.plan_revision_id === plan.revision_id && card.binding.requirement_ids?.includes(row.id));
+	}
+	function fillFilters() {
+		const fill = (select, all, options, saved) => {
+			const current = select.value || saved || "", values = new Map(options);
+			if (current && !values.has(current)) values.set(current, t("ui_status_unknown"));
+			const signature = JSON.stringify([...values]);
+			if (select.dataset.options !== signature) {
+				select.dataset.options = signature;
+				select.replaceChildren(h$1("option", { value: "" }, t(all)), ...[...values].map(([value, label]) => h$1("option", { value }, label)));
+			}
+			select.value = current;
+		};
+		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, id)])), preference.requirement);
+		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, agent])), preference.agent);
+	}
 	function renderMetrics() {
-		metrics.replaceChildren();
 		if (!page) return;
-		metrics.append(note("pm_kanban_loaded", { count: rows.size }));
-		boardInfo.replaceChildren(note("pm_kanban_wip", page.wip), h("p", {}, t("pm_kanban_page_at"), ": ", stamp(page.observed_at)));
-		if (next != null) metrics.append(note("pm_kanban_partial"));
-		if (page.coverage?.byte_limited) metrics.append(note("pm_kanban_bounded"));
+		const partial = next != null || page.coverage?.byte_limited || [...sources.values()].some((source) => source.filtered || source.next != null);
+		const blocked = [...rows.values()].filter(({ card }) => blockedWork(card)).length;
+		meta.textContent = joinLabel([t(partial ? "wv_loaded" : "wv_work_count", { n: rows.size }), blocked ? t(blocked === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: blocked }) : null]);
+		boardInfo.replaceChildren(...[
+			h$1("p", {}, t("pm_kanban_wip", page.wip)),
+			partial ? note("pm_kanban_partial") : null,
+			page.coverage?.byte_limited ? note("pm_kanban_bounded") : null
+		].filter(Boolean));
 		more.hidden = next == null;
 		more.disabled = reading;
 	}
-	function detailsFor(card, observedAt) {
-		const execution = card.execution || {}, capture = card.latest_capture;
-		const lines = (kind, records, content) => records?.length ? h("ul", {}, ...records.map((value) => h("li", {}, h("strong", {}, t(kind)), " · ", content(value)))) : "";
-		const flow = card.flow || {};
-		const detail = h("div", { class: "pm-kanban-detail" }, card.quality?.selected_assessment ? qualityFact({
-			h,
-			t,
-			fact: card.quality,
-			current: true
-		}) : note("pm_kanban_quality_unknown"), h("p", {}, t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age"), ": ", elapsed(card.completion?.approved ? flow.cycle_seconds : flow.age_seconds)), flow.history !== "available_central_events" ? note("pm_kanban_history_unknown") : "", h("h4", {}, t("pm_kanban_execution")), note("pm_kanban_attempts", { count: integer(execution.accepted_attempts) ? execution.accepted_attempts : t("pm_kanban_unknown") }), h("p", { class: "pm-kanban-note" }, t("pm_kanban_read_at"), ": ", stamp(observedAt)), note("pm_kanban_saved_only"), ...notices(execution.coverage), note("pm_kanban_attempt_basis"), lines("pm_kanban_task", execution.tasks, (value) => h("span", {}, state(value.state), code(value.task_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_operation", execution.operations, (value) => h("span", {}, state(value.status), code(value.operation_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_session", execution.sessions, (value) => h("span", {}, value.runtime_status ? state(value.runtime_status) : t("pm_kanban_stream_unknown"), code(value.resource_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), lines("pm_kanban_attempt", execution.attempts, (value) => h("span", {}, t(value.accepted === true ? "pm_kanban_accepted" : "pm_kanban_accept_unknown"), " · ", state(value.status), code(value.attempt_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.observed_at)))), h("h4", {}, t("pm_kanban_capture")));
-		if (!capture) detail.append(note("pm_kanban_no_capture"));
-		else {
-			if (capture.workspace_id !== workspaceId || capture.work_item_id !== card.work_item_id) throw Error(t("pm_kanban_scope_error"));
-			detail.append(h("p", { class: "pm-kanban-note" }, t("pm_kanban_capture_time"), ": ", stamp(capture.captured_at)), code(capture.capture_id), code(capture.binding_id), ...notices(capture.coverage));
-			if (card.capture_matches_binding === false || card.capture_matches_work_version === false) detail.append(note("pm_kanban_capture_different", {}, true));
-			detail.append(h("ul", {}, ...(capture.evidence || []).map((value) => {
-				if (value.workspace_id && value.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
-				const sourceKey = "pm_kanban_source_" + value.source_kind, source = t(sourceKey);
-				return h("li", {}, source === sourceKey ? t("pm_kanban_fact") : source, " · ", Object.entries(value.assessment || {}).map(([key, value]) => {
-					const fieldKey = "pm_kanban_field_" + key, field = t(fieldKey);
-					return `${field === fieldKey ? key.replaceAll("_", " ") : field}: ${state(value)}`;
-				}).join(" · "), code(value.evidence_id), h("span", { class: "pm-kanban-note" }, t("pm_kanban_source_time"), ": ", stamp(value.source_observed_at)));
-			})));
-		}
-		detail.append(h("h4", {}, t("pm_kanban_versions")), h("dl", {}, ...[
-			["pm_kanban_binding", card.binding.binding_id],
-			["pm_kanban_plan", card.binding.plan_revision_id],
-			["pm_kanban_requirements", (card.binding.requirement_ids || []).join(", ")],
-			["pm_kanban_work_version", card.work.version],
-			["pm_kanban_bound_version", card.binding.work_version]
-		].flatMap(([key, value]) => [h("dt", {}, t(key)), h("dd", {}, code(value))])), note("pm_kanban_assignment"), note("pm_kanban_dependencies"));
-		return detail;
+	function preview(card) {
+		const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
+		const chip = (text) => {
+			const node = contextChip({ text });
+			node.title = text;
+			return node;
+		};
+		const age = elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
+		return [
+			h$1("h3", { title: firstLabel(card.work.title, t("ui_work_item")) }, firstLabel(card.work.title, t("ui_work_item"))),
+			h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => chip(firstLabel(req.text, req.id))) : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(" · ") : t("wv_no_requirement"))]),
+			h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
+				const node = contextChip({ text: `PR #${target.pull_number}` });
+				node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
+				return node;
+			}), blockedWork(card) ? h$1("span", {
+				class: "pm-board-blocker",
+				tabindex: 0,
+				title: blockerText(t, card),
+				"aria-label": blockerText(t, card)
+			}, icon("circle-alert"), t("ui_status_blocked")) : null, group.value !== "status" ? h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))) : null, age ? h$1("span", {
+				class: "pm-board-age",
+				title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
+			}, age) : null),
+			coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null
+		].filter(Boolean);
 	}
-	function previewFor(card, observedAt) {
-		const flow = card.flow || {}, coverage = card.execution?.coverage || {};
-		const age = card.completion?.approved ? flow.cycle_seconds : flow.age_seconds;
-		return h("div", { class: "pm-kanban-overview" }, h("h3", {}, h("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, card.work.title)), h("p", { class: "pm-kanban-stage" }, card.column === "accepted" ? t("pm_kanban_content_approved") : state(card.column)), h("div", { class: "pm-kanban-card-meta" }, h("span", {}, card.quality?.selected_assessment ? t(card.quality.qualified ? "pq_qualified" : "pq_not_qualified") : t("pm_kanban_quality_unknown")), typeof age === "number" && age >= 0 ? h("span", { title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age") }, elapsed(age)) : ""), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? note("pm_kanban_partial_sources") : "");
-	}
-	function renderCard(card, observedAt) {
-		const ticket = serial, preview = h("div", {}, previewFor(card, observedAt));
-		const node = h("article", {
+	function makeCard(card) {
+		const node = h$1("article", {
 			class: "pm-kanban-card",
-			"data-pm-kanban-work": card.work_item_id
-		}, preview);
-		const body = h("div"), fold = h("details", {}, h("summary", {}, t("pm_kanban_detail")), body);
-		let detailRequest = 0;
-		fold.addEventListener("toggle", async () => {
-			const request = ++detailRequest;
-			if (!fold.open) {
-				body.replaceChildren();
-				return;
+			"data-pm-kanban-work": card.work_item_id,
+			role: "button",
+			tabindex: 0,
+			"aria-label": firstLabel(card.work.title, t("ui_work_item")),
+			onclick: () => {
+				node.focus();
+				select(card.work_item_id);
 			}
-			body.replaceChildren(note("pm_kanban_detail_loading"));
-			try {
-				const data = await api("GET", `${endpoint}/${encodeURIComponent(card.work_item_id)}`);
-				alive();
-				if (ticket !== serial || request !== detailRequest || !fold.open || !node.isConnected) return;
-				if (data.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
-				checkCard(data.card, card.work_item_id);
-				const contents = detailsFor(data.card, data.observed_at);
-				preview.replaceChildren(previewFor(data.card, data.observed_at));
-				body.replaceChildren(contents);
-				rows.set(card.work_item_id, {
-					node,
-					card: data.card
-				});
-				renderColumns();
-			} catch (error) {
-				if (ticket === serial && request === detailRequest && node.isConnected) unavailable(error);
+		}, ...preview(card));
+		node.addEventListener("keydown", (event) => {
+			if (event.target !== node) return;
+			if (["Enter", " "].includes(event.key)) {
+				event.preventDefault();
+				select(card.work_item_id);
+			}
+			if ([
+				"ArrowUp",
+				"ArrowDown",
+				"ArrowLeft",
+				"ArrowRight",
+				"Home",
+				"End"
+			].includes(event.key)) {
+				event.preventDefault();
+				const lane = node.closest("[data-pm-kanban-column]"), cards = [...lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])")], index = cards.indexOf(node);
+				let target;
+				if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+					const lanes = [...list.children], next = lanes[lanes.indexOf(lane) + (event.key === "ArrowLeft" ? -1 : 1)];
+					const available = next?.querySelector(".pm-kanban-cards")?.hidden ? [] : [...next?.querySelectorAll("[data-pm-kanban-work]:not([hidden])") || []];
+					target = available[index] || available[0] || next?.querySelector("button");
+				} else target = cards[event.key === "Home" ? 0 : event.key === "End" ? cards.length - 1 : index + (event.key === "ArrowUp" ? -1 : 1)];
+				target?.focus({ preventScroll: true });
+				if (target) revealCard(target);
 			}
 		});
-		node.append(fold);
 		return node;
 	}
-	function renderColumns() {
-		const groups = new Map(columns.map((column) => [column, []]));
-		for (const row of rows.values()) {
-			const column = [...columns, "archived"].includes(row.card.column) ? row.card.column : "unknown";
-			if (!groups.has(column)) groups.set(column, []);
-			groups.get(column).push(row.node);
-		}
-		for (const [column, cards] of groups) {
-			let lane = [...list.children].find((node) => node.dataset.pmKanbanColumn === column);
-			if (!lane) {
-				lane = h("section", {
-					class: "pm-kanban-column",
-					"data-pm-kanban-column": column,
-					"aria-label": column === "accepted" ? t("pm_kanban_content_approved") : state(column)
-				}, h("header", {}, h("h3", {}, column === "accepted" ? t("pm_kanban_content_approved") : state(column)), h("span", { class: "pm-kanban-count" })), h("div", { class: "pm-kanban-cards" }));
-				list.append(lane);
-			}
-			lane.querySelector(".pm-kanban-count").textContent = cards.length;
-			const holder = lane.querySelector(".pm-kanban-cards");
-			for (const card of cards) if (card.parentNode !== holder) holder.append(card);
-		}
-		for (const lane of [...list.children]) if (!groups.has(lane.dataset.pmKanbanColumn)) lane.remove();
+	const locked = (lane) => lane && (lane.matches(":hover") || lane.contains(document.activeElement));
+	function laneKey(card) {
+		if (group.value === "milestone") return milestones.find((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id)))?.milestone_id || "unassigned";
+		return [...columns, "archived"].includes(card.column) ? card.column : "unknown";
 	}
-	function accept(data, append) {
+	function renderColumns(force = false) {
+		const query = search.value.trim().toLocaleLowerCase();
+		const groupKeys = group.value === "status" ? [...columns] : milestones.map((row) => row.milestone_id);
+		const currentLanes = new Map([...list.children].map((node) => [node.dataset.pmKanbanColumn, node]));
+		for (const { card } of rows.values()) if (!groupKeys.includes(laneKey(card))) groupKeys.push(laneKey(card));
+		for (const key of groupKeys) if (!currentLanes.has(key)) {
+			const name = group.value === "milestone" ? firstLabel(milestones.find((row) => row.milestone_id === key)?.title, t("wb_unassigned")) : key === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus({ column: key }));
+			const holder = h$1("div", { class: "pm-kanban-cards" }), collapsed = preference.collapsed?.includes(key) === true;
+			const toggle = h$1("button", {
+				type: "button",
+				class: "pm-board-lane-toggle",
+				"aria-expanded": String(!collapsed),
+				onclick: () => {
+					holder.hidden = !holder.hidden;
+					toggle.setAttribute("aria-expanded", String(!holder.hidden));
+					preference.collapsed = [...list.children].filter((lane) => lane.querySelector(".pm-kanban-cards").hidden).map((lane) => lane.dataset.pmKanbanColumn);
+				}
+			}, icon("chevron-right"), h$1("span", {}, name), h$1("span", { class: "pm-kanban-count" }));
+			holder.hidden = collapsed;
+			const lane = h$1("section", {
+				class: "pm-kanban-column",
+				"data-pm-kanban-column": key,
+				"aria-label": name
+			}, h$1("header", {}, toggle), holder);
+			lane.addEventListener("pointerleave", () => requestAnimationFrame(() => renderColumns()));
+			lane.addEventListener("focusout", () => requestAnimationFrame(() => renderColumns()));
+			currentLanes.set(key, lane);
+			list.append(lane);
+		}
+		for (const entry of rows.values()) {
+			const { card, node } = entry;
+			if ((entry.pending || force) && (!node.contains(document.activeElement) || node === document.activeElement)) {
+				node.replaceChildren(...preview(card));
+				entry.pending = false;
+			}
+			node.hidden = !((!query || joinLabel([card.work.title, ...requirements(card).map((req) => req.text)], " ").toLocaleLowerCase().includes(query)) && (!requirementFilter.value || card.binding.requirement_ids?.includes(requirementFilter.value)) && (!agentFilter.value || workAgents(sources.get(card.work_item_id)).includes(agentFilter.value)));
+			const lane = currentLanes.get(laneKey(card)), previous = node.closest("[data-pm-kanban-column]");
+			if (previous !== lane && (force || !locked(previous) && !locked(lane))) lane.querySelector(".pm-kanban-cards").append(node);
+			else if (!previous) lane.querySelector(".pm-kanban-cards").append(node);
+		}
+		for (const [key, lane] of currentLanes) if (!groupKeys.includes(key) && !lane.querySelector("[data-pm-kanban-work]")) lane.remove();
+		else lane.querySelector(".pm-kanban-count").textContent = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length;
+		markSelection();
+		requestAnimationFrame(updateEdges);
+	}
+	function markSelection() {
+		for (const { node, card } of rows.values()) node.setAttribute("aria-pressed", String(selected === card.work_item_id));
+	}
+	function present(data, append = false) {
+		const ids = new Set(data.cards.map((card) => card.work_item_id));
 		if (!append) {
-			rows.clear();
-			list.replaceChildren();
+			for (const [id, { node }] of rows) if (!ids.has(id)) {
+				node.remove();
+				rows.delete(id);
+			}
 		}
 		for (const card of data.cards) {
-			const previous = rows.get(card.work_item_id), node = renderCard(card, data.observed_at);
-			if (previous) previous.node.replaceWith(node);
-			rows.set(card.work_item_id, {
-				node,
+			const previous = rows.get(card.work_item_id);
+			if (previous) {
+				const contentSignature = JSON.stringify([
+					card.work.title,
+					card.column,
+					card.flow?.age_seconds,
+					card.flow?.cycle_seconds,
+					blockedWork(card),
+					sources.get(card.work_item_id)
+				]);
+				if (previous.signature !== contentSignature) previous.pending = true;
+				previous.signature = contentSignature;
+				previous.card = card;
+				previous.node.setAttribute("aria-label", firstLabel(card.work.title, t("ui_work_item")));
+			} else rows.set(card.work_item_id, {
+				node: makeCard(card),
 				card
 			});
 		}
 		page = data;
 		next = data.next_cursor ?? null;
+		fillFilters();
 		renderColumns();
-		if (!rows.size) status.replaceChildren(note("pm_kanban_empty"));
-		else status.replaceChildren();
 		renderMetrics();
+		status.replaceChildren(...!rows.size ? [emptyState({ title: t("pm_kanban_empty") })] : []);
+		if (selected && !rows.has(selected)) closeRetaining();
+		else if (selected && active && detail.element) showDetail(rows.get(selected).card);
 	}
-	const path = (after) => `${endpoint}?${new URLSearchParams({
+	function showDetail(card) {
+		const opening = !detail.element;
+		detail.show({
+			title: card.work.title,
+			card,
+			plan: card.binding.plan_revision_id === plan?.revision_id ? plan : null,
+			requirements: requirements(card),
+			milestones: milestones.filter((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id))),
+			source: sources.get(card.work_item_id),
+			onMore: () => {
+				deliveryPages++;
+				select(card.work_item_id, true);
+			}
+		});
+		if (opening) requestAnimationFrame(() => {
+			const node = rows.get(card.work_item_id)?.node;
+			if (selected === card.work_item_id && node?.isConnected && detail.element) revealCard(node);
+		});
+	}
+	async function select(id, retain = false) {
+		const current = rows.get(id);
+		if (!current) return;
+		if (selected !== id) deliveryPages = 1;
+		selected = id;
+		preference.selected = id;
+		markSelection();
+		const generation = serial, ticket = ++detailSerial;
+		if (!retain) {
+			detail.show({ title: current.card.work.title });
+			detail.element.body.replaceChildren(note("pm_kanban_detail_loading"));
+			requestAnimationFrame(() => {
+				if (selected === id && current.node.isConnected && detail.element) revealCard(current.node);
+			});
+		}
+		try {
+			const data = await api("GET", `${endpoint}/kanban/${id}`);
+			alive();
+			if (generation !== serial || ticket !== detailSerial) return;
+			if (data.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+			checkCard(data.card, id);
+			const source = await readWorkSources({
+				api,
+				workspaceId,
+				cards: [data.card],
+				caps: caps(),
+				t,
+				deliveryPages,
+				valid: () => {
+					alive();
+					return generation === serial && ticket === detailSerial;
+				}
+			});
+			alive();
+			if (generation !== serial || ticket !== detailSerial) return;
+			sources.set(id, source.get(id));
+			current.card = data.card;
+			current.node.replaceChildren(...preview(data.card));
+			current.node.setAttribute("aria-label", firstLabel(data.card.work.title, t("ui_work_item")));
+			renderColumns();
+			renderMetrics();
+			showDetail(data.card);
+		} catch (error) {
+			if (generation === serial && ticket === detailSerial) unavailable(error);
+		}
+	}
+	const path = (after) => `${endpoint}/kanban?${new URLSearchParams({
 		...projectId ? { project_id: projectId } : {},
 		after: String(after),
 		limit: String(pageSize)
 	})}`;
 	async function refresh() {
 		const ticket = ++serial;
+		detailSerial++;
 		reading = true;
-		page = null;
-		next = null;
-		rows.clear();
-		list.replaceChildren();
-		metrics.replaceChildren();
-		boardInfo.replaceChildren();
-		more.hidden = true;
-		status.replaceChildren(note("pm_kanban_loading"));
+		refreshButton.disabled = true;
+		more.disabled = true;
+		if (!rows.size) status.replaceChildren(note("pm_kanban_loading"));
 		element.setAttribute("aria-busy", "true");
 		try {
-			const data = checkPage(await api("GET", path(0)), 0);
+			const combined = new Map();
+			let after = 0, data;
+			for (let index = 0; index < pages; index++) {
+				data = checkPage(await api("GET", path(after)), after);
+				alive();
+				if (ticket !== serial) return;
+				for (const card of data.cards) combined.set(card.work_item_id, card);
+				if (data.next_cursor == null) break;
+				after = data.next_cursor;
+			}
+			const features = caps()?.features?.pm_workspaces;
+			const [accepted, roadmap, read] = await Promise.all([
+				features?.plan_drafting ? api("GET", `${endpoint}/plans/accepted`) : null,
+				features?.roadmap ? api("GET", `${endpoint}/roadmap`) : null,
+				readWorkSources({
+					api,
+					workspaceId,
+					cards: [...combined.values()],
+					caps: caps(),
+					t,
+					valid: () => {
+						alive();
+						return ticket === serial;
+					}
+				})
+			]);
 			alive();
-			if (ticket === serial) accept(data, false);
+			if (ticket !== serial) return;
+			if (accepted && (accepted.head?.workspace_id !== workspaceId || accepted.plan && accepted.plan.workspace_id !== workspaceId) || roadmap && roadmap.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+			plan = accepted?.plan || null;
+			milestones = roadmap?.baseline?.document?.milestones || [];
+			sources = read;
+			present({
+				...data,
+				cards: [...combined.values()]
+			});
 		} catch (error) {
 			if (ticket === serial) unavailable(error);
 		} finally {
@@ -26447,36 +27159,65 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 				reading = false;
 				element.removeAttribute("aria-busy");
 				more.disabled = false;
+				refreshButton.disabled = false;
 			}
 		}
 	}
 	async function loadMore() {
 		if (reading || next == null) return;
-		const ticket = serial, after = next;
-		reading = true;
-		more.disabled = true;
-		try {
-			const data = checkPage(await api("GET", path(after)), after);
-			alive();
-			if (ticket === serial) accept(data, true);
-		} catch (error) {
-			if (ticket === serial) unavailable(error);
-		} finally {
-			if (ticket === serial) {
-				reading = false;
-				more.disabled = false;
-			}
-		}
+		pages++;
+		await refresh();
 	}
 	function titleFor(id) {
 		const title = rows.get(id)?.card?.work?.title;
 		return typeof title === "string" ? title : "";
 	}
+	function updateEdges() {
+		content.classList.toggle("pm-board-clipped-start", list.scrollLeft > 1);
+		content.classList.toggle("pm-board-clipped-end", list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
+	}
+	function revealCard(node) {
+		node.scrollIntoView({
+			block: "nearest",
+			inline: "nearest",
+			behavior: "instant"
+		});
+		updateEdges();
+	}
+	const resize = new ResizeObserver(updateEdges);
+	resize.observe(list);
+	list.addEventListener("scroll", () => {
+		preference.laneScroll = list.scrollLeft;
+		updateEdges();
+	});
+	function setActive(value) {
+		if (active === value) return;
+		active = value;
+		if (!value) {
+			preference.scroll = window.scrollY;
+			closeRetaining();
+		} else {
+			if (selected && rows.has(selected)) select(selected, true);
+			list.scrollLeft = preference.laneScroll || 0;
+			requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));
+		}
+	}
 	return {
 		element,
 		box: element,
+		meta,
 		refresh,
-		titleFor
+		titleFor,
+		withdraw,
+		setActive,
+		hideInspector: closeRetaining,
+		setTools: (value) => {
+			toolItems = value;
+		},
+		dispose: () => {
+			resize.disconnect();
+			withdraw();
+		}
 	};
 }
 //#endregion
@@ -33825,17 +34566,21 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const refresh = iconButton({
 		icon: "refresh-cw",
 		label: t("pm_refresh"),
+		"data-pm-refresh": "",
 		onClick: () => void load()
 	});
 	const phasePill = h("span", {
 		class: "ui-pill tone-neutral",
 		hidden: true
 	});
+	const viewMeta = h("span", { "data-pm-work-meta": "" });
 	const heading = pageHeader({
 		title,
 		pill: phasePill,
+		meta: viewMeta,
 		actions: [refresh]
 	});
+	viewMeta.parentElement.hidden = true;
 	const headerMeta = h("p", {
 		class: "ui-meta",
 		"data-dependencies-meta": "",
@@ -34128,8 +34873,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
-		errorBox
+		errorBox,
+		caps,
+		embedded: true
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);
 	const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints ? workspaceSprints({
@@ -34215,7 +34963,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === "work_item" ? kanban?.titleFor?.(id) : "") || ""
 	}) : null;
 	openRegisterForm = (viewId, section) => {
-		const host = body.querySelector(`[data-pm-section="${section}"]`);
+		const host = body.querySelector(`[data-pm-section="${section}"]`) || viewTools[viewId]?.find(([key]) => key === section)?.[1];
 		if (!host) return;
 		if (matchMedia("(max-width: 1199px)").matches) register?.closeSheet?.(true);
 		if (viewId && workspaceId) {
@@ -34227,6 +34975,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			([...root.querySelectorAll("input:not([type=\"hidden\"]), select, textarea")].find((node) => !node.disabled) || root.querySelector("summary"))?.focus();
 			root.scrollIntoView({ block: "nearest" });
 		};
+		if (host.dataset.pmTool) {
+			openPanel(t(section), host);
+			queueMicrotask(() => focusForm(host));
+			return;
+		}
 		if (fold instanceof HTMLDetailsElement) {
 			fold.open = true;
 			queueMicrotask(() => focusForm(fold));
@@ -34405,17 +35158,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const drawersHome = h("div", { hidden: true });
 	body.append(drawersHome);
 	let detailPanel = null;
+	const toolPreference = viewState(namespace, workspaceId, "work-tools");
 	function openPanel(label, node) {
 		if (!node || !loaded) return;
 		if (node === reportTools) brief?.prepareReports?.();
 		detailPanel?.close();
 		schedule?.setActive(false);
+		traceability?.hideInspector();
+		kanban?.hideInspector();
 		const home = node.parentNode, next = node.nextSibling;
+		toolPreference.open = node.dataset.pmTool || null;
 		detailPanel = inspector({
 			title: label,
 			onClose: () => {
 				home.insertBefore(node, next?.parentNode === home ? next : null);
 				detailPanel = null;
+				if (!disposed) toolPreference.open = null;
 				schedule?.setActive(workbench?.selected() === "schedule");
 			}
 		});
@@ -34598,6 +35356,58 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	};
 	const lazyThreadSections = new Map();
+	const viewToolMenus = new Map();
+	const viewTools = {
+		requirements: [
+			["ui_quality", qualityReviews?.element],
+			["ui_evidence", evidence?.box],
+			["ui_specs", specifications?.element],
+			["ui_materialization", materialization?.element],
+			["ui_packages", engineering?.element],
+			["ui_handoff", handoff?.element],
+			["ui_publication", issues?.element]
+		],
+		board: [["ui_batches", workBatches?.element]]
+	};
+	for (const [id, entries] of Object.entries(threadId ? {} : viewTools)) {
+		const available = entries.filter(([, node]) => node);
+		const items = available.map(([key, node]) => ({
+			key,
+			label: t(key),
+			onSelect: () => openPanel(t(key), node)
+		}));
+		for (const [key, node] of available) {
+			node.dataset.pmTool = key;
+			drawersHome.append(node);
+		}
+		if (items.length) {
+			const control = menu({
+				button: iconButton({
+					icon: "more-horizontal",
+					label: t("ui_more"),
+					"data-pm-view-tools": id
+				}),
+				items
+			});
+			headerActions.append(control);
+			viewToolMenus.set(id, control);
+		}
+		if (id === "requirements") {
+			traceability?.setTools(() => items);
+			kanban?.setTools(() => items);
+		}
+	}
+	function updateWorkView(id) {
+		traceability?.setActive(id === "requirements");
+		kanban?.setActive(id === "board");
+		const meta = id === "requirements" ? traceability?.meta : id === "board" ? kanban?.meta : null;
+		viewMeta.replaceChildren(...meta ? [meta] : []);
+		viewMeta.parentElement.hidden = !meta;
+		for (const [viewId, control] of viewToolMenus) {
+			control.hidden = viewId !== id;
+			if (control.hidden) control.close(false);
+		}
+	}
 	function secondary(label, node) {
 		if (!node) return null;
 		const details = disclosure({
@@ -34636,16 +35446,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"requirements",
-				traceability?.element,
-				[
-					["ui_quality", qualityReviews?.element],
-					["ui_evidence", evidence?.box],
-					["ui_specs", specifications?.element],
-					["ui_materialization", materialization?.element],
-					["ui_packages", engineering?.element],
-					["ui_handoff", handoff?.element],
-					["ui_publication", issues?.element]
-				]
+				traceability?.element || (viewTools.requirements.some(([, node]) => node) ? emptyState({ title: t("wv_requirements_unavailable") }) : null),
+				[]
 			],
 			[
 				"schedule",
@@ -34674,8 +35476,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"board",
-				kanban?.element,
-				[["ui_batches", workBatches?.element]]
+				kanban?.element || (workBatches ? emptyState({ title: t("wv_board_unavailable") }) : null),
+				[]
 			]
 		];
 		for (const [id, primarySection, secondaries] of definitions) {
@@ -34713,11 +35515,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				brief?.setActive?.(id === "overview");
 				register?.setActive(id === "issues");
 				if (scheduleTools) scheduleTools.hidden = id !== "schedule";
-				if (id !== "overview" || !liveOverview) window.scrollTo(0, 0);
+				updateWorkView(id);
+				if (!["requirements", "board"].includes(id) && (id !== "overview" || !liveOverview)) window.scrollTo(0, 0);
 				if (id === "issues") register?.restoreScroll();
 				else setHeaderMeta("");
 				syncIssueTools(id);
-				if (id === "requirements") traceability?.activate();
 				detailPanel?.close();
 				if (primary) primary.hidden = id !== "overview";
 				if (reportMenu) reportMenu.hidden = id !== "overview";
@@ -34733,6 +35535,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (scheduleTools) scheduleTools.hidden = workbench.selected() !== "schedule";
 		shownView = workbench.selected();
 		syncIssueTools(shownView);
+		updateWorkView(workbench.selected());
 		if (view && view !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		if (primary) primary.hidden = workbench.selected() !== "overview";
 		if (reportMenu) reportMenu.hidden = workbench.selected() !== "overview";
@@ -35636,7 +36439,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			].includes(stage) ? t("ui_phase_" + stage) : "";
 			publishContext();
 			brief?.setActive?.(workbench?.selected() === "overview");
-			if (workbench?.selected() === "requirements") await traceability?.activate();
+			updateWorkView(workbench?.selected());
 			resources?.setActive(workbench?.selected() === "agents");
 			schedule?.setActive(workbench?.selected() === "schedule");
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
@@ -35654,6 +36457,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
 				brief?.withdraw();
 				traceability?.withdraw();
+				kanban?.withdraw();
 				resources?.withdraw();
 				schedule?.withdraw();
 				dependencies?.withdraw();
@@ -35712,6 +36516,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		discussionTools.open("plan");
 		revisions.open(linkedRevision);
 	}
+	const rememberedTool = viewTools[workbench?.selected()]?.find(([key]) => key === toolPreference.open);
+	if (rememberedTool?.[1]) openPanel(t(rememberedTool[0]), rememberedTool[1]);
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
 	const subscribeEvents = onEvents;
 	onEvents = (listener) => subscribeEvents((event) => {
@@ -35807,6 +36613,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		overflow.dispose();
 		brief?.dispose?.();
 		traceability?.dispose();
+		kanban?.dispose();
 		resources?.dispose();
 		schedule?.dispose();
 		scheduleTools?.dispose();
@@ -35815,11 +36622,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		proposalReview?.dispose();
 		nativeAnalysis?.dispose();
 		ahp?.dispose();
+		for (const control of viewToolMenus.values()) control.dispose();
 		for (const value of forms) value.dispose();
 	};
 	dispose.navigate = (nextWorkspace, nextThread, nextView) => {
 		if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;
 		workbench.select(nextView);
+		updateWorkView(workbench.selected());
 		if (nextView !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		return true;
 	};

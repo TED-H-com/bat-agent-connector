@@ -55,11 +55,11 @@ test('filters, expanded rows and selection survive other views and Settings with
   const filter = page.locator('[data-pm-rtm] input[type=search]'); await filter.fill('login');
   await page.locator('[data-rtm-toggle]').first().click(); await page.locator(`[data-rtm-select="${workId(1)}"]`).first().click();
   await openPmSection(page,'overview'); await openPmSection(page,'requirements');
-  await expect(filter).toHaveValue('login'); await expect(page.locator('[data-rtm-detail]')).toContainText('PR #10');
+  await expect(filter).toHaveValue('login'); await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
   await page.locator('.workspace-nav-footer a[href="#/settings"]').click(); await page.locator('[data-pm-view=requirements]').click();
-  await expect(filter).toHaveValue('login'); await expect(page.locator('[data-rtm-detail]')).toContainText('PR #10');
-  f.pm.state.denyIssues = true; await page.locator('[data-pm-rtm]').getByRole('button',{name:'Refresh records',exact:true}).click();
-  await expect(page.locator('[data-rtm-detail]')).toBeHidden(); await expect(page.locator('[data-pm-rtm]')).not.toContainText('PR #10');
+  await expect(filter).toHaveValue('login'); await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
+  f.pm.state.denyIssues = true; await page.locator('[data-pm-refresh]').click();
+  await expect(page.locator('[data-work-inspector]')).toBeHidden(); await expect(page.locator('[data-pm-rtm]')).not.toContainText('PR #10');
 });
 for (const kind of ['pm_evidence', 'project']) test(`binding withdrawal removes Work rows live on ${kind}; workspace names never imply bindings`, async ({page}) => {
   const f = fixture(); await mountConversation(page, false, f.dispatch); await page.goto(route);

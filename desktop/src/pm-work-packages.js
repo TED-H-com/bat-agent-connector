@@ -1,3 +1,4 @@
+import {joinLabel} from './label-text.js';
 // The central service owns preparation and source policy. This view only reads.
 export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSize=20,onSelection=()=>{}}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
@@ -30,7 +31,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
     list.replaceChildren(h('p',{class:'muted'},t('wp_partial')),
       ...rows.map(row=>h('div',{class:'pm-workspace-row','data-pm-wp-row':row.package_id},
         h('button',{type:'button',class:'secondary',disabled:busy,'aria-pressed':selected===row.package_id,
-          onclick:()=>void select(row.package_id)},row.document.title+' · '+t('wp_preparation')+' '+row.sequence))));
+          onclick:()=>void select(row.package_id)},joinLabel([row.document.title, joinLabel([t('wp_preparation'), row.sequence], ' ')])))));
     if(!rows.length)list.append(h('p',{class:'muted'},t('wp_empty')));
   }
   function render(row,readiness){

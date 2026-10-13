@@ -8,6 +8,8 @@ import vm from "node:vm";
 const root = new URL("../desktop/src/", import.meta.url);
 const app = readFileSync(new URL("app.js", root), "utf8")
   .replace(/^import .*;\n/gm, "").replace(/\nstart\(\);\s*$/, "\n");
+const dom = readFileSync(new URL("ui/dom.js", root), "utf8")
+  .replace("export function h", "function dom");
 const i18nSource = readFileSync(new URL("i18n.js", root), "utf8");
 // Load the actual named translation imports, including newly added PM panels.
 // The fixture still executes the canonical translator and start-note behavior.
@@ -35,7 +37,7 @@ function render(language, effect, agent, declared = true) {
     navigator: { language }, Node: FixtureNode, nativeDesktop: false, ...translations,
     document: { createElement: () => new FixtureNode(), createTextNode: () => new FixtureNode(), addEventListener() {} },
   });
-  vm.runInContext(i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
+  vm.runInContext(dom + "\n" + i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
   const { state, confinementNote, t } = context.fixture;
   const reason = "fixture_check_reason"; // no JS copy of the server's supported-reason list
   // Contradict the status to prove that routing uses only the server's start_effect.

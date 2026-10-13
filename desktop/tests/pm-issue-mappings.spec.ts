@@ -97,7 +97,7 @@ for(const native of [false,true])test.describe(native?'Native issue mapping':'We
     await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_publication');await selectPackage(page);
     let release=()=>{};f.state.gate=new Promise<void>(resolve=>release=resolve);
     const prior=f.state.reads.length;await section(page).getByRole('button',{name:'Refresh issue mappings'}).click();await expect.poll(()=>f.state.reads.length).toBeGreaterThan(prior);
-    f.state.packageDenied=true;await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Refresh work packages'}).click();
+    f.state.packageDenied=true;await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Refresh work packages'}).click();
     await expect(page.locator('[data-pm-work-packages]')).toContainText('Package source unavailable');release();await page.waitForTimeout(350);
     await expect(section(page)).not.toContainText('#41');await expect(section(page)).not.toContainText('Sensitive original');await expect(action(page,'publish')).toHaveCount(0);
     expect(f.state.writes).toHaveLength(0);

@@ -64,8 +64,9 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await expect(card).not.toContainText('3 accepted sends');
-    await openPmSection(page,'board');await card.getByText('Execution and sources',{exact:true}).click();
-    await expect(card).toContainText('3 accepted sends');
+    await openPmSection(page,'board');await card.click();
+    await page.locator('[data-work-section=details] > summary').click();
+    await expect(page.locator('[data-work-inspector]')).toContainText('3 accepted sends');
     await expect(page.locator('[data-pm-sprints]')).toContainText('A returning member can sign in');
     await expect(page.getByRole('tab')).toHaveCount(0);expect(f.kanban.state.writes).toHaveLength(0);
   });
@@ -137,7 +138,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await page.locator('.pm-main > .ui-page-header').getByRole('button',{name:'Refresh',exact:true}).click();
     await expect.poll(()=>f.kanban.state.held.length).toBe(1);
     f.base.state.failRead=true;f.publish('pm_workspace');await expect(page.locator('[data-pm-kanban]')).toHaveJSProperty('hidden',true,{timeout:10000});await withdrawnViews(page);
-    f.kanban.state.held.shift()();await expect(card).toContainText('Older response held after revoke');
+    f.kanban.state.held.shift()();await expect(card).toHaveCount(0);
     await withdrawnViews(page);
     expect(f.sprint.state.writes).toHaveLength(0);
   });

@@ -186,3 +186,14 @@ dispatch, quality assessment and throughput remain unavailable here. Parent IDs
 are hierarchy, not dependencies; creators/execution actors are not assignees.
 Missing capacity/cost is unknown, not zero. Additional W14 work must extend the
 existing authoritative contracts instead of creating a second progress engine.
+
+## UX v2 Requirements / Board integration
+
+The shared work inspector replaces inline execution disclosures. Its fixed order,
+keyboard behavior, complete/partial counts, session ownership labels and drawer
+entry points are specified in [the frontend design](../../desktop/DESIGN.md#requirements-and-board).
+Read-only joins use original work bindings, session resource IDs and engineering
+receipts. A linked task in `blocked` state is a recorded blocker; a generic work
+`waiting` column is not. The projection supplies neither the task's blocking reason
+nor execution start/end or PR CI results, so the client keeps these unknown. It
+never derives an agent from a session name or an assignee from an execution actor.
