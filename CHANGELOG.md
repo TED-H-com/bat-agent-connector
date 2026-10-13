@@ -26,8 +26,10 @@
 
 - Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
   Each row keeps its source record's identity and canonical status. Totals, open-item age, the
-  last 12 weeks and blocking reasons are included only when the visible scan is complete. A
-  withdrawn source leaves the rows and the counts together. The projection adds no write actions.
+  last 12 weeks and blocking reasons are included only when every source that matches the active
+  type filter was read completely. A hidden or oversized record is left out of that page; it does
+  not fail the register or change the counts. Row ids are path-safe (`governance.pmgov_…`) and
+  cursors are opaque sequence tokens. The projection adds no write actions.
 
 - Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
   `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.

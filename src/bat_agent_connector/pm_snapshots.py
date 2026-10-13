@@ -472,15 +472,18 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=50):
 
 
 def get_snapshot(ops, principal, workspace_id, snapshot_id):
-    with ops.journal.tx():
-        _member(ops, principal, workspace_id)
-        if not isinstance(snapshot_id, str) or not SNAPSHOT_ID.fullmatch(snapshot_id):
-            raise _bad("PM_SNAPSHOT_NOT_FOUND", "Snapshot not found", 404)
-        row = ops.db.execute("SELECT * FROM pm_document_snapshots WHERE workspace_id=? AND snapshot_id=?",
-                             (workspace_id, snapshot_id)).fetchone()
-        if not row:
-            raise _bad("PM_SNAPSHOT_NOT_FOUND", "Snapshot not found", 404)
-        return _out(ops, principal, row)
+    def load():
+        with ops.journal.tx():
+            _member(ops, principal, workspace_id)
+            if not isinstance(snapshot_id, str) or not SNAPSHOT_ID.fullmatch(snapshot_id):
+                raise _bad("PM_SNAPSHOT_NOT_FOUND", "Snapshot not found", 404)
+            row = ops.db.execute("SELECT * FROM pm_document_snapshots WHERE workspace_id=? AND snapshot_id=?",
+                                 (workspace_id, snapshot_id)).fetchone()
+            if not row:
+                raise _bad("PM_SNAPSHOT_NOT_FOUND", "Snapshot not found", 404)
+            return _out(ops, principal, row)
+    from .pm_release_baselines import _remember
+    return _remember("snapshot", snapshot_id, load)
 
 
 def latest_snapshot(ops, principal, workspace_id):

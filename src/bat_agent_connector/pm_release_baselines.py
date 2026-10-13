@@ -9,6 +9,7 @@ import json
 import re
 import time
 from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import wraps
 
 from . import pm_evidence, pm_workspace, work_items
@@ -34,6 +35,29 @@ def _snapshot(db):
     except BaseException:
         db.execute("ROLLBACK")
         raise
+
+
+_MEMO = ContextVar("pm_read_memo", default=None)
+
+
+@contextmanager
+def _memoized_reads():
+    """Reuse snapshot and evidence results inside one register read."""
+    token = _MEMO.set({})
+    try:
+        yield
+    finally:
+        _MEMO.reset(token)
+
+
+def _remember(kind, identity, load):
+    memo = _MEMO.get()
+    if memo is None or not isinstance(identity, str):
+        return load()
+    key = (kind, identity)
+    if key not in memo:
+        memo[key] = load()
+    return memo[key]
 
 
 def _snapshot_read(fn):

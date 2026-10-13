@@ -658,13 +658,16 @@ def list_evidence(ops, principal, workspace_id, *, work_item_id=None, after=0, l
 
 
 def get_evidence(ops, principal, workspace_id, evidence_id):
-    _member(ops, principal, workspace_id)
-    if not isinstance(evidence_id, str) or not _EVIDENCE.fullmatch(evidence_id):
-        raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
-    row = ops.db.execute("SELECT * FROM pm_evidence WHERE workspace_id=? AND evidence_id=?", (workspace_id, evidence_id)).fetchone()
-    if not row or not _visible(ops, principal, row):
-        raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
-    return {"version": 1, "evidence": _evidence(row, detail=True)}
+    def load():
+        _member(ops, principal, workspace_id)
+        if not isinstance(evidence_id, str) or not _EVIDENCE.fullmatch(evidence_id):
+            raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
+        row = ops.db.execute("SELECT * FROM pm_evidence WHERE workspace_id=? AND evidence_id=?", (workspace_id, evidence_id)).fetchone()
+        if not row or not _visible(ops, principal, row):
+            raise _bad("PM_EVIDENCE_NOT_FOUND", "Evidence not found", 404)
+        return {"version": 1, "evidence": _evidence(row, detail=True)}
+    from .pm_release_baselines import _remember
+    return _remember("evidence", evidence_id, load)
 
 
 def _capture_out(ops, principal, row):

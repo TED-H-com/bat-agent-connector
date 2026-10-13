@@ -198,7 +198,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/resources", self.pm_resources, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/schedule", self.pm_schedule, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register", self.pm_register, "observe"),
-            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register/(?P<row_id>(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision):[A-Za-z0-9_.~-]{1,180})", self.pm_register_row, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/register/(?P<row_id>[^/]+)", self.pm_register_row, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies", self.pm_dependencies, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies/revisions", self.pm_dependency_revisions, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/dependencies/impact", self.pm_dependency_impact, "observe"),
