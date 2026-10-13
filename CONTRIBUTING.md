@@ -42,33 +42,30 @@ text. Changing current files does not remove information from Git history or old
 
 ## Continuous integration
 
-`ci.yml` runs static checks once on Python 3.13 (`lint`), the secret scan, and five
-separate pytest runners for each of Python 3.10–3.13. Read `pytest-complete` for the
-combined pytest result: every runner must succeed, and downloaded manifests must
-prove an exact, disjoint partition of each version's full collection. Manifests and
-JUnit XML are retained for seven days, including on failure. The manifest hashes the
-sorted full node-ID list as compact ASCII JSON with SHA-256; parameter IDs are included.
-Files stay together to preserve module fixtures. Assignment is longest-first, with
-path ordering for ties and the table median for new files. No xdist processes share a runner.
+| Workflow | Job | Checks |
+| --- | --- | --- |
+| `ci.yml` | `lint`, `secrets-scan` | Static checks once on Python 3.13; secret scan |
+| `ci.yml` | `pytest <version> (i/5)` | Five separate runners for each Python 3.10–3.13 |
+| `ci.yml` | `pytest-complete` | Combined pytest result and exact collection coverage |
+| `desktop.yml` | `frontend` | Regenerate/check browser assets and run Node tests |
+| `desktop.yml` | `browser-ui (i/3)` | Three Playwright shards on committed browser assets |
+| `desktop.yml` | `central-ui` | Nineteen named central-service UI script steps |
+| `desktop.yml` | `build`, `windows-endpoint-oracle` | Existing native OS matrix, packaged runtime/upgrades, native checks, packaging and installed smoke tests; Windows endpoint fixtures |
 
-After `uv sync --locked --extra dev`, run one shard from the repository root:
+Read `pytest-complete` for the combined pytest check: every shard must succeed and
+the manifests must prove complete coverage without duplicates.
+
+After `uv sync --locked --extra dev`, run one shard from the repository root.
+Use a disk-backed `TMPDIR`:
 
 ```sh
 pytest-disktmp uv run pytest -q -p tests.ci_shard_plugin \
   --ci-shard-index=1 --ci-shard-count=5 \
-  --ci-shard-manifest="$TMPDIR/shard-1/manifest.json" \
-  --junitxml="$TMPDIR/shard-1/junit.xml" -o junit_family=xunit1 --durations=15
+  --ci-shard-manifest="$TMPDIR/shard-1/manifest.json"
 ```
 
-Use a disk-backed scratch directory for `TMPDIR`. Add `--collect-only` to inspect
-the selection without running tests. The plugin is opt-in; existing pytest commands
-retain their usual behavior. The required local full checks are unchanged: ruff,
-the full Python suite, and Python 3.10 for backend changes. Use `pytest-disktmp` for
-local pytest and the shared `heavy` lock when running full suites on a shared host.
-
-The initial `tests/ci_durations.json` explicitly uses collected test counts as weights,
-not measured seconds. After a successful GitHub run, download all `pytest-*` artifacts
-from that single run into a directory, preserving their individual subdirectories:
+To replace the initial test-count weights with measured durations, download all
+`pytest-*` artifacts from one successful GitHub run, preserving subdirectories:
 
 ```sh
 uv run python -m scripts.ci_complete "$TMPDIR/pytest-artifacts" \
@@ -76,27 +73,9 @@ uv run python -m scripts.ci_complete "$TMPDIR/pytest-artifacts" \
 uv run python -m scripts.ci_durations "$TMPDIR/pytest-artifacts"
 ```
 
-Commit the refreshed table. The refresh sums setup/call/teardown seconds per file in
-each JUnit report and takes the median across Python versions. Do not mix runs or
-partial artifacts. If a test only fails in a shard, fix its isolation rather than
-changing order, excluding it, or extending its deadline.
-
-`desktop.yml` runs these independent jobs with the existing path filters:
-
-| Job | Coverage |
-| --- | --- |
-| `frontend` | Regenerate browser assets, check for drift, run Node unit tests once |
-| `browser-ui (1/3)` through `(3/3)` | Entire Playwright suite, on committed generated assets, with Chromium cached by Playwright version; UTC and DejaVu Sans |
-| `central-ui` | Nineteen named central-service UI script steps sharing the original ten-minute test budget, plus setup; fixture evidence retained |
-| `build` (all four existing OS runners) | Native frontend build, managed runtime/upgrade/setup, Rust/GLib, native files, packaging and installed smoke tests |
-| `windows-endpoint-oracle` | Existing read-only endpoint and Fleet fixtures |
-
-Browser jobs need Node and Chromium; central UI also needs the locked Python dev
-environment. Neither needs Rust or a packaged runtime. Native validation retains
-those dependencies and uses the committed browser assets in its managed core.
-Browser failures retain the HTML report and test results for seven days. Signed
-workflows and Pages are unchanged. Superseded PR runs are cancelled per workflow;
-main pushes have unique concurrency groups so pending and running main checks survive.
+Commit the refreshed `tests/ci_durations.json`. Required local full checks are unchanged:
+ruff, the full Python suite, and Python 3.10 for backend changes. Use `pytest-disktmp`
+for local pytest and the shared `heavy` lock for full suites on a shared host.
 
 ## Working after the October 10, 2026 history rewrite
 

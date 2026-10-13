@@ -2,11 +2,6 @@
 
 ## Next release (unreleased)
 
-- Split CI into independent static checks, five whole-file pytest shards per Python
-  version with an exact-collection completeness gate, and separate frontend, browser UI
-  and central UI jobs. Preserve the native OS matrix and test deadlines; cancel
-  superseded PR runs and retain shard proof/JUnit artifacts for timing refreshes.
-
 - Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
   startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
   Installed-app UI tests retry transient UI Automation reads within the existing
@@ -852,6 +847,8 @@
   and log reference. Jev and `BAT-STATUS` remain completion claims, not test evidence.
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
+- Split CI into pytest shards and separate frontend, browser and central UI jobs.
+  Verify full coverage, cancel superseded PR runs and preserve native checks.
 
 ## 0.2.4 (unreleased)
 
