@@ -9,7 +9,7 @@ import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
 async function start(page: Page, locale = 'en', options: {native?: boolean; withoutBrief?: boolean; pageSize?: number; mutate?: (data: any) => void} = {}) {
   const fixture = demoFixture({locale}), project = demoProject(locale);
-  const calls: string[] = [], writes: any[] = [], state = {deny: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, completed: 0, overviewReads: 0};
+  const calls: string[] = [], writes: any[] = [], state = {deny: false, workspaceDeny: false, defer: false, pending: null as null | (() => void), cursor: 0, eventType: 'work_item', completed: 0, overviewReads: 0};
   await page.clock.setFixedTime(DEMO_NOW);
   await mountConversation(page, options.native || false, async input => {
     if (input.method !== 'GET') writes.push(input);
@@ -26,7 +26,7 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
     }
     if (url.pathname === `/pm/workspaces/${fixture.ids.workspaceId}` && state.workspaceDeny) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
     if (url.pathname === '/events' && state.cursor) return {status: 200, data: {events: Number(url.searchParams.get('after')) < state.cursor
-      ? [{seq: state.cursor, resource_type: 'work_item', resource_id: fixture.ids.work.email, kind: 'work_item.updated'}] : [],
+      ? [{seq: state.cursor, resource_type: state.eventType, resource_id: state.eventType === 'pm_workspace' ? fixture.ids.workspaceId : fixture.ids.work.email, kind: `${state.eventType}.updated`}] : [],
       next_cursor: state.cursor, head_cursor: state.cursor, has_more: false, sync: {checkpoint: {cursor: state.cursor, token: `demo-${state.cursor}`}}}};
     const result = await fixture.dispatch(input);
     if (options.withoutBrief && ['/bootstrap', '/capabilities'].includes(url.pathname)) {
@@ -328,6 +328,24 @@ test('tree keeps a single tab stop, aria-selected only on treeitems, accessible 
   expect(await region.locator('.schedule-lane[tabindex], .schedule-lane[role="region"]').count()).toBe(0);
   await expect(region.locator('.schedule-axis .schedule-today')).toHaveAttribute('role', 'img');
 });
+
+test('roadmap drawer stays the only open inspector when a live refresh runs with a selected schedule row', async ({page}) => {
+  const f = await start(page, 'en');
+  await item(page, `work:${f.ids.work.resetEmail}`).click();
+  await expect(page.locator('[data-schedule-inspector]')).toBeVisible();
+  await page.locator('[data-schedule-tools]').click();
+  await page.getByRole('menuitem', {name: 'Roadmap', exact: true}).click();
+  await expect(page.getByText('Update a forecast')).toBeVisible();
+  await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
+  const reads = f.calls.length;
+  f.state.eventType = 'pm_workspace';
+  f.state.cursor++;
+  await expect.poll(() => f.calls.length).toBeGreaterThan(reads);
+  await expect(page.getByText('Update a forecast')).toBeVisible();
+  await expect(page.locator('[data-schedule-inspector]')).toHaveCount(0);
+  await expect(page.locator('.ui-inspector')).toHaveCount(1);
+});
+
 
 
 

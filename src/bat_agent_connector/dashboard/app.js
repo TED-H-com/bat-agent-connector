@@ -36658,7 +36658,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			brief?.setActive?.(workbench?.selected() === "overview");
 			updateWorkView(workbench?.selected());
 			resources?.setActive(workbench?.selected() === "agents");
-			schedule?.setActive(workbench?.selected() === "schedule");
+			schedule?.setActive(workbench?.selected() === "schedule" && !detailPanel);
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
 			register?.setActive(workbench?.selected() === "issues");
 			updateForms();
