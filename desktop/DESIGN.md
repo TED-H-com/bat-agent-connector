@@ -215,7 +215,8 @@ The shared `/discussions/new` link opens an editable draft and focuses the compo
 Its first Send creates the bound thread and then appends the note. Both operations
 retain their own original keys; the acknowledged thread ID and unsent note bridge a
 reload between the two. Opening or reloading the draft performs no write. Thread
-origins retain the project-view route; source views retain their own preference state.
+origins retain the project-view route and fixed report ID through draft reloads; source
+views retain their own preference state.
 
 Structured analysis stays on the existing capability-checked native/BAT proposal
 path. A Proposed update card groups candidates with include toggles, at most three

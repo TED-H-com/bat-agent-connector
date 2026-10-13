@@ -224,10 +224,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const threadRows = h('div', {class: 'pd-thread-rows'});
   const threadState = viewState(namespace, workspaceId, 'discussion.' + (threadId || 'list'));
   const backLink = () => {
-    let origin = launch.from;
-    try {origin ||= JSON.parse(localStorage.getItem(originKey + threadId))?.from;} catch {}
-    origin ||= 'overview';
-    return h('a', {class: 'pd-back', href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': ''}, t('pd_back', {view: t('ui_' + origin)}));
+    let savedOrigin = {};
+    try {savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};} catch {}
+    const source = parseDiscussRefs(new URLSearchParams({from: launch.from || savedOrigin.from || '', report: launch.report || savedOrigin.report || ''}));
+    const origin = source.from || 'overview';
+    return h('a', {class: 'pd-back', href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', onclick: () => {
+      // Restore the originating fixed report even after a discussion-draft reload.
+      if (origin === 'overview' && source.report) viewState(namespace, workspaceId, 'overview').snapshotId = source.report;
+    }}, t('pd_back', {view: t('ui_' + origin)}));
   };
   const disclosureKey = JSON.stringify([namespace, workspaceId, threadId]);
   const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};

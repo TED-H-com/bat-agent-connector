@@ -26084,15 +26084,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const threadRows = h("div", { class: "pd-thread-rows" });
 	const threadState = viewState(namespace, workspaceId, "discussion." + (threadId || "list"));
 	const backLink = () => {
-		let origin = launch.from;
+		let savedOrigin = {};
 		try {
-			origin ||= JSON.parse(localStorage.getItem(originKey + threadId))?.from;
+			savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};
 		} catch {}
-		origin ||= "overview";
+		const source = parseDiscussRefs(new URLSearchParams({
+			from: launch.from || savedOrigin.from || "",
+			report: launch.report || savedOrigin.report || ""
+		}));
+		const origin = source.from || "overview";
 		return h("a", {
 			class: "pd-back",
 			href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
-			"data-discussion-back": ""
+			"data-discussion-back": "",
+			onclick: () => {
+				if (origin === "overview" && source.report) viewState(namespace, workspaceId, "overview").snapshotId = source.report;
+			}
 		}, t("pd_back", { view: t("ui_" + origin) }));
 	};
 	const disclosureKey = JSON.stringify([

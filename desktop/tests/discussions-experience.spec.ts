@@ -11,10 +11,16 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     const page = await context.newPage(), errors: string[] = [];
     const dir = `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(dir, {recursive: true});
     page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => {
+      // The shared bearer-only fixture deliberately returns 404 for this optional
+      // managed-session probe. Every discussion/API or script error still fails.
+      const optionalProbe = message.location().url.endsWith('/api/v1/browser-session') && message.text().includes('404');
+      if (message.type() === 'error' && !optionalProbe) errors.push(message.text() + ' ' + message.location().url);
+    });
     const f = demoFixture({locale, discussions: true}), zh = locale === 'zh-TW';
     await mountConversation(page, false, f.dispatch);
     const ref = {kind: 'governance', id: 'pmgov_' + 'a'.repeat(32)};
-    const href = discussHref({workspaceId: f.ids.workspaceId, refs: [ref], title: f.copy.blocker, from: 'overview'});
+    const href = discussHref({workspaceId: f.ids.workspaceId, refs: [ref], title: f.copy.blocker, from: 'overview', report: f.ids.snap1});
     expect(parseDiscussRefs(href.split('?')[1]).refs).toEqual([ref]);
     // Producer views share this exact link; the receiving contract is exercised here.
     await page.goto('/dashboard/' + href);
@@ -54,6 +60,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await page.screenshot({path: `${dir}/discussions-${locale}-${width}.png`});
     if (width === 1440 && !zh) {await page.evaluate(() => document.documentElement.dataset.theme = 'dark'); await page.screenshot({path: `${dir}/discussions-en-1440-dark.png`, animations: 'disabled'});}
     await page.locator('[data-discussion-back]').first().click(); await expect(page).toHaveURL(/\/overview$/);
+    await expect(page.locator('.pm-charter-meta')).toContainText(f.copy.snapshotV2);
     expect(errors).toEqual([]); await context.close();
   });
 }

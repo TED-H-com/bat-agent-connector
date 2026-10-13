@@ -1,4 +1,4 @@
-import {openPmPanel, openThreadTab} from './pm-navigation.ts';
+import {openPmPanel, openThreadTab, openThreadBrief} from './pm-navigation.ts';
 // One browser flow against actual PM HTTP actions; the central has no BAT hosts.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -126,7 +126,7 @@ try {
   assert.equal(revision.plan.adoption, null); assert.equal(revision.plan.document.execution_authorized, false);
   // Inputs retain their own tab while the plan and immutable revisions remain selected.
   await openThreadTab(page,'inputs');
-  await page.locator('[data-pm-add-input] > summary').click();
+  if (!await page.locator('[data-pm-add-input]').evaluate(node => node.open)) await page.locator('[data-pm-add-input] > summary').click();
   await input.getByLabel('Topic', {exact:true}).selectOption('finance');
   await input.getByLabel('Statement or question', {exact:true}).fill('Budget still needs an owner decision');
   await input.getByRole('button', {name:'Save input', exact:true}).click();
@@ -161,7 +161,7 @@ try {
   };
   const project = await submit('project.create', {}, {name:'Reader experience'});
   const work = await submit('work_item.create', {project_id:project.project_id}, {title:'First useful action'});
-  await page.reload();
+  await page.reload(); await openPmPanel(page,'ui_workspace_settings');
   await page.getByLabel('Connector project',{exact:true}).selectOption(project.project_id);
   const projectForm=page.locator('[data-pm-action="pm.project.bind"]');
   await projectForm.getByLabel('Why associate this work?',{exact:true}).fill('Track this existing project in the PM workspace');
@@ -206,6 +206,7 @@ try {
   assert.equal(captured.capture.work_item_id,work.work_item_id); assert.equal(captured.capture.dod,'unassessed');
   assert.equal(captured.capture.evidence.length,1); assert.equal(captured.capture.evidence[0].source_kind,'work_claim');
   assert.equal(captured.capture.execution_authorized,false);
+  await page.keyboard.press('Escape'); await openThreadTab(page,'plan');
   const comparison = page.locator('[data-pm-plan-diff]');
   await expect(comparison).toHaveCount(1);
   await page.locator('[data-pm-plan-comparison] > summary').click();
@@ -239,6 +240,7 @@ try {
   await expect(comparisonResult).toContainText('effect on scope has not been classified');
   await comparisonResult.locator('summary').filter({hasText:'Review candidate'}).click();
   await expect(comparisonResult).toContainText('Title and work state were not saved');
+  await openThreadBrief(page);
   await page.locator('[data-pm-action="pm.snapshot.create"] button[type="submit"]').click();
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   await expect(page.locator('[data-pm-brief-section="delivery"]')).toContainText('quality unassessed');
