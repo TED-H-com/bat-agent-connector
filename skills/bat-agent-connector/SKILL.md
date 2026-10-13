@@ -1575,7 +1575,12 @@ Milestone dates are points. Rows with no baseline, forecast, or actual dates sta
 or phase rows from names, paths, titles, or time. Manual sessions stay `read_only`.
 A session that stopped producing output is not ended; do not use the last message time.
 
-`limit` is 1–100. Preserve `next_cursor` and read further pages. A page is not a total:
-honor `truncated`, `partial`, and `range_scope`. Withdrawn sources disappear from rows
-and derived dates together; do not refill them from memory. Unknown fields stay null
-with a reason in `unknown`. See `docs/design/pm-schedule.md`.
+`limit` is 1–100. `after` is the previous page's opaque `next_cursor` (base64url, not a raw
+row id). Preserve it and read further pages. A page may also end early so its lineage roots
+stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_scope`.
+Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
+issues, and attempts are omitted from every page; a 200 does not reveal whether an id
+exists. `refs.run_id` appears only when one visible run is bound to that observed session.
+Withdrawn work items, runs, operations, sessions, and tasks disappear from rows and derived
+dates together; do not refill them from memory. Unknown fields stay null with a reason in
+`unknown`. See `docs/design/pm-schedule.md`.

@@ -1389,13 +1389,13 @@ pub fn validate_request(input: &ConnectorRequest) -> Result<(), String> {
                         && value.bytes().all(|b| b.is_ascii_digit())
                         && value.parse::<u16>().is_ok_and(|n| (1..=100).contains(&n))
                 }
-                "after" if schedule => value.split_once(':').is_some_and(|(kind, rest)| {
-                    matches!(kind, "milestone" | "requirement" | "issue" | "work" | "attempt")
-                        && (1..=360).contains(&rest.len())
-                        && rest.chars().all(|ch| {
-                            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.' | ':' | '/' | '+' | '-')
-                        })
-                }),
+                "after" if schedule => {
+                    let bytes = value.as_bytes();
+                    (1..=4096).contains(&bytes.len())
+                        && bytes
+                            .iter()
+                            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+                }
                 "quality_refs" if package_readiness => {
                     value.len() <= 16_384
                         && serde_json::from_str::<serde_json::Value>(&value)
@@ -1984,11 +1984,11 @@ mod tests {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/schedule";
         assert!(validate_request(&get(root)).is_ok());
         assert!(validate_request(&get(&format!(
-            "{root}?limit=50&after=milestone:release"
+            "{root}?limit=50&after=bWlsZXN0b25lOnJlbGVhc2U"
         )))
         .is_ok());
         assert!(validate_request(&get(&format!(
-            "{root}?limit=1&after=attempt:session:wi_11111111111111111111:mock-host/mock-session"
+            "{root}?limit=1&after=YXR0ZW1wdDpzZXNzaW9uOndpXzExMTExMTExMTExMTExMTExMTExOm1vY2staG9zdC9tb2NrLXNlc3Npb24"
         )))
         .is_ok());
         for query in [
@@ -1996,8 +1996,12 @@ mod tests {
             "refresh=1",
             "limit=101",
             "limit=0",
+            "after=milestone:release",
             "after=phase:a",
             "after=../x",
+            "after=bWls+",
+            "after=bWls/zx",
+            "after=bWls=",
             "limit=50&limit=1",
         ] {
             assert!(
