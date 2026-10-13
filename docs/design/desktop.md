@@ -144,6 +144,40 @@ restores that same window, and terminating/relaunching the owned process resumes
 without changing configuration. Finally it checks silent uninstall removes the binary
 and version registration. JSON receipts, process/HTTP diagnostics and window screenshots
 are uploaded as `desktop-windows-installed-fixture`, including diagnostics after failures.
+
+Managed first-run and reopen readiness use `tests/windows-managed-view.cs`, a dedicated
+MTA .NET Framework UI Automation process. Each read has an 8-second cap within the same
+30-second readiness wait; a timeout remains fatal. Exit **0** means a completed read with
+boolean JSON, not necessarily readiness: all existing English/zh-TW authentication,
+setup, empty-configuration and enabled-save labels, document presence and bounds must
+still be positive. Exit **3** retries a transient provider read in that original wait:
+`ElementNotAvailableException`, `UIA_E_ELEMENTNOTAVAILABLE` (`0x80040201`),
+`RPC_E_DISCONNECTED` (`0x80010108`), `RPC_E_CALL_REJECTED` (`0x80010001`) or
+`RPC_E_SERVERCALL_RETRYLATER` (`0x8001010A`). The latter COM outcomes describe a
+disconnected, rejecting or busy callee; a fresh read can recover. All other failures
+exit **2** and stop immediately, including a missing cache property or an invalid cast.
+See Microsoft's [UIA errors](https://learn.microsoft.com/en-us/windows/win32/winauto/uiauto-error-codes)
+and [COM errors](https://learn.microsoft.com/en-us/windows/win32/com/com-error-codes-3).
+
+The query caches its three requested properties for every returned raw-view node,
+including text outside the default control view. `AutomationElementMode.None` permits
+cached reads; no current-property calls are needed. An unavailable node is skipped
+without contributing partial readiness. Null/unsupported values supply no positive
+evidence, especially no default enabled-button value. Cache-contract errors are not
+swallowed. This follows the [.NET Framework caching contract](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/caching-in-ui-automation-clients)
+and [`GetCachedPropertyValue` contract](https://learn.microsoft.com/en-us/dotnet/api/system.windows.automation.automationelement.getcachedpropertyvalue).
+
+`<name>-probe-phases.json` records `attempt_count` and the last 20 `attempts`, each with
+its ordinal, phase flags, exit code (null if no exit was observed), unavailable-node
+count and last `error_type`/`error_hresult`. Stderr diagnostics include only exception
+type and an eight-digit hexadecimal HRESULT for `ExternalException` (including
+`COMException`); no exception messages, stacks, names, values or entry contents are
+retained. `<name>-readiness.json` contains only the latest completed read, or an empty
+object after a failed read. Failure screenshots are still captured before cleanup.
+`windows-installed-support-test.ps1`, run by the installed fixture, exercises retry,
+deadline, fatal-error and evidence behavior and compiles deterministic C# probe tests
+against the same Framework assemblies on Windows.
+
 Installation uses the documented [NSIS command-line switches](https://nsis.sourceforge.io/Docs/Chapter3.html).
 The [pinned Tauri bundler](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.1/crates/tauri-bundler/src/bundle.rs)
 changes the first `__TAURI_BUNDLE_TYPE_VAR_UNK` marker to `__TAURI_BUNDLE_TYPE_VAR_NSS`

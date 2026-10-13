@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
+  startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
+  Installed-app UI tests retry transient UI Automation reads within the existing
+  readiness deadline and keep bounded, text-free attempt diagnostics.
+
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
   the mapping, or the name on the published issue when the mapping omits it,
