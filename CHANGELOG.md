@@ -84,7 +84,8 @@
 - Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
   shared page header, inbox groups, operations table and inspector. Pending opens each operation
   from its inspector and reports a failed read instead of an empty inbox, and every registered
-  action has an English and Traditional Chinese label.
+  action has an English and Traditional Chinese label. A failed Pending refresh shows no count, with
+  one Retry when every group fails; operation durations use a compact day and hour form.
 - Lay out the session transcript on one message grid with an inline agent chip. Tool events, labels
   and checkpoints share the inspector's disclosures, and a linked work item reads Work · title.
 

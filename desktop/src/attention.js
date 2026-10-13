@@ -25,6 +25,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
   const emptyTitle = tab === 'active' ? 'global_empty_active' : tab === 'unread' ? 'global_empty_unread' : 'empty_needs_you';
   const empty = emptyState({title: t(emptyTitle), action: emptyLink});
   empty.hidden = true;
+  const pageAlert = h('div', {class: 'global-pending-alert'});
   const noteKeys = ['replies', 'completion', 'problems', 'hosts', 'active', ...(unread ? ['unread'] : [])];
   const notes = disclosure({
     label: t('global_details'),
@@ -79,7 +80,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     const section = h('section', {class: 'global-group', 'aria-label': t('attention_' + key), 'data-inbox-group': key},
       h('div', {class: 'global-group-head'}, h('h2', {}, t('attention_' + key)), badge, viewAll),
       status, list, h('div', {class: 'global-group-foot'}, count, more, quiet));
-    const state = {key, path, field, row, ...options, section, list, status, badge, count, more, pages: 1, size: null, busy: false};
+    const state = {key, path, field, row, ...options, section, list, status, badge, count, more, pages: 1, size: null, busy: false, readFailed: false};
     more.onclick = () => refresh(state, state.pages + 1).catch(() => {});
     sections.push(state);
     return section;
@@ -107,7 +108,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
   ] : [add('unread', '/work-items?unread=true&limit=50', 'work_items', workItemRow)];
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => refresh().catch(() => {})});
   const syncBusy = () => { refreshButton.disabled = sections.some(section => section.busy); };
-  column.append(empty, ...groups, notes);
+  column.append(pageAlert, empty, ...groups, notes);
   main.append(pageHeader({title: t('nav_home'), actions: [refreshButton]}), tabs, layout);
   let serial = Promise.resolve();
   let lastPending = null;
@@ -147,6 +148,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       section.count.textContent = section.partial ? t('global_shown', {count: items.size}) : '';
       section.status.replaceChildren();
       section.more.hidden = cursor === null;
+      section.readFailed = false;
       section.section.hidden = items.size === 0;
       section.section.dataset.fresh = 'true';
       if (focusKey) {
@@ -159,11 +161,14 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       publishPending();
     } catch (error) {
       guard();
+      section.readFailed = true;
       section.section.dataset.fresh = 'false';
       section.section.hidden = false;
+      section.badge.textContent = '';
+      section.badge.hidden = true;
       if ([403, 404].includes(error.status)) {
-        section.list.replaceChildren(); section.count.replaceChildren(); section.badge.textContent = '';
-        section.badge.hidden = true; section.size = null; section.more.hidden = true;
+        section.list.replaceChildren(); section.count.replaceChildren();
+        section.size = null; section.more.hidden = true;
         reconcile();
         if (tab === 'needs') { lastPending = null; onPending({}); }
       } else if (tab === 'needs' && lastPending) onPending(lastPending);
@@ -182,6 +187,27 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       guard();
       const results = await Promise.allSettled((only ? [only] : sections).map(item => load(item, only ? wanted : item.pages)));
       guard();
+      const notUpdated = item => inlineError({
+        error: {message: t('global_not_updated')},
+        retry: () => refresh(item).catch(() => {}),
+      });
+      if (sections.length && sections.every(item => item.readFailed)) {
+        pageAlert.replaceChildren(inlineError({
+          error: {message: t('global_not_updated')},
+          retry: () => refresh().catch(() => {}),
+        }));
+        for (const item of sections) {
+          item.status.replaceChildren();
+          item.section.hidden = item.list.childElementCount === 0;
+        }
+      } else {
+        pageAlert.replaceChildren();
+        for (const item of sections) {
+          if (!item.readFailed) continue;
+          if (!item.status.querySelector('.ui-inline-error')) item.status.replaceChildren(notUpdated(item));
+          item.section.hidden = false;
+        }
+      }
       const settled = sections.every(item => item.size === 0 && item.section.dataset.fresh === 'true');
       empty.hidden = !settled;
       const failed = results.find(item => item.status === 'rejected');

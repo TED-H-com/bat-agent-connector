@@ -833,9 +833,12 @@ var globalStrings = {
 		global_code: "Code",
 		global_refs: "References",
 		global_result: "Result",
-		global_duration_s: "{n}s",
-		global_duration_m: "{n}m {s}s",
-		global_duration_m_only: "{n}m",
+		global_duration_s: "{n} s",
+		global_duration_m: "{n} min",
+		global_duration_h: "{n} h",
+		global_duration_hm: "{n} h {m} min",
+		global_duration_d: "{n} d",
+		global_duration_dh: "{n} d {h} h",
 		action_unknown: "Operation",
 		action_checkpoint_continue: "Continue from checkpoint",
 		action_checkpoint_revalidate: "Revalidate checkpoint source",
@@ -1025,8 +1028,11 @@ var globalStrings = {
 		global_refs: "參照",
 		global_result: "結果",
 		global_duration_s: "{n} 秒",
-		global_duration_m: "{n} 分 {s} 秒",
-		global_duration_m_only: "{n} 分",
+		global_duration_m: "{n} 分",
+		global_duration_h: "{n} 小時",
+		global_duration_hm: "{n} 小時 {m} 分",
+		global_duration_d: "{n} 天",
+		global_duration_dh: "{n} 天 {h} 小時",
 		action_unknown: "操作",
 		action_checkpoint_continue: "從檢查點繼續",
 		action_checkpoint_revalidate: "重新驗證檢查點來源",
@@ -11359,12 +11365,21 @@ function operationDuration(op, nowSeconds) {
 	if (!Number.isFinite(end) || end < start) return "";
 	const seconds = Math.round(end - start);
 	if (seconds < 60) return t("global_duration_s", { n: seconds });
-	const minutes = Math.floor(seconds / 60);
-	const rest = seconds % 60;
-	return rest ? t("global_duration_m", {
-		n: minutes,
-		s: rest
-	}) : t("global_duration_m_only", { n: minutes });
+	if (seconds < 3600) return t("global_duration_m", { n: Math.floor(seconds / 60) });
+	if (seconds < 86400) {
+		const hours = Math.floor(seconds / 3600);
+		const minutes = Math.floor(seconds % 3600 / 60);
+		return minutes ? t("global_duration_hm", {
+			n: hours,
+			m: minutes
+		}) : t("global_duration_h", { n: hours });
+	}
+	const days = Math.floor(seconds / 86400);
+	const hours = Math.floor(seconds % 86400 / 3600);
+	return hours ? t("global_duration_dh", {
+		n: days,
+		h: hours
+	}) : t("global_duration_d", { n: days });
 }
 function railPresentation(state) {
 	if (!state?.key) return null;
@@ -38077,6 +38092,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		action: emptyLink
 	});
 	empty.hidden = true;
+	const pageAlert = h("div", { class: "global-pending-alert" });
 	const noteKeys = [
 		"replies",
 		"completion",
@@ -38166,7 +38182,8 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			more,
 			pages: 1,
 			size: null,
-			busy: false
+			busy: false,
+			readFailed: false
 		};
 		more.onclick = () => refresh(state, state.pages + 1).catch(() => {});
 		sections.push(state);
@@ -38209,7 +38226,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const syncBusy = () => {
 		refreshButton.disabled = sections.some((section) => section.busy);
 	};
-	column.append(empty, ...groups, notes);
+	column.append(pageAlert, empty, ...groups, notes);
 	main.append(pageHeader({
 		title: t("nav_home"),
 		actions: [refreshButton]
@@ -38257,6 +38274,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			section.count.textContent = section.partial ? t("global_shown", { count: items.size }) : "";
 			section.status.replaceChildren();
 			section.more.hidden = cursor === null;
+			section.readFailed = false;
 			section.section.hidden = items.size === 0;
 			section.section.dataset.fresh = "true";
 			if (focusKey) {
@@ -38267,13 +38285,14 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			publishPending();
 		} catch (error) {
 			guard();
+			section.readFailed = true;
 			section.section.dataset.fresh = "false";
 			section.section.hidden = false;
+			section.badge.textContent = "";
+			section.badge.hidden = true;
 			if ([403, 404].includes(error.status)) {
 				section.list.replaceChildren();
 				section.count.replaceChildren();
-				section.badge.textContent = "";
-				section.badge.hidden = true;
 				section.size = null;
 				section.more.hidden = true;
 				reconcile();
@@ -38299,6 +38318,27 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			guard();
 			const results = await Promise.allSettled((only ? [only] : sections).map((item) => load(item, only ? wanted : item.pages)));
 			guard();
+			const notUpdated = (item) => inlineError({
+				error: { message: t("global_not_updated") },
+				retry: () => refresh(item).catch(() => {})
+			});
+			if (sections.length && sections.every((item) => item.readFailed)) {
+				pageAlert.replaceChildren(inlineError({
+					error: { message: t("global_not_updated") },
+					retry: () => refresh().catch(() => {})
+				}));
+				for (const item of sections) {
+					item.status.replaceChildren();
+					item.section.hidden = item.list.childElementCount === 0;
+				}
+			} else {
+				pageAlert.replaceChildren();
+				for (const item of sections) {
+					if (!item.readFailed) continue;
+					if (!item.status.querySelector(".ui-inline-error")) item.status.replaceChildren(notUpdated(item));
+					item.section.hidden = false;
+				}
+			}
 			const settled = sections.every((item) => item.size === 0 && item.section.dataset.fresh === "true");
 			empty.hidden = !settled;
 			const failed = results.find((item) => item.status === "rejected");
@@ -42716,20 +42756,20 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 	function body(op) {
 		const steps = Array.isArray(op.steps) ? op.steps : [];
 		const precise = t("op_" + op.status);
+		const target = operationTargetText(op);
 		return [
+			precise !== "op_" + op.status ? h("p", {}, precise) : null,
 			h("a", {
 				class: "ui-button secondary ui-sm",
 				href: `#/op/${encodeURIComponent(op.operation_id)}`
 			}, t("global_open_operation")),
 			statusPill(operationStatusKey(op.status)),
-			h("p", { class: "muted" }, operationMeta(op, formatTime(op.created_at)) || "—"),
-			op.status_reason ? h("p", {}, op.status_reason) : null,
-			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
+			target ? h("p", { class: "muted" }, target) : null,
 			facts(op),
 			disclosure({
 				label: t("global_details"),
 				key: "operations." + op.operation_id,
-				body: h("div", {}, h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null), steps.length ? h("h3", {}, t("steps")) : null, ...steps.map((step) => h("p", {}, joinLabel([
+				body: h("div", {}, h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null), steps.length ? h("h3", {}, t("steps")) : null, ...steps.map((step) => h("p", {}, joinLabel([
 					step.name,
 					step.status,
 					step.error?.code
@@ -47188,6 +47228,13 @@ function sessionBadges(s) {
 		s.pending ? chip(t("pending_" + s.pending.kind), "stale") : null
 	];
 }
+function sessionQuestions(pending) {
+	if (!Array.isArray(pending?.questions)) return [];
+	return pending.questions.flatMap((item) => {
+		const text = typeof item === "string" ? item : item?.question;
+		return typeof text === "string" && text.trim() ? [text.trim()] : [];
+	});
+}
 function sessionRow(s, open) {
 	const title = s.title || s.session_id;
 	const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
@@ -47202,19 +47249,23 @@ function sessionRow(s, open) {
 		s.pending?.kind ? t("pending_" + s.pending.kind) : "",
 		s.stale ? reasonText$1(s.stale_reason) : ""
 	]);
+	const pill = !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
+	const primary = () => h("a", {
+		class: "ui-button secondary ui-sm",
+		href
+	}, t(asking ? "global_answer" : permission ? "global_review" : "global_open"));
 	return inboxRow({
 		h,
 		key,
 		title,
 		href,
 		meta,
-		pill: !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
-		action: h("a", {
-			class: "ui-button secondary ui-sm",
-			href
-		}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
+		pill,
+		action: primary(),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
+			...sessionQuestions(s.pending).map((text) => h("p", {}, text)),
+			primary(),
 			!managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
 			meta ? h("p", {}, meta) : null,
 			disclosure({
@@ -47253,13 +47304,12 @@ function opRow(op, open) {
 		}, t(needs ? "global_review" : "global_open")),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
+			precise !== "op_" + op.status ? h("p", {}, precise) : null,
 			statusPill(operationStatusKey(op.status)),
 			meta ? h("p", { class: "muted" }, meta) : null,
-			op.status_reason ? h("p", {}, op.status_reason) : null,
-			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
 			disclosure({
 				label: t("global_details"),
-				body: h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)
+				body: h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)
 			})
 		])
 	});
