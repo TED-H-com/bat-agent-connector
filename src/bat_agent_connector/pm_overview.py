@@ -11,6 +11,9 @@ from .operations import OperationError
 SOURCE_LIMIT = 50
 ATTENTION_LIMIT = 20
 MILESTONE_LIMIT = 20
+DECISION_LIMIT = 5
+DECIDED_SOURCE_LIMIT = 50
+GOAL_SLOTS = frozenset({'value', 'goal', 'problem', 'governance.goal'})
 SEVERITY = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
 
 
@@ -118,14 +121,89 @@ class Projection:
         if not plan:
             return None, None
         goal = next((item['value'] for item in plan['document']['selected_inputs']
-            if item['slot'] in {'value', 'goal', 'problem'} and item['status'] in {'user_confirmed', 'repo_evidence'}), None)
+            if item['slot'] in GOAL_SLOTS and item['status'] in {'user_confirmed', 'repo_evidence'}), None)
         if goal is None:
-            self.missing('plan.goal', 'goal_unconfirmed' if any(item['slot'] in {'value', 'goal', 'problem'}
+            self.missing('plan.goal', 'goal_unconfirmed' if any(item['slot'] in GOAL_SLOTS
                 for item in plan['document']['selected_inputs']) else 'no_explicit_goal')
         adopted = plan['adoption']
         return plan, {'revision_id': rid, 'number': plan['sequence'], 'title': plan['document']['title'],
             'goal': ' '.join(goal.splitlines()) if goal else None,
             'adopted_at': adopted['created_at'], 'adopted_by': adopted['adopted_by']}
+
+    def decided_source(self, field, table, sql, decode):
+        """Newest immutable decision per register identity, with a bounded scan."""
+        page = self.source(field, table, lambda: {'rows': self.ops.db.execute(sql,
+            (self.wid, DECIDED_SOURCE_LIMIT + 1)).fetchall()})
+        if page is None:
+            return []
+        rows, result = page['rows'], []
+        if len(rows) > DECIDED_SOURCE_LIMIT:
+            # Existing lists page forward by sequence; a reverse time scan has
+            # no equivalent continuation cursor. Never manufacture one.
+            self.incomplete(field, 'scan_limit')
+        for row in rows[:DECIDED_SOURCE_LIMIT]:
+            try:
+                value = decode(row)
+                if value is not None and self.visible(value, field):
+                    result.append(value)
+            except OperationError as exc:
+                if exc.status not in (403, 404, 409, 413):
+                    raise
+                if exc.status in (409, 413):
+                    self.incomplete(field)
+        return result
+
+    def decisions(self):
+        from . import pm_access, pm_governance, pm_plans
+
+        def adopted(row):
+            plan = pm_plans.get_plan(self.ops, self.principal, self.wid, row['revision_id'])['plan']
+            pm_access.require_operation_sources(self.ops.db, self.principal, [row['operation_id']])
+            ref = {'kind': 'plan_revision', 'id': row['revision_id']}
+            return {'key': ref['kind'] + '.' + ref['id'], 'title': plan['document']['title'],
+                'decided_at': row['created_at'], 'actor': row['adopted_by'], 'status': 'adopted',
+                'ref': ref, 'operation_id': row['operation_id']}
+
+        def governed(row):
+            # The inspector's current record and the original decision must both
+            # be readable. A later revise can clear a decision without erasing it.
+            current = pm_governance.get_record(self.ops, self.principal, self.wid, row['record_id'])
+            revision = pm_governance._revision(self.ops.db, row['revision_id'])
+            pm_access.require_operation_sources(self.ops.db, self.principal,
+                [current['record']['operation_id'], current['revision']['operation_id'], revision['operation_id']])
+            if not self.visible(current, 'decided_governance') or not self.visible(revision, 'decided_governance'):
+                return None
+            doc = revision['document']
+            ref = {'kind': 'governance', 'id': row['record_id']}
+            return {'key': ref['kind'] + '.' + ref['id'], 'title': doc['title'],
+                'decided_at': revision['created_at'], 'actor': doc['decision']['recorded_by'],
+                'status': doc['decision']['disposition'], 'ref': ref, 'operation_id': revision['operation_id']}
+
+        plans = self.decided_source('decided_plans', 'pm_plan_adoptions', """SELECT a.*,r.sequence
+            FROM pm_plan_adoptions a JOIN pm_plan_revisions r USING(workspace_id,revision_id)
+            WHERE a.workspace_id=? AND a.rowid=(SELECT MAX(last.rowid) FROM pm_plan_adoptions last
+                WHERE last.workspace_id=a.workspace_id AND last.revision_id=a.revision_id)
+            ORDER BY a.created_at DESC,r.sequence DESC LIMIT ?""", adopted)
+        governance = self.decided_source('decided_governance', 'pm_governance_revisions', """SELECT v.*
+            FROM pm_governance_revisions v JOIN pm_governance_records r USING(record_id)
+            WHERE r.workspace_id=? AND v.action='pm.governance.decide'
+            AND v.sequence=(SELECT MAX(last.sequence) FROM pm_governance_revisions last
+                WHERE last.record_id=v.record_id AND last.action='pm.governance.decide')
+            ORDER BY v.created_at DESC,v.sequence DESC LIMIT ?""", governed)
+        return sorted([*plans, *governance], key=lambda row: (-row['decided_at'], row['key']))
+
+    def fit_decisions(self, output, rows):
+        """History cannot displace existing pending attention or delivery refs."""
+        output['recent_decisions'] = []
+        for row in rows[:DECISION_LIMIT]:
+            output['recent_decisions'].append(row)
+            try:
+                pm_source_lineage.document_roots(self.ops.db, output)
+            except OperationError as exc:
+                if exc.status not in (409, 413):
+                    raise
+                output['recent_decisions'].pop()
+                self.incomplete('decided_references', 'source_limit')
 
     def work(self):
         from . import pm_evidence, work_items
@@ -489,17 +567,27 @@ class Projection:
             'milestones': milestones[:MILESTONE_LIMIT], 'milestones_truncated': len(milestones) > MILESTONE_LIMIT,
             'attention': attention[:ATTENTION_LIMIT], 'recent_deliveries': recent}
         self.fit_sources(output)
-        complete = all(value['complete'] for value in self.coverage.values())
         groups = {'blocker': ('governance',), 'decision': ('governance', 'plan_candidate', 'proposals', 'lifecycle_inflight'),
                   'deviation': ('plan', 'work', 'roadmap', 'forecast', 'quality'), 'risk': ('governance', 'findings')}
         attention_complete = {kind: all(self.coverage.get(k, {'complete': False})['complete'] for k in sources)
                               for kind, sources in groups.items()}
+        attention_truncated = len(attention) > ATTENTION_LIMIT or not all(attention_complete.values()) \
+            or any(item['reason'] == 'source_limit' for item in self.unknown)
+        decisions = self.decisions()
+        self.fit_decisions(output, decisions)
+        decisions_complete = all(self.coverage.get(k, {'complete': k == 'decided_references'})['complete']
+            for k in ('decided_plans', 'decided_governance', 'decided_references'))
+        if not decisions_complete:
+            self.missing('recent_decisions_count', 'incomplete_sources')
+        complete = all(value['complete'] for value in self.coverage.values())
         return {**output,
-            'attention_truncated': len(attention) > ATTENTION_LIMIT or not all(attention_complete.values())
-                or any(item['reason'] == 'source_limit' for item in self.unknown),
+            'attention_truncated': attention_truncated,
             'attention_counts': {k: sum(a['kind'] == k for a in attention) if attention_complete[k] else None
                 for k in ('blocker', 'decision', 'deviation', 'risk')},
             'recent_deliveries_complete': all(v['complete'] for k, v in self.coverage.items() if k in {'work', 'quality'} or k.startswith('deliveries.')),
+            'recent_decisions_count': len(decisions) if decisions_complete else None,
+            'recent_decisions_complete': decisions_complete,
+            'recent_decisions_truncated': len(decisions) > DECISION_LIMIT or not decisions_complete,
             'coverage': {'complete': complete, 'sources': self.coverage,
                 'basis': 'current_visible_central_records', 'network_checked': False}, 'unknown': self.unknown}
 

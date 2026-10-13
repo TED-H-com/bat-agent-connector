@@ -95,6 +95,7 @@ async def test_withdrawn_plan_and_work_cannot_influence_labels_counts_or_order(o
     assert result['milestones'] == []
     assert result['attention'] == []
     assert result['recent_deliveries'] == []
+    assert result['recent_decisions'] == [] and result['recent_decisions_count'] == 0
     assert refs[1]['id'] not in str(result)
     assert pm_source_lineage.read_response(ops.db, OWNER, result) == result
 
@@ -476,12 +477,13 @@ async def test_hidden_pending_source_is_omitted_through_http_rpc_and_mcp(served,
 
 
 @pytest.mark.parametrize('status', ['agent_assumption', 'user_confirmed', 'repo_evidence'])
-async def test_goal_requires_confirmed_or_repository_input(ops, status):  # noqa: F811
+@pytest.mark.parametrize('slot', ['value', 'goal', 'problem', 'governance.goal'])
+async def test_goal_requires_confirmed_or_repository_input(ops, status, slot):  # noqa: F811
     from tests import test_pm_plans as plans
     from tests.test_pm_discussions import act, prepared
     target = await prepared(ops)
     value = 'Restore member access\nwithout support delays'
-    row = await act(ops, target, 'pm.input.record', {'slot': 'value', 'value': value, 'status': status,
+    row = await act(ops, target, 'pm.input.record', {'slot': slot, 'value': value, 'status': status,
         'source_ref': {'kind': 'repository', 'ref': 'example/product', 'revision': '1' * 40, 'path': 'README.md'}
             if status == 'repo_evidence' else {'kind': 'statement', 'ref': 'Explicitly recorded input'}})
     await act(ops, target, 'pm.thread.plan', {'selected_input_ids': [row['input_id']], 'rationale': 'Discuss project purpose'})
