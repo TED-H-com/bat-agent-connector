@@ -192,8 +192,8 @@ def _check(ops, principal, action, target, params, pre):
                 AND json_extract(target,'$.workspace_id')=? AND json_extract(target,'$.thread_id')=?
                 AND status NOT IN (SELECT value FROM json_each(?)) LIMIT 1""",
                 (workspace['workspace_id'], thread['thread_id'], json.dumps(sorted(TERMINAL)))).fetchone():
-            raise _bad("Rename is refused until the adoption finishes. Resume or cancel a paused adoption "
-                       "(needs_attention) first. / 採用完成前不能改名；已暫停（needs_attention）的採用請先繼續或取消。",
+            raise _bad("Rename is unavailable until the adoption finishes; resume or cancel a paused adoption first. "
+                       "/ 採用完成前無法改名；已暫停的採用請先繼續或取消。",
                        "PM_CONVERSATION_ADOPTION_IN_PROGRESS", 409)
     elif action == "pm.message.append":
         _only(params, ("content",))

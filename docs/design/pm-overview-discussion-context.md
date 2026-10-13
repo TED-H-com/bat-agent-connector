@@ -137,6 +137,7 @@ Adoption 接受 proposal 原 version 或目前 thread version，並重查內容�
 該 thread 存在尚未終結的 `pm.conversation.adopt` 時，rename 的 admission 與執行前檢查皆以
 `PM_CONVERSATION_ADOPTION_IN_PROGRESS`（409）拒絕，直到採用結束（succeeded／failed／cancelled）。
 暫停在 `needs_attention` 的採用不會自行結束，必須先以原 operation 明確繼續（resume）或取消（cancel）；
+使用者訊息為「採用完成前無法改名；已暫停的採用請先繼續或取消。」；不顯示原始狀態碼。
 單純等待沒有用。採用結束後重讀 version 即可重試改名。
 這保護已建立但尚未執行的 child CAS，不中止採用或重建任何 child。
 Proposal get／list 每筆提供 `adoptable` 布林與 `adoptable_reason`（可採用時為 null）。

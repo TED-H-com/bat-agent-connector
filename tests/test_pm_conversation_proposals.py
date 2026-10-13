@@ -603,9 +603,9 @@ async def test_rename_during_adoption_is_retryable_after_original_children_finis
     assert refusal is not None
     assert refusal.code == 'PM_CONVERSATION_ADOPTION_IN_PROGRESS' and refusal.status == 409
     # Waiting alone never clears a paused adoption, so the message names what unblocks rename.
-    assert 'Rename is refused until the adoption finishes.' in refusal.message
-    assert 'Resume or cancel a paused adoption (needs_attention) first.' in refusal.message
-    assert '採用完成前不能改名；已暫停（needs_attention）的採用請先繼續或取消。' in refusal.message
+    assert refusal.message == ('Rename is unavailable until the adoption finishes; resume or cancel a paused adoption first. '
+                               '/ 採用完成前無法改名；已暫停的採用請先繼續或取消。')
+    assert 'needs_attention' not in refusal.message
     assert 'Try again in a moment' not in refusal.message
     assert writes == 0
     assert done['status'] == 'succeeded', done
@@ -614,3 +614,38 @@ async def test_rename_during_adoption_is_retryable_after_original_children_finis
     renamed = await complete(w, ops.create(OWNER, **rename_request())[0])
     assert renamed['status'] == 'succeeded', renamed
     assert ops.create(OWNER, **{**rename_request(), 'preconditions': renamed['preconditions']})[0]['operation_id'] == renamed['operation_id']
+
+
+async def test_paused_adoption_blocks_rename_without_writes_until_original_cancel(proposal_world):
+    from dataclasses import replace
+
+    from bat_agent_connector import pm_conversation_adoption as adoption
+    from bat_agent_connector.operations import NeedsAttention
+
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+
+    async def pause_before_effect(ctx):
+        raise NeedsAttention('FIXTURE_PAUSED', 'Original child needs a decision')
+
+    ops.actions['pm.input.record'] = replace(ops.actions['pm.input.record'], run=pause_before_effect)
+    parent = await complete(w, ops.create(OWNER, **adoption_request(w, proposal))[0])
+    assert parent['status'] == 'needs_attention'
+    original_children = adoption._children(ops.db, parent)
+    assert len(original_children) == 1 and original_children[0]['status'] == 'needs_attention'
+    request = dict(action='pm.thread.rename', target=plans.target(w), params={'title': 'New title / 新名稱'},
+                   preconditions={'expected_version': plans.version(w)}, idempotency_key=uuid.uuid4().hex)
+    before = ops.db.total_changes
+    with pytest.raises(OperationError) as refused:
+        ops.create(OWNER, **request)
+    assert refused.value.code == 'PM_CONVERSATION_ADOPTION_IN_PROGRESS' and refused.value.status == 409
+    assert refused.value.message == ('Rename is unavailable until the adoption finishes; resume or cancel a paused adoption first. '
+                                     '/ 採用完成前無法改名；已暫停的採用請先繼續或取消。')
+    assert ops.db.total_changes == before
+    assert adoption._children(ops.db, parent) == original_children
+    for operation_id in (original_children[0]['operation_id'], parent['operation_id']):
+        assert ops.cancel(OWNER, operation_id)['status'] == 'cancelled'
+    renamed = await complete(w, ops.create(OWNER, **request)[0])
+    assert renamed['status'] == 'succeeded'
+    replay, fresh = ops.create(OWNER, **request)
+    assert fresh is False and replay['operation_id'] == renamed['operation_id']
