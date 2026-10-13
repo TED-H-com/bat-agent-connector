@@ -153,6 +153,7 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
       status.replaceChildren(...([work, mappings, quality].some(row => row?.filtered || row?.next != null) ? [h('p', {class: 'muted'}, t('wb_partial'))] : []));
       if (selected && cards.some(card => card.work_item_id === selected)) await select(selected, false, true);
       else {detailCard = null; deliveryRows = []; detail.replaceChildren(); detail.hidden = true; detailBusy = false; renderedDetail = '';}
+      applyPending();
     } catch (error) {fail(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   function deliveryCheck(data, id, after) {
@@ -244,5 +245,29 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
     if (detailBusy || deliveryCursor === null || !selected) return;
     deliveryPages++; await select(selected);
   }
-  controls(); return {element, refresh, withdraw, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate: async () => {if (!active) {active = true; await refresh();}}};
+  let pendingFocus = null;
+  async function activate() {if (!active) {active = true; await refresh();}}
+  function focusWork(id) {pendingFocus = {kind: 'work', id}; if (!active) return activate(); if (!busy) applyPending();}
+  function focusRequirement(id) {pendingFocus = {kind: 'requirement', id}; if (!active) return activate(); if (!busy) applyPending();}
+  function applyPending() {
+    const pending = pendingFocus;
+    if (!pending || !plan) return;
+    if (pending.kind === 'work') {
+      const card = cards.find(row => row.work_item_id === pending.id);
+      if (!card) {pendingFocus = null; return;}
+      pendingFocus = null;
+      for (const id of card.binding?.requirement_ids || []) expanded.add(id);
+      renderTable();
+      tableBody.querySelector(`[data-rtm-work="${CSS.escape(pending.id)}"]`)?.scrollIntoView({block: 'nearest'});
+      void select(pending.id, true);
+      return;
+    }
+    const requirements = plan.document?.requirements || [];
+    if (!requirements.some(row => row.id === pending.id)) {pendingFocus = null; return;}
+    pendingFocus = null;
+    expanded.add(pending.id);
+    renderTable();
+    tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(pending.id)}"]`)?.scrollIntoView({block: 'nearest'});
+  }
+  controls(); return {element, refresh, withdraw, focusWork, focusRequirement, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate};
 }

@@ -132,12 +132,26 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 | Requirements | RTM; quality reviews and execution verification, evidence, specs, work packages (including deliveries), handoff and issue publication |
 | Schedule | Roadmap baseline/forecast/observation; sprints |
 | Dependencies | Maintenance policy, checks, workload and release baselines |
-| Issues & changes | Governance and findings; repairs, review and follow-ups |
+| Issues & changes | Register of risks, issues, actions, changes and decisions when `pm_register` is available; otherwise governance stays primary. Repairs, review, follow-ups and governance remain collapsed disclosures |
 | Agents | Resource observations; AHP |
 | Board | Kanban; work batches |
 
 Secondary tools use collapsed section disclosures. They keep their original forms
 and refresh/withdrawal behavior. Do not rebuild view contents just to move sections.
+
+### Issues & changes
+
+When `features.pm_register.version` is 1, the view reads `GET /pm/workspaces/{id}/register`
+and `GET …/register/{row_id}`. Type counts and the summary (open-by-age, twelve weeks,
+blocking reasons) appear only when `coverage.complete` is true. Otherwise the header
+meta is the number of rows shown, and an empty blocking-reason list says that no
+reason field was recorded. Filters are the API's type, status, exact owner and title
+search. Pages follow `next_cursor`; row ids and cursors are passed through unchanged.
+The inspector shows the stored processing timeline. Discuss and Propose change use
+the shared discussion link, bound only when the row source is a context ref.
+Requirement and work links open the Requirements selection. A 403 or 404 drops the
+rows, counts and inspector together. Governance, repairs, review and follow-up keep
+their durable forms in collapsed disclosures, opened from the header overflow.
 
 Routes are `#/pm/<workspace>/<view>` and
 `#/pm/<workspace>/discussions/<thread>`. A workspace-only route restores its last

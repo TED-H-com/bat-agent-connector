@@ -193,7 +193,14 @@ var uiStrings = {
 		ui_policy: "Maintenance policy",
 		ui_baselines: "Release baselines",
 		ui_batches: "Work batches",
-		ui_observations: "AHP observations"
+		ui_observations: "AHP observations",
+		ui_governance: "Governance",
+		ui_reason_not_recorded: "Not recorded",
+		ui_reason_not_on_current_revision: "Not on this revision",
+		ui_reason_repository_name_not_stored: "Repository name was not stored",
+		ui_reason_source_incomplete: "Source is incomplete",
+		ui_reason_incomplete: "Incomplete",
+		ui_reason_generic: "Not available"
 	},
 	"zh-TW": {
 		ui_search_work: "搜尋工作",
@@ -264,7 +271,14 @@ var uiStrings = {
 		ui_policy: "維護政策",
 		ui_baselines: "發布基準",
 		ui_batches: "工作批次",
-		ui_observations: "AHP 觀察"
+		ui_observations: "AHP 觀察",
+		ui_governance: "治理",
+		ui_reason_not_recorded: "未記錄",
+		ui_reason_not_on_current_revision: "不在這個版本",
+		ui_reason_repository_name_not_stored: "沒有儲存儲存庫名稱",
+		ui_reason_source_incomplete: "來源不完整",
+		ui_reason_incomplete: "不完整",
+		ui_reason_generic: "無法取得"
 	}
 };
 for (const lang of ["en", "zh-TW"]) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]["ui_status_" + key] = row[lang];
@@ -3007,6 +3021,196 @@ var pmIssueStrings = {
 	}
 };
 //#endregion
+//#region src/pm-register-strings.js
+var pmRegisterStrings = {
+	en: {
+		reg_all: "All",
+		reg_type_risk: "Risk",
+		reg_type_issue: "Issue",
+		reg_type_action: "Action",
+		reg_type_change: "Change",
+		reg_type_decision: "Decision",
+		reg_filter_status: "Status",
+		reg_any_status: "Any status",
+		reg_filter_owner: "Owner",
+		reg_filter_search: "Search titles",
+		reg_shown: "{n} shown",
+		reg_none_shown: "None shown",
+		reg_load_more: "Load more",
+		reg_empty: "No matching records",
+		reg_unavailable: "Source unavailable",
+		reg_open_age: "Open by age",
+		reg_age_0_7: "0–7 days",
+		reg_age_8_30: "8–30 days",
+		reg_age_31_90: "31–90 days",
+		reg_age_90: "90+ days",
+		reg_without_age: "{n} without a known age",
+		reg_weekly: "Opened and resolved",
+		reg_opened: "Opened",
+		reg_resolved: "Resolved",
+		reg_blocking: "Blocking reasons",
+		reg_no_reasons: "No reason fields recorded",
+		reg_no_reason_recorded: "No reason recorded · {n}",
+		reg_col_type: "Type",
+		reg_col_title: "Title",
+		reg_col_source: "Source",
+		reg_col_impact: "Impact",
+		reg_col_priority: "Priority",
+		reg_col_owner: "Owner",
+		reg_col_due: "Due",
+		reg_col_status: "Status",
+		reg_col_next: "Next step",
+		reg_col_related: "Related",
+		reg_discuss: "Discuss",
+		reg_propose: "Propose change",
+		reg_change_title: "Change: {title}",
+		reg_discussion: "Discussion",
+		reg_created: "Created",
+		reg_updated: "Updated",
+		reg_timeline: "Processing",
+		reg_details: "Details",
+		reg_neutral: "Type is a neutral classification",
+		reg_bar_value: "{label}, {value}",
+		reg_week_value: "{week}, {opened} opened, {resolved} resolved",
+		reg_reason_count: "{reason}, {count}",
+		reg_step_finding: "Finding",
+		reg_step_action: "Action",
+		reg_step_work: "Work",
+		reg_step_evidence: "Evidence",
+		reg_step_review: "Review",
+		reg_step_proposal: "Proposal",
+		reg_step_decision: "Decision",
+		reg_step_revision: "Revision",
+		reg_kind_governance: "Governance",
+		reg_kind_finding: "Finding",
+		reg_kind_repair: "Repair",
+		reg_kind_follow_up: "Follow-up",
+		reg_kind_proposal: "Proposal",
+		reg_kind_issue_mapping: "GitHub issue",
+		reg_kind_meeting: "Meeting",
+		reg_kind_plan_revision: "Plan",
+		reg_kind_requirement: "Requirement",
+		reg_kind_work_item: "Work",
+		reg_status_open: "Open",
+		reg_status_monitoring: "Monitoring",
+		reg_status_observed_open: "Observed",
+		reg_status_tracking: "Tracking",
+		reg_status_needs_review: "Needs review",
+		reg_status_proposed: "Proposed",
+		reg_status_reported_resolved: "Reported resolved",
+		reg_status_reported_done: "Reported done",
+		reg_status_rejected: "Rejected",
+		reg_status_cancelled: "Cancelled",
+		reg_status_succeeded: "Succeeded",
+		reg_status_failed: "Failed",
+		reg_action_repair: "Turn into work",
+		reg_action_evidence: "Record evidence",
+		reg_action_revise: "Revise record",
+		reg_action_decide: "Record decision",
+		reg_action_link: "Link adoption",
+		reg_action_publish: "Publish issue",
+		reg_action_cancel: "Stop tracking",
+		reg_action_follow: "Record follow-up",
+		reg_action_open: "Open action",
+		reg_pr: "PR #{n}",
+		reg_work: "Work",
+		reg_requirement: "Requirement"
+	},
+	"zh-TW": {
+		reg_all: "全部",
+		reg_type_risk: "風險",
+		reg_type_issue: "問題",
+		reg_type_action: "行動",
+		reg_type_change: "變更",
+		reg_type_decision: "決定",
+		reg_filter_status: "狀態",
+		reg_any_status: "任何狀態",
+		reg_filter_owner: "負責人",
+		reg_filter_search: "搜尋標題",
+		reg_shown: "顯示 {n} 筆",
+		reg_none_shown: "目前沒有顯示",
+		reg_load_more: "載入更多",
+		reg_empty: "沒有符合的紀錄",
+		reg_unavailable: "來源無法取得",
+		reg_open_age: "未決時間",
+		reg_age_0_7: "0–7 天",
+		reg_age_8_30: "8–30 天",
+		reg_age_31_90: "31–90 天",
+		reg_age_90: "超過 90 天",
+		reg_without_age: "{n} 筆沒有已知時間",
+		reg_weekly: "新開與已解決",
+		reg_opened: "新開",
+		reg_resolved: "已解決",
+		reg_blocking: "受阻原因",
+		reg_no_reasons: "沒有記下原因欄位",
+		reg_no_reason_recorded: "沒有記錄原因 · {n}",
+		reg_col_type: "類型",
+		reg_col_title: "標題",
+		reg_col_source: "來源",
+		reg_col_impact: "影響",
+		reg_col_priority: "優先順序",
+		reg_col_owner: "負責人",
+		reg_col_due: "期限",
+		reg_col_status: "狀態",
+		reg_col_next: "下一步",
+		reg_col_related: "相關",
+		reg_discuss: "討論",
+		reg_propose: "提議變更",
+		reg_change_title: "變更：{title}",
+		reg_discussion: "討論",
+		reg_created: "建立時間",
+		reg_updated: "更新時間",
+		reg_timeline: "處理過程",
+		reg_details: "詳細資料",
+		reg_neutral: "類型是中性分類",
+		reg_bar_value: "{label}，{value}",
+		reg_week_value: "{week}，新開 {opened}，已解決 {resolved}",
+		reg_reason_count: "{reason}，{count}",
+		reg_step_finding: "發現",
+		reg_step_action: "行動",
+		reg_step_work: "工作",
+		reg_step_evidence: "證據",
+		reg_step_review: "審查",
+		reg_step_proposal: "提案",
+		reg_step_decision: "決定",
+		reg_step_revision: "修訂",
+		reg_kind_governance: "治理",
+		reg_kind_finding: "發現",
+		reg_kind_repair: "修復",
+		reg_kind_follow_up: "後續",
+		reg_kind_proposal: "提案",
+		reg_kind_issue_mapping: "GitHub issue",
+		reg_kind_meeting: "會議",
+		reg_kind_plan_revision: "計畫",
+		reg_kind_requirement: "需求",
+		reg_kind_work_item: "工作",
+		reg_status_open: "未解決",
+		reg_status_monitoring: "觀察中",
+		reg_status_observed_open: "已觀察",
+		reg_status_tracking: "追蹤中",
+		reg_status_needs_review: "待審閱",
+		reg_status_proposed: "已提議",
+		reg_status_reported_resolved: "回報已解決",
+		reg_status_reported_done: "回報完成",
+		reg_status_rejected: "已拒絕",
+		reg_status_cancelled: "已取消",
+		reg_status_succeeded: "已成功",
+		reg_status_failed: "失敗",
+		reg_action_repair: "轉成工作",
+		reg_action_evidence: "記錄證據",
+		reg_action_revise: "修訂紀錄",
+		reg_action_decide: "記錄決定",
+		reg_action_link: "連結採用",
+		reg_action_publish: "發布 issue",
+		reg_action_cancel: "停止追蹤",
+		reg_action_follow: "記錄後續",
+		reg_action_open: "開啟動作",
+		reg_pr: "PR #{n}",
+		reg_work: "工作",
+		reg_requirement: "需求"
+	}
+};
+//#endregion
 //#region src/pm-spec-sources-strings.js
 var specSourceStrings = {
 	en: {
@@ -4389,6 +4593,7 @@ var pmStrings = {
 		...resourceStrings.en,
 		...pmPlanProposalStrings.en,
 		...pmIssueStrings.en,
+		...pmRegisterStrings.en,
 		...pmLifecycleStrings.en,
 		...pmSprintStrings.en,
 		...pmKanbanStrings.en,
@@ -4735,6 +4940,7 @@ var pmStrings = {
 		...resourceStrings["zh-TW"],
 		...pmPlanProposalStrings["zh-TW"],
 		...pmIssueStrings["zh-TW"],
+		...pmRegisterStrings["zh-TW"],
 		...pmLifecycleStrings["zh-TW"],
 		...pmSprintStrings["zh-TW"],
 		...pmKanbanStrings["zh-TW"],
@@ -8488,11 +8694,73 @@ function iconButton({ icon, label, ...attrs }) {
 		class: "ui-button ghost ui-icon-button"
 	});
 }
+function choices({ options, value, onChange = () => {}, label }, isTabs) {
+	const root = h$1("div", {
+		class: isTabs ? "ui-tabs" : "ui-segmented",
+		role: isTabs ? "tablist" : "radiogroup",
+		"aria-label": label
+	});
+	const buttons = options.map((option) => h$1("button", {
+		type: "button",
+		role: isTabs ? "tab" : "radio",
+		id: option.id || uid(),
+		"aria-controls": isTabs ? option.panel : null,
+		disabled: option.disabled,
+		onclick: () => select(option.value)
+	}, option.label));
+	function select(next, notify = true) {
+		value = next;
+		buttons.forEach((node, i) => {
+			const active = options[i].value === value;
+			node.tabIndex = active ? 0 : -1;
+			node.setAttribute(isTabs ? "aria-selected" : "aria-checked", String(active));
+		});
+		if (notify) onChange(value);
+	}
+	root.addEventListener("keydown", (event) => {
+		if (![
+			"ArrowLeft",
+			"ArrowRight",
+			"ArrowUp",
+			"ArrowDown",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		event.preventDefault();
+		const enabled = buttons.filter((node) => !node.disabled), current = enabled.indexOf(document.activeElement);
+		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1) + enabled.length) % enabled.length];
+		if (!next) return;
+		next.focus();
+		next.click();
+	});
+	root.append(...buttons);
+	select(options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value, false);
+	root.setValue = (next) => select(next, false);
+	return root;
+}
+var segmented = (options) => choices(options, false);
+function statusPill(status) {
+	const key = Object.hasOwn(statusVocabulary, status) ? status : "unknown";
+	return h$1("span", {
+		class: `ui-pill tone-${statusVocabulary[key].tone}`,
+		"data-status": key
+	}, t("ui_status_" + key));
+}
 function pageHeader({ title, pill, meta, actions = [], overflow } = {}) {
 	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, h$1("h1", {}, title), pill), meta ? h$1("p", { class: "ui-meta" }, meta) : null), h$1("div", { class: "ui-header-actions" }, ...actions, overflow));
 }
 function sectionCard({ title, actions = [], body } = {}) {
 	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
+}
+function emptyState({ icon, title, text, action }) {
+	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
+}
+function skeleton(rows = 3) {
+	return h$1("div", {
+		class: "ui-skeleton",
+		role: "status",
+		"aria-label": t("ui_loading")
+	}, ...Array.from({ length: Math.min(100, Math.max(0, rows)) }, () => h$1("div", { "aria-hidden": "true" })));
 }
 var disclosures = new Map();
 function disclosure({ label, body, open = false, key }) {
@@ -8507,6 +8775,17 @@ function disclosure({ label, body, open = false, key }) {
 		if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);
 	});
 	return root;
+}
+function inlineError({ error, retry }) {
+	return h$1("div", {
+		class: "ui-inline-error",
+		role: "alert"
+	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
+		size: "sm",
+		variant: "ghost",
+		label: t("ui_retry"),
+		onClick: retry
+	}) : null);
 }
 function menu({ button: trigger, items }) {
 	const panel = h$1("div", {
@@ -8675,6 +8954,72 @@ function inspector({ title, onClose = () => {} }) {
 		dispose: close
 	});
 }
+function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable }) {
+	const tbody = h$1("tbody");
+	const root = h$1("div", {
+		class: "ui-data-table",
+		tabindex: 0
+	}, h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
+		scope: "col",
+		class: column.numeric ? "numeric" : ""
+	}, column.label)))), tbody)), controls = [];
+	rows.forEach((row, i) => {
+		const key = typeof rowKey === "function" ? rowKey(row) : row[rowKey], active = key === selected;
+		const tr = h$1("tr", {
+			"data-row-key": key,
+			tabindex: active || selected == null && i === 0 ? 0 : -1,
+			"aria-selected": String(active),
+			onclick: (event) => {
+				if (!event.target.closest("button, a, input, select")) select();
+			}
+		});
+		function select() {
+			controls.forEach((node) => {
+				node.tabIndex = node === tr ? 0 : -1;
+				node.setAttribute("aria-selected", String(node === tr));
+			});
+			onSelect(key, row);
+		}
+		if (expandable) {
+			const detail = h$1("tr", { hidden: true }, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
+			const toggle = iconButton({
+				icon: "chevron-right",
+				label: t("ui_expand", { title: row.title || key }),
+				"aria-expanded": "false",
+				onClick: () => {
+					detail.hidden = !detail.hidden;
+					toggle.setAttribute("aria-expanded", String(!detail.hidden));
+					toggle.setAttribute("aria-label", t(detail.hidden ? "ui_expand" : "ui_collapse", { title: row.title || key }));
+				}
+			});
+			tr.append(h$1("td", {}, toggle));
+			tbody.append(tr, detail);
+		} else tbody.append(tr);
+		tr.append(...columns.map((column) => h$1("td", { class: column.numeric ? "numeric" : "" }, column.render ? column.render(row) : row[column.key] ?? "—")));
+		tr.addEventListener("keydown", (event) => {
+			if (event.target !== tr) return;
+			if (["Enter", " "].includes(event.key)) {
+				event.preventDefault();
+				select();
+			}
+			if ([
+				"ArrowDown",
+				"ArrowUp",
+				"Home",
+				"End"
+			].includes(event.key)) {
+				event.preventDefault();
+				const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : Math.max(0, Math.min(controls.length - 1, i + (event.key === "ArrowUp" ? -1 : 1)));
+				controls.forEach((node, n) => {
+					node.tabIndex = n === next ? 0 : -1;
+				});
+				controls[next]?.focus();
+			}
+		});
+		controls.push(tr);
+	});
+	return root;
+}
 //#endregion
 //#region src/pm-workbench.js
 var selections = new Map();
@@ -8715,7 +9060,7 @@ function availableProjectViews(caps) {
 		requirements: pm.work_evidence || pm.work_package_prepare || pm.spec_sources || pm.quality_reviews?.version === 1 || pm.spec_materialization?.version === 1 || pm.package_handoff?.available || pm.issue_mapping || pm.engineering_delivery?.contract === "pm-engineering-delivery/v1" || pm.plan_drafting && pm.kanban && pm.brief_snapshots,
 		schedule: pm.roadmap || pm.sprints,
 		dependencies: pm.maintenance_policy?.version === 1 || pm.release_baselines,
-		issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare,
+		issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare || caps?.features?.pm_register?.version === 1,
 		agents: caps?.features?.pm_resources || pm.ahp_observation?.contract === "ahp_observer_v1",
 		board: pm.kanban || pm.work_batches?.version === 1
 	})[id]);
@@ -8737,7 +9082,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
+function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -11315,6 +11660,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 				detailBusy = false;
 				renderedDetail = "";
 			}
+			applyPending();
 		} catch (error) {
 			fail(error, ticket);
 		} finally {
@@ -11455,11 +11801,61 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		deliveryPages++;
 		await select(selected);
 	}
+	let pendingFocus = null;
+	async function activate() {
+		if (!active) {
+			active = true;
+			await refresh();
+		}
+	}
+	function focusWork(id) {
+		pendingFocus = {
+			kind: "work",
+			id
+		};
+		if (!active) return activate();
+		if (!busy) applyPending();
+	}
+	function focusRequirement(id) {
+		pendingFocus = {
+			kind: "requirement",
+			id
+		};
+		if (!active) return activate();
+		if (!busy) applyPending();
+	}
+	function applyPending() {
+		const pending = pendingFocus;
+		if (!pending || !plan) return;
+		if (pending.kind === "work") {
+			const card = cards.find((row) => row.work_item_id === pending.id);
+			if (!card) {
+				pendingFocus = null;
+				return;
+			}
+			pendingFocus = null;
+			for (const id of card.binding?.requirement_ids || []) expanded.add(id);
+			renderTable();
+			tableBody.querySelector(`[data-rtm-work="${CSS.escape(pending.id)}"]`)?.scrollIntoView({ block: "nearest" });
+			select(pending.id, true);
+			return;
+		}
+		if (!(plan.document?.requirements || []).some((row) => row.id === pending.id)) {
+			pendingFocus = null;
+			return;
+		}
+		pendingFocus = null;
+		expanded.add(pending.id);
+		renderTable();
+		tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(pending.id)}"]`)?.scrollIntoView({ block: "nearest" });
+	}
 	controls();
 	return {
 		element,
 		refresh,
 		withdraw,
+		focusWork,
+		focusRequirement,
 		dispose: () => {
 			Object.assign(preference, {
 				selected,
@@ -11468,12 +11864,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			});
 			withdraw();
 		},
-		activate: async () => {
-			if (!active) {
-				active = true;
-				await refresh();
-			}
-		}
+		activate
 	};
 }
 //#endregion
@@ -14493,6 +14884,880 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		refresh
 	};
 }
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews.has(from) ? from : "",
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+//#endregion
+//#region src/pm-register.js
+var TYPES = [
+	"risk",
+	"issue",
+	"action",
+	"change",
+	"decision"
+];
+var ROW_ID = /^(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180}$/;
+var STATUSES = [
+	"open",
+	"monitoring",
+	"observed_open",
+	"blocked",
+	"tracking",
+	"needs_review",
+	"proposed",
+	"in_progress",
+	"draft",
+	"reported_resolved",
+	"reported_done",
+	"adopted",
+	"rejected",
+	"cancelled",
+	"succeeded",
+	"failed"
+];
+var STEPS = [
+	"finding",
+	"action",
+	"work",
+	"evidence",
+	"review",
+	"proposal",
+	"decision",
+	"revision"
+];
+var TYPE_ICON = {
+	risk: "circle-alert",
+	issue: "inbox",
+	action: "check",
+	change: "refresh-cw",
+	decision: "list-checks"
+};
+var ACTION_KEYS = {
+	"pm.maintenance.repair": "reg_action_repair",
+	"pm.maintenance.repair.evidence.record": "reg_action_evidence",
+	"pm.governance.revise": "reg_action_revise",
+	"pm.governance.decide": "reg_action_decide",
+	"pm.governance.adoption.link": "reg_action_link",
+	"pm.issue.publish": "reg_action_publish",
+	"pm.issue.cancel": "reg_action_cancel",
+	"pm.meeting.follow_up.record": "reg_action_follow",
+	"pm.maintenance_review.follow_up.record": "reg_action_follow"
+};
+var AGE_KEYS = {
+	"0-7d": "reg_age_0_7",
+	"8-30d": "reg_age_8_30",
+	"31-90d": "reg_age_31_90",
+	"90d+": "reg_age_90"
+};
+var TONES = {
+	open: "info",
+	monitoring: "info",
+	observed_open: "info",
+	tracking: "info",
+	failed: "bad",
+	proposed: "review",
+	needs_review: "review",
+	succeeded: "ok"
+};
+var REPO = /^[\w.-]+\/[\w.-]+$/;
+var finite = (value) => typeof value === "number" && Number.isFinite(value);
+var known = (t, key) => {
+	const text = t(key);
+	return text === key ? "" : text;
+};
+var reasonText = (t, code) => known(t, "ui_reason_" + code) || t("ui_reason_generic");
+var when$1 = (value) => {
+	const text = labelSegment(value);
+	if (!text) return "";
+	const date = new Date(text);
+	return Number.isNaN(date.valueOf()) ? "" : date.toLocaleString();
+};
+var day = (value) => {
+	const text = labelSegment(value);
+	if (!text) return "";
+	const date = new Date(text);
+	return Number.isNaN(date.valueOf()) ? text : date.toLocaleDateString();
+};
+function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {} }) {
+	const preference = viewState(namespace, workspaceId, "issues");
+	let serial = 0, detailSerial = 0, active = false, busy = false, rows = [], nextCursor = null, coverage = null, totals = null, summary = null;
+	let loaded = false, unavailable = false, failed = null, selected = preference.selected || null;
+	let typeValue = TYPES.includes(preference.type) ? preference.type : "";
+	let debounce = null, sheet = null, retainSheet = false, opening = false;
+	const statusLine = h("div", { role: "status" });
+	const summaryHost = h("div", {
+		"data-reg-summary": "",
+		hidden: true
+	});
+	const tableHost = h("div", { "data-reg-table": "" });
+	const footer = h("div", {
+		class: "reg-footer",
+		"data-reg-footer": "",
+		hidden: true
+	});
+	const statusSelect = h("select", {
+		"data-reg-status": "",
+		onchange: () => reloadNow()
+	}, h("option", { value: "" }, t("reg_any_status")), ...STATUSES.map((status) => h("option", { value: status }, statusLabel(status))));
+	const ownerInput = h("input", {
+		type: "text",
+		"data-reg-owner": "",
+		autocomplete: "off",
+		oninput: queueReload
+	});
+	const searchInput = h("input", {
+		type: "search",
+		"data-reg-search": "",
+		oninput: queueReload
+	});
+	statusSelect.value = STATUSES.includes(preference.status) ? preference.status : "";
+	ownerInput.value = preference.owner || "";
+	searchInput.value = preference.q || "";
+	const typeControl = segmented({
+		label: t("reg_col_type"),
+		value: typeValue,
+		onChange: (value) => {
+			typeValue = value || "";
+			reloadNow();
+		},
+		options: [{
+			value: "",
+			label: t("reg_all")
+		}, ...TYPES.map((type) => ({
+			value: type,
+			label: t("reg_type_" + type)
+		}))]
+	});
+	[...typeControl.querySelectorAll("button")].forEach((node, index) => node.setAttribute("data-reg-type", index ? TYPES[index - 1] : ""));
+	const layout = h("div", { class: "reg-layout" }, h("div", { class: "reg-main" }, h("div", { class: "reg-filters" }, typeControl, h("div", { class: "reg-fields" }, field(t("reg_filter_status"), statusSelect), field(t("reg_filter_owner"), ownerInput), field(t("reg_filter_search"), searchInput))), summaryHost, statusLine, tableHost, footer));
+	const element = h("section", { "data-pm-register": "" }, layout);
+	const pinCharts = () => {
+		for (const node of element.querySelectorAll(".reg-chart")) node.scrollLeft = node.scrollWidth;
+	};
+	window.addEventListener("resize", pinCharts);
+	function field(label, control) {
+		return h("label", { class: "reg-field" }, h("span", {}, label), control);
+	}
+	function statusLabel(status) {
+		if (Object.hasOwn(statusVocabulary, status)) return t("ui_status_" + status);
+		return known(t, "reg_status_" + status) || t("ui_reason_generic");
+	}
+	function statusNode(status) {
+		if (!labelSegment(status)) return statusPill("unknown");
+		if (Object.hasOwn(statusVocabulary, status)) return statusPill(status);
+		const label = known(t, "reg_status_" + status);
+		return h("span", { class: `ui-pill tone-${TONES[status] || "neutral"}` }, label || t("ui_reason_generic"));
+	}
+	function kindLabel(kind) {
+		return known(t, "reg_kind_" + kind) || t("ui_reason_generic");
+	}
+	function stepLabel(step) {
+		return known(t, "reg_step_" + step) || t("ui_reason_generic");
+	}
+	function dash(value) {
+		return labelSegment(value) || "—";
+	}
+	function readFilters() {
+		preference.type = typeValue;
+		preference.status = statusSelect.value;
+		preference.owner = ownerInput.value;
+		preference.q = searchInput.value;
+	}
+	function resetPage() {
+		rows = [];
+		nextCursor = null;
+		summary = null;
+		totals = null;
+		coverage = null;
+		loaded = false;
+		failed = null;
+		unavailable = false;
+		selected = null;
+		preference.inspector = false;
+		closeSheet(false);
+		render();
+	}
+	function queueReload() {
+		readFilters();
+		clearTimeout(debounce);
+		debounce = setTimeout(() => {
+			debounce = null;
+			resetPage();
+			refresh();
+		}, 200);
+	}
+	function reloadNow() {
+		readFilters();
+		clearTimeout(debounce);
+		debounce = null;
+		resetPage();
+		refresh();
+	}
+	function publishMeta() {
+		if (!active || unavailable || failed || !loaded) {
+			onMeta(null);
+			return;
+		}
+		if (coverage?.complete === true && totals && typeof totals === "object") {
+			onMeta(joinLabel(TYPES.map((type) => finite(totals[type]) ? `${t("reg_type_" + type)} ${totals[type]}` : "")) || (rows.length ? t("reg_shown", { n: rows.length }) : t("reg_none_shown")));
+			return;
+		}
+		onMeta(rows.length ? t("reg_shown", { n: rows.length }) : t("reg_none_shown"));
+	}
+	function shownLine() {
+		const complete = coverage?.complete === true;
+		const sum = complete && totals ? TYPES.reduce((total, type) => total + (finite(totals[type]) ? totals[type] : 0), 0) : null;
+		return Boolean(nextCursor) || !complete || sum != null && sum !== rows.length ? rows.length ? t("reg_shown", { n: rows.length }) : t("reg_none_shown") : "";
+	}
+	function bar(label, value, max, attrs) {
+		const track = h("div", {
+			class: "reg-bar-track",
+			"aria-hidden": "true"
+		}, h("span", { class: "reg-bar-fill" }));
+		const fill = track.firstChild;
+		fill.style.width = max > 0 && finite(value) ? `${Math.max(0, Math.min(100, Math.round(value / max * 100)))}%` : "0%";
+		return h("div", {
+			class: "reg-bar",
+			role: "img",
+			"aria-label": t("reg_bar_value", {
+				label,
+				value
+			}),
+			...attrs
+		}, h("span", { class: "reg-bar-label" }, label), track, h("span", { class: "reg-bar-value" }, String(value)));
+	}
+	function paintSummary() {
+		summaryHost.replaceChildren();
+		summaryHost.hidden = summary == null;
+		if (summary == null) return;
+		const ages = Array.isArray(summary.open_by_age) ? summary.open_by_age : [];
+		const maxAge = Math.max(0, ...ages.map((row) => finite(row?.count) ? row.count : 0));
+		const ageSection = h("section", {}, h("h3", {}, t("reg_open_age")), h("div", { class: "reg-bars" }, ...ages.filter((row) => AGE_KEYS[row?.bucket] && finite(row.count)).map((row) => bar(t(AGE_KEYS[row.bucket]), row.count, maxAge, { "data-reg-age": row.bucket }))));
+		const unknownAge = coverage?.open_without_known_age;
+		if (finite(unknownAge)) ageSection.append(h("p", {
+			class: "reg-note",
+			"data-reg-unknown-age": ""
+		}, t("reg_without_age", { n: unknownAge })));
+		const weeks = Array.isArray(summary.weekly) ? summary.weekly : [];
+		const maxWeek = Math.max(0, ...weeks.flatMap((row) => [row?.opened, row?.resolved].filter(finite)));
+		const chart = h("div", { class: "reg-chart" });
+		for (const week of weeks) {
+			if (!labelSegment(week?.week_start) || !finite(week.opened) || !finite(week.resolved)) continue;
+			const opened = h("span", { class: "reg-week-open" });
+			const resolved = h("span", { class: "reg-week-resolved" });
+			opened.style.height = maxWeek > 0 ? `${Math.round(week.opened / maxWeek * 64)}px` : "0px";
+			resolved.style.height = maxWeek > 0 ? `${Math.round(week.resolved / maxWeek * 64)}px` : "0px";
+			const short = String(week.week_start).slice(5);
+			chart.append(h("div", {
+				class: "reg-week",
+				role: "img",
+				"aria-label": t("reg_week_value", {
+					week: week.week_start,
+					opened: week.opened,
+					resolved: week.resolved
+				})
+			}, h("div", {
+				class: "reg-week-bars",
+				"aria-hidden": "true"
+			}, opened, resolved), h("span", { class: "reg-week-label" }, short)));
+		}
+		const weekSection = h("section", {}, h("h3", {}, t("reg_weekly")), h("div", { class: "reg-legend" }, h("span", {}, h("span", {
+			class: "reg-swatch",
+			"aria-hidden": "true"
+		}), t("reg_opened")), h("span", {}, h("span", {
+			class: "reg-swatch resolved",
+			"aria-hidden": "true"
+		}), t("reg_resolved"))), chart);
+		const reasons = Array.isArray(summary.blocking_reasons) ? summary.blocking_reasons : null;
+		const reasonSection = h("section", { "data-reg-reasons": "" }, h("h3", {}, t("reg_blocking")));
+		if (reasons && !reasons.length) reasonSection.append(h("p", {
+			class: "reg-note",
+			"data-reg-no-reasons": ""
+		}, t("reg_no_reasons")));
+		else if (reasons) {
+			const maxReason = Math.max(0, ...reasons.map((row) => finite(row?.count) ? row.count : 0));
+			const reasonBars = reasons.filter((row) => labelSegment(row?.reason) && finite(row.count)).map((row) => bar(String(row.reason), row.count, maxReason, { "aria-label": t("reg_reason_count", {
+				reason: row.reason,
+				count: row.count
+			}) }));
+			reasonSection.append(h("div", { class: "reg-bars" }, ...reasonBars));
+		}
+		const blocked = finite(summary.blocked_without_reason) ? summary.blocked_without_reason : finite(coverage?.blocked_without_reason) ? coverage.blocked_without_reason : null;
+		if (blocked > 0) reasonSection.append(h("p", {
+			class: "reg-note",
+			"data-reg-blocked": ""
+		}, t("reg_no_reason_recorded", { n: blocked })));
+		summaryHost.append(ageSection, weekSection, reasonSection);
+		requestAnimationFrame(pinCharts);
+	}
+	function relatedChips(row) {
+		const related = row.related || {};
+		const chips = [];
+		for (const id of related.requirement_ids || []) if (labelSegment(id)) chips.push(h("button", {
+			type: "button",
+			class: "ui-button ghost ui-sm",
+			"data-reg-requirement": id,
+			title: id,
+			"aria-label": `${t("reg_requirement")} ${id}`,
+			onclick: () => onOpenRequirement(id)
+		}, t("reg_requirement")));
+		for (const id of related.work_item_ids || []) if (labelSegment(id)) chips.push(h("button", {
+			type: "button",
+			class: "ui-button ghost ui-sm",
+			"data-reg-work": id,
+			title: id,
+			"aria-label": `${t("reg_work")} ${id}`,
+			onclick: () => onOpenWork(id)
+		}, t("reg_work")));
+		for (const pr of related.prs || []) {
+			if (!finite(pr?.number)) continue;
+			const label = t("reg_pr", { n: pr.number });
+			if (typeof pr.repository === "string" && REPO.test(pr.repository)) chips.push(h("a", {
+				class: "ui-button ghost ui-sm",
+				"data-reg-pr": "",
+				href: `https://github.com/${pr.repository}/pull/${pr.number}`,
+				target: "_blank",
+				rel: "noopener noreferrer"
+			}, label));
+			else chips.push(h("span", { class: "ui-context-chip" }, label));
+		}
+		return chips.length ? h("div", { class: "reg-chips" }, ...chips) : "—";
+	}
+	function paintTable() {
+		const focusKey = tableHost.contains(document.activeElement) ? document.activeElement.closest("[data-row-key]")?.getAttribute("data-row-key") : null;
+		const scroll = tableHost.querySelector(".ui-data-table")?.scrollTop || 0;
+		if (failed) {
+			tableHost.replaceChildren();
+			return;
+		}
+		if (unavailable) {
+			tableHost.replaceChildren(emptyState({
+				icon: "circle-alert",
+				title: t("reg_unavailable")
+			}));
+			return;
+		}
+		if (!loaded) {
+			tableHost.replaceChildren(skeleton(4));
+			return;
+		}
+		if (!rows.length) {
+			tableHost.replaceChildren(emptyState({
+				icon: "search",
+				title: t("reg_empty")
+			}));
+			return;
+		}
+		const columns = [
+			{
+				key: "type",
+				label: t("reg_col_type"),
+				render: (row) => h("span", { class: "reg-type-icon" }, icon(TYPE_ICON[row.type] || "circle-alert", { label: t("reg_type_" + row.type) }))
+			},
+			{
+				key: "title",
+				label: t("reg_col_title"),
+				render: (row) => dash(row.title)
+			},
+			{
+				key: "source",
+				label: t("reg_col_source"),
+				render: (row) => kindLabel(row.source?.kind)
+			},
+			{
+				key: "impact",
+				label: t("reg_col_impact"),
+				render: (row) => dash(row.impact)
+			},
+			{
+				key: "priority",
+				label: t("reg_col_priority"),
+				render: (row) => dash(row.priority)
+			},
+			{
+				key: "owner",
+				label: t("reg_col_owner"),
+				render: (row) => dash(row.owner)
+			},
+			{
+				key: "due",
+				label: t("reg_col_due"),
+				render: (row) => day(row.due) || "—"
+			},
+			{
+				key: "status",
+				label: t("reg_col_status"),
+				render: (row) => statusNode(row.status)
+			},
+			{
+				key: "next",
+				label: t("reg_col_next"),
+				render: (row) => dash(row.next_step)
+			},
+			{
+				key: "related",
+				label: t("reg_col_related"),
+				render: (row) => relatedChips(row)
+			}
+		];
+		tableHost.replaceChildren(dataTable({
+			columns,
+			rows,
+			rowKey: "row_id",
+			selected,
+			onSelect: (_key, row) => openRow(row)
+		}));
+		if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({ preventScroll: true });
+		const scroller = tableHost.querySelector(".ui-data-table");
+		if (scroller) scroller.scrollTop = scroll;
+	}
+	function paintFooter() {
+		footer.replaceChildren();
+		const text = !failed && !unavailable && loaded ? shownLine() : "";
+		footer.hidden = !text && !nextCursor;
+		if (text) footer.append(h("p", { "data-reg-count": "" }, text));
+		if (nextCursor && !failed && !unavailable) footer.append(h("button", {
+			type: "button",
+			class: "ui-button secondary ui-sm",
+			"data-reg-more": "",
+			disabled: busy || null,
+			onclick: () => void loadList(true)
+		}, t("reg_load_more")));
+	}
+	function render() {
+		paintSummary();
+		paintTable();
+		paintFooter();
+		publishMeta();
+	}
+	function closeSheet(retain) {
+		retainSheet = retain;
+		sheet?.close();
+		retainSheet = false;
+	}
+	function linkedRow(ref) {
+		if (!ref || typeof ref !== "object") return null;
+		return rows.find((row) => row.source?.kind === ref.kind && row.source?.id === ref.id) || null;
+	}
+	function refLink(ref, label, rowId) {
+		if (ref?.kind === "work_item" && labelSegment(ref.id)) return h("button", {
+			type: "button",
+			class: "ui-button ghost ui-sm",
+			"data-reg-work": ref.id,
+			title: ref.id,
+			"aria-label": `${t("reg_work")} ${ref.id}`,
+			onclick: () => onOpenWork(ref.id)
+		}, label || t("reg_work"));
+		if (ref?.kind === "requirement" && labelSegment(ref.id)) return h("button", {
+			type: "button",
+			class: "ui-button ghost ui-sm",
+			"data-reg-requirement": ref.id,
+			title: ref.id,
+			"aria-label": `${t("reg_requirement")} ${ref.id}`,
+			onclick: () => onOpenRequirement(ref.id)
+		}, label || t("reg_requirement"));
+		if (ref?.kind === "proposal" && isContextRef(ref)) return h("a", {
+			class: "ui-button ghost ui-sm",
+			href: discussHref({
+				workspaceId,
+				refs: [ref],
+				title: label || t("reg_discussion"),
+				from: "issues"
+			})
+		}, label || t("reg_kind_proposal"));
+		const match = linkedRow(ref);
+		if (match && match.row_id !== rowId) return h("button", {
+			type: "button",
+			class: "ui-button ghost ui-sm",
+			onclick: () => openRow(match)
+		}, label || kindLabel(ref.kind));
+		return label ? h("span", {}, label) : null;
+	}
+	function detailNodes(record) {
+		const row = record.row;
+		const unknownCodes = [];
+		const facts = h("dl", { class: "reg-facts" }, ...[
+			[t("reg_col_type"), t("reg_type_" + row.type)],
+			[t("reg_col_title"), dash(row.title)],
+			[t("reg_col_source"), kindLabel(row.source?.kind)],
+			[t("reg_col_impact"), dash(row.impact)],
+			[t("reg_col_priority"), dash(row.priority)],
+			[t("reg_col_owner"), dash(row.owner)],
+			[t("reg_col_due"), day(row.due) || "—"],
+			[t("reg_col_status"), statusNode(row.status)],
+			[t("reg_col_next"), dash(row.next_step)],
+			[t("reg_col_related"), relatedChips(row)]
+		].flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)]));
+		const timeline = h("ol", {
+			class: "reg-timeline",
+			"data-reg-timeline": ""
+		}, ...(Array.isArray(record.timeline) ? record.timeline : []).map((step, index) => ({
+			step,
+			index
+		})).sort((a, b) => (STEPS.indexOf(a.step?.step) < 0 ? STEPS.length : STEPS.indexOf(a.step.step)) - (STEPS.indexOf(b.step?.step) < 0 ? STEPS.length : STEPS.indexOf(b.step.step)) || a.index - b.index).map(({ step }, index) => {
+			if (!known(t, "reg_step_" + step?.step)) unknownCodes.push(step?.step);
+			const meta = joinLabel([step?.actor, when$1(step?.at)]);
+			const title = labelSegment(step?.title);
+			return h("li", {
+				class: "reg-step",
+				"data-reg-step": step?.step || "unknown"
+			}, h("h4", {}, stepLabel(step?.step)), meta ? h("p", { class: "reg-note" }, meta) : null, refLink(step?.ref, title, row.row_id), labelSegment(step?.status) ? statusNode(step.status) : null);
+		}));
+		const partial = record.timeline_coverage && record.timeline_coverage.complete === false;
+		if (partial && record.timeline_coverage.partial_reason) unknownCodes.push(record.timeline_coverage.partial_reason);
+		const head = h("div", { class: "reg-timeline-head" }, h("h3", {}, t("reg_timeline")), partial ? statusPill("partial") : null);
+		const source = isContextRef(row.source) ? row.source : null;
+		const title = labelSegment(row.title) || t("reg_discussion");
+		const links = h("div", { class: "reg-actions" }, h("a", {
+			class: "ui-button ghost ui-sm",
+			"data-reg-discuss": "",
+			href: discussHref({
+				workspaceId,
+				refs: source ? [source] : [],
+				title,
+				from: "issues"
+			})
+		}, t("reg_discuss")), ...(Array.isArray(row.available_actions) ? row.available_actions : []).filter((action) => labelSegment(action?.action)).map((action) => {
+			const key = ACTION_KEYS[action.action];
+			if (!key) unknownCodes.push(action.action);
+			return h("button", {
+				type: "button",
+				class: "ui-button secondary ui-sm",
+				"data-reg-action": action.action,
+				onclick: () => onAction(action)
+			}, t(key || "reg_action_open"));
+		}), h("a", {
+			class: "ui-button ghost ui-sm",
+			"data-reg-propose": "",
+			href: discussHref({
+				workspaceId,
+				refs: source ? [source] : [],
+				title: t("reg_change_title", { title }),
+				from: "issues"
+			})
+		}, t("reg_propose")));
+		const fieldKey = {
+			title: "reg_col_title",
+			status: "reg_col_status",
+			owner: "reg_col_owner",
+			due: "reg_col_due",
+			impact: "reg_col_impact",
+			priority: "reg_col_priority",
+			next_step: "reg_col_next",
+			created_at: "reg_created",
+			updated_at: "reg_updated"
+		};
+		const detailBits = [];
+		if (row.type_basis === "neutral") detailBits.push(h("p", {}, t("reg_neutral")));
+		for (const [name, code] of Object.entries(row.unknowns || {})) {
+			if (!labelSegment(code)) continue;
+			const recognised = Boolean(known(t, "ui_reason_" + code));
+			const label = fieldKey[name] ? t(fieldKey[name]) : t("ui_reason_generic");
+			detailBits.push(h("p", {}, `${label}: ${reasonText(t, code)}`));
+			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, String(code)));
+		}
+		for (const code of unknownCodes) if (labelSegment(code)) detailBits.push(h("p", { class: "reg-note" }, String(code)));
+		return [
+			facts,
+			head,
+			timeline,
+			links,
+			detailBits.length ? h("details", { class: "ui-disclosure" }, h("summary", {}, t("reg_details")), ...detailBits) : null
+		];
+	}
+	function paintInspector(record) {
+		const row = record.row;
+		const title = labelSegment(row.title) || t("reg_type_" + row.type);
+		if (sheet?.contains(document.activeElement) && sheet?.getAttribute("data-reg-row") === row.row_id) return;
+		if (!sheet || sheet.getAttribute("data-reg-row") !== row.row_id) {
+			closeSheet(true);
+			opening = true;
+			sheet = inspector({
+				title,
+				onClose: () => {
+					sheet = null;
+					if (!retainSheet && !opening) preference.inspector = false;
+				}
+			});
+			opening = false;
+			sheet.setAttribute("data-reg-inspector", "");
+			sheet.setAttribute("data-reg-row", row.row_id);
+			layout.append(sheet);
+		} else sheet.querySelector("h2").textContent = title;
+		sheet.body.replaceChildren(...detailNodes(record).filter(Boolean));
+	}
+	function openRow(row) {
+		selected = row.row_id;
+		preference.selected = selected;
+		preference.inspector = true;
+		render();
+		loadDetail(row.row_id);
+	}
+	function checkList(data) {
+		if (data?.workspace_id !== workspaceId || !Array.isArray(data.rows) || data.next_cursor != null && typeof data.next_cursor !== "string") throw Error(t("pm_scope_mismatch"));
+		const complete = data.coverage?.complete === true;
+		if (!complete && (data.total_by_type != null || data.summary != null)) throw Error(t("pm_scope_mismatch"));
+		if (complete && data.total_by_type != null) {
+			if (typeof data.total_by_type !== "object") throw Error(t("pm_scope_mismatch"));
+			for (const type of TYPES) if (data.total_by_type[type] != null && !finite(data.total_by_type[type])) throw Error(t("pm_scope_mismatch"));
+		}
+		for (const row of data.rows) if (!ROW_ID.test(row?.row_id || "") || !TYPES.includes(row.type) || !row.source || typeof row.source.kind !== "string" || !labelSegment(row.source.id)) throw Error(t("pm_scope_mismatch"));
+		return data;
+	}
+	function checkDetail(data, rowId) {
+		if (data?.workspace_id !== workspaceId || data.row?.row_id !== rowId || !Array.isArray(data.timeline)) throw Error(t("pm_scope_mismatch"));
+		return data;
+	}
+	function query(append) {
+		const params = new URLSearchParams();
+		if (typeValue) params.set("type", typeValue);
+		if (statusSelect.value) params.set("status", statusSelect.value);
+		if (ownerInput.value.trim()) params.set("owner", ownerInput.value.trim());
+		if (searchInput.value.trim()) params.set("q", searchInput.value.trim());
+		if (append && nextCursor) params.set("after", nextCursor);
+		params.set("limit", "50");
+		return params;
+	}
+	async function loadList(append) {
+		if (!active) return;
+		const ticket = ++serial;
+		busy = true;
+		paintFooter();
+		try {
+			const data = checkList(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/register?${query(append)}`));
+			alive();
+			if (ticket !== serial) return;
+			unavailable = false;
+			failed = null;
+			loaded = true;
+			if (!append) rows = [];
+			const seen = new Set(rows.map((row) => row.row_id));
+			for (const row of data.rows) if (!seen.has(row.row_id)) {
+				seen.add(row.row_id);
+				rows.push(row);
+			}
+			nextCursor = data.next_cursor || null;
+			coverage = data.coverage || {};
+			totals = coverage.complete === true ? data.total_by_type : null;
+			summary = coverage.complete === true ? data.summary : null;
+			if (selected && !rows.some((row) => row.row_id === selected)) {
+				selected = null;
+				preference.inspector = false;
+				closeSheet(false);
+			}
+			statusLine.replaceChildren();
+			render();
+			if (preference.inspector && selected) loadDetail(selected);
+		} catch (error) {
+			try {
+				alive();
+			} catch {
+				return;
+			}
+			if (ticket !== serial) return;
+			if ([403, 404].includes(error.status)) withdraw();
+			else fail(error);
+		} finally {
+			if (ticket === serial) {
+				busy = false;
+				paintFooter();
+			}
+		}
+	}
+	async function loadDetail(rowId) {
+		const ticket = ++detailSerial;
+		const listTicket = serial;
+		try {
+			const data = checkDetail(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/register/${encodeURIComponent(rowId)}`), rowId);
+			alive();
+			if (ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
+			paintInspector(data);
+		} catch (error) {
+			try {
+				alive();
+			} catch {
+				return;
+			}
+			if (ticket !== detailSerial || listTicket !== serial) return;
+			if ([403, 404].includes(error.status)) {
+				rows = rows.filter((row) => row.row_id !== rowId);
+				if (selected === rowId) {
+					selected = null;
+					preference.inspector = false;
+					closeSheet(false);
+				}
+				render();
+				refresh();
+				return;
+			}
+			statusLine.replaceChildren(inlineError({
+				error,
+				retry: () => void loadDetail(rowId)
+			}));
+		}
+	}
+	function fail(error) {
+		serial++;
+		busy = false;
+		rows = [];
+		nextCursor = null;
+		coverage = null;
+		totals = null;
+		summary = null;
+		loaded = true;
+		unavailable = false;
+		failed = error;
+		selected = null;
+		preference.inspector = false;
+		closeSheet(false);
+		onMeta(null);
+		statusLine.replaceChildren(inlineError({
+			error,
+			retry: () => void refresh()
+		}));
+		render();
+	}
+	function withdraw() {
+		serial++;
+		detailSerial++;
+		busy = false;
+		rows = [];
+		nextCursor = null;
+		coverage = null;
+		totals = null;
+		summary = null;
+		loaded = true;
+		unavailable = true;
+		failed = null;
+		selected = null;
+		preference.inspector = false;
+		closeSheet(false);
+		statusLine.replaceChildren();
+		onMeta(null);
+		render();
+	}
+	async function refresh() {
+		if (!active) return;
+		await loadList(false);
+	}
+	function rememberScroll() {
+		preference.scrollY = window.scrollY;
+		preference.tableScroll = tableHost.querySelector(".ui-data-table")?.scrollTop || 0;
+	}
+	function restoreScroll() {
+		const y = finite(preference.scrollY) ? preference.scrollY : 0;
+		const tableY = finite(preference.tableScroll) ? preference.tableScroll : 0;
+		requestAnimationFrame(() => {
+			window.scrollTo(0, y);
+			const scroller = tableHost.querySelector(".ui-data-table");
+			if (scroller) scroller.scrollTop = tableY;
+		});
+	}
+	function setActive(value) {
+		const next = Boolean(value);
+		if (active === next) {
+			if (active) publishMeta();
+			else onMeta(null);
+			return;
+		}
+		active = next;
+		if (!active) {
+			onMeta(null);
+			closeSheet(true);
+			return;
+		}
+		refresh();
+	}
+	function dispose() {
+		active = false;
+		clearTimeout(debounce);
+		serial++;
+		detailSerial++;
+		window.removeEventListener("resize", pinCharts);
+		readFilters();
+		rememberScroll();
+		closeSheet(false);
+	}
+	render();
+	return {
+		element,
+		refresh,
+		withdraw,
+		rememberScroll,
+		restoreScroll,
+		setActive,
+		dispose
+	};
+}
 //#endregion
 //#region src/pm-package-handoff.js
 var contract = "pm-engineering-handoff/v1";
@@ -15558,7 +16823,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		const row = record.current, doc = row.document;
 		detail.replaceChildren(h("h4", {}, trackedIssue(doc)), h("p", {}, stateLabel(doc.state) || t("pm_label_unknown")), h("p", { class: "muted" }, t("pmi_not_done")), fold("pmi_history", ...record.revisions.map((item) => {
 			const d = item.document, selected = d.selected;
-			return h("details", {}, h("summary", {}, `${t("pmi_revision")} ${item.sequence} · ${item.actor}`), selected.public_title ? h("h4", {}, selected.public_title) : "", selected.public_body ? h("pre", { class: "pm-note-text" }, selected.public_body) : "", selected.public_reason ? h("pre", { class: "pm-note-text" }, selected.public_reason) : "", selected.rationale ? h("p", {}, t("pmi_private_reason"), ": ", selected.rationale) : "", h("p", { class: "pm-source" }, item.revision_id, " · ", d.package_ref.package_id), h("a", { href: `#/op/${item.operation_id}` }, t("pm_operation")));
+			return h("details", {}, h("summary", {}, joinLabel([`${t("pmi_revision")} ${labelSegment(item.sequence)}`, item.actor])), selected.public_title ? h("h4", {}, selected.public_title) : "", selected.public_body ? h("pre", { class: "pm-note-text" }, selected.public_body) : "", selected.public_reason ? h("pre", { class: "pm-note-text" }, selected.public_reason) : "", selected.rationale ? h("p", {}, t("pmi_private_reason"), ": ", selected.rationale) : "", h("p", { class: "pm-source" }, item.revision_id, " · ", d.package_ref.package_id), h("a", { href: `#/op/${item.operation_id}` }, t("pm_operation")));
 		})), fold("pmi_stop", cancelEditor(row).box));
 	}
 	async function readSelected(ticket) {
@@ -25514,6 +26779,16 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		pill: phasePill,
 		actions: [refresh]
 	});
+	const headerMeta = h("p", {
+		class: "ui-meta",
+		"data-pm-header-meta": "",
+		hidden: true
+	});
+	heading.querySelector(".ui-page-heading").append(headerMeta);
+	const setHeaderMeta = (text) => {
+		headerMeta.textContent = text || "";
+		headerMeta.hidden = !text;
+	};
 	const content = h("div", { class: "pm-content" }), body = h("section", { class: "pm-main" }, heading, status, content);
 	const creationHome = h("div", { hidden: true }, workspaceForm.box);
 	main.append(h("div", { class: "pm-shell" }, body, creationHome));
@@ -25778,6 +27053,42 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps
 	}) : null;
 	if (governance) body.insertBefore(governance.element, content);
+	const routeRegisterAction = (action) => {
+		const name = action?.action || "";
+		const open = (viewId, section) => {
+			if (viewId) workbench?.select(viewId);
+			const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
+			if (fold instanceof HTMLDetailsElement) {
+				fold.open = true;
+				fold.scrollIntoView({ block: "nearest" });
+			}
+		};
+		if (name.startsWith("pm.meeting.")) open("discussions", "ui_meetings");
+		else if (name.includes("follow_up.record")) open("issues", "ui_follow_up");
+		else if (name.startsWith("pm.maintenance_review.")) open("issues", "ui_maintenance_review");
+		else if (name.startsWith("pm.maintenance.repair")) open("issues", "ui_repairs");
+		else if (name.startsWith("pm.governance.")) open("issues", "ui_governance");
+		else if (name.startsWith("pm.issue.")) open("requirements", "ui_publication");
+	};
+	const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1 ? workspaceRegister({
+		h,
+		t,
+		api,
+		alive,
+		namespace,
+		workspaceId,
+		errorBox,
+		onMeta: setHeaderMeta,
+		onOpenWork: (id) => {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
+			traceability?.focusWork?.(id);
+		},
+		onOpenRequirement: (id) => {
+			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
+			traceability?.focusRequirement?.(id);
+		},
+		onAction: routeRegisterAction
+	}) : null;
 	const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources ? specSources({
 		h,
 		t,
@@ -26014,23 +27325,75 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		]
 	}) : null;
 	if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
+	const issueTools = [];
+	if (register) {
+		if (governance) issueTools.push({
+			key: "governance",
+			label: t("ui_governance"),
+			section: "ui_governance"
+		});
+		if (maintenanceRepairs) issueTools.push({
+			key: "repairs",
+			label: t("ui_repairs"),
+			section: "ui_repairs"
+		});
+		if (maintenanceReview) issueTools.push({
+			key: "review",
+			label: t("ui_maintenance_review"),
+			section: "ui_maintenance_review"
+		});
+		if (followUp) issueTools.push({
+			key: "follow",
+			label: t("ui_follow_up"),
+			section: "ui_follow_up"
+		});
+	}
+	const openIssueTool = (section) => {
+		const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
+		if (fold instanceof HTMLDetailsElement) {
+			fold.open = true;
+			fold.scrollIntoView({ block: "nearest" });
+			return;
+		}
+		body.querySelector(`[data-pm-section="${section}"]`)?.scrollIntoView({ block: "nearest" });
+	};
 	const overflow = menu({
 		button: iconButton({
 			icon: "more-horizontal",
 			label: t("ui_more"),
 			"data-pm-overflow": ""
 		}),
-		items: [...lifecycle ? [{
-			key: "phase",
-			label: t("ui_change_phase"),
-			onSelect: () => openPanel(t("ui_change_phase"), lifecycle.element)
-		}] : [], ...evidence ? [{
-			key: "settings",
-			label: t("ui_workspace_settings"),
-			onSelect: () => openPanel(t("ui_workspace_settings"), evidence.box)
-		}] : []]
+		items: [
+			...lifecycle ? [{
+				key: "phase",
+				label: t("ui_change_phase"),
+				onSelect: () => openPanel(t("ui_change_phase"), lifecycle.element)
+			}] : [],
+			...evidence ? [{
+				key: "settings",
+				label: t("ui_workspace_settings"),
+				onSelect: () => openPanel(t("ui_workspace_settings"), evidence.box)
+			}] : [],
+			...issueTools.map((tool) => ({
+				key: tool.key,
+				label: tool.label,
+				disabled: true,
+				onSelect: () => openIssueTool(tool.section)
+			}))
+		]
 	});
-	if (lifecycle || evidence) headerActions.append(overflow);
+	if (lifecycle || evidence || issueTools.length) headerActions.append(overflow);
+	const syncIssueTools = (view) => {
+		const on = view === "issues";
+		for (const tool of issueTools) {
+			const node = overflow.querySelector(`[data-menu-key="${tool.key}"]`);
+			if (!node) continue;
+			node.hidden = !on;
+			if ("disabled" in node) node.disabled = !on;
+			if (on) node.removeAttribute("aria-disabled");
+			else node.setAttribute("aria-disabled", "true");
+		}
+	};
 	function secondary(label, node) {
 		if (!node) return null;
 		const card = sectionCard({ body: disclosure({
@@ -26084,8 +27447,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"issues",
-				governance?.element,
+				register?.element || governance?.element,
 				[
+					...register && governance ? [["ui_governance", governance.element]] : [],
 					["ui_repairs", maintenanceRepairs?.element],
 					["ui_maintenance_review", maintenanceReview?.element],
 					["ui_follow_up", followUp?.element]
@@ -26116,7 +27480,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				sections: [region]
 			});
 		}
-		workbench = projectViews({
+		let shownView = null;
+		workbench = projectViews$1({
 			h,
 			t,
 			namespace,
@@ -26124,17 +27489,27 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			view,
 			groups,
 			onSelect: (id) => {
+				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
+				register?.setActive(id === "issues");
 				window.scrollTo(0, 0);
+				if (id === "issues") register?.restoreScroll();
+				else setHeaderMeta("");
+				syncIssueTools(id);
 				if (id === "requirements") traceability?.activate();
 				detailPanel?.close();
 				if (primary) primary.hidden = id !== "overview";
 				if (reportMenu) reportMenu.hidden = id !== "overview";
+				const focused = document.activeElement;
+				if (id !== "issues" && focused && register?.element.contains(focused)) document.querySelector(`[data-pm-view="${id}"]`)?.focus();
 				publishContext();
+				shownView = id;
 			}
 		});
 		workbench.apply();
+		shownView = workbench.selected();
+		syncIssueTools(shownView);
 		if (view && view !== workbench.selected()) history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/${workbench.selected()}`);
 		if (primary) primary.hidden = workbench.selected() !== "overview";
 		if (reportMenu) reportMenu.hidden = workbench.selected() !== "overview";
@@ -26158,6 +27533,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		sprints?.box,
 		meetings?.element,
 		governance?.element,
+		register?.element,
 		specifications?.element,
 		followUp?.element,
 		engineering?.element,
@@ -26845,6 +28221,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				sprints,
 				meetings,
 				governance,
+				register,
 				specifications,
 				followUp,
 				engineering,
@@ -26874,6 +28251,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			publishContext();
 			if (workbench?.selected() === "requirements") await traceability?.activate();
 			resources?.setActive(workbench?.selected() === "agents");
+			register?.setActive(workbench?.selected() === "issues");
 			updateForms();
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
@@ -26893,6 +28271,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				handoff?.withdraw();
 				workBatches?.withdraw();
 				issues?.withdraw();
+				register?.withdraw();
 				ahp?.withdraw();
 				releaseBaselines?.withdraw();
 				maintenancePolicy?.withdraw();
@@ -27009,6 +28388,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		overflow.dispose();
 		traceability?.dispose();
 		resources?.dispose();
+		register?.dispose();
 		proposalReview?.dispose();
 		ahp?.dispose();
 		for (const value of forms) value.dispose();

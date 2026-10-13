@@ -11,7 +11,7 @@ export function availableProjectViews(caps) {
       || pm.spec_materialization?.version === 1 || pm.package_handoff?.available || pm.issue_mapping
       || pm.engineering_delivery?.contract === 'pm-engineering-delivery/v1' || pm.plan_drafting && pm.kanban && pm.brief_snapshots,
     schedule: pm.roadmap || pm.sprints, dependencies: pm.maintenance_policy?.version === 1 || pm.release_baselines,
-    issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare,
+    issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare || caps?.features?.pm_register?.version === 1,
     agents: caps?.features?.pm_resources || pm.ahp_observation?.contract === 'ahp_observer_v1', board: pm.kanban || pm.work_batches?.version === 1})[id]);
 }
 const bounded = (map, key, value) => {map.delete(key); map.set(key, value); if (map.size > 40) map.delete(map.keys().next().value);};
