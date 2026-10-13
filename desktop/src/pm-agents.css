@@ -1,0 +1,79 @@
+/* Agents view only. Shared chrome stays in the shell and ui components. */
+.pm-agents { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.pm-agents-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; }
+.pm-agents-toolbar .pm-agents-refresh { margin-inline-start: auto; }
+.pm-agents-filter-host { min-width: 0; }
+.pm-agents-filter-host .ui-menu-panel { max-height: 320px; overflow: auto; left: 0; right: auto; }
+.pm-agents-layout { min-width: 0; }
+.pm-agents-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); min-width: 0; }
+.pm-agents > *, .pm-agents-main > * { min-width: 0; }
+.pm-agents .ui-section-card { margin: 0; }
+.pm-agents .ui-section-card > header { margin-bottom: var(--space-3); }
+.pm-agents-metrics {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--space-4);
+}
+.pm-agents-metrics .ui-metric-value { flex-wrap: wrap; }
+.pm-agents-source { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.pm-agents-source-id { min-width: 0; overflow-wrap: break-word; }
+.pm-agents-requested { color: var(--text-2); font-size: var(--fs-caption); }
+.pm-agents .ui-data-table { min-width: 0; }
+.pm-agents .ui-data-table table { width: 100%; }
+.pm-agents .ui-data-table th, .pm-agents .ui-data-table td { overflow-wrap: break-word; }
+.pm-agents .ui-data-table .ui-pill { white-space: normal; }
+.pm-agents-tokens-detail { color: var(--text-3); font-size: var(--fs-caption); }
+.pm-agents-seen { display: grid; white-space: nowrap; }
+.pm-agents-seen span { color: var(--text-3); }
+.pm-agents-chart { position: relative; min-width: 0; max-width: 100%; margin: 0; overflow: hidden; }
+.pm-agents-chart .ui-disclosure { max-width: 100%; min-width: 0; }
+.pm-agents-chart-scroll { overflow-x: auto; max-width: 100%; min-width: 0; }
+.pm-agents-chart-scroll > svg { display: block; width: 100%; min-width: var(--chart-min, 100%); height: 168px; }
+.pm-agents-chart .grid { stroke: var(--line); stroke-width: 1; }
+.pm-agents-chart .axis { fill: var(--text-3); font-size: var(--fs-caption); font-family: var(--font-ui); }
+.pm-agents-chart .band { fill: transparent; }
+.pm-agents-chart .day:focus-visible .band { stroke: var(--accent); stroke-width: 1; }
+.pm-agents-chart .bar.cli-codex, .pm-agents-legend .swatch.cli-codex { fill: var(--accent); background: var(--accent); }
+.pm-agents-chart .bar.cli-claude, .pm-agents-legend .swatch.cli-claude { fill: var(--review); background: var(--review); }
+.pm-agents-chart .bar.cli-grok, .pm-agents-chart .bar.cli-gemini, .pm-agents-chart .bar.cli-bat, .pm-agents-chart .bar.cli-pm, .pm-agents-chart .bar.cli-other,
+.pm-agents-legend .swatch.cli-grok, .pm-agents-legend .swatch.cli-gemini, .pm-agents-legend .swatch.cli-bat, .pm-agents-legend .swatch.cli-pm, .pm-agents-legend .swatch.cli-other { fill: var(--neutral); background: var(--neutral); }
+.pm-agents-chart .tick { fill: var(--text-3); }
+.pm-agents-chart .mark { fill: none; stroke: var(--info); stroke-width: 1.5; }
+.pm-agents-chart .mark.partial { fill: var(--text-3); stroke: none; }
+.pm-agents-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); list-style: none; margin: var(--space-2) 0 0; padding: 0; color: var(--text-2); font-size: var(--fs-caption); }
+.pm-agents-legend li { display: inline-flex; align-items: center; gap: var(--space-1); }
+.pm-agents-legend .swatch { width: 8px; height: 8px; border-radius: 2px; }
+.pm-agents-legend .mark-open, .pm-agents-legend .mark-settle { background: transparent; border: 1.5px solid var(--info); border-radius: 50%; }
+.pm-agents-legend .mark-settle { border-radius: 1px; }
+.pm-agents-legend .mark-partial { background: var(--text-3); }
+.pm-agents-tip {
+  position: absolute; z-index: 2; pointer-events: none; max-width: min(240px, calc(100% - 16px));
+  background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-sm);
+  box-shadow: var(--shadow-overlay); padding: var(--space-2); font-size: var(--fs-caption);
+}
+.pm-agents-exact { max-width: 100%; overflow-x: auto; }
+.pm-agents-exact table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+.pm-agents-exact th, .pm-agents-exact td { padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.pm-agents-exact th:first-child, .pm-agents-exact td:first-child, .pm-agents-exact th:last-child, .pm-agents-exact td:last-child { text-align: left; }
+.pm-agents [data-resource-quota],
+.pm-agents-quotas,
+.pm-agents-quota { min-width: 0; max-width: 100%; }
+.pm-agents-quotas { display: grid; }
+.pm-agents-quota + .pm-agents-quota { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--line); }
+.pm-agents-quota-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); min-width: 0; max-width: 100%; }
+.pm-agents-quota-head > div:first-child { min-width: 0; flex: 1 1 0; }
+.pm-agents-quota-head .tabular,
+.pm-agents-quota-head .ui-pill { flex: none; }
+.pm-agents-pool-id { font-family: var(--font-mono); font-size: var(--fs-mono); overflow-wrap: anywhere; max-width: 100%; }
+.pm-agents-used { height: 6px; margin-top: var(--space-2); border-radius: var(--r-pill); background: var(--surface-3); overflow: hidden; }
+.pm-agents-used > span { display: block; height: 100%; width: 0; background: var(--accent); }
+.pm-agents-facts { display: grid; grid-template-columns: minmax(8em, 40%) minmax(0, 1fr); gap: var(--space-1) var(--space-3); margin: 0; }
+.pm-agents-facts dt { margin: 0; color: var(--text-3); font-size: var(--fs-caption); }
+.pm-agents-facts dd { margin: 0; overflow-wrap: anywhere; }
+.pm-agents .ui-inspector h2 { overflow-wrap: anywhere; min-width: 0; }
+.pm-agents-scope p { margin: 0 0 var(--space-2); color: var(--text-2); font-size: var(--fs-small); }
+@media (max-width: 700px) {
+  .pm-agents-metrics { grid-template-columns: 1fr; }
+}
+@media (min-width: 1200px) {
+  .pm-agents-layout:has(> .ui-inspector) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; gap: var(--space-4); }
+}

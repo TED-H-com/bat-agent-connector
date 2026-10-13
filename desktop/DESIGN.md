@@ -192,12 +192,17 @@ warn 4.93 / 6.30, bad 4.83 / 5.55, info 5.23 / 5.61, review 5.34 / 5.91,
 neutral 5.19 / 5.44. All meet 4.5:1. The icon legal comment must remain in both
 browser and Tauri web bundles; `THIRD_PARTY_NOTICES.md` is a desktop bundle resource.
 
-Agent resources uses the same compact navigation, table and inspector. Separate
-source-reported models from requested model context, and observed tokens from current
-quota windows. Missing counters stay unknown. Source failures withdraw numbers and
-model details together. Filters and a selected inspector keep their place during
-background reads; the toolbar can pause view updates without stopping collection.
-When the resources projection includes `buckets`, the usage trend is one stacked bar
-per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
-The resources read includes `buckets` only when the request sets `buckets=day`.
-Omit the chart when the projection has no buckets.
+Agent resources keeps the shell title and adds one meta line for the observed range.
+Metrics show sourced tokens (partial when a day or a total is incomplete), current
+sources out of the total, and the next reported quota reset. Unknown stays an em dash
+with the Unknown pill. The usage trend is drawn only when the read includes daily
+buckets. It asks for `buckets=day` together with the browser time zone, retries once
+as UTC if that zone is rejected, and labels the axis with the zone the server used.
+Each bar stacks `tokens.total` by CLI. A null total is a gap, a covered zero is a
+baseline tick, and an incomplete day is marked in progress or settling. The 60-second
+table refresh may omit buckets and keep the last trend. The table separates reported
+and requested models. An unreadable source shows its label and status only; the adapter
+stays in the inspector. Quota is one block per pool and window, as used percent, and
+is never added across pools. An unconfirmed pool has no percent. Filters, period and
+the open inspector stay put across background reads. Pause freezes those updates and
+does not stop collection. A 403 or 404 withdraws rows, counts and the inspector together.

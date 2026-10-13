@@ -13,5 +13,6 @@ import "./pm-kanban.css";
 import "./pm-follow-up.css";
 import "./pm-lifecycle.css";
 import "./pm-issues.css";
+import "./pm-agents.css";
 import "./shell.css";
 import "./app.js";

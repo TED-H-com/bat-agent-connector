@@ -49,14 +49,14 @@ export function pageHeader({title, pill, meta, actions = [], overflow} = {}) {
 export function sectionCard({title, actions = [], body} = {}) {
   return h('section', {class: 'ui-section-card'}, title ? h('header', {}, h('h2', {}, title), h('div', {class: 'ui-header-actions'}, ...actions)) : null, body);
 }
-export function metric({label, value, context, bar} = {}) {
+export function metric({label, value, context, bar, pill} = {}) {
   const unknown = value === null || value === undefined || typeof value === 'number' && !Number.isFinite(value);
   const track = bar && !unknown ? h('div', {class: 'ui-metric-bar', 'aria-hidden': 'true'}, ...bar.map(part => {
     const span = h('span', {class: `tone-${['ok', 'review', 'info'].includes(part.tone) ? part.tone : 'neutral'}`});
     span.style.flexGrow = String(Number.isFinite(part.value) && part.value > 0 ? part.value : 0); return span;
   })) : null;
   return h('div', {class: 'ui-metric'}, h('div', {class: 'ui-meta'}, label),
-    h('div', {class: 'ui-metric-value'}, unknown ? '—' : value, unknown ? statusPill('unknown') : null), context ? h('div', {class: 'ui-metric-context'}, context) : null, track);
+    h('div', {class: 'ui-metric-value'}, unknown ? '—' : value, unknown ? statusPill('unknown') : pill || null), context ? h('div', {class: 'ui-metric-context'}, context) : null, track);
 }
 export function emptyState({icon, title, text, action}) {
   return h('div', {class: 'ui-empty'}, nodeIcon(icon), h('h2', {}, title), text ? h('p', {}, text) : null, action);
@@ -153,13 +153,14 @@ export function inspector({title, onClose = () => {}}) {
     document.addEventListener('keydown', keys); media.addEventListener('change', resize);});
   return Object.assign(root, {body, close, dispose: close});
 }
-export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable}) {
+export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, rowAttrs} = {}) {
   const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-label': t('ui_more')}) : null,
     ...columns.map(column => h('th', {scope: 'col', class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
   const root = h('div', {class: 'ui-data-table', tabindex: 0}, table), controls = [];
   rows.forEach((row, i) => {
     const key = typeof rowKey === 'function' ? rowKey(row) : row[rowKey], active = key === selected;
-    const tr = h('tr', {'data-row-key': key, tabindex: active || selected == null && i === 0 ? 0 : -1,
+    const extra = typeof rowAttrs === 'function' ? rowAttrs(row) || {} : {};
+    const tr = h('tr', {...extra, 'data-row-key': key, tabindex: active || selected == null && i === 0 ? 0 : -1,
       'aria-selected': String(active), onclick: event => {if (!event.target.closest('button, a, input, select')) select();}});
     function select() {controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1; node.setAttribute('aria-selected', String(node === tr));}); onSelect(key, row);}
     if (expandable) {
