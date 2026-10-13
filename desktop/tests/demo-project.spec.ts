@@ -22,7 +22,7 @@ function shotDir() {
 async function shot(page: Page, name: string) {
   if (process.env.BATC_DEMO_SCREENSHOTS !== '1') return;
   mkdirSync(shotDir(), {recursive: true});
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true});
+  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true, animations: 'disabled'});
 }
 
 // The rail is still `.workspace-nav` (a drawer below 1000px). Scan it with the page.
@@ -167,6 +167,8 @@ for (const {locale, width} of cases) {
     await expect(page.locator('[data-overview-status]')).toBeVisible();
     await openView(page, 'issues');
     await expectView(page, locale, width, 'issues', fixture.copy.name);
+    if (process.env.BATC_DEMO_SCREENSHOTS === '1') await expect(page.locator('[data-reg-table] [data-row-key]').first()).toBeVisible();
+    await shot(page, `issues-${locale}-${width}`);
     await page.locator('[data-pm-overflow]').click();
     await expect(page.locator('[data-menu-key=governance]')).toBeVisible();
     await expect(page.locator('[data-menu-key=governance]')).toBeFocused();
@@ -216,6 +218,7 @@ for (const {locale, width} of cases) {
     await expectView(page, locale, width, 'overview', copy.name);
     const charter = page.locator('[data-pm-charter]');
     await expect(page.locator('[data-overview-status]')).toContainText(locale === 'zh-TW' ? '8 項中 3 項已驗收' : '3 of 8 accepted');
+    await shot(page, `overview-live-${locale}-${width}`);
     await openPmPanel(page, 'ui_report');
     await page.locator('[data-pm-report-tools] select').selectOption(ids.snap2);
     await page.keyboard.press('Escape');
@@ -283,6 +286,8 @@ for (const {locale, width} of cases) {
 
     await openView(page, 'schedule');
     await expectView(page, locale, width, 'schedule', copy.name);
+    if (process.env.BATC_DEMO_SCREENSHOTS === '1') await expect(page.locator('.schedule-chart [data-schedule-row]').first()).toBeVisible();
+    await shot(page, `schedule-${locale}-${width}`);
     await page.locator('[data-schedule-tools]').click();
     await page.getByRole('menuitem', {name: locale === 'zh-TW' ? '路線圖' : 'Roadmap', exact: true}).click();
     const recovery = page.locator('[data-pm-milestone="recovery_review"]');
