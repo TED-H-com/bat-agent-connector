@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Keep PM discussion disclosures as the reader left them during live updates and
+  Refresh. A pending original request still opens Inputs when the thread is first
+  shown, including after a reload, and does not expand that section again later.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
