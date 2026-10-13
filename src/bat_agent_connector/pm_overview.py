@@ -295,14 +295,13 @@ class Projection:
         return sorted(milestones, key=lambda m: (m['forecast_date'] or m['baseline_date'] or '9999-12-31', m['milestone_id']))
 
     def proposals(self):
-        from . import pm_conversation_proposals, pm_discussions, pm_runs
+        from . import pm_conversation_proposals, pm_runs
         def decode(row):
             pm_conversation_proposals.require_visible(self.ops.db, self.principal, row)
             context = json.loads(row['context'])
             if pm_runs._digest(context) != row['context_digest']:
                 raise OperationError('PM_CONVERSATION_CHANGED', 'Original proposal context cannot be verified', 409)
-            thread = pm_discussions._thread(self.ops.db, self.wid, row['thread_id'])
-            if not pm_discussions.content_unchanged(self.ops.db, thread, context['thread_version']):
+            if not pm_conversation_proposals.adoptability(self.ops.db, row, context)['adoptable']:
                 return None
             document = json.loads(row['document'])
             if pm_runs._digest(document) != row['document_digest']:

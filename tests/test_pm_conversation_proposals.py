@@ -282,14 +282,26 @@ def test_removed_commitments_require_explicit_original_ids_and_cycles_are_reject
     assert format_.validate(json.dumps(doc), {"message.original"}, ["member.old"])[1]["status"] == "needs_review"
 
 
+def assert_adoptability(w, proposal, expected, reason):
+    ops = w['d'].ops
+    view = proposals.get_proposal(ops, OWNER, w['workspace_id'], proposal['proposal_id'])['proposal']
+    listed = proposals.list_proposals(ops, OWNER, w['workspace_id'])['proposals']
+    row = next(item for item in listed if item['proposal_id'] == proposal['proposal_id'])
+    for item in (view, row):
+        assert item['adoptable'] is expected
+        assert item['adoptable_reason'] == reason
+
+
 @pytest.mark.parametrize('renames', [1, 105])
 async def test_title_only_rename_preserves_proposal_adoption(proposal_world, renames):
     from bat_agent_connector import pm_overview
     w, ops = proposal_world, proposal_world['d'].ops
     proposal = await proposed(w)
     ref = {'kind': 'proposal', 'id': proposal['proposal_id']}
+    assert_adoptability(w, proposal, True, None)
     for index in range(renames):
         await plans.act(w, 'pm.thread.rename', {'title': f'Owner discussion title / 討論名稱 {index}'})
+    assert_adoptability(w, proposal, True, None)
     assert any(a['ref'] == ref for a in pm_overview.read(ops, OWNER, w['workspace_id'])['attention'])
     done = await complete(w, ops.create(OWNER, **adoption_request(w, proposal))[0])
     assert done['status'] == 'succeeded', done
@@ -302,6 +314,7 @@ async def test_new_message_invalidates_proposal_and_pending_decision(proposal_wo
     w, ops = proposal_world, proposal_world['d'].ops
     proposal = await proposed(w)
     await plans.act(w, 'pm.message.append', {'content': 'Also support enterprise identities.'})
+    assert_adoptability(w, proposal, False, 'content_changed')
     with pytest.raises(OperationError, match='VERSION_CONFLICT'):
         ops.create(OWNER, **adoption_request(w, proposal))
     out = pm_overview.read(ops, OWNER, w['workspace_id'])

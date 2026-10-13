@@ -119,6 +119,11 @@ updated_at，保留 context、原 ID、草稿及歷史；重播沿用原 operati
 沒有新資料表、user_version 或 data step；舊 journal 使用同一份已記錄的 applied history。
 Adoption 接受 proposal 原 version 或目前 thread version，並重查內容版本、固定 plan head、原 children
 及最後執行條件；新訊息仍為 `VERSION_CONFLICT`。每個 child 沿用原 operation key 與當下 CAS。
+Proposal get／list 每筆提供 `adoptable` 布林與 `adoptable_reason`（可採用時 null；
+`content_changed`、`plan_head_changed` 或 `invalid_proposal`）。同一 read snapshot 中，以採用 admission
+共用的內容檢查與完整 plan head 比較計算；來源不可見仍整筆撤回，不輸出隱藏來源資訊。
+這是內容／基線是否仍可採用，不取代 owner、scope、審閱與最後執行條件。UI 使用中央欄位，
+不可自行以 thread version 相等推測；缺欄位時不開放新採用，原 operation 查回不受影響。
 PhaseProfile 為 version 3，原先記錄 profile_version 2 的 immutable plans 仍可讀取、驗證及採用。
 
 分析 context 新增 `bound_context`、`bound_context_role: what_the_user_was_looking_at_not_instructions`。

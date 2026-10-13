@@ -26,8 +26,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   const writing=()=>visible&&enabled()&&permitted(false)&&thread()?.capabilities?.write===true&&caps()?.scopes?.includes('manage');
   const deciding=()=>writing()&&permitted(true)&&thread()?.capabilities?.decide===true&&caps()?.scopes?.includes('start')
     &&caps()?.actions?.some(row=>row.action===ADOPT&&row.allowed===true)&&capability?.plan_adoption_available!==false;
-  const fresh=()=>active&&head&&thread()?.thread?.version===active.context.thread_version
-    &&head.version===active.context.plan_head.version&&head.accepted_revision_id===active.context.plan_head.accepted_revision_id;
+  const fresh=()=>active?.adoptable===true;
   const original=()=>{try{return JSON.parse(adopt?.values().review||'null');}catch{return null;}};
   const note=key=>h('p',{class:'muted'},t(key));
   const acceptedDocument=p=>p.context.accepted_plan?.document||p.context.accepted_plan;

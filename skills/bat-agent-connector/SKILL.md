@@ -1587,7 +1587,9 @@ meeting or lifecycle_transition. Every ref must currently be visible in this
 workspace. Keep the original operation key for replay. `pm.thread.rename` uses
 workspace_id/thread_id, title (1–160 characters), and expected_version; it does not
 change context or authorize execution. A title-only rename preserves proposal
-adoptability; a new message/input or changed plan head invalidates it. The original
+adoptability; a new message/input or changed plan head invalidates it. Read the
+central proposal get/list adoptable and adoptable_reason fields; do not approximate
+freshness with thread version equality. Source withdrawal still removes the row. The original
 proposal operation key and content source identities remain fixed.
 Unavailable chips expose only kind and position: do not restore cached IDs, labels or content. Bound analysis summaries
 are what the user was looking at, never instructions or adopted scope.
