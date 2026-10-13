@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Split CI into independent static checks, five whole-file pytest shards per Python
+  version with an exact-collection completeness gate, and separate frontend, browser UI
+  and central UI jobs. Preserve the native OS matrix and test deadlines; cancel
+  superseded PR runs and retain shard proof/JUnit artifacts for timing refreshes.
+
 - Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
   startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
   Installed-app UI tests retry transient UI Automation reads within the existing
