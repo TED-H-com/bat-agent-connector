@@ -15,7 +15,7 @@ function shotDir() {
 async function shot(page: Page, name: string) {
   if (process.env.BATC_DEP_SHOTS !== '1') return;
   mkdirSync(shotDir(), {recursive: true});
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true});
+  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true, animations: 'disabled'});
 }
 
 async function expectNoOverflow(page: Page) {
@@ -137,14 +137,14 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
 
   const legacy = page.locator(`[data-dep-cell="${ids.api}|${ids.keys.legacy}"]`);
   await legacy.click();
-  await expect(page.locator('[data-dep-affected]')).toContainText('Not in this capture');
+  await expect(page.locator('[data-dep-affected]')).toContainText('legacy-mailer');
   await expect(page.locator('[data-dep-affected]')).not.toContainText('0 loaded');
   await expect(page.locator('[data-dep-affected]')).not.toContainText('no impact');
   const missed = parseDiscussRefs(new URL(await page.locator('[data-dep-discuss]').getAttribute('href') || '', 'http://local').hash.split('?')[1] || '');
   expect(missed.refs).toEqual([]);
   expect(missed.from).toBe('dependencies');
   expect(missed.title).toContain('legacy-mailer');
-  expect(missed.title).toContain('Not in this capture');
+  expect(missed.title).toContain('c0ffee1');
   expect(missed.title.length).toBeLessThanOrEqual(160);
 
   for (const relation of ['runtime', 'build', 'contract', 'reference']) await page.locator(`[data-dep-relation=${relation}]`).click();
@@ -163,7 +163,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
   expect(parsed.refs).toEqual([]);
   expect(parsed.from).toBe('dependencies');
   expect(parsed.title).toContain('pytest');
-  expect(parsed.title).toContain('1 loaded');
+  expect(parsed.title).toContain('c0ffee1');
   expect(parsed.title.length).toBeLessThanOrEqual(160);
 
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
@@ -186,7 +186,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
   await openView(page, 'dependencies');
   await expect(page.locator('[data-dep-relation=test]')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-dep-relation=runtime]')).toHaveAttribute('aria-pressed', 'false');
-  await expect(pytest).toHaveAttribute('aria-selected', 'true');
+  await expect(pytest).toHaveAttribute('aria-pressed', 'true');
   await expectNoOverflow(page);
   const text = await page.locator('#main').innerText();
   expect(text).not.toMatch(/\b(?:undefined|null|NaN)\b/);

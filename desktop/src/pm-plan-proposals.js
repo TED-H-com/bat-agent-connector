@@ -59,7 +59,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       return {proposal_id:saved.proposal_id,review:saved.review,rationale:values.rationale};},
     preconditions:()=>{const saved=original();if(!saved?.preconditions)throw fail();return saved.preconditions;},
     permitted:()=>active?.proposal_id!==adoptedId&&deciding()&&fresh()&&active?.validation.status==='format_valid'&&validReview(original()?.review)&&!prepare.locked(),
-    recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh();}if(conversation){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));}},
+    recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh();}},
     onStateChange:()=>{if(ready)updateControls();},extra:h('div',{},review,content,labelled('pcp_rationale',rationale),note('pcp_review_help'))});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
   const reload=iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()});
@@ -137,7 +137,6 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     const p=active;if(!p)return;const sig=p.proposal_id+':'+p.document_digest+':'+(p.adoptable_reason==='adopted'?p.adopted_revision_id:'');
     if(rendered===sig){adopt.update();return;}rendered=sig;candidateFields=[];requirementFields=[];detail.replaceChildren();content.replaceChildren();
     detail.append(h('h4',{},p.document?.title||t('pcp_review')));
-    if(conversation&&adoptedId===p.proposal_id){detail.replaceChildren(h('p',{'data-proposal-adopted':'',role:'status'},t('pd_adopted'),' · ',backLink()));return;}
     if(conversation&&adopted()){
       const confirmation=h('div',{'data-proposal-adopted':''},statusPill('adopted'));
       if(typeof p.adopted_revision_id==='string'&&/^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id))confirmation.append(' · ',h('a',{'data-proposal-adopted-revision':'',href:`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(threadId)}?revision=${encodeURIComponent(p.adopted_revision_id)}`,onclick:event=>{event.preventDefault();onRevision(p.adopted_revision_id);}},t('pd_accepted_revision')));

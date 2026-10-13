@@ -56,7 +56,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   });
   test('RTM uses exact revisions, distinct work and an Issue with two PRs and three attempts',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
-    await page.locator('[data-pm-view="requirements"]').click();await expect(page.locator('[data-pm-work-meta]')).toContainText('2 requirements');
+    await page.locator('[data-pm-view="requirements"]').click();await expect(page.locator('[data-pm-work-meta]')).toContainText('2 loaded');
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Expand Members can recover access',exact:true}).click();
     await expect(rtm(page).locator(`[data-rtm-work="${workId(1)}"]`)).toHaveCount(2);
@@ -66,31 +66,31 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await detail.locator('[data-work-section=details] > summary').click();
     for(const n of [1,2,3])await expect(detail).toContainText('command-'+n);
     await expect(detail).toContainText('Historical deployment');await expect(detail).toContainText('product-owner');
-    await expect(rtm(page).locator('[data-rtm-requirement="membership.login"]')).toContainText('Not assessed');
+    await expect(rtm(page).locator('[data-rtm-requirement="membership.login"]')).toContainText('Unknown');
     await page.locator('[data-pm-view="overview"]').click();await expect(charter(page)).toBeVisible();
     await page.locator('[data-pm-view="requirements"]').click();await expect(detail).toBeVisible();
     expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
   });
-  test('RTM clears private rows and details when an Issue source is withdrawn',async({page})=>{
+  test('RTM clears private rows and details when the work catalogue is withdrawn',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="requirements"]').click();
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('PR #10');
-    f.state.denyIssues=true;await page.locator('[data-pm-refresh]').click();
+    f.state.denyWork=true;await page.locator('[data-pm-refresh]').click();
     await expect(rtm(page)).toContainText('Your token lacks this scope');await expect(rtm(page)).not.toContainText('PR #10');
     await expect(rtm(page)).not.toContainText('Members can sign in');await expect(rtm(page)).not.toContainText('3 distinct');
-    f.state.denyIssues=false;await page.locator('[data-pm-refresh]').click();
+    f.state.denyWork=false;await page.locator('[data-pm-refresh]').click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toBeVisible();await expect(rtm(page)).toContainText('PR #10');
   });
   test('pagination rereads earlier receipts and retains unassigned Issues',async({page})=>{
     const f=workbenchFixture();f.state.deliveryPageSize=1;f.state.issuePageSize=1;
     await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="requirements"]').click();
     await expect(rtm(page)).toContainText('outside the loaded range');
-    await rtm(page).getByRole('button',{name:'Load more Issue links',exact:true}).click();
+    await rtm(page).getByRole('button',{name:'More issue links',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-unassigned-issue]')).toContainText('Unassigned export request');
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('PR #10');f.state.receipts.shift();
-    await rtm(page).getByRole('button',{name:'Load more delivery records',exact:true}).click();
+    await rtm(page).getByRole('button',{name:'More delivery records',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('Historical deployment');
     await expect(rtm(page).locator('[data-rtm-detail]')).not.toContainText('PR #10');
   });
@@ -100,7 +100,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     let release:()=>void=()=>{};f.state.heldDetail=new Promise<void>(resolve=>release=resolve);
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]').getByRole('status',{name:'Reading the selected work and its delivery records…',exact:true})).toBeVisible();
-    f.state.denyIssues=true;
+    f.state.denyWork=true;
     try{await page.locator('[data-pm-refresh]').click();await expect(rtm(page)).toContainText('Your token lacks this scope');}
     finally{release();}
     await expect(rtm(page).locator('[data-rtm-detail]')).toBeHidden();await expect(rtm(page)).not.toContainText('PR #10');

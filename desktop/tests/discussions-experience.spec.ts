@@ -4,6 +4,26 @@ import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {discussHref, parseDiscussRefs} from '../src/pm-discuss-link.js';
 
+for (const locale of ['en', 'zh-TW']) test(`new discussion stays focused when central exposes all thread tools ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
+  const page = await context.newPage(), f = demoFixture({locale, discussions: true});
+  await mountConversation(page, false, async input => {
+    if (input.path.startsWith(`/pm/workspaces/${f.ids.workspaceId}/projects?`)) return {status: 200,
+      data: {workspace_id: f.ids.workspaceId, bindings: [], next_cursor: null}};
+    const result = await f.dispatch(input);
+    const caps = input.path === '/bootstrap' ? result.data.capabilities : input.path === '/capabilities' ? result.data : null;
+    if (caps) Object.assign(caps.features.pm_workspaces, {meetings: true, work_evidence: true, spec_sources: true, follow_up_prepare: true});
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/new`);
+  await expect(page.locator('[data-discussion-composer]')).toBeFocused();
+  await expect(page.locator('[data-discussion-composer]')).toBeInViewport();
+  await expect(page.locator('[data-pm-action]:visible')).toHaveCount(1);
+  await expect(page.locator('.pm-main > [data-pm-follow-up], .pm-main > [data-pm-meetings], .pm-main > .pm-evidence, .pm-main > .pm-spec-sources')).toHaveCount(0);
+  expect(f.discussion.writes).toHaveLength(0);
+  await context.close();
+});
+
 for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
   test(`discussion with context, review and return ${locale} ${width}`, async ({browser, baseURL}) => {
     test.setTimeout(60000);
@@ -19,7 +39,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     });
     const f = demoFixture({locale, discussions: true}), zh = locale === 'zh-TW';
     await mountConversation(page, false, f.dispatch);
-    const ref = {kind: 'governance', id: 'pmgov_' + 'a'.repeat(32)};
+    const ref = {kind: 'governance', id: 'pmgov_' + '1'.padStart(32, '0')};
     const href = discussHref({workspaceId: f.ids.workspaceId, refs: [ref], title: f.copy.blocker, from: 'overview', report: f.ids.snap1});
     expect(parseDiscussRefs(href.split('?')[1]).refs).toEqual([ref]);
     // Producer views share this exact link; the receiving contract is exercised here.
@@ -29,6 +49,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await expect(page.locator('[data-discussion-title]')).toHaveText(f.copy.blocker);
     await expect(page.getByLabel(zh ? '討論標題' : 'Discussion title', {exact: true})).toBeHidden();
     await expect(page.locator('[data-discussion-context=governance]')).toBeVisible();
+    await expect(page.locator('[data-discussion-context=governance]')).toContainText(f.copy.blocker);
     const draftTitle = zh ? '審閱復原阻礙' : 'Review the recovery blocker';
     await page.getByRole('button', {name: zh ? '重新命名' : 'Rename', exact: true}).click();
     await page.getByLabel(zh ? '討論標題' : 'Discussion title', {exact: true}).fill(draftTitle);
@@ -66,6 +87,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await adopt.getByLabel(zh ? '採用這組更新的理由' : 'Reason for adopting this update').fill(zh ? '保留未決事項並採用審閱後的範圍。' : 'Adopt the reviewed scope and preserve open decisions.');
     await adopt.getByRole('button', {name: zh ? '採用這組更新' : 'Adopt this update', exact: true}).click();
     await expect(page.locator('[data-proposal-adopted]')).toBeVisible();
+    await expect(page.locator('[data-proposal-adopted] [data-status=adopted]')).toHaveText(zh ? '已採用' : 'Adopted');
+    await expect(page.locator('[data-proposal-adopted-revision]')).toHaveText(zh ? '已採用版本' : 'Accepted revision');
     expect(f.discussion.writes.at(-1).body.action).toBe('pm.conversation.adopt');
     if (width < 1200) {await page.locator('[data-discussion-panel-toggle]').click(); await expect(page.locator('.pd-panel-overlay')).toHaveAttribute('aria-modal', 'true');}
     if (width === 390) await page.screenshot({path: `${dir}/discussions-sheet-${locale}-390.png`});
@@ -95,6 +118,80 @@ test('withdrawn context drops both labels and IDs from list, header and panel', 
   await expect(chips.first()).toContainText('Unavailable');
   expect(await page.locator('#main').textContent()).not.toMatch(/Current sensitive label|Earlier sensitive label|pmgov_cc/);
   expect(f.discussion.writes).toHaveLength(0);
+});
+
+for (const status of [403, 404]) test(`draft governance context withdrawn with ${status} drops its label and prevents sending`, async ({page}) => {
+  const f = demoFixture({discussions: true}), id = 'pmgov_' + '1'.padStart(32, '0');
+  let withdrawn = false;
+  await mountConversation(page, false, async input => {
+    if (withdrawn && input.path.endsWith('/governance/' + id)) return {status, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
+    return f.dispatch(input);
+  });
+  await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, refs: [{kind: 'governance', id}], from: 'issues'}));
+  const chip = page.locator('[data-discussion-context=governance]');
+  await expect(chip).toContainText(f.copy.blocker);
+  const composer = page.locator('[data-discussion-composer]');
+  await composer.fill('Keep this local draft');
+  withdrawn = true; await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+  await expect(chip).toContainText('Unavailable');
+  await expect(page.locator('#main')).not.toContainText(f.copy.blocker);
+  await expect(chip).not.toContainText(id);
+  await expect(composer).toHaveValue('Keep this local draft');
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
+  expect(f.discussion.writes).toHaveLength(0);
+});
+
+test('a late draft context response cannot revive a withdrawn record', async ({page}) => {
+  const f = demoFixture({discussions: true}), id = 'pmgov_' + '1'.padStart(32, '0');
+  let count = 0, release: () => void;
+  const delayed = new Promise<void>(resolve => {release = resolve;});
+  await mountConversation(page, false, async input => {
+    if (input.path.endsWith('/governance/' + id)) {
+      count++;
+      if (count === 2) {await delayed; return f.dispatch(input);}
+      if (count > 2) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
+    }
+    return f.dispatch(input);
+  });
+  await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, refs: [{kind: 'governance', id}]}));
+  const chip = page.locator('[data-discussion-context=governance]');
+  await expect(chip).toContainText(f.copy.blocker);
+  const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+  await refresh.click(); await expect.poll(() => count).toBe(2);
+  // A second projection refresh wins over the in-flight older read.
+  await refresh.dispatchEvent('click'); await expect(chip).toContainText('Unavailable');
+  const response = page.waitForResponse(response => response.url().endsWith('/governance/' + id) && response.status() === 200);
+  release!(); await response;
+  await expect(chip).toContainText('Unavailable');
+  await expect(page.locator('#main')).not.toContainText(f.copy.blocker);
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
+  expect(f.discussion.writes).toHaveLength(0);
+});
+
+for (const status of ['waiting_external', 'waiting_checks']) test(`adoption checks the original ${status} receipt until it succeeds`, async ({page}) => {
+  const f = demoFixture({discussions: true}), reads: string[] = []; let adoption: any;
+  await mountConversation(page, false, async input => {
+    const result = await f.dispatch(input);
+    if (input.method === 'POST' && input.body?.action === 'pm.conversation.adopt') {
+      adoption = structuredClone(result.data.operation);
+      result.data.operation.status = status;
+    } else if (adoption && input.method === 'GET' && input.path.startsWith('/operations/')) {
+      reads.push(input.path);
+      result.data.operation.status = reads.length < 2 ? status : 'succeeded';
+    }
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await page.locator('[data-discussion-ask]').click();
+  await page.locator('[data-proposal-review]').click();
+  const form = page.locator('[data-pm-action="pm.conversation.adopt"]');
+  await form.getByLabel('Reason for adopting this update').fill('Adopt the reviewed update');
+  await form.getByRole('button', {name: 'Adopt this update', exact: true}).click();
+  await expect(page.locator('[data-proposal-adopted]')).toBeVisible();
+  expect(reads).toEqual([`/operations/${adoption.operation_id}`, `/operations/${adoption.operation_id}`]);
+  const writes = f.discussion.writes.filter((row: any) => row.body.action === 'pm.conversation.adopt');
+  expect(writes).toHaveLength(1);
+  expect(writes[0].idempotency_key).toBe(adoption.idempotency_key);
 });
 
 test('a new message makes the proposal out of date while preserving review choices', async ({page}) => {
@@ -199,6 +296,7 @@ test('inline rename cancels without writing and recovers an unknown save with th
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   const title = page.locator('[data-discussion-title]'), original = await title.textContent();
   const rename = page.getByRole('button', {name: 'Rename', exact: true}), input = page.getByLabel('Discussion title', {exact: true});
+  await expect(rename).toBeEnabled();
   await expect(input).toBeHidden(); await rename.press('Enter'); await expect(input).toBeFocused();
   await input.fill('Discard this title'); await input.press('Escape');
   await expect(rename).toBeFocused(); await expect(title).toHaveText(original!); expect(f.discussion.writes).toHaveLength(0);
@@ -311,10 +409,19 @@ for (const locale of ['en', 'zh-TW']) test(`missing PM adapter occupies only the
 });
 
 test('a new multi-context draft opens Context after leaving the Plan tab', async ({page}) => {
-  const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
+  const f = demoFixture({discussions: true});
+  const refs = Array.from({length: 5}, (_, i) => ({kind: 'governance', id: 'pmgov_' + String(i + 1).padStart(32, '0')}));
+  await mountConversation(page, false, async input => {
+    const ref = refs.find(ref => input.path === `/pm/workspaces/${f.ids.workspaceId}/governance/${ref.id}`);
+    if (input.method === 'GET' && ref) {
+      const result = structuredClone(await f.dispatch({...input, path: `/pm/workspaces/${f.ids.workspaceId}/governance/${refs[0].id}`}));
+      result.data.record.record_id = ref.id;
+      return result;
+    }
+    return f.dispatch(input);
+  });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   await page.getByRole('tab', {name: 'Plan', exact: true}).click();
-  const refs = Array.from({length: 5}, (_, i) => ({kind: 'governance', id: 'pmgov_' + String(i).repeat(32)}));
   const href = discussHref({workspaceId: f.ids.workspaceId, refs, title: 'Review five decisions', from: 'overview'});
   await page.evaluate(href => {location.hash = href;}, href);
   await expect(page.locator('[data-discussion-composer]')).toBeFocused();
@@ -406,17 +513,18 @@ test('refresh reads one proposal list and only its selected document, with revis
   expect(revisions()).toHaveLength(2);
 });
 
-for (const locale of ['en', 'zh-TW']) test(`centrally adopted proposal survives reload and links to the accepted revision ${locale}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+for (const locale of ['en', 'zh-TW']) for (const width of [390, 1440]) test(`centrally adopted proposal survives reload and links to the accepted revision ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}}), page = await context.newPage();
   const f = demoFixture({locale, discussions: true}); await mountConversation(page, false, f.dispatch);
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadFollow}`); await page.reload();
   const card = page.locator('[data-pm-plan-proposals]');
   await expect(card.locator('[data-status=adopted]')).toHaveText(locale === 'en' ? 'Adopted' : '已採用');
   await expect(card.locator('[data-proposal-again], [data-proposal-review]')).toHaveCount(0);
-  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-adopted-${locale}-1440.png`});
+  const dir = `${process.env.TMPDIR}/shots3`; await mkdir(dir, {recursive: true}); await page.screenshot({path: `${dir}/discussions-adopted-${locale}-${width}.png`});
   await card.locator('[data-proposal-adopted-revision]').click();
   await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();
   await expect(page.locator(`[data-pm-revision="${f.ids.planV3}"] [data-pm-revision-open]`)).toBeFocused();
+  await expect(page.locator(`[data-pm-revision="${f.ids.planV3}"] [data-pm-revision-open]`)).toBeInViewport();
   expect(f.discussion.writes).toHaveLength(0); await context.close();
 });
 

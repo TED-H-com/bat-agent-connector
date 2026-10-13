@@ -1,6 +1,6 @@
 /* Session workspace. Scoped so other views keep their own layout. */
 .session-workspace { min-width: 0; }
-main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: hidden; }
+main.session-view { display: flex; flex-direction: column; height: calc(100dvh - 48px); overflow: auto; }
 main.session-view > .workspace-session-heading { flex: none; }
 main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .session-workspace .workspace-conversation { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
@@ -10,10 +10,10 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-back { margin: 0 0 var(--space-2); }
 .session-back a { color: var(--text-2); font-size: var(--fs-small); text-decoration: none; }
 .session-back a:hover { color: var(--text); }
-.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.session-workspace .conversation { position: relative; flex: 1 1 auto; min-height: 160px; display: flex; flex-direction: column; }
 .session-workspace .conversation-scroll { flex: 1 1 auto; min-height: 120px; height: auto; max-width: 760px; }
-.session-workspace .msg,
-.session-workspace .workspace-conversation .msg.user {
+.session-workspace .conversation-scroll > .msg,
+.session-workspace .workspace-conversation .conversation-scroll > .msg.user {
   display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 8px; row-gap: var(--space-1);
   align-items: start; max-width: 760px; margin-left: 0; padding: var(--space-3) 0; background: transparent; border: 0;
   font-size: var(--fs-read); line-height: 1.55; }
@@ -55,8 +55,19 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-workspace .message-tool > summary { max-width: 100%; min-width: 0; color: var(--text-2); min-height: 32px; }
 .session-workspace .message-tool-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .session-workspace .conversation-jump { position: absolute; right: var(--space-3); bottom: var(--space-3); z-index: 2; }
-.session-workspace .workspace-composer { flex: none; background: var(--bg); margin-top: var(--space-2); }
-.session-asking { display: grid; gap: var(--space-2); }
+.session-workspace .conversation-toolbar { min-height: 0; margin: 0; }
+.session-workspace .conversation-toolbar:not(:has([role="status"]:not(:empty))) { height: 0; }
+.session-workspace .workspace-composer { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; max-height: 50dvh; overflow: auto; background: var(--bg); margin-top: var(--space-2); }
+.session-workspace .workspace-composer:not(:has(.session-asking)) { flex: none; }
+.session-workspace #workspace-message-input { flex: none; }
+.session-workspace .session-asking-region { display: flex; flex: 1 1 auto; min-height: 0; }
+.session-asking-content { min-height: 0; overflow: auto; }
+.session-asking-preview { display: block; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 12em; overflow: auto; margin: 0; }
+.session-question p { margin: 0 0 var(--space-1); }
+.session-question { margin-bottom: var(--space-2); }
+.session-asking-actions { flex: none; margin-bottom: 0; }
+.session-readonly { margin: var(--space-2) 0 0; }
+.session-asking { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; min-height: 0; width: 100%; }
 .session-asking .title { display: flex; align-items: center; gap: var(--space-2); }
 .session-send-reason { margin: var(--space-1) 0; }
 .session-workspace .ui-inspector-body > .session-section {
@@ -120,6 +131,10 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
   .session-workspace .msg:focus-within .message-copy { opacity: 1; }
 }
 @media (max-width: 800px) {
+  .workspace-session-heading .ui-page-header { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-2); }
+  .workspace-session-heading .ui-page-heading { display: block; min-width: 0; }
+  .workspace-session-heading .ui-header-actions { grid-column: 1; grid-row: 2; }
+  .session-workspace .workspace-composer:has(.session-asking) textarea { min-height: 44px; height: 44px; }
   .session-workspace .message-tool > summary,
   .session-workspace .workspace-composer .ui-button,
   .session-workspace .message-copy { min-height: 44px; }
@@ -131,3 +146,20 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
     justify-content: center; padding: 0;
   }
 }
+
+.session-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.session-workspace .session-status:empty { display: none; }
+.session-workspace .session-status { flex: none; max-height: 20dvh; overflow: auto; }
+.session-error-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); color: var(--bad); margin: var(--space-2) 0; }
+.session-error-action { border: 0; background: transparent; color: inherit; padding: 0; font: inherit; text-decoration: underline; cursor: pointer; }
+.session-error { padding: var(--space-2); background: var(--bad-soft); border-radius: var(--r-sm); }
+.session-delivery-state { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; color: var(--text-3); }
+.session-withdrawn { padding-block: var(--space-6); }
+
+.session-checkpoint-row { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); }
+.session-checkpoint-head { display: flex; align-items: start; flex-wrap: wrap; gap: var(--space-2); width: 100%; }
+.session-checkpoint-head .grow { min-width: 0; }
+.session-checkpoint-head > button { flex: none; }
+.session-checkpoint-form { width: 100%; min-width: 0; }
+.session-checkpoint-record { margin-bottom: var(--space-2); }
+.session-checkpoint-op { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }

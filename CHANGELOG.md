@@ -21,6 +21,11 @@
   tooltips, calendar-safe dates and one visibility-aware minute ticker that retains
   selected text. Missing message timestamps stay empty after refreshes.
 
+- Add a repeatable real-central PM decision walkthrough in English and zh-TW,
+  with scripted native analysis, temporary Git, original-key adoption recovery
+  and step screenshots. It currently exposes two Overview contract gaps;
+  see [walkthrough status](docs/design/pm-decision-walkthrough.md).
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
@@ -36,6 +41,7 @@
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.
   Withdrawn context is redacted and access to analysis derived from it remains protected.
+  The PM profile catalog uses version 3; version 2 plans still read and adopt.
   See the [discussion contract](docs/design/pm-overview-discussion-context.md).
 
 - Add a read-only issues, actions and changes register via `pm_register_list` and
@@ -80,20 +86,56 @@
   expose reports and lifecycle through header menus without changing durable actions.
 - Show live project status and what needs attention first in Overview, with compact charter cards
   and saved reports on demand. Unknown values stay explicit, saved reports never mix in live data,
-  and a burst of live events coalesces into one read per source.
+  and a burst of live events coalesces into one read per source. Open Overview issue and risk
+  attention items in the Issues & changes inspector, retaining the exact source and a meaningful
+  title for Discuss with PM.
 - Polish Discussions with inline renaming, compact context and thread rows, and a paired composer
   toolbar. Proposal freshness follows central adoptability, an adopted proposal links its accepted
-  revision, and first-message drafts and original-key recovery survive reloads.
+  revision, and first-message drafts and original-key recovery survive reloads. Keep unsent PM
+  discussions focused on their draft; defer thread tools until the central discussion is created,
+  even when all PM capabilities are available. Reveal and focus the accepted PM revision when its
+  link opens the mobile Plan sheet, after the sheet establishes its focus boundary. Preserve the
+  central Adopted status and accepted-revision link immediately after a PM proposal adoption,
+  including recovery of its original receipt. Keep checking acknowledged PM operations while central
+  waits for child operations or checks, using the original receipt and bounded backoff. Name
+  governance context in unsent PM discussions using the current central record; retain local drafts
+  and prevent sending when that source becomes unavailable.
 - Show acceptance, PR merge and deployment evidence for each requirement in a shared work inspector,
   with list rows on narrow screens and readable columns beside the docked inspector. Board adds
   filters, keyboard navigation, one-line cards and mobile lanes, and keeps existing PM tools in
-  drawers.
+  drawers. Requirements distinguishes accepted, unassessed and unknown quality coverage, marks
+  partial delivery evidence, and shows the requirement traceability chain. Auxiliary failures stay
+  local; live inspector actions retain focus and open menus. Board cards expose their recorded facts
+  to assistive technology, retain selected delivery pages across refreshes, and restore selection
+  and focus on return. Empty Boards show one empty state; paged lanes label counts as loaded.
+  Requirement inspectors show saved verification evidence when no qualifying review is available.
+  Withdrawal clears selection and returns focus to the view heading; snapshot conflicts expose raw
+  codes only in Details and offer a local retry. Live refresh of a Requirements milestone selection
+  preserves search and group-heading focus. Requirements work links open authorized unassigned work
+  even before a plan is adopted. Keep Board card metadata on one centred line with wider fallback
+  fonts, truncating flexible labels while preserving their full accessible names and delivery
+  evidence.
 - Add the Schedule view: Day, Week and Month zoom over the central schedule projection, with dashed
   baselines, outlined forecasts, filled actuals and an Open marker for an actual without end
   evidence. Partial reads keep a Partial pill, and narrow screens get list rows with mini timelines.
+  Schedule shows "End time not recorded" for a terminal attempt with no end time, and "Open" only
+  when the projection marks the span open. Unscheduled omits rows already in the tree. The tree
+  keeps one tab stop. A hidden Schedule does not fetch. Day labels and the Today mark do not
+  collide, and narrow layouts share one timeline origin.
 - Add the Dependencies view, which answers which checks to re-run when a dependency changes: a
   component matrix with evidence styles, a bounded graph, and an inspector with the pinned version,
   owner, tests to re-run and affected components. Capture again stays the durable header action.
+  Preserve distinct dependency declarations alongside captured relations and hide empty view hosts
+  after failed reads. Move Dependencies capture reasons below header actions; improve form layout,
+  touch targets, dark chip contrast, graph spacing and selected-cell outlines. Apply Dependencies
+  graph filters to cross-repository links and bound large matrix, graph and narrow list views with
+  explicit shown-versus-loaded counts and legends. Clear Dependencies form options and hide source
+  surfaces on failed reads, while retaining drafts and original operation keys. Refresh open impact
+  inspectors and restore inferred relation drafts in both languages. Count owner declarations
+  throughout Dependencies and disclose bounded impact, catalog gaps and declared-only results.
+  Component inspectors name their dependencies; Discuss with PM titles include the selected item and
+  captured commit. Preserve Dependencies keyboard focus across activation, live reads and inspector
+  close in the matrix, graph and narrow list; expose valid selection semantics.
 - Show the central register in Issues & changes: type counts and the summary appear only when
   coverage is complete, pagination stays honest, and a processing timeline offers Discuss and
   Propose change. A selected row survives refreshes, and states read in the reader's language.
@@ -106,7 +148,23 @@
   action has an English and Traditional Chinese label. A failed Pending refresh shows no count, with
   one Retry when every group fails; operation durations use a compact day and hour form.
 - Lay out the session transcript on one message grid with an inline agent chip. Tool events, labels
-  and checkpoints share the inspector's disclosures, and a linked work item reads Work · title.
+  and checkpoints share the inspector's disclosures, and a linked work item reads Work · title. Keep
+  Session reply controls visible before focusing the input and after resizing. Complete the
+  Traditional Chinese execution-limit explanations. Preserve Session return locations through reload
+  and discussion drafts. Project inspector links carry their view, and Discuss returns to the exact
+  session. Make Session checkpoints quiet at rest, distinguish capable hosts and preserve disclosure
+  choices per connection. Continue forms expand below their actions and link to the new session only
+  when the central result identifies it. Withdraw unavailable Sessions as one inline state, retain
+  drafts and original retry keys, back off failed reads, and render message failures inside the
+  transcript. Validate and group Session Delivery receipts without clearing them during refresh;
+  distinguish transient failures, withdrawn sources and partial pages. Keep Session approval and
+  question actions visible without keyboard scrolling; cap prompt content, preserve transcript space
+  and use the shared Results drawer widths. Simplify manual-session copy and distinguish unknown
+  titles, agents and disclosures. Keep Session transcript position and tool disclosures stable
+  during live updates and resizing; restore focus on Back to latest and follow successful replies.
+  Show received message counts, consistent agent marks, compact durations and Person on manual
+  turns. Give mobile Session titles the full header width so wider fonts leave room for a whole
+  pending answer input.
 
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,

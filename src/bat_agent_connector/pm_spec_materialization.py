@@ -12,6 +12,7 @@ from . import (
     pm_discussions,
     pm_package_handoff,
     pm_plans,
+    pm_read_cache,
     pm_revision_git,
     pm_run_operations,
     pm_runs,
@@ -130,7 +131,9 @@ def source_visible(db, principal, operation):
             return False
         active.add(key)
         try:
-            results[key] = _source_visible(db, principal, operation)
+            # Cycle and root-budget refusals must not reach the request read memo either.
+            with pm_read_cache.guarded():
+                results[key] = _source_visible(db, principal, operation)
         finally:
             active.remove(key)
         return results[key]

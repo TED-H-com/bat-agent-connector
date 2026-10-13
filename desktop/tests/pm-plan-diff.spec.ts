@@ -79,7 +79,7 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
     await expect(result).toContainText('A proposed condition');await expect(result).toContainText('No confirmer recorded');
     await result.getByText('Title and Markdown',{exact:true}).click();await expect(result).toContainText('effect on scope has not been classified');
     await result.locator('summary').filter({hasText:'Review candidate'}).click();await expect(result).toContainText('Title and work state were not saved');
-    await expect(result.getByRole('link',{name:'Open existing work'})).toHaveAttribute('href',/^#\/work\/wi_/);
+    await expect(result.getByRole('link',{name:'Open existing work'})).toHaveAttribute('href','#/item/wi_'+'d'.repeat(32));
     await expect(result.locator('script,img')).toHaveCount(0);
     expect(f.state.writes).toHaveLength(0);
     const firstRequest=new URL(f.comparison.reads[0].path,'http://fixture');expect(firstRequest.searchParams.get('binding_ids')).toBe(binding);

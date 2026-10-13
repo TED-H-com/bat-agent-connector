@@ -78,7 +78,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   if (width >= 800) {await expect(emailRow.locator('[data-column=milestone]')).toBeVisible(); await expect(emailRow.locator('[data-column=blocker]')).toBeVisible();}
   if (width < 800) {
     await rtm.getByRole('button', {name: locale === 'en' ? 'Open requirement' : '開啟需求', exact: true}).click();
-    await expect(inspector.locator('[data-work-section=requirements]')).toContainText(fixture.copy.requirements[0].text);
+    await expect(inspector.locator('[data-work-section=criteria]')).toContainText(fixture.copy.requirements[0].acceptance);
     await page.keyboard.press('Escape');
     await expect(rtm.getByRole('button', {name: locale === 'en' ? 'Open requirement' : '開啟需求', exact: true})).toBeFocused();
     await toggle.focus(); await page.keyboard.press('ArrowLeft'); await expect(toggle).toHaveAttribute('aria-expanded', 'false');
@@ -97,7 +97,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     await page.keyboard.press('Enter'); await expect(second).toHaveAttribute('aria-expanded', 'true');
   }
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${ids.workspaceId}/requirements?select=${ids.requirements.email}`);
-  await expect(inspector.locator('[data-work-section=requirements]')).toContainText(fixture.copy.requirements[0].text);
+  await expect(inspector.locator('[data-work-section=criteria]')).toContainText(fixture.copy.requirements[0].acceptance);
   expect(parseDiscussRefs(new URLSearchParams((await inspector.locator('[data-work-discuss]').getAttribute('href'))!.split('?')[1])).refs).toEqual([
     {kind: 'requirement', id: ids.requirements.email, revision_id: ids.planV3},
   ]);
@@ -113,7 +113,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
 test('source withdrawal clears requirement facts, counts and the open inspector; late replies stay withdrawn', async ({page}) => {
   const fixture = demoFixture(); let withdrawn = false, hold = false, release = () => {}, held = false;
   await mountConversation(page, false, async (input: any) => {
-    if (withdrawn && input.path.includes('/issue-mappings')) return {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Withdrawn'}}};
+    if (withdrawn && input.path.includes('/plans/accepted')) return {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Withdrawn'}}};
     const result = await fixture.dispatch(input);
     if (hold && input.path.includes('/kanban/')) {hold = false; held = true; await new Promise<void>(resolve => {release = resolve;});}
     return result;

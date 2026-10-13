@@ -60,7 +60,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   const row = (label, contents) => h('section', {class: 'pm-brief-row'}, h('h3', {}, t(label)), h('div', {class: 'pm-brief-values'}, contents));
   function workRows(items) {
     return h('div', {class: 'pm-evidence-rows pm-sprint-work-list'}, ...(items.length ? items.map(item => h('article', {class: 'pm-fact', 'data-pm-sprint-work': item.work_item_id},
-      h('div', {class: 'pm-sprint-work-heading'}, h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
+      h('div', {class: 'pm-sprint-work-heading'}, h('a', {href: `#/item/${encodeURIComponent(item.work_item_id)}`}, title(item)),
         item.assignee ? h('span', {class: 'muted'}, item.assignee) : ''),
       item.assignee ? h('p', {class: 'pm-note-text'}, item.how || t('pm_sprint_how_empty')) : '',
       fold('pm_sprint_versions', h('div', {}, note('pm_sprint_unassessed'), source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
@@ -88,7 +88,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     if (terminal) view.append(closure);
     const endingItems = items => h('div', {class: 'pm-evidence-rows'}, ...items.map(item =>
       h('article', {class: 'pm-fact', 'data-pm-sprint-ended-work': item.work_item_id},
-        h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
+        h('a', {href: `#/item/${encodeURIComponent(item.work_item_id)}`}, title(item)),
         item.quality_assessment ? qualityFact({h,t,fact:item.quality_assessment}) : h('p', {class: 'pm-note-text'}, t('pm_sprint_unassessed')),
         h('p', {class: 'pm-note-text'}, t(item.counts_as_done ? 'pq_increment' : 'pm_sprint_reconsider')),
         h('p', {class: 'pm-note-text'}, item.reason),

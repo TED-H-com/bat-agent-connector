@@ -11,6 +11,9 @@ from inspect import signature
 from .api_auth import Principal
 
 _CURRENT = ContextVar('pm_read_cache', default=None)
+# Depth of active traversal guards. A context copied into another thread or
+# task keeps the depth, which can only prevent storing, never add an entry.
+_GUARDS = ContextVar('pm_read_cache_guards', default=0)
 
 
 def _task():
@@ -89,6 +92,22 @@ def scope(db, principal=None):
         _CURRENT.reset(token)
 
 
+@contextmanager
+def guarded():
+    """Mark a traversal guard (re-entry suppression, cycle or budget refusal).
+
+    Answers computed inside a guard can assume that an in-progress back edge is
+    visible, or refuse because a traversal budget ran out. Neither is the
+    request-wide answer, so nothing loaded while any guard is active is stored.
+    Entries stored outside every guard may still be served.
+    """
+    token = _GUARDS.set(_GUARDS.get() + 1)
+    try:
+        yield
+    finally:
+        _GUARDS.reset(token)
+
+
 def remember(kind, key, load):
     """Remember a namespaced value; include explicit visibility inputs in key.
 
@@ -104,6 +123,8 @@ def remember(kind, key, load):
     except TypeError:
         return load()
     if identity not in current.values:
+        if _GUARDS.get() > 0:
+            return load()
         from .operations import OperationError
         try:
             value = load()

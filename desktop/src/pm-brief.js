@@ -55,7 +55,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
           h('code', {}, source.revision_id), h('p', {}, source.source_ref?.ref || source.source_ref?.message_id || ''));
         else if (source.kind === 'plan_adoption') details.append(h('p', {class: 'muted'}, t('pm_brief_decision_source')),
           h('code', {}, source.revision_id));
-        else if (source.kind === 'work_binding') details.append(h('a', {href: `#/work/${source.work_item_id}`}, t('pm_evidence_open_work')));
+        else if (source.kind === 'work_binding') details.append(h('a', {href: `#/item/${source.work_item_id}`}, t('pm_evidence_open_work')));
         else if (source.kind === 'evidence') {
           const evidence = (snapshot.evidence || []).find(row => row.evidence_id === source.evidence_id);
           if (evidence) details.append(h('p', {class: 'muted'}, readable('pm_evidence_kind_', evidence.source_kind), ' · ', stamp(evidence.source_observed_at)));

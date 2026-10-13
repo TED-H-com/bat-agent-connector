@@ -153,7 +153,7 @@ async def test_hidden_large_issue_mapping_checks_access_before_size(mapped):
     ref = {'kind': 'issue_mapping', 'id': mid}
     with pytest.raises(OperationError) as exc:
         pm_thread_contexts.admission(ops, OWNER, w['workspace_id'], [ref])
-    assert exc.value.status == 413
+    assert exc.value.status == 413 and exc.value.code == 'PM_CONTEXT_TOO_LARGE'
     ops.db.execute("UPDATE tasks SET controller_authority='{}' WHERE task_id=?", (task['task_id'],))
     with pytest.raises(OperationError) as exc:
         pm_thread_contexts.admission(ops, OWNER, w['workspace_id'], [ref])

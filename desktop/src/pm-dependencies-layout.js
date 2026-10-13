@@ -1,3 +1,21 @@
+// Keep one direct dependency for each shown component before filling the column budget.
+export function limitColumns(rows, columns, edges, limit) {
+  const picked = new Set();
+  for (const row of rows) {
+    const key = columns.find(key => edges.some(edge => edge.component_id === row.component_id && edge.dependency_key === key));
+    if (key && picked.size < limit) picked.add(key);
+  }
+  for (const key of columns) {if (picked.size >= limit) break; picked.add(key);}
+  return columns.filter(key => picked.has(key));
+}
+
+// A visible prefix is a view budget, never a graph total. Keep a focused item by key.
+export function boundGraph(nodes, links, {limit = 60, required = []} = {}) {
+  const ids = new Set(required.filter(id => nodes.some(node => node.id === id)).slice(0, limit));
+  for (const node of nodes) {if (ids.size >= limit) break; ids.add(node.id);}
+  return {nodes: nodes.filter(node => ids.has(node.id)), links: links.filter(link => ids.has(link.from) && ids.has(link.to))};
+}
+
 // Longest-path layers, then a few barycentric passes. Cycles stop at the visiting node.
 export function layoutGraph(nodes, links) {
   const ids = [];

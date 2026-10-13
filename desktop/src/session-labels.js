@@ -103,7 +103,7 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
     tags.hidden=!chips.length;
     stateLine.hidden=Boolean(chips.length);
     stateLine.textContent=t(readable?'labels_empty':'labels_unavailable');
-    foldLabel.textContent=t(showEdit?'labels_edit':'session_details');
+    foldLabel.textContent=t(showEdit?'labels_edit':'session_label_details');
     const why=!readable?t('labels_unreadable'):!permitted()?t('labels_scope'):'';
     reason.hidden=showEdit||!why;
     reason.textContent=why;

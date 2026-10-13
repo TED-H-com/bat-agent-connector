@@ -59,6 +59,9 @@ test('filters, expanded rows and selection survive other views and Settings with
   await page.locator('.workspace-nav-footer a[href="#/settings"]').click(); await page.locator('[data-pm-view=requirements]').click();
   await expect(filter).toHaveValue('login'); await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
   f.pm.state.denyIssues = true; await page.locator('[data-pm-refresh]').click();
+  await expect(page.locator('[data-work-inspector]')).toContainText('PR #10');
+  await expect(page.locator('[data-pm-rtm]')).not.toContainText('Issue #41');
+  f.pm.state.denyWork = true; await page.locator('[data-pm-refresh]').click();
   await expect(page.locator('[data-work-inspector]')).toBeHidden(); await expect(page.locator('[data-pm-rtm]')).not.toContainText('PR #10');
 });
 for (const kind of ['pm_evidence', 'project']) test(`binding withdrawal removes Work rows live on ${kind}; workspace names never imply bindings`, async ({page}) => {
@@ -300,12 +303,18 @@ for(const width of [390,768,1100,1440]) test(`long tree names are single-line wi
     const row=page.locator(selector).first(),label=row.locator('.workspace-tree-label');
     await expect(row).toHaveAttribute('title',new RegExp(name));await expect(row).toHaveAccessibleName(new RegExp(name));
     await expect(label).toHaveCSS('white-space','nowrap');await expect(label).toHaveCSS('text-overflow','ellipsis');
-    await expect(label).toBeVisible();
-    await expect.poll(() => label.evaluate(node => ({
-      overflow: node.clientWidth > 0 && node.scrollWidth > node.clientWidth,
-      oneLine: node.getBoundingClientRect().height <= parseFloat(getComputedStyle(node).lineHeight) + 1,
-    }))).toEqual({overflow:true, oneLine:true});
-    expect((await row.boundingBox())!.height).toBe(width<1000?44:36);
+    // A live refresh may replace the row between locator resolution and evaluation.
+    // Retry the same layout assertions on a connected row, including visible width.
+    await expect(async()=>{
+      const size=await row.evaluate(node=>{
+        const label=node.querySelector('.workspace-tree-label')!;
+        return {connected:node.isConnected,scroll:label.scrollWidth,width:label.clientWidth,
+          height:label.getBoundingClientRect().height,line:parseFloat(getComputedStyle(label).lineHeight),rowHeight:node.getBoundingClientRect().height};
+      });
+      expect(size.connected).toBe(true);expect(size.width).toBeGreaterThan(0);
+      expect(size.scroll).toBeGreaterThan(size.width);expect(size.height).toBeLessThanOrEqual(size.line+1);
+      expect(size.rowHeight).toBe(width<1000?44:36);
+    }).toPass({timeout:5000});
     await expect(row.locator('.workspace-tree-state .ui-icon, .workspace-tree-state .workspace-dot')).toBeVisible();
     if(width===1100)await expect(row.locator('.workspace-tree-state-label')).toBeHidden();
   }

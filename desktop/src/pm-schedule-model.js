@@ -24,8 +24,14 @@ export function spans(row) {
     const span = row[kind]; if (!span) return [];
     const start = dayNumber(span.start), end = dayNumber(span.end);
     if (start === null && end === null) return [];
-    return [{kind, start, end: start !== null && end !== null && end < start ? null : end,
-      open: kind === 'actual' && (end === null || start !== null && end < start), recordedOpen: span.open}];
+    const invalidEnd = start !== null && end !== null && end < start;
+    const cleanEnd = invalidEnd ? null : end;
+    // Only an explicit open flag reads as Open. An omitted flag still opens an
+    // inconsistent end, which the projection marks open after dropping that end.
+    // A terminal span (open: false) with no end is unknownEnd, never Open.
+    const open = kind === 'actual' && cleanEnd === null && (span.open === true || (span.open == null && invalidEnd));
+    const unknownEnd = kind === 'actual' && span.open === false && cleanEnd === null;
+    return [{kind, start, end: cleanEnd, open, unknownEnd}];
   });
 }
 export function chartRange(rows) {
@@ -38,7 +44,11 @@ export function milestoneDelta(row) {
 }
 export function scheduleRef(row, data) {
   const refs = row.refs || {};
-  if (row.kind === 'milestone') return {kind: 'milestone', id: refs.milestone_id, revision_id: data.baseline?.revision_id};
+  if (row.kind === 'milestone') {
+    const hasBaseline = row.baseline ? Boolean(row.baseline.start || row.baseline.end) : row.baseline !== null && !row.forecast;
+    if (!refs.milestone_id || !data?.baseline?.revision_id || !hasBaseline || (refs.revision_id && refs.revision_id !== data.baseline.revision_id)) return null;
+    return {kind: 'milestone', id: refs.milestone_id, revision_id: data.baseline.revision_id};
+  }
   if (row.kind === 'requirement') return {kind: 'requirement', id: refs.requirement_id, revision_id: refs.plan_revision_id};
   if (row.kind === 'issue') return {kind: 'issue_mapping', id: row.id.slice('issue:'.length)};
   const workId = refs.work_item_id || (row.kind === 'attempt' && row.parent_id?.startsWith('work:') ? row.parent_id.slice(5) : null);
@@ -65,17 +75,21 @@ export async function readSchedule(api, workspaceId, check) {
     after = next.next_cursor;
     if (page === 9) {partial = true; reasons.add('schedule_page_limit');}
   }
-  const rows = [...all.values()];
-  return {...frame, rows, unscheduled: rows.filter(row => !spans(row).length), range: chartRange(rows),
+  const rows = [...all.values()], {included} = treeIds(rows);
+  return {...frame, rows, unscheduled: rows.filter(row => !spans(row).length && !included.has(row.id)), range: chartRange(rows),
     unknown: [...notes.values()], partial, reasons: [...reasons]};
 }
-// Keep ancestors even when they have no dates. Session attempts never become bars.
-export function scheduleTree(rows, collapsed) {
+function treeIds(rows) {
   const byId = new Map(rows.map(row => [row.id, row])), included = new Set();
   for (const row of rows.filter(row => spans(row).length)) {
     let next = row; const path = new Set();
     while (next && !path.has(next.id)) {included.add(next.id); path.add(next.id); next = byId.get(next.parent_id);}
   }
+  return {byId, included};
+}
+// Keep ancestors even when they have no dates. Session attempts never become bars.
+export function scheduleTree(rows, collapsed) {
+  const {byId, included} = treeIds(rows);
   const children = new Map();
   for (const row of rows.filter(row => included.has(row.id) && !sessionAttempt(row))) {
     const parent = included.has(row.parent_id) ? row.parent_id : row.kind === 'milestone' ? null : 'unassigned';

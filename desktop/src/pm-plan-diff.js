@@ -129,7 +129,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
       h('p', {class: 'pm-source'}, candidate.binding.binding_id),
       ...candidate.reasons.map(reason => h('p', {}, text('pm_diff_reason_' + reason))),
       h('p', {class: 'pm-source'}, text('pm_diff_requirements'), ': ', raw(candidate.binding.requirement_ids)),
-      h('a', {href: `#/work/${encodeURIComponent(candidate.binding.work_item_id)}`}, text('pm_diff_open_work'))));
+      h('a', {href: `#/item/${encodeURIComponent(candidate.binding.work_item_id)}`}, text('pm_diff_open_work'))));
     const fixed = detail(text('pm_diff_evidence'), h('p', {class: 'pm-source'}, text('pm_diff_from'), ': ', value.from_revision.revision_id),
       h('p', {class: 'pm-source'}, text('pm_diff_to'), ': ', value.to_revision.revision_id),
       h('p', {class: 'pm-source'}, text('pm_diff_cursor'), ': ', value.context.journal_cursor),

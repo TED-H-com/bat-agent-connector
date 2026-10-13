@@ -35,21 +35,21 @@ test('pagination deduplicates a rebound work by stable identity without claiming
   await expect(row(page,1)).toContainText('explicitly reassociated');
   await expect(page.locator('[data-pm-kanban-column=accepted]')).toHaveAttribute('aria-label','Content approved');
   await expect(page.locator('[data-pm-kanban-column=accepted]')).toContainText('Account settings');
-  await row(page,3).click(); await expect(detail(page)).toContainText('DoD unassessed'); await page.keyboard.press('Escape');
+  await row(page,3).locator('[data-board-open]').click(); await expect(detail(page)).toContainText('Definition of done not assessed'); await page.keyboard.press('Escape');
   await expect(page.locator('[data-pm-kanban]')).toContainText('Latest page: 1 WIP');
-  await expect(page.locator('[data-pm-kanban] .ui-page-header')).toContainText('3 work items');
+  await expect(page.locator('[data-pm-kanban] .ui-page-header')).toContainText('3 loaded');
   await expect(page.getByRole('button',{name:'Load more work',exact:true})).toBeHidden();
   expect(f.state.reads.filter((path:string)=>path.includes('after=0'))).toHaveLength(2);expect(f.state.reads.some((path:string)=>path.includes('after=3'))).toBe(true);expect(f.state.writes).toHaveLength(0);
 });
 
 test('expanded card rechecks access and displays current execution separately from the original capture', async ({page}) => {
   const f=fixture();await mount(page,f);f.state.cards[0].work.title='Login with reviewed title';f.state.time+=600;
-  await row(page,1).click();
+  await row(page,1).locator('[data-board-open]').click();
   await expect(row(page,1)).toContainText('Login with reviewed title');
   await showDetails(page); await expect(detail(page)).toContainText('Current execution read');
   await expect(detail(page)).toContainText('Saved evidence snapshot');
   await expect(detail(page)).toContainText('This snapshot describes an earlier binding or work version');
-  await expect(detail(page).locator('[data-work-attempt]').first()).toContainText('Acceptance recorded');
+  await expect(detail(page).locator('[data-work-attempt]').first()).toContainText('Send accepted');
   await expect(row(page,1).getByText('Content approved',{exact:true})).toHaveCount(0);
   await expect(detail(page)).toContainText('command-1');
   const times=await detail(page).locator('time').evaluateAll((nodes:any[])=>nodes.map(node=>node.dateTime));
@@ -62,10 +62,10 @@ test('expanded card rechecks access and displays current execution separately fr
 test('a fresh central stage moves the original card and updates both column counts', async ({page}) => {
   const f=fixture();await mount(page,f);
   f.state.cards[0].column='waiting';f.state.cards[0].work.state='waiting';
-  await row(page,1).click();
+  await row(page,1).locator('[data-board-open]').click();
   await expect(detail(page)).toBeVisible(); await page.mouse.move(0, 0);
   await expect(page.locator('[data-pm-kanban-column="waiting"] [data-pm-kanban-work]')).toHaveCount(1);
-  await expect(page.locator('[data-pm-kanban-column="in_progress"] .pm-kanban-count')).toHaveText('0');
+  await expect(page.locator('[data-pm-kanban-column="in_progress"] .pm-kanban-count')).toHaveText('0 loaded');
   await showDetails(page); await expect(detail(page).locator('[data-work-section=details]')).toHaveAttribute('open','');
   await expect(detail(page)).toContainText('command-1');
   expect(f.state.writes).toHaveLength(0);
@@ -73,8 +73,8 @@ test('a fresh central stage moves the original card and updates both column coun
 
 test('standalone execution remains visible when there is no Task Service task',async({page})=>{
   const f=fixture();f.state.cards[0].execution.tasks=[];await mount(page,f);
-  await row(page,1).click();
-  await showDetails(page); await expect(detail(page)).toContainText('3 accepted sends');await expect(detail(page)).toContainText('Accepted');
+  await row(page,1).locator('[data-board-open]').click();
+  await showDetails(page); await expect(detail(page)).toContainText('3 accepted sends');await expect(detail(page)).toContainText('Send accepted');
   await expect(row(page,1)).not.toContainText('No visible linked execution');
 });
 
@@ -85,14 +85,14 @@ test('foreign capture scope is rejected before showing even its timestamp',async
 });
 
 for(const failure of [403,503])test(`failed full refresh ${failure} removes all previously visible facts and can retry`,async({page})=>{
-  const f=fixture();await mount(page,f);await row(page,1).click(); await showDetails(page);
+  const f=fixture();await mount(page,f);await row(page,1).locator('[data-board-open]').click(); await showDetails(page);
   await expect(detail(page)).toContainText('command-1');f.state.failRead=failure;await reload(page);
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban]')).not.toContainText('command-1');
   await expect(page.locator('[data-pm-kanban]')).not.toContainText('Latest page: 2 WIP');
   f.state.failRead=null;await page.getByRole('button',{name:'Retry work flow',exact:true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(2);
-  expect(f.state.reads.at(-1)).toContain('after=0');expect(f.state.writes).toHaveLength(0);
+  expect(f.state.reads.filter((path:string) => path.includes('/kanban?')).at(-1)).toContain('after=0');expect(f.state.writes).toHaveLength(0);
 });
 
 test('pagination failure clears facts and retry starts from the first page rather than skipping work',async({page})=>{
@@ -106,14 +106,15 @@ test('pagination failure clears facts and retry starts from the first page rathe
 
 test('revocation during a lazy card read clears list, detail and counters',async({page})=>{
   const f=fixture();await mount(page,f);f.state.failRead=403;
-  await row(page,1).click();
-  await expect(page.locator('[data-pm-kanban]')).toContainText('Workspace access removed');
+  await row(page,1).locator('[data-board-open]').click();
+  await expect(page.locator('[data-pm-kanban]')).toContainText('Your token lacks this scope.');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban]')).not.toContainText('Member login');
 });
 
 test('source permission change in a successful card refresh removes old source data',async({page})=>{
-  const f=fixture();await mount(page,f);const control=row(page,1);await control.click(); await showDetails(page);
+  const f=fixture();await mount(page,f);const control=row(page,1).locator('[data-board-open]');await control.click(); await showDetails(page);
   await expect(detail(page)).toContainText('command-1');await page.keyboard.press('Escape');
   f.state.cards[0].execution.attempts=[];f.state.cards[0].execution.accepted_attempts=0;f.state.cards[0].execution.coverage.unavailable_sources=true;
   f.state.cards[0].latest_capture.evidence=[];f.state.cards[0].latest_capture.coverage.inaccessible_sources=true;
@@ -124,7 +125,7 @@ test('source permission change in a successful card refresh removes old source d
 
 for(const mismatch of ['wrongScope','wrongCard','nonAdvancing'])test(`rejects ${mismatch} without retaining stale facts`,async({page})=>{
   const f=fixture();await mount(page,f);f.state[mismatch]=true;
-  if(mismatch==='wrongCard')await row(page,1).click();else await reload(page);
+  if(mismatch==='wrongCard')await row(page,1).locator('[data-board-open]').click();else await reload(page);
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban]')).toContainText('does not match this workspace or page');
 });
@@ -134,12 +135,13 @@ test('a late old refresh never restores facts cleared by a newer permission fail
   await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect.poll(()=>f.state.held.length).toBe(1);
   f.state.failRead=403;await reload(page);f.state.held.shift()();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
-  await expect(page.locator('[data-pm-kanban]')).toContainText('Workspace access removed');
+  await expect(page.locator('[data-pm-kanban]')).toContainText('Your token lacks this scope.');
+  await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(0);
 });
 
 test('a late expanded-card read cannot replace a newer board result',async({page})=>{
   const f=fixture();await mount(page,f);f.state.holdNext=true;
-  await row(page,1).click();await expect.poll(()=>f.state.held.length).toBe(1);
+  await row(page,1).locator('[data-board-open]').click();await expect.poll(()=>f.state.held.length).toBe(1);
   f.state.cards[0].work.title='Fresh central work title';await reload(page);f.state.held.shift()();
   await expect(row(page,1)).toContainText('Fresh central work title');
   await expect(row(page,1)).not.toContainText('command-1');
@@ -149,7 +151,7 @@ test('partial coverage is concise while unknown timing is available in details',
   const f=fixture();f.state.byteLimited=true;await mount(page,f);
   await expect(row(page,2)).toContainText('Sources incomplete');
   await expect(row(page,2)).not.toContainText('Work age: Unknown');
-  await row(page,2).click();
+  await row(page,2).locator('[data-board-open]').click();
   await showDetails(page); await expect(detail(page)).toContainText('Work age: Unknown');
   await expect(detail(page)).toContainText('Recorded flow history cannot establish reliable timing');
   await expect(detail(page)).toContainText('Source coverage is limited');
@@ -170,7 +172,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Kanba
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_PM_KANBAN_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
   await page.screenshot({path:`${out}/kanban-list-${locale}-${width}.png`,fullPage:true});
-  await row(page,1).click(); await showDetails(page);
+  await row(page,1).locator('[data-board-open]').click(); await showDetails(page);
   await expect(detail(page)).toContainText('command-1');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(await page.locator('[data-pm-kanban]').innerText()).not.toContain('pm_kanban_');expect(errors).toEqual([]);
@@ -180,7 +182,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Kanba
 
 test('dark theme keeps the shared palette and keyboard details access',async({page},info)=>{
   await page.emulateMedia({colorScheme:'dark'});const f=fixture();await mount(page,f);
-  const summary=row(page,1);await summary.focus();await page.keyboard.press('Enter'); await showDetails(page);
+  const summary=row(page,1).locator('[data-board-open]');await summary.focus();await page.keyboard.press('Enter'); await showDetails(page);
   await expect(detail(page)).toContainText('command-1');
   const out=process.env.BATC_PM_KANBAN_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
   await page.screenshot({path:`${out}/kanban-dark.png`,fullPage:true});
@@ -191,7 +193,7 @@ test('live updates hold a hovered or focused lane until the reader leaves it', a
   const original = page.locator('[data-pm-kanban-column=in_progress]');
   await row(page, 1).hover(); f.state.cards[0].column = 'waiting'; await reload(page);
   await expect(original.locator('[data-pm-kanban-work]')).toHaveCount(1);
-  await row(page, 1).focus(); await page.mouse.move(0, 0); await expect(row(page, 1)).toBeFocused();
+  await row(page, 1).locator('[data-board-open]').focus(); await page.mouse.move(0, 0); await expect(row(page, 1).locator('[data-board-open]')).toBeFocused();
   await expect(original.locator('[data-pm-kanban-work]')).toHaveCount(1);
   await page.getByRole('searchbox').focus();
   await expect(page.locator('[data-pm-kanban-column=waiting] [data-pm-kanban-work]')).toHaveCount(1);

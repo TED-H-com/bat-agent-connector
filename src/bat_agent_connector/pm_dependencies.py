@@ -251,7 +251,9 @@ async def _run(ctx):
         parser = Inventory(binding["target"]["repository"], binding["source_sha"], source["files"], source["contents"])
         inventory = await asyncio.to_thread(parser.parse)
         from .pm_dependency_reads import discover_peers
-        inventory["peer_revisions"] = discover_peers(ops, principal, wid)
+        peer_reasons = []
+        inventory["peer_revisions"] = discover_peers(ops, principal, wid, reasons=peer_reasons)
+        inventory["peer_selection_reasons"] = sorted(set(peer_reasons))
         inventory.update(files=source["files"], tree_sha=source["tree_sha"], catalog_reasons=source["catalog_reasons"], unreadable_paths=source["unreadable_paths"])
         inventory = await asyncio.to_thread(trim_inventory, inventory, limit=MAX_CAPTURE_BYTES - 8192)
         # No await between this final host/workspace frame and the atomic CAS+receipt.

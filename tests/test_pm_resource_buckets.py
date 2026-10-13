@@ -227,6 +227,19 @@ def test_empty_workspace_invalid_zone_and_day_bound(ready):  # noqa: F811
         daily(d, wid, tz="UTC", since="yesterday")
 
 
+@pytest.mark.parametrize('span,message', [(93, '92 local dates'), (366, '92 local dates'),
+                                         (367, '366 days'), (400, '366 days')])
+def test_daily_bucket_duration_error_precedes_local_date_error(ready, span, message):  # noqa: F811
+    d, wid, _source = ready
+    start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    changes = d.journal.db.total_changes
+    with pytest.raises(OperationError) as refused:
+        daily(d, wid, since=start.isoformat(), until=(start + timedelta(days=span)).isoformat())
+    assert (refused.value.status, refused.value.code) == (422, 'INVALID_PARAMS')
+    assert message in refused.value.message
+    assert d.journal.db.total_changes == changes
+
+
 async def test_http_and_mcp_accept_tz_and_hide_withdrawn_counts(served, tmp_path, monkeypatch):  # noqa: F811
     d, port = served
     workspace, _target = await seed(d)
