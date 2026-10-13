@@ -358,6 +358,8 @@ rejection stays visible even when no review qualifies the overall requirement as
 Auxiliary source failures clear only their own facts and offer Retry; plan and work
 catalogue withdrawal clears the view. Inspector actions retain their nodes across live
 age updates, and closing returns to the current selection.
+Milestone destinations apply once for the current route. Live refresh retains the
+reader's search and restores group-heading focus by central milestone identity.
 
 Existing quality, evidence, specs, package, handoff and publication controls move
 intact into drawers reached from the Requirements overflow and work inspector;

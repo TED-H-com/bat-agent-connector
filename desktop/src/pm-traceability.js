@@ -19,7 +19,7 @@ export function requirementReviews(plan, requirement, reviews) {
 export function workspaceTraceability({t, api, alive, namespace, workspaceId, caps, errorBox}) {
   const preference = viewState(namespace, workspaceId, 'requirements'), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
-  let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
+  let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
   let qualityComplete = false, workIncomplete = false, catalogueErrors = [], stale = true;
   let selected = preference.selected || null, signature = '', deliveryPages = 1, preserveSelection = false, tools = () => [];
   const pages = {work: 1, issues: 1, reviews: 1}, cursors = {}, expanded = new Set(preference.expanded || []), order = [];
@@ -86,7 +86,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   function controls() {for (const [kind, button] of Object.entries(moreButtons)) {button.disabled = busy; button.hidden = cursors[kind] == null;}}
   function closeRetaining() {detailSerial++; preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw({forgetRoute = true} = {}) {
-    pendingFocus = null; pendingNavigation = null; currentRequirement = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); earlierPlans.clear(); signature = '';
+    pendingFocus = null; pendingNavigation = null; currentRequirement = null; currentMilestone = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); earlierPlans.clear(); signature = '';
     if (forgetRoute) writeSelection(null);
     closeRetaining(); tables.replaceChildren(); meta.replaceChildren(); status.replaceChildren();
     if (forgetRoute && visible) viewHeading()?.focus({preventScroll: true});
@@ -120,7 +120,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       ...issuesFor(card).map(row => h('span', {class: 'ui-meta'}, issueLabel(row))));
   }
   function renderTable() {
-    const focused = tables.contains(document.activeElement) ? ['data-rtm-select', 'data-rtm-toggle', 'data-row-key']
+    const focused = tables.contains(document.activeElement) ? ['data-rtm-select', 'data-rtm-toggle', 'data-row-key', 'data-rtm-group']
       .map(attribute => [attribute, document.activeElement?.getAttribute(attribute)]).find(([, value]) => value) : null;
     const scrolls = [...tables.querySelectorAll('.ui-data-table')].map(node => node.scrollLeft);
     const query = filter.value.trim().toLocaleLowerCase(), requirements = plan?.document?.requirements || [];
@@ -170,7 +170,9 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     };
     tables.replaceChildren();
     for (const [label, rows] of [...groups].sort(([a], [b]) => a ? b ? 0 : -1 : b ? 1 : 0)) {
-      if (group.value !== 'none') tables.append(h('h2', {class: 'pm-requirement-group'}, label || t('wv_unassigned', {n: rows.length})));
+      const ids = milestoneFor(rows[0]).map(row => row.milestone_id).sort().join(',');
+      if (group.value !== 'none') tables.append(h('h2', {class: 'pm-requirement-group', tabindex: -1,
+        'data-rtm-group': group.value + ':' + (group.value === 'milestone' ? ids : label), 'data-rtm-milestones': ids}, label || t('wv_unassigned', {n: rows.length})));
       tables.append(tableFor(rows));
     }
     const unassigned = cards.filter(card => !requirements.some(req => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id)))
@@ -186,7 +188,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     if (!displayed.length && !unassigned.length && !orphanIssues.length) tables.append(emptyState({title: t(query ? 'wb_no_match' : 'wb_no_requirements')}));
     [...tables.querySelectorAll('.ui-data-table')].forEach((node, i) => {node.scrollLeft = scrolls[i] || preference.tableScroll || 0; node.addEventListener('scroll', () => {preference.tableScroll = node.scrollLeft;});});
     markSelection();
-    if (focused) tables.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({preventScroll: true});
+    if (focused) (tables.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`) || viewHeading())?.focus({preventScroll: true});
   }
   async function catalogue(kind, ticket) {
     const config = {work: ['kanban', 'cards'], issues: ['issue-mappings', 'mappings'], reviews: ['quality-reviews', 'reviews']}[kind];
@@ -243,7 +245,9 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         ...catalogueErrors.map(row => h('span', {}, t(row.kind === 'reviews' ? 'wv_acceptance_unknown' : 'wv_source_unavailable'))),
         ...(catalogueErrors.length ? [h('button', {type: 'button', class: 'ui-button secondary', onclick: () => void refresh()}, t('wv_retry'))] : []));
       const routeSelection = new URLSearchParams(location.hash.split('?')[1]).get('select');
-      if (visible && routeSelection && routeSelection !== selected && routeSelection !== currentRequirement) await select(routeSelection, true);
+      if (!routeSelection) currentMilestone = null;
+      if (visible && routeSelection && routeSelection !== selected && routeSelection !== currentRequirement
+        && (routeSelection !== currentMilestone || !milestones.some(row => 'milestone:' + row.milestone_id === currentMilestone))) await select(routeSelection, true);
       else if (visible && selected) await select(selected, false, true);
       busy = false;
       if (pendingFocus) await applyPending();
@@ -253,13 +257,15 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   async function select(id, scroll = false, retain = false) {
     if (id.startsWith('milestone:')) {
       const milestone = milestones.find(row => row.milestone_id === id.slice(10));
-      selected = null; preference.selected = null; currentRequirement = null; closeRetaining();
+      selected = null; preference.selected = null; currentRequirement = null; currentMilestone = null; closeRetaining();
       if (!milestone) {markSelection(); status.textContent = t('wv_not_in_plan'); return;}
+      currentMilestone = id;
       group.value = 'milestone'; preference.group = 'milestone'; filter.value = ''; preference.filter = ''; renderTable();
-      const heading = [...tables.querySelectorAll('.pm-requirement-group')].find(node => node.textContent === milestone.title);
+      const heading = [...tables.querySelectorAll('.pm-requirement-group')].find(node => node.dataset.rtmMilestones.split(',').includes(milestone.milestone_id));
       if (heading) {heading.tabIndex = -1; heading.focus(); heading.scrollIntoView({block: 'nearest'});}
       return;
     }
+    currentMilestone = null;
     const card = cards.find(row => row.work_item_id === id), requirement = plan?.document?.requirements?.find(row => row.id === id);
     if (!card && !requirement) {const withdrawn = selected === id; selected = null; preference.selected = null; currentRequirement = null; closeRetaining(); markSelection(); status.textContent = t('wv_not_in_plan'); if (withdrawn) {writeSelection(null); viewHeading()?.focus();} return;}
     if (selected !== id) deliveryPages = 1;
@@ -306,7 +312,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     }}
   }
   function setActive(value) {
-    if (visible === value) {if (value && plan) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (id && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
+    if (visible === value) {if (value && plan) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (!id) currentMilestone = null; if (id && id !== currentMilestone && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
     if (!value) {active = false; stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
     else {const generation = ++scrollGeneration; void activate(); if (!stale && selected && cards.length) void select(selected, false, true); requestAnimationFrame(() => {if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);});}
@@ -322,7 +328,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       return;
     }
     if (ref.kind !== 'requirement' || ref.revision_id !== plan?.revision_id || !plan.document?.requirements?.some(row => row.id === ref.id)) {selected = null; currentRequirement = null; closeRetaining(); markSelection(); status.textContent = t('wv_not_in_plan'); return;}
-    closeRetaining(); selected = null; preference.selected = null; currentRequirement = ref.id; writeSelection(ref.id);
+    closeRetaining(); selected = null; preference.selected = null; currentRequirement = ref.id; currentMilestone = null; writeSelection(ref.id);
     expanded.add(ref.id); preference.expanded = [...expanded]; filter.value = ''; preference.filter = ''; renderTable();
     const row = tables.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
     const target = matchMedia('(max-width: 799px)').matches ? row : row?.querySelector('[data-rtm-toggle]');

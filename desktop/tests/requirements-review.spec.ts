@@ -190,6 +190,19 @@ test('S7 Requirements resolves milestones and clears unknown selection through B
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${f.ids.workspaceId}/requirements?select=milestone:design_review`);
   await expect(page.locator('[data-work-inspector]')).toHaveCount(0);
   await expect(page.locator('.pm-requirement-group:focus')).toHaveText('Design review');
+  const search = page.locator('[data-pm-rtm] input[type=search]'); await search.fill('Email');
+  let before = f.reads.length; f.emit();
+  await expect.poll(() => f.reads.slice(before).some(path => path.includes('/kanban?'))).toBe(true);
+  await expect(page.locator('[data-pm-rtm] > .actions > button').first()).toBeEnabled();
+  await expect(search).toHaveValue('Email'); await expect(search).toBeFocused();
+  const toggle = page.locator(`[data-rtm-toggle="${f.ids.requirements.email}"]`);
+  if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+  await page.locator('.pm-requirement-group').filter({hasText: 'Design review'}).focus();
+  f.overrides.push((url, r) => {if (url.pathname.endsWith('/kanban')) r.data.cards.find((card: any) => card.work_item_id === f.ids.work.email).work.title = 'Email sign-in updated'; return r;});
+  before = f.reads.length; f.emit();
+  await expect(page.locator(`[data-rtm-select="${f.ids.work.email}"]`)).toHaveText('Email sign-in updated');
+  await expect(page.locator('.pm-requirement-group:focus')).toHaveText('Design review');
+  expect(f.writes).toEqual([]);
 });
 
 test('M1 hidden Board does not fan out on a Requirements event', async ({page}) => {

@@ -17898,7 +17898,7 @@ function requirementReviews(plan, requirement, reviews) {
 function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
-	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
+	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
 	let qualityComplete = false, workIncomplete = false, catalogueErrors = [], stale = true;
 	let selected = preference.selected || null, signature = "", deliveryPages = 1, preserveSelection = false, tools = () => [];
 	const pages = {
@@ -18036,6 +18036,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		pendingFocus = null;
 		pendingNavigation = null;
 		currentRequirement = null;
+		currentMilestone = null;
 		scrollGeneration++;
 		serial++;
 		detailSerial++;
@@ -18105,7 +18106,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		const focused = tables.contains(document.activeElement) ? [
 			"data-rtm-select",
 			"data-rtm-toggle",
-			"data-row-key"
+			"data-row-key",
+			"data-rtm-group"
 		].map((attribute) => [attribute, document.activeElement?.getAttribute(attribute)]).find(([, value]) => value) : null;
 		const scrolls = [...tables.querySelectorAll(".ui-data-table")].map((node) => node.scrollLeft);
 		const query = filter.value.trim().toLocaleLowerCase(), requirements = plan?.document?.requirements || [];
@@ -18210,7 +18212,13 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		};
 		tables.replaceChildren();
 		for (const [label, rows] of [...groups].sort(([a], [b]) => a ? b ? 0 : -1 : b ? 1 : 0)) {
-			if (group.value !== "none") tables.append(h$1("h2", { class: "pm-requirement-group" }, label || t("wv_unassigned", { n: rows.length })));
+			const ids = milestoneFor(rows[0]).map((row) => row.milestone_id).sort().join(",");
+			if (group.value !== "none") tables.append(h$1("h2", {
+				class: "pm-requirement-group",
+				tabindex: -1,
+				"data-rtm-group": group.value + ":" + (group.value === "milestone" ? ids : label),
+				"data-rtm-milestones": ids
+			}, label || t("wv_unassigned", { n: rows.length })));
 			tables.append(tableFor(rows));
 		}
 		const unassigned = cards.filter((card) => !requirements.some((req) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id))).filter((card) => matches(null, [card]));
@@ -18239,7 +18247,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			});
 		});
 		markSelection();
-		if (focused) tables.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({ preventScroll: true });
+		if (focused) (tables.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`) || viewHeading())?.focus({ preventScroll: true });
 	}
 	async function catalogue(kind, ticket) {
 		const config = {
@@ -18396,7 +18404,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				onclick: () => void refresh()
 			}, t("wv_retry"))] : []);
 			const routeSelection = new URLSearchParams(location.hash.split("?")[1]).get("select");
-			if (visible && routeSelection && routeSelection !== selected && routeSelection !== currentRequirement) await select(routeSelection, true);
+			if (!routeSelection) currentMilestone = null;
+			if (visible && routeSelection && routeSelection !== selected && routeSelection !== currentRequirement && (routeSelection !== currentMilestone || !milestones.some((row) => "milestone:" + row.milestone_id === currentMilestone))) await select(routeSelection, true);
 			else if (visible && selected) await select(selected, false, true);
 			busy = false;
 			if (pendingFocus) await applyPending();
@@ -18420,18 +18429,20 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			selected = null;
 			preference.selected = null;
 			currentRequirement = null;
+			currentMilestone = null;
 			closeRetaining();
 			if (!milestone) {
 				markSelection();
 				status.textContent = t("wv_not_in_plan");
 				return;
 			}
+			currentMilestone = id;
 			group.value = "milestone";
 			preference.group = "milestone";
 			filter.value = "";
 			preference.filter = "";
 			renderTable();
-			const heading = [...tables.querySelectorAll(".pm-requirement-group")].find((node) => node.textContent === milestone.title);
+			const heading = [...tables.querySelectorAll(".pm-requirement-group")].find((node) => node.dataset.rtmMilestones.split(",").includes(milestone.milestone_id));
 			if (heading) {
 				heading.tabIndex = -1;
 				heading.focus();
@@ -18439,6 +18450,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 			return;
 		}
+		currentMilestone = null;
 		const card = cards.find((row) => row.work_item_id === id), requirement = plan?.document?.requirements?.find((row) => row.id === id);
 		if (!card && !requirement) {
 			const withdrawn = selected === id;
@@ -18575,7 +18587,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		if (visible === value) {
 			if (value && plan) {
 				const id = new URLSearchParams(location.hash.split("?")[1]).get("select");
-				if (id && (id !== selected || !detail.element)) select(id, id !== selected);
+				if (!id) currentMilestone = null;
+				if (id && id !== currentMilestone && (id !== selected || !detail.element)) select(id, id !== selected);
 			}
 			return;
 		}
@@ -18631,6 +18644,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		selected = null;
 		preference.selected = null;
 		currentRequirement = ref.id;
+		currentMilestone = null;
 		writeSelection(ref.id);
 		expanded.add(ref.id);
 		preference.expanded = [...expanded];
