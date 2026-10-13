@@ -5,10 +5,11 @@ from types import SimpleNamespace
 import pytest
 
 from bat_agent_connector import pm_access, pm_workspace
+from bat_agent_connector import pm_github_observation as observations
 from bat_agent_connector import pm_maintenance_repair_delivery as delivery
 from bat_agent_connector import pm_maintenance_repairs as repairs
 from bat_agent_connector import pm_workload as workload
-from bat_agent_connector.operations import OperationError
+from bat_agent_connector.operations import OpContext, OperationError
 from tests import pm_joined_maintenance_helpers as maintenance
 from tests.pm_joined_lifecycle_helpers import OWNER
 from tests.test_pm_joined_lifecycle import bat_world, daemon, joined, world  # noqa: F401
@@ -68,8 +69,26 @@ async def check_frame(w, parent, observer, monkeypatch, record_property):
     assert ops.db.total_changes == changes
     record_property('repair_observer_prior_frame_selects', old_queries)
     record_property('repair_observer_scoped_frame_selects', new_queries)
+
+    # The actual page handler also reads the current policy under its admitted
+    # principal. Before this fix that separate read expanded the same original
+    # baseline/dependency history repeatedly, even though the repair guard was
+    # already scoped. Compare identical intents on the joined graph, not time.
+    ctx = OpContext(ops, observer)
+    principal = pm_workspace.admitted_principal(ctx)
+    def current_policy():
+        return observations._check(ops, principal, ctx.target, ctx.params, ctx.preconditions)
+    old_intent, old_policy_queries = measured(ops.db, lambda:
+        workload._check(ops, principal, ctx.target, ctx.params, ctx.preconditions))
+    new_intent, new_policy_queries = measured(ops.db, current_policy)
+    assert new_intent == old_intent == ctx.admission_binding['github_observation_intent']
+    assert new_policy_queries * 2 < old_policy_queries
+    assert ops.db.total_changes == changes
+    record_property('repair_observer_prior_policy_selects', old_policy_queries)
+    record_property('repair_observer_scoped_policy_selects', new_policy_queries)
     await asyncio.sleep(0)
     assert frame() == new
+    assert current_policy() == new_intent
 
     # Each subsequent frame reloads live credentials and the original parent.
     for mutation, args, code in (
@@ -99,6 +118,9 @@ async def check_frame(w, parent, observer, monkeypatch, record_property):
         await asyncio.sleep(0)
         with pytest.raises(OperationError) as denied:
             frame()
+        with pytest.raises(OperationError) as policy_denied:
+            current_policy()
+        assert policy_denied.value.status == 404
         assert denied.value.status == 404
         assert not pm_access.visible(ops.db, OWNER, parent)
         assert not any(pm_access.event_visible(ops.db, OWNER, event) for event in events)

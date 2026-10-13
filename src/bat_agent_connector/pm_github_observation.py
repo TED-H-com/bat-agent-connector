@@ -5,11 +5,11 @@ import json
 import re
 import time
 
+from . import pm_source_reads, pm_workspace
 from . import pm_github_sources as provider
 from . import pm_release_baselines as baselines
 from . import pm_workload as workload
 from . import pm_workload_sources as sources
-from . import pm_workspace
 from .operations import ActionDef, OperationError, OperationService
 
 ACTION = 'pm.github.observe'
@@ -56,12 +56,15 @@ def capabilities():
 
 
 def _check(ops, principal, target, params, pre):
-    intent = workload._check(ops, principal, target, params, pre)
-    if intent['scope']['github_scope'] != provider.PROFILE:
-        raise _bad('PM_GITHUB_PROFILE_NOT_ADOPTED', 'Adopt the explicit GitHub observation profile first')
-    if not callable(getattr(ops.context.get('github'), 'bounded_get', None)):
-        raise _bad('PM_GITHUB_PROVIDER_UNAVAILABLE', 'A bounded read provider is unavailable')
-    return intent
+    # The current policy and baseline can share complete historical sources.
+    # Scope ends before any journal write or provider await; eligibility is rerun.
+    with pm_source_reads.scope(ops.db, principal):
+        intent = workload._check(ops, principal, target, params, pre)
+        if intent['scope']['github_scope'] != provider.PROFILE:
+            raise _bad('PM_GITHUB_PROFILE_NOT_ADOPTED', 'Adopt the explicit GitHub observation profile first')
+        if not callable(getattr(ops.context.get('github'), 'bounded_get', None)):
+            raise _bad('PM_GITHUB_PROVIDER_UNAVAILABLE', 'A bounded read provider is unavailable')
+        return intent
 
 
 def _admit(ops, principal, target, params, pre):
@@ -147,12 +150,15 @@ async def _run(ctx):
     def check():
         ctx.check_cancel()
         from . import pm_maintenance_checks
-        pm_maintenance_checks.require_child(ctx.service, ctx.op)
+        maintenance_deadline = pm_maintenance_checks.require_child(ctx.service, ctx.op)
         from . import pm_maintenance_repairs
-        pm_maintenance_repairs.require_delivery_child(ctx.service, ctx.op)
+        repair_deadline = pm_maintenance_repairs.require_delivery_child(ctx.service, ctx.op)
         current = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions)
         if current != intent or sources.digest(current) != binding.get('github_observation_intent_digest'):
             raise _bad('PM_GITHUB_CONTEXT_CHANGED', 'Original GitHub observation scope changed')
+        # These original budgets belong to this synchronous check only. The page
+        # caller consumes them immediately, without another write or await.
+        return min((value for value in (maintenance_deadline, repair_deadline) if value is not None), default=None)
 
     check()
     start = ctx.effect('pm.github.started', lambda: {'started_at': time.time()})

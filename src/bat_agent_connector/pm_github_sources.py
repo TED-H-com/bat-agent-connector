@@ -145,13 +145,18 @@ class Traversal:
         request = {'path': path, 'query': query, 'kind': kind, 'head_sha': sha, 'profile': PROFILE}
 
         async def read_once():
-            self.check()
-            from . import pm_maintenance_checks
-            timeout_s = pm_maintenance_checks.child_timeout(self.ctx.service, self.ctx.op,
-                max(0.001, min(30, self.deadline - time.monotonic())))
-            from . import pm_maintenance_repairs
-            timeout_s = pm_maintenance_repairs.delivery_child_timeout(self.ctx.service, self.ctx.op, timeout_s)
+            parent_deadline = self.check()
             try:
+                # The final authority check already proved both private parent
+                # relations and returned their original budget. Do not expand
+                # that same source DAG again just to compute a timeout. Account
+                # for time spent in the synchronous check before sending a GET.
+                self.limits()
+                timeout_s = min(30, self.deadline - time.monotonic())
+                if parent_deadline is not None:
+                    timeout_s = min(timeout_s, parent_deadline - time.time())
+                if timeout_s <= 0:
+                    raise Incomplete('observation_time_limit')
                 answer = await self.gh.bounded_get(path, query=query,
                     max_bytes=min(PAGE_BYTES, MAX_BYTES - self.bytes),
                     timeout_s=timeout_s)

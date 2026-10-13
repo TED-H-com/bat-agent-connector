@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Bound repeated original-source traversal in GitHub workload observation checks.
+  Share only completed historical decisions within each synchronous policy read,
+  consume the immediately verified parent budget before each GET, and refuse a page
+  whose deadline expired during validation. Keep the original 60-second bound,
+  receipt recovery and independent post-read/source-withdrawal checks.
+
 - Integrate the M4 lifecycle evidence and original recovery candidate with the
   Charter, requirements traceability, compact board and local CLI resource workbench.
   Preserve original runtime receipts and manual observation controls in board details,
