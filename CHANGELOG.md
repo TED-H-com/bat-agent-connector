@@ -92,6 +92,8 @@
   worktrees for reviewed cleanup. Publish the same workflow in canonical agent skill `.8`.
 - Add fixed-selection batch approval and managed artifact capture/review to the shared UI. Preserve
   each original request, operation and immutable revision across reloads and partial outcomes.
+- Keep engineering handoff prerequisite selectors disabled while their sources are read. A slow read
+  can no longer drop a selected assessment, and batch preflight refuses unavailable sources.
 - Add Task Service reviewed cleanup and automatic eligible lifecycle cleanup using the same central
   ownership, control-version and live-consumer checks. Retain dirty/unique content and task history.
 - Add native file picker/drop uploads, bounded literal text/static PNG preview, and Save As for an
@@ -882,11 +884,6 @@
   and log reference. Jev and `BAT-STATUS` remain completion claims, not test evidence.
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
-
-- Engineering handoff prerequisite selectors now stay disabled throughout source
-  review, including newly loaded choices. Slow reads can no longer silently drop
-  a selected original assessment from a handoff or batch; batch preflight retains
-  the exact reference and refuses unavailable sources without sending an operation.
 
 ## 0.2.4 (unreleased)
 
