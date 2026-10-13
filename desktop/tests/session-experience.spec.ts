@@ -108,6 +108,9 @@ for (const locale of ['en', 'zh-TW'] as const) {
     expect(await page.evaluate(noOverflow)).toBe(true);
     await shot(page, `session-${locale}-768`);
     await page.setViewportSize({width: 390, height: 844});
+    const caption = await page.locator('.workspace-session-heading .ui-title-row').boundingBox();
+    expect(caption!.width).toBeGreaterThan(330);
+    expect(await page.locator('h1').evaluate(node => node.getBoundingClientRect().height <= 2 * parseFloat(getComputedStyle(node).lineHeight))).toBe(true);
     await scroller.evaluate(el => {el.scrollTop = el.scrollHeight;});
     expect(await page.evaluate(noOverflow)).toBe(true);
     const leadingDot = await meta.evaluate(el => {

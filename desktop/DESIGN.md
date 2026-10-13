@@ -571,7 +571,7 @@ mark, one status pill, and one quiet meta line: project, host, and a compact obs
 time (relative within a day, otherwise a short local time with no seconds). Send stays
 the only primary action, on the composer's queue row. Interrupt is a danger button.
 Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the overflow
-menu. A manual or unconfirmed session shows Read-only and has no send, answer, or
+menu. Below 600px the session caption and metadata keep the full header width, with actions on the following row. A manual or unconfirmed session shows Read-only and has no send, answer, or
 interrupt control.
 
 The conversation uses one grid for every message: a 24px mark, an 8px gap, and one

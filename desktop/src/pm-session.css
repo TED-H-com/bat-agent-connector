@@ -105,6 +105,12 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-delivery-row a { color: var(--accent); text-decoration: none; background: transparent; border: 0; padding: 0; font-weight: 400; }
 .session-delivery-row a:hover, .session-delivery-row a:focus-visible { text-decoration: underline; }
 .session-workspace > .ui-inspector { width: auto; max-width: 100%; }
+@media (max-width: 599px) {
+  .workspace-session-heading .ui-page-header { grid-template-columns: minmax(0, 1fr); row-gap: var(--space-3); }
+  .workspace-session-heading .ui-header-actions { grid-column: 1; grid-row: 3; justify-self: start; }
+  .workspace-session-heading .ui-title-row { flex-wrap: wrap; overflow: visible; }
+  .workspace-session-heading h1 { overflow-wrap: normal; }
+}
 @media (min-width: 1200px) {
   .session-workspace.workspace-session { grid-template-columns: minmax(0, 1fr) 400px; }
 }
