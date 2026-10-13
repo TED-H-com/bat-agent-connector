@@ -182,17 +182,29 @@ journal sequence 顯示版本。未知值保留破折號；來源掃描不完整
 回復與匯出流程仍由原本的 charter／brief export 模組負責。
 ## 共用前端討論入口
 
+總覽的治理關注項目在中央支援登記讀取時，開啟「問題與變更」的原紀錄詳情，
+由詳情的討論入口帶入同一紀錄與標題。沒有登記能力才使用原治理工具。
+先完成目的頁的清單讀取，再選取固定來源；撤回與晚到回覆沿用原序號檢查。
+
 `desktop/src/pm-discuss-link.js` 解析 new 討論 URL；開啟時只建立本機草稿，第一次
-傳送才依序呼叫原 `pm.thread.create` 與 `pm.message.append`。建立回執後保存 thread
+傳送才依序呼叫原 `pm.thread.create` 與 `pm.message.append`。草稿頁只呈現討論草稿
+與清單；會議、後續準備、交付證據與規格工具等中央 thread 建立後才掛載，避免完整
+中央能力讓尚未傳送的草稿被次要工具擠出畫面。建立回執後保存 thread
 ID 與待傳訊息，重新載入不重建討論；結果不明時保留原 key，只有已知 operation ID
 可自動查回。來源 chip 使用本次讀取的 label，舊 bound_label 只放提示；不可用的來源
 不保留 ID、標題或快取內容。右側脈絡／資訊／計畫分頁保留原操作與草稿。
+尚未傳送的治理來源草稿也先讀取中央紀錄，讓 chip 顯示目前標題。403/404 時
+移除來源標題與 ID，停用傳送並保留本機草稿；被更新讀取取代的晚到回覆不得恢復來源。
 
 提案顯示建議更新、納入選項及單次採用審閱。介面只依中央提案讀取回傳的
 `adoptable` 與 `adoptable_reason` 判斷是否仍可採用，不比較訊息、輸入、草稿 ID
 或 thread version。已知原因使用共用短標籤；未知原因仍顯示「已過期」，原始
 代碼只放在詳細資料。純改名保留中央可採用狀態。VERSION_CONFLICT 顯示
 「已過期／再次詢問 PM」，不清除審閱文字，也不以另一個 key 重送原採用。
+已知原操作進入 `waiting_external` 或 `waiting_checks` 時仍以原 ID 做有限次回執檢查，
+讓等待子操作的採用完成後能更新介面；不重建請求或重送開始。
+成功查回採用回執後仍顯示中央的已採用狀態與已採用版本連結，不以本機成功提示取代。
+行動版先完成計畫面板的焦點邊界，再把焦點移到已採用版本，讓目標紀錄進入可視範圍。
 
 
 Overview review corrections: event pages coalesce post-event projection reads without

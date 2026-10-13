@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Add a repeatable real-central PM decision walkthrough in English and zh-TW,
+  with scripted native analysis, temporary Git, original-key adoption recovery
+  and step screenshots. It currently exposes two Overview contract gaps;
+  see [walkthrough status](docs/design/pm-decision-walkthrough.md).
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
@@ -62,10 +67,20 @@
   expose reports and lifecycle through header menus without changing durable actions.
 - Show live project status and what needs attention first in Overview, with compact charter cards
   and saved reports on demand. Unknown values stay explicit, saved reports never mix in live data,
-  and a burst of live events coalesces into one read per source.
+  and a burst of live events coalesces into one read per source. Open Overview issue and risk
+  attention items in the Issues & changes inspector, retaining the exact source and a meaningful
+  title for Discuss with PM.
 - Polish Discussions with inline renaming, compact context and thread rows, and a paired composer
   toolbar. Proposal freshness follows central adoptability, an adopted proposal links its accepted
-  revision, and first-message drafts and original-key recovery survive reloads.
+  revision, and first-message drafts and original-key recovery survive reloads. Keep unsent PM
+  discussions focused on their draft; defer thread tools until the central discussion is created,
+  even when all PM capabilities are available. Reveal and focus the accepted PM revision when its
+  link opens the mobile Plan sheet, after the sheet establishes its focus boundary. Preserve the
+  central Adopted status and accepted-revision link immediately after a PM proposal adoption,
+  including recovery of its original receipt. Keep checking acknowledged PM operations while central
+  waits for child operations or checks, using the original receipt and bounded backoff. Name
+  governance context in unsent PM discussions using the current central record; retain local drafts
+  and prevent sending when that source becomes unavailable.
 - Show acceptance, PR merge and deployment evidence for each requirement in a shared work inspector,
   with list rows on narrow screens and readable columns beside the docked inspector. Board adds
   filters, keyboard navigation, one-line cards and mobile lanes, and keeps existing PM tools in

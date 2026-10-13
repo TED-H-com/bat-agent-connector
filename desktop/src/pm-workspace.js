@@ -116,7 +116,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     // admission keeps its exact key and the existing explicit recovery control.
     if (disposed || receiptTimer !== null || busy || damaged || !receiptPolling || receiptAttempt >= receiptDelays.length
       || !saved.intent?.operation_id || !form.isConnected || !allowed()) return;
-    if (operation && !['accepted', 'queued', 'pending', 'running'].includes(operation.status)) return;
+    if (operation && !['accepted', 'queued', 'pending', 'running', 'waiting_external', 'waiting_checks'].includes(operation.status)) return;
     try {guard();} catch {receiptPolling = false; return;}
     receiptTimer = setTimeout(() => {
       receiptTimer = null;
@@ -236,6 +236,21 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let sendHandoff = null, firstMessagePending = false;
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
   let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
+  let draftSourceUnavailable = false;
+  async function draftSourceRefs() {
+    return Promise.all(launch.refs.map(async (ref, position) => {
+      if (ref.kind !== 'governance') return ref;
+      try {
+        const value = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/governance/${encodeURIComponent(ref.id)}`);
+        if (value.workspace_id !== workspaceId || value.record?.record_id !== ref.id
+          || typeof value.revision?.document?.title !== 'string') throw Error(t('pm_scope_mismatch'));
+        return {...ref, label: value.revision.document.title};
+      } catch (error) {
+        if (![403, 404].includes(error.status)) throw error;
+        return {kind: ref.kind, position, available: false};
+      }
+    }));
+  }
   const threadRows = h('div', {class: 'pd-thread-rows'});
   const threadState = viewState(namespace, workspaceId, 'discussion.' + (threadId || 'list'));
   // Bound cosmetic return locations without evicting durable intents or drafts.
@@ -325,7 +340,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const qualitySelections = new Map();
   const qualitySelection = !threadId && caps()?.features?.pm_workspaces?.quality_reviews?.version === 1
     ? id => qualitySelections.get(id) || null : null;
-  const evidence = workspaceId && caps()?.features?.pm_workspaces?.work_evidence
+  const evidence = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.work_evidence
     ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox, qualitySelection}) : null;
   if (evidence) body.append(evidence.box);
   let workbench = null;
@@ -344,8 +359,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
         if (destination === 'requirements') await traceability?.openRef?.(ref);
         else if (ref.kind === 'governance') {
-          if (register) openIssueTool('ui_governance');
-          await governance?.openRef?.(ref);
+          if (register) await register.openRef(ref);
+          else await governance?.openRef?.(ref);
         }
         else if (ref.kind === 'milestone' && destination === 'schedule' && schedule) await schedule.openRef(ref);
         else if (ref.kind === 'milestone' && destination === 'schedule') {
@@ -385,7 +400,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
-  const meetings = workspaceId && caps()?.features?.pm_workspaces?.meetings
+  const meetings = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.meetings
     ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
@@ -434,13 +449,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (fold instanceof HTMLDetailsElement) {fold.open = true; queueMicrotask(() => focusForm(fold)); return;}
     queueMicrotask(() => focusForm(host));
   };
-  const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources
+  const specifications = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.spec_sources
     ? specSources({h,t,api,alive,workspaceId,errorBox}) : null;
   if (specifications) {
     if (threadId) body.append(specifications.element);
     else body.insertBefore(specifications.element, content);
   }
-  const followUp = workspaceId && caps()?.features?.pm_workspaces?.follow_up_prepare
+  const followUp = workspaceId && threadId !== 'new' && caps()?.features?.pm_workspaces?.follow_up_prepare
     ? workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,namespace}) : null;
   if (followUp) body.insertBefore(followUp.element, roadmap?.box || kanban?.element || sprints?.box || meetings?.element || governance?.element || specifications?.element || content);
   const issues = workspaceId && !threadId && caps()?.features?.pm_workspaces?.issue_mapping
@@ -718,7 +733,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
         proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
-          thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {discussionTools.open('plan'); revisions?.open(id);},
+          thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {
+            discussionTools.open('plan');
+            // Let a new mobile sheet establish its focus boundary first.
+            queueMicrotask(() => {try {alive();} catch {return;} revisions?.open(id);});
+          },
           onFollowUp: () => text.focus(), onAnswer: value => {if (!value || noteForm.locked()) return; noteForm.set('content', [text.value, value].filter(Boolean).join('\n\n')); void noteForm.submit();}});
         column.querySelector('.pd-transcript').append(proposalReview.box);
       }
@@ -979,9 +998,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();
     try {
       alive(); const list = await api('GET', '/pm/workspaces'); alive();
-      let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null;
+      let detail = null, threadList = null, data = null, runs = null, plans = null, accepted = null, workspaceCaps = null, draftRefs = null;
       if (workspaceId) {
-        [detail, threadList, data, runs, plans, accepted, workspaceCaps] = await Promise.all([api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
+        [detail, threadList, data, runs, plans, accepted, workspaceCaps, draftRefs] = await Promise.all([api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
           api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
           threadId && threadId !== 'new' ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
           threadId && threadId !== 'new' && caps()?.features?.pm_workspaces?.context_packages
@@ -991,7 +1010,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           threadId && threadId !== 'new' && caps()?.features?.pm_workspaces?.plan_drafting
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`) : Promise.resolve(null),
           threadId && threadId !== 'new' && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)
-            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null)]);
+            ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`) : Promise.resolve(null),
+          threadId === 'new' ? draftSourceRefs() : Promise.resolve(null)]);
         alive();
         for (let page = 1; page < threadPages && threadList.next_cursor; page++) {
           const next = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads?after=${encodeURIComponent(threadList.next_cursor)}`); alive();
@@ -1001,6 +1021,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (ticket !== sequence) return;
       if (detail && detail.workspace?.workspace_id !== workspaceId || data && (data.thread?.workspace_id !== workspaceId || data.thread?.thread_id !== threadId)) throw Error(t('pm_scope_mismatch'));
       workspace = detail?.workspace || null; pmCapabilities = workspaceCaps; loaded = true; status.replaceChildren();
+      draftSourceUnavailable = Boolean(draftRefs?.some(ref => ref.available === false));
       title.textContent = workspace ? t('ui_' + (threadId ? 'discussions' : workbench?.selected() || 'discussions')) : t('pm_title');
       lastList = list.workspaces || []; lastThreadList = threadList;
       if (!threadSearch) {
@@ -1028,7 +1049,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const create = form({action: 'pm.thread.create', pruneEmpty: true, target: {workspace_id: workspaceId}, fields: {title: name, content: text},
             namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(launch) : namespace,
             params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
-            permitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
+            permitted: () => permitted(false) && !draftSourceUnavailable, recoverPermitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
             onStateChange: () => titleDraft?.updateState(),
             onBeforeSaved: (result, values) => {
               if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
@@ -1037,18 +1058,24 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
           titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
-          const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, launch.refs));
+          const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, draftRefs || launch.refs));
           const draftPanel = discussionPanel({t, namespace, workspaceId, panes: {context: contextDraft}});
           if (threadId === 'new') discussionTools = draftPanel;
+          boundContext = h('div', {class: 'pd-context'});
+          panelContext = contextDraft;
           content.append(h('div', {class: 'pm-thread-layout pd-new-layout'}, h('section', {class: 'pm-discussion'},
             h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new')))),
               h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
-                h('div', {class: 'pd-context'}, ...discussionContext(t, launch.refs, {limit: 3, onMore: () => draftPanel.open('context')})))),
+                boundContext)),
             h('div', {class: 'pd-transcript'}, h('p', {class: 'muted pd-start'}, t('pd_empty'))), discussionComposer({t, form: create, draft: true})),
             launch.refs.length > 3 ? draftPanel.home : ''));
 
 
         }
+      }
+      if (threadId === 'new' && draftRefs && boundContext) {
+        boundContext.replaceChildren(...discussionContext(t, draftRefs, {limit: 3, onMore: () => discussionTools.open('context')}));
+        panelContext.replaceChildren(...discussionContext(t, draftRefs));
       }
       if (!workspaceList.isConnected) content.prepend(workspaceList);
       if (runs) {

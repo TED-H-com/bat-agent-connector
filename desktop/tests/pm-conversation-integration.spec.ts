@@ -10,7 +10,14 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
   Object.assign(base.state,{actor:'owner',plans:true,start:true,bound:true});base.state.thread.version=4;proposal.save();
   const dispatch=async(input:any)=>{
     const path=new URL(input.path,'http://fixture').pathname;
-    if(path.includes('/conversation-proposals')||input.body?.action?.startsWith('pm.conversation.'))return proposal.dispatch(input);
+    if(path.includes('/conversation-proposals')||input.body?.action?.startsWith('pm.conversation.')){
+      const value=await proposal.dispatch(input);
+      if(input.body?.action===ADOPT&&value.data.operation?.status==='succeeded'){
+        const adopted=proposal.state.proposals.find((row:any)=>row.proposal_id===input.body.params.proposal_id);
+        Object.assign(adopted,{adoptable:false,adoptable_reason:'adopted',adopted_revision_id:value.data.operation.result.revision_id});
+      }
+      return value;
+    }
     const value=await base.dispatch(input);
     if(path===pmPath&&value.status===200)value.data.next_message_cursor=1;
     if(path==='/bootstrap'||path==='/capabilities'){
@@ -43,6 +50,8 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
   expect(proposal.state.writes[0].body.params.review.rows.find((row:any)=>row.key==='referral').include).toBe(false);
   await expect(page.locator('.pm-notes')).toContainText('Visitors should find their first useful action');
   await expect(panel.locator('[data-proposal-adopted]')).toBeVisible();
+  await expect(panel.locator('[data-status=adopted]')).toHaveText('Adopted');
+  await expect(panel.locator('[data-proposal-adopted-revision]')).toHaveAttribute('href', /revision=pmrev_7{32}$/);
   await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
   base.state.failRead=true;
   await page.getByRole('button',{name:'Load earlier notes',exact:true}).click();

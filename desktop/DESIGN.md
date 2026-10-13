@@ -220,6 +220,11 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
+Selecting a governance attention item opens its exact Issues & changes inspector,
+where Discuss retains the record identity and title. Without the register capability,
+the existing governance tool remains the destination. The destination list settles
+before selection; withdrawn or late record reads cannot reopen an inspector.
+
 Attention retains the central severity/age ordering, with exact context identities
 passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
 by identity within their own part. Cached ages advance with the projection timestamp.
@@ -277,9 +282,14 @@ and pending note explanations stay visible. Search shares the list header with a
 icon-only New discussion button. A list-opened thread returns to Discussions.
 
 The shared `/discussions/new` link opens an editable draft and focuses the composer.
+Before a central thread exists, it mounts only the local discussion draft and
+list, deferring meetings, follow-ups, evidence and specification tools until Send.
 Its title can be renamed locally once the initial permission read completes; title
 controls follow the durable create form's gates and lock with its original intent.
 The draft title survives reload and becomes the central thread-create title.
+Governance context chips in an unsent draft read the current record title from
+central. A 403/404 removes the source label and ID and disables sending while
+retaining the local draft; a superseded read cannot restore withdrawn context.
 Its first Send creates the bound thread and then appends the note. Both operations
 retain their own original keys. The first thread mount transfers the note into the
 composer draft and intent, consumes the handoff, and submits it once. A non-empty
@@ -300,11 +310,17 @@ and central VERSION_CONFLICT show Out of date and Ask PM again while retaining
 review drafts. An adopted proposal uses the central adopted reason and revision ID
 to show Adopted and open the accepted revision in Plan, without another adoption or
 Ask PM again action. Raw reason codes stay in Details.
+Successful receipt recovery refreshes this same central adopted view; a local
+success message must not replace its accepted-revision link.
+On mobile, that link focuses and reveals the accepted revision after the Plan
+sheet establishes its focus boundary.
 The clock runs only during actual operation checks. Exhausted polling shows Status
 not checked; refresh and PM events re-read the known original operation ID and reset
 the backoff. Only label changes update the live region; elapsed time is hidden from
-announcements. Original-key recovery is retained. Saved proposals, runtime options,
-planning inputs, immutable revisions,
+announcements. Original-key recovery is retained.
+Receipt checks include the central `waiting_external` and `waiting_checks` states;
+these keep the bounded backoff and read only the acknowledged operation ID.
+Saved proposals, runtime options, planning inputs, immutable revisions,
 context packages, meetings, follow-ups and Brief remain in the thread panel.
 Each proposal refresh reads one list and its selected document; picker titles and
 status come directly from list rows. Proposal titles replace raw IDs in the picker;

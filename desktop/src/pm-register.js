@@ -584,6 +584,19 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     wideQuery.removeEventListener('change', onWide);
     readFilters(); rememberScroll(); closeSheet(false);
   }
+  async function openRef(ref) {
+    if (!isContextRef(ref)) return;
+    const rowId = `${ref.kind}.${ref.id}`;
+    if (!ROW_ID.test(rowId) || !active) return;
+    // Finish the destination's initial list read before selecting. Its normal
+    // serial/withdrawal guards still govern the subsequent exact record read.
+    await refresh();
+    try {alive();} catch {return;}
+    if (!active || unavailable || failed) return;
+    selected = rowId; preference.selected = rowId; preference.inspector = true;
+    render();
+    await loadDetail(rowId);
+  }
   render();
-  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose, closeSheet};
+  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose, closeSheet, openRef};
 }
