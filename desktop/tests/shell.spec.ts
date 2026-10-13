@@ -300,6 +300,7 @@ for(const width of [390,768,1100,1440]) test(`long tree names are single-line wi
     const row=page.locator(selector).first(),label=row.locator('.workspace-tree-label');
     await expect(row).toHaveAttribute('title',new RegExp(name));await expect(row).toHaveAccessibleName(new RegExp(name));
     await expect(label).toHaveCSS('white-space','nowrap');await expect(label).toHaveCSS('text-overflow','ellipsis');
+    await expect(label).toBeVisible();
     const size=await label.evaluate(node=>({scroll:node.scrollWidth,width:node.clientWidth,height:node.getBoundingClientRect().height,line:parseFloat(getComputedStyle(node).lineHeight)}));
     expect(size.scroll).toBeGreaterThan(size.width);expect(size.height).toBeLessThanOrEqual(size.line+1);
     expect((await row.boundingBox())!.height).toBe(width<1000?44:36);

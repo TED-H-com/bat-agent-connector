@@ -882,8 +882,9 @@ async function viewSessions(main) {
   const list = h("div", {class: "session-inventory"}), status = h("div", {}), count = h("p", {class: "muted", "aria-live": "polite"});
   const more = h("button", {class: "secondary", hidden: true}, t("load_more"));
   const navigation = h("nav", {"aria-label": t("sessions_workspaces"), class: "session-workspaces"});
+  const scopeNote = h("p", {class: "muted"}, t("sessions_scope_note"));
   const scope = h("details", {class: "panel session-scope", open: matchMedia("(min-width: 901px)").matches},
-    h("summary", {}, t("sessions_workspaces")), h("p", {class: "muted"}, t("sessions_scope_note")), navigation,
+    h("summary", {}, t("sessions_workspaces")), scopeNote, navigation,
     h("a", {class: "session-project-link", href: "#/projects"}, t("sessions_projects")));
   main.append(h("div", {class: "session-heading"}, pageHeader({title: t("sessions_title")}),
     state.caps?.actions?.some(a => a.action === "session.start") ? h("a", {href: "#/start"}, t("start_title_page")) : null,
@@ -945,8 +946,8 @@ async function viewSessions(main) {
     const choose = key => {selected = key; save(); render();};
     const workspaceName = group => group.name || group.id || t("sessions_workspace_unknown");
     const navButton = (label, key, n) => h("button", {class: "session-scope-button", "aria-pressed": String(selected === key),
-      "data-workspace-key": key, title: label, onclick: () => choose(key)}, h("span", {}, label), h("span", {class: "muted"}, t("sessions_loaded_count", {count: n})));
-    const links = [navButton(t("sessions_all_loaded"), "", rows.size)];
+      "data-workspace-key": key, title: label, onclick: () => choose(key)}, h("span", {}, label), h("span", {class: "muted"}, t(cursor ? "sessions_loaded_count" : n === 1 ? "sessions_exact_count_one" : "sessions_exact_count", {count: n})));
+    const links = [navButton(t(cursor ? "sessions_all_loaded" : "sessions_all"), "", rows.size)];
     const labels = new Map();
     const labelKey = group => JSON.stringify([group.host, workspaceName(group)]);
     for (const group of groups) labels.set(labelKey(group), (labels.get(labelKey(group)) || 0) + 1);
@@ -975,9 +976,9 @@ async function viewSessions(main) {
           group.name && group.id && labels.get(labelKey(group)) > 1 ? h("code", {class: "muted"}, group.id) : null,
           group.name && !group.id ? h("span", {class: "muted"}, t("sessions_workspace_unverified")) : null), ...sessions.map(row))];
     });
-    list.replaceChildren(...(sections.length ? sections : [h("div", {class: "panel"}, h("p", {}, t("sessions_no_matches")),
-      h("p", {class: "muted"}, cursor ? t("sessions_more_hint") : t("sessions_empty_hint")))]));
-    count.textContent = t("sessions_showing", {shown: visible, loaded: rows.size});
+    list.replaceChildren(...(sections.length ? sections : [emptyState({title:t("sessions_no_matches"), text:t(cursor ? "sessions_more_hint" : "sessions_empty_hint")})]));
+    scopeNote.textContent = t(cursor ? "sessions_scope_note" : "sessions_scope_exact");
+    count.textContent = t(cursor ? "sessions_showing" : "sessions_showing_exact", {shown: visible, loaded: rows.size});
   };
   const read = async (mode, expectedRevision) => {
     if (expectedRevision !== revision) return;
@@ -2058,7 +2059,7 @@ function deploymentRecord(dep, env, reload, compact = false) {
     h("div", { class: "deployment-record-heading" }, deploymentState(dep.state), h("span", { class: "muted" }, dep.recipe)),
     deploymentIdentity(dep.identity),
     compact ? h("p", {}, h("a", { href: `#/op/${dep.operation_id}` }, t("dep_open_operation")))
-      : h("p", { class: "muted" }, `${dep.environment} · ${deploymentTime(dep.created_at)}`),
+      : h("p", { class: "muted" }, dep.environment, ' · ', deploymentTime(dep.created_at)),
     dep.state === "superseded" ? h("p", {}, t("dep_superseded"), " ",
       env.desired ? h("a", { href: `#/op/${env.desired.operation_id}` }, t("dep_new_desired")) : null, " · ",
       providerUrl ? h("a", { href: providerUrl, target: "_blank", rel: "noopener" }, t("dep_provider_run")) : null) : null,

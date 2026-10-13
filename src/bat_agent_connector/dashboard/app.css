@@ -204,6 +204,7 @@ a { color: var(--accent); }
 :root body details[open] > summary:not(:has(> .ui-icon))::before { transform: rotate(135deg); }
 :root body details > summary > .ui-icon:first-child { transition: transform var(--motion); }
 :root body details[open] > summary > .ui-icon:first-child { transform: rotate(90deg); }
+:root body .workspace-session-tree > summary { display: grid; column-gap: var(--rail-gap); }
 @media (max-width: 800px) { :root body :is(details, .ui-disclosure) > summary { min-height: 44px; } }
 
 :root body :is(.ui-context-chip, .chip, .reg-chip, .message-chip) {

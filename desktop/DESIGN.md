@@ -602,4 +602,4 @@ link, binding only exact work item refs.
 
 事件頁的多筆通知共用尚未開始的讀取；一旦開始便釋放共用位置，較晚事件仍需自己的讀取，ACK 仍等候結果。`cross-view-events.spec.ts` 用 20 筆混合事件固定請求預算：PM 一般頁 28、Requirements 48、Session 24、Pending 18、Delivery 12、Operations／Settings／Projects 8，另驗證最後事件後有讀取且不重載 workspace／thread。Projects 頁和 rail 各自讀一次專案清單。尚未登入的首次設定頁不訂閱事件。
 
-空白區域使用 `emptyState()`（24px 圖示、15px／600 標題、至多一句說明及一個動作）；讀取中使用 `skeleton()`，特定狀態名稱放於 aria-label，保留原有狀態及錯誤容器。完整清單顯示精確數量，只有部分清單使用 loaded／shown；Schedule 明確區分兩者。Operations 步驟狀態使用共享操作狀態翻譯，步驟名稱與錯誤碼維持原始識別碼。
+空白區域使用 `emptyState()`（24px 圖示、15px／600 標題、至多一句說明及一個動作）；讀取中使用 `skeleton()`，特定狀態名稱放於 aria-label，保留原有狀態及錯誤容器。完整清單顯示精確數量，只有部分清單使用 loaded／shown；Schedule、Sessions 與導覽計數明確區分兩者。Operations 步驟狀態使用共享操作狀態翻譯，步驟名稱與錯誤碼維持原始識別碼。

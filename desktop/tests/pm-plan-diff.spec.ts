@@ -85,7 +85,7 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
     const firstRequest=new URL(f.comparison.reads[0].path,'http://fixture');expect(firstRequest.searchParams.get('binding_ids')).toBe(binding);
     expect(firstRequest.searchParams.has('journal_cursor')).toBe(false);
     f.comparison.cursor=99;await box(page).getByRole('button',{name:'Recheck this comparison',exact:true}).click();
-    await expect(box(page)).not.toContainText('Reading the fixed comparison');
+    await expect(box(page).getByRole('status',{name:'Reading the fixed comparison…',exact:true})).toHaveCount(0);
     expect(new URL(f.comparison.reads[1].path,'http://fixture').searchParams.get('journal_cursor')).toBe('45');
     const planReads=f.comparison.planReads;
     await page.getByRole('button',{name:'Refresh',exact:true}).click();
@@ -112,7 +112,7 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
   test('late read from a changed selection is discarded',async({page})=>{
     const f=fixture();let release!:()=>void;f.comparison.defer=new Promise<void>(resolve=>release=resolve);
     await mount(page,native,f);await choose(page);await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
-    await expect(box(page)).toContainText('Reading the fixed comparison');await box(page).getByLabel('To version',{exact:true}).selectOption(first);
+    await expect(box(page).getByRole('status',{name:'Reading the fixed comparison…',exact:true})).toBeVisible();await box(page).getByLabel('To version',{exact:true}).selectOption(first);
     release();await page.waitForTimeout(100);await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
     await expect(box(page).getByRole('button',{name:'Compare versions',exact:true})).toBeEnabled();
   });

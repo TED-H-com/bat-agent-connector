@@ -221,7 +221,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     if (scroll) {opener?.scrollIntoView({block: 'center'}); opener?.focus({preventScroll: true});}
     markSelection();
     const ticket = ++detailSerial, generation = serial;
-    if (!retain) {detail.show({title: firstLabel(card?.work.title, requirement?.text)}); detail.element.body.replaceChildren(skeleton(2));}
+    if (!retain) {detail.show({title: firstLabel(card?.work.title, requirement?.text)}); detail.element.body.replaceChildren(skeleton(2, {label:t('wb_detail_loading')}));}
     if (requirement) {const blocked = linked(requirement).find(blockedWork); detail.show({title: requirement.text, plan, requirement, milestones: milestoneFor(requirement), blocker: blocked ? blockerText(t, blocked) : null, accepted: requirementReviews(plan, requirement, reviews).length > 0}); return;}
     try {
       const data = scope(await api('GET', `${endpoint}/kanban/${id}`)); alive(); if (ticket !== detailSerial || generation !== serial) return;

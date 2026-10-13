@@ -155,7 +155,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   function withdraw(){epoch++;verifier.withdraw();verifier.element.hidden=true;filtered=false;ready=false;policy=baseline=lifecycle=findings=repair=null;proofReady=false;choices.clear();for(const field of [finding,rule,history,evidence])field.replaceChildren();facts.replaceChildren();budget.replaceChildren();status.replaceChildren();
     for(const editor of [start,...editors.values()])editor?.box.querySelector('.pm-receipt')?.replaceChildren();update();}
   function failure(error){withdraw();status.append(text('pmr_unavailable'),errorBox(error));}
-  async function refresh(){withdraw();const ticket=epoch;status.append(skeleton(2));
+  async function refresh(){withdraw();const ticket=epoch;status.append(skeleton(2, {label:t('pmr_loading')}));
     try{const [p,b,l,f]=(await Promise.all(['maintenance-policies/current','release-baselines/current','lifecycle','maintenance-findings/current'].map(path=>api('GET',`${base}/${path}`)))).map(check);if(!valid(ticket))return;
       if(!Number.isSafeInteger(l.lifecycle?.revision)||p.policy&&(p.policy.workspace_id!==workspaceId||p.policy.document?.workspace_id!==workspaceId||p.policy.revision!==p.head?.revision)
         ||p.policy&&(p.policy.policy_id!==p.head.policy_id||p.policy.document.policy_id!==p.policy.policy_id||p.policy.document.revision!==p.policy.revision)

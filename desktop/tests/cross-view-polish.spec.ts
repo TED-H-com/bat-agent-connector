@@ -49,7 +49,9 @@ for (const locale of ['en','zh-TW']) test(`remaining labels stay localized ${loc
   const panel=page.locator('.ui-inspector'); await panel.locator('summary').click();
   await expect(panel).toContainText(locale==='en'?'outcome unknown, reading back':'結果不明，回查中');
   await expect(panel.locator('details')).not.toContainText('· uncertain');
-  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/agents`); await page.locator('[data-resource-row]').first().click();
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/agents`);
+  await expect(page.locator('[data-pm-view=discussions] .shell-count')).toHaveAttribute('title',locale==='en'?'3 discussions':'3 則討論');
+  await page.locator('[data-resource-row]').first().click();
   await expect(page.locator('[data-resource-detail]')).toContainText(locale==='en'?'Total':'總計');
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/issues`);
   await page.locator('[data-reg-more]').click();

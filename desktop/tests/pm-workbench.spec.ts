@@ -99,7 +99,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     let release:()=>void=()=>{};f.state.heldDetail=new Promise<void>(resolve=>release=resolve);
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
-    await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('Reading the selected work');
+    await expect(rtm(page).locator('[data-rtm-detail]').getByRole('status',{name:'Reading the selected work and its delivery records…',exact:true})).toBeVisible();
     f.state.denyIssues=true;
     try{await page.locator('[data-pm-refresh]').click();await expect(rtm(page)).toContainText('Your token lacks this scope');}
     finally{release();}

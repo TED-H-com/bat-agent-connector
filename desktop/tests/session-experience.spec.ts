@@ -42,7 +42,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const allow = zh ? '允許' : 'Allow';
     const newest = zh ? '新訊息' : 'New messages';
     const more = zh ? '更多操作' : 'More actions';
-    const discuss = zh ? '與專案討論' : 'Discuss with PM';
+    const discuss = zh ? '討論' : 'Discuss';
     const results = zh ? '成果' : 'Results';
     const back = zh ? '返回需求' : 'Back to Requirements';
     await page.setViewportSize({width: 1440, height: 900});

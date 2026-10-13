@@ -181,7 +181,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
             h('p', {class: 'muted workspace-session-group'}, joinLabel([group.host, group.name || group.id || t('obs_unknown')])),
             ...group.sessions.map(session => link(`#/session/${[session.host, session.session_id].map(encodeURIComponent).join('/')}`,
               session.title || session.session_id, sessionActivity(session), session.reading)))),
-            h('p', {class: 'muted'}, t('attention_loaded', {count: rows.size})));
+            h('p', {class: 'muted'}, t(cursor ? 'attention_loaded' : 'attention_exact', {count: rows.size})));
           if (focused) [...sessionRows.querySelectorAll('a')].find(a => a.getAttribute('href') === focused)?.focus({preventScroll:true});
           more.hidden = !cursor; sessionsLoaded = true; filterSessions();
         }

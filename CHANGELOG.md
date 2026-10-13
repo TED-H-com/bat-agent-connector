@@ -2,7 +2,7 @@
 
 ## Next release (unreleased)
 
-- Normalize empty/loading states and refresh icons, localize operation step status, distinguish complete schedule counts, and polish zoom, missing record titles and token totals.
+- Normalize empty/loading states and refresh icons, localize operation step status, distinguish complete schedule, session and navigation counts, and polish zoom, missing record titles and token totals.
 
 - Coalesce navigation reads for mixed event bursts and verify bounded requests across every authenticated view.
 

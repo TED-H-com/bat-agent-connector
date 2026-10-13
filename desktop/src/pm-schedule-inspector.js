@@ -12,7 +12,7 @@ export function rowStatus(row, data) {
 }
 export function dateRange(span) {
   if (!span) return t('sched_no_dates');
-  return h('span', {}, timeStamp(span.start), ' → ', span.end && (!span.start || span.end >= span.start) ? timeStamp(span.end) : t('sched_open'));
+  return h('span', {}, timeStamp(span.start?.slice(0, 10), {dateOnly:true}), ' → ', span.end && (!span.start || span.end >= span.start) ? timeStamp(span.end.slice(0, 10), {dateOnly:true}) : t('sched_open'));
 }
 const unknown = () => h('span', {class: 'ui-meta'}, t('sched_unavailable'));
 const section = (key, ...body) => h('section', {'data-schedule-section': key}, h('h3', {}, t('sched_' + key)), ...body);

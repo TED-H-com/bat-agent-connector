@@ -75,7 +75,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
         h('nav', {class: 'pm-project-views', 'aria-label': t('wb_navigation')}, ...views.map(id => h('button', {type: 'button', class: 'ui-button ghost', 'data-pm-view': id,
           'aria-current': currentRoute === 'pm' && currentView === id ? 'page' : 'false', onclick: () => {location.hash = `#/pm/${workspace.workspace_id}/${id}`;}},
           icon(viewIcons[id], {size: 20}), h('span', {}, t('ui_' + id)), id === 'discussions' && threadCount !== null
-            ? h('span', {class: 'shell-count', title: t('ui_threads_loaded', {n: threadCount, more: threadMore ? '+' : ''}), 'aria-label': t('ui_threads_loaded', {n: threadCount, more: threadMore ? '+' : ''})}, String(threadCount) + (threadMore ? '+' : '')) : null))));
+            ? h('span', {class: 'shell-count', title: t(threadMore ? 'ui_threads_loaded' : threadCount === 1 ? 'ui_thread_count' : 'ui_threads_count', {n: threadCount, more: threadMore ? '+' : ''}), 'aria-label': t(threadMore ? 'ui_threads_loaded' : threadCount === 1 ? 'ui_thread_count' : 'ui_threads_count', {n: threadCount, more: threadMore ? '+' : ''})}, String(threadCount) + (threadMore ? '+' : '')) : null))));
       crumb.append(h('a', {class: 'shell-crumb-workspace', href: `#/pm/${encodeURIComponent(workspace.workspace_id)}/overview`, title: workspace.name},
         h('span', {class: 'shell-workspace-name'}, workspace.name)));
     } else {
@@ -134,7 +134,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     pending({count, partial} = {}) {for (const badge of pendingCounts) {
       const known = Number.isSafeInteger(count) && count > 0;
       badge.hidden = !known; badge.textContent = known ? String(count) + (partial ? '+' : '') : '';
-      badge.title = known ? t('ui_pending_loaded', {n: count, more: partial ? '+' : ''}) : '';
+      badge.title = known ? t(partial ? 'ui_pending_loaded' : 'ui_pending_count', {n: count, more: partial ? '+' : ''}) : '';
     }},
     withdraw() {serial++; update({workspace: null, workspaces: [], threadCount: null, phase: null});},
     dispose() {disposed = true; serial++; off(); menus.forEach(control => control.dispose()); tools.dispose(); closeDrawer(false);
