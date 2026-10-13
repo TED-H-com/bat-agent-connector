@@ -41289,6 +41289,11 @@ async function route() {
 	let [name, ...rest] = (location.hash.replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (name === "home" && state.token && state.caps?.managed_installation && !state.caps.hosts?.length) name = "settings";
 	mountWorkspace(name);
+	const live = document.getElementById("live");
+	live.dataset.connection = state.token ? "reconnecting" : "offline";
+	live.className = "live " + (state.token ? "reconnecting" : "down");
+	live.textContent = t(state.token ? "ui_reconnecting" : "ui_offline");
+	live.title = t("sync_waiting");
 	const main = document.getElementById("main");
 	main.replaceChildren();
 	if (!state.token && name !== "settings") {
