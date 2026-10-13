@@ -25,6 +25,7 @@ KINDS = {
     'proposal': (r'pmcp_[0-9a-f]{32}', {}),
     'issue_mapping': (r'pmim_[0-9a-f]{32}', {}),
     'meeting': (r'pmmeet_[0-9a-f]{32}', {}),
+    'lifecycle_transition': (r'pmlt_[0-9a-f]{32}', {}),
 }
 
 
@@ -146,8 +147,11 @@ def resolve(ops, principal, wid, ref):
         sources = [row[0]]
     elif kind == 'repair':
         _table(ops, 'pm_maintenance_repairs')
-        record = pm_maintenance_repairs.get_repair(ops, principal, wid, identity)['repair']
-        summary = {k: record[k] for k in ('finding_id', 'work_item_id', 'operation_status', 'outcome')}
+        record = pm_maintenance_repairs._row(ops, wid, identity)
+        parent = pm_maintenance_repairs._operation(ops, record['operation_id'])
+        pm_maintenance_repairs._full_access(ops, principal, parent)
+        summary = {k: record[k] for k in ('finding_id', 'work_item_id')}
+        summary.update(operation_status=parent['status'], outcome=(parent['result'] or {}).get('outcome'))
         work = resolve(ops, principal, wid, {'kind': 'work_item', 'id': record['work_item_id']})
         label, sources = work['label'], [record['operation_id']]
     elif kind == 'follow_up':
@@ -171,6 +175,16 @@ def resolve(ops, principal, wid, ref):
         summary = record['document']
         work = resolve(ops, principal, wid, {'kind': 'work_item', 'id': record['work_item_id']})
         label, sources = work['label'], [record['operation_id']]
+    elif kind == 'lifecycle_transition':
+        from . import pm_lifecycle
+        _table(ops, 'pm_lifecycle_transitions')
+        pm_lifecycle._member(ops, principal, wid)
+        record = pm_lifecycle._transition(ops.db, wid, identity)
+        if not pm_lifecycle._transition_visible(ops.db, principal, record):
+            raise unavailable()
+        label = record['reason']
+        summary = {k: record[k] for k in ('from_stage', 'to_stage', 'reason', 'created_at')}
+        sources = [record['operation_id']]
     else:  # meeting
         _table(ops, 'pm_meetings')
         record = pm_meetings.get_meeting(ops, principal, wid, identity, history_limit=1)

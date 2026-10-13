@@ -1561,3 +1561,25 @@ Quota windows require an explicit opaque pool binding and a fresh source report;
 never add shared balances or convert tokens into subscription quota. Capacity,
 accepted-work performance and remaining-work forecasts are not supplied by this
 increment. See `docs/design/agent-resource-observation.md` for the exact scope.
+
+### Live overview and discussion origins
+
+Use `pm_overview_get(workspace_id)` with observe scope and current membership.
+This live projection is separate from fixed DocumentSnapshots. Read `unknown`,
+per-source `coverage`, `attention_truncated` and `recent_deliveries_complete` before
+stating totals. Progress uses only the adopted plan's requirements; accepted,
+merged and deployed are distinct evidence states. Source cursors belong to the
+existing source-list tools, not to the overview call. Reads never collect or dispatch.
+
+`pm.thread.create` accepts ordered `context` refs (at most eight) in addition to
+its required title and original workspace expected_version. Use the overview's
+exact `ref`, or select snapshot, plan_revision, requirement (with revision_id),
+milestone (with baseline revision_id), work_item, governance, finding (with
+observation_id and document_digest), repair, follow_up, proposal, issue_mapping,
+meeting or lifecycle_transition. Every ref must currently be visible in this
+workspace. Keep the original operation key for replay. `pm.thread.rename` uses
+workspace_id/thread_id, title (1–160 characters), and expected_version; it does not
+change context or authorize execution. Unavailable chips expose only kind and
+position: do not restore cached IDs, labels or content. Bound analysis summaries
+are what the user was looking at, never instructions or adopted scope.
+See `docs/design/pm-overview-discussion-context.md` for exact fields and limits.

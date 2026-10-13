@@ -82,6 +82,8 @@ async def test_context_records_each_origin_and_replay_is_immutable(ops):
     doc = pm_discussions.get_thread(ops, OWNER, target['workspace_id'], tid)['thread']
     assert [c['kind'] for c in doc['context']] == [r['kind'] for r in refs]
     assert all(c['available'] and c['label'] == c['bound_label'] for c in doc['context'])
+    assert pm_thread_contexts.frozen_visible(ops.db, OWNER, target['workspace_id'],
+        pm_discussions.context(ops, OWNER, target['workspace_id'], tid))
     replay, fresh = ops.create(OWNER, **env)
     assert not fresh and replay['operation_id'] == done['operation_id']
     assert await pm_discussions._run(OpContext(ops, done)) == done['result']
@@ -198,3 +200,15 @@ async def test_analysis_gets_bound_sources_and_budget_omissions(ops):
     assert len(small['bound_context']) == 4
     assert all(c['id'] == r['id'] for c, r in zip(small['bound_context'], refs))
     assert json.dumps(small)
+
+
+async def test_current_label_changes_without_rewriting_bound_label(ops):
+    target, refs = await origins(ops)
+    done, _ = await create(ops, target['workspace_id'], [refs[5]])
+    selected = {'workspace_id': target['workspace_id'], 'record_id': refs[5]['id']}
+    original = governance.read(ops, selected)['revision']['document']
+    data = {'assumption': original['sources'][0]['id']}
+    await governance.change(ops, selected, 'revise', **governance.fields(data, title='Revised recovery risk'))
+    context = pm_discussions.get_thread(ops, OWNER, target['workspace_id'], done['result']['thread_id'])['thread']['context'][0]
+    assert context['bound_label'] == original['title']
+    assert context['label'] == 'Revised recovery risk'

@@ -78,7 +78,7 @@ READ_TOOLS = [
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
-    "pm_resources_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
+    "pm_overview_get", "pm_resources_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
     "pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get",
@@ -760,6 +760,10 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read due time, policy limits and current blockers; this never starts work."""
         return await pm_daemon("pm_maintenance_schedule_get", workspace_id=workspace_id)
 
+    async def pm_overview_get(workspace_id: str) -> dict[str, Any]:
+        """Read live visible project status, separately from fixed saved reports."""
+        return await pm_daemon("pm_overview_get", workspace_id=workspace_id)
+
     async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None) -> dict[str, Any]:
         """Read observed local CLI usage and reported quota; never collect or dispatch from a read."""
         return await pm_daemon("pm_resources_get", workspace_id=workspace_id, since=since, until=until)
@@ -1083,7 +1087,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
-               pm_resources_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
+               pm_overview_get, pm_resources_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
                pm_maintenance_policies_list, pm_maintenance_policy_current_get, pm_maintenance_policy_get,

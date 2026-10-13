@@ -533,7 +533,7 @@ def context(ops, principal, workspace_id, thread_id, *, max_chars=32000):
     used = sum(len(json.dumps(item, ensure_ascii=False)) for item in result["bound_context"])
     if used > max_chars:
         raise _bad("Context identities exceed the selected budget / 討論來源識別資料超出內容上限", "PM_CONTEXT_TOO_LARGE", 413)
-    for item, summary in zip(result["bound_context"], summaries):
+    for item, summary in zip(result["bound_context"], summaries, strict=True):
         if summary is None:
             continue
         size = len(json.dumps({**item, "summary": summary}, ensure_ascii=False)) - len(json.dumps(item, ensure_ascii=False))

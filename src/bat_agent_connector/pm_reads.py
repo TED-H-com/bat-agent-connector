@@ -7,6 +7,7 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
+    "pm_overview_get": ("workspace_id",),
     "pm_resources_get": ("workspace_id", "since", "until"),
     "pm_ahp_adapters_list": ("workspace_id",),
     "pm_ahp_observations_list": ("workspace_id", "after", "limit"),
@@ -113,6 +114,9 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_overview_get":
+        from .pm_overview import read as overview
+        return overview(ops, principal, workspace_id)
     if method == "pm_resources_get":
         from .pm_resources import read as resources
         return resources(ops, principal, workspace_id, since=params.get("since"), until=params.get("until"))

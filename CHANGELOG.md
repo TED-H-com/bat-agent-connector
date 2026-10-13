@@ -2,6 +2,15 @@
 
 ## Next release (unreleased)
 
+- Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
+  with adopted-requirement progress, explicit blockers, decisions, schedule/quality
+  deviations, visible delivery evidence and bounded source coverage. Saved reports
+  retain their fixed snapshot semantics.
+- Bind up to eight original context items when creating a PM discussion and rename
+  threads with durable version checks. Current source withdrawal redacts chips and
+  protects analysis derived from their frozen context; English and Traditional
+  Chinese validation messages accompany the new context errors.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
