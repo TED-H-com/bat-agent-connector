@@ -16,15 +16,26 @@ test('operation metadata omits empty separators and unknown durations', () => {
   assert.equal(operationDuration({created_at: 20, finished_at: 10}), '');
   assert.equal(operationDuration({status: 'succeeded', created_at: 10}), '');
   assert.equal(operationDuration({status: 'uncertain', created_at: 20, updated_at: 10}), '');
-  either(operationDuration({status: 'succeeded', created_at: 10, updated_at: 70}), ['1m', '1 分']);
-  either(operationDuration({status: 'failed', created_at: 10, updated_at: 10}), ['0s', '0 秒']);
-  either(operationDuration({status: 'running', created_at: 10}, 40), ['30s', '30 秒']);
-  either(operationDuration({status: 'accepted', created_at: 1000}, 1075), ['1m 15s', '1 分 15 秒']);
+  either(operationDuration({status: 'succeeded', created_at: 10, updated_at: 70}), ['1 min', '1 分']);
+  either(operationDuration({status: 'failed', created_at: 10, updated_at: 10}), ['0 s', '0 秒']);
+  either(operationDuration({status: 'running', created_at: 10}, 40), ['30 s', '30 秒']);
+  either(operationDuration({status: 'accepted', created_at: 1000}, 1075), ['1 min', '1 分']);
   assert.equal(operationStatusKey('uncertain'), 'unknown');
   assert.equal(operationStatusKey('running'), 'in_progress');
   assert.equal(operationStatusKey('needs_attention'), 'blocked');
   assert.equal(workStatusKey('awaiting_approval'), 'in_review');
   assert.equal(workStatusKey('doing'), 'in_progress');
+});
+
+test('duration boundaries use a compact day and hour form', () => {
+  const at = (seconds: number) => operationDuration({status: 'succeeded', created_at: 1, updated_at: 1 + seconds});
+  either(at(0), ['0 s', '0 秒']);
+  either(at(59), ['59 s', '59 秒']);
+  either(at(60), ['1 min', '1 分']);
+  either(at(3599), ['59 min', '59 分']);
+  either(at(3600), ['1 h', '1 小時']);
+  either(at(86399), ['23 h 59 min', '23 小時 59 分']);
+  either(at(86400), ['1 d', '1 天']);
 });
 
 test('rail words are loud only when the user is needed', () => {

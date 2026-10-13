@@ -1,5 +1,6 @@
-import {test, expect} from '@playwright/test';
+import {test, expect, type Page} from '@playwright/test';
 import {taskFixture} from './task-controls-fixture';
+const openReason = (page: Page) => page.locator('.ui-inspector details.ui-disclosure > summary').click();
 const operations = () => Array.from({length:7},(_,i)=>({operation_id:'op_'+String(i+1).padStart(32,'0'),
   action:'task.pause', actor:'history-person', status:i%2 ? 'running':'needs_attention',
   created_at:100-i, status_reason:`Historical receipt ${i+1}`}));
@@ -16,6 +17,7 @@ for(const native of [false,true]) {
     state.events.push({seq:1,resource_type:'operation',resource_id:state.list[3].operation_id,kind:'operation.updated'});
     await expect.poll(()=>state.after).toBe(1);
     await page.locator(`[data-row-key="${state.list[3].operation_id}"]`).click();
+    await openReason(page);
     await expect(page.getByText('Older receipt changed',{exact:true})).toBeVisible();
     expect(await page.locator('[data-operation-list] [data-row-key]').count()).toBe(4);
     await page.getByRole('button',{name:'Load earlier operations'}).click();
@@ -52,10 +54,12 @@ for(const native of [false,true]) {
     state.events.push({seq:1,resource_type:'operation',resource_id:inserted,kind:'operation.accepted'});
     await expect.poll(()=>state.after).toBe(1);
     await page.locator(`[data-row-key="${inserted}"]`).click();
+    await openReason(page);
     await expect(page.getByText('New operation',{exact:true})).toBeVisible();
     await expect(page.locator('[data-operation-count]')).toContainText('4 shown');
     await page.getByRole('button',{name:'Load earlier operations'}).click();
     await page.locator('[data-row-key="op_'+String(4).padStart(32,'0')+'"]').click();
+    await openReason(page);
     await expect(page.getByText('Historical receipt 4',{exact:true})).toBeVisible();
     await expect(page.locator('[data-operation-count]')).toContainText('6 shown');
   });
@@ -67,11 +71,13 @@ for(const native of [false,true]) {
     await expect(page.getByText('Historical receipt 2',{exact:true})).toHaveCount(0);
     await page.getByRole('button',{name:'Load earlier operations'}).click();
     await page.locator('[data-row-key="op_'+String(7).padStart(32,'0')+'"]').click();
+    await openReason(page);
     await expect(page.getByText('Historical receipt 7',{exact:true})).toBeVisible();
     await page.goto('/dashboard/#/home');
     await page.getByRole('radio',{name:'Active operations',exact:true}).click();
     await page.getByRole('link',{name:'To confirm', exact:true}).click();
     await page.locator('[data-row-key="op_'+String(2).padStart(32,'0')+'"]').click();
+    await openReason(page);
     await expect(page.getByText('Historical receipt 2',{exact:true})).toBeVisible();
     await expect(page.getByText('Historical receipt 1',{exact:true})).toHaveCount(0);
   });

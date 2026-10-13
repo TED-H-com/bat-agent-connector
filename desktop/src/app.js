@@ -785,6 +785,13 @@ function sessionBadges(s) {
     s.pending ? chip(t("pending_" + s.pending.kind), "stale") : null,
   ];
 }
+function sessionQuestions(pending) {
+  if (!Array.isArray(pending?.questions)) return [];
+  return pending.questions.flatMap(item => {
+    const text = typeof item === "string" ? item : item?.question;
+    return typeof text === "string" && text.trim() ? [text.trim()] : [];
+  });
+}
 function sessionRow(s, open) {
   const title = s.title || s.session_id;
   const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
@@ -795,11 +802,14 @@ function sessionRow(s, open) {
   const meta = joinLabel([s.host, s.agent_kind, s.worktree_branch,
     s.pending?.kind ? t("pending_" + s.pending.kind) : "", s.stale ? reasonText(s.stale_reason) : ""]);
   const pill = !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
+  const primary = () => h("a", {class: "ui-button secondary ui-sm", href}, t(asking ? "global_answer" : permission ? "global_review" : "global_open"));
   return inboxRow({
     h, key, title, href, meta, pill,
-    action: h("a", {class: "ui-button secondary ui-sm", href}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
+    action: primary(),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
+      ...sessionQuestions(s.pending).map(text => h("p", {}, text)),
+      primary(),
       !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
       meta ? h("p", {}, meta) : null,
       disclosure({label: t("global_details"), body: h("dl", {class: "kv"},
@@ -828,14 +838,14 @@ function opRow(op, open) {
     action: h("a", {class: "ui-button secondary ui-sm", href}, t(needs ? "global_review" : "global_open")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
+      precise !== "op_" + op.status ? h("p", {}, precise) : null,
       statusPill(operationStatusKey(op.status)),
       meta ? h("p", {class: "muted"}, meta) : null,
-      op.status_reason ? h("p", {}, op.status_reason) : null,
-      precise !== "op_" + op.status ? h("p", {class: "muted"}, precise) : null,
       disclosure({label: t("global_details"), body: h("dl", {class: "kv"},
         h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")),
         h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")),
         h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))),
+        op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null,
         op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)}),
     ]),
   });
