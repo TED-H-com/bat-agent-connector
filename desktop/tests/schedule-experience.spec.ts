@@ -346,6 +346,42 @@ test('roadmap drawer stays the only open inspector when a live refresh runs with
   await expect(page.locator('.ui-inspector')).toHaveCount(1);
 });
 
+test('open work item bars include Waiting and Blocked labels and delta/bar labels meet 4.5:1 contrast in light and dark mode', async ({page}) => {
+  const project = demoProject();
+  const f = await start(page, 'en', {mutate: data => {
+    const emailRow = data.rows.find((r: any) => r.id === `work:${project.ids.work.resetEmail}`);
+    if (emailRow) emailRow.status = 'blocked';
+  }});
+  await expect(page.locator(`[data-schedule-track="work:${f.ids.work.audit}"] .schedule-bar-label`)).toHaveText('Waiting · Open');
+  await expect(page.locator(`[data-schedule-track="work:${f.ids.work.resetEmail}"] .schedule-bar-label`)).toHaveText('Blocked · Open');
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({colorScheme});
+    const ratios = await page.evaluate(() => {
+      const parse = (c: string) => (c.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+      const lum = ([r, g, b]: number[]) => {
+        const f = (v: number) => {const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;};
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+      };
+      const cr = (a: number[], b: number[]) => {const l1 = lum(a), l2 = lum(b); return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);};
+      const chartBg = parse(getComputedStyle(document.querySelector('.schedule-chart')!).backgroundColor);
+      const deltaCs = getComputedStyle(document.querySelector('.schedule-delta')!);
+      const labelCs = getComputedStyle(document.querySelector('.schedule-bar-label')!);
+      return {
+        deltaOnChart: cr(parse(deltaCs.color), chartBg),
+        deltaOnOwnBg: cr(parse(deltaCs.color), parse(deltaCs.backgroundColor)),
+        labelOnChart: cr(parse(labelCs.color), chartBg),
+        labelOnOwnBg: cr(parse(labelCs.color), parse(labelCs.backgroundColor)),
+      };
+    });
+    expect(ratios.deltaOnChart).toBeGreaterThanOrEqual(4.5);
+    expect(ratios.deltaOnOwnBg).toBeGreaterThanOrEqual(4.5);
+    expect(ratios.labelOnChart).toBeGreaterThanOrEqual(4.5);
+    expect(ratios.labelOnOwnBg).toBeGreaterThanOrEqual(4.5);
+  }
+});
+
+
 
 
 

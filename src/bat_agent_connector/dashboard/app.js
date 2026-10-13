@@ -28788,9 +28788,11 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				}, marker ? "◆" : null);
 				bar.style.left = `${(start - domain.start) * scale}px`;
 				if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
-				if (span.open) bar.append(h$1("span", { class: "schedule-bar-label" }, t("sched_open")));
-				else if (span.end === null) bar.append(h$1("span", { class: "schedule-bar-label" }, reasonLabel(t, "terminal_time_unrecorded")));
-				else if (["waiting", "blocked"].includes(row.status)) bar.append(h$1("span", { class: "schedule-bar-label" }, t("ui_status_" + row.status)));
+				const labels = [];
+				if (["waiting", "blocked"].includes(row.status)) labels.push(t("ui_status_" + row.status));
+				if (span.open) labels.push(t("sched_open"));
+				else if (span.end === null) labels.push(reasonLabel(t, "terminal_time_unrecorded"));
+				if (labels.length) bar.append(h$1("span", { class: "schedule-bar-label" }, labels.join(" · ")));
 				node.append(bar);
 			}
 			const delta = milestoneDelta(row);
