@@ -64,7 +64,7 @@ pytest-disktmp uv run pytest -q -p tests.ci_shard_plugin \
   --ci-shard-manifest="$TMPDIR/shard-1/manifest.json"
 ```
 
-To replace the initial test-count weights with measured durations, download all
+To refresh the measured per-file durations, download all
 `pytest-*` artifacts from one successful GitHub run, preserving subdirectories:
 
 ```sh

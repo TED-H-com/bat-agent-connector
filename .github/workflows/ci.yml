@@ -36,7 +36,8 @@ jobs:
   pytest:
     name: pytest ${{ matrix.python }} (${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Twice the slowest predicted job (including overhead), rounded up to 5m.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

@@ -848,7 +848,7 @@
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
 - Split CI into pytest shards and separate frontend, browser and central UI jobs.
-  Verify full coverage, cancel superseded PR runs and preserve native checks.
+  Balance files by measured times, verify full coverage and preserve native checks.
 
 ## 0.2.4 (unreleased)
 
