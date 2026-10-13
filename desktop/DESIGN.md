@@ -69,6 +69,10 @@ chose. Live updates and Refresh do not collapse or expand them. A pending
 original request opens Inputs when that thread is first shown, including after
 a reload, and a later refresh leaves a reader-closed section closed.
 Remove withdrawn source facts from rows, counts and the inspector together.
+Composed labels drop a missing segment. A Brief section without a recorded status
+says Unknown, and an issue link uses the repository name on the mapping or, when
+that field is absent, the name copied onto the published issue. It never prints
+a missing value as text.
 
 Agent resources uses the same compact navigation, table and inspector. Separate
 source-reported models from requested model context, and observed tokens from current
