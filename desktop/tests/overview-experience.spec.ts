@@ -416,11 +416,11 @@ test('390px navigation selects visible requirement and work after an earlier vis
   expect(f.state.writes).toEqual([]);
 });
 
-test('Overview restores scroll after a shorter view', async ({page}) => {
+for (const view of ['requirements', 'dependencies']) test(`Overview restores scroll after ${view}`, async ({page}) => {
   await page.setViewportSize({width: 390, height: 844}); const f = fixture(); await boot(page, f);
   await root(page).locator('[data-charter-section=decisions]').scrollIntoViewIfNeeded();
   const before = await page.evaluate(() => scrollY); expect(before).toBeGreaterThan(500);
-  await openPmSection(page, 'requirements'); await openPmSection(page, 'overview');
+  await openPmSection(page, view); await openPmSection(page, 'overview');
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(before); expect(f.state.writes).toEqual([]);
 });
 

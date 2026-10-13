@@ -12530,7 +12530,9 @@ function workspaceOverview(options) {
 			if (!value) {
 				preference.scroll = window.scrollY;
 				closeReader();
-			} else if (preference.scroll) window.scrollTo(0, preference.scroll);
+			} else if (preference.scroll) requestAnimationFrame(() => {
+				if (active) window.scrollTo(0, preference.scroll);
+			});
 			header();
 		},
 		dispose() {
