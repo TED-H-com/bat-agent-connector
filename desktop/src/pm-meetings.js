@@ -1,7 +1,7 @@
 // Meeting records share the existing durable command forms. A draft is not a completed discussion.
-export function workspaceMeetings({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
+export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  const navigationKey = `batc.pm.meeting-navigation.${workspaceId}.${caps()?.actor}`;
+  const navigationKey = `batc.pm.meeting-navigation.${namespace}.${workspaceId}.${caps()?.actor}`;
   let navigation = {};
   try {const saved=JSON.parse(localStorage.getItem(navigationKey)||'{}');if(saved&&typeof saved==='object'&&!Array.isArray(saved))navigation=saved;}
   catch { /* Navigation is only a preference, never an operation receipt. */ }

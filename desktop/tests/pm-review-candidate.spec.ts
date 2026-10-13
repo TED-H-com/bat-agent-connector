@@ -1,4 +1,3 @@
-import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {reviewFixture,mount,boot,wid} from './pm-maintenance-review-fixture.ts';

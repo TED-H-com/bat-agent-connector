@@ -42,6 +42,8 @@ test('workspace remains selected through views and bound work; history and legac
   await expect(page.locator('#nav')).toContainText('Work'); expect(f.pm.base.state.writes).toHaveLength(0);
   await page.goto(`/dashboard/#/pm/${workspaceId}/${threadId}`);
   await expect(page).toHaveURL(new RegExp(`/discussions/${threadId}$`)); await expect(page.locator('.pm-notes')).toBeVisible();
+  await page.evaluate(id => {location.hash = `#/pm/${id}`;}, workspaceId);
+  await expect(page.locator('[data-pm-region=discussions]')).toBeVisible();
   await openPmSection(page, 'requirements'); await page.locator('.shell-top-actions a.ui-icon-button[href="#/settings"]').click();
   await page.locator('[data-pm-view=requirements]').click(); await expect(context).toHaveAttribute('data-workspace-id', workspaceId);
 });
@@ -151,4 +153,14 @@ test('initial central loading reports Reconnecting until the view is ready',asyn
   await page.goto(route);await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');
   await expect(page.locator('#live')).toHaveText('Reconnecting');release();
   await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
+});
+test('Overview rereads the selected fixed report after leaving for Settings',async({page})=>{
+  const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
+  await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
+  const picker=page.getByRole('combobox',{name:'Summary version',exact:true});
+  await picker.selectOption({index:0});const selected=await picker.inputValue();await expect(picker).toBeEnabled();
+  await page.keyboard.press('Escape');await page.locator('.shell-top-actions a.ui-icon-button[href="#/settings"]').click();
+  await page.locator('[data-pm-view=overview]').click();
+  await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
+  await expect(picker).toHaveValue(selected);expect(f.pm.base.state.writes).toHaveLength(0);
 });

@@ -4,7 +4,7 @@ import {reviewCandidateToIdea} from './pm-review-candidate.js';
 // The central retains report facts and decides authority. Forms keep exact original requests.
 export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,prefix='pm.maintenance_review.';
-  const navigationKey=`batc.pm.review-navigation.${workspaceId}.${caps()?.actor}`;
+  const navigationKey=`batc.pm.review-navigation.${namespace}.${workspaceId}.${caps()?.actor}`;
   let selected='';try{const value=JSON.parse(localStorage.getItem(navigationKey)||'{}');if(typeof value.review_id==='string')selected=value.review_id;}catch{}
   let model=null,ready=false,ticket=0,forms=[],widgets=[],signature='',dirty=false,editorId=null,output=null,imports=[];
   const status=h('div',{role:'status'}),scheduleView=h('div'),view=h('div'),editors=h('div'),warning=h('p',{class:'muted',hidden:true},t('pmrv_stale'));

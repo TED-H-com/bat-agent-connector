@@ -1,9 +1,9 @@
 // Sourced management findings and explicit direction decisions share one journal.
-export function workspaceGovernance({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
+export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = ['risk', 'assumption', 'issue', 'dependency', 'drift', 'change'];
   let serial = 0, loaded = false, dirty = false, stale = false, signature = '', selectedId = '', model = null, forms = [], widgets = [];
   let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
-  const navigationKey = `batc.pm.governance.selection.${workspaceId}.${caps()?.actor}`;
+  const navigationKey = `batc.pm.governance.selection.${namespace}.${workspaceId}.${caps()?.actor}`;
   try {const saved = sessionStorage.getItem(navigationKey); if (/^pmgov_[0-9a-f]{32}$/.test(saved || '')) selectedId = saved;} catch { /* Navigation is optional. */ }
   const selectRecord = value => {selectedId = value; try {alive(); sessionStorage.setItem(navigationKey, value);} catch { /* Form persistence remains authoritative. */ }};
   const status = h('div', {role: 'status'}), list = h('div', {class: 'pm-evidence-rows'}), detail = h('div'), editors = h('div');

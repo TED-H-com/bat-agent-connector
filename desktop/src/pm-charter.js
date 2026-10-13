@@ -1,5 +1,6 @@
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
+import {viewState} from './ui/view-state.js';
 
 const sections = ['definition', 'scope', 'schedule', 'resources', 'risks', 'decisions'];
 // A report is a projection of one central DocumentSnapshot, never today's plan or quota.
@@ -16,9 +17,10 @@ export function charterSections(snapshot) {
   };
 }
 
-export function workspaceCharter({h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead}) {
+export function workspaceCharter({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-  let serial = 0, head = null, snapshot = null, selectedId = null, latestId = null, history = [], cursor = null, busy = false;
+  const preference = viewState(namespace, workspaceId, 'overview');
+  let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false;
   const status = h('div', {role: 'status'}), report = h('div', {class: 'pm-charter-report'}), comparison = h('div');
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
@@ -121,6 +123,7 @@ export function workspaceCharter({h, t, api, alive, workspaceId, permitted, form
       if (current.head?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
       snapshot = checkedSnapshot(data, chosen); head = current.head; acceptHistory(page, 0);
       selectedId = snapshot?.snapshot_id || null;
+      preference.snapshotId = selectedId;
       if (!chosen) latestId = selectedId;
       if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
       if (!report.childElementCount || previous !== JSON.stringify([snapshot, latestId, cursor])) {status.replaceChildren(); render();}
@@ -131,7 +134,7 @@ export function workspaceCharter({h, t, api, alive, workspaceId, permitted, form
     if (busy || !history.some(row => row.snapshot_id === id)) return;
     const ticket = ++serial; busy = true; selectedId = id; snapshot = null; report.replaceChildren(); comparison.replaceChildren(); controls();
     try {const data = await api('GET', `${endpoint}/snapshots/${id}`); alive(); if (ticket !== serial) return;
-      snapshot = checkedSnapshot(data, id); status.replaceChildren(); render();
+      snapshot = checkedSnapshot(data, id); preference.snapshotId = id; status.replaceChildren(); render();
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
   function move(delta) {const index = history.findIndex(row => row.snapshot_id === selectedId); if (index >= 0 && history[index + delta]) void select(history[index + delta].snapshot_id);}

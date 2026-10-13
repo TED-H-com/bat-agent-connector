@@ -8653,14 +8653,14 @@ var viewIcons = {
 function availableProjectViews(caps) {
 	const pm = caps?.features?.pm_workspaces || {};
 	return projectViewIds.filter((id) => ({
-		overview: pm.brief_snapshots || pm.lifecycle,
+		overview: pm.brief_snapshots || pm.lifecycle?.version === 1,
 		discussions: pm.version === 1,
-		requirements: pm.work_evidence || pm.work_package_prepare || pm.spec_sources || pm.plan_drafting && pm.kanban && pm.brief_snapshots,
+		requirements: pm.work_evidence || pm.work_package_prepare || pm.spec_sources || pm.quality_reviews?.version === 1 || pm.spec_materialization?.version === 1 || pm.package_handoff?.available || pm.issue_mapping || pm.engineering_delivery?.contract === "pm-engineering-delivery/v1" || pm.plan_drafting && pm.kanban && pm.brief_snapshots,
 		schedule: pm.roadmap || pm.sprints,
-		dependencies: pm.maintenance_policy || pm.release_baselines,
-		issues: pm.governance || pm.maintenance_repairs || pm.maintenance_review || pm.follow_up_prepare,
-		agents: caps?.features?.pm_resources || pm.ahp_observation,
-		board: pm.kanban || pm.work_batches
+		dependencies: pm.maintenance_policy?.version === 1 || pm.release_baselines,
+		issues: pm.governance || pm.maintenance_repairs?.version === 1 || pm.maintenance_review?.version === 1 || pm.follow_up_prepare,
+		agents: caps?.features?.pm_resources || pm.ahp_observation?.contract === "ahp_observer_v1",
+		board: pm.kanban || pm.work_batches?.version === 1
 	})[id]);
 }
 var bounded = (map, key, value) => {
@@ -10510,9 +10510,10 @@ function charterSections(snapshot) {
 		decisions: items("decisions").filter((row) => row.source?.kind !== "plan_adoption")
 	};
 }
-function workspaceCharter({ h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead }) {
+function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let serial = 0, head = null, snapshot = null, selectedId = null, latestId = null, history = [], cursor = null, busy = false;
+	const preference = viewState(namespace, workspaceId, "overview");
+	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false;
 	const status = h("div", { role: "status" }), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
 	const title = input("pm_brief_snapshot_title", {
 		max: 160,
@@ -10713,6 +10714,7 @@ function workspaceCharter({ h, t, api, alive, workspaceId, permitted, form, inpu
 			head = current.head;
 			acceptHistory(page, 0);
 			selectedId = snapshot?.snapshot_id || null;
+			preference.snapshotId = selectedId;
 			if (!chosen) latestId = selectedId;
 			if (cursor === null && history.length) latestId = history.at(-1).snapshot_id;
 			if (!report.childElementCount || previous !== JSON.stringify([
@@ -10746,6 +10748,7 @@ function workspaceCharter({ h, t, api, alive, workspaceId, permitted, form, inpu
 			alive();
 			if (ticket !== serial) return;
 			snapshot = checkedSnapshot(data, id);
+			preference.snapshotId = id;
 			status.replaceChildren();
 			render();
 		} catch (error) {
@@ -13647,7 +13650,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 }
 //#endregion
 //#region src/pm-governance.js
-function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
+function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = [
 		"risk",
 		"assumption",
@@ -13658,7 +13661,7 @@ function workspaceGovernance({ h, t, api, alive, workspaceId, workspace, permitt
 	];
 	let serial = 0, loaded = false, dirty = false, stale = false, signature = "", selectedId = "", model = null, forms = [], widgets = [];
 	let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
-	const navigationKey = `batc.pm.governance.selection.${workspaceId}.${caps()?.actor}`;
+	const navigationKey = `batc.pm.governance.selection.${namespace}.${workspaceId}.${caps()?.actor}`;
 	try {
 		const saved = sessionStorage.getItem(navigationKey);
 		if (/^pmgov_[0-9a-f]{32}$/.test(saved || "")) selectedId = saved;
@@ -18900,9 +18903,9 @@ function workspaceKanban({ h, t, api, alive, workspaceId, errorBox, projectId = 
 }
 //#endregion
 //#region src/pm-meetings.js
-function workspaceMeetings({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
+function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	const navigationKey = `batc.pm.meeting-navigation.${workspaceId}.${caps()?.actor}`;
+	const navigationKey = `batc.pm.meeting-navigation.${namespace}.${workspaceId}.${caps()?.actor}`;
 	let navigation = {};
 	try {
 		const saved = JSON.parse(localStorage.getItem(navigationKey) || "{}");
@@ -21092,7 +21095,7 @@ function reviewCandidateProof({ h, t, source }) {
 //#region src/pm-maintenance-review.js
 function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, prefix = "pm.maintenance_review.";
-	const navigationKey = `batc.pm.review-navigation.${workspaceId}.${caps()?.actor}`;
+	const navigationKey = `batc.pm.review-navigation.${namespace}.${workspaceId}.${caps()?.actor}`;
 	let selected = "";
 	try {
 		const value = JSON.parse(localStorage.getItem(navigationKey) || "{}");
@@ -25402,6 +25405,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let lastList = [], lastThreadList = null;
 	function publishContext() {
 		const stage = workspace ? lifecycle?.phase?.() : null;
+		if (workspace && threadId) rememberProjectView(namespace, workspaceId, "discussions");
 		phasePill.hidden = ![
 			"idea",
 			"planning",
@@ -25460,12 +25464,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}) : null;
 	if (evidence) body.append(evidence.box);
 	let workbench = null;
-	const charter = !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
+	const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
 	const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots ? charter ? workspaceCharter({
 		h,
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
 		permitted,
 		form,
@@ -25615,6 +25620,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
 		workspace: () => workspace,
 		permitted,
@@ -25630,6 +25636,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		t,
 		api,
 		alive,
+		namespace,
 		workspaceId,
 		workspace: () => workspace,
 		permitted,
@@ -25797,7 +25804,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox
 	}) : null;
 	if (traceability) body.insertBefore(traceability.element, content);
-	const resources = !threadId && caps()?.features?.pm_resources ? workspaceResources({
+	const resources = workspaceId && !threadId && caps()?.features?.pm_resources ? workspaceResources({
 		h,
 		t,
 		api,

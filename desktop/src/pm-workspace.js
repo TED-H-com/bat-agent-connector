@@ -243,6 +243,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   let lastList = [], lastThreadList = null;
   function publishContext() {
     const stage = workspace ? lifecycle?.phase?.() : null;
+    if (workspace && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
     phasePill.hidden = !['idea','planning','development','maintain','paused','closed'].includes(stage);
     phasePill.textContent = phasePill.hidden ? '' : t('ui_phase_' + stage);
     onContext({workspace, workspaces: lastList, view: threadId ? 'discussions' : workbench?.selected() || view || 'discussions',
@@ -263,9 +264,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceEvidence({h, t, api, alive, namespace, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox, qualitySelection}) : null;
   if (evidence) body.append(evidence.box);
   let workbench = null;
-  const charter = !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
+  const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
-    ? charter ? workspaceCharter({h, t, api, alive, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
+    ? charter ? workspaceCharter({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
       onDiscuss: () => {location.hash = `#/pm/${workspaceId}/discussions`; workbench?.select('discussions'); content.querySelector('input')?.focus();}})
       : projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, lifecycle?.element||content);
@@ -295,10 +296,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceSprints({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps,qualitySelection}) : null;
   if(sprints)body.insertBefore(sprints.box,content);
   const meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings
-    ? workspaceMeetings({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+    ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
-    ? workspaceGovernance({h,t,api,alive,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(governance)body.insertBefore(governance.element,content);
   const specifications = workspaceId && caps()?.features?.pm_workspaces?.spec_sources
     ? specSources({h,t,api,alive,workspaceId,errorBox}) : null;
@@ -335,7 +336,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const traceability = charter && brief && kanban
     ? workspaceTraceability({h, t, api, alive, namespace, workspaceId, caps, errorBox}) : null;
   if (traceability) body.insertBefore(traceability.element, content);
-  const resources = !threadId && caps()?.features?.pm_resources
+  const resources = workspaceId && !threadId && caps()?.features?.pm_resources
     ? workspaceResources({h, t, api, alive, namespace, workspaceId, errorBox}) : null;
   if (resources) body.insertBefore(resources.element, content);
   const drawersHome = h('div', {hidden: true});

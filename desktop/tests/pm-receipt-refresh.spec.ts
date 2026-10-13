@@ -25,7 +25,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
       f.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
       await expect(page.locator('.pm-status')).toContainText('PM read unavailable');
     }else if(interruption==='view remount'){
-      await page.evaluate(()=>{location.hash='#/pm';});
+      await page.evaluate(()=>{location.hash='#/settings';});
       await expect(page.getByRole('heading',{name:'Start an idea discussion',exact:true})).toHaveCount(0);
       await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);
       await expect(form(page).getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
@@ -39,7 +39,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
       expect(reads).toEqual([]);await expect(page).toHaveURL(new RegExp(`${workspaceId}$`));
       f.state.failRead=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     }
-    await expect(page).toHaveURL(new RegExp(`${workspaceId}/${threadId}$`));
+    await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions/${threadId}$`));
     expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].idempotency_key).toBe(original.intent.key);
     expect(f.state.writes[0].body).toEqual(original.intent.request);
     expect(reads).toEqual([`/operations/${[...f.state.ops.values()][0].operation_id}`]);
@@ -81,7 +81,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     });
     await page.goto(home);await form(page).getByLabel('Discussion title',{exact:true}).fill('Preserve the exact source');
     await form(page).getByRole('button',{name:'Start discussion',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
-    const original=(await intents(page))[0];await page.evaluate(()=>{location.hash='#/pm';});
+    const original=(await intents(page))[0];await page.evaluate(()=>{location.hash='#/settings';});
     await expect(form(page)).toHaveCount(0);await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);
     await expect(form(page).getByRole('button',{name:'Check original request',exact:true})).toBeVisible();deny=true;release();
     await expect.poll(()=>reads.length).toBe(1);await expect(form(page).locator('.error')).toBeVisible();
@@ -90,7 +90,7 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     await expect(form(page).getByLabel('Discussion title',{exact:true})).toBeDisabled();
     expect((await intents(page))[0].intent.request).toEqual(original.intent.request);
     deny=false;await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
-    await expect(page).toHaveURL(new RegExp(`${workspaceId}/${threadId}$`));
+    await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions/${threadId}$`));
     expect(f.state.writes).toHaveLength(1);expect(reads).toHaveLength(2);
   });
   for(const mismatch of ['actor','key','action','target','params','preconditions','id'])test(`a mismatched ${mismatch} cannot acknowledge the original intent`,async({page})=>{
@@ -143,13 +143,13 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
     });
     await page.goto(home);await form(page).getByLabel('Discussion title',{exact:true}).fill('Recover once');
     await form(page).getByRole('button',{name:'Start discussion',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
-    await page.evaluate(()=>{location.hash='#/pm';});await expect(form(page)).toHaveCount(0);
+    await page.evaluate(()=>{location.hash='#/settings';});await expect(form(page)).toHaveCount(0);
     await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);
     await expect(form(page).getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
     // The user explicitly checks an unacknowledged original key. Its second
     // response arrives before the first; automatic recovery must not issue it.
     f.state.defer=null;await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
-    await expect(page).toHaveURL(new RegExp(`${workspaceId}/${threadId}$`));
+    await expect(page).toHaveURL(new RegExp(`${workspaceId}/discussions/${threadId}$`));
     await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);
     await form(page).getByLabel('Discussion title',{exact:true}).fill('A separate new draft');
     const before=await intents(page);release();await expect.poll(()=>responses).toBe(2);await page.waitForTimeout(350);
