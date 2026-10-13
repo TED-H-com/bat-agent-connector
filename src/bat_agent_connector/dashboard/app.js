@@ -274,6 +274,7 @@ var workViewStrings = {
 		wv_from_earlier_plan: "From an earlier plan",
 		wv_ci_times_missing: "CI and attempt times not recorded",
 		wv_bound_work: "Bound work",
+		wv_work_unknown: "Bound work unknown",
 		wv_quality_review: "Quality review",
 		wv_decisions_changes: "Decisions and changes",
 		wv_decisions_unknown: "Related records unknown",
@@ -285,6 +286,10 @@ var workViewStrings = {
 		wv_open_requirement: "Open requirement",
 		wv_not_recorded: "Not recorded",
 		wv_compact_prs_unknown: "PRs unknown",
+		wv_compact_work_one: "1 work item",
+		wv_compact_work_one_loaded: "1 work item loaded",
+		wv_compact_pr_one: "1 PR",
+		wv_compact_pr_one_loaded: "1 PR loaded",
 		wv_compact_work: "{n} work items",
 		wv_compact_prs: "{n} PRs",
 		wv_compact_work_loaded: "{n} work items loaded",
@@ -357,6 +362,7 @@ var workViewStrings = {
 		wv_from_earlier_plan: "來自較早的計畫",
 		wv_ci_times_missing: "尚無 CI 與嘗試起訖時間紀錄",
 		wv_bound_work: "關聯工作",
+		wv_work_unknown: "關聯工作未知",
 		wv_quality_review: "品質審閱",
 		wv_decisions_changes: "決策與變更",
 		wv_decisions_unknown: "相關紀錄未知",
@@ -368,6 +374,10 @@ var workViewStrings = {
 		wv_open_requirement: "開啟需求",
 		wv_not_recorded: "未記錄",
 		wv_compact_prs_unknown: "PR 未知",
+		wv_compact_work_one: "1 項工作",
+		wv_compact_work_one_loaded: "已載入 1 項工作",
+		wv_compact_pr_one: "1 個 PR",
+		wv_compact_pr_one_loaded: "已載入 1 個 PR",
 		wv_compact_work: "{n} 項工作",
 		wv_compact_prs: "{n} 個 PR",
 		wv_compact_work_loaded: "已載入 {n} 項工作",
@@ -17641,6 +17651,10 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
 		return date && Number.isFinite(date.valueOf()) ? h$1("time", { datetime: date.toISOString() }, date.toISOString().replace("T", " ").replace(".000Z", " UTC")) : "—";
 	};
+	const captureFacts = (capture) => (capture.evidence || []).map((row) => paragraph(t("pm_kanban_fact"), " · ", ...Object.entries(row.assessment || {}).map(([key, value]) => {
+		const label = t("pm_kanban_field_" + key), state = t("pm_kanban_state_" + labelSegment(value));
+		return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
+	})));
 	function close() {
 		panel?.close();
 	}
@@ -17651,7 +17665,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				title: data.title || t("ui_work_item"),
 				returnFocus: () => returnTarget,
 				onClose: () => {
-					returnTarget = returnFocus?.();
+					returnTarget = typeof returnFocus === "function" ? returnFocus() : returnFocus;
 					actions?.dispose();
 					actions = null;
 					panel = null;
@@ -17752,10 +17766,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			if (capture) {
 				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
 				if (card.capture_matches_binding === false || card.capture_matches_work_version === false) result.append(paragraph(t("pm_kanban_capture_different")));
-				result.append(...(capture.evidence || []).map((row) => paragraph(t("pm_kanban_fact"), " · ", ...Object.entries(row.assessment || {}).map(([key, value]) => {
-					const label = t("pm_kanban_field_" + key), state = t("pm_kanban_state_" + labelSegment(value));
-					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
-				}))));
+				result.append(...captureFacts(capture));
 			} else result.append(paragraph(t("wv_no_result")));
 			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null));
 			const groups = prGroups(source.deliveries);
@@ -17780,7 +17791,20 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		} else if (requirement) {
 			served.dataset.workSection = "criteria";
 			served.querySelector("h3").textContent = t("wv_criteria");
-			served.replaceChildren(h$1("h3", {}, t("wv_criteria")), statusPill(data.acceptance || "unknown"), h$1("ul", {}, ...(requirement.acceptance || []).map((item) => h$1("li", {}, labelSegment(item.text), " ", statusPill(data.reviews?.length ? "accepted" : data.acceptance === "not_assessed" ? "not_assessed" : "unknown")))));
+			const criterionPill = (item) => {
+				const result = item.source_input_id && data.criteriaResults?.find((row) => row.criterion?.kind === "acceptance" && row.criterion.requirement_id === requirement.id && row.criterion.input_id === item.source_input_id);
+				const pill = statusPill(result ? {
+					accepted: "accepted",
+					rejected: "failed",
+					unassessed: "not_assessed"
+				}[result.status] || "unknown" : data.acceptance === "not_assessed" ? "not_assessed" : "unknown");
+				if (result?.status === "rejected") {
+					pill.textContent = t("pq_rejected");
+					pill.dataset.qualityResult = "rejected";
+				}
+				return pill;
+			};
+			served.replaceChildren(h$1("h3", {}, t("wv_criteria")), statusPill(data.acceptance || "unknown"), h$1("ul", {}, ...(requirement.acceptance || []).map((item) => h$1("li", {}, labelSegment(item.text), " ", criterionPill(item)))));
 			state.dataset.workSection = "work";
 			state.querySelector("h3").textContent = t("wv_bound_work");
 			for (const work of data.work || []) state.append(paragraph(button({
@@ -17788,13 +17812,16 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				label: work.work.title,
 				onClick: () => data.onWork?.(work.work_item_id)
 			}), " ", statusPill(workStatus(work))));
-			if (!data.work?.length) state.append(paragraph(t("wb_no_work")));
+			if (!data.work?.length) state.append(paragraph(t(data.workIncomplete ? "wv_work_unknown" : "wb_no_work")));
+			if (data.workIncomplete) state.append(statusPill("partial"));
 			for (const row of data.milestones || []) state.append(paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}` }, row.title)));
 			const review = data.reviews?.at(-1);
 			if (review) result.append(statusPill("accepted"), paragraph(t("wv_quality_review")), h$1("ul", {}, ...(review.assessment?.document?.criteria || []).filter((row) => row.criterion?.requirement_id === requirement.id).map((row) => h$1("li", {}, labelSegment(requirement.acceptance?.find((item) => item.source_input_id === row.criterion.input_id)?.text), " ", statusPill(row.status === "accepted" ? "accepted" : "unknown")))));
 			else {
-				const captures = (data.work || []).map((work) => work.latest_capture).filter(Boolean);
-				result.append(paragraph(t(data.acceptance === "unknown" ? "wv_acceptance_unknown" : captures.length ? "pm_kanban_capture" : "wv_no_result")));
+				const work = (data.work || []).filter((work) => work.latest_capture).sort((a, b) => (b.latest_capture.captured_at || 0) - (a.latest_capture.captured_at || 0))[0];
+				if (work) result.append(h$1("div", { "data-requirement-capture": "" }, paragraph(work.work.title), paragraph(t("pm_kanban_capture"), " · ", stamp(work.latest_capture.captured_at)), ...captureFacts(work.latest_capture)));
+				if (data.acceptance === "unknown") result.append(paragraph(t("wv_acceptance_unknown")));
+				else if (!work) result.append(paragraph(t("wv_no_result")));
 			}
 			blocker.dataset.workSection = "decisions";
 			blocker.querySelector("h3").textContent = t("wv_decisions_changes");
@@ -17818,7 +17845,12 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				"attempts"
 			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), paragraph(t("wv_ci_times_missing")), h$1("pre", { class: "mono" }, JSON.stringify({
 				reviews: data.reviews,
+				criteria_results: data.criteriaResults,
 				register: data.register,
+				work_captures: data.work?.map((work) => ({
+					work_item_id: work.work_item_id,
+					capture: work.latest_capture
+				})),
 				errors: source.errors,
 				plan_revision: plan?.revision_id || card?.binding?.plan_revision_id,
 				binding: card?.binding,
@@ -17867,7 +17899,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
 	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
-	let qualityComplete = false, catalogueErrors = [], stale = true;
+	let qualityComplete = false, workIncomplete = false, catalogueErrors = [], stale = true;
 	let selected = preference.selected || null, signature = "", deliveryPages = 1, preserveSelection = false, tools = () => [];
 	const pages = {
 		work: 1,
@@ -17952,10 +17984,18 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	};
 	const issuesFor = (card) => issues.filter((row) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id);
 	const linked = (req) => cards.filter((card) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id));
-	const deliverySource = (req) => aggregateDelivery(linked(req).map((card) => sources.get(card.work_item_id)), cursors.work != null);
+	const deliverySource = (req) => {
+		const source = aggregateDelivery(linked(req).map((card) => sources.get(card.work_item_id)), workIncomplete);
+		if (!feature("engineering_delivery")) source.available = false;
+		return source;
+	};
 	const milestoneFor = (req) => milestones.filter((row) => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
 	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wv_issue", { number: row.document.issue.number })]);
 	const acceptance = (req) => requirementReviews(plan, req, reviews).length ? "accepted" : qualityComplete ? "not_assessed" : "unknown";
+	const criteriaResults = (req) => {
+		const qualified = requirementReviews(plan, req, reviews);
+		return (qualified.length ? qualified : reviews.filter((row) => row.applicable === true && plan?.document_digest && plan?.adoption?.scope_revision && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption.scope_revision && Array.isArray(row.assessment?.document?.criteria) && row.assessment.document.criteria.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === req.id))).at(-1)?.assessment?.document?.criteria || [];
+	};
 	const acceptancePill = (req) => statusPill(acceptance(req));
 	const deployPill = (req) => statusPill(deployStatus(deliverySource(req)));
 	const milestoneLabel = (req) => {
@@ -18013,6 +18053,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		tables.replaceChildren();
 		meta.replaceChildren();
 		status.replaceChildren();
+		if (forgetRoute && visible) viewHeading()?.focus({ preventScroll: true });
 		for (const kind of Object.keys(pages)) cursors[kind] = null;
 		controls();
 	}
@@ -18023,8 +18064,16 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		} catch {
 			return;
 		}
+		errorBox(error);
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(h$1("p", { class: "error" }, t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_requirements_unavailable")), ...error.code ? [disclosure({
+			label: t("wv_details"),
+			body: h$1("p", {}, labelSegment(error.code))
+		})] : [], h$1("button", {
+			type: "button",
+			class: "ui-button secondary",
+			onclick: () => void refresh()
+		}, t("wv_retry")));
 	}
 	function markSelection() {
 		for (const row of tables.querySelectorAll("[data-row-key]")) {
@@ -18104,11 +18153,13 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? h$1("p", { class: "ui-meta" }, t("wb_no_work")) : null),
 				compactRow: (req) => {
 					const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
-					const coverage = deliveryCoverage(source);
+					const coverage = deliveryCoverage(source), prs = prGroups(source.deliveries).length;
+					const workLabel = work.length === 1 ? "wv_compact_work_one" : "wv_compact_work";
+					const prLabel = prs === 1 ? "wv_compact_pr_one" : "wv_compact_prs";
 					return h$1("div", { class: "pm-requirement-summary" }, h$1("span", {
 						class: "pm-requirement-title",
 						title: labelSegment(req.text)
-					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", {}, t("wv_acceptance") + ": ", acceptancePill(req)), h$1("span", {}, t("wv_deploy") + ": ", deployPill(req)), h$1("span", {}, t(cursors.work != null ? "wv_compact_work_loaded" : "wv_compact_work", { n: work.length })), h$1("span", {}, t(coverage === "unknown" ? "wv_compact_prs_unknown" : coverage === "partial" ? "wv_compact_prs_loaded" : "wv_compact_prs", { n: prGroups(source.deliveries).length })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
+					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", {}, t("wv_acceptance") + ": ", acceptancePill(req)), h$1("span", {}, t("wv_deploy") + ": ", deployPill(req)), h$1("span", {}, t(workLabel + (workIncomplete ? "_loaded" : ""), { n: work.length })), h$1("span", {}, t(coverage === "unknown" ? "wv_compact_prs_unknown" : prLabel + (coverage === "partial" ? "_loaded" : ""), { n: prs })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
 				},
 				columns: [
 					{
@@ -18124,7 +18175,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 						key: "work",
 						label: t("wv_work"),
 						numeric: true,
-						render: (req) => cursors.work != null ? t("wv_loaded", { n: linked(req).length }) : String(linked(req).length)
+						render: (req) => workIncomplete ? t("wv_loaded", { n: linked(req).length }) : String(linked(req).length)
 					},
 					{
 						key: "pr",
@@ -18292,6 +18343,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			issues = mappings?.rows || [];
 			reviews = quality?.rows || [];
 			sources = read;
+			workIncomplete = work.filtered || work.next != null;
 			milestones = roadmap?.baseline?.document?.milestones || [];
 			for (const [kind, data] of Object.entries({
 				work,
@@ -18311,6 +18363,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				issues,
 				reviews,
 				qualityComplete,
+				workIncomplete,
 				cursors,
 				milestones,
 				[...sources].map(([id, source]) => [
@@ -18331,7 +18384,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				work,
 				mappings,
 				quality
-			].some((row) => row?.filtered || row?.next != null) || [...sources.values()].some((row) => row.filtered || row.next != null);
+			].some((row) => row?.filtered || row?.next != null) || [...sources.values()].some((row) => deliveryCoverage(row) !== "complete");
 			meta.textContent = !plan ? t("ui_status_unknown") : partial ? t("wv_loaded", { n: requirements.length }) : joinLabel([
 				t("wv_requirements_count", { n: requirements.length }),
 				feature("quality_reviews") ? t("wv_accepted_count", { n: requirements.filter((req) => requirementReviews(plan, req, reviews).length).length }) : null,
@@ -18453,8 +18506,10 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				requirement,
 				acceptance: acceptance(requirement),
 				reviews: requirementReviews(plan, requirement, reviews),
+				criteriaResults: criteriaResults(requirement),
 				register,
 				work: linked(requirement),
+				workIncomplete,
 				source: deliverySource(requirement),
 				milestones: milestoneFor(requirement),
 				onWork: (id) => void select(id),
@@ -18504,7 +18559,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				if ([403, 404].includes(error.status)) {
 					cards = cards.filter((row) => row.work_item_id !== id);
 					sources.delete(id);
+					workIncomplete = true;
 					renderTable();
+					meta.textContent = plan ? t("wv_loaded", { n: plan.document.requirements.length }) : t("ui_status_unknown");
 				}
 				detail.show({
 					title: card.work.title,
@@ -18518,7 +18575,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		if (visible === value) {
 			if (value && plan) {
 				const id = new URLSearchParams(location.hash.split("?")[1]).get("select");
-				if (id && (id !== selected || !detail.element)) select(id, true);
+				if (id && (id !== selected || !detail.element)) select(id, id !== selected);
 			}
 			return;
 		}
@@ -27322,10 +27379,21 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		more.hidden = true;
 		more.disabled = false;
 		element.removeAttribute("aria-busy");
+		list.hidden = true;
+		content.querySelector(".ui-empty")?.remove();
+		element.querySelector("[data-board-partial]")?.remove();
+		requirementFilter.replaceChildren(h$1("option", { value: "" }, t("wv_all_requirements")));
+		delete requirementFilter.dataset.options;
+		agentFilter.replaceChildren(h$1("option", { value: "" }, t("wv_all_agents")));
+		delete agentFilter.dataset.options;
 	}
 	function unavailable(error) {
+		errorBox?.(error);
 		withdraw();
-		status.replaceChildren(errorBox ? errorBox(error) : h$1("p", { class: "error" }, error.message), h$1("button", {
+		status.replaceChildren(h$1("p", { class: "error" }, error.message === t("pm_kanban_scope_error") ? error.message : t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_board_unavailable")), ...error.code ? [disclosure({
+			label: t("wv_details"),
+			body: h$1("p", {}, labelSegment(error.code))
+		})] : [], h$1("button", {
 			type: "button",
 			class: "ui-button secondary",
 			onclick: () => {
@@ -27351,18 +27419,19 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, t("wv_earlier_plan"))])), preference.requirement);
 		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, agent])), preference.agent);
 	}
+	const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
 	function renderMetrics() {
 		if (!page) return;
-		const partial = next != null || page.coverage?.byte_limited || [...sources.values()].some((source) => source.filtered || source.next != null);
+		const partial = partialWorkPage() || [...sources.values()].some((source) => deliveryCoverage(source) !== "complete");
 		const blocked = [...rows.values()].filter(({ card }) => blockedWork(card)).length;
 		meta.textContent = joinLabel([t(partial ? "wv_loaded" : "wv_work_count", { n: rows.size }), blocked ? t(blocked === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: blocked }) : null]);
 		boardInfo.replaceChildren(...[
-			h$1("p", {}, t("pm_kanban_wip", page.wip)),
+			page.wip ? h$1("p", {}, t("pm_kanban_wip", page.wip)) : note("wv_source_unavailable"),
 			partial ? note("pm_kanban_partial") : null,
 			page.coverage?.byte_limited ? note("pm_kanban_bounded") : null
 		].filter(Boolean));
 		element.querySelector("[data-board-partial]")?.remove();
-		if (next != null || page.coverage?.byte_limited) more.before(h$1("span", {
+		if (partialWorkPage()) more.before(h$1("span", {
 			class: "ui-meta",
 			"data-board-partial": ""
 		}, t("pm_kanban_partial")));
@@ -27453,6 +27522,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		return [...columns, "archived"].includes(card.column) ? card.column : "unknown";
 	}
 	function renderColumns(force = false) {
+		if (!page || !rows.size) return;
 		const query = search.value.trim().toLocaleLowerCase();
 		const groupKeys = group.value === "status" ? [...columns] : milestones.map((row) => row.milestone_id);
 		const currentLanes = new Map([...list.children].map((node) => [node.dataset.pmKanbanColumn, node]));
@@ -27498,7 +27568,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 		for (const [key, lane] of currentLanes) if (!groupKeys.includes(key) && !lane.querySelector("[data-pm-kanban-work]")) lane.remove();
 		else {
-			const count = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length, partial = next != null || page?.coverage?.byte_limited;
+			const count = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length, partial = partialWorkPage();
 			const label = lane.querySelector(".pm-kanban-count");
 			label.textContent = partial ? t("wv_loaded", { n: count }) : count;
 			if (partial) label.setAttribute("aria-label", t("wv_lane_loaded", { n: count }));
@@ -27638,6 +27708,14 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					current.node.remove();
 					rows.delete(id);
 					sources.delete(id);
+					page = {
+						...page,
+						wip: null,
+						coverage: {
+							...page.coverage,
+							withdrawn: true
+						}
+					};
 					renderColumns();
 					renderMetrics();
 				}

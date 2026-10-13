@@ -337,7 +337,7 @@ receipts stay Partial in rows, compact summaries, inspectors and Board chips.
 An unknown blocker is never counted as zero.
 
 Below 800px the shared table's optional `compactRow` renders each requirement as
-one expandable summary target: two-line title, wrapping acceptance/deployment pills,
+one expandable summary target: two-line title, labelled acceptance/deployment pills with gaps,
 work/PR counts and milestone, followed only by recorded blockers. Enter/Space or a
 tap toggles it; Left/Right collapse/expand. The expanded content retains criteria,
 stacked work rows and an Open requirement action. Desktop selection stays unchanged.
@@ -353,6 +353,8 @@ access metadata; manual sessions carry Read-only. Missing attempt start/end time
 and CI results remain unknown; observation or send-acceptance time does not imply
 execution duration. Technical records and source times appear in Details. A requirement instead shows
 Criteria, Bound work, Latest result, Decisions and changes, Delivery, then Details.
+Criterion results use the exact current plan, digest, scope and input identity; a recorded
+rejection stays visible even when no review qualifies the overall requirement as Accepted.
 Auxiliary source failures clear only their own facts and offer Retry; plan and work
 catalogue withdrawal clears the view. Inspector actions retain their nodes across live
 age updates, and closing returns to the current selection.
@@ -546,7 +548,7 @@ once; a recorded blocker retains both its status and reason.
 
 Each lane is a list with an H2 heading. Cards are list items with an H3 title
 button, described by their requirement, status and recorded delivery/blocker/age
-facts. Blocker flags are not tab stops. Paged lanes show loaded counts and one
+facts. Visually hidden status text stays inside the card’s bounds; blocker flags are not tab stops. Paged lanes show loaded counts and one
 visible partial marker; an empty Board hides the lanes and shows one empty state.
 Opening the inspector reveals the selected card after docking. Closing restores
 focus to the latest selection, falling back to the view heading after withdrawal.

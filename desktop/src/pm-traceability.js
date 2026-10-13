@@ -20,7 +20,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   const preference = viewState(namespace, workspaceId, 'requirements'), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
   let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
-  let qualityComplete = false, catalogueErrors = [], stale = true;
+  let qualityComplete = false, workIncomplete = false, catalogueErrors = [], stale = true;
   let selected = preference.selected || null, signature = '', deliveryPages = 1, preserveSelection = false, tools = () => [];
   const pages = {work: 1, issues: 1, reviews: 1}, cursors = {}, expanded = new Set(preference.expanded || []), order = [];
   const status = h('div', {role: 'status'}), meta = h('span'), tables = h('div', {class: 'pm-requirements-tables'});
@@ -52,10 +52,22 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   };
   const issuesFor = card => issues.filter(row => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id);
   const linked = req => cards.filter(card => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id));
-  const deliverySource = req => aggregateDelivery(linked(req).map(card => sources.get(card.work_item_id)), cursors.work != null);
+  const deliverySource = req => {
+    const source = aggregateDelivery(linked(req).map(card => sources.get(card.work_item_id)), workIncomplete);
+    if (!feature('engineering_delivery')) source.available = false;
+    return source;
+  };
   const milestoneFor = req => milestones.filter(row => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
   const issueLabel = row => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t('wv_issue', {number: row.document.issue.number})]);
   const acceptance = req => requirementReviews(plan, req, reviews).length ? 'accepted' : qualityComplete ? 'not_assessed' : 'unknown';
+  const criteriaResults = req => {
+    const qualified = requirementReviews(plan, req, reviews);
+    const current = qualified.length ? qualified : reviews.filter(row => row.applicable === true && plan?.document_digest && plan?.adoption?.scope_revision
+      && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest
+      && row.context.plan_ref.scope_revision === plan.adoption.scope_revision && Array.isArray(row.assessment?.document?.criteria)
+      && row.assessment.document.criteria.some(result => result.criterion?.kind === 'acceptance' && result.criterion.requirement_id === req.id));
+    return current.at(-1)?.assessment?.document?.criteria || [];
+  };
   const acceptancePill = req => statusPill(acceptance(req));
   const deployPill = req => statusPill(deployStatus(deliverySource(req)));
   const milestoneLabel = req => {
@@ -77,9 +89,17 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     pendingFocus = null; pendingNavigation = null; currentRequirement = null; scrollGeneration++; serial++; detailSerial++; busy = false; plan = null; cards = []; issues = []; reviews = []; milestones = []; sources.clear(); earlierPlans.clear(); signature = '';
     if (forgetRoute) writeSelection(null);
     closeRetaining(); tables.replaceChildren(); meta.replaceChildren(); status.replaceChildren();
+    if (forgetRoute && visible) viewHeading()?.focus({preventScroll: true});
     for (const kind of Object.keys(pages)) cursors[kind] = null; controls();
   }
-  function fail(error, ticket) {try {alive(); if (ticket !== serial) return;} catch {return;} withdraw(); status.replaceChildren(errorBox(error));}
+  function fail(error, ticket) {
+    try {alive(); if (ticket !== serial) return;} catch {return;}
+    // Keep the shared event-cycle failure signal, with concise local presentation.
+    errorBox(error); withdraw();
+    status.replaceChildren(h('p', {class: 'error'}, t(error.code === 'SNAPSHOT_CHANGED' ? 'wb_plan_changed' : error.status === 403 ? 'forbidden_scope' : 'wv_requirements_unavailable')),
+      ...(error.code ? [disclosure({label: t('wv_details'), body: h('p', {}, labelSegment(error.code))})] : []),
+      h('button', {type: 'button', class: 'ui-button secondary', onclick: () => void refresh()}, t('wv_retry')));
+  }
   function markSelection() {
     for (const row of tables.querySelectorAll('[data-row-key]')) {
       row.setAttribute('aria-selected', String(row.dataset.rowKey === selected));
@@ -126,18 +146,20 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
           ...linked(req).map(workRow), !linked(req).length ? h('p', {class: 'ui-meta'}, t('wb_no_work')) : null),
         compactRow: req => {
           const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
-          const coverage = deliveryCoverage(source);
+          const coverage = deliveryCoverage(source), prs = prGroups(source.deliveries).length;
+          const workLabel = work.length === 1 ? 'wv_compact_work_one' : 'wv_compact_work';
+          const prLabel = prs === 1 ? 'wv_compact_pr_one' : 'wv_compact_prs';
           return h('div', {class: 'pm-requirement-summary'}, h('span', {class: 'pm-requirement-title', title: labelSegment(req.text)}, labelSegment(req.text)),
             h('div', {class: 'pm-requirement-facts'},
               h('span', {}, t('wv_acceptance') + ': ', acceptancePill(req)), h('span', {}, t('wv_deploy') + ': ', deployPill(req)),
-              h('span', {}, t(cursors.work != null ? 'wv_compact_work_loaded' : 'wv_compact_work', {n: work.length})),
-              h('span', {}, t(coverage === 'unknown' ? 'wv_compact_prs_unknown' : coverage === 'partial' ? 'wv_compact_prs_loaded' : 'wv_compact_prs', {n: prGroups(source.deliveries).length})), milestoneLabel(req)),
+              h('span', {}, t(workLabel + (workIncomplete ? '_loaded' : ''), {n: work.length})),
+              h('span', {}, t(coverage === 'unknown' ? 'wv_compact_prs_unknown' : prLabel + (coverage === 'partial' ? '_loaded' : ''), {n: prs})), milestoneLabel(req)),
             blocked ? h('div', {class: 'pm-requirement-blocker'}, icon('circle-alert'), blockerText(t, blocked)) : null);
         },
         columns: [
           {key: 'title', label: t('wv_requirement')},
           {key: 'milestone', label: t('wv_milestone'), render: milestoneLabel},
-          {key: 'work', label: t('wv_work'), numeric: true, render: req => cursors.work != null ? t('wv_loaded', {n: linked(req).length}) : String(linked(req).length)},
+          {key: 'work', label: t('wv_work'), numeric: true, render: req => workIncomplete ? t('wv_loaded', {n: linked(req).length}) : String(linked(req).length)},
           {key: 'pr', label: t('wv_pr'), render: req => h('div', {class: 'pm-work-inline'}, ...prPills(deliverySource(req)))},
           {key: 'acceptance', label: t('wv_acceptance'), render: acceptancePill},
           {key: 'deploy', label: t('wv_deploy'), render: deployPill},
@@ -208,11 +230,12 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       earlierPlans = await readEarlierPlans({api, workspaceId, cards: work.rows, currentId: accepted.plan?.revision_id, valid: () => {alive(); return ticket === serial;}});
       alive(); if (ticket !== serial) return;
       plan = accepted.plan; cards = work.rows; issues = mappings?.rows || []; reviews = quality?.rows || []; sources = read;
+      workIncomplete = work.filtered || work.next != null;
       milestones = roadmap?.baseline?.document?.milestones || [];
       for (const [kind, data] of Object.entries({work, issues: mappings, reviews: quality})) cursors[kind] = data?.next ?? null;
-      const next = JSON.stringify([plan, cards.map(card => [card.work_item_id, card.binding, card.work.title, card.column, card.execution?.attempts?.length, blockedWork(card)]), issues, reviews, qualityComplete, cursors, milestones, [...sources].map(([id, source]) => [id, source.deliveries, source.available, source.filtered, source.next, source.errors, workAgents(source)])]);
+      const next = JSON.stringify([plan, cards.map(card => [card.work_item_id, card.binding, card.work.title, card.column, card.execution?.attempts?.length, blockedWork(card)]), issues, reviews, qualityComplete, workIncomplete, cursors, milestones, [...sources].map(([id, source]) => [id, source.deliveries, source.available, source.filtered, source.next, source.errors, workAgents(source)])]);
       if (next !== signature) {signature = next; renderTable();}
-      const requirements = plan?.document?.requirements || [], partial = !qualityComplete || catalogueErrors.length > 0 || [work, mappings, quality].some(row => row?.filtered || row?.next != null) || [...sources.values()].some(row => row.filtered || row.next != null);
+      const requirements = plan?.document?.requirements || [], partial = !qualityComplete || catalogueErrors.length > 0 || [work, mappings, quality].some(row => row?.filtered || row?.next != null) || [...sources.values()].some(row => deliveryCoverage(row) !== 'complete');
       meta.textContent = !plan ? t('ui_status_unknown') : partial ? t('wv_loaded', {n: requirements.length}) : joinLabel([
         t('wv_requirements_count', {n: requirements.length}), feature('quality_reviews') ? t('wv_accepted_count', {n: requirements.filter(req => requirementReviews(plan, req, reviews).length).length}) : null,
         requirements.some(req => linked(req).some(blockedWork)) ? t(requirements.filter(req => linked(req).some(blockedWork)).length === 1 ? 'wv_blocked_one' : 'wv_blocked_count', {n: requirements.filter(req => linked(req).some(blockedWork)).length}) : null]);
@@ -263,8 +286,8 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         } catch {register = null;}
       }
       alive(); if (ticket !== detailSerial || generation !== serial) return;
-      detail.show({title: requirement.text, plan, requirement, acceptance: acceptance(requirement), reviews: requirementReviews(plan, requirement, reviews), register,
-        work: linked(requirement), source: deliverySource(requirement), milestones: milestoneFor(requirement), onWork: id => void select(id), onRetry: () => void refresh()}); return;
+      detail.show({title: requirement.text, plan, requirement, acceptance: acceptance(requirement), reviews: requirementReviews(plan, requirement, reviews), criteriaResults: criteriaResults(requirement), register,
+        work: linked(requirement), workIncomplete, source: deliverySource(requirement), milestones: milestoneFor(requirement), onWork: id => void select(id), onRetry: () => void refresh()}); return;
     }
     try {
       const data = scope(await api('GET', `${endpoint}/kanban/${id}`)); alive(); if (ticket !== detailSerial || generation !== serial) return;
@@ -278,12 +301,12 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         requirements: (data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id))?.document?.requirements?.filter(req => data.card.binding.requirement_ids?.includes(req.id)) || [],
         onMore: () => {deliveryPages++; void select(id, false, true);}});
     } catch (error) {if (ticket === detailSerial && generation === serial) {
-      if ([403, 404].includes(error.status)) {cards = cards.filter(row => row.work_item_id !== id); sources.delete(id); renderTable();}
+      if ([403, 404].includes(error.status)) {cards = cards.filter(row => row.work_item_id !== id); sources.delete(id); workIncomplete = true; renderTable(); meta.textContent = plan ? t('wv_loaded', {n: plan.document.requirements.length}) : t('ui_status_unknown');}
       detail.show({title: card.work.title, error, onRetry: () => void refresh()});
     }}
   }
   function setActive(value) {
-    if (visible === value) {if (value && plan) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (id && (id !== selected || !detail.element)) void select(id, true);} return;}
+    if (visible === value) {if (value && plan) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (id && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
     if (!value) {active = false; stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
     else {const generation = ++scrollGeneration; void activate(); if (!stale && selected && cards.length) void select(selected, false, true); requestAnimationFrame(() => {if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);});}

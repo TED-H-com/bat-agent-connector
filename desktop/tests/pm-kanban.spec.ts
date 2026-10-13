@@ -37,7 +37,7 @@ test('pagination deduplicates a rebound work by stable identity without claiming
   await expect(page.locator('[data-pm-kanban-column=accepted]')).toContainText('Account settings');
   await row(page,3).locator('[data-board-open]').click(); await expect(detail(page)).toContainText('Definition of done not assessed'); await page.keyboard.press('Escape');
   await expect(page.locator('[data-pm-kanban]')).toContainText('Latest page: 1 WIP');
-  await expect(page.locator('[data-pm-kanban] .ui-page-header')).toContainText('3 work items');
+  await expect(page.locator('[data-pm-kanban] .ui-page-header')).toContainText('3 loaded');
   await expect(page.getByRole('button',{name:'Load more work',exact:true})).toBeHidden();
   expect(f.state.reads.filter((path:string)=>path.includes('after=0'))).toHaveLength(2);expect(f.state.reads.some((path:string)=>path.includes('after=3'))).toBe(true);expect(f.state.writes).toHaveLength(0);
 });
@@ -107,8 +107,9 @@ test('pagination failure clears facts and retry starts from the first page rathe
 test('revocation during a lazy card read clears list, detail and counters',async({page})=>{
   const f=fixture();await mount(page,f);f.state.failRead=403;
   await row(page,1).locator('[data-board-open]').click();
-  await expect(page.locator('[data-pm-kanban]')).toContainText('Workspace access removed');
+  await expect(page.locator('[data-pm-kanban]')).toContainText('Your token lacks this scope.');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban]')).not.toContainText('Member login');
 });
 
@@ -134,7 +135,8 @@ test('a late old refresh never restores facts cleared by a newer permission fail
   await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect.poll(()=>f.state.held.length).toBe(1);
   f.state.failRead=403;await reload(page);f.state.held.shift()();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
-  await expect(page.locator('[data-pm-kanban]')).toContainText('Workspace access removed');
+  await expect(page.locator('[data-pm-kanban]')).toContainText('Your token lacks this scope.');
+  await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(0);
 });
 
 test('a late expanded-card read cannot replace a newer board result',async({page})=>{

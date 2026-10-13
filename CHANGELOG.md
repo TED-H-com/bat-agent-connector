@@ -8,6 +8,9 @@
 - Board cards expose their recorded facts to assistive technology, retain selected
   delivery pages across refreshes, and restore selection and focus on return.
   Empty Boards show one empty state; paged lanes label counts as loaded.
+- Requirement inspectors show saved verification evidence when no qualifying review
+  is available. Withdrawal clears selection and returns focus to the view heading;
+  snapshot conflicts expose raw codes only in Details and offer a local retry.
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and

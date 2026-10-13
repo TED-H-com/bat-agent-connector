@@ -61,8 +61,14 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     ++serial; ++detailSerial; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; earlierPlans.clear(); milestones = [];
     if (forgetRoute) writeSelection(null);
     closeRetaining(); list.replaceChildren(); meta.replaceChildren(); boardInfo.replaceChildren(); more.hidden = true; more.disabled = false; element.removeAttribute('aria-busy');
+    list.hidden = true; content.querySelector('.ui-empty')?.remove(); element.querySelector('[data-board-partial]')?.remove();
+    requirementFilter.replaceChildren(h('option', {value: ''}, t('wv_all_requirements'))); delete requirementFilter.dataset.options;
+    agentFilter.replaceChildren(h('option', {value: ''}, t('wv_all_agents'))); delete agentFilter.dataset.options;
   }
-  function unavailable(error) {withdraw(); status.replaceChildren(errorBox ? errorBox(error) : h('p', {class: 'error'}, error.message),
+  function unavailable(error) {
+    errorBox?.(error); withdraw();
+    status.replaceChildren(h('p', {class: 'error'}, error.message === t('pm_kanban_scope_error') ? error.message : t(error.code === 'SNAPSHOT_CHANGED' ? 'wb_plan_changed' : error.status === 403 ? 'forbidden_scope' : 'wv_board_unavailable')),
+    ...(error.code ? [disclosure({label: t('wv_details'), body: h('p', {}, labelSegment(error.code))})] : []),
     h('button', {type: 'button', class: 'ui-button secondary', onclick: () => {pages = 1; void refresh();}}, t('pm_kanban_retry')));}
   function requirements(card) {const bound = card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id);
     return (bound?.document?.requirements || []).filter(row => card.binding.requirement_ids?.includes(row.id));}
@@ -77,15 +83,16 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     fill(requirementFilter, 'wv_all_requirements', [...rows.values()].flatMap(({card}) => (card.binding.requirement_ids || []).map(id => [id, firstLabel(requirements(card).find(req => req.id === id)?.text, t('wv_earlier_plan'))])), preference.requirement);
     fill(agentFilter, 'wv_all_agents', [...sources.values()].flatMap(source => workAgents(source).map(agent => [agent, agent])), preference.agent);
   }
+  const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
   function renderMetrics() {
     if (!page) return;
-    const partial = next != null || page.coverage?.byte_limited || [...sources.values()].some(source => source.filtered || source.next != null);
+    const partial = partialWorkPage() || [...sources.values()].some(source => deliveryCoverage(source) !== 'complete');
     const blocked = [...rows.values()].filter(({card}) => blockedWork(card)).length;
     meta.textContent = joinLabel([t(partial ? 'wv_loaded' : 'wv_work_count', {n: rows.size}), blocked ? t(blocked === 1 ? 'wv_blocked_one' : 'wv_blocked_count', {n: blocked}) : null]);
-    boardInfo.replaceChildren(...[h('p', {}, t('pm_kanban_wip', page.wip)),
+    boardInfo.replaceChildren(...[page.wip ? h('p', {}, t('pm_kanban_wip', page.wip)) : note('wv_source_unavailable'),
       partial ? note('pm_kanban_partial') : null, page.coverage?.byte_limited ? note('pm_kanban_bounded') : null].filter(Boolean));
     element.querySelector('[data-board-partial]')?.remove();
-    if (next != null || page.coverage?.byte_limited) more.before(h('span', {class: 'ui-meta', 'data-board-partial': ''}, t('pm_kanban_partial')));
+    if (partialWorkPage()) more.before(h('span', {class: 'ui-meta', 'data-board-partial': ''}, t('pm_kanban_partial')));
     more.hidden = next == null; more.disabled = reading;
   }
   function preview(card) {
@@ -136,6 +143,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     return [...columns, 'archived'].includes(card.column) ? card.column : 'unknown';
   }
   function renderColumns(force = false) {
+    if (!page || !rows.size) return;
     const query = search.value.trim().toLocaleLowerCase();
     const groupKeys = group.value === 'status' ? [...columns] : milestones.map(row => row.milestone_id);
     const currentLanes = new Map([...list.children].map(node => [node.dataset.pmKanbanColumn, node]));
@@ -165,7 +173,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     }
     for (const [key, lane] of currentLanes) {
       if (!groupKeys.includes(key) && !lane.querySelector('[data-pm-kanban-work]')) lane.remove();
-      else {const count = lane.querySelectorAll('[data-pm-kanban-work]:not([hidden])').length, partial = next != null || page?.coverage?.byte_limited;
+      else {const count = lane.querySelectorAll('[data-pm-kanban-work]:not([hidden])').length, partial = partialWorkPage();
         const label = lane.querySelector('.pm-kanban-count'); label.textContent = partial ? t('wv_loaded', {n: count}) : count;
         if (partial) label.setAttribute('aria-label', t('wv_lane_loaded', {n: count})); else label.removeAttribute('aria-label');
       }
@@ -223,7 +231,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         try {checkPage(await api('GET', path(0)), 0); alive(); if (generation !== serial || ticket !== detailSerial) return;}
         catch (parentError) {if (generation === serial && ticket === detailSerial) unavailable(parentError); return;}
       }
-      if ([403, 404].includes(error.status)) {current.node.remove(); rows.delete(id); sources.delete(id); renderColumns(); renderMetrics();}
+      if ([403, 404].includes(error.status)) {current.node.remove(); rows.delete(id); sources.delete(id); page = {...page, wip: null, coverage: {...page.coverage, withdrawn: true}}; renderColumns(); renderMetrics();}
       detail.show({title: current.card.work.title, error, onRetry: () => void refresh()});
     }}
   }

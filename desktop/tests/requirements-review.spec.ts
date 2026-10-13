@@ -109,6 +109,9 @@ for (const source of ['session', 'delivery', 'reviews', 'detail']) for (const vi
   if (source === 'detail') {
     // A detail 403 is authoritative withdrawal of this one work, not the whole view.
     await expect(page.locator('[data-work-inspector]')).not.toContainText('PR #87');
+    await expect(page.locator('[data-pm-work-meta]')).toContainText('loaded');
+    if (view === 'requirements') await expect(page.locator(`[data-rtm-requirement="${f.ids.requirements.email}"] [data-column=work]`)).toHaveText('0 loaded');
+    else await expect(page.locator('.pm-kanban-count').first()).toContainText('loaded');
   } else if (source === 'delivery') {
     await expect(page.locator('[data-work-section=delivery]')).toContainText('Delivery unknown');
     for (const node of await page.locator((view === 'board' ? '[data-pm-kanban]' : '[data-pm-rtm]') + ', [data-work-inspector]').all()) await expect(node).not.toContainText('PR #87');
@@ -304,4 +307,86 @@ test('V4 paged sources expose short load buttons with descriptive names', async 
   for (const name of ['More quality records', 'More issue links', 'More delivery records']) {
     const button = page.getByRole('button', {name, exact: true}); await expect(button).toHaveText('Load more');
   }
+});
+
+for (const view of ['requirements', 'board']) test(`S5 ${view} withdrawal clears the route and focuses the heading`, async ({page}) => {
+  const f = reviewFixture(); let failed = false;
+  f.overrides.push((url, r) => failed && (url.pathname.endsWith('/plans/accepted') || url.pathname.endsWith('/kanban'))
+    ? {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Withdrawn'}}} : r);
+  await f.mount(page, view, f.ids.work.email);
+  if (view === 'board') await page.getByRole('button', {name: 'Email sign-in', exact: true}).click();
+  await expect(page.locator('[data-work-inspector]')).toBeVisible();
+  failed = true; await page.locator('[data-pm-refresh]').click();
+  await expect(page.locator('[data-work-inspector]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-work-meta]')).toBeEmpty();
+  await expect(page.getByRole('heading', {level: 1, name: view === 'board' ? 'Board' : 'Requirements', exact: true})).toBeFocused();
+  await expect(page).not.toHaveURL(/select=/); expect(f.writes).toEqual([]);
+});
+
+for (const view of ['requirements', 'board']) test(`S1 ${view} snapshot conflicts use concise status and recover`, async ({page}) => {
+  const f = reviewFixture(); let failed = false;
+  f.overrides.push((url, r) => failed && url.pathname.endsWith('/kanban')
+    ? {status: 409, data: {error: {code: 'SNAPSHOT_CHANGED', message: 'Private raw journal error'}}} : r);
+  await f.mount(page, view); await expect(page.locator(view === 'board' ? '[data-pm-kanban-work]' : '[data-rtm-requirement]')).toHaveCount(view === 'board' ? 12 : 8);
+  failed = true; await page.locator('[data-pm-refresh]').click();
+  const status = page.locator(view === 'board' ? '[data-pm-kanban] > [role=status]' : '[data-pm-rtm] > [role=status]');
+  await expect(status.locator('p').first()).not.toContainText('SNAPSHOT_CHANGED');
+  await expect(status.locator('p').first()).not.toContainText('Private raw');
+  await expect(status.locator('details')).toContainText('SNAPSHOT_CHANGED');
+  failed = false; await status.getByRole('button', {name: /^Retry/}).click();
+  await expect(page.locator(view === 'board' ? '[data-pm-kanban-work]' : '[data-rtm-requirement]')).toHaveCount(view === 'board' ? 12 : 8);
+  expect(f.writes).toEqual([]);
+});
+
+test('S3 saved evidence remains visible without a qualifying review', async ({page}) => {
+  const f = reviewFixture(); f.overrides.push((url, r) => {if (url.pathname.endsWith('/quality-reviews')) r.data.reviews = []; return r;});
+  await f.mount(page, 'requirements', f.ids.requirements.email);
+  await expect(page.locator('[data-work-section=criteria] > [data-status=not_assessed]')).toBeVisible();
+  await expect(page.locator('[data-requirement-capture]')).toContainText('Email sign-in');
+  await expect(page.locator('[data-requirement-capture]')).toContainText('Verification · Passed');
+  await expect(page.locator('[data-work-section=result]')).not.toContainText('No result recorded');
+  expect(f.writes).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`B2 B3 compact rows and requirement inspector keep partial and unknown ${locale}`, async ({page}) => {
+  const f = reviewFixture(locale); let absent = false;
+  f.overrides.push((url, r) => {
+    if (absent && ['/bootstrap', '/capabilities'].includes(url.pathname)) {
+      const caps = url.pathname === '/bootstrap' ? r.data.capabilities : r.data;
+      caps.features.pm_workspaces.quality_reviews = false; caps.features.pm_workspaces.engineering_delivery = false;
+    }
+    if (url.pathname.endsWith('/quality-reviews')) {r.data.reviews = []; r.data.next_cursor = 3;}
+    if (url.pathname.endsWith('/deliveries') && url.pathname.includes(f.ids.work.email)) {r.data.deliveries = r.data.deliveries.filter((row: any) => row.target.pull_number === 91); r.data.next_after = 2;}
+    return r;
+  });
+  await page.setViewportSize({width: 390, height: 900}); await f.mount(page, 'requirements');
+  const row = page.locator(`[data-rtm-requirement="${f.ids.requirements.email}"]`), facts = row.locator('.pm-requirement-facts');
+  await expect(facts).toContainText(locale === 'en' ? 'Acceptance: Unknown' : '驗收: 未知');
+  await expect(facts).toContainText(locale === 'en' ? 'Deploy: Partial' : '部署: 部分');
+  await expect(facts).toContainText(locale === 'en' ? '1 PR loaded' : '已載入 1 個 PR');
+  await expect(page.locator('[data-pm-work-meta]')).toHaveText(locale === 'en' ? '8 loaded' : '已載入 8 筆');
+  await row.click(); await page.getByRole('button', {name: locale === 'en' ? 'Open requirement' : '開啟需求', exact: true}).click();
+  await expect(page.locator('[data-work-section=criteria] > [data-status=unknown]')).toBeVisible();
+  await expect(page.locator('[data-work-section=delivery] > [data-status=partial]')).toBeVisible();
+  await page.keyboard.press('Escape'); absent = true; await page.reload();
+  await expect(facts).toContainText(locale === 'en' ? 'Deploy: Unknown' : '部署: 未知');
+  await expect(facts).toContainText(locale === 'en' ? 'PRs unknown' : 'PR 未知');
+  await expect(facts).not.toContainText(locale === 'en' ? '0 PRs' : '0 個 PR');
+  expect(f.writes).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`S3 criteria show the current recorded rejection without claiming acceptance ${locale}`, async ({page}) => {
+  const f = reviewFixture(locale);
+  f.overrides.push((url, r) => {
+    if (url.pathname.endsWith('/quality-reviews')) {
+      const review = r.data.reviews[0]; review.qualified = false; review.assessment.document.qualified = false;
+      review.assessment.document.criteria[0].status = 'rejected';
+    } return r;
+  });
+  await f.mount(page, 'requirements', f.ids.requirements.email);
+  const criteria = page.locator('[data-work-section=criteria]');
+  await expect(criteria.locator('> [data-status=not_assessed]')).toBeVisible();
+  await expect(criteria.locator('li [data-quality-result=rejected]')).toHaveText(locale === 'en' ? 'Rejected' : '不符合');
+  await expect(criteria.locator('[data-status=accepted]')).toHaveCount(0);
+  expect(f.writes).toEqual([]);
 });

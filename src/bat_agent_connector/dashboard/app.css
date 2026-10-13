@@ -1131,7 +1131,6 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-kanban-cards { display: grid; gap: var(--space-2); }
 .pm-kanban-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--space-3); min-width: 0; cursor: pointer; transition: border-color 140ms ease-out, background-color 140ms ease-out; }
 .pm-kanban-card:hover { border-color: var(--line-strong); }
-.pm-kanban-card[aria-pressed=true] { border-color: var(--accent); }
 .pm-kanban-card h3 { font-size: var(--fs-body); line-height: 1.5; font-weight: 600; margin: 0 0 var(--space-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .pm-board-requirements { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-3); }
 .pm-board-requirements .ui-context-chip { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: var(--fs-caption); line-height: 24px; }
@@ -1163,7 +1162,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-board-open { border: 0; background: transparent; color: var(--text); font: inherit; text-align: left; padding: 0; width: 100%; cursor: pointer; }
 .pm-board-open:focus-visible { outline: 2px solid var(--accent); outline-offset: var(--space-1); border-radius: var(--r-xs); }
 .pm-kanban-card:has([aria-pressed=true]) { border-color: var(--accent); background: var(--accent-soft); }
-.pm-board-facts > .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pm-board-facts { position: relative; }
+.pm-board-facts > .sr-only { position: absolute; left: 0; top: 0; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 799px) { .pm-board-open { min-height: 44px; } }
 .dep-view { min-width: 0; display: grid; gap: var(--space-3); }
 .dep-view > * { min-width: 0; }

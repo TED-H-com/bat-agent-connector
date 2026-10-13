@@ -116,11 +116,16 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     const date = typeof value === 'number' && Number.isFinite(value) ? new Date(value * 1000) : null;
     return date && Number.isFinite(date.valueOf()) ? h('time', {datetime: date.toISOString()}, date.toISOString().replace('T', ' ').replace('.000Z', ' UTC')) : '—';
   };
+  const captureFacts = capture => (capture.evidence || []).map(row => paragraph(t('pm_kanban_fact'), ' · ',
+    ...Object.entries(row.assessment || {}).map(([key, value]) => {
+      const label = t('pm_kanban_field_' + key), state = t('pm_kanban_state_' + labelSegment(value));
+      return joinLabel([label.startsWith('pm_kanban_') ? t('pm_kanban_fact') : label, state.startsWith('pm_kanban_') ? t('ui_status_unknown') : state]);
+    })));
   function close() {panel?.close();}
   function show(data) {
     selection = data;
     if (!panel) {
-      panel = inspector({title: data.title || t('ui_work_item'), returnFocus: () => returnTarget, onClose: () => {returnTarget = returnFocus?.(); actions?.dispose(); actions = null; panel = null; selection = null; signature = ''; onClose();}});
+      panel = inspector({title: data.title || t('ui_work_item'), returnFocus: () => returnTarget, onClose: () => {returnTarget = typeof returnFocus === 'function' ? returnFocus() : returnFocus; actions?.dispose(); actions = null; panel = null; selection = null; signature = ''; onClose();}});
       panel.classList.add('pm-work-inspector'); panel.dataset.workInspector = ''; panel.dataset.rtmDetail = '';
       mount.append(panel);
     }
@@ -173,11 +178,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       if (capture) {
         result.append(paragraph(t('pm_kanban_capture'), ' · ', stamp(capture.captured_at)));
         if (card.capture_matches_binding === false || card.capture_matches_work_version === false) result.append(paragraph(t('pm_kanban_capture_different')));
-        result.append(...(capture.evidence || []).map(row => paragraph(t('pm_kanban_fact'), ' · ',
-          ...Object.entries(row.assessment || {}).map(([key, value]) => {
-            const label = t('pm_kanban_field_' + key), state = t('pm_kanban_state_' + labelSegment(value));
-            return joinLabel([label.startsWith('pm_kanban_') ? t('pm_kanban_fact') : label, state.startsWith('pm_kanban_') ? t('ui_status_unknown') : state]);
-          }))));
+        result.append(...captureFacts(capture));
       } else result.append(paragraph(t('wv_no_result')));
       blocker.append(paragraph(blockedWork(card) ? statusPill('blocked') : unknown(), blockedWork(card) ? ' ' + blockerText(t, card) : null));
       const groups = prGroups(source.deliveries);
@@ -199,19 +200,32 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     } else if (requirement) {
       // Requirement detail follows the traceability chain, rather than repeating its title.
       served.dataset.workSection = 'criteria'; served.querySelector('h3').textContent = t('wv_criteria');
+      const criterionPill = item => {
+        const result = item.source_input_id && data.criteriaResults?.find(row => row.criterion?.kind === 'acceptance'
+          && row.criterion.requirement_id === requirement.id && row.criterion.input_id === item.source_input_id);
+        const state = result ? ({accepted: 'accepted', rejected: 'failed', unassessed: 'not_assessed'})[result.status] || 'unknown'
+          : data.acceptance === 'not_assessed' ? 'not_assessed' : 'unknown';
+        const pill = statusPill(state);
+        if (result?.status === 'rejected') {pill.textContent = t('pq_rejected'); pill.dataset.qualityResult = 'rejected';}
+        return pill;
+      };
       served.replaceChildren(h('h3', {}, t('wv_criteria')), statusPill(data.acceptance || 'unknown'),
         h('ul', {}, ...(requirement.acceptance || []).map(item => h('li', {}, labelSegment(item.text), ' ',
-          statusPill(data.reviews?.length ? 'accepted' : data.acceptance === 'not_assessed' ? 'not_assessed' : 'unknown')))));
+          criterionPill(item)))));
       state.dataset.workSection = 'work'; state.querySelector('h3').textContent = t('wv_bound_work');
       for (const work of data.work || []) state.append(paragraph(button({variant: 'ghost', label: work.work.title, onClick: () => data.onWork?.(work.work_item_id)}), ' ', statusPill(workStatus(work))));
-      if (!data.work?.length) state.append(paragraph(t('wb_no_work')));
+      if (!data.work?.length) state.append(paragraph(t(data.workIncomplete ? 'wv_work_unknown' : 'wb_no_work')));
+      if (data.workIncomplete) state.append(statusPill('partial'));
       for (const row of data.milestones || []) state.append(paragraph(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}`}, row.title)));
       const review = data.reviews?.at(-1);
       if (review) result.append(statusPill('accepted'), paragraph(t('wv_quality_review')), h('ul', {}, ...(review.assessment?.document?.criteria || []).filter(row => row.criterion?.requirement_id === requirement.id)
         .map(row => h('li', {}, labelSegment(requirement.acceptance?.find(item => item.source_input_id === row.criterion.input_id)?.text), ' ', statusPill(row.status === 'accepted' ? 'accepted' : 'unknown')))));
       else {
-        const captures = (data.work || []).map(work => work.latest_capture).filter(Boolean);
-        result.append(paragraph(t(data.acceptance === 'unknown' ? 'wv_acceptance_unknown' : captures.length ? 'pm_kanban_capture' : 'wv_no_result')));
+        const work = (data.work || []).filter(work => work.latest_capture).sort((a, b) => (b.latest_capture.captured_at || 0) - (a.latest_capture.captured_at || 0))[0];
+        if (work) result.append(h('div', {'data-requirement-capture': ''}, paragraph(work.work.title),
+          paragraph(t('pm_kanban_capture'), ' · ', stamp(work.latest_capture.captured_at)), ...captureFacts(work.latest_capture)));
+        if (data.acceptance === 'unknown') result.append(paragraph(t('wv_acceptance_unknown')));
+        else if (!work) result.append(paragraph(t('wv_no_result')));
       }
       blocker.dataset.workSection = 'decisions'; blocker.querySelector('h3').textContent = t('wv_decisions_changes');
       for (const row of data.register?.rows || []) blocker.append(paragraph(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/issues?select=${encodeURIComponent(row.row_id)}`}, firstLabel(row.title, t('wv_related_record')))));
@@ -237,7 +251,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       ...['tasks', 'operations', 'sessions', 'attempts'].flatMap(kind => (card?.execution?.[kind] || []).map(row => paragraph(t('pm_kanban_source_time'), ' · ', stamp(row.observed_at)))),
       paragraph(t('pm_kanban_attempt_basis')), paragraph(t('wb_acceptance_separate')),
       paragraph(t('wv_ci_times_missing')),
-      h('pre', {class: 'mono'}, JSON.stringify({reviews: data.reviews, register: data.register, errors: source.errors, plan_revision: plan?.revision_id || card?.binding?.plan_revision_id, binding: card?.binding, work: card?.work,
+      h('pre', {class: 'mono'}, JSON.stringify({reviews: data.reviews, criteria_results: data.criteriaResults, register: data.register, work_captures: data.work?.map(work => ({work_item_id: work.work_item_id, capture: work.latest_capture})), errors: source.errors, plan_revision: plan?.revision_id || card?.binding?.plan_revision_id, binding: card?.binding, work: card?.work,
         execution: card?.execution, flow: card?.flow, capture: card?.latest_capture, issues, deliveries: source.deliveries, quality: card?.quality}, (key, value) => value === null ? '—' : value, 2))),
       open: panel.body.querySelector('[data-work-section="details"]')?.open || false});
     details.dataset.workSection = 'details';
