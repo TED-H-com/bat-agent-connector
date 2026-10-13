@@ -5,6 +5,11 @@
 - Diagnose durable-operation test timeouts with worker/step details and join failed
   test workers before journal teardown, preserving the existing deadline and original-key recovery.
 
+- PM labels no longer print a missing value. A Brief section without a recorded
+  status says Unknown / 未知. Issue tracking uses the repository name stored on
+  the mapping, or the name on the published issue when the mapping omits it,
+  and otherwise shows only the issue number.
+
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
