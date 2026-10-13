@@ -853,6 +853,25 @@ async def test_requirement_text_is_kept_and_edges_name_emitted_rows(ops, text):
     assert body["partial"] is False and body["range_scope"] == "complete"
 
 
+@pytest.mark.parametrize("text", ["\tMembers can log in", "Members can log in\n", "\n\tMembers can log in\t\n",
+                                  " Members can log in "])
+async def test_requirement_and_issue_text_keep_surrounding_whitespace(ops, text):
+    target, saved = await plan_with(ops, ["Members can log in", "Billing works"], [
+        {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])
+    wid, rev = target["workspace_id"], saved["revision_id"]
+    rewrite_requirement(ops, rev, "login", text)
+    work = await work_for(ops, target)
+    binding = await bind_work(ops, work, plan_revision_id=rev, requirement_ids=["login"])
+    await revision(ops, wid, milestones=[milestone({"revision_id": rev}, requirement_ids=["login", "billing"])])
+    _tracked_issue(ops, wid, work["work_item_id"], binding, text, mapping_id="pmim_" + "e" * 32,
+                   package_id="pmwp_" + "e" * 32, revision_id="pmir_" + "e" * 32, operation_id="op_" + "e" * 16)
+    body = check(schedule(ops, wid), wid)
+    found = by_id(body)
+    assert found[f"requirement:{rev}:login"]["title"] == text
+    assert found[f"issue:pmim_{'e' * 32}"]["title"] == text
+    assert ("requirement", "requirement_text_unavailable") not in reasons(body)
+
+
 async def test_missing_requirement_text_still_emits_the_row(ops):
     target, saved = await plan_with(ops, ["Members can log in", "Billing works"], [
         {"id": "login", "source": 0}, {"id": "billing", "source": 1, "depends_on": ["login"]}])

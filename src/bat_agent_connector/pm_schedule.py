@@ -108,11 +108,10 @@ def _label(value, limit):
 
 
 def _plain(value):
-    """Non-blank planning or issue text. Newlines, tabs and a leading slash stay."""
-    if not isinstance(value, str):
+    """Non-blank planning or issue text, verbatim: surrounding and inner whitespace and a leading slash stay."""
+    if not isinstance(value, str) or not value.strip():
         return None
-    text = value.strip()
-    return text or None
+    return value
 
 
 def _span(value):
