@@ -227,7 +227,11 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
       if (previous !== detailSignature()) renderDetail();
       detail.querySelector('[data-rtm-filtered]')?.remove();
       if (deliveries?.source_visibility_filtered) detail.append(h('p', {class: 'muted', 'data-rtm-filtered': ''}, t('wb_partial')));
-      if (focus) detail.querySelector('h3')?.focus({preventScroll: true});
+      if (focus) {
+        const heading = detail.querySelector('h3');
+        if (matchMedia('(max-width: 1100px)').matches) {detail.scrollIntoView({block: 'start'}); heading?.focus();}
+        else heading?.focus({preventScroll: true});
+      }
     } catch (error) {if (ticket === detailSerial) fail(error, generation);}
   }
   async function readDeliveries(id, ticket, generation) {
@@ -269,9 +273,21 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
     filter.value = '';
     await openRef({...pending, revision_id: plan.revision_id});
     if (pending.kind === 'work_item') {
-      const target = tableBody.querySelector(`[data-rtm-select="${CSS.escape(pending.id)}"]`);
-      target?.focus({preventScroll: true}); target?.scrollIntoView({block: 'nearest'});
+      if (matchMedia('(max-width: 1100px)').matches) {detail.scrollIntoView({block: 'start'}); detail.querySelector('h3')?.focus();}
+      else {
+        const target = tableBody.querySelector(`[data-rtm-select="${CSS.escape(pending.id)}"]`);
+        target?.focus({preventScroll: true}); target?.scrollIntoView({block: 'nearest'});
+      }
+    } else if (pending.kind === 'requirement') {
+      const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(pending.id)}"]`);
+      row?.querySelector('button')?.focus();
+      row?.scrollIntoView({block: 'nearest'});
     }
   }
-  controls(); return {element, refresh, withdraw, openRef, focusWork, focusRequirement, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate};
+  function labelFor(kind, id) {
+    if (kind === 'requirement') {const text = plan?.document?.requirements?.find(row => row.id === id)?.text; return typeof text === 'string' ? text : '';}
+    if (kind === 'work_item') {const title = cards.find(row => row.work_item_id === id)?.work?.title; return typeof title === 'string' ? title : '';}
+    return '';
+  }
+  controls(); return {element, refresh, withdraw, openRef, focusWork, focusRequirement, labelFor, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate};
 }
