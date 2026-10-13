@@ -198,6 +198,7 @@ class Projection:
         from . import pm_roadmap
         if not pm_source_lineage._table(self.ops.db, 'pm_roadmap_heads'):
             self.missing('milestones', 'source_unavailable')
+            self.coverage['roadmap'] = {'complete': False, 'next_cursor': None}
             return []
         head = pm_roadmap.head(self.ops.db, self.wid)
         rid = head['baseline_revision_id']
@@ -239,14 +240,15 @@ class Projection:
         return sorted(milestones, key=lambda m: (m['forecast_date'] or m['baseline_date'] or '9999-12-31', m['milestone_id']))
 
     def proposals(self):
-        from . import pm_conversation_proposals
+        from . import pm_access, pm_conversation_proposals
         page = self.source('proposals', 'pm_conversation_proposals', lambda: pm_conversation_proposals.list_proposals(
             self.ops, self.principal, self.wid, limit=SOURCE_LIMIT))
         for row in page['proposals'] if page else []:
-            adopted = self.ops.db.execute("""SELECT 1 FROM pm_source_lineage l JOIN operations o ON o.operation_id=l.resource_id
+            adopted = self.ops.db.execute("""SELECT o.operation_id FROM pm_source_lineage l JOIN operations o ON o.operation_id=l.resource_id
                 WHERE l.resource_type='operation' AND l.original_operation_id=?
                 AND o.action='pm.conversation.adopt' AND o.status='succeeded' LIMIT 1""", (row['operation_id'],)).fetchone()
-            if adopted or row['validation'].get('status') != 'format_valid':
+            if ((adopted and pm_access.operation_source_visible(self.ops.db, self.principal, adopted[0]))
+                    or row['validation'].get('status') != 'format_valid'):
                 continue
             value = pm_conversation_proposals.get_proposal(self.ops, self.principal, self.wid, row['proposal_id'])['proposal']
             self.add('decision', value['document']['title'], {'kind': 'proposal', 'id': row['proposal_id']}, row['created_at'])

@@ -71,6 +71,16 @@ async def test_partial_work_page_never_becomes_total_progress(ops, monkeypatch):
     assert result['attention_truncated']
 
 
+async def test_missing_roadmap_source_cannot_report_zero_deviations(ops, monkeypatch):  # noqa: F811
+    target, _ = await origins(ops)
+    actual = pm_source_lineage._table
+    monkeypatch.setattr(pm_source_lineage, '_table', lambda db, name: name != 'pm_roadmap_heads' and actual(db, name))
+    result = pm_overview.read(ops, OWNER, target['workspace_id'])
+    assert result['attention_counts']['deviation'] is None
+    assert not result['coverage']['sources']['roadmap']['complete']
+    assert {'field': 'milestones', 'reason': 'source_unavailable'} in result['unknown']
+
+
 async def test_withdrawn_plan_and_work_cannot_influence_labels_counts_or_order(ops, monkeypatch):  # noqa: F811
     target, refs = await origins(ops)
     wid = target['workspace_id']

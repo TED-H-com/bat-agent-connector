@@ -52,6 +52,23 @@ class TestProposal:
         overview = pm_overview.read(ops, OWNER, w['workspace_id'])
         assert any(a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']} for a in overview['attention'])
 
+    async def test_only_visible_adoption_removes_a_proposal_from_attention(self, proposal_world, monkeypatch):
+        from bat_agent_connector import pm_access
+        w, ops = proposal_world, proposal_world['d'].ops
+        proposal = await proposals.proposed(w)
+        def pending():
+            overview = pm_overview.read(ops, OWNER, w['workspace_id'])
+            return [a for a in overview['attention'] if a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']}]
+        assert pending()
+        parent = ops.create(OWNER, **proposals.adoption_request(w, proposal))[0]
+        done = await proposals.complete(w, parent)
+        assert done['status'] == 'succeeded', done
+        assert not pending()
+        actual = pm_access.operation_source_visible
+        monkeypatch.setattr(pm_access, 'operation_source_visible',
+            lambda db, principal, oid: oid != parent['operation_id'] and actual(db, principal, oid))
+        assert pending()
+
 
 async def test_issue_mapping_context_resolves_saved_publication(mapped):
     w, ops = mapped, mapped['d'].ops
