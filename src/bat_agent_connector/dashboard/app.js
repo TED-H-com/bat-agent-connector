@@ -9388,7 +9388,11 @@ function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect =
 	}
 	function select(id) {
 		id = normalizeProjectView(id);
-		if (!buttons.has(id) || id === selected) return;
+		if (!buttons.has(id)) return;
+		if (id === selected) {
+			apply();
+			return;
+		}
 		beforeSelect(id, selected);
 		selected = id;
 		rememberProjectView(namespace, workspaceId, id);

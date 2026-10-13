@@ -41,7 +41,10 @@ export function projectViews({h, t, namespace, workspaceId, groups, view, onSele
     }
   }
   function select(id) {
-    id = normalizeProjectView(id); if (!buttons.has(id) || id === selected) return;
+    id = normalizeProjectView(id); if (!buttons.has(id)) return;
+    // Reopen the region after withdrawal without re-running selection effects
+    // (including scrolling). Its source children remain independently withdrawn.
+    if (id === selected) {apply(); return;}
     beforeSelect(id, selected);
     selected = id; rememberProjectView(namespace, workspaceId, id); apply(); onSelect(id);
   }
