@@ -348,6 +348,17 @@ Other actions target `{workspace_id,record_id}` with `expected_version`:
   for that exact proposed revision and its original baseline. It records the actual
   adoption result; it never sends another adoption request.
 
+To resolve an issue after adopting a newer plan, re-read pm_governance_get for
+the current record version and send the full finding fields to
+pm.governance.revise with status reported_resolved and the user's rationale.
+Keep the original affected requirement IDs and source_refs ({kind,id} from
+document.sources), even if a current plan removed some IDs. No new snapshot or
+expected_plan_version is needed; use expected_version for the governance record.
+The assigned writer or workspace owner and original source access are still
+required. Settle/recover that resolution operation with its own original key,
+then re-read the record and Overview. This removes the pending blocker without
+establishing acceptance or replacing the frozen snapshot with fresh evidence.
+
 Read every non-null cursor. Original source access is checked again on records,
 shared operation results and event feeds; do not recover a hidden quote from history.
 Unknown verification and remaining lifecycle work stay explicit. Automatic causal

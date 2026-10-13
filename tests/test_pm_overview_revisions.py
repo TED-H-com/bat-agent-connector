@@ -1,6 +1,7 @@
 """Stable requirement impacts survive registered adoption without rewriting findings."""
 from __future__ import annotations
 
+import copy
 import uuid
 
 import pytest
@@ -114,3 +115,43 @@ async def test_blocker_requirement_relation_is_unknown_when_current_plan_is_unav
     context = next(r for r in out['attention'] if r['kind'] == 'blocker')['context']
     assert context['requirement_ids'] == ['member.login', 'member.recovery']
     assert context['current_revision_id'] is context['blocked_requirement_ids'] is context['absent_requirement_ids'] is None
+
+
+@pytest.mark.parametrize('remaining', [['member.login', 'member.recovery'], ['member.login']])
+async def test_original_issue_can_be_reported_resolved_after_adoption_without_new_snapshot(ready, mock, remaining):
+    w, service = ready, ready['d'].ops
+    human_before = snapshot(w['human'])
+    original, requirements, snap, finding = await blocked_plan(w)
+    revision = await revise_plan(w, requirements, remaining)
+    record = pm_governance.get_record(service, plans.OWNER, w['workspace_id'], finding['record_id'])
+    document = record['revision']['document']
+    fields = {key: copy.deepcopy(document[key]) for key in pm_governance.FIELDS if key in document}
+    fields.update(status='reported_resolved', rationale='The adopted direction resolves this reported issue',
+        source_refs=[{'kind': s['kind'], 'id': s['id']} for s in document['sources']])
+    head = pm_plans.head(service.db, w['workspace_id'])
+    done, request = await operate(w, 'pm.governance.revise',
+        {'workspace_id': w['workspace_id'], 'record_id': finding['record_id']}, fields,
+        {'expected_version': record['record']['version']})
+    resolved = pm_governance.get_record(service, plans.OWNER, w['workspace_id'], finding['record_id'])
+    assert resolved['record']['context'] == record['record']['context']
+    assert resolved['record']['context']['plan_revision_id'] == original['revision_id']
+    assert resolved['record']['context']['snapshot_ref']['snapshot_id'] == snap['snapshot_id']
+    assert resolved['revision']['document']['status'] == 'reported_resolved'
+    assert resolved['revision']['document']['verification_status'] == 'unassessed'
+    assert resolved['revision']['document']['sources'] == document['sources']
+    assert resolved['revision']['document']['affected_requirement_ids'] == ['member.login', 'member.recovery']
+    assert resolved['revision']['previous_revision_id'] == record['revision']['revision_id']
+    assert len(pm_governance.list_history(service, plans.OWNER, w['workspace_id'], finding['record_id'])['revisions']) == 2
+    replay, created = service.create(plans.OWNER, **request)
+    assert not created and replay['operation_id'] == done['operation_id']
+    out = pm_overview.read(service, plans.OWNER, w['workspace_id'])
+    assert out['plan']['revision_id'] == revision['revision_id']
+    assert out['attention_counts']['blocker'] == out['progress']['blocked'] == 0
+    assert not any(r['ref']['id'] == finding['record_id'] for r in out['attention'])
+    assert out['progress']['requirements'] == out['progress']['not_started'] == len(remaining)
+    assert out['progress']['accepted'] == 0  # Resolution does not establish acceptance.
+    assert pm_plans.head(service.db, w['workspace_id']) == head
+    assert service.db.execute('SELECT count(*) FROM pm_document_snapshots').fetchone()[0] == 1
+    assert service.db.execute('SELECT count(*) FROM pm_plan_adoptions').fetchone()[0] == 2
+    assert service.db.execute('SELECT count(*) FROM tasks').fetchone()[0] == 0
+    assert snapshot(w['human']) == human_before and not bat_writes(mock)

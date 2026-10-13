@@ -61,6 +61,10 @@ Blockers 的數字計算未解決紀錄；progress.blocked 計算目前需求的
 例如 N 記錄的 issue 影響 login／recovery，N+1 保留兩個 ID 時，原 blocker 仍計為一筆，兩條需求皆 blocked；
 N+1 移除 recovery 時，仍有一筆 blocker、login 為 blocked，recovery 明列於 absent_requirement_ids，不進目前分母。
 全部受影響需求已移除時，未解決紀錄仍須處理，row 與 count 保留、blocked_requirement_ids 為空，progress 不新增不存在的需求。
+新版採用後可用既有 `pm.governance.revise` 將原 issue 記為 `reported_resolved`，不需先建立新快照；
+需重讀治理 record.version、沿用原快照的完整管理欄位與來源，並沿用本次解決操作的原 key 等待中央結果後重讀總覽。
+解決紀錄才移除 blocker row／count／目前 blocked ID，不以計畫採用自動推測已解決；驗收仍須自己的品質證據。
+完整步驟見 [治理合約](pm-governance.md#registered-actions)。
 
 Attention 只使用明確中央關係：未決 change、仍可採用的 conversation proposal（plan head 與討論內容未變）、
 較新的 plan head、生命週期尚未核對的操作、未解決（含 monitoring）的 issue／dependency、risk／assumption、
