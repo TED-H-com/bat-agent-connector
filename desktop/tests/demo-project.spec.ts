@@ -22,6 +22,7 @@ async function shot(page: Page, name: string) {
   await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true});
 }
 
+// The rail is still `.workspace-nav` (a drawer below 1000px). Scan it with the page.
 async function visibleText(page: Page) {
   return page.locator('#main, .workspace-nav').evaluateAll(nodes => nodes.map(node => (node as HTMLElement).innerText).join('\n'));
 }
@@ -31,13 +32,54 @@ async function expectNoJunk(page: Page) {
   expect(text, text.slice(0, 800)).not.toMatch(/\b(?:undefined|null|NaN)\b/);
 }
 
-async function showThreads(page: Page) {
-  const nav = page.locator('details.pm-navigation');
-  if (await nav.getAttribute('open') === null) await page.locator('details.pm-navigation > summary').click();
+const viewTitle = {
+  en: {overview: 'Overview', discussions: 'Discussions', requirements: 'Requirements', schedule: 'Schedule', agents: 'Agents', board: 'Board'},
+  'zh-TW': {overview: '專案總覽', discussions: '討論', requirements: '需求', schedule: '時程', agents: 'Agent 資源', board: '工作看板'},
+} as const;
+
+type DemoLocale = keyof typeof viewTitle;
+type ProjectView = keyof typeof viewTitle.en;
+
+async function expectProjectName(page: Page, width: number, name: string) {
+  const crumb = page.locator('.shell-crumb-workspace');
+  const mobile = page.locator('.shell-mobile-name');
+  const switcher = page.locator('.shell-workspace-switch');
+  if (width >= 1000) {
+    await expect(crumb).toBeVisible();
+    await expect(crumb).toContainText(name);
+    await expect(mobile).toBeHidden();
+    await expect(switcher).toBeVisible();
+  } else {
+    await expect(mobile).toBeVisible();
+    await expect(mobile).toContainText(name);
+    await expect(crumb).toBeHidden();
+  }
+  await expect(switcher).toContainText(name);
 }
 
-async function openView(page: Page, id: string) {
-  await page.locator(`[data-pm-view="${id}"]`).click();
+async function expectView(page: Page, locale: DemoLocale, width: number, view: ProjectView, name: string) {
+  await expect(page.getByRole('heading', {level: 1})).toHaveText(viewTitle[locale][view]);
+  await expectProjectName(page, width, name);
+  await expect(page.locator(`[data-pm-view="${view}"]`)).toHaveAttribute('aria-current', 'page');
+}
+
+// Below 1000px the project rail is a drawer. Open it from the topbar, then choose the view.
+async function openView(page: Page, id: ProjectView) {
+  await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
+  const entry = page.locator(`[data-pm-view="${id}"]`);
+  const narrow = (page.viewportSize()?.width ?? 0) < 1000;
+  if (!await entry.isVisible()) {
+    await page.locator('#workspace-menu').click();
+    await expect(page.locator('.workspace-nav')).toHaveAttribute('aria-modal', 'true');
+  }
+  await entry.click();
+  await expect(page.locator(`[data-pm-region="${id}"]`)).toBeVisible();
+  if (narrow) await expect(page.locator('.workspace-nav')).toBeHidden();
+}
+
+async function showThreads(page: Page) {
+  await openView(page, 'discussions');
+  await expect(page.locator('.pm-workspace-list a.pm-thread-link').first()).toBeVisible();
 }
 
 test('unknown demo routes fail loudly and pages keep their cursors', async () => {
@@ -86,7 +128,7 @@ for (const {locale, width} of cases) {
     });
     await mountConversation(page, false, fixture.dispatch);
     await page.goto(demoRoute());
-    await expect(page.locator('h1')).toContainText(copy.name);
+    await expectView(page, locale, width, 'overview', copy.name);
     const charter = page.locator('[data-pm-charter]');
     await expect(charter).toContainText(copy.goal);
     await expect(charter).toContainText(copy.schedule);
@@ -101,7 +143,8 @@ for (const {locale, width} of cases) {
     await expectNoJunk(page);
     await shot(page, `charter-${locale}-${width}`);
 
-    await openView(page, 'rtm');
+    await openView(page, 'requirements');
+    await expectView(page, locale, width, 'requirements', copy.name);
     const rtm = page.locator('[data-pm-rtm]');
     for (const requirement of copy.requirements) await expect(rtm).toContainText(requirement.text);
     await expect(rtm).toContainText(locale === 'zh-TW' ? '尚未評估' : 'Not assessed');
@@ -116,6 +159,7 @@ for (const {locale, width} of cases) {
     await shot(page, `rtm-${locale}-${width}`);
 
     await openView(page, 'board');
+    await expectView(page, locale, width, 'board', copy.name);
     const board = page.locator('[data-pm-kanban]');
     await expect(board.locator('[data-pm-kanban-work]')).toHaveCount(12);
     await expect(board.locator('[data-pm-kanban-column="accepted"]')).toContainText(copy.work.email);
@@ -130,6 +174,7 @@ for (const {locale, width} of cases) {
     await shot(page, `board-${locale}-${width}`);
 
     await openView(page, 'agents');
+    await expectView(page, locale, width, 'agents', copy.name);
     const agents = page.locator('[data-pm-resources]');
     await expect(agents.locator('[data-resource-row="codex-implementer"]')).toBeVisible();
     await expect(agents.locator('[data-resource-row="claude-reviewer"]')).toBeVisible();
@@ -140,7 +185,8 @@ for (const {locale, width} of cases) {
     await expectNoJunk(page);
     await shot(page, `agents-${locale}-${width}`);
 
-    await openView(page, 'planning');
+    await openView(page, 'schedule');
+    await expectView(page, locale, width, 'schedule', copy.name);
     const recovery = page.locator('[data-pm-milestone="recovery_review"]');
     await expect(recovery).toContainText(locale === 'zh-TW' ? '復原審查' : 'Recovery review');
     await expect(recovery).toContainText(dates.recoveryBaseline);
@@ -152,9 +198,12 @@ for (const {locale, width} of cases) {
     await shot(page, `roadmap-${locale}-${width}`);
 
     await showThreads(page);
-    await expect(page.locator('a.pm-thread-link', {hasText: copy.threads.idea})).toBeVisible();
-    await expect(page.locator('a.pm-thread-link', {hasText: copy.threads.delivery})).toBeVisible();
-    await page.locator('a.pm-thread-link', {hasText: copy.threads.planning}).click();
+    await expectView(page, locale, width, 'discussions', copy.name);
+    const threads = page.locator('.pm-workspace-list a.pm-thread-link');
+    await expect(threads.filter({hasText: copy.threads.idea})).toBeVisible();
+    await expect(threads.filter({hasText: copy.threads.delivery})).toBeVisible();
+    await threads.filter({hasText: copy.threads.planning}).click();
+    await expectView(page, locale, width, 'discussions', copy.name);
     await expect(page.locator('.pm-notes')).toContainText(copy.planningNote);
     await page.locator('[data-pm-information] > summary').click();
     await expect(page.locator('[data-pm-information]')).toContainText(copy.draftRationale);
@@ -168,6 +217,7 @@ for (const {locale, width} of cases) {
 
     await page.goto(demoRoute('manual'));
     await expect(page.locator('h1')).toContainText(copy.manualTitle);
+    await expectProjectName(page, width, copy.name);
     await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? 'API 唯讀' : 'API read-only');
     await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? '人工建立（BAT）' : 'created in BAT');
     await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? '這個 session 由人在 BAT 建立' : 'A person created this session in BAT');
