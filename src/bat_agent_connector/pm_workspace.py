@@ -129,6 +129,9 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         from .pm_context_bundles import operation_visible as bundle_visible
         if not bundle_visible(db, principal, op):
             return False
+    if op['action'].startswith('pm.dependencies.'):
+        from .pm_dependencies import operation_visible as dependencies_visible
+        return dependencies_visible(db, principal, op)
     if op['action'].startswith('pm.lifecycle.'):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         return lifecycle_visible(db, principal, op)
