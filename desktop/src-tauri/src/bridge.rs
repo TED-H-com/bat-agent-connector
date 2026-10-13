@@ -1997,7 +1997,8 @@ mod tests {
     fn register_is_a_scoped_read_without_writes() {
         let root = "/pm/workspaces/ws_11111111111111111111111111111111/register";
         assert!(validate_request(&get(root)).is_ok());
-        let cursor = "MQlnb3Zlcm5hbmNlLnBtZ292X2FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYQ";
+        // Unpadded base64url of "{sequence}\n{row_id}". The bridge checks the alphabet only.
+        let cursor = "MQpnb3Zlcm5hbmNlLnBtZ292X2FhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh";
         assert!(validate_request(&get(&format!(
             "{root}?type=risk&status=open&owner=project-owner&q=login&limit=50&after={cursor}"
         )))

@@ -130,6 +130,7 @@ Finding 的直接讀取仍會掃描 repair，以便知道哪些 finding 已被�
 維護 repair 的 proof 文件沒有 evidence id，所以不做成證據步驟。
 
 `limit` 預設 50、最大 100。排序是首次寫入的序號降序、`row_id` 升序，不用 `updated_at`。
+計畫列的序號是 `pm_plan_revisions.sequence`，不是 adoption 表的 rowid。
 列在兩頁之間被修訂時仍留在原位，顯示的是目前內容。`after` 是不透明的 base64url
 （沒有 `+`、`/`、`=`），內容是序號與下一列的 `row_id`，在 Python 3.10 與 3.14 的解析相同。
 `q` 只比對標題，大小寫不敏感；標題為 null 不相符。空的 `q` 在 HTTP 查詢層是 `INVALID_REQUEST`，

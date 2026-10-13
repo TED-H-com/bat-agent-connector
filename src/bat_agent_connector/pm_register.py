@@ -968,11 +968,13 @@ def _visible_proposal(ops, principal, workspace_id, operation_id, result):
 
 def _collect_plans(ops, principal, workspace_id):
     from .pm_plans import get_plan
-    if not _table(ops.db, "pm_plan_adoptions"):
+    if not _table(ops.db, "pm_plan_adoptions") or not _table(ops.db, "pm_plan_revisions"):
         return [], False, False
     cap = DETAIL_CAP
-    grouped = ops.db.execute("SELECT revision_id, MIN(rowid) AS sequence FROM pm_plan_adoptions WHERE workspace_id=? "
-                             "GROUP BY revision_id ORDER BY sequence", (workspace_id,)).fetchall()
+    # sequence is immutable. An adoption rowid can move across VACUUM.
+    grouped = ops.db.execute("SELECT r.revision_id, r.sequence FROM pm_plan_revisions r WHERE r.workspace_id=? "
+                             "AND r.revision_id IN (SELECT revision_id FROM pm_plan_adoptions WHERE workspace_id=?) "
+                             "ORDER BY r.sequence", (workspace_id, workspace_id)).fetchall()
     # Walk oldest to newest and keep the tail, so a hidden adoption does not consume the cap.
     visible, truncated, bad = [], False, False
     window = deque()
@@ -1627,10 +1629,11 @@ def _proposal_by_id(ops, principal, workspace_id, ident):
 
 def _plan_by_id(ops, principal, workspace_id, revision_id):
     from .pm_plans import get_plan
-    if not _table(ops.db, "pm_plan_adoptions"):
+    if not _table(ops.db, "pm_plan_adoptions") or not _table(ops.db, "pm_plan_revisions"):
         return None
-    item = ops.db.execute("SELECT MIN(rowid) AS sequence FROM pm_plan_adoptions WHERE workspace_id=? AND revision_id=?",
-                          (workspace_id, revision_id)).fetchone()
+    item = ops.db.execute("SELECT r.sequence FROM pm_plan_revisions r "
+                          "JOIN pm_plan_adoptions a ON a.workspace_id=r.workspace_id AND a.revision_id=r.revision_id "
+                          "WHERE r.workspace_id=? AND r.revision_id=? LIMIT 1", (workspace_id, revision_id)).fetchone()
     if item is None or item["sequence"] is None:
         return None
     plan = get_plan(ops, principal, workspace_id, revision_id)["plan"]

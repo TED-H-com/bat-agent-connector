@@ -591,6 +591,38 @@ async def test_plan_cap_keeps_the_newest_and_spares_risks(ops, monkeypatch):
     assert risks["coverage"]["complete"] is True and "plan_revision" not in risks["coverage"]["sources"]
 
 
+async def test_plan_order_follows_revision_sequence_not_adoption_rowid(ops, monkeypatch):
+    """An earlier adoption rowid must not outrank a later plan revision sequence."""
+    from tests.test_pm_plans import planning
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    target, confirmed, _assumption, acceptance = await planning(ops)
+    requirements = [{"id": "login", "source_input_id": confirmed, "acceptance_input_ids": [acceptance]}]
+    earlier = await plan_draft(ops, target, title="Earlier revision", requirements=requirements)
+    later = await plan_draft(ops, target, title="Later revision", requirements=requirements)
+
+    def insert(revision_id, operation_id):
+        ops.db.execute("INSERT INTO pm_plan_adoptions VALUES(?,?,?,?,?,?,?,?,?,?)",
+                       (operation_id, target["workspace_id"], revision_id, None, "pmscope_" + operation_id[3:],
+                        "pmdec_" + operation_id[3:], "Record this adoption ahead of its revision order",
+                        OWNER.actor, 1_700_000_000.0, json.dumps({"status": "adopted", "revision_id": revision_id})))
+
+    insert(later["revision_id"], "op_" + "b" * 32)
+    insert(earlier["revision_id"], "op_" + "a" * 32)
+    sequences = {row["revision_id"]: row["sequence"] for row in ops.db.execute(
+        "SELECT revision_id, sequence FROM pm_plan_revisions WHERE workspace_id=?", (target["workspace_id"],))}
+    rowids = {row["revision_id"]: row[1] for row in ops.db.execute(
+        "SELECT revision_id, MIN(rowid) FROM pm_plan_adoptions WHERE workspace_id=? GROUP BY revision_id",
+        (target["workspace_id"],))}
+    assert sequences[later["revision_id"]] > sequences[earlier["revision_id"]]
+    assert rowids[later["revision_id"]] < rowids[earlier["revision_id"]]
+    view = pm_register.list_register(ops, OWNER, target["workspace_id"], row_type="decision")
+    plans = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "plan_revision"]
+    assert plans == [later["revision_id"]]
+    assert view["coverage"]["complete"] is False and "plan_revision" in view["coverage"]["sources"]
+    detail = pm_register.get_register(ops, OWNER, target["workspace_id"], "plan_revision." + later["revision_id"])
+    assert detail["row"]["title"] == "Later revision"
+
+
 async def test_repair_cap_keeps_the_newest(ops, monkeypatch):
     monkeypatch.setattr(pm_register, "MAX_SCAN", 2)
     _force_table(monkeypatch, "pm_maintenance_repairs")
