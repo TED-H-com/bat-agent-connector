@@ -1665,24 +1665,6 @@ def _plan_by_id(ops, principal, workspace_id, revision_id):
     return row
 
 
-def _direct(ops, principal, workspace_id, row_id, rows):
-    """Load one governance or repair row by id. Other kinds use the same direct load."""
-    found = next((row for row in rows if row["row_id"] == row_id), None)
-    if found:
-        return found, False
-    try:
-        row = _load_shallow(ops, principal, workspace_id, row_id)
-    except OperationError as exc:
-        if _hidden(exc):
-            return None, True
-        raise
-    except sqlite3.OperationalError as exc:
-        if _missing(exc):
-            return None, True
-        raise
-    return row, row is None
-
-
 def _read(ops):
     from .pm_release_baselines import _memoized_reads, _snapshot
     return _snapshot(ops.db), _memoized_reads()

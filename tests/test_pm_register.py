@@ -523,19 +523,21 @@ def test_blocked_rows_without_a_recorded_reason_are_counted():
     assert pm_register._coverage(False, ["meeting"], [blocked], as_of)["blocked_without_reason"] is None
 
 
-def test_direct_repair_lookup_keeps_actions_links_and_steps(monkeypatch):
+async def test_direct_repair_lookup_keeps_actions_links_and_steps(ops, monkeypatch):
+    data = await prepared(ops)
     repair = {"repair_id": "pmrp_" + "a" * 32, "operation_status": "running", "finding_id": "pmfn_" + "b" * 32,
               "work_item_id": "wi_" + "1" * 20, "created_at": 1_760_000_000.0, "finished_at": None,
               "deadline_at": 1_760_003_600.0, "sequence": 4}
-    ops = SimpleNamespace(db=None, actions={"pm.maintenance.repair.evidence.record"})
+    ops.actions["pm.maintenance.repair.evidence.record"] = object()
     calls = []
     monkeypatch.setattr(pm_maintenance_repairs, "get_repair", lambda *args, **kwargs: {"repair": repair})
     monkeypatch.setattr(pm_maintenance_repairs, "list_repairs", lambda *args, **kwargs: calls.append(1))
-    listed = pm_register._repair_row(ops, "ws", repair)
-    direct, absent = pm_register._direct(ops, READER, "ws", listed["row_id"], [])
-    assert absent is False and calls == []
-    assert direct["available_actions"] == listed["available_actions"] and direct["available_actions"]
-    assert direct["_refs"] == listed["_refs"] and direct["_steps"] == listed["_steps"]
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "repair." + repair["repair_id"])
+    assert calls == []
+    assert [item["action"] for item in detail["row"]["available_actions"]] == ["pm.maintenance.repair.evidence.record"]
+    assert detail["row"]["related"]["work_item_ids"] == [repair["work_item_id"]]
+    assert any(step["step"] == "work" and step["ref"] == {"kind": "work_item", "id": repair["work_item_id"]}
+               for step in detail["timeline"])
 
 
 async def test_repair_detail_outside_the_scan_does_not_rescan(ops, monkeypatch):
