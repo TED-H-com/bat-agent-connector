@@ -150,7 +150,7 @@ for (const {locale, width} of cases) {
     await expect(rtm).toContainText(locale === 'zh-TW' ? '未評估' : 'Not assessed');
     await rtm.locator(`[data-rtm-toggle="${ids.requirements.email}"]`).click();
     await expect(rtm).toContainText(copy.work.email);
-    await expect(rtm).toContainText('example/membership · Issue #41');
+    await expect(rtm).toContainText(locale === 'en' ? 'example/membership · Issue #41' : 'example/membership · 議題 #41');
     await rtm.locator(`[data-rtm-select="${ids.work.email}"]`).click();
     await expect(rtm.locator('[data-rtm-pr]')).toHaveCount(2);
     await expect(rtm).toContainText('example/membership · PR #87');

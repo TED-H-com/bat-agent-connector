@@ -231,9 +231,11 @@ execution duration. Technical records and source times appear in Details.
 Existing quality, evidence, specs, package, handoff and publication controls move
 intact into drawers reached from the Requirements overflow and work inspector;
 Board's overflow opens Batches. Drafts, original request keys and recovery controls
-remain owned by their existing modules. The shell provides the single refresh.
+remain owned by their existing modules. Both work inspectors expose the same
+Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh.
 `requirements?select=<work_item_id|requirement_id>` expands and scrolls to the
-selection. Preferences are bounded by connection/principal and workspace; fetched
+selection, clearing a previous search when following an explicit selection link.
+Unassigned work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
 The package entry preserves the existing read-only catalogue. This foundation has

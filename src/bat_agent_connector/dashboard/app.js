@@ -11506,7 +11506,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		if (card) {
 			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || reasonLabel(t, card.assignment?.reason)));
 			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
-			if (!(source.sessions || []).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
+			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
 			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
 			if (card.quality?.selected_assessment) result.append(qualityFact({
 				h: h$1,
@@ -11529,7 +11529,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			for (const { target, rows } of groups) delivery.append(h$1("div", {
 				class: "pm-work-delivery",
 				"data-rtm-pr": target.pull_number
-			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), h$1("span", {}, t("wv_ci")), unknown()), ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
+			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), h$1("span", {}, t("wv_ci")), unknown()), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
 			for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t("wv_deploy"), " · ", statusPill(row.deployment?.verified === true ? "deployed" : "unknown")));
 			if (!(source.deliveries || []).length) delivery.append(paragraph(t("wv_no_delivery")));
 			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
@@ -12005,8 +12005,12 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		if (selected !== id) deliveryPages = 1;
 		selected = id;
 		preference.selected = id;
-		if (scroll && card) {
-			for (const req of plan.document.requirements) if (linked(req).includes(card)) expanded.add(req.id);
+		if (scroll) {
+			filter.value = "";
+			preference.filter = "";
+			if (card) {
+				for (const req of plan?.document?.requirements || []) if (linked(req).includes(card)) expanded.add(req.id);
+			}
 			renderTable();
 		}
 		const opener = tables.querySelector(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`);
@@ -26910,7 +26914,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			headerActions.append(control);
 			viewToolMenus.set(id, control);
 		}
-		(id === "requirements" ? traceability : kanban)?.setTools(() => items);
+		if (id === "requirements") {
+			traceability?.setTools(() => items);
+			kanban?.setTools(() => items);
+		}
 	}
 	function updateWorkView(id) {
 		traceability?.setActive(id === "requirements");

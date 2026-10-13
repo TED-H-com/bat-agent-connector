@@ -181,7 +181,12 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     if (!card && !requirement) {closeRetaining(); return;}
     if (selected !== id) deliveryPages = 1;
     selected = id; preference.selected = id;
-    if (scroll && card) {for (const req of plan.document.requirements) if (linked(req).includes(card)) expanded.add(req.id); renderTable();}
+    if (scroll) {
+      // An explicit destination must be visible even when the previous search hid it.
+      filter.value = ''; preference.filter = '';
+      if (card) for (const req of plan?.document?.requirements || []) if (linked(req).includes(card)) expanded.add(req.id);
+      renderTable();
+    }
     const opener = tables.querySelector(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`);
     if (scroll) {opener?.scrollIntoView({block: 'center'}); opener?.focus({preventScroll: true});}
     markSelection();

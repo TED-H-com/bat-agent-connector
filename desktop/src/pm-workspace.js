@@ -399,7 +399,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const control = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-view-tools': id}), items});
       headerActions.append(control); viewToolMenus.set(id, control);
     }
-    (id === 'requirements' ? traceability : kanban)?.setTools(() => items);
+    if (id === 'requirements') {
+      traceability?.setTools(() => items);
+      kanban?.setTools(() => items);
+    }
   }
   function updateWorkView(id) {
     traceability?.setActive(id === 'requirements'); kanban?.setActive(id === 'board');

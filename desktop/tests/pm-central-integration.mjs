@@ -308,7 +308,12 @@ try {
   await expect(page.locator('[data-resource-quota]')).toContainText('No current quota balance');
   await page.locator('[data-pm-view="requirements"]').click();
   await expect(page.locator('[data-pm-rtm]')).toContainText('First useful action');
-  await expect(page.locator('[data-pm-rtm]')).toContainText('Unassigned / other plan versions');
+  await expect(page.locator('[data-rtm-unassigned] > summary')).toHaveText('Unassigned (1)');
+  await page.evaluate(hash=>{location.hash=hash;},`#/pm/${workspaceId}/requirements?select=${work.work_item_id}`);
+  await expect(page.locator('[data-work-inspector] h2')).toHaveText('First useful action');
+  await expect(page.locator('[data-work-inspector] [data-work-section]')).toHaveCount(6);
+  await page.keyboard.press('Escape');
+  await expect(page.locator(`[data-rtm-select="${work.work_item_id}"]`)).toBeFocused();
   child.stdin.write(JSON.stringify({action:'verify'})+'\n'); const result = await next();
   assert.deepEqual(result.actions.sort(), ['pm.workspace.create','pm.thread.create','pm.message.append','pm.input.record','pm.input.record','pm.input.confirm','pm.thread.plan','pm.plan.draft','pm.input.record','pm.thread.plan.revise','pm.plan.draft','project.create','work_item.create','pm.message.append','pm.project.bind','pm.work.bind','pm.evidence.capture','pm.snapshot.create','pm.lifecycle.pause','pm.lifecycle.close','pm.lifecycle.reopen'].sort());
   assert.deepEqual(errors, []);

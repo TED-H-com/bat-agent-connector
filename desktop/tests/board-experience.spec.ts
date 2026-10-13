@@ -18,6 +18,12 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(board.locator('[data-pm-kanban-work]:visible')).toHaveCount(1);
   await expect(board.locator(`[data-pm-kanban-work="${ids.work.email}"]`)).toBeVisible();
   await board.getByLabel('Agent', {exact: true}).selectOption('');
+  const requirement = board.getByLabel(locale === 'en' ? 'Requirement' : '需求', {exact: true});
+  await requirement.selectOption(ids.requirements.email); await expect(board.locator('[data-pm-kanban-work]:visible')).toHaveCount(1);
+  await requirement.selectOption('');
+  const grouping = board.getByLabel(locale === 'en' ? 'Group by' : '分組方式', {exact: true});
+  await grouping.selectOption('milestone'); await expect(board.locator('[data-pm-kanban-column]')).toHaveCount(3);
+  await grouping.selectOption('status');
   const card = board.locator(`[data-pm-kanban-work="${ids.work.audit}"]`);
   await expect(card.locator('.pm-board-blocker')).toHaveAttribute('title', locale === 'en' ? 'A linked task is blocked' : '連結的任務受阻');
   await card.focus(); await page.keyboard.press('Enter');
@@ -28,6 +34,12 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   expect(parseDiscussRefs(new URLSearchParams((await inspector.locator('[data-work-discuss]').getAttribute('href'))!.split('?')[1])).refs).toEqual([{kind: 'work_item', id: ids.work.audit}]);
   await expect(inspector.locator('[data-work-section=blocker]')).toContainText(locale === 'en' ? 'A linked task is blocked' : '連結的任務受阻');
   await page.screenshot({path: `${out}/board-inspector-${locale}-${width}.png`, fullPage: false});
+  await page.keyboard.press('Escape'); await expect(card).toBeFocused();
+  await card.click();
+  await inspector.locator('[data-work-actions]').getByRole('button').click();
+  await inspector.locator('[data-menu-key=ui_publication]').click();
+  await expect(page.locator('[data-pm-issue-mappings]')).toBeVisible();
+  await expect(inspector).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(card).toBeFocused();
   await page.keyboard.press('ArrowLeft'); await expect(card).not.toBeFocused();
   if (width < 800) {

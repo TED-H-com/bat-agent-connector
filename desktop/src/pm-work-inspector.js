@@ -108,7 +108,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       for (const session of source.sessions || []) state.append(paragraph(h('a', {
         href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`,
       }, firstLabel(session.title, t('wv_session'))), ' ', session.api_access === 'managed' && session.provenance === 'connector_managed' ? null : statusPill('read_only')));
-      if (!(source.sessions || []).length) state.append(paragraph(t('wv_agent'), ' · ', unknown()));
+      if (!workAgents(source).length) state.append(paragraph(t('wv_agent'), ' · ', unknown()));
       state.append(h('a', {href: `#/work/${encodeURIComponent(card.work_item_id)}`}, t('wv_work_details')));
       if (card.quality?.selected_assessment) result.append(qualityFact({h, t, fact: card.quality, current: true}));
       else result.append(paragraph(t('pm_kanban_quality_unknown')));
@@ -129,6 +129,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
         h('h4', {}, joinLabel([target.repository, `PR #${target.pull_number}`])),
         h('div', {class: 'pm-work-inline'}, h('span', {}, t('wv_merge')), statusPill(rows.some(row => row.merge?.merged === true) ? 'merged' : 'unknown'),
           h('span', {}, t('wv_ci')), unknown()),
+        !rows.some(row => row.deployment) ? paragraph(t('wv_deploy'), ' · ', unknown()) : null,
         ...rows.filter(row => row.deployment).map(row => paragraph(t('wv_deploy'), ' · ', statusPill(row.deployment.verified === true ? 'deployed' : 'unknown'),
           ' ', row.deployment.is_current === false ? t('wb_historical_deployment') : row.deployment.is_current === true ? t('wb_current_environment') : t('ui_status_unknown')))));
       for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t('wv_deploy'), ' · ', statusPill(row.deployment?.verified === true ? 'deployed' : 'unknown')));

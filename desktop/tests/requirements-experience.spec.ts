@@ -31,15 +31,18 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   expect(parseDiscussRefs(new URLSearchParams(link!.split('?')[1])).refs).toEqual([{kind: 'work_item', id: ids.work.email}]);
   const pr87 = inspector.locator('[data-rtm-pr="87"]'); await expect(pr87.locator('[data-status=merged]')).toHaveCount(1);
   await expect(pr87.locator('[data-status=deployed]')).toHaveCount(0);
+  await expect(pr87).toContainText(locale === 'en' ? 'Deploy' : '部署');
   await expect(inspector.locator('[data-rtm-pr="91"] [data-status=deployed]')).toHaveCount(1);
   await expect(inspector.locator('[data-status=accepted]')).toHaveCount(0);
   await page.screenshot({path: `${out}/requirements-inspector-${locale}-${width}.png`, fullPage: false});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.locator('body').innerText()).not.toMatch(/\b(?:undefined|null|NaN|wv_\w+)\b/);
   await page.keyboard.press('Escape'); await expect(select).toBeFocused();
-  await search.fill('');
+  await search.fill('No matching requirement');
+  await expect(rtm.locator('[data-rtm-requirement]')).toHaveCount(0);
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${ids.workspaceId}/requirements?select=${ids.work.email}`);
   await expect(inspector.locator('[data-work-attempt]')).toHaveCount(3);
+  await expect(search).toHaveValue(''); await expect(select).toBeVisible();
   await page.keyboard.press('Escape');
   await page.evaluate(hash => {location.hash = hash;}, `#/pm/${ids.workspaceId}/requirements?select=${ids.requirements.email}`);
   await expect(inspector.locator('[data-work-section=requirements]')).toContainText(fixture.copy.requirements[0].text);
@@ -47,6 +50,10 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     {kind: 'requirement', id: ids.requirements.email, revision_id: ids.planV3},
   ]);
   await page.keyboard.press('Escape');
+  const grouping = rtm.getByRole('combobox'); await grouping.selectOption('milestone');
+  await expect(rtm.locator('.pm-requirement-group')).toHaveCount(3);
+  await grouping.selectOption('phase'); await expect(rtm.locator('.pm-requirement-group')).toHaveText(locale === 'en' ? 'Phase not recorded' : '尚無階段紀錄');
+  await grouping.selectOption('none');
   if (width === 1440) {await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${out}/requirements-dark-${locale}-1440.png`, fullPage: true});}
   expect(errors).toEqual([]); await context.close();
 });
