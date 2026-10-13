@@ -24,3 +24,16 @@ export async function openPmPanel(page: Page, item: 'ui_change_phase' | 'ui_repo
     await page.locator(`[data-menu-key=${item === 'ui_change_phase' ? 'phase' : 'settings'}]`).click();
   }
 }
+// A withdrawn workspace removes the sidebar context. Exercise its bookmarked view
+// route anyway, so a hidden ancestor cannot make a source-withdrawal assertion pass.
+export async function expectPmWithdrawn(page: Page, view: string, selector: string, section?: string, facts: string[] = []) {
+  await page.evaluate(view => {const parts = location.hash.split('/'); const target = parts.slice(0, 3).join('/') + '/' + view; if (location.hash === target) window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = target;}, view);
+  await expect(page.locator(`[data-pm-region="${view}"]`)).toHaveJSProperty('hidden', false);
+  if (section) {
+    const fold = page.locator(`[data-pm-section="${section}"] > details`);
+    if (!await fold.evaluate(node => (node as HTMLDetailsElement).open)) await fold.locator(':scope > summary').click();
+  }
+  await expect(page.locator(selector)).toHaveJSProperty('hidden', true);
+  await expect(page.locator(selector)).toBeHidden();
+  for (const fact of facts) await expect(page.locator('#main')).not.toContainText(fact, {useInnerText: true});
+}

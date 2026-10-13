@@ -1,4 +1,4 @@
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId,threadId} from './pm-fixture.ts';
@@ -42,7 +42,7 @@ for(const native of [false,true])test.describe(native?'native workspace specific
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_specs');
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();await expect(box(page)).toContainText(sourcePath);
     f.base.state.failRead=true;f.base.state.cursor++;
-    await expect(box(page)).toBeHidden({timeout:10000});await expect(page.locator('.shell-workspace-block')).not.toContainText('Library refresh');
+    await expect(box(page)).toHaveJSProperty('hidden',true,{timeout:10000});await expectPmWithdrawn(page,'requirements','[data-pm-spec-sources]','ui_specs');await expect(page.locator('.shell-workspace-block')).not.toContainText('Library refresh');
     f.base.state.failRead=false;f.base.state.cursor++;
     await expect(box(page)).toBeVisible({timeout:10000});expect(f.sources.state.reads).toHaveLength(1);
     f.sources.state.denied=true;f.base.state.cursor++;

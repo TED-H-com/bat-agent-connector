@@ -1,4 +1,4 @@
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
@@ -52,7 +52,7 @@ for(const native of [false,true])test.describe(native?'native governance workspa
   test('failed workspace reads hide source facts and restore unsent wording after recovery',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues');await openAction(page,'revise');
     const field=action(page,'revise').getByLabel('Finding title',{exact:true});await field.fill('Keep this unsubmitted finding');
-    f.base.state.failRead=true;f.publish();await expect(page.locator(region)).toBeHidden({timeout:10000});
+    f.base.state.failRead=true;f.publish();await expect(page.locator(region)).toHaveJSProperty('hidden',true,{timeout:10000});await expectPmWithdrawn(page,'issues',region);
     await expect(page.locator('.shell-workspace-block')).not.toContainText('Library refresh');
     f.base.state.failRead=false;f.publish();await expect(page.locator(region)).toBeVisible({timeout:10000});
     await expect(field).toHaveValue('Keep this unsubmitted finding');expect(f.governance.state.writes).toHaveLength(0);

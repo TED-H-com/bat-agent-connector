@@ -158,6 +158,9 @@ for(const native of [false,true])test(`parent authority failure blocks a late re
   const f=fixture();await mount(page,native,f);await open(page);f.state.holdReport=true;let downloads=0;page.on('download',()=>downloads++);
   await page.getByRole('button',{name:native?'Save report…':'Download report',exact:true}).click();await expect.poll(()=>f.state.held.length).toBe(1);
   f.state.failWorkspace=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(brief(page)).toBeHidden();
+  // The inspector closes on withdrawal; check source removal independently of it.
+  await expect(brief(page)).not.toContainText('Current selected goal');
+  await expect(page.locator('[data-pm-brief-section]')).toHaveCount(0);
   await f.state.held[0]();await expect(page.locator('[data-pm-brief-section]')).toHaveCount(0);
   expect(downloads).toBe(0);expect(f.state.nativeSaves).toHaveLength(0);
 });

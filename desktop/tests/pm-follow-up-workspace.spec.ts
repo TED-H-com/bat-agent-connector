@@ -1,4 +1,4 @@
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
@@ -114,7 +114,7 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
   test('failed parent read hides knowledge and preserves unsent fixed selections',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');await select(page);
     f.base.state.failRead=true;f.base.state.cursor++;
-    await expect(section(page)).toBeHidden({timeout:10000});
+    await expect(section(page)).toHaveJSProperty('hidden',true,{timeout:10000});await expectPmWithdrawn(page,'issues','[data-pm-follow-up]','ui_follow_up');
     await expect(page.locator('.shell-workspace-block')).not.toContainText('Library refresh');
     f.base.state.failRead=false;f.base.state.cursor++;
     await expect(section(page)).toBeVisible({timeout:10000});await expect(page.getByLabel('Evidence snapshot',{exact:true})).toHaveValue(snapshotId);

@@ -1,4 +1,4 @@
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
@@ -88,7 +88,7 @@ for(const native of [false,true])test.describe(native?'Native policy':'Web polic
     let release!:()=>void;f.state.deferHistory=new Promise(resolve=>{release=resolve;});
     await section(page).getByText('Policy history',{exact:true}).click();await expect.poll(()=>f.state.reads.some(path=>path.includes('?after='))).toBe(true);
     f.base.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.pm-status')).toContainText('PM read unavailable');release();
-    await expect(section(page)).toBeHidden();await expect(section(page).locator('[data-maintenance-policy]')).toHaveCount(0);
+    await expect(section(page)).toHaveJSProperty('hidden',true);await expectPmWithdrawn(page,'dependencies','[data-pm-maintenance-policy]','ui_policy');await expect(section(page).locator('[data-maintenance-policy]')).toHaveCount(0);
     f.state.deferHistory=null;f.base.state.failRead=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(section(page)).toBeVisible();
   });
   test('request-side rejection withdraws sources without forgetting the frozen original request',async({page})=>{

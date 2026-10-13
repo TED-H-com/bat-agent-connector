@@ -1,4 +1,4 @@
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId,pmRoute} from './pm-fixture.ts';
@@ -41,6 +41,12 @@ function fixture(){
   return{base,sprint,kanban,meetings,dispatch,publish:(kind:string)=>{eventType=kind;base.state.cursor++;},changeAccess:()=>accessVersion++,bootstrapFailure:(value:boolean)=>{failBootstrap=value;},bootstrapReads:()=>bootstrapReads};
 }
 const route=`/dashboard/#/pm/${workspaceId}`;
+async function withdrawnViews(page) {
+  const facts = ['Member login', 'A returning member can sign in', 'Older response held after revoke'];
+  await expectPmWithdrawn(page, 'board', '[data-pm-kanban]', undefined, facts);
+  await expectPmWithdrawn(page, 'discussions', '[data-pm-meetings]', 'ui_meetings', facts);
+  await expectPmWithdrawn(page, 'schedule', '[data-pm-sprints]', 'ui_sprints', facts);
+}
 for(const native of [false,true])test.describe(native?'native management workspace':'web management workspace',()=>{
   test('access revalidation keeps an open discussion input usable without exposing old facts',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
@@ -79,7 +85,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});await draft.fill('Keep this unsent direction');
     f.base.state.failRead=true;f.publish('pm_workspace');
-    await expect(region).toBeHidden({timeout:10000});await expect(page.locator('[data-pm-kanban]')).toBeHidden();await expect(page.locator('[data-pm-meetings]')).toBeHidden();
+    await expect(region).toHaveJSProperty('hidden',true,{timeout:10000});await withdrawnViews(page);
     await expect(page.locator('.shell-workspace-block')).not.toContainText('Library refresh');
     f.base.state.failRead=false;f.publish('pm_workspace');await expect(region).toBeVisible({timeout:10000});
     await expect(draft).toHaveValue('Keep this unsent direction');expect(f.sprint.state.writes).toHaveLength(0);
@@ -129,9 +135,9 @@ for(const native of [false,true])test.describe(native?'native management workspa
     f.kanban.state.cards[0].work.title='Older response held after revoke';f.kanban.state.holdNext=true;
     await page.locator('.pm-main > .ui-page-header').getByRole('button',{name:'Refresh',exact:true}).click();
     await expect.poll(()=>f.kanban.state.held.length).toBe(1);
-    f.base.state.failRead=true;f.publish('pm_workspace');await expect(page.locator('[data-pm-kanban]')).toBeHidden({timeout:10000});
+    f.base.state.failRead=true;f.publish('pm_workspace');await expect(page.locator('[data-pm-kanban]')).toHaveJSProperty('hidden',true,{timeout:10000});await withdrawnViews(page);
     f.kanban.state.held.shift()();await expect(card).toContainText('Older response held after revoke');
-    await expect(page.locator('[data-pm-kanban]')).toBeHidden();await expect(page.locator('[data-pm-meetings]')).toBeHidden();
+    await withdrawnViews(page);
     expect(f.sprint.state.writes).toHaveLength(0);
   });
 });
@@ -141,8 +147,11 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`manag
   await expect(page.locator('[data-pm-sprints] h2')).toHaveText(locale==='en'?'Sprint and iteration':'Sprint 與迭代');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
   await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
-  expect(await page.locator('.pm-main').innerText()).not.toMatch(/pm_kanban_|pm_sprint_|pm_meeting_|\bundefined\b/);
-  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  for (const [view, section] of [['board', undefined], ['discussions', 'ui_meetings'], ['schedule', 'ui_sprints']]) {
+    await openPmSection(page, view!, section);
+    expect(await page.locator('.pm-main').innerText()).not.toMatch(/pm_kanban_|pm_sprint_|pm_meeting_|\bundefined\b/);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  }
   const directory=process.env.BATC_PM_MANAGEMENT_SCREENSHOTS;
   if(directory){await mkdir(directory,{recursive:true});await page.screenshot({path:`${directory}/workspace-${locale}-${width}.png`,fullPage:true});}
   await context.close();

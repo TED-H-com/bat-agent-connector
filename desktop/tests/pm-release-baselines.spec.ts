@@ -1,4 +1,4 @@
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
@@ -89,7 +89,7 @@ for(const native of [false,true])test.describe(native?'Native release baselines'
     let release!:()=>void;f.state.deferPreview=new Promise(resolve=>{release=resolve;});await page.getByRole('button',{name:'Read fixed source evidence',exact:true}).click();
     await expect.poll(()=>f.state.reads.some(path=>path.includes('preview'))).toBe(true);
     f.base.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.pm-status')).toContainText('PM read unavailable');
-    release();await expect(section(page)).toBeHidden();await expect(section(page).getByRole('heading',{name:'Reviewed source',exact:true})).toHaveCount(0);
+    release();await expect(section(page)).toHaveJSProperty('hidden',true);await expectPmWithdrawn(page,'dependencies','[data-pm-release-baselines]','ui_baselines');await expect(section(page).getByRole('heading',{name:'Reviewed source',exact:true})).toHaveCount(0);
     f.state.deferPreview=null;f.base.state.failRead=false;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(section(page)).toBeVisible();
     await expect(section(page).getByRole('heading',{name:'Reviewed source',exact:true})).toHaveCount(0);
   });
