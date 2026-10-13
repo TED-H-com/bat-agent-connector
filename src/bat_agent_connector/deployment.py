@@ -13,6 +13,7 @@ from email.utils import parsedate_to_datetime
 
 from . import deployment_store as store
 from .github import GitHubAmbiguous
+from .iso_time import parse_datetime
 from .operations import RERUN, TERMINAL, NeedsAttention, OperationError, Wait
 
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
@@ -22,7 +23,7 @@ ARTIFACT_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 def unexpired(value):
     try:
-        date = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        date = parse_datetime(value)
         return date.tzinfo is not None and date.timestamp() > time.time()
     except (AttributeError, TypeError, ValueError, OverflowError):
         return False

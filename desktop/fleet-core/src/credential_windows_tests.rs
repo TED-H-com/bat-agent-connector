@@ -1,9 +1,9 @@
 //! Temporary synthetic files only. Never uses the user's actual BAT data directory.
 use super::*;
+use crate::powershell_fixture::{self, Fixture};
 use std::{
-    process::{Child, Command, Stdio},
     ptr::{null, null_mut},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use windows_sys::Win32::{
     Foundation::LocalFree,
@@ -58,41 +58,16 @@ fn hex(bytes: &[u8]) -> Vec<u8> {
         .collect::<String>()
         .into_bytes()
 }
-struct OwnedChild(Child);
-impl Drop for OwnedChild {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
 fn powershell(script: &str, path: &Path) {
-    let system = std::env::var_os("SystemRoot").unwrap();
-    let base = Path::new(&system).join("System32/WindowsPowerShell/v1.0");
-    let child = Command::new(base.join("powershell.exe"))
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .env("PSModulePath", base.join("Modules"))
-        .env("BAT_FLEET_FIXTURE_DPAPI", path)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    let mut child = OwnedChild(child);
-    let deadline = Instant::now() + Duration::from_secs(15);
-    loop {
-        if let Some(status) = child.0.try_wait().unwrap() {
-            assert!(
-                status.success(),
-                "synthetic PowerShell format fixture failed"
-            );
-            return;
-        }
-        assert!(
-            Instant::now() < deadline,
-            "synthetic PowerShell fixture exceeded deadline"
-        );
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    let fixture = Fixture::new();
+    let mut command = powershell_fixture::command();
+    command
+        .args([
+            "-Command",
+            &format!("{}{script}", powershell_fixture::READY_SCRIPT),
+        ])
+        .env("BAT_FLEET_FIXTURE_DPAPI", path);
+    fixture.run(&mut command, Duration::from_secs(15));
 }
 #[test]
 fn native_dpapi_current_user_format_roundtrip_tamper_entropy_and_remove() {

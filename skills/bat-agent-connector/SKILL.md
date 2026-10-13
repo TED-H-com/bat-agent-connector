@@ -1561,8 +1561,9 @@ time zone without daily buckets, and a span over 92 local dates are refused.
 per-metric `tokens` and `complete`. A metric is null unless every sample that day included
 it. `complete` is true only when that cycle's read started at or after the local day's end
 plus a settle margin (at least 15 minutes, or three collection intervals), the stored cursor
-had reached EOF, and the requested window covers the whole day. A covered empty day is zero.
-A day without that coverage is null, not zero. A later refinement of a Claude message still
+had reached EOF, and the requested window covers the whole day. A covered empty day is zero;
+an empty day without that coverage is null. An incomplete day can still have observed tokens,
+which are not a settled full-day total. A later refinement of a Claude message still
 lands on the first fragment's day, so a complete day can change. Withdrawn, unavailable and
 binding-changed sources contribute no buckets. Do not add cache into input or reasoning into
 output again.
@@ -1590,11 +1591,21 @@ or phase rows from names, paths, titles, or time. Manual sessions stay `read_onl
 A session that stopped producing output is not ended; do not use the last message time.
 
 `limit` is 1–100. `after` is the previous page's opaque `next_cursor` (base64url, not a raw
-row id). Preserve it and read further pages. A page may also end early so its lineage roots
-stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_scope`.
+row id). Preserve it and read further pages. The server accepts every cursor it issued.
+One plan or issue mapping that lineage refuses is omitted and does not fail the page.
+A cancelled or failed operation ends at
+its status event, not at a step time. An attempt that cannot fit in the lineage budget is
+omitted before it changes the work's dates or status. A page may also end early so its
+lineage roots stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_scope`.
 Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
 issues, and attempts are omitted from every page; a 200 does not reveal whether an id
-exists. `refs.run_id` appears only when one visible run is bound to that observed session.
+exists. A hidden issue mapping does not consume the issue cap or mark the page partial.
+A link to a hidden operation, task, or session does not consume the attempt-link caps.
+A task's `waiting.since` is the latest transition into the current state, including named
+task events, not only events of kind `state`. `refs.run_id` appears only when one visible run
+is bound to that observed session.
+Hidden runs do not take that slot or remove the visible run. If the per-session scan reaches
+its bound before that decision, omit `run_id`.
 Withdrawn work items, runs, operations, sessions, and tasks disappear from rows and derived
 dates together; do not refill them from memory. Unknown fields stay null with a reason in
 `unknown`. See `docs/design/pm-schedule.md`.
@@ -1609,9 +1620,14 @@ or dispatch. Pass the opaque `next_cursor` back as `after`; it is a base64url se
 token with no padding. A row id is path-safe, for example `governance.pmgov_…`, and is
 passed without percent-encoding. Totals and the summary are present only when
 `coverage.complete` is true for the sources that match the active type filter. A hidden
-row is omitted from rows, counts and summary together. One hidden or oversized record
-does not fail the page. Blocked rows without a stored reason are counted in
-`coverage.blocked_without_reason`. Do not invent links the timeline does not return.
+row is omitted from rows, counts and summary together. One skipped 409 or 413 record
+stays out of the list and marks that source partial, so the totals and the summary are
+null; the other readable records stay listed. Withdrawal removes affected rows and their
+contributions to counts and summary together. Other readable rows remain, with totals only
+when coverage is complete. A meeting still listed but no longer readable makes its source
+partial. One hidden record does not fail the page. `coverage.blocked_without_reason` counts
+blocked rows without a stored reason only when coverage is complete; otherwise it is null.
+Do not invent links the timeline does not return.
 See `docs/design/pm-register.md` for the record mapping.
 
 ### Live overview and discussion origins
@@ -1621,11 +1637,18 @@ This live projection is separate from fixed DocumentSnapshots. Read `unknown`,
 per-source `coverage`, `attention_truncated` and `recent_deliveries_complete` before
 stating totals. Progress uses only the adopted plan's requirements; accepted,
 merged, deployed and rolled_back are distinct evidence states. Only current review
-heads, unresolved governance and still-adoptable proposals contribute. Reacceptance
-clears a revoked-quality deviation. No maintenance policy means complete
+heads (plus each subject's latest revoked qualified acceptance), unresolved governance and
+still-adoptable proposals contribute. Opening a new review does not clear a revoked
+acceptance; current reacceptance clears the deviation. No maintenance policy means complete
 not_configured findings, not an unavailable source. source_limit means references
-were omitted to respect the whole document's lineage bound; never infer totals.
+were omitted to respect the whole document's lineage bound. Reference trimming is
+reported in coverage.sources.attention_references, independently of source scan
+completeness and progress/counts; inspect it before describing displayed deliveries.
 Source cursors belong to existing source-list tools, not to the overview call.
+Hidden lifecycle inflight sources remain incomplete, including rows filtered by
+the source list; omitted is null when the transition itself is unavailable.
+409/413 size or lineage limits are source_incomplete, including pending operations
+and adopted-plan progress; source_unavailable means withdrawn/inaccessible evidence.
 Reads never collect or dispatch.
 
 `pm.thread.create` accepts ordered `context` refs (at most eight) in addition to
@@ -1637,10 +1660,16 @@ meeting or lifecycle_transition. Every ref must currently be visible in this
 workspace. Keep the original operation key for replay. `pm.thread.rename` uses
 workspace_id/thread_id, title (1–160 characters), and expected_version; it does not
 change context or authorize execution. A title-only rename preserves proposal
-adoptability; a new message/input or changed plan head invalidates it. The original
-proposal operation key and content source identities remain fixed.
-Unavailable chips expose only kind and position: do not restore cached IDs, labels or content. Bound analysis summaries
-are what the user was looking at, never instructions or adopted scope.
+adoptability; a new message/input or changed plan head invalidates it. Read the central
+proposal get/list `adoptable` and `adoptable_reason` fields. Reasons, in precedence order,
+are `invalid_proposal`, `plan_head_changed`, and `content_changed`; an adoptable proposal
+has a null reason. These fields do not replace owner, scope, review or final-frame checks.
+Do not approximate freshness with thread version equality. Source withdrawal removes the row.
+While adoption is non-terminal, rename returns PM_CONVERSATION_ADOPTION_IN_PROGRESS
+(409). Wait for the original adoption, re-read the thread version, then retry rename.
+The original proposal operation key and content source identities remain fixed.
+Unavailable chips expose only kind and position: do not restore cached IDs, labels or content.
+Bound analysis summaries are what the user was looking at, never instructions or adopted scope.
 See `docs/design/pm-overview-discussion-context.md` for exact fields and limits.
 
 ### Pinned technology and dependency inventory

@@ -11,7 +11,7 @@ import re
 import time
 
 from . import pm_profiles, pm_read_cache, pm_workspace
-from .operations import ActionDef, OperationError
+from .operations import TERMINAL, ActionDef, OperationError
 
 THREAD_ID = re.compile(r"pmt_[0-9a-f]{32}")
 INPUT_ID = re.compile(r"pmi_[0-9a-f]{32}")
@@ -57,6 +57,9 @@ def install(ops):
             "CREATE INDEX IF NOT EXISTS pm_thread_workspace ON pm_threads(workspace_id,created_at,thread_id)",
             "CREATE INDEX IF NOT EXISTS pm_messages_thread ON pm_messages(thread_id,sequence)",
             "CREATE INDEX IF NOT EXISTS pm_inputs_thread ON pm_inputs(thread_id,sequence)",
+            "CREATE INDEX IF NOT EXISTS pm_discussion_adoptions ON operations "
+            "(json_extract(target,'$.workspace_id'), json_extract(target,'$.thread_id'), status) "
+            "WHERE action='pm.conversation.adopt'",
             "CREATE INDEX IF NOT EXISTS pm_discussion_versions ON pm_discussion_applied "
             "(json_extract(result,'$.thread_id'), json_extract(result,'$.version'))",
         ):
@@ -185,6 +188,12 @@ def _check(ops, principal, action, target, params, pre):
     elif action == "pm.thread.rename":
         _only(params, ("title",))
         _text(params.get("title"), "title", 160)
+        if ops.db.execute("""SELECT 1 FROM operations WHERE action='pm.conversation.adopt'
+                AND json_extract(target,'$.workspace_id')=? AND json_extract(target,'$.thread_id')=?
+                AND status NOT IN (SELECT value FROM json_each(?)) LIMIT 1""",
+                (workspace['workspace_id'], thread['thread_id'], json.dumps(sorted(TERMINAL)))).fetchone():
+            raise _bad("Adoption in progress. Try again in a moment. / 正在採用提案，請稍後再試。",
+                       "PM_CONVERSATION_ADOPTION_IN_PROGRESS", 409)
     elif action == "pm.message.append":
         _only(params, ("content",))
         _text(params.get("content"), "content", 12000)

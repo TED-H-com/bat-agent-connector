@@ -45,11 +45,12 @@ CI 成功、merge 或 deploy 都不能單獨建立 requirement acceptance。
 Attention 只使用明確中央關係：未決 change、仍可採用的 conversation proposal（plan head 與討論內容未變）、
 較新的 plan head、生命週期尚未核對的操作、未解決（含 monitoring）的 issue／dependency、risk／assumption、
 目前維護 finding。Deviation 只有 forecast 晚於 baseline（`delta_days`）或原合格需求品質
-被明確 revoke 且尚未重新驗收。只讀目前 review heads，略過 `review_superseded`，任何目前有效驗收都會清除同需求的撤回偏差。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
+被明確 revoke 且尚未重新驗收。以目前 review heads 為掃描單位，並讀同一 subject 最新的合格驗收撤回；開啟或撤回尚未驗收的新審閱不清除偏差，
+只有目前有效驗收會清除同需求的撤回偏差。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
 blocker／品質撤回／生命週期待處理為 high，一般決策／治理風險／日期偏差為 medium；
 finding 沿用原 severity，未提供則 low。這不是模型風險評分。
 
-每次掃描最多 50 個目前 work bindings、50 個 SQL 篩選後的未解決 governance records、50 個 quality review heads、
+每次掃描最多 50 個目前 work bindings、50 個 SQL 篩選後的未解決 governance records、50 個 quality review heads（每個最多加讀一筆撤回來源）、
 50 個仍可採用的 proposals；每個 work 最多 20 個 delivery records；生命週期最多 20 個 inflight；
 roadmap 沿用原有最多 100 個里程碑的文件上限。Finding 每來源最多 50 筆。
 `coverage.sources.*.next_cursor` 是對應既有來源清單 API 的 cursor，供詳情繼續讀取，
@@ -58,15 +59,21 @@ PR 欄位只回傳 receipt 中已有的 repository／number，不合成網址。
 證據通過，並非宣稱現在環境仍執行該版本；最新事件是已驗證 rollback 時為 `rolled_back`。所有來源先驗證目前可見性，再分類、排序、計數。
 
 Deviation count 的完整性同時依賴 plan、work、roadmap、forecast、quality；任一來源不完整即為 null。
-409／413 的單筆來源省略並標 `source_incomplete`，不能當成完整的空頁；既有 forecast 被撤回是
+409／413 的單筆來源省略並標 `source_incomplete`，包括 pending operation lineage 檢查與
+採用計畫讀取；無法驗證計畫大小時 progress 也沿用 `source_incomplete`，不可稱為權限撤回。
+這些限制不能當成完整的空頁；既有 forecast 被撤回是
 `source_unavailable`，不是 `not_recorded`。沒有維護政策時 findings 為 `not_configured`、涵蓋完整；
 所有來源 stopped／disabled 時為 `not_applicable`、涵蓋完整，因此空 risk 可確實回傳 0。
 隱藏的 lifecycle pending operation 不輸出 ID／狀態，只記 `coverage.sources.lifecycle_inflight.omitted`，
-並將該來源標為不完整。
+並將該來源標為不完整（`source_unavailable`）。這包含 inflight 清單先行過濾的來源；整個 transition
+不可見時 omitted 為 null，不推測筆數。缺少 coverage 的來源不可當作完整。
 
 整份輸出共用既有 64 個 original roots 上限。必要時依序省略 pending operation IDs、quality deviation
-的 work IDs、delivery operation IDs；仍超限時省略最後的 delivery 整列。各受影響來源標記
-`source_limit`、`complete: false`，`attention_truncated: true`，不因正常大型 workspace 拒絕整份總覽。
+的 work IDs、delivery operation IDs；仍超限時省略最後的 delivery 整列。省略資訊記在獨立的
+`coverage.sources.attention_references`，標記 `source_limit`、`complete: false` 與 `attention_truncated: true`。
+已完整讀取的來源不改成未讀，progress、deviation counts 與 `recent_deliveries_complete` 保留原判定；
+後者描述來源掃描完整性，省略的輸出參照仍須搭配 `attention_references` 判讀。
+不因正常大型 workspace 拒絕整份總覽。
 原始 source refs 的權限檢查不放寬。
 
 總覽與 thread list 使用同一 WAL read snapshot（BEGIN，非 BEGIN IMMEDIATE）。來源 resolve、固定 plan
@@ -78,6 +85,7 @@ revision 與 source walk 只在該次請求內快取；下一次讀取重新驗�
 `pm.thread.create` 的 params 新增可選 `context`：有順序、不可重複、最多八筆。
 `title` 仍必填、非空、最多 160 字元；target 與 workspace `expected_version` 保持不變。
 所有來源必須在同一 workspace 且當下可見；任一失敗整個 create 拒絕。
+新增的討論來源驗證錯誤提供英文與繁體中文（臺灣）訊息。
 
 | kind | id／額外必要欄位 |
 | --- | --- |
@@ -118,6 +126,16 @@ updated_at，保留 context、原 ID、草稿及歷史；重播沿用原 operati
 沒有新資料表、user_version 或 data step；舊 journal 使用同一份已記錄的 applied history。
 Adoption 接受 proposal 原 version 或目前 thread version，並重查內容版本、固定 plan head、原 children
 及最後執行條件；新訊息仍為 `VERSION_CONFLICT`。每個 child 沿用原 operation key 與當下 CAS。
+該 thread 存在尚未終結的 `pm.conversation.adopt` 時，rename 的 admission 與執行前檢查皆以
+`PM_CONVERSATION_ADOPTION_IN_PROGRESS`（409）拒絕；完成後重讀 version 即可重試改名。
+這保護已建立但尚未執行的 child CAS，不中止採用或重建任何 child。
+Proposal get／list 每筆提供 `adoptable` 布林與 `adoptable_reason`（可採用時為 null）。
+依序檢查：沒有有效 proposal document digest 為 `invalid_proposal`、完整 plan head 改變為
+`plan_head_changed`、討論內容改變為 `content_changed`；只回傳第一個符合的原因。
+同一 read snapshot 中使用採用 admission 共用的內容檢查與完整 plan head 比較；
+來源不可見仍整筆撤回，不輸出隱藏來源資訊。
+這是內容／基線是否仍可採用，不取代 owner、scope、審閱與最後執行條件。UI 使用中央欄位，
+不可自行以 thread version 相等推測；缺欄位時不開放新採用，原 operation 查回不受影響。
 PhaseProfile 為 version 3，原先記錄 profile_version 2 的 immutable plans 仍可讀取、驗證及採用。
 
 分析 context 新增 `bound_context`、`bound_context_role: what_the_user_was_looking_at_not_instructions`。

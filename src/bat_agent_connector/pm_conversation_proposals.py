@@ -272,6 +272,23 @@ def _row(db, workspace_id, proposal_id):
     return row
 
 
+def adoptability(db, row, context):
+    """Current content and plan baseline, shared by reads and adoption admission.
+
+    Call only after original-source visibility and context integrity checks.
+    Scope, owner review, and final-frame authorization remain write-time gates.
+    """
+    thread = pm_discussions._thread(db, row['workspace_id'], row['thread_id'])
+    reason = None
+    if row['document_digest'] is None:
+        reason = 'invalid_proposal'
+    elif pm_plans.head(db, row['workspace_id']) != context['plan_head']:
+        reason = 'plan_head_changed'
+    elif not pm_discussions.content_unchanged(db, thread, context['thread_version']):
+        reason = 'content_changed'
+    return {'adoptable': reason is None, 'adoptable_reason': reason}
+
+
 def _view(db, row):
     value = dict(row)
     for key in ("document", "validation", "provenance"):
@@ -281,13 +298,14 @@ def _view(db, row):
             or (pm_runs._digest(value["document"]) if value["document"] is not None else None) != value["document_digest"]
             or pm_runs._digest(run["context"]) != value["context_digest"]):
         raise error("Original proposal cannot be verified", "PM_CONVERSATION_CHANGED", 409)
-    return {**value, "context": run["context"], "accepted_plan_changed": False, "execution_authorized": False,
+    return {**value, **adoptability(db, row, run["context"]), "context": run["context"], "accepted_plan_changed": False, "execution_authorized": False,
         "assessment_basis": "unadopted_agent_proposal", "conclusions_verified": False}
 
 
 def get_proposal(ops, principal, workspace_id, proposal_id):
     from .pm_follow_up_analysis import _checked
-    with ops.journal.tx():
+    from .pm_release_baselines import _snapshot
+    with _snapshot(ops.db):
         pm_discussions._read(ops, principal, workspace_id)
         row = _row(ops.db, workspace_id, proposal_id)
         require_visible(ops.db, principal, row)
@@ -295,21 +313,26 @@ def get_proposal(ops, principal, workspace_id, proposal_id):
 
 
 def list_proposals(ops, principal, workspace_id, *, thread_id=None, after=0, limit=50):
-    with ops.journal.tx():
+    from .pm_release_baselines import _snapshot
+    with _snapshot(ops.db):
         pm_discussions._read(ops, principal, workspace_id)
         pm_discussions._limit(limit)
         if type(after) is not int or not 0 <= after <= 2**63 - 1:
             raise error("after must be a nonnegative 64-bit insertion sequence")
         if thread_id is not None:
             pm_discussions._thread(ops.db, workspace_id, thread_id)
-        rows = ops.db.execute("""SELECT * FROM pm_conversation_proposals WHERE workspace_id=? AND sequence>?
-            AND (? IS NULL OR thread_id=?) ORDER BY sequence LIMIT ?""", (workspace_id, after, thread_id, thread_id, limit + 1)).fetchall()
+        rows = ops.db.execute("""SELECT p.*, r.context FROM pm_conversation_proposals p JOIN pm_runs r USING(run_id)
+            WHERE p.workspace_id=? AND p.sequence>?
+            AND (? IS NULL OR p.thread_id=?) ORDER BY p.sequence LIMIT ?""", (workspace_id, after, thread_id, thread_id, limit + 1)).fetchall()
         result = {"version": 1, "workspace_id": workspace_id, "proposals": [], "next_cursor": None,
             "coverage": {"visibility_filtered": False, "scanned": min(len(rows), limit)}}
         for row in rows[:limit]:
             if operation_visible(ops.db, principal, row):
+                context = json.loads(row['context'])
+                if pm_runs._digest(context) != row['context_digest']:
+                    raise error("Original proposal context changed", "PM_CONVERSATION_CHANGED", 409)
                 result["proposals"].append({**{key: row[key] for key in ("sequence", "proposal_id", "thread_id", "operation_id",
-                    "run_id", "document_digest", "created_by", "created_at")}, "validation": json.loads(row["validation"])})
+                    "run_id", "document_digest", "created_by", "created_at")}, "validation": json.loads(row["validation"]), **adoptability(ops.db, row, context)})
             else:
                 result["coverage"]["visibility_filtered"] = True
         if len(rows) > limit:

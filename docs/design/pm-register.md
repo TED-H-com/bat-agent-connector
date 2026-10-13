@@ -74,6 +74,10 @@ disposition 已明確是 `proposal`，所以類型是 `change`。
 - 計畫採用結果或 source lineage 能對上、且目前看得到的 `proposal_id`。看不到的提案 id 不出現。
 - 治理 `disambiguation.record_ids`。
 
+這些外鍵從兩邊讀。選到的列載入它存下的對方；對方那一列也載入指回這裡的紀錄。
+只加對方自己的一步，不跟著對方的外鍵再走。隱藏的對方略過。對方 409／413 時不放進時間線，
+並把該來源標成 `source_incomplete`。清單不為計畫列讀提案；提案 id 只在這筆計畫的明細上解析。
+
 不從標題、路徑、時間接近或相似名稱推論。需求 id 放在 `related.requirement_ids`，不是時間線步驟。
 證據步驟只在紀錄明確存了 evidence id 時出現。
 
@@ -83,8 +87,10 @@ disposition 已明確是 `proposal`，所以類型是 `change`。
 （`pm_source_lineage.MAX_ROOTS`，呼叫當下讀取）。下一列會超過時這一頁就結束，
 `next_cursor` 從被排除的第一列繼續，下一頁重新累計。沒有 lineage 的列不占這個名額。
 明細的時間線步驟用同一套檢查：隱藏的步驟略過；再加一步會超過上限時，時間線在那之前結束，
-並把該來源標成部分。單一列或單一步驟的 409／413 只略過該筆，並把來源標成
-`source_incomplete`；它不會讓整頁失敗。
+並把該來源標成部分。清單、審查事件與單筆治理歷史遇到 409／413 時，先用同一個 `after`
+以一筆重試；這一筆仍失敗，就用該來源自己的序號 stub 讀出這筆的序號，略過它，保留已經
+建立的列與步驟，再從它之後繼續。被略過的一筆把該來源標成 `source_incomplete`，所以合計
+與摘要是 null；其餘可讀的紀錄仍列出。它不會讓整頁失敗。
 
 篩選後、分頁前，若這次篩選用到的來源都完整：
 
@@ -107,21 +113,29 @@ disposition 已明確是 `proposal`，所以類型是 `change`。
 `partial_reason` 在相關來源有 409／413 略過時是 `source_incomplete`，否則是 `incomplete`。
 缺表代表該功能未安裝，是完整的空來源，不是部分資料。
 
-掃描保留最新的紀錄，不是最舊的。隱藏列不占名額，也不因此標成部分。上限在呼叫當下讀取：
+掃描保留最新的可讀紀錄，不是最舊的。略過的 409／413 不進入清單，但該來源是部分，
+合計與摘要是 null。隱藏列不占名額，也不因此標成部分。上限在呼叫當下讀取：
 治理、repair、issue mapping 與單筆治理歷史是 200；會議、審查、intake、提案與計畫採用是 40；
 會議 follow-up 歷史是 50；審查事件是 20。
 
+登記讀取會以 `follow_up_after` 選取會議最近的 follow-up 歷史；若省略較早事件，會議來源為部分。
+底層 meeting get 的 `coverage.histories.follow_ups.after` 回報實際使用的起始序號；未指定時為 0。
+這是會議歷史的涵蓋欄位，不是登記頁的 `after` 游標。
+
 Finding 只讀目前這一筆觀察。觀察不存在，或存在但這位讀者看不到（`visibility_filtered`），
 都是未知，不是「完整、零筆 finding」。歷史出現在被截斷的觀察裡時，finding 來源標為部分，
-不把抄到的 finding 當成總數。看不到的紀錄（含來源撤回）整筆略過，不影響順序、計數、可用動作或標籤。
-若撤回後會議清單仍列著該會議，登記不把會議來源說成完整。
+不把抄到的 finding 當成總數。看不到的紀錄（含來源撤回）整筆略過，其列、合計貢獻與摘要一起移除；
+其餘可讀列保留，合計與摘要仍須符合完整涵蓋條件。隱藏紀錄不影響可見列的順序、可用動作或標籤。
+若撤回後會議清單仍列著該會議，但明細已不可讀，該會議的登記列移除，會議來源標為部分。
 
 格式不合法的 `row_id` 在 HTTP、RPC 與 MCP 都是 422。格式合法但缺少或隱藏的列都是 404，
 即使其他來源不完整也一樣。治理與 repair 依 id 直接讀取，不重掃整份清單。
-Finding 的直接讀取仍會掃描 repair，以便知道哪些 finding 已被佔用。
+Finding 的直接讀取仍會掃描 repair，以便知道哪些 finding 已被可見的 repair 佔用。
+血緣上隱藏的 repair 不佔用，也不把來源標成不完整；repair 來源若被截斷或 409／413，動作維持未知。
 維護 repair 的 proof 文件沒有 evidence id，所以不做成證據步驟。
 
 `limit` 預設 50、最大 100。排序是首次寫入的序號降序、`row_id` 升序，不用 `updated_at`。
+計畫列的序號是 `pm_plan_revisions.sequence`，不是 adoption 表的 rowid。
 列在兩頁之間被修訂時仍留在原位，顯示的是目前內容。`after` 是不透明的 base64url
 （沒有 `+`、`/`、`=`），內容是序號與下一列的 `row_id`，在 Python 3.10 與 3.14 的解析相同。
 `q` 只比對標題，大小寫不敏感；標題為 null 不相符。空的 `q` 在 HTTP 查詢層是 `INVALID_REQUEST`，
@@ -137,7 +151,7 @@ repository 全名，不放進 `related.prs`。不把 GitHub issue 的 number 當
 
 - 治理：`pm.governance.revise`。`change` 且尚未決定時加 `pm.governance.decide`。已採方向、有提案版本、
   尚未連結採用時加 `pm.governance.adoption.link`。
-- finding：只有 `issues`、沒有既有 PR／工作／repair，且某個已採用 `repair_rules.labels_all` 是標籤子集時，
+- finding：只有 `issues`、沒有既有 PR／工作／可見的 repair，且某個已採用 `repair_rules.labels_all` 是標籤子集時，
   才給 `pm.maintenance.repair`，並帶上該 `rule_key` 與 `finding_ref`。對不上就不給，不發明規則。
 - repair 尚未終態：`pm.maintenance.repair.evidence.record`。
 - issue mapping：`tracking` 給 `pm.issue.cancel`；未 `cancelled` 給 `pm.issue.publish`。

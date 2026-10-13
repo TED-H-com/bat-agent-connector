@@ -6,10 +6,10 @@ import hashlib
 import json
 import re
 import time
-from datetime import datetime
 from urllib.parse import quote
 
 from . import deployment_store, pm_evidence
+from .iso_time import parse_datetime
 from .operations import OperationError
 
 SHA = re.compile(r"[0-9a-f]{40}")
@@ -55,7 +55,7 @@ def _sha(value):
 def _release(value, release_id, channel):
     published = value.get("published_at")
     try:
-        if not isinstance(published, str) or not datetime.fromisoformat(published.replace("Z", "+00:00")).tzinfo:
+        if not isinstance(published, str) or not parse_datetime(published).tzinfo:
             raise ValueError
     except ValueError:
         raise bad("A release must have an explicit publication timestamp") from None

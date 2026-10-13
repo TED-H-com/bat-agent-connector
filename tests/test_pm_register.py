@@ -5,6 +5,7 @@ import json
 import re
 import sqlite3
 import uuid
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from urllib.parse import quote
@@ -15,6 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from bat_agent_connector import (
     controller_authority,
     mcp_server,
+    pm_governance,
     pm_maintenance_checks,
     pm_maintenance_findings,
     pm_maintenance_policy,
@@ -32,7 +34,7 @@ from tests.test_pm_evidence import capture, link, task
 from tests.test_pm_governance import change, fields, prepared, record
 from tests.test_pm_governance import ops as ops
 from tests.test_pm_governance_api import finding, send
-from tests.test_pm_meetings import apply, complete, meeting, note
+from tests.test_pm_meetings import apply, complete, draft_params, meeting, note
 from tests.test_pm_meetings import draft as meeting_draft
 from tests.test_pm_plans import adopt, adoption
 from tests.test_pm_plans import draft as plan_draft
@@ -66,6 +68,22 @@ def meeting_ops(tmp_path, monkeypatch):
 ISO = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00$")
 ROW_KEYS = {"row_id", "type", "title", "source", "impact", "priority", "owner", "due", "status", "next_step",
             "created_at", "updated_at", "related", "available_actions"}
+
+
+def _shows(detail, kind, ident):
+    return any(step.get("ref") == {"kind": kind, "id": ident} for step in detail["timeline"])
+
+
+def _install_follow_up(ops, monkeypatch):
+    from bat_agent_connector import pm_follow_up, pm_sprints
+    from tests.test_pm_sprints import NOW
+    version = ops.db.execute("PRAGMA user_version").fetchone()[0]
+    pm_sprints.install(ops)
+    pm_meetings.install(ops)
+    pm_follow_up.install(ops)
+    pm_follow_up.install(ops)
+    monkeypatch.setattr(pm_sprints, "time", SimpleNamespace(time=lambda: NOW))
+    assert ops.db.execute("PRAGMA user_version").fetchone()[0] == version
 
 
 def _walk(value):
@@ -506,19 +524,21 @@ def test_blocked_rows_without_a_recorded_reason_are_counted():
     assert pm_register._coverage(False, ["meeting"], [blocked], as_of)["blocked_without_reason"] is None
 
 
-def test_direct_repair_lookup_keeps_actions_links_and_steps(monkeypatch):
+async def test_direct_repair_lookup_keeps_actions_links_and_steps(ops, monkeypatch):
+    data = await prepared(ops)
     repair = {"repair_id": "pmrp_" + "a" * 32, "operation_status": "running", "finding_id": "pmfn_" + "b" * 32,
               "work_item_id": "wi_" + "1" * 20, "created_at": 1_760_000_000.0, "finished_at": None,
               "deadline_at": 1_760_003_600.0, "sequence": 4}
-    ops = SimpleNamespace(db=None, actions={"pm.maintenance.repair.evidence.record"})
+    ops.actions["pm.maintenance.repair.evidence.record"] = object()
     calls = []
     monkeypatch.setattr(pm_maintenance_repairs, "get_repair", lambda *args, **kwargs: {"repair": repair})
     monkeypatch.setattr(pm_maintenance_repairs, "list_repairs", lambda *args, **kwargs: calls.append(1))
-    listed = pm_register._repair_row(ops, "ws", repair)
-    direct, absent = pm_register._direct(ops, READER, "ws", listed["row_id"], [])
-    assert absent is False and calls == []
-    assert direct["available_actions"] == listed["available_actions"] and direct["available_actions"]
-    assert direct["_refs"] == listed["_refs"] and direct["_steps"] == listed["_steps"]
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "repair." + repair["repair_id"])
+    assert calls == []
+    assert [item["action"] for item in detail["row"]["available_actions"]] == ["pm.maintenance.repair.evidence.record"]
+    assert detail["row"]["related"]["work_item_ids"] == [repair["work_item_id"]]
+    assert any(step["step"] == "work" and step["ref"] == {"kind": "work_item", "id": repair["work_item_id"]}
+               for step in detail["timeline"])
 
 
 async def test_repair_detail_outside_the_scan_does_not_rescan(ops, monkeypatch):
@@ -570,6 +590,38 @@ async def test_plan_cap_keeps_the_newest_and_spares_risks(ops, monkeypatch):
     assert view["coverage"]["complete"] is False and "plan_revision" in view["coverage"]["sources"]
     risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
     assert risks["coverage"]["complete"] is True and "plan_revision" not in risks["coverage"]["sources"]
+
+
+async def test_plan_order_follows_revision_sequence_not_adoption_rowid(ops, monkeypatch):
+    """An earlier adoption rowid must not outrank a later plan revision sequence."""
+    from tests.test_pm_plans import planning
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    target, confirmed, _assumption, acceptance = await planning(ops)
+    requirements = [{"id": "login", "source_input_id": confirmed, "acceptance_input_ids": [acceptance]}]
+    earlier = await plan_draft(ops, target, title="Earlier revision", requirements=requirements)
+    later = await plan_draft(ops, target, title="Later revision", requirements=requirements)
+
+    def insert(revision_id, operation_id):
+        ops.db.execute("INSERT INTO pm_plan_adoptions VALUES(?,?,?,?,?,?,?,?,?,?)",
+                       (operation_id, target["workspace_id"], revision_id, None, "pmscope_" + operation_id[3:],
+                        "pmdec_" + operation_id[3:], "Record this adoption ahead of its revision order",
+                        OWNER.actor, 1_700_000_000.0, json.dumps({"status": "adopted", "revision_id": revision_id})))
+
+    insert(later["revision_id"], "op_" + "b" * 32)
+    insert(earlier["revision_id"], "op_" + "a" * 32)
+    sequences = {row["revision_id"]: row["sequence"] for row in ops.db.execute(
+        "SELECT revision_id, sequence FROM pm_plan_revisions WHERE workspace_id=?", (target["workspace_id"],))}
+    rowids = {row["revision_id"]: row[1] for row in ops.db.execute(
+        "SELECT revision_id, MIN(rowid) FROM pm_plan_adoptions WHERE workspace_id=? GROUP BY revision_id",
+        (target["workspace_id"],))}
+    assert sequences[later["revision_id"]] > sequences[earlier["revision_id"]]
+    assert rowids[later["revision_id"]] < rowids[earlier["revision_id"]]
+    view = pm_register.list_register(ops, OWNER, target["workspace_id"], row_type="decision")
+    plans = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "plan_revision"]
+    assert plans == [later["revision_id"]]
+    assert view["coverage"]["complete"] is False and "plan_revision" in view["coverage"]["sources"]
+    detail = pm_register.get_register(ops, OWNER, target["workspace_id"], "plan_revision." + later["revision_id"])
+    assert detail["row"]["title"] == "Later revision"
 
 
 async def test_repair_cap_keeps_the_newest(ops, monkeypatch):
@@ -643,6 +695,24 @@ async def test_meeting_history_cap_marks_only_that_source(ops, monkeypatch):
     assert risks["coverage"]["complete"] is True and risks["total_by_type"]["risk"] == 0
 
 
+async def test_meeting_follow_up_cutoff_is_reported_on_the_history(meeting_ops):
+    data, _sprint, _snap, target = await meeting(meeting_ops, kind="retro")
+    await apply(meeting_ops, target, "draft", who=CONTRIBUTOR, **draft_params("retro"))
+    await note(meeting_ops, target)
+    await complete(meeting_ops, target)
+    for status, result in (("blocked", "First block"), ("open", "Unblocked"), ("reported_done", "Done now")):
+        await apply(meeting_ops, target, "follow_up.record", follow_up_id="check_quality", status=status, result=result)
+    wid, mid = data["workspace_id"], target["meeting_id"]
+    cutoff = meeting_ops.db.execute("SELECT sequence FROM pm_meeting_follow_up_events WHERE meeting_id=? ORDER BY sequence LIMIT 1",
+                                    (mid,)).fetchone()["sequence"]
+    detail = pm_meetings.get_meeting(meeting_ops, READER, wid, mid, follow_up_after=cutoff)
+    assert detail["coverage"]["histories"]["follow_ups"]["after"] == cutoff
+    assert detail["coverage"]["histories"]["notes"]["after"] == 0
+    plain = pm_meetings.get_meeting(meeting_ops, READER, wid, mid)
+    zero = pm_meetings.get_meeting(meeting_ops, READER, wid, mid, follow_up_after=0)
+    assert json.dumps(plain, sort_keys=True, default=str) == json.dumps(zero, sort_keys=True, default=str)
+
+
 async def test_review_history_cap_keeps_the_newest_event(ops, monkeypatch):
     from bat_agent_connector import pm_maintenance_review
     monkeypatch.setattr(pm_register, "HISTORY_REVIEW", 1)
@@ -671,6 +741,126 @@ async def test_review_history_cap_keeps_the_newest_event(ops, monkeypatch):
     assert risks["coverage"]["complete"] is True and "review" not in risks["coverage"]["sources"]
 
 
+def _newest_page(rows, key, after, limit):
+    visible = [row for row in rows if row["sequence"] > after]
+    page = visible[:limit]
+    return {key: page, "next_cursor": page[-1]["sequence"] if len(visible) > limit else None}
+
+
+async def test_review_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    _force_table(monkeypatch, "pm_maintenance_reviews")
+    reviews = [{"review_id": f"pmrevw_{index:032x}", "sequence": index, "status": "completed",
+                "title": f"Review {index}", "created_at": index} for index in (1, 2, 3)]
+
+    def get_review(service, principal, workspace_id, review_id, *, history_limit=1):
+        review = next(row for row in reviews if row["review_id"] == review_id)
+        return {"review": review, "completion": {"actor": OWNER.actor, "created_at": 2, "document": {
+            "direction": "accepted", "follow_ups": []}}, "events": []}
+
+    monkeypatch.setattr(pm_maintenance_review, "list_reviews",
+                        lambda *args, after=0, limit=20, **kwargs: _newest_page(reviews, "reviews", after, limit))
+    monkeypatch.setattr(pm_maintenance_review, "list_events", lambda *args, **kwargs: {"events": [], "next_cursor": None})
+    monkeypatch.setattr(pm_maintenance_review, "get_review", get_review)
+    data = await prepared(ops)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="decision")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "meeting"]
+    assert kept == [reviews[-1]["review_id"]]
+    assert view["coverage"]["complete"] is False and "review" in view["coverage"]["sources"]
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "review" not in risks["coverage"]["sources"]
+
+
+async def test_intake_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_follow_up
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    _force_table(monkeypatch, "pm_follow_up_intakes")
+    intakes = [{"intake_id": f"pmfu_{index:032x}", "sequence": index, "created_at": index, "document": {}}
+               for index in (1, 2, 3)]
+    monkeypatch.setattr(pm_follow_up, "list_intakes",
+                        lambda *args, after=0, limit=50, **kwargs: _newest_page(intakes, "intakes", after, limit))
+    monkeypatch.setattr(pm_follow_up, "get_intake",
+                        lambda *args, **kwargs: {"intake": next(row for row in intakes if row["intake_id"] == args[3])})
+    data = await prepared(ops)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="action")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "follow_up"]
+    assert kept == [intakes[-1]["intake_id"]]
+    assert view["coverage"]["complete"] is False and "follow_up" in view["coverage"]["sources"]
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "follow_up" not in risks["coverage"]["sources"]
+
+
+async def test_proposal_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_conversation_proposals
+    monkeypatch.setattr(pm_register, "DETAIL_CAP", 1)
+    _force_table(monkeypatch, "pm_conversation_proposals")
+    proposals = [{"proposal_id": f"pmcp_{index:032x}", "sequence": index, "created_at": index,
+                  "document": {"title": f"Proposal {index}"}, "validation": {"status": "proposed"}}
+                 for index in (1, 2, 3)]
+    monkeypatch.setattr(pm_conversation_proposals, "list_proposals",
+                        lambda *args, after=0, limit=50, **kwargs: _newest_page(proposals, "proposals", after, limit))
+    monkeypatch.setattr(pm_conversation_proposals, "get_proposal",
+                        lambda *args, **kwargs: {"proposal": next(row for row in proposals if row["proposal_id"] == args[3])})
+    data = await prepared(ops)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="change")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "proposal"]
+    assert kept == [proposals[-1]["proposal_id"]]
+    assert view["coverage"]["complete"] is False and "proposal" in view["coverage"]["sources"]
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "proposal" not in risks["coverage"]["sources"]
+
+
+async def test_mapping_cap_keeps_the_newest(ops, monkeypatch):
+    from bat_agent_connector import pm_issue_mappings
+    monkeypatch.setattr(pm_register, "MAX_SCAN", 2)
+    data = await prepared(ops)
+    version = ops.db.execute("PRAGMA user_version").fetchone()[0]
+    ops.db.execute("""CREATE TABLE IF NOT EXISTS pm_issue_revisions (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, revision_id TEXT NOT NULL UNIQUE,
+        mapping_id TEXT NOT NULL, workspace_id TEXT NOT NULL, work_item_id TEXT NOT NULL,
+        previous_revision_id TEXT UNIQUE, document TEXT NOT NULL, document_digest TEXT NOT NULL,
+        operation_id TEXT NOT NULL UNIQUE, created_at REAL NOT NULL, actor TEXT NOT NULL)""")
+    assert ops.db.execute("PRAGMA user_version").fetchone()[0] == version
+    mappings = []
+    for index in (1, 2, 3):
+        mapping_id = f"pmim_{index:032x}"
+        mappings.append({"mapping_id": mapping_id, "sequence": index, "created_at": float(index),
+                         "document": {"state": "tracking", "selected": {"public_title": f"Issue {index}"}}})
+        ops.db.execute("""INSERT INTO pm_issue_revisions(
+            revision_id,mapping_id,workspace_id,work_item_id,document,document_digest,operation_id,created_at,actor)
+            VALUES(?,?,?,?,?,?,?,?,?)""",
+            (f"pmir_{index:032x}", mapping_id, data["wid"], f"wi_{index:020x}", "{}", "digest",
+             f"op_{index:032x}", index, OWNER.actor))
+    monkeypatch.setattr(pm_issue_mappings, "list_mappings",
+                        lambda *args, after=0, limit=50, **kwargs: _newest_page(mappings, "mappings", after, limit))
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="issue")
+    kept = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "issue_mapping"]
+    assert kept == [mappings[2]["mapping_id"], mappings[1]["mapping_id"]]
+    assert view["coverage"]["complete"] is False and "issue_mapping" in view["coverage"]["sources"]
+    assert view["coverage"]["scan_limit_per_source"] == 2
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "issue_mapping" not in risks["coverage"]["sources"]
+
+
+async def test_governance_history_cap_marks_only_the_detail(ops, monkeypatch):
+    data = await prepared(ops)
+    made = await record(ops, data, title="First title", root_cause_key="history-cap")
+    await change(ops, made, "revise", **fields(data, title="Second title"))
+    await change(ops, made, "revise", **fields(data, title="Third title"))
+    open_detail = pm_register.get_register(ops, OWNER, data["wid"], "governance." + made["record_id"])
+    assert open_detail["timeline_coverage"]["complete"] is True
+    monkeypatch.setattr(pm_register, "MAX_SCAN", 1)
+    listed = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert [row["source"]["id"] for row in listed["rows"]] == [made["record_id"]]
+    assert listed["coverage"]["complete"] is True
+    capped = pm_register.get_register(ops, OWNER, data["wid"], "governance." + made["record_id"])
+    assert capped["timeline_coverage"]["complete"] is False
+    assert capped["timeline_coverage"]["sources"] == ["governance"]
+    assert capped["timeline_coverage"]["partial_reason"] == "incomplete"
+    assert any(step.get("title") == "Third title" for step in capped["timeline"])
+
+
 async def test_hidden_repairs_do_not_change_coverage_counts_or_actions(ops, monkeypatch):
     monkeypatch.setattr(pm_register, "MAX_SCAN", 1)
     data = await prepared(ops)
@@ -689,6 +879,47 @@ async def test_hidden_repairs_do_not_change_coverage_counts_or_actions(ops, monk
     assert stored > pm_register.MAX_SCAN
     assert after == before
     assert after["coverage"]["complete"] is True
+
+
+async def test_lineage_hidden_repair_does_not_remove_the_finding_action(ops, monkeypatch):
+    """A repair dropped by lineage must not reserve its finding or mark the source partial."""
+    data = await prepared(ops)
+    finding_id = "pmfn_" + "1" * 32
+    work_item = "wi_" + "e" * 20
+    repair = {"repair_id": "pmrp_" + "7" * 32, "operation_status": "running", "sequence": 5,
+              "created_at": 1_760_000_000.0, "finished_at": None, "deadline_at": None,
+              "finding_id": finding_id, "work_item_id": work_item}
+    ops.actions["pm.maintenance.repair"] = object()
+    _force_table(monkeypatch, "pm_maintenance_policies", "pm_maintenance_repairs")
+    monkeypatch.setattr(pm_maintenance_policy, "head", lambda db, wid: {"policy_id": "pmmp_" + "a" * 32, "revision": 1})
+    monkeypatch.setattr(pm_maintenance_policy, "active_record", lambda *args, **kwargs: {
+        "policy_id": "pmmp_" + "a" * 32, "policy": {"repair_rules": [{"key": "ci-bug", "labels_all": ["bug"]}]}})
+    monkeypatch.setattr(pm_maintenance_findings, "current_findings", lambda *args, **kwargs: {
+        "visibility_filtered": False,
+        "observation_ref": {"observation_id": "pmobs_" + "a" * 27, "document_digest": "d" * 64},
+        "sources": {"issues": {"status": "complete", "findings": [{
+            "finding_id": finding_id, "state": "observed_open", "native": {"kind": "issues"},
+            "facts": {"labels": ["bug", "ci"]}}]}}})
+    monkeypatch.setattr(pm_maintenance_repairs, "list_repairs",
+                        lambda *args, after=0, limit=20, **kwargs: {"repairs": [repair] if repair["sequence"] > after else [], "next_after": None})
+
+    def offered(view):
+        row = next(item for item in view["rows"] if item["source"] == {"kind": "finding", "id": finding_id})
+        return [action["action"] for action in row["available_actions"]]
+
+    visible = pm_register.list_register(ops, OWNER, data["wid"])
+    assert repair["repair_id"] in {row["source"]["id"] for row in visible["rows"]}
+    assert offered(visible) == []
+    _ensure_lineage(ops)
+    ops.db.execute("INSERT INTO pm_source_lineage VALUES(?,?,?,?)",
+                   ("work_item", work_item, "op_" + uuid.uuid4().hex, "op_" + "f" * 32))
+    hidden = pm_register.list_register(ops, OWNER, data["wid"])
+    assert repair["repair_id"] not in {row["source"]["id"] for row in hidden["rows"]}
+    assert offered(hidden) == ["pm.maintenance.repair"]
+    assert hidden["coverage"]["complete"] is True and "repair" not in hidden["coverage"]["sources"]
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "finding." + finding_id)
+    assert [action["action"] for action in detail["row"]["available_actions"]] == ["pm.maintenance.repair"]
+    assert detail["timeline_coverage"]["complete"] is True
 
 
 async def test_revision_between_pages_keeps_the_row_and_shows_the_new_title(ops):
@@ -738,10 +969,10 @@ async def test_change_timeline_keeps_one_adoption_and_only_resolvable_refs(ops, 
     monkeypatch.setattr(pm_plans, "get_plan", counting)
     detail = pm_register.get_register(ops, OWNER, data["wid"], "governance." + first["record_id"])
     decisions = [step for step in detail["timeline"] if step["step"] == "decision" and step["status"] == "adopted_direction"]
-    adopted = [step for step in detail["timeline"] if step["ref"]["id"] == candidate["revision_id"]]
+    adopted = [step for step in detail["timeline"] if step["ref"]["id"] == candidate["revision_id"] and step["step"] == "revision"]
     assert len(decisions) == 1
     assert decisions[0]["ref"] == {"kind": "governance", "id": first["record_id"]}
-    assert len(adopted) == 1 and adopted[0]["step"] == "revision" and adopted[0]["status"] == "adopted"
+    assert len(adopted) == 1 and adopted[0]["status"] == "adopted"
     assert data["plan"]["revision_id"] not in {step["ref"]["id"] for step in detail["timeline"]}
     assert all(not str(step["ref"]["id"]).startswith("pmgrev_") for step in detail["timeline"])
     assert set(calls) == {candidate["revision_id"]}
@@ -982,3 +1213,405 @@ async def test_lineage_page_survives_a_hidden_row_and_pages_at_the_root_budget(s
         assert quoted_status == 200 and quoted["rows"][0]["row_id"] == row_id
     finally:
         await fleet.close()
+
+
+async def test_one_unverifiable_governance_record_keeps_the_readable_rows(ops, monkeypatch):
+    data = await prepared(ops)
+    older = await record(ops, data, title="Older risk", root_cause_key="older")
+    broken = await record(ops, data, title="Unverifiable risk", root_cause_key="broken",
+                          source_refs=[{"kind": "plan_input", "id": data["confirmed"]}])
+    newer = await record(ops, data, title="Newer risk", root_cause_key="newer",
+                         source_refs=[{"kind": "requirement", "id": "login"}])
+    bad_revision = pm_governance.get_record(ops, OWNER, data["wid"], broken["record_id"])["revision"]["revision_id"]
+    real = pm_governance._revision
+
+    def revision(db, revision_id):
+        if revision_id == bad_revision:
+            raise OperationError("PM_GOVERNANCE_UNAVAILABLE", "Original governance revision cannot be verified", 409)
+        return real(db, revision_id)
+
+    monkeypatch.setattr(pm_governance, "_revision", revision)
+    view = pm_register.list_register(ops, OWNER, data["wid"])
+    gov = [row["source"]["id"] for row in view["rows"] if row["source"]["kind"] == "governance"]
+    assert older["record_id"] in gov and newer["record_id"] in gov
+    assert broken["record_id"] not in gov
+    assert view["coverage"]["complete"] is False
+    assert view["coverage"]["partial_reason"] == "source_incomplete"
+    assert view["total_by_type"] is None and view["summary"] is None
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    risk_ids = [row["source"]["id"] for row in risks["rows"]]
+    assert older["record_id"] in risk_ids and newer["record_id"] in risk_ids
+    assert risks["total_by_type"] is None and risks["summary"] is None
+
+
+async def test_oversized_first_repair_keeps_the_newer_records(ops, monkeypatch):
+    data = await prepared(ops)
+    pm_maintenance_repairs.schema(ops.journal)
+    context = {"repair": "page"}
+    digest = pm_maintenance_checks._digest(context)
+    for index in (1, 2):
+        ops.db.execute("""INSERT INTO pm_maintenance_repairs(
+            repair_id,operation_id,workspace_id,policy_id,finding_id,work_item_id,context,context_digest,
+            created_at,deadline_at,budget_period) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+            (f"pmrp_{index:032x}", f"op_{index:032x}", data["wid"], "pmmp_" + "a" * 32, f"finding-{index}",
+             f"wi_{index:020x}", json.dumps(context), digest, 1, 2, 0))
+    stored = list(ops.db.execute("SELECT repair_id, sequence FROM pm_maintenance_repairs WHERE workspace_id=? ORDER BY sequence",
+                                 (data["wid"],)))
+    oversized_id, newer_id = stored[0]["repair_id"], stored[1]["repair_id"]
+    records = [{"repair_id": row["repair_id"], "sequence": row["sequence"], "operation_status": "running",
+                "created_at": 1_760_000_000.0, "finished_at": None, "finding_id": None, "work_item_id": None,
+                "deadline_at": None} for row in stored]
+
+    def list_repairs(service, principal, workspace_id, *, after=0, limit=20):
+        visible = [row for row in records if row["sequence"] > after]
+        if visible and visible[0]["repair_id"] == oversized_id:
+            raise OperationError("PM_REPAIR_READ_TOO_LARGE", "One whole repair record exceeds the read bound", 413)
+        page = visible[:limit]
+        return {"repairs": page, "next_after": page[-1]["sequence"] if len(visible) > limit else None}
+
+    monkeypatch.setattr(pm_maintenance_repairs, "list_repairs", list_repairs)
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="action")
+    listed = [row["source"]["id"] for row in view["rows"]]
+    assert newer_id in listed and oversized_id not in listed
+    assert view["coverage"]["complete"] is False
+    assert view["coverage"]["partial_reason"] == "source_incomplete"
+    assert view["total_by_type"] is None and view["summary"] is None
+
+
+async def test_one_unverifiable_governance_revision_keeps_later_steps(ops, monkeypatch):
+    data = await prepared(ops)
+    first = await record(ops, data, kind="change", title="Direction")
+    await change(ops, first, "decide", disposition="rejected", rationale="Not this direction")
+    rejected = pm_governance.get_record(ops, OWNER, data["wid"], first["record_id"])["revision"]["revision_id"]
+    await change(ops, first, "decide", disposition="adopted_direction", rationale="Choose this direction")
+    real = pm_governance._revision
+
+    def revision(db, revision_id):
+        if revision_id == rejected:
+            raise OperationError("PM_GOVERNANCE_UNAVAILABLE", "Original governance revision cannot be verified", 409)
+        return real(db, revision_id)
+
+    monkeypatch.setattr(pm_governance, "_revision", revision)
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "governance." + first["record_id"])
+    statuses = [step["status"] for step in detail["timeline"] if step["step"] == "decision"]
+    assert "adopted_direction" in statuses
+    assert "rejected" not in statuses
+    assert detail["timeline_coverage"]["partial_reason"] == "source_incomplete"
+    assert "governance" in detail["timeline_coverage"]["sources"]
+
+
+async def test_one_unreadable_review_event_keeps_the_newer_candidate(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    _force_table(monkeypatch, "pm_maintenance_reviews")
+    data = await prepared(ops)
+    review_id = "pmrevw_" + "b" * 32
+    ops.db.execute("""CREATE TABLE pm_maintenance_review_events (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL,
+        review_id TEXT NOT NULL, workspace_id TEXT NOT NULL)""")
+    events = []
+    for index, title in ((1, "Older"), (2, "Broken"), (3, "Newer")):
+        event_id = f"pmrve_{index:032x}"
+        ops.db.execute("INSERT INTO pm_maintenance_review_events(event_id, review_id, workspace_id) VALUES(?,?,?)",
+                       (event_id, review_id, data["wid"]))
+        sequence = ops.db.execute("SELECT sequence FROM pm_maintenance_review_events WHERE event_id=?", (event_id,)).fetchone()[0]
+        events.append({"event_id": event_id, "kind": "candidate.record", "sequence": sequence, "created_at": index,
+                       "document": {"disposition": "proposal", "title": title}})
+    broken = events[1]["sequence"]
+
+    def list_events(service, principal, workspace_id, review, *, after=0, limit=20):
+        visible = [row for row in events if row["sequence"] > after]
+        page = visible[:limit]
+        if any(row["sequence"] == broken for row in page):
+            raise OperationError("PM_MAINTENANCE_REVIEW_TOO_LARGE", "One whole review event exceeds the read bound", 413)
+        return {"events": page, "next_cursor": page[-1]["sequence"] if len(visible) > limit else None}
+
+    review = {"review_id": review_id, "sequence": 4, "status": "completed", "title": "Review", "created_at": 1}
+    monkeypatch.setattr(pm_maintenance_review, "list_reviews", lambda *args, **kwargs: {"reviews": [review], "next_cursor": None})
+    monkeypatch.setattr(pm_maintenance_review, "list_events", list_events)
+    monkeypatch.setattr(pm_maintenance_review, "get_review", lambda *args, **kwargs: {
+        "review": review, "completion": {"actor": OWNER.actor, "created_at": 2, "document": {
+            "direction": "accepted", "follow_ups": []}}, "events": []})
+    view = pm_register.list_register(ops, OWNER, data["wid"], row_type="change")
+    assert [row["source"]["id"] for row in view["rows"]] == [events[2]["event_id"], events[0]["event_id"]]
+    assert view["coverage"]["partial_reason"] == "source_incomplete"
+    assert view["total_by_type"] is None and view["summary"] is None
+    risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
+    assert risks["coverage"]["complete"] is True and "review" not in risks["coverage"]["sources"]
+
+
+async def test_dotted_meeting_item_ids_open_on_http_rpc_and_mcp(served, monkeypatch, mock):
+    from bat_agent_connector import pm_sprints
+    from tests.test_pm_meetings import create_request as meeting_create
+    from tests.test_pm_sprints import NOW, active
+    monkeypatch.setattr(pm_sprints, "time", SimpleNamespace(time=lambda: NOW))
+    daemon, port, selection = served
+    data = await sprint_prepared(daemon, selection)
+    sprint = await active(daemon.ops, data)
+    snap = await snapshot(daemon.ops, data["workspace_id"])
+    operation, _ = daemon.ops.create(CONTRIBUTOR, **meeting_create(daemon.ops, sprint, snap, "retro"))
+    result = (await settle(daemon.ops, operation))["result"]
+    target = {"workspace_id": data["workspace_id"], "meeting_id": result["meeting_id"]}
+    params = draft_params("retro")
+    params["follow_ups"][0]["id"] = "check.quality"
+    params["decisions"][0]["id"] = "retain.direction"
+    await apply(daemon.ops, target, "draft", who=CONTRIBUTOR, **params)
+    await note(daemon.ops, target)
+    await complete(daemon.ops, target, decision_ids=["retain.direction"])
+    wid, mid = data["workspace_id"], target["meeting_id"]
+    follow = f"meeting.{mid}.follow_up.check.quality"
+    decision = f"meeting.{mid}.decision.retain.direction"
+    auth = token(daemon, READER.actor, "observe")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(daemon.fleet.config, read_only=True, principal_only=True)
+    prefix = f"/api/v1/pm/workspaces/{wid}/register"
+    before = daemon.ops.db.total_changes
+    try:
+        status, body = await http(port, "GET", prefix, tok=auth)
+        assert status == 200, body
+        listed = {row["row_id"] for row in body["rows"]}
+        assert follow in listed and decision in listed
+        assert body["coverage"]["complete"] is True
+        rpc = await daemon.call_api("pm_register_list", {"workspace_id": wid}, READER)
+        mcp_list = unpack(await server.call_tool("pm_register_list", {"workspace_id": wid}))
+        assert {row["row_id"] for row in rpc["rows"]} >= {follow, decision}
+        assert {row["row_id"] for row in mcp_list["rows"]} >= {follow, decision}
+        for row_id in (follow, decision):
+            status, detail = await http(port, "GET", prefix + "/" + row_id, tok=auth)
+            assert status == 200, detail
+            assert detail["row"]["row_id"] == row_id
+            detail_params = {"workspace_id": wid, "row_id": row_id}
+            rpc_detail = await daemon.call_api("pm_register_get", detail_params, READER)
+            mcp_detail = unpack(await server.call_tool("pm_register_get", detail_params))
+            assert rpc_detail["row"]["source"] == detail["row"]["source"]
+            assert mcp_detail["row"]["source"] == detail["row"]["source"]
+        assert daemon.ops.db.total_changes == before
+        assert not write_frames(mock)
+    finally:
+        await fleet.close()
+
+
+async def test_repair_timeline_links_the_finding_both_ways(ops, monkeypatch):
+    data = await prepared(ops)
+    pm_maintenance_repairs.schema(ops.journal)
+    finding_id, repair_id = "pmfn_" + "b" * 32, "pmrp_" + "a" * 32
+    work_item = "wi_" + "1" * 20
+    context = {"visible": True}
+    ops.db.execute("""INSERT INTO pm_maintenance_repairs(
+        repair_id,operation_id,workspace_id,policy_id,finding_id,work_item_id,context,context_digest,
+        created_at,deadline_at,budget_period) VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
+        (repair_id, "op_" + "a" * 32, data["wid"], "pmmp_" + "a" * 32, finding_id, work_item,
+         json.dumps(context), pm_maintenance_checks._digest(context), 1_760_000_000.0, 1_760_003_600.0, 0))
+    repair = {"repair_id": repair_id, "operation_status": "running", "finding_id": finding_id,
+              "work_item_id": work_item, "created_at": 1_760_000_000.0, "finished_at": None,
+              "deadline_at": 1_760_003_600.0, "sequence": 4}
+    monkeypatch.setattr(pm_maintenance_repairs, "get_repair", lambda *args, **kwargs: {"repair": repair})
+
+    def readable_finding(service, principal, workspace_id, ident):
+        assert ident == finding_id
+        return pm_register._finding_row(service, workspace_id, {"finding_id": finding_id, "state": "observed_open",
+                                                                "facts": {}, "native": {}}, "issues", None, None, None, set())
+
+    monkeypatch.setattr(pm_register, "_finding_by_id", readable_finding)
+    repair_detail = pm_register.get_register(ops, OWNER, data["wid"], "repair." + repair_id)
+    finding_detail = pm_register.get_register(ops, OWNER, data["wid"], "finding." + finding_id)
+    assert _shows(repair_detail, "finding", finding_id)
+    assert any(step["step"] == "work" and step["ref"]["id"] == work_item for step in repair_detail["timeline"])
+    assert _shows(finding_detail, "repair", repair_id)
+    assert repair_detail["timeline_coverage"]["complete"] is True
+    assert finding_detail["timeline_coverage"]["complete"] is True
+
+    def broken_finding(*args, **kwargs):
+        raise OperationError("PM_FINDINGS_TOO_LARGE", "One finding exceeds the read bound", 413)
+
+    monkeypatch.setattr(pm_register, "_finding_by_id", broken_finding)
+    partial = pm_register.get_register(ops, OWNER, data["wid"], "repair." + repair_id)
+    assert any(step["step"] == "work" and step["ref"]["id"] == work_item for step in partial["timeline"])
+    assert not _shows(partial, "finding", finding_id)
+    assert partial["timeline_coverage"]["partial_reason"] == "source_incomplete"
+    assert "finding" in partial["timeline_coverage"]["sources"]
+
+    monkeypatch.setattr(pm_register, "_finding_by_id", readable_finding)
+
+    def broken_repair(*args, **kwargs):
+        raise OperationError("PM_REPAIR_READ_TOO_LARGE", "One repair exceeds the read bound", 413)
+
+    monkeypatch.setattr(pm_maintenance_repairs, "get_repair", broken_repair)
+    hidden_repair = pm_register.get_register(ops, OWNER, data["wid"], "finding." + finding_id)
+    assert not _shows(hidden_repair, "repair", repair_id)
+    assert hidden_repair["timeline_coverage"]["partial_reason"] == "source_incomplete"
+    assert "repair" in hidden_repair["timeline_coverage"]["sources"]
+
+
+async def test_intake_timeline_links_selected_governance_both_ways(ops, monkeypatch):
+    from tests.test_pm_follow_up import prepare
+    from tests.test_pm_follow_up import prepared as follow_prepared
+    _install_follow_up(ops, monkeypatch)
+    data = await follow_prepared(ops)
+    original = await record(ops, data, kind="risk", root_cause_key="linked-cause", title="Linked risk")
+    intake = await prepare(ops, data, governance_revision_ids=[original["revision_id"]])
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "follow_up." + intake["intake_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "governance." + original["record_id"])
+    assert _shows(detail, "governance", original["record_id"])
+    assert _shows(reverse, "follow_up", intake["intake_id"])
+    assert detail["timeline_coverage"]["complete"] is True
+    assert reverse["timeline_coverage"]["complete"] is True
+
+
+async def test_intake_timeline_links_selected_meeting_follow_up_both_ways(ops, monkeypatch):
+    from tests.test_pm_follow_up import completed_meeting, prepare
+    _install_follow_up(ops, monkeypatch)
+    data, target, completion_id = await completed_meeting(ops)
+    recorded = await apply(ops, target, "follow_up.record", follow_up_id="check_quality", status="reported_done",
+                           result="The reviewer says it is all fixed")
+    intake = await prepare(ops, data, meeting_follow_up_refs=[{
+        "completion_id": completion_id, "follow_up_id": "check_quality", "result_event_id": recorded["event_id"]}])
+    follow_ident = target["meeting_id"] + ".follow_up.check_quality"
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "follow_up." + intake["intake_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "meeting." + follow_ident)
+    assert _shows(detail, "meeting", follow_ident)
+    assert _shows(reverse, "follow_up", intake["intake_id"])
+
+
+async def test_disambiguation_links_both_governance_records(ops):
+    data = await prepared(ops)
+    first = await record(ops, data, title="First risk", root_cause_key="first-cause")
+    second = await record(ops, data, title="Second risk", root_cause_key="second-cause",
+                          source_refs=[{"kind": "plan_input", "id": data["assumption"]}],
+                          disambiguation={"record_ids": [first["record_id"]], "rationale": "Same source, separate record"})
+    forward = pm_register.get_register(ops, OWNER, data["wid"], "governance." + second["record_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "governance." + first["record_id"])
+    assert _shows(forward, "governance", first["record_id"])
+    assert _shows(reverse, "governance", second["record_id"])
+    assert forward["timeline_coverage"]["complete"] is True
+    assert reverse["timeline_coverage"]["complete"] is True
+
+
+def _review_detail(review_id, *, follow_ups=None, events=None):
+    review = {"review_id": review_id, "sequence": 4, "status": "completed", "title": "Review the gap",
+              "created_at": 1_760_000_000.0}
+    completion = {"actor": OWNER.actor, "created_at": 1_760_000_100.0, "document": {
+        "direction": "accepted", "follow_ups": follow_ups or []}}
+    return review, completion, events or []
+
+
+async def test_review_follow_up_timeline_links_the_review_both_ways(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    data = await prepared(ops)
+    review_id = "pmrevw_" + "a" * 32
+    review, completion, events = _review_detail(review_id, follow_ups=[{
+        "id": "coverage", "text": "Inspect the gap", "status": "open", "owner_actor": OWNER.actor}])
+    monkeypatch.setattr(pm_maintenance_review, "get_review", lambda *args, **kwargs: {
+        "review": review, "completion": completion, "events": []})
+    monkeypatch.setattr(pm_maintenance_review, "list_events", lambda *args, **kwargs: {"events": events, "next_cursor": None})
+    follow_ident = review_id + ".follow_up.coverage"
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "follow_up." + follow_ident)
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "meeting." + review_id)
+    assert _shows(detail, "meeting", review_id)
+    assert _shows(reverse, "follow_up", follow_ident)
+    assert detail["timeline_coverage"]["complete"] is True
+    assert reverse["timeline_coverage"]["complete"] is True
+
+
+async def test_review_candidate_timeline_links_the_review_both_ways(ops, monkeypatch):
+    from bat_agent_connector import pm_maintenance_review
+    data = await prepared(ops)
+    pm_maintenance_review.schema(ops.journal)
+    review_id, event_id = "pmrevw_" + "c" * 32, "pmrve_" + "d" * 32
+    ops.db.execute("""INSERT INTO pm_maintenance_review_events(
+        event_id,review_id,workspace_id,kind,document,document_digest,source_binding,actor,created_at,operation_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (event_id, review_id, data["wid"], "candidate.record", "{}", "digest", "{}", OWNER.actor, 1.0, "op_" + "e" * 32))
+    event = {"event_id": event_id, "kind": "candidate.record", "sequence": 1, "created_at": 1_760_000_050.0,
+             "document": {"disposition": "proposal", "title": "Narrow a verification gap"}}
+    review, completion, events = _review_detail(review_id, events=[event])
+    monkeypatch.setattr(pm_maintenance_review, "get_review", lambda *args, **kwargs: {
+        "review": review, "completion": completion, "events": []})
+    monkeypatch.setattr(pm_maintenance_review, "list_events", lambda *args, **kwargs: {"events": events, "next_cursor": None})
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "proposal." + event_id)
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "meeting." + review_id)
+    assert _shows(detail, "meeting", review_id)
+    assert _shows(reverse, "proposal", event_id)
+
+
+async def test_plan_timeline_links_the_visible_proposal_both_ways(ops, monkeypatch):
+    from bat_agent_connector import pm_conversation_proposals
+    data = await prepared(ops)
+    candidate = await plan_draft(ops, data["target"], title="Fixed next plan")
+    ctx = adoption(ops, data["target"], candidate["revision_id"], previous=data["plan"]["revision_id"])
+    adopt(ctx)
+    await settle(ops, ctx.op)
+    proposal_id, proposal_op = "pmcp_" + "ab" * 16, "op_reg" + "c" * 32
+    ops.db.execute("""CREATE TABLE pm_conversation_proposals (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, proposal_id TEXT NOT NULL UNIQUE,
+        workspace_id TEXT NOT NULL, thread_id TEXT NOT NULL, operation_id TEXT NOT NULL UNIQUE)""")
+    ops.db.execute("INSERT INTO pm_conversation_proposals(proposal_id,workspace_id,thread_id,operation_id) VALUES(?,?,?,?)",
+                   (proposal_id, data["wid"], "thread", proposal_op))
+    # The adoption's own sources stay readable; this root only names the proposal operation.
+    _visible_synthetic(monkeypatch)
+    _ensure_lineage(ops)
+    ops.db.execute("INSERT INTO pm_source_lineage VALUES(?,?,?,?)", ("operation", ctx.operation_id, proposal_op, ctx.operation_id))
+    calls = []
+
+    def get_proposal(service, principal, workspace_id, ident):
+        calls.append(ident)
+        return {"proposal": {"proposal_id": proposal_id, "sequence": 1, "created_at": 1_760_000_000.0,
+                             "document": {"title": "Narrow the gap", "requirements": [{"id": "login"}]},
+                             "validation": {"status": "valid"}}}
+
+    monkeypatch.setattr(pm_conversation_proposals, "get_proposal", get_proposal)
+    listed = pm_register.list_register(ops, OWNER, data["wid"])
+    assert calls == []
+    assert proposal_id not in {row["source"]["id"] for row in listed["rows"]}
+    detail = pm_register.get_register(ops, OWNER, data["wid"], "plan_revision." + candidate["revision_id"])
+    reverse = pm_register.get_register(ops, OWNER, data["wid"], "proposal." + proposal_id)
+    baseline = pm_register.get_register(ops, OWNER, data["wid"], "plan_revision." + data["plan"]["revision_id"])
+    assert _shows(detail, "proposal", proposal_id)
+    assert _shows(reverse, "plan_revision", candidate["revision_id"])
+    assert not _shows(baseline, "proposal", proposal_id)
+    assert calls and set(calls) == {proposal_id}
+
+
+@pytest.mark.parametrize("source", ["snapshot", "evidence"])
+@pytest.mark.parametrize("difference", [
+    {"actor": "other-reader"}, {"scopes": frozenset()},
+    {"admin": True}, {"credential_id": "other-credential"},
+    {"workspace_id": "ws_" + "f" * 32},
+])
+async def test_register_source_memo_keys_principal_and_workspace(ops, monkeypatch, source, difference):
+    """MN-2: a cached source cannot skip access checks for another identity or workspace."""
+    from bat_agent_connector import pm_evidence, pm_read_cache, pm_snapshots
+    from bat_agent_connector.pm_release_baselines import _snapshot
+
+    data = await prepared(ops, evidence=True)
+    module = pm_snapshots if source == "snapshot" else pm_evidence
+    read = module.get_snapshot if source == "snapshot" else module.get_evidence
+    identity = (data["snapshot"]["snapshot_id"] if source == "snapshot" else
+                ops.db.execute("SELECT evidence_id FROM pm_evidence WHERE workspace_id=? LIMIT 1", (data["wid"],)).fetchone()[0])
+    original, calls = module._member, []
+
+    def member(service, principal, workspace_id, **kwargs):
+        calls.append((principal, workspace_id))
+        return original(service, principal, workspace_id, **kwargs)
+
+    monkeypatch.setattr(module, "_member", member)
+    other = replace(OWNER, **difference) if "workspace_id" not in difference else OWNER
+    workspace_id = difference.get("workspace_id", data["wid"])
+    with _snapshot(ops.db), pm_read_cache.scope(ops.db, OWNER):
+        expected = read(ops, OWNER, data["wid"], identity)
+        assert read(ops, OWNER, data["wid"], identity) == expected
+        assert len(calls) == 1
+        try:
+            changed = read(ops, other, workspace_id, identity)
+        except OperationError as exc:
+            assert exc.status in (403, 404)
+            with pytest.raises(OperationError) as repeated:
+                read(ops, other, workspace_id, identity)
+            assert repeated.value is not exc
+            assert (repeated.value.code, repeated.value.status) == (exc.code, exc.status)
+        else:
+            assert read(ops, other, workspace_id, identity) == changed
+        assert len(calls) == 2
+        assert calls[-1][0] is other and calls[-1][1] == workspace_id
+        assert read(ops, OWNER, data["wid"], identity) == expected
+        assert len(calls) == 2

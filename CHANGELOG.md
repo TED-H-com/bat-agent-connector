@@ -2,61 +2,51 @@
 
 ## Next release (unreleased)
 
-- Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
-  lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
-  immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
-  current membership and source withdrawal; capture never executes repository code. Lockfile
-  versions count as verified only for components the lockfile covers (never by name alone),
-  unsupported fields make a capture partial, and freshness stays unknown until a repository head
-  is observed. Optional extras and tool-specific dev groups keep their roles; an oversized
-  manifest is stored as a deterministic partial capture with its omission count.
+- Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
+  reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
+  `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
+  and withdrawn sources lose rows and counts together.
+  See the [dependency contract](docs/design/pm-dependencies.md).
 
-- Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
-  with adopted-requirement progress, explicit blockers, decisions, schedule/quality
-  deviations, current review/proposal state, rollback evidence and bounded source
-  coverage. Hidden or oversized sources stay partial; source references respect
-  the whole document's limit. Reads share a snapshot and request-local source cache.
-  Saved reports retain their fixed snapshot semantics.
-- Bind up to eight original context items when creating a PM discussion and rename
-  threads with durable version checks while preserving title-only proposal adoption.
-  Version 3 profiles retain compatibility with version 2 plan documents. Bound
-  analysis references use each original revision's operation. Source withdrawal redacts chips and
-  protects analysis derived from their frozen context; English and Traditional
-  Chinese validation messages accompany the new context errors.
+- Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
+  decisions, deviations and recent deliveries, separate from fixed saved reports.
+  Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
+  See the [overview contract](docs/design/pm-overview-discussion-context.md).
+- Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
+  `pm_conversation_proposal_get` exposes adoptability that survives title-only renames.
+  Withdrawn context is redacted and access to analysis derived from it remains protected.
+  See the [discussion contract](docs/design/pm-overview-discussion-context.md).
 
-- Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
-  Each row keeps its source record's identity and canonical status. Totals, open-item age, the
-  last 12 weeks and blocking reasons are included only when every source that matches the active
-  type filter was read completely. A hidden or oversized record is left out of that page; it does
-  not fail the register or change the counts. Row ids are path-safe (`governance.pmgov_…`) and
-  cursors are opaque sequence tokens. The projection adds no write actions.
+- Add a read-only issues, actions and changes register via `pm_register_list` and
+  `pm_register_get`, with source identities, recorded statuses and linked detail timelines.
+  Totals and summaries require complete relevant sources; hidden or withdrawn records
+  are omitted from rows and aggregates together, while other readable records remain.
+  See the [register contract](docs/design/pm-register.md).
 
-- Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
-  `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
-  Actual intervals come only from explicit execution evidence. Manual sessions stay read-only.
-  The read does not compute a forecast, a critical path, phase rows, or per-work token use.
-  A visible session link with no observation stays an unknown read-only attempt. A linked
-  operation or task with no record is omitted, marked partial, and does not publish the id.
-  The page is cut by encoded size and by a 64-root lineage budget. `next_cursor` is an
-  opaque base64url keyset, so the next page resumes without gaps. Requirement text is kept
-  verbatim. Withdrawn work items, runs, operations, sessions, and tasks leave together with
-  the dates derived from them, and their ids do not appear in rows or cursors.
-  See `docs/design/pm-schedule.md`.
+- Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
+  dates, including unscheduled work and execution attempts for a future schedule view.
+  Partial pages never claim totals; withdrawn sources lose rows and derived dates together,
+  and missing dates stay unknown. Manual sessions remain read-only.
+  See the [schedule contract](docs/design/pm-schedule.md).
 
-- Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
-  returns per-source local days only when `buckets=day` is set; `tz` is then an exact IANA
-  name and defaults to UTC. The window is still at most 366 days. Daily buckets additionally
-  cover at most 92 local dates. A day is complete only when the collector's read started at
-  or after that local day's end plus a settle margin (`max(15 minutes, 3 × interval)`), the
-  stored cursor had reached EOF, and the window contains the whole day. A later Claude
-  refinement can still land on its first-fragment day, so `complete` is settled coverage
-  rather than a frozen total. Missing counters and uncovered days stay null, and withdrawn
-  sources omit buckets together with their totals.
+- Add opt-in daily usage through `pm_resources_get` with `buckets=day` and an IANA `tz`,
+  covering up to 92 local dates for usage charts. Complete days are settled, not frozen.
+  Missing counters stay null; withdrawn sources lose buckets and totals together.
+  See the [resource contract](docs/design/agent-resource-observation.md).
+
+- Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
+  startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
+  Installed-app UI tests retry transient UI Automation reads within the existing
+  readiness deadline and keep bounded, text-free attempt diagnostics.
 
 - PM labels no longer print a missing value. A Brief section without a recorded
   status says Unknown / 未知. Issue tracking uses the repository name stored on
   the mapping, or the name on the published issue when the mapping omits it,
   and otherwise shows only the issue number.
+
+- Diagnose durable-operation test timeouts with worker/step details and join failed
+  test workers before journal teardown, preserving the existing deadline and original-key
+  recovery.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
@@ -79,10 +69,16 @@
   source inventory; require resolved-source verification, an optimized iterator
   regression, and a packaged release WebView smoke test in desktop CI.
 
+- Date/time inputs are validated the same way on every supported Python version; an
+  hour of 24 is rejected.
+
 - Add published-version starts through explicit repository/host/workspace bindings. Preview the
   exact branch head, fetch its fixed SHA into a fresh managed carrier, and recover the original
   operation after lost replies. Shared browser/Tauri UI, CLI, MCP and canonical workflow `.9`
   preserve the same request; human checkouts and remote refs remain unchanged.
+
+- Windows Fleet core tests give PowerShell fixtures their own bounded startup phase before the unchanged work
+  deadline, and start them one at a time.
 
 - Add central durable `session.start`, exact workspace discovery and a shared start form. Save
   the original request before submission; reconcile unknown start/send outcomes and preserve retained
