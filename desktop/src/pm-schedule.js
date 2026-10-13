@@ -165,11 +165,11 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const {row, depth, expandable} = item;
       const expand = expandable ? button({icon: 'chevron-right', variant: 'ghost', label: null, 'aria-label': t(collapsed.has(row.id) ? 'ui_expand' : 'ui_collapse', {title: label(row)}),
         tabindex: -1, 'aria-expanded': String(!collapsed.has(row.id)), onClick: event => {event.stopPropagation(); toggle(row.id); focusRow(row.id);}}) : h('span', {class: 'schedule-indent'});
-      const dates = ['baseline', 'forecast', 'actual'].filter(key => row[key]).map(key => `${t('sched_' + key)} ${row[key].start?.slice(0, 10) || '—'}${row[key].end && row[key].end !== row[key].start ? ' → ' + row[key].end.slice(0, 10) : ''}`);
+      const dates = ['baseline', 'forecast', 'actual'].filter(key => row[key]).map(key => h('span', {}, t('sched_' + key), ' ', timeStamp(row[key].start?.slice(0, 10), {dateOnly:true}), row[key].end && row[key].end !== row[key].start ? [' → ', timeStamp(row[key].end.slice(0, 10), {dateOnly:true})] : null));
       const cell = h('div', {class: 'schedule-tree-cell', role: 'treeitem', 'aria-level': depth, 'aria-expanded': expandable ? String(!collapsed.has(row.id)) : null,
         'aria-label': label(row), tabindex: (focusId || selected || visible[0]?.row.id) === row.id ? 0 : -1,
         'data-schedule-select': row.id, onclick: event => row.kind === 'group' ? toggle(row.id) : select(row.id, event.currentTarget), onkeydown: event => keydown(event, item, index)},
-        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: row.title}, label(row)), h('span', {class: 'schedule-date-range'}, dates.join(' · ') || t('sched_no_dates'))),
+        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: row.title}, label(row)), h('span', {class: 'schedule-date-range'}, ...(dates.length ? dates.flatMap((date, index) => index ? [' · ', date] : [date]) : [t('sched_no_dates')]))),
         row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null);
       cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
       const lane = h('div', {class: 'schedule-lane', tabindex: 0, role: 'region', 'aria-label': `${t('sched_timeline')} · ${label(row)}`}, track(row));
@@ -200,7 +200,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
         .sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
       const delta = upcoming ? milestoneDelta(upcoming) : null;
       meta.replaceChildren(...(upcoming ? [h('span', {class: 'schedule-answer'}, firstLine(upcoming), delta ? ' · ' + t('sched_delta', {n: delta > 0 ? '+' + delta : delta}) : '')] : []),
-        h('span', {}, t('sched_loaded', {n: data.rows.length})), data.partial ? statusPill('partial') : h('span'), details);
+        h('span', {}, t(data.partial ? 'sched_loaded' : 'sched_count', {n: data.rows.length})), data.partial ? statusPill('partial') : h('span'), details);
       const list = h('ul', {}, ...data.unscheduled.map(row => h('li', {},
         button({variant: 'ghost', label: firstLine(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}), rowStatus(row, data))));
       unscheduled.replaceChildren(disclosure({label: t('sched_unscheduled', {n: data.unscheduled.length}), key: `${namespace}:${workspaceId}:schedule:unscheduled`, body: list}));

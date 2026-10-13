@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // Central Sprint management, with fixed references and the shared durable operation forms.
 import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
@@ -11,7 +12,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_sprint_stale'));
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-sprints': ''},
     h('header', {class: 'pm-heading'}, h('h2', {}, t('pm_sprint_title')),
-      h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, t('pm_sprint_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pm_sprint_refresh'), ...{type: 'button', class: 'secondary', onclick: () => void refresh()}})),
     labelled('pm_sprint_choose', choose), status, warning, review, view, editors);
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
   const actor = () => caps()?.actor;

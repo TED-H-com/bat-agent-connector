@@ -36,7 +36,7 @@ async function start(page: Page, locale = 'en', options: {native?: boolean; with
     return result;
   });
   await page.goto(`/dashboard/#/pm/${fixture.ids.workspaceId}/schedule`);
-  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText(locale === 'en' ? 'loaded' : '已載入');
+  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText(locale === 'en' ? /items|loaded/ : /共 .* 筆|已載入/);
   await expect(page.locator('.pm-main > header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
   return {...fixture, state, calls, writes};
 }
@@ -244,6 +244,6 @@ test('schedule events still refresh without a mounted Overview', async ({page}) 
   const reads = f.calls.length;
   f.state.cursor++;
   await expect.poll(() => f.calls.length).toBeGreaterThan(reads);
-  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText('27 loaded');
+  await expect(page.locator('.ui-page-header .schedule-meta')).toContainText('27 items');
   expect(f.state.overviewReads).toBe(0); expect(f.writes).toEqual([]);
 });

@@ -1,3 +1,4 @@
+import {skeleton} from './ui/components.js';
 // A reviewed selector fixes central bytes; this client never constructs plan contents.
 export function pmContextBundle({h,t,api,guard,caps,target,thread}) {
   const value=h('input',{type:'hidden'}),summary=h('div',{'data-pm-context-selection':''});
@@ -25,7 +26,7 @@ export function pmContextBundle({h,t,api,guard,caps,target,thread}) {
   const valid=()=>!value.value||Boolean(selected()&&verified===value.value&&selected().thread_version===currentVersion()&&supported());
   const inspect=h('button',{type:'button',class:'secondary',onclick:async()=>{
     try {guard?.();if(loading||request?.locked()||!supported())return;
-      loading=true;const ticket=++generation,actor=caps()?.actor;preview=null;verified=null;status.textContent=t('pm_cb_loading');details.replaceChildren();update();request?.update();
+      loading=true;const ticket=++generation,actor=caps()?.actor;preview=null;verified=null;status.replaceChildren(skeleton(2));details.replaceChildren();update();request?.update();
       const result=await api('GET',`/pm/workspaces/${encodeURIComponent(target.workspace_id)}/threads/${encodeURIComponent(target.thread_id)}/context-bundle`);
       guard?.();if(ticket!==generation||caps()?.actor!==actor||request?.locked())return;
       preview=validate(result);

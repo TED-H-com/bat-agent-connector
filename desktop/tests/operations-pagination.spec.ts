@@ -22,7 +22,7 @@ for(const native of [false,true]) {
     expect(await page.locator('[data-operation-list] [data-row-key]').count()).toBe(4);
     await page.getByRole('button',{name:'Load earlier operations'}).click();
     await page.getByRole('button',{name:'Load earlier operations'}).click();
-    await expect(page.locator('[data-operation-count]')).toBeHidden();
+    await expect(page.locator('[data-operation-count]')).toHaveText('7 operations');
     await expect(page.getByRole('button',{name:'Load earlier operations'})).toBeHidden();
     expect(await page.locator('[data-operation-list] [data-row-key]').count()).toBe(7);
     expect(state.errors).toEqual([]);

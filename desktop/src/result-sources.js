@@ -1,3 +1,4 @@
+import {iconButton, emptyState} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 const itemHref = item => `#/item/${encodeURIComponent(item.work_item_id)}`;
 const artifactHref = artifact => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
@@ -5,13 +6,13 @@ const date = value => timeStamp(value);
 export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, onEvents, errorBox}) {
   let doc = null, serial = 0, children = [], refreshing = null;
   const warning = h('div', {'data-child-warning': ''}), status = h('p', {class: 'muted', role: 'status'}), body = h('div');
-  const refresh = h('button', {class: 'mini', type: 'button', onclick: () => load()}, t('results_refresh'));
+  const refresh = iconButton({icon:'refresh-cw', label:t('results_refresh'), ...{class: 'mini', type: 'button', onclick: () => load()}});
   const more = h('button', {class: 'secondary', type: 'button', hidden: true, onclick: () => load(doc?.children_next_cursor)}, t('results_more'));
   const details = h('details', {}, h('summary', {}, t('results_title')), status, h('div', {class: 'actions'}, refresh), body, more);
   const box = h('section', {class: 'result-sources panel', 'data-result-sources': ''}, warning, details);
   function renderSource(item, own = false) {
     const content = h('div', {}, h('p', {class: 'muted'}, t('results_completion', {state: t(`wi_state_${item.completion.display_state}`)})));
-    if (!item.links.length && !item.result_artifacts.length) content.append(h('p', {class: 'muted'}, t('results_empty')));
+    if (!item.links.length && !item.result_artifacts.length) content.append(emptyState({title:t('results_empty')}));
     for (const link of item.links) {
       const row = h('div', {class: 'panel'}, linkTarget(link));
       if (link.note) row.append(h('p', {class: 'muted'}, link.note));

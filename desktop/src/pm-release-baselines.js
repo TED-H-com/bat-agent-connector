@@ -1,3 +1,4 @@
+import {emptyState, iconButton} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 // Release selection records a fixed source. It does not publish or authorize Maintain.
 export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace}) {
@@ -41,7 +42,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
   const permission=h('p',{class:'muted'},t('prb_owner'));
   const element=h('section',{class:'pm-brief','data-pm-release-baselines':''},h('header',{class:'pm-heading'},
     h('div',{},h('h2',{},t('prb_title')),h('p',{class:'muted'},t('prb_intro'))),
-    h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('prb_refresh'))),status,view,historyDetails,permission,editorDetails);
+    iconButton({icon:'refresh-cw', label:t('prb_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,view,historyDetails,permission,editorDetails);
   function controls(){
     const can=ready&&allowed();
     for(const field of [repository,kind,branch])field.disabled=!can||reading;
@@ -91,7 +92,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
   }
   function renderCurrent(data){
     check(data);if(!Number.isSafeInteger(data.head?.version))throw Error(t('prb_invalid'));
-    head=data.head;view.replaceChildren(data.baseline?baselineRow(data.baseline,true):h('p',{class:'muted'},t(data.visibility_filtered||head.version>0?'prb_hidden':'prb_empty')));
+    head=data.head;view.replaceChildren(data.baseline?baselineRow(data.baseline,true):emptyState({title:t(data.visibility_filtered||head.version>0?'prb_hidden':'prb_empty')}));
   }
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;

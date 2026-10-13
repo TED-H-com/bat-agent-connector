@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 // Catalogs and subscription observations come only from the selected BAT host.
 const fields = ['initial_agent', 'initial_model', 'last_agent', 'last_model', 'hidden', 'order'];
@@ -103,7 +104,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     agent.addEventListener('change', modified); model.addEventListener('input', modified);
     form.append(h('label', {}, t(`models_${role}_agent`), agent), h('label', {}, t(`models_${role}_model`), model));
   }
-  const refresh = h('button', {class: 'secondary', type: 'button', onclick: () => load(true)}, t('models_refresh'));
+  const refresh = iconButton({icon:'refresh-cw', label:t('models_refresh'), ...{class: 'secondary', type: 'button', onclick: () => load(true)}});
   const reset = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (!draft || busy || intent || doc?.host !== host.value) return;
     draft.params.hidden = []; draft.params.order = [];

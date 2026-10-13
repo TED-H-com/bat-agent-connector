@@ -1,3 +1,4 @@
+import {emptyState} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 // All five Brief sections render one immutable snapshot, filtered for current source access.
 import {briefExport} from './pm-brief-export.js';
@@ -33,7 +34,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   function render(data) {
     snapshot = check(data).snapshot;
     view.replaceChildren();status.replaceChildren();
-    if (!snapshot) {view.append(h('p', {class: 'muted'}, t('pm_brief_empty'))); exports?.update();return;}
+    if (!snapshot) {view.append(emptyState({title:t('pm_brief_empty')})); exports?.update();return;}
     if (snapshot.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     selectedSnapshotId=snapshot.snapshot_id;
     view.append(h('p', {class: 'pm-brief-date'}, h('strong', {}, snapshot.title || workspace().name), ' · ',

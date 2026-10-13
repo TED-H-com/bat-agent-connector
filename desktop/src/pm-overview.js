@@ -255,7 +255,7 @@ export function workspaceOverview(options) {
     if (mode === 'saved') {
       reportPartial.hidden = !savedPartial();
       reportLabel.replaceChildren(...(saved ? [t('ov_viewing', {n: saved.sequence}), ' · ', date(saved.as_of), saved.title ? ' · ' + saved.title : ''] : [t(reportLoading ? 'ov_loading_report' : 'ov_not_saved')]));
-      if (!saved) {resetContent(reportLoading ? h('div', {}, h('p', {role: 'status'}, t('ov_loading_report')), skeleton(3)) : h('p', {}, t('ov_not_saved'))); return;}
+      if (!saved) {resetContent(reportLoading ? skeleton(3, {label:t('ov_loading_report')}) : emptyState({title:t('ov_not_saved')})); return;}
       const next = JSON.stringify(saved);
       if (signature === `saved:${next}`) return;
       signature = `saved:${next}`; closeReader();

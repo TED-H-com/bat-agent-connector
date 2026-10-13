@@ -349,7 +349,7 @@ for (const locale of ['en', 'zh-TW']) test(`selected report has a loading state 
   try {
     await page.locator('[data-pm-report-tools] select').selectOption(f.ids.snap1); await page.keyboard.press('Escape');
     await expect(root(page).locator('.ui-skeleton')).toBeVisible();
-    await expect(root(page).getByRole('status').filter({hasText: locale === 'en' ? 'Loading report…' : '正在載入報告…'})).toBeVisible();
+    await expect(root(page).getByRole('status', {name: locale === 'en' ? 'Loading report…' : '正在載入報告…'})).toBeVisible();
     await expect(root(page)).not.toContainText(locale === 'en' ? 'Select a report in Versions.' : '請從版本選取報告。');
   } finally {release();}
   await expect(metric(page, 'goal')).toContainText(f.copy.goalV2); await context.close();

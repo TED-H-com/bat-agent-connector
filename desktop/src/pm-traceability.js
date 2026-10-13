@@ -1,6 +1,6 @@
 import {viewState} from './ui/view-state.js';
 import {h} from './ui/dom.js';
-import {searchField, dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
+import {skeleton, searchField, dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatus, blockedWork, blockerText, workAgents, prPills, prGroups, readWorkSources} from './pm-work-inspector.js';
@@ -114,7 +114,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
           h('ul', {}, ...(req.acceptance || []).map(row => h('li', {}, labelSegment(row.text)))),
           h('button', {type: 'button', class: 'ui-button ghost pm-requirement-open', 'data-rtm-select': req.id,
             onclick: () => void select(req.id)}, t('wv_open_requirement')),
-          ...linked(req).map(workRow), !linked(req).length ? h('p', {class: 'ui-meta'}, t('wb_no_work')) : null),
+          ...linked(req).map(workRow), !linked(req).length ? emptyState({title:t('wb_no_work')}) : null),
         compactRow: req => {
           const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
           const partialPRs = work.some(card => sources.get(card.work_item_id)?.filtered || sources.get(card.work_item_id)?.next != null);
@@ -221,7 +221,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     if (scroll) {opener?.scrollIntoView({block: 'center'}); opener?.focus({preventScroll: true});}
     markSelection();
     const ticket = ++detailSerial, generation = serial;
-    if (!retain) {detail.show({title: firstLabel(card?.work.title, requirement?.text)}); detail.element.body.replaceChildren(h('p', {role: 'status'}, t('wb_detail_loading')));}
+    if (!retain) {detail.show({title: firstLabel(card?.work.title, requirement?.text)}); detail.element.body.replaceChildren(skeleton(2));}
     if (requirement) {const blocked = linked(requirement).find(blockedWork); detail.show({title: requirement.text, plan, requirement, milestones: milestoneFor(requirement), blocker: blocked ? blockerText(t, blocked) : null, accepted: requirementReviews(plan, requirement, reviews).length > 0}); return;}
     try {
       const data = scope(await api('GET', `${endpoint}/kanban/${id}`)); alive(); if (ticket !== detailSerial || generation !== serial) return;

@@ -141,7 +141,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const graphScroll = h('div', {class: 'dep-graph-scroll', 'data-dep-graph': ''});
   const zoomOut = button({size: 'sm', label: '−', 'aria-label': t('dep_zoom_out'), title: t('dep_zoom_out'), onClick: () => setZoom(zoom - 0.2)});
   const zoomIn = button({size: 'sm', label: '+', 'aria-label': t('dep_zoom_in'), title: t('dep_zoom_in'), onClick: () => setZoom(zoom + 0.2)});
-  const loaded = h('span', {class: 'dep-loaded', 'data-dep-loaded': ''}, t('dep_loaded'));
+  const loaded = h('span', {class: 'dep-loaded', 'data-dep-loaded': ''}, `${Math.round(zoom * 100)}%`);
   const graphHost = h('div', {'data-dep-graph-host': ''}, h('div', {class: 'dep-graph-bar'}, loaded, zoomOut, zoomIn), graphScroll);
   const detailBody = h('div');
   const details = disclosure({label: t('dep_details'), body: detailBody, key: JSON.stringify([namespace, workspaceId, 'dep-files'])});
@@ -317,7 +317,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     for (const item of graphScroll.querySelectorAll('[data-dep-node]')) item.tabIndex = item === node ? 0 : -1;
     node.focus();
   }
-  function setZoom(next) {zoom = Math.min(1.8, Math.max(0.6, Math.round(next * 10) / 10)); remember(); drawGraph(filteredEdges());}
+  function setZoom(next) {zoom = Math.min(1.8, Math.max(0.6, Math.round(next * 10) / 10)); loaded.textContent = `${Math.round(zoom * 100)}%`; remember(); drawGraph(filteredEdges());}
   function choose(next, open) {
     selection = next;
     if (next?.componentId) focusId = next.componentId;

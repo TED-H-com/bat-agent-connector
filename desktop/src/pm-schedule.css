@@ -84,3 +84,17 @@
   .schedule-meta { align-items: center; }
   .schedule-answer { flex-basis: 100%; }
 }
+/* Compact list rows match the shared 44px rhythm. */
+.schedule-unscheduled li { min-height: 44px; }
+.schedule-row, .schedule-tree-cell, .schedule-track { min-height: 44px; height: 44px; }
+.schedule-bar.baseline { top: 9px; }
+.schedule-bar.forecast, .schedule-bar.actual { top: 25px; }
+.schedule-bar.milestone.forecast { top: 23px; }
+.schedule-delta { top: 24px; }
+@media (max-width: 799px) {
+  .schedule-row { height: auto; }
+  .schedule-tree-cell { height: auto; min-height: 44px; }
+  .schedule-track { height: 44px; }
+}
+.schedule-head, .schedule-head > .schedule-tree-cell, .schedule-axis { height: 40px; min-height: 40px; }
+.schedule-date-range { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

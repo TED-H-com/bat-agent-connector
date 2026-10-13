@@ -1,3 +1,4 @@
+import {iconButton, emptyState} from './ui/components.js';
 // Instruction receipts describe central sends, never a provider queue position.
 const oid = v => typeof v === 'string' && /^op_[0-9a-f]{32}$/.test(v);
 const phases = new Set(['accepted', 'not_accepted', 'unconfirmed', 'operation_cancelled', 'operation_failed', 'pending']);
@@ -54,7 +55,7 @@ export function instructionReceiptPanel({h, t, when, api, guard, host, sessionId
   const reader = instructionReceiptReader({api, guard, host, sessionId});
   const list = h('div'), status = h('div', {role: 'status'});
   const more = h('button', {type: 'button', class: 'mini', hidden: true, onclick: () => refresh(true)}, t('instruction_more'));
-  const reload = h('button', {type: 'button', class: 'mini', onclick: () => refresh()}, t('instruction_refresh'));
+  const reload = iconButton({icon:'refresh-cw', label:t('instruction_refresh'), ...{type: 'button', class: 'mini', onclick: () => refresh()}});
   const box = h('details', {class: 'workspace-evidence', 'data-instruction-receipts': ''}, h('summary', {}, t('instruction_receipts')),
     h('p', {class: 'muted'}, t('instruction_receipts_note')), list, status, h('div', {class: 'actions'}, reload, more));
   const nodes = new Map();
@@ -91,7 +92,7 @@ export function instructionReceiptPanel({h, t, when, api, guard, host, sessionId
       let position = list.firstChild;
       for (const row of value.instructions) {const node = nodes.get(row.operation_id).node;
         if (node === position) position = position.nextSibling; else list.insertBefore(node, position);}
-      if (!value.instructions.length) list.replaceChildren(h('p', {class: 'muted'}, t('instruction_empty')));
+      if (!value.instructions.length) list.replaceChildren(emptyState({title:t('instruction_empty')}));
       for (const [id, entry] of nodes) if (!retained.has(entry.node)) nodes.delete(id);
       status.replaceChildren(); more.hidden = !value.can_load_more;
     } catch (error) {if (alive()) status.replaceChildren(h('p', {class: 'muted'}, t('instruction_stale')), errorBox(error));}

@@ -1,3 +1,4 @@
+import {skeleton} from './ui/components.js';
 // Explicit orchestration intents. Accepted recovery only reads the original operation.
 const object = v => v && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 256) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
@@ -100,7 +101,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
     if (!current() || saved.intent || !caps()?.scopes?.includes('observe') || !saved.host) return;
     const mine = ++discovery, expectedHost = saved.host;
     discovering = true; selected = null; discoveredHost = ''; rows = []; renderSelection(); update();
-    discoveryStatus.textContent = t('orch_loading');
+    discoveryStatus.replaceChildren(skeleton(2));
     try {
       const path = sessionMode(mode) ? `/sessions?host=${encodeURIComponent(expectedHost)}&access=managed&provenance=connector_managed&limit=200` : `/workspaces?host=${encodeURIComponent(expectedHost)}&limit=200`;
       const doc = await api('GET', path); guard();

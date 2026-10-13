@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {acceptanceProfile,requirementCondition,readRequirementReviews,matchesRequirementReview,referenceKey,checkRequirementMap} from './pm-requirement-quality.js';
 import {checkSpecMaterialization,fixedSpecSelection} from './pm-spec-materialization.js';
@@ -25,7 +26,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
   const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(ready&&!start.locked()){start.set('_baseline',JSON.stringify(currentPre()));update();}}},t('pmb_use_versions'));
   const element=h('section',{class:'panel pm-work-batches','data-pm-work-batches':''},
     h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmb_title')),text('pmb_intro')),
-      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmb_refresh'))),status,
+      iconButton({icon:'refresh-cw', label:t('pmb_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,
     h('details',{'data-batch-draft':'',open:true},h('summary',{},t('pmb_draft')),text('pmb_selection_help'),add,stale,rebase,startView),
     labelled('pmb_history',history),facts,proofView);
   const cap=()=>caps()?.features?.pm_workspaces?.work_batches;

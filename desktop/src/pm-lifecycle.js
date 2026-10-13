@@ -1,3 +1,4 @@
+import {emptyState, skeleton} from './ui/components.js';
 // Management intent and execution admissions stay on the central journal.
 export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,form,input,labelled,errorBox,onChange}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/lifecycle`,actor=caps()?.actor;
@@ -103,7 +104,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function renderWork(){
     work.replaceChildren(h('h3',{},t('pm_lifecycle_inflight')));
-    if(!rows.length)work.append(h('p',{class:'muted'},t('pm_lifecycle_inflight_empty')));
+    if(!rows.length)work.append(emptyState({title:t('pm_lifecycle_inflight_empty')}));
     if(workFiltered)work.append(h('p',{class:'muted'},t('pm_lifecycle_filtered')));
     for(const row of rows){
       const details=h('details',{'data-pm-lifecycle-operation':row.operation_id},h('summary',{},row.action,' · ',t('pm_lifecycle_'+row.disposition)),
@@ -145,7 +146,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
     maintenanceNote.textContent='';summary.replaceChildren();work.replaceChildren();retentionChoices.replaceChildren();historyBody.replaceChildren();status.replaceChildren();notify();}
   function unavailable(error){withdraw();status.replaceChildren(errorBox(error),h('p',{class:'muted'},t('pm_lifecycle_unknown')));}
   async function refresh(){
-    withdraw();const ticket=serial;status.replaceChildren(h('p',{class:'muted'},t('pm_lifecycle_loading')));
+    withdraw();const ticket=serial;status.replaceChildren(skeleton(2));
     try{
       const value=checkScope(await api('GET',endpoint));alive();if(ticket!==serial)return;
       if(!value.lifecycle||!Number.isSafeInteger(value.lifecycle.revision)||value.lifecycle.revision<0

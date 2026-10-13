@@ -4,7 +4,7 @@ import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
 import {viewState} from './ui/view-state.js';
 import {settleRefreshes} from './state/events.ts';
-import {searchField, pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState} from './ui/components.js';
+import {skeleton, searchField, pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState} from './ui/components.js';
 import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
 import {workspaceOverview} from './pm-overview.js';
@@ -826,7 +826,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const transcript = notes.closest('.pd-transcript');
     const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
     notes.replaceChildren(...(data.messages || []).map(message => pmDiscussionMessage({h, t, message, time, timestamp})));
-    if (!data.messages?.length) notes.append(h('p', {class: 'muted pm-empty'}, t('pm_no_notes')));
+    if (!data.messages?.length) notes.append(emptyState({title:t('pm_no_notes')}));
     transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
     earlier.hidden = !historyCursor; earlier.disabled = false;
     coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t('pm_partial') : '';
@@ -918,7 +918,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       let fetched = false, pending = false;
       item.addEventListener('toggle', async () => {
         if (!item.open || fetched || pending) return;
-        pending = true; detail.replaceChildren(h('p', {class: 'muted'}, t('pm_package_loading')));
+        pending = true; detail.replaceChildren(skeleton(2));
         try {
           const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs/${encodeURIComponent(run.run_id)}`);
           alive(); if (!item.isConnected) return;
@@ -943,7 +943,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       });
       packages.append(item);
     }
-    if (!packages.children.length) packages.append(h('p', {class: 'muted'}, t('pm_packages_empty')));
+    if (!packages.children.length) packages.append(emptyState({title:t('pm_packages_empty')}));
     if (page.next_cursor) {
       const more = h('button', {type: 'button', class: 'secondary', onclick: async () => {
         more.disabled = true;
@@ -1021,7 +1021,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (threadList?.next_cursor) workspaceList.append(h('button', {type: 'button', class: 'secondary', 'data-discussion-more': '', onclick: () => {threadPages++; void load();}}, t('pm_more_threads')));
       if (data) renderThread(data);
       else if (!content.querySelector('.pm-thread-layout')) {
-        if (!workspace) content.append(h('div', {class: 'pm-empty'}, h('h2', {}, t('pm_start_title')), h('p', {}, t('pm_start_help'))));
+        if (!workspace) content.append(emptyState({icon:'message-square',title:t('pm_start_title'),text:t('pm_start_help')}));
         else {
           const name = input('pd_title', {max: 160, value: threadId === 'new' ? launch.title || t('pd_new') : ''});
           const text = input('pd_message', {multiline: true, max: 12000, required: threadId === 'new'}); text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
@@ -1045,7 +1045,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new')))),
               h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
                 h('div', {class: 'pd-context'}, ...discussionContext(t, launch.refs, {title:launch.title, limit: 3, onMore: () => draftPanel.open('context')})))),
-            h('div', {class: 'pd-transcript'}, h('p', {class: 'muted pd-start'}, t('pd_empty'))), discussionComposer({t, form: create, draft: true})),
+            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_empty')})), discussionComposer({t, form: create, draft: true})),
             launch.refs.length > 3 ? draftPanel.home : ''));
 
 

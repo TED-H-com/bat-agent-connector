@@ -32,7 +32,7 @@ function h$1(tag, attrs = {}, ...children) {
 		if (child === null || child === void 0 || child === false) continue;
 		el.append(child instanceof Node ? child : document.createTextNode(String(child)));
 	}
-	if (el.matches(".chip, .reg-chip, .message-chip")) {
+	if (el.matches(".chip, .reg-chip, .message-chip, .dep-chip")) {
 		if (!el.hasAttribute("title")) el.title = el.textContent;
 		if (!el.hasAttribute("aria-label")) el.setAttribute("aria-label", el.textContent);
 	}
@@ -190,6 +190,7 @@ var scheduleStrings = {
 		sched_unassigned: "Not under a milestone",
 		sched_unscheduled: "Unscheduled ({n})",
 		sched_loaded: "{n} loaded",
+		sched_count: "{n} items",
 		sched_empty: "No scheduled dates",
 		sched_empty_unscheduled: "No unscheduled items",
 		sched_details: "Details",
@@ -234,6 +235,7 @@ var scheduleStrings = {
 		sched_unassigned: "未歸屬里程碑",
 		sched_unscheduled: "未排期（{n}）",
 		sched_loaded: "已載入 {n} 筆",
+		sched_count: "共 {n} 筆",
 		sched_empty: "尚無排定日期",
 		sched_empty_unscheduled: "沒有未排期項目",
 		sched_details: "詳細資訊",
@@ -814,6 +816,8 @@ var globalStrings = {
 		global_details: "Details",
 		global_details_for: "Details for {title}",
 		global_shown: "{count} shown",
+		global_operation_count: "{count} operations",
+		global_operations_unavailable: "Operations unavailable",
 		global_answer: "Answer",
 		global_review: "Review",
 		global_open: "Open",
@@ -1008,6 +1012,8 @@ var globalStrings = {
 		global_details: "詳細資料",
 		global_details_for: "{title}的詳細資料",
 		global_shown: "顯示 {count} 筆",
+		global_operation_count: "共 {count} 項操作",
+		global_operations_unavailable: "無法取得操作紀錄",
 		global_answer: "回答",
 		global_review: "查看",
 		global_open: "開啟",
@@ -3448,6 +3454,7 @@ var resourceStrings = {
 		res_status: "Status",
 		res_model_col: "Model",
 		res_tokens_col: "Tokens",
+		res_total: "Total",
 		res_requested_short: "requested: {model}",
 		res_more_models: "+{count}",
 		res_filter_all: "All sources",
@@ -3548,6 +3555,7 @@ var resourceStrings = {
 		res_status: "狀態",
 		res_model_col: "模型",
 		res_tokens_col: "Tokens",
+		res_total: "總計",
 		res_requested_short: "要求：{model}",
 		res_more_models: "另外 {count} 個",
 		res_filter_all: "全部來源",
@@ -6619,6 +6627,1006 @@ var pmStrings = {
 		pm_slot_quality: "品質"
 	}
 };
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : "",
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/ui/icons.js
+/*!
+ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+---
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, pause, play, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
+*/
+var paths = {
+	"pencil": [["path", { "d": "m16 3 5 5L7 22H2v-5L16 3Z" }], ["path", { "d": "m14 5 5 5" }]],
+	"panel-right": [["rect", {
+		"x": "3",
+		"y": "3",
+		"width": "18",
+		"height": "18",
+		"rx": "2"
+	}], ["path", { "d": "M15 3v18" }]],
+	"clipboard": [["rect", {
+		"width": "8",
+		"height": "4",
+		"x": "8",
+		"y": "2",
+		"rx": "1",
+		"ry": "1"
+	}], ["path", { "d": "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" }]],
+	"external-link": [
+		["path", { "d": "M15 3h6v6" }],
+		["path", { "d": "M10 14 21 3" }],
+		["path", { "d": "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }]
+	],
+	"layout-dashboard": [
+		["rect", {
+			"width": "7",
+			"height": "9",
+			"x": "3",
+			"y": "3",
+			"rx": "1"
+		}],
+		["rect", {
+			"width": "7",
+			"height": "5",
+			"x": "14",
+			"y": "3",
+			"rx": "1"
+		}],
+		["rect", {
+			"width": "7",
+			"height": "9",
+			"x": "14",
+			"y": "12",
+			"rx": "1"
+		}],
+		["rect", {
+			"width": "7",
+			"height": "5",
+			"x": "3",
+			"y": "16",
+			"rx": "1"
+		}]
+	],
+	"message-square": [["path", { "d": "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" }]],
+	"list-checks": [
+		["path", { "d": "M13 5h8" }],
+		["path", { "d": "M13 12h8" }],
+		["path", { "d": "M13 19h8" }],
+		["path", { "d": "m3 17 2 2 4-4" }],
+		["path", { "d": "m3 7 2 2 4-4" }]
+	],
+	"calendar-range": [
+		["rect", {
+			"x": "3",
+			"y": "3",
+			"width": "18",
+			"height": "18",
+			"rx": "2"
+		}],
+		["path", { "d": "M16 2v3" }],
+		["path", { "d": "M3 9h18" }],
+		["path", { "d": "M8 2v3" }],
+		["path", { "d": "M17 13h-6" }],
+		["path", { "d": "M13 17H7" }],
+		["path", { "d": "M7 13h.01" }],
+		["path", { "d": "M17 17h.01" }]
+	],
+	"network": [
+		["rect", {
+			"x": "16",
+			"y": "16",
+			"width": "6",
+			"height": "6",
+			"rx": "1"
+		}],
+		["rect", {
+			"x": "2",
+			"y": "16",
+			"width": "6",
+			"height": "6",
+			"rx": "1"
+		}],
+		["rect", {
+			"x": "9",
+			"y": "2",
+			"width": "6",
+			"height": "6",
+			"rx": "1"
+		}],
+		["path", { "d": "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" }],
+		["path", { "d": "M12 12V8" }]
+	],
+	"circle-alert": [
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "10"
+		}],
+		["line", {
+			"x1": "12",
+			"x2": "12",
+			"y1": "8",
+			"y2": "12"
+		}],
+		["line", {
+			"x1": "12",
+			"x2": "12.01",
+			"y1": "16",
+			"y2": "16"
+		}]
+	],
+	"circle-x": [
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "10"
+		}],
+		["path", { "d": "m15 9-6 6" }],
+		["path", { "d": "m9 9 6 6" }]
+	],
+	"cpu": [
+		["path", { "d": "M12 20v2" }],
+		["path", { "d": "M12 2v2" }],
+		["path", { "d": "M17 20v2" }],
+		["path", { "d": "M17 2v2" }],
+		["path", { "d": "M2 12h2" }],
+		["path", { "d": "M2 17h2" }],
+		["path", { "d": "M2 7h2" }],
+		["path", { "d": "M20 12h2" }],
+		["path", { "d": "M20 17h2" }],
+		["path", { "d": "M20 7h2" }],
+		["path", { "d": "M7 20v2" }],
+		["path", { "d": "M7 2v2" }],
+		["rect", {
+			"x": "4",
+			"y": "4",
+			"width": "16",
+			"height": "16",
+			"rx": "2"
+		}],
+		["rect", {
+			"x": "8",
+			"y": "8",
+			"width": "8",
+			"height": "8",
+			"rx": "1"
+		}]
+	],
+	"kanban": [
+		["path", { "d": "M5 3v14" }],
+		["path", { "d": "M12 3v8" }],
+		["path", { "d": "M19 3v18" }]
+	],
+	"folder": [["path", { "d": "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" }]],
+	"inbox": [["polyline", { "points": "22 12 16 12 14 15 10 15 8 12 2 12" }], ["path", { "d": "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" }]],
+	"settings": [["path", { "d": "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" }], ["circle", {
+		"cx": "12",
+		"cy": "12",
+		"r": "3"
+	}]],
+	"wrench": [["path", { "d": "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" }]],
+	"search": [["path", { "d": "m21 21-4.34-4.34" }], ["circle", {
+		"cx": "11",
+		"cy": "11",
+		"r": "8"
+	}]],
+	"refresh-cw": [
+		["path", { "d": "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }],
+		["path", { "d": "M21 3v5h-5" }],
+		["path", { "d": "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }],
+		["path", { "d": "M8 16H3v5" }]
+	],
+	"chevron-right": [["path", { "d": "m9 18 6-6-6-6" }]],
+	"chevron-down": [["path", { "d": "m6 9 6 6 6-6" }]],
+	"chevron-up": [["path", { "d": "m18 15-6-6-6 6" }]],
+	"chevron-left": [["path", { "d": "m15 18-6-6 6-6" }]],
+	"x": [["path", { "d": "M18 6 6 18" }], ["path", { "d": "m6 6 12 12" }]],
+	"more-horizontal": [
+		["circle", {
+			"cx": "12",
+			"cy": "12",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "19",
+			"cy": "12",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "5",
+			"cy": "12",
+			"r": "1"
+		}]
+	],
+	"plus": [["path", { "d": "M5 12h14" }], ["path", { "d": "M12 5v14" }]],
+	"check": [["path", { "d": "M20 6 9 17l-5-5" }]],
+	"menu": [
+		["path", { "d": "M4 5h16" }],
+		["path", { "d": "M4 12h16" }],
+		["path", { "d": "M4 19h16" }]
+	],
+	"pause": [["rect", {
+		"x": "6",
+		"y": "4",
+		"width": "4",
+		"height": "16"
+	}], ["rect", {
+		"x": "14",
+		"y": "4",
+		"width": "4",
+		"height": "16"
+	}]],
+	"play": [["polygon", { "points": "5 3 19 12 5 21 5 3" }]]
+};
+function icon(name, { label, size = 16 } = {}) {
+	const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+	for (const [key, value] of Object.entries({
+		viewBox: "0 0 24 24",
+		width: size,
+		height: size,
+		fill: "none",
+		stroke: "currentColor",
+		"stroke-width": 1.75,
+		"stroke-linecap": "round",
+		"stroke-linejoin": "round",
+		focusable: "false",
+		class: "ui-icon",
+		...label ? {
+			role: "img",
+			"aria-label": label
+		} : { "aria-hidden": "true" }
+	})) svg.setAttribute(key, String(value));
+	for (const [tag, attrs] of paths[name] || paths["circle-alert"]) {
+		const node = document.createElementNS(svg.namespaceURI, tag);
+		for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+		svg.append(node);
+	}
+	return svg;
+}
+//#endregion
+//#region src/ui/components.js
+var sequence = 0;
+var uid = () => `ui-${++sequence}`;
+var nodeIcon = (icon$1) => typeof icon$1 === "string" ? icon(icon$1) : icon$1;
+var choiceFocus = null;
+var choiceSerial = 0;
+function button({ variant = "secondary", size = "md", icon, iconPosition = "start", label, onClick, ...attrs } = {}) {
+	return h$1("button", {
+		type: "button",
+		class: `ui-button ${variant} ui-${size}`,
+		onclick: onClick,
+		...attrs
+	}, iconPosition === "end" ? null : nodeIcon(icon), label, iconPosition === "end" ? nodeIcon(icon) : null);
+}
+function discussLink(context, attrs = {}) {
+	return h$1("a", {
+		class: "ui-button secondary ui-sm",
+		href: discussHref(context),
+		...attrs
+	}, icon("message-square"), t("ui_discuss"));
+}
+function iconButton({ icon, label, ...attrs }) {
+	return button({
+		variant: "ghost",
+		icon,
+		"aria-label": label,
+		title: label,
+		...attrs,
+		class: "ui-button ghost ui-icon-button"
+	});
+}
+function searchField(input, attrs = {}) {
+	input.type = "search";
+	input.placeholder = t("ui_search");
+	return h$1("div", {
+		...attrs,
+		class: `ui-search ${attrs.class || ""}`
+	}, icon("search"), input);
+}
+var choiceObserver;
+var choiceMounts;
+var choiceFits = new WeakMap();
+var choiceParents = new Map();
+function watchChoice(root, measure) {
+	choiceFits.set(root, measure);
+	root.dataset.choiceAdaptive = "";
+	if (!choiceObserver) {
+		choiceObserver = new ResizeObserver((entries) => {
+			for (const { target } of entries) for (const control of choiceParents.get(target) || []) choiceFits.get(control)?.();
+		});
+		const reconcile = () => {
+			for (const [parent, controls] of choiceParents) {
+				for (const control of controls) if (!control.isConnected || control.parentElement !== parent) controls.delete(control);
+				if (!controls.size) {
+					choiceObserver.unobserve(parent);
+					choiceParents.delete(parent);
+				}
+			}
+			for (const control of document.querySelectorAll("[data-choice-adaptive]")) {
+				const parent = control.parentElement;
+				if (!choiceFits.has(control) || choiceParents.get(parent)?.has(control)) continue;
+				if (!choiceParents.has(parent)) {
+					choiceParents.set(parent, new Set());
+					choiceObserver.observe(parent);
+				}
+				choiceParents.get(parent).add(control);
+				choiceFits.get(control)();
+			}
+		};
+		choiceMounts = new MutationObserver(reconcile);
+		choiceMounts.observe(document.documentElement, {
+			childList: true,
+			subtree: true
+		});
+		document.fonts?.ready.then(reconcile);
+	}
+}
+function choices({ options, value, onChange = () => {}, label }, isTabs) {
+	const root = h$1("div", {
+		class: isTabs ? "ui-tabs" : "ui-segmented",
+		role: isTabs ? "tablist" : "radiogroup",
+		"aria-label": label
+	});
+	const buttons = options.map((option) => h$1("button", {
+		type: "button",
+		role: isTabs ? "tab" : "radio",
+		id: option.id || uid(),
+		"aria-controls": isTabs && typeof option.panel === "string" ? option.panel : null,
+		disabled: option.disabled,
+		onclick: () => select(option.value)
+	}, option.label));
+	const fallback = isTabs ? null : h$1("select", {
+		"aria-label": label,
+		"data-choice-select": "",
+		hidden: true,
+		onchange: () => select(options[fallback.selectedIndex].value)
+	}, ...options.map((option, index) => h$1("option", {
+		value: String(index),
+		disabled: option.disabled
+	}, option.label)));
+	if (isTabs) options.forEach((option, index) => {
+		if (!option.panel || typeof option.panel === "string") return;
+		const panel = option.panel;
+		panel.id ||= uid();
+		panel.setAttribute("role", "tabpanel");
+		panel.setAttribute("aria-labelledby", buttons[index].id);
+		buttons[index].setAttribute("aria-controls", panel.id);
+	});
+	function select(next, notify = true) {
+		value = next;
+		if (fallback) fallback.value = String(options.findIndex((option) => option.value === value));
+		buttons.forEach((node, i) => {
+			const active = options[i].value === value;
+			node.tabIndex = active ? 0 : -1;
+			node.setAttribute(isTabs ? "aria-selected" : "aria-checked", String(active));
+		});
+		if (notify) onChange(value);
+	}
+	root.addEventListener("keydown", (event) => {
+		if (event.target === fallback) return;
+		if (![
+			"ArrowLeft",
+			"ArrowRight",
+			"ArrowUp",
+			"ArrowDown",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		event.preventDefault();
+		const enabled = buttons.filter((node) => !node.disabled), current = enabled.indexOf(document.activeElement);
+		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1) + enabled.length) % enabled.length];
+		if (!next) return;
+		const ticket = {
+			label,
+			id: ++choiceSerial
+		};
+		choiceFocus = ticket;
+		next.focus();
+		next.click();
+		setTimeout(() => {
+			if (choiceFocus === ticket) choiceFocus = null;
+		}, 80);
+	});
+	root.append(...buttons, ...fallback ? [fallback] : []);
+	select(options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value, false);
+	if (fallback) watchChoice(root, () => {
+		if (!root.isConnected) return;
+		const focused = document.activeElement, parent = root.parentElement, css = getComputedStyle(parent);
+		fallback.hidden = true;
+		buttons.forEach((node) => node.hidden = false);
+		root.removeAttribute("data-choice-overflow");
+		const overflow = root.scrollWidth > parent.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) + 1;
+		fallback.hidden = !overflow;
+		buttons.forEach((node) => node.hidden = overflow);
+		root.toggleAttribute("data-choice-overflow", overflow);
+		root.setAttribute("role", overflow ? "group" : "radiogroup");
+		if (overflow && (buttons.includes(focused) || focused === fallback)) fallback.focus({ preventScroll: true });
+		else if (!overflow && focused === fallback) buttons.find((node) => node.getAttribute("aria-checked") === "true")?.focus({ preventScroll: true });
+	});
+	if (choiceFocus?.label === label) {
+		choiceFocus = null;
+		const focusChecked = () => {
+			if (!root.isConnected) return;
+			buttons.find((node) => node.getAttribute(isTabs ? "aria-selected" : "aria-checked") === "true")?.focus();
+		};
+		queueMicrotask(focusChecked);
+		setTimeout(focusChecked, 50);
+	}
+	root.setValue = (next) => select(next, false);
+	return root;
+}
+var segmented = (options) => choices(options, false);
+var tabs = (options) => choices(options, true);
+function statusPill(status) {
+	const key = Object.hasOwn(statusVocabulary, status) ? status : "unknown";
+	return h$1("span", {
+		class: `ui-pill tone-${statusVocabulary[key].tone}`,
+		"data-status": key
+	}, t("ui_status_" + key));
+}
+function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
+	const actionRow = h$1("div", { class: "ui-header-actions" }, ...actions, overflow);
+	actionRow.addEventListener("focusin", (event) => {
+		const target = event.target.closest("button, a, select");
+		if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;
+		const box = target.getBoundingClientRect(), row = actionRow.getBoundingClientRect();
+		if (box.right > row.right) actionRow.scrollLeft += box.right - row.right;
+		if (box.left < row.left) actionRow.scrollLeft -= row.left - box.left;
+	});
+	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, mark, h$1("h1", {}, title), pill), meta ? meta instanceof Node ? meta : h$1("p", { class: "ui-meta" }, meta) : null), actionRow);
+}
+function sectionCard({ title, actions = [], body } = {}) {
+	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
+}
+function metric({ label, value, context, bar, pill } = {}) {
+	const unknown = value === null || value === void 0 || typeof value === "number" && !Number.isFinite(value);
+	const track = bar && !unknown ? h$1("div", {
+		class: "ui-metric-bar",
+		"aria-hidden": "true"
+	}, ...bar.map((part) => {
+		const span = h$1("span", { class: `tone-${[
+			"ok",
+			"review",
+			"info",
+			"bad",
+			"warn"
+		].includes(part.tone) ? part.tone : "neutral"}` });
+		span.style.flexGrow = String(Number.isFinite(part.value) && part.value > 0 ? part.value : 0);
+		return span;
+	})) : null;
+	return h$1("div", { class: "ui-metric" }, h$1("div", { class: "ui-meta" }, label), h$1("div", { class: "ui-metric-value" }, unknown ? "—" : value, unknown ? statusPill("unknown") : pill || null), context ? h$1("div", { class: "ui-metric-context" }, context) : null, track);
+}
+function emptyState({ icon = "inbox", title, text, action }) {
+	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
+}
+function skeleton(rows = 3, { label = t("ui_loading") } = {}) {
+	return h$1("div", {
+		class: "ui-skeleton",
+		role: "status",
+		"aria-label": label
+	}, ...Array.from({ length: Math.min(100, Math.max(0, rows)) }, () => h$1("div", { "aria-hidden": "true" })));
+}
+var disclosures = new Map();
+function disclosure({ label, body, open = false, key, element }) {
+	const root = element || h$1("details", { open }, h$1("summary", {}, label), body);
+	if (root.classList.contains("ui-disclosure")) return root;
+	root.classList.add("ui-disclosure");
+	root.querySelector(":scope > summary")?.prepend(icon("chevron-right"));
+	if (key && disclosures.has(key)) root.open = disclosures.get(key);
+	root.addEventListener("toggle", () => {
+		if (!key || !root.isConnected) return;
+		disclosures.delete(key);
+		disclosures.set(key, root.open);
+		if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);
+	});
+	return root;
+}
+function inlineError({ error, retry }) {
+	return h$1("div", {
+		class: "ui-inline-error",
+		role: "alert"
+	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
+		size: "sm",
+		variant: "ghost",
+		label: t("ui_retry"),
+		onClick: retry
+	}) : null);
+}
+function contextChip({ icon, text, onRemove }) {
+	return h$1("span", {
+		class: "ui-context-chip",
+		role: "group",
+		title: text,
+		"aria-label": text
+	}, nodeIcon(icon), h$1("span", { class: "ui-chip-label" }, text), onRemove ? iconButton({
+		icon: "x",
+		label: t("ui_remove", { text }),
+		onClick: onRemove
+	}) : null);
+}
+function agentMark(cli) {
+	const [initials, label] = {
+		codex: ["CX", "Codex"],
+		claude: ["CL", "Claude"],
+		grok: ["GK", "Grok"],
+		gemini: ["GM", "Gemini"],
+		bat: ["BT", "BAT"],
+		pm: ["PM", "PM"]
+	}[String(cli).toLowerCase()] || ["?", t("ui_status_unknown")];
+	return h$1("span", {
+		class: "ui-agent-mark",
+		role: "img",
+		"aria-label": label,
+		title: label
+	}, initials);
+}
+function menu({ button: trigger, items }) {
+	const panel = h$1("div", {
+		class: "ui-menu-panel",
+		role: "menu",
+		id: uid(),
+		hidden: true
+	});
+	const root = h$1("div", { class: "ui-menu" }, trigger, panel);
+	trigger.setAttribute("aria-haspopup", "menu");
+	trigger.setAttribute("aria-controls", panel.id);
+	trigger.setAttribute("aria-expanded", "false");
+	const controls = items.map((item) => {
+		if (item.content) return h$1("div", {
+			class: "ui-menu-group",
+			role: "group",
+			"aria-label": item.label,
+			"data-menu-key": item.key
+		}, item.content);
+		let node;
+		node = h$1(item.href ? "a" : "button", {
+			type: item.href ? null : "button",
+			href: item.href,
+			role: "menuitem",
+			"data-menu-key": item.key,
+			tabindex: -1,
+			title: item.title,
+			disabled: item.href ? null : item.disabled,
+			"aria-disabled": item.disabled ? "true" : null,
+			onclick: (event) => {
+				if (node.disabled || node.getAttribute("aria-disabled") === "true") {
+					event.preventDefault();
+					return;
+				}
+				close();
+				item.onSelect?.();
+			}
+		}, nodeIcon(item.icon), item.label);
+		return node;
+	});
+	panel.append(...controls);
+	const enabledControls = () => [...panel.querySelectorAll("[role=\"menuitem\"], select:not(:disabled)")].filter((node) => !node.disabled && node.getAttribute("aria-disabled") !== "true" && node.getClientRects().length && !node.closest("[hidden], [inert]"));
+	function close(restore = true) {
+		panel.hidden = true;
+		trigger.setAttribute("aria-expanded", "false");
+		document.removeEventListener("pointerdown", outside);
+		if (restore && root.isConnected) trigger.focus();
+	}
+	function outside(event) {
+		if (!root.contains(event.target)) close(false);
+	}
+	function keys(event) {
+		if (event.key === "Escape") {
+			event.preventDefault();
+			event.stopPropagation();
+			close();
+		} else if (event.key === "Tab") close(false);
+		else if (!event.target?.matches?.("select, input, textarea") && [
+			"ArrowDown",
+			"ArrowUp",
+			"Home",
+			"End"
+		].includes(event.key)) {
+			event.preventDefault();
+			const enabled = enabledControls(), at = enabled.indexOf(document.activeElement);
+			enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (at + (event.key === "ArrowUp" ? -1 : 1) + enabled.length) % enabled.length]?.focus();
+		}
+	}
+	panel.addEventListener("keydown", keys);
+	function open(last = false) {
+		panel.hidden = false;
+		trigger.setAttribute("aria-expanded", "true");
+		enabledControls().at(last ? -1 : 0)?.focus();
+		document.addEventListener("pointerdown", outside);
+	}
+	trigger.addEventListener("click", () => panel.hidden ? open() : close());
+	trigger.addEventListener("keydown", (event) => {
+		if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+			event.preventDefault();
+			open(event.key === "ArrowUp");
+		}
+	});
+	root.close = close;
+	root.dispose = () => close(false);
+	return root;
+}
+var focusables = (root) => [...root.querySelectorAll("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex=\"0\"]")].filter((node) => node.getClientRects().length && !node.closest("[hidden], [inert]"));
+function trapFocus(root, event) {
+	if (event.key !== "Tab") return;
+	const nodes = focusables(root), first = nodes[0], last = nodes.at(-1);
+	if (!first) {
+		event.preventDefault();
+		root.focus();
+	} else if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {
+		event.preventDefault();
+		last.focus();
+	} else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {
+		event.preventDefault();
+		first.focus();
+	}
+}
+function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}) {
+	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
+	const body = h$1("div", { class: "ui-inspector-body" });
+	const closeButton = iconButton({
+		icon: "x",
+		label: t("ui_close"),
+		onClick: () => close()
+	});
+	const back = button({
+		variant: "ghost",
+		icon: "chevron-left",
+		label: t("ui_back"),
+		onClick: () => close(),
+		class: "ui-button ghost ui-inspector-back"
+	});
+	const root = h$1("aside", {
+		class: dock ? "ui-inspector ui-inspector-dock" : "ui-inspector",
+		tabindex: -1,
+		"aria-labelledby": titleId
+	}, h$1("header", {}, back, h$1("h2", { id: titleId }, title), closeButton), body);
+	const scrim = h$1("div", {
+		class: "ui-inspector-scrim",
+		onclick: () => close()
+	});
+	const inerted = [];
+	function release() {
+		for (const node of inerted.splice(0)) node.inert = false;
+	}
+	function resize() {
+		release();
+		if (dock && !media.matches && root.hidden) {
+			scrim.remove();
+			root.removeAttribute("aria-modal");
+			return;
+		}
+		root.setAttribute("role", media.matches ? "complementary" : "dialog");
+		if (media.matches || root.hidden) {
+			root.removeAttribute("aria-modal");
+			scrim.remove();
+		} else {
+			root.setAttribute("aria-modal", "true");
+			if (!scrim.isConnected) root.before(scrim);
+			let node = root;
+			while (node.parentElement && node.parentElement !== document.documentElement) {
+				for (const sibling of node.parentElement.children) if (sibling !== node && sibling !== scrim && !sibling.inert) {
+					sibling.inert = true;
+					inerted.push(sibling);
+				}
+				node = node.parentElement;
+			}
+		}
+	}
+	function keys(event) {
+		if (dock && (root.hidden || media.matches)) return;
+		if (event.key === "Escape") {
+			event.preventDefault();
+			close();
+		} else if (!media.matches) trapFocus(root, event);
+	}
+	let closed = false;
+	function restoreFocus() {
+		let target = null;
+		try {
+			target = typeof returnFocus === "function" ? returnFocus() : returnFocus;
+		} catch {
+			target = null;
+		}
+		const rendered = (node) => node?.isConnected && node.getClientRects().length && !node.closest("[hidden], [inert]");
+		if (rendered(target)) target.focus();
+		else if (rendered(opener)) opener.focus();
+	}
+	function destroy() {
+		if (closed) return;
+		closed = true;
+		release();
+		scrim.remove();
+		root.remove();
+		document.removeEventListener("keydown", keys);
+		media.removeEventListener("change", onMedia);
+	}
+	function close() {
+		if (closed) return;
+		if (dock && !media.matches) {
+			root.hidden = true;
+			release();
+			scrim.remove();
+			root.removeAttribute("aria-modal");
+			onClose();
+			restoreFocus();
+			return;
+		}
+		if (dock && media.matches) return;
+		destroy();
+		onClose();
+		restoreFocus();
+	}
+	function open() {
+		if (closed) return;
+		root.hidden = false;
+		resize();
+		(matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
+	}
+	function onMedia() {
+		if (dock && !media.matches) root.hidden = true;
+		if (dock && media.matches) root.hidden = false;
+		resize();
+	}
+	queueMicrotask(() => {
+		if (closed || !root.isConnected) return;
+		if (dock && !media.matches) root.hidden = true;
+		resize();
+		if (!dock) (matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
+		document.addEventListener("keydown", keys);
+		media.addEventListener("change", onMedia);
+	});
+	return Object.assign(root, {
+		body,
+		close,
+		open,
+		dispose: dock ? destroy : close
+	});
+}
+function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, rowAttrs } = {}) {
+	const compact = () => compactRow && matchMedia("(max-width: 799px)").matches;
+	const keyFor = (row) => typeof rowKey === "function" ? rowKey(row) : row[rowKey];
+	const hasSelection = rows.some((row) => keyFor(row) === selected);
+	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
+		scope: "col",
+		"data-column": column.key,
+		"data-secondary": column.secondary || null,
+		class: column.numeric ? "numeric" : ""
+	}, column.label)))), tbody);
+	const root = h$1("div", {
+		class: "ui-data-table" + (compactRow ? " ui-data-table-responsive" : ""),
+		tabindex: compactRow ? null : 0
+	}, table), controls = [];
+	rows.forEach((row, i) => {
+		const key = keyFor(row), active = key === selected;
+		const extra = typeof rowAttrs === "function" ? rowAttrs(row) || {} : {};
+		let toggleExpansion;
+		const tr = h$1("tr", {
+			...extra,
+			"data-row-key": key,
+			tabindex: active || !hasSelection && i === 0 ? 0 : -1,
+			"aria-selected": String(active),
+			onclick: (event) => {
+				if (!event.target.closest("button, a, input, select")) {
+					if (compact() && toggleExpansion) {
+						tr.focus();
+						toggleExpansion();
+					} else select();
+				}
+			}
+		});
+		function select() {
+			controls.forEach((node) => {
+				node.tabIndex = node === tr ? 0 : -1;
+				node.setAttribute("aria-selected", String(node === tr));
+			});
+			onSelect(key, row);
+		}
+		if (expandable) {
+			const open = expanded.has(key);
+			const detail = h$1("tr", {
+				hidden: !open,
+				class: "ui-data-table-detail"
+			}, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
+			toggleExpansion = (open = detail.hidden) => {
+				detail.hidden = !open;
+				toggle.setAttribute("aria-expanded", String(open));
+				if (compactRow) tr.setAttribute("aria-expanded", String(open));
+				toggle.setAttribute("aria-label", t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }));
+				onToggle(key, open);
+			};
+			const toggle = iconButton({
+				icon: "chevron-right",
+				label: t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }),
+				"aria-expanded": String(open),
+				onClick: () => toggleExpansion()
+			});
+			if (compactRow) tr.setAttribute("aria-expanded", String(open));
+			tr.append(h$1("td", {}, toggle));
+			tbody.append(tr, detail);
+		} else tbody.append(tr);
+		tr.append(...columns.map((column) => h$1("td", {
+			"data-column": column.key,
+			"data-secondary": column.secondary || null,
+			class: column.numeric ? "numeric" : ""
+		}, column.render ? column.render(row) : row[column.key] ?? "—")));
+		if (compactRow) tr.append(h$1("td", {
+			class: "ui-data-table-compact",
+			colspan: columns.length + (expandable ? 1 : 0)
+		}, expandable ? icon("chevron-right") : null, compactRow(row)));
+		tr.addEventListener("keydown", (event) => {
+			if (event.target !== tr) return;
+			if (["Enter", " "].includes(event.key)) {
+				event.preventDefault();
+				if (compact() && toggleExpansion) toggleExpansion();
+				else select();
+			}
+			if (compact() && toggleExpansion && ["ArrowRight", "ArrowLeft"].includes(event.key)) {
+				event.preventDefault();
+				toggleExpansion(event.key === "ArrowRight");
+			}
+			if ([
+				"ArrowDown",
+				"ArrowUp",
+				"Home",
+				"End"
+			].includes(event.key)) {
+				event.preventDefault();
+				const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : Math.max(0, Math.min(controls.length - 1, i + (event.key === "ArrowUp" ? -1 : 1)));
+				controls.forEach((node, n) => {
+					node.tabIndex = n === next ? 0 : -1;
+				});
+				controls[next]?.focus();
+			}
+		});
+		tr.addEventListener("focus", () => controls.forEach((node) => {
+			node.tabIndex = node === tr ? 0 : -1;
+		}));
+		controls.push(tr);
+	});
+	for (const cell of table.querySelectorAll("th, td:not(.ui-data-table-compact)")) if (!cell.title) cell.title = cell.textContent;
+	root.addEventListener("keydown", (event) => {
+		if (event.target !== root || !controls.length) return;
+		if (![
+			"ArrowDown",
+			"ArrowUp",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		event.preventDefault();
+		const index = event.key === "End" || event.key === "ArrowUp" ? controls.length - 1 : 0;
+		controls.forEach((node, n) => {
+			node.tabIndex = n === index ? 0 : -1;
+		});
+		controls[index].focus();
+	});
+	return root;
+}
 //#endregion
 //#region src/instruction-receipts.js
 var oid$3 = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
@@ -6731,11 +7739,13 @@ function instructionReceiptPanel({ h, t, when, api, guard, host, sessionId, erro
 		hidden: true,
 		onclick: () => refresh(true)
 	}, t("instruction_more"));
-	const reload = h("button", {
+	const reload = iconButton({
+		icon: "refresh-cw",
+		label: t("instruction_refresh"),
 		type: "button",
 		class: "mini",
 		onclick: () => refresh()
-	}, t("instruction_refresh"));
+	});
 	const box = h("details", {
 		class: "workspace-evidence",
 		"data-instruction-receipts": ""
@@ -6796,7 +7806,7 @@ function instructionReceiptPanel({ h, t, when, api, guard, host, sessionId, erro
 				if (node === position) position = position.nextSibling;
 				else list.insertBefore(node, position);
 			}
-			if (!value.instructions.length) list.replaceChildren(h("p", { class: "muted" }, t("instruction_empty")));
+			if (!value.instructions.length) list.replaceChildren(emptyState({ title: t("instruction_empty") }));
 			for (const [id, entry] of nodes) if (!retained.has(entry.node)) nodes.delete(id);
 			status.replaceChildren();
 			more.hidden = !value.can_load_more;
@@ -9827,1006 +10837,6 @@ var locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("
 function t(key, vars = {}) {
 	return (STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 }
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews$1 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews$1.has(from) ? from : "",
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
-	};
-}
-//#endregion
-//#region src/ui/icons.js
-/*!
-ISC License
-
-Copyright (c) 2026 Lucide Icons and Contributors
-
-Permission to use, copy, modify, and/or distribute this software for any
-purpose with or without fee is hereby granted, provided that the above
-copyright notice and this permission notice appear in all copies.
-
-THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
-WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
-MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
-ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
-WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
-ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
-OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
----
-
-The following Lucide icons are derived from the Feather project:
-
-airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, pause, play, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
-
-The MIT License (MIT) (for the icons listed above)
-
-Copyright (c) 2013-present Cole Bemis
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
-*/
-var paths = {
-	"pencil": [["path", { "d": "m16 3 5 5L7 22H2v-5L16 3Z" }], ["path", { "d": "m14 5 5 5" }]],
-	"panel-right": [["rect", {
-		"x": "3",
-		"y": "3",
-		"width": "18",
-		"height": "18",
-		"rx": "2"
-	}], ["path", { "d": "M15 3v18" }]],
-	"clipboard": [["rect", {
-		"width": "8",
-		"height": "4",
-		"x": "8",
-		"y": "2",
-		"rx": "1",
-		"ry": "1"
-	}], ["path", { "d": "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" }]],
-	"external-link": [
-		["path", { "d": "M15 3h6v6" }],
-		["path", { "d": "M10 14 21 3" }],
-		["path", { "d": "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }]
-	],
-	"layout-dashboard": [
-		["rect", {
-			"width": "7",
-			"height": "9",
-			"x": "3",
-			"y": "3",
-			"rx": "1"
-		}],
-		["rect", {
-			"width": "7",
-			"height": "5",
-			"x": "14",
-			"y": "3",
-			"rx": "1"
-		}],
-		["rect", {
-			"width": "7",
-			"height": "9",
-			"x": "14",
-			"y": "12",
-			"rx": "1"
-		}],
-		["rect", {
-			"width": "7",
-			"height": "5",
-			"x": "3",
-			"y": "16",
-			"rx": "1"
-		}]
-	],
-	"message-square": [["path", { "d": "M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z" }]],
-	"list-checks": [
-		["path", { "d": "M13 5h8" }],
-		["path", { "d": "M13 12h8" }],
-		["path", { "d": "M13 19h8" }],
-		["path", { "d": "m3 17 2 2 4-4" }],
-		["path", { "d": "m3 7 2 2 4-4" }]
-	],
-	"calendar-range": [
-		["rect", {
-			"x": "3",
-			"y": "3",
-			"width": "18",
-			"height": "18",
-			"rx": "2"
-		}],
-		["path", { "d": "M16 2v3" }],
-		["path", { "d": "M3 9h18" }],
-		["path", { "d": "M8 2v3" }],
-		["path", { "d": "M17 13h-6" }],
-		["path", { "d": "M13 17H7" }],
-		["path", { "d": "M7 13h.01" }],
-		["path", { "d": "M17 17h.01" }]
-	],
-	"network": [
-		["rect", {
-			"x": "16",
-			"y": "16",
-			"width": "6",
-			"height": "6",
-			"rx": "1"
-		}],
-		["rect", {
-			"x": "2",
-			"y": "16",
-			"width": "6",
-			"height": "6",
-			"rx": "1"
-		}],
-		["rect", {
-			"x": "9",
-			"y": "2",
-			"width": "6",
-			"height": "6",
-			"rx": "1"
-		}],
-		["path", { "d": "M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" }],
-		["path", { "d": "M12 12V8" }]
-	],
-	"circle-alert": [
-		["circle", {
-			"cx": "12",
-			"cy": "12",
-			"r": "10"
-		}],
-		["line", {
-			"x1": "12",
-			"x2": "12",
-			"y1": "8",
-			"y2": "12"
-		}],
-		["line", {
-			"x1": "12",
-			"x2": "12.01",
-			"y1": "16",
-			"y2": "16"
-		}]
-	],
-	"circle-x": [
-		["circle", {
-			"cx": "12",
-			"cy": "12",
-			"r": "10"
-		}],
-		["path", { "d": "m15 9-6 6" }],
-		["path", { "d": "m9 9 6 6" }]
-	],
-	"cpu": [
-		["path", { "d": "M12 20v2" }],
-		["path", { "d": "M12 2v2" }],
-		["path", { "d": "M17 20v2" }],
-		["path", { "d": "M17 2v2" }],
-		["path", { "d": "M2 12h2" }],
-		["path", { "d": "M2 17h2" }],
-		["path", { "d": "M2 7h2" }],
-		["path", { "d": "M20 12h2" }],
-		["path", { "d": "M20 17h2" }],
-		["path", { "d": "M20 7h2" }],
-		["path", { "d": "M7 20v2" }],
-		["path", { "d": "M7 2v2" }],
-		["rect", {
-			"x": "4",
-			"y": "4",
-			"width": "16",
-			"height": "16",
-			"rx": "2"
-		}],
-		["rect", {
-			"x": "8",
-			"y": "8",
-			"width": "8",
-			"height": "8",
-			"rx": "1"
-		}]
-	],
-	"kanban": [
-		["path", { "d": "M5 3v14" }],
-		["path", { "d": "M12 3v8" }],
-		["path", { "d": "M19 3v18" }]
-	],
-	"folder": [["path", { "d": "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" }]],
-	"inbox": [["polyline", { "points": "22 12 16 12 14 15 10 15 8 12 2 12" }], ["path", { "d": "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" }]],
-	"settings": [["path", { "d": "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" }], ["circle", {
-		"cx": "12",
-		"cy": "12",
-		"r": "3"
-	}]],
-	"wrench": [["path", { "d": "M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" }]],
-	"search": [["path", { "d": "m21 21-4.34-4.34" }], ["circle", {
-		"cx": "11",
-		"cy": "11",
-		"r": "8"
-	}]],
-	"refresh-cw": [
-		["path", { "d": "M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" }],
-		["path", { "d": "M21 3v5h-5" }],
-		["path", { "d": "M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" }],
-		["path", { "d": "M8 16H3v5" }]
-	],
-	"chevron-right": [["path", { "d": "m9 18 6-6-6-6" }]],
-	"chevron-down": [["path", { "d": "m6 9 6 6 6-6" }]],
-	"chevron-up": [["path", { "d": "m18 15-6-6-6 6" }]],
-	"chevron-left": [["path", { "d": "m15 18-6-6 6-6" }]],
-	"x": [["path", { "d": "M18 6 6 18" }], ["path", { "d": "m6 6 12 12" }]],
-	"more-horizontal": [
-		["circle", {
-			"cx": "12",
-			"cy": "12",
-			"r": "1"
-		}],
-		["circle", {
-			"cx": "19",
-			"cy": "12",
-			"r": "1"
-		}],
-		["circle", {
-			"cx": "5",
-			"cy": "12",
-			"r": "1"
-		}]
-	],
-	"plus": [["path", { "d": "M5 12h14" }], ["path", { "d": "M12 5v14" }]],
-	"check": [["path", { "d": "M20 6 9 17l-5-5" }]],
-	"menu": [
-		["path", { "d": "M4 5h16" }],
-		["path", { "d": "M4 12h16" }],
-		["path", { "d": "M4 19h16" }]
-	],
-	"pause": [["rect", {
-		"x": "6",
-		"y": "4",
-		"width": "4",
-		"height": "16"
-	}], ["rect", {
-		"x": "14",
-		"y": "4",
-		"width": "4",
-		"height": "16"
-	}]],
-	"play": [["polygon", { "points": "5 3 19 12 5 21 5 3" }]]
-};
-function icon(name, { label, size = 16 } = {}) {
-	const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-	for (const [key, value] of Object.entries({
-		viewBox: "0 0 24 24",
-		width: size,
-		height: size,
-		fill: "none",
-		stroke: "currentColor",
-		"stroke-width": 1.75,
-		"stroke-linecap": "round",
-		"stroke-linejoin": "round",
-		focusable: "false",
-		class: "ui-icon",
-		...label ? {
-			role: "img",
-			"aria-label": label
-		} : { "aria-hidden": "true" }
-	})) svg.setAttribute(key, String(value));
-	for (const [tag, attrs] of paths[name] || paths["circle-alert"]) {
-		const node = document.createElementNS(svg.namespaceURI, tag);
-		for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
-		svg.append(node);
-	}
-	return svg;
-}
-//#endregion
-//#region src/ui/components.js
-var sequence = 0;
-var uid = () => `ui-${++sequence}`;
-var nodeIcon = (icon$1) => typeof icon$1 === "string" ? icon(icon$1) : icon$1;
-var choiceFocus = null;
-var choiceSerial = 0;
-function button({ variant = "secondary", size = "md", icon, iconPosition = "start", label, onClick, ...attrs } = {}) {
-	return h$1("button", {
-		type: "button",
-		class: `ui-button ${variant} ui-${size}`,
-		onclick: onClick,
-		...attrs
-	}, iconPosition === "end" ? null : nodeIcon(icon), label, iconPosition === "end" ? nodeIcon(icon) : null);
-}
-function discussLink(context, attrs = {}) {
-	return h$1("a", {
-		class: "ui-button secondary ui-sm",
-		href: discussHref(context),
-		...attrs
-	}, icon("message-square"), t("ui_discuss"));
-}
-function iconButton({ icon, label, ...attrs }) {
-	return button({
-		variant: "ghost",
-		icon,
-		"aria-label": label,
-		title: label,
-		...attrs,
-		class: "ui-button ghost ui-icon-button"
-	});
-}
-function searchField(input, attrs = {}) {
-	input.type = "search";
-	input.placeholder = t("ui_search");
-	return h$1("div", {
-		...attrs,
-		class: `ui-search ${attrs.class || ""}`
-	}, icon("search"), input);
-}
-var choiceObserver;
-var choiceMounts;
-var choiceFits = new WeakMap();
-var choiceParents = new Map();
-function watchChoice(root, measure) {
-	choiceFits.set(root, measure);
-	root.dataset.choiceAdaptive = "";
-	if (!choiceObserver) {
-		choiceObserver = new ResizeObserver((entries) => {
-			for (const { target } of entries) for (const control of choiceParents.get(target) || []) choiceFits.get(control)?.();
-		});
-		const reconcile = () => {
-			for (const [parent, controls] of choiceParents) {
-				for (const control of controls) if (!control.isConnected || control.parentElement !== parent) controls.delete(control);
-				if (!controls.size) {
-					choiceObserver.unobserve(parent);
-					choiceParents.delete(parent);
-				}
-			}
-			for (const control of document.querySelectorAll("[data-choice-adaptive]")) {
-				const parent = control.parentElement;
-				if (!choiceFits.has(control) || choiceParents.get(parent)?.has(control)) continue;
-				if (!choiceParents.has(parent)) {
-					choiceParents.set(parent, new Set());
-					choiceObserver.observe(parent);
-				}
-				choiceParents.get(parent).add(control);
-				choiceFits.get(control)();
-			}
-		};
-		choiceMounts = new MutationObserver(reconcile);
-		choiceMounts.observe(document.documentElement, {
-			childList: true,
-			subtree: true
-		});
-		document.fonts?.ready.then(reconcile);
-	}
-}
-function choices({ options, value, onChange = () => {}, label }, isTabs) {
-	const root = h$1("div", {
-		class: isTabs ? "ui-tabs" : "ui-segmented",
-		role: isTabs ? "tablist" : "radiogroup",
-		"aria-label": label
-	});
-	const buttons = options.map((option) => h$1("button", {
-		type: "button",
-		role: isTabs ? "tab" : "radio",
-		id: option.id || uid(),
-		"aria-controls": isTabs && typeof option.panel === "string" ? option.panel : null,
-		disabled: option.disabled,
-		onclick: () => select(option.value)
-	}, option.label));
-	const fallback = isTabs ? null : h$1("select", {
-		"aria-label": label,
-		"data-choice-select": "",
-		hidden: true,
-		onchange: () => select(options[fallback.selectedIndex].value)
-	}, ...options.map((option, index) => h$1("option", {
-		value: String(index),
-		disabled: option.disabled
-	}, option.label)));
-	if (isTabs) options.forEach((option, index) => {
-		if (!option.panel || typeof option.panel === "string") return;
-		const panel = option.panel;
-		panel.id ||= uid();
-		panel.setAttribute("role", "tabpanel");
-		panel.setAttribute("aria-labelledby", buttons[index].id);
-		buttons[index].setAttribute("aria-controls", panel.id);
-	});
-	function select(next, notify = true) {
-		value = next;
-		if (fallback) fallback.value = String(options.findIndex((option) => option.value === value));
-		buttons.forEach((node, i) => {
-			const active = options[i].value === value;
-			node.tabIndex = active ? 0 : -1;
-			node.setAttribute(isTabs ? "aria-selected" : "aria-checked", String(active));
-		});
-		if (notify) onChange(value);
-	}
-	root.addEventListener("keydown", (event) => {
-		if (event.target === fallback) return;
-		if (![
-			"ArrowLeft",
-			"ArrowRight",
-			"ArrowUp",
-			"ArrowDown",
-			"Home",
-			"End"
-		].includes(event.key)) return;
-		event.preventDefault();
-		const enabled = buttons.filter((node) => !node.disabled), current = enabled.indexOf(document.activeElement);
-		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1) + enabled.length) % enabled.length];
-		if (!next) return;
-		const ticket = {
-			label,
-			id: ++choiceSerial
-		};
-		choiceFocus = ticket;
-		next.focus();
-		next.click();
-		setTimeout(() => {
-			if (choiceFocus === ticket) choiceFocus = null;
-		}, 80);
-	});
-	root.append(...buttons, ...fallback ? [fallback] : []);
-	select(options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value, false);
-	if (fallback) watchChoice(root, () => {
-		if (!root.isConnected) return;
-		const focused = document.activeElement, parent = root.parentElement, css = getComputedStyle(parent);
-		fallback.hidden = true;
-		buttons.forEach((node) => node.hidden = false);
-		root.removeAttribute("data-choice-overflow");
-		const overflow = root.scrollWidth > parent.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) + 1;
-		fallback.hidden = !overflow;
-		buttons.forEach((node) => node.hidden = overflow);
-		root.toggleAttribute("data-choice-overflow", overflow);
-		root.setAttribute("role", overflow ? "group" : "radiogroup");
-		if (overflow && (buttons.includes(focused) || focused === fallback)) fallback.focus({ preventScroll: true });
-		else if (!overflow && focused === fallback) buttons.find((node) => node.getAttribute("aria-checked") === "true")?.focus({ preventScroll: true });
-	});
-	if (choiceFocus?.label === label) {
-		choiceFocus = null;
-		const focusChecked = () => {
-			if (!root.isConnected) return;
-			buttons.find((node) => node.getAttribute(isTabs ? "aria-selected" : "aria-checked") === "true")?.focus();
-		};
-		queueMicrotask(focusChecked);
-		setTimeout(focusChecked, 50);
-	}
-	root.setValue = (next) => select(next, false);
-	return root;
-}
-var segmented = (options) => choices(options, false);
-var tabs = (options) => choices(options, true);
-function statusPill(status) {
-	const key = Object.hasOwn(statusVocabulary, status) ? status : "unknown";
-	return h$1("span", {
-		class: `ui-pill tone-${statusVocabulary[key].tone}`,
-		"data-status": key
-	}, t("ui_status_" + key));
-}
-function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
-	const actionRow = h$1("div", { class: "ui-header-actions" }, ...actions, overflow);
-	actionRow.addEventListener("focusin", (event) => {
-		const target = event.target.closest("button, a, select");
-		if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;
-		const box = target.getBoundingClientRect(), row = actionRow.getBoundingClientRect();
-		if (box.right > row.right) actionRow.scrollLeft += box.right - row.right;
-		if (box.left < row.left) actionRow.scrollLeft -= row.left - box.left;
-	});
-	return h$1("header", { class: "ui-page-header" }, h$1("div", { class: "ui-page-heading" }, h$1("div", { class: "ui-title-row" }, mark, h$1("h1", {}, title), pill), meta ? meta instanceof Node ? meta : h$1("p", { class: "ui-meta" }, meta) : null), actionRow);
-}
-function sectionCard({ title, actions = [], body } = {}) {
-	return h$1("section", { class: "ui-section-card" }, title ? h$1("header", {}, h$1("h2", {}, title), h$1("div", { class: "ui-header-actions" }, ...actions)) : null, body);
-}
-function metric({ label, value, context, bar, pill } = {}) {
-	const unknown = value === null || value === void 0 || typeof value === "number" && !Number.isFinite(value);
-	const track = bar && !unknown ? h$1("div", {
-		class: "ui-metric-bar",
-		"aria-hidden": "true"
-	}, ...bar.map((part) => {
-		const span = h$1("span", { class: `tone-${[
-			"ok",
-			"review",
-			"info",
-			"bad",
-			"warn"
-		].includes(part.tone) ? part.tone : "neutral"}` });
-		span.style.flexGrow = String(Number.isFinite(part.value) && part.value > 0 ? part.value : 0);
-		return span;
-	})) : null;
-	return h$1("div", { class: "ui-metric" }, h$1("div", { class: "ui-meta" }, label), h$1("div", { class: "ui-metric-value" }, unknown ? "—" : value, unknown ? statusPill("unknown") : pill || null), context ? h$1("div", { class: "ui-metric-context" }, context) : null, track);
-}
-function emptyState({ icon, title, text, action }) {
-	return h$1("div", { class: "ui-empty" }, nodeIcon(icon), h$1("h2", {}, title), text ? h$1("p", {}, text) : null, action);
-}
-function skeleton(rows = 3) {
-	return h$1("div", {
-		class: "ui-skeleton",
-		role: "status",
-		"aria-label": t("ui_loading")
-	}, ...Array.from({ length: Math.min(100, Math.max(0, rows)) }, () => h$1("div", { "aria-hidden": "true" })));
-}
-var disclosures = new Map();
-function disclosure({ label, body, open = false, key, element }) {
-	const root = element || h$1("details", { open }, h$1("summary", {}, label), body);
-	if (root.classList.contains("ui-disclosure")) return root;
-	root.classList.add("ui-disclosure");
-	root.querySelector(":scope > summary")?.prepend(icon("chevron-right"));
-	if (key && disclosures.has(key)) root.open = disclosures.get(key);
-	root.addEventListener("toggle", () => {
-		if (!key || !root.isConnected) return;
-		disclosures.delete(key);
-		disclosures.set(key, root.open);
-		if (disclosures.size > 200) disclosures.delete(disclosures.keys().next().value);
-	});
-	return root;
-}
-function inlineError({ error, retry }) {
-	return h$1("div", {
-		class: "ui-inline-error",
-		role: "alert"
-	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
-		size: "sm",
-		variant: "ghost",
-		label: t("ui_retry"),
-		onClick: retry
-	}) : null);
-}
-function contextChip({ icon, text, onRemove }) {
-	return h$1("span", {
-		class: "ui-context-chip",
-		role: "group",
-		title: text,
-		"aria-label": text
-	}, nodeIcon(icon), h$1("span", { class: "ui-chip-label" }, text), onRemove ? iconButton({
-		icon: "x",
-		label: t("ui_remove", { text }),
-		onClick: onRemove
-	}) : null);
-}
-function agentMark(cli) {
-	const [initials, label] = {
-		codex: ["CX", "Codex"],
-		claude: ["CL", "Claude"],
-		grok: ["GK", "Grok"],
-		gemini: ["GM", "Gemini"],
-		bat: ["BT", "BAT"],
-		pm: ["PM", "PM"]
-	}[String(cli).toLowerCase()] || ["?", t("ui_status_unknown")];
-	return h$1("span", {
-		class: "ui-agent-mark",
-		role: "img",
-		"aria-label": label,
-		title: label
-	}, initials);
-}
-function menu({ button: trigger, items }) {
-	const panel = h$1("div", {
-		class: "ui-menu-panel",
-		role: "menu",
-		id: uid(),
-		hidden: true
-	});
-	const root = h$1("div", { class: "ui-menu" }, trigger, panel);
-	trigger.setAttribute("aria-haspopup", "menu");
-	trigger.setAttribute("aria-controls", panel.id);
-	trigger.setAttribute("aria-expanded", "false");
-	const controls = items.map((item) => {
-		if (item.content) return h$1("div", {
-			class: "ui-menu-group",
-			role: "group",
-			"aria-label": item.label,
-			"data-menu-key": item.key
-		}, item.content);
-		let node;
-		node = h$1(item.href ? "a" : "button", {
-			type: item.href ? null : "button",
-			href: item.href,
-			role: "menuitem",
-			"data-menu-key": item.key,
-			tabindex: -1,
-			title: item.title,
-			disabled: item.href ? null : item.disabled,
-			"aria-disabled": item.disabled ? "true" : null,
-			onclick: (event) => {
-				if (node.disabled || node.getAttribute("aria-disabled") === "true") {
-					event.preventDefault();
-					return;
-				}
-				close();
-				item.onSelect?.();
-			}
-		}, nodeIcon(item.icon), item.label);
-		return node;
-	});
-	panel.append(...controls);
-	const enabledControls = () => [...panel.querySelectorAll("[role=\"menuitem\"], select:not(:disabled)")].filter((node) => !node.disabled && node.getAttribute("aria-disabled") !== "true" && node.getClientRects().length && !node.closest("[hidden], [inert]"));
-	function close(restore = true) {
-		panel.hidden = true;
-		trigger.setAttribute("aria-expanded", "false");
-		document.removeEventListener("pointerdown", outside);
-		if (restore && root.isConnected) trigger.focus();
-	}
-	function outside(event) {
-		if (!root.contains(event.target)) close(false);
-	}
-	function keys(event) {
-		if (event.key === "Escape") {
-			event.preventDefault();
-			event.stopPropagation();
-			close();
-		} else if (event.key === "Tab") close(false);
-		else if (!event.target?.matches?.("select, input, textarea") && [
-			"ArrowDown",
-			"ArrowUp",
-			"Home",
-			"End"
-		].includes(event.key)) {
-			event.preventDefault();
-			const enabled = enabledControls(), at = enabled.indexOf(document.activeElement);
-			enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (at + (event.key === "ArrowUp" ? -1 : 1) + enabled.length) % enabled.length]?.focus();
-		}
-	}
-	panel.addEventListener("keydown", keys);
-	function open(last = false) {
-		panel.hidden = false;
-		trigger.setAttribute("aria-expanded", "true");
-		enabledControls().at(last ? -1 : 0)?.focus();
-		document.addEventListener("pointerdown", outside);
-	}
-	trigger.addEventListener("click", () => panel.hidden ? open() : close());
-	trigger.addEventListener("keydown", (event) => {
-		if (["ArrowDown", "ArrowUp"].includes(event.key)) {
-			event.preventDefault();
-			open(event.key === "ArrowUp");
-		}
-	});
-	root.close = close;
-	root.dispose = () => close(false);
-	return root;
-}
-var focusables = (root) => [...root.querySelectorAll("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex=\"0\"]")].filter((node) => node.getClientRects().length && !node.closest("[hidden], [inert]"));
-function trapFocus(root, event) {
-	if (event.key !== "Tab") return;
-	const nodes = focusables(root), first = nodes[0], last = nodes.at(-1);
-	if (!first) {
-		event.preventDefault();
-		root.focus();
-	} else if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {
-		event.preventDefault();
-		last.focus();
-	} else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {
-		event.preventDefault();
-		first.focus();
-	}
-}
-function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}) {
-	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
-	const body = h$1("div", { class: "ui-inspector-body" });
-	const closeButton = iconButton({
-		icon: "x",
-		label: t("ui_close"),
-		onClick: () => close()
-	});
-	const back = button({
-		variant: "ghost",
-		icon: "chevron-left",
-		label: t("ui_back"),
-		onClick: () => close(),
-		class: "ui-button ghost ui-inspector-back"
-	});
-	const root = h$1("aside", {
-		class: dock ? "ui-inspector ui-inspector-dock" : "ui-inspector",
-		tabindex: -1,
-		"aria-labelledby": titleId
-	}, h$1("header", {}, back, h$1("h2", { id: titleId }, title), closeButton), body);
-	const scrim = h$1("div", {
-		class: "ui-inspector-scrim",
-		onclick: () => close()
-	});
-	const inerted = [];
-	function release() {
-		for (const node of inerted.splice(0)) node.inert = false;
-	}
-	function resize() {
-		release();
-		if (dock && !media.matches && root.hidden) {
-			scrim.remove();
-			root.removeAttribute("aria-modal");
-			return;
-		}
-		root.setAttribute("role", media.matches ? "complementary" : "dialog");
-		if (media.matches || root.hidden) {
-			root.removeAttribute("aria-modal");
-			scrim.remove();
-		} else {
-			root.setAttribute("aria-modal", "true");
-			if (!scrim.isConnected) root.before(scrim);
-			let node = root;
-			while (node.parentElement && node.parentElement !== document.documentElement) {
-				for (const sibling of node.parentElement.children) if (sibling !== node && sibling !== scrim && !sibling.inert) {
-					sibling.inert = true;
-					inerted.push(sibling);
-				}
-				node = node.parentElement;
-			}
-		}
-	}
-	function keys(event) {
-		if (dock && (root.hidden || media.matches)) return;
-		if (event.key === "Escape") {
-			event.preventDefault();
-			close();
-		} else if (!media.matches) trapFocus(root, event);
-	}
-	let closed = false;
-	function restoreFocus() {
-		let target = null;
-		try {
-			target = typeof returnFocus === "function" ? returnFocus() : returnFocus;
-		} catch {
-			target = null;
-		}
-		const rendered = (node) => node?.isConnected && node.getClientRects().length && !node.closest("[hidden], [inert]");
-		if (rendered(target)) target.focus();
-		else if (rendered(opener)) opener.focus();
-	}
-	function destroy() {
-		if (closed) return;
-		closed = true;
-		release();
-		scrim.remove();
-		root.remove();
-		document.removeEventListener("keydown", keys);
-		media.removeEventListener("change", onMedia);
-	}
-	function close() {
-		if (closed) return;
-		if (dock && !media.matches) {
-			root.hidden = true;
-			release();
-			scrim.remove();
-			root.removeAttribute("aria-modal");
-			onClose();
-			restoreFocus();
-			return;
-		}
-		if (dock && media.matches) return;
-		destroy();
-		onClose();
-		restoreFocus();
-	}
-	function open() {
-		if (closed) return;
-		root.hidden = false;
-		resize();
-		(matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
-	}
-	function onMedia() {
-		if (dock && !media.matches) root.hidden = true;
-		if (dock && media.matches) root.hidden = false;
-		resize();
-	}
-	queueMicrotask(() => {
-		if (closed || !root.isConnected) return;
-		if (dock && !media.matches) root.hidden = true;
-		resize();
-		if (!dock) (matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
-		document.addEventListener("keydown", keys);
-		media.addEventListener("change", onMedia);
-	});
-	return Object.assign(root, {
-		body,
-		close,
-		open,
-		dispose: dock ? destroy : close
-	});
-}
-function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, rowAttrs } = {}) {
-	const compact = () => compactRow && matchMedia("(max-width: 799px)").matches;
-	const keyFor = (row) => typeof rowKey === "function" ? rowKey(row) : row[rowKey];
-	const hasSelection = rows.some((row) => keyFor(row) === selected);
-	const tbody = h$1("tbody"), table = h$1("table", {}, h$1("thead", {}, h$1("tr", {}, expandable ? h$1("th", { "aria-label": t("ui_more") }) : null, ...columns.map((column) => h$1("th", {
-		scope: "col",
-		"data-column": column.key,
-		"data-secondary": column.secondary || null,
-		class: column.numeric ? "numeric" : ""
-	}, column.label)))), tbody);
-	const root = h$1("div", {
-		class: "ui-data-table" + (compactRow ? " ui-data-table-responsive" : ""),
-		tabindex: compactRow ? null : 0
-	}, table), controls = [];
-	rows.forEach((row, i) => {
-		const key = keyFor(row), active = key === selected;
-		const extra = typeof rowAttrs === "function" ? rowAttrs(row) || {} : {};
-		let toggleExpansion;
-		const tr = h$1("tr", {
-			...extra,
-			"data-row-key": key,
-			tabindex: active || !hasSelection && i === 0 ? 0 : -1,
-			"aria-selected": String(active),
-			onclick: (event) => {
-				if (!event.target.closest("button, a, input, select")) {
-					if (compact() && toggleExpansion) {
-						tr.focus();
-						toggleExpansion();
-					} else select();
-				}
-			}
-		});
-		function select() {
-			controls.forEach((node) => {
-				node.tabIndex = node === tr ? 0 : -1;
-				node.setAttribute("aria-selected", String(node === tr));
-			});
-			onSelect(key, row);
-		}
-		if (expandable) {
-			const open = expanded.has(key);
-			const detail = h$1("tr", {
-				hidden: !open,
-				class: "ui-data-table-detail"
-			}, h$1("td", { colspan: columns.length + 1 }, typeof expandable === "function" ? expandable(row) : ""));
-			toggleExpansion = (open = detail.hidden) => {
-				detail.hidden = !open;
-				toggle.setAttribute("aria-expanded", String(open));
-				if (compactRow) tr.setAttribute("aria-expanded", String(open));
-				toggle.setAttribute("aria-label", t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }));
-				onToggle(key, open);
-			};
-			const toggle = iconButton({
-				icon: "chevron-right",
-				label: t(open ? "ui_collapse" : "ui_expand", { title: row.title || key }),
-				"aria-expanded": String(open),
-				onClick: () => toggleExpansion()
-			});
-			if (compactRow) tr.setAttribute("aria-expanded", String(open));
-			tr.append(h$1("td", {}, toggle));
-			tbody.append(tr, detail);
-		} else tbody.append(tr);
-		tr.append(...columns.map((column) => h$1("td", {
-			"data-column": column.key,
-			"data-secondary": column.secondary || null,
-			class: column.numeric ? "numeric" : ""
-		}, column.render ? column.render(row) : row[column.key] ?? "—")));
-		if (compactRow) tr.append(h$1("td", {
-			class: "ui-data-table-compact",
-			colspan: columns.length + (expandable ? 1 : 0)
-		}, expandable ? icon("chevron-right") : null, compactRow(row)));
-		tr.addEventListener("keydown", (event) => {
-			if (event.target !== tr) return;
-			if (["Enter", " "].includes(event.key)) {
-				event.preventDefault();
-				if (compact() && toggleExpansion) toggleExpansion();
-				else select();
-			}
-			if (compact() && toggleExpansion && ["ArrowRight", "ArrowLeft"].includes(event.key)) {
-				event.preventDefault();
-				toggleExpansion(event.key === "ArrowRight");
-			}
-			if ([
-				"ArrowDown",
-				"ArrowUp",
-				"Home",
-				"End"
-			].includes(event.key)) {
-				event.preventDefault();
-				const next = event.key === "Home" ? 0 : event.key === "End" ? controls.length - 1 : Math.max(0, Math.min(controls.length - 1, i + (event.key === "ArrowUp" ? -1 : 1)));
-				controls.forEach((node, n) => {
-					node.tabIndex = n === next ? 0 : -1;
-				});
-				controls[next]?.focus();
-			}
-		});
-		tr.addEventListener("focus", () => controls.forEach((node) => {
-			node.tabIndex = node === tr ? 0 : -1;
-		}));
-		controls.push(tr);
-	});
-	for (const cell of table.querySelectorAll("th, td:not(.ui-data-table-compact)")) if (!cell.title) cell.title = cell.textContent;
-	root.addEventListener("keydown", (event) => {
-		if (event.target !== root || !controls.length) return;
-		if (![
-			"ArrowDown",
-			"ArrowUp",
-			"Home",
-			"End"
-		].includes(event.key)) return;
-		event.preventDefault();
-		const index = event.key === "End" || event.key === "ArrowUp" ? controls.length - 1 : 0;
-		controls.forEach((node, n) => {
-			node.tabIndex = n === index ? 0 : -1;
-		});
-		controls[index].focus();
-	});
-	return root;
-}
 //#endregion
 //#region src/pm-workbench.js
 var selections = new Map();
@@ -11638,6 +11648,10 @@ function actionLabel(action) {
 	}
 	return humanizeAction(action) || t("action_unknown");
 }
+function operationStatusLabel(status) {
+	const label = t("op_" + status);
+	return label === "op_" + status ? t("ui_status_unknown") : label;
+}
 function operationStatusKey(status) {
 	return OPERATION_STATUS[status] || "unknown";
 }
@@ -11668,9 +11682,6 @@ function operationMeta(op, whenText = "") {
 		op?.actor,
 		whenText
 	]);
-}
-function formatTime(value) {
-	return value ? timeText(value) : "";
 }
 var TERMINAL_OPERATION = new Set([
 	"succeeded",
@@ -13366,7 +13377,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function tableFor(visible) {
 		if (!data?.rows?.length) return emptyState({ title: t("res_empty") });
-		if (!visible.length) return h("p", { class: "ui-meta" }, t("res_no_match"));
+		if (!visible.length) return emptyState({ title: t("res_no_match") });
 		if (listMedia.matches) return h("div", {
 			class: "pm-agents-list",
 			role: "list"
@@ -13563,7 +13574,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				[t("res_version"), item.cli_version || t("res_unknown")]
 			])));
 			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_tokens_col")), facts([
-				[t("res_tokens_col"), tokenHeadline(row)],
+				[t("res_total"), tokenHeadline(row)],
 				...tokenBreakdown(row),
 				[t("res_calls"), finite(row.calls) == null ? t("res_unknown") : finite(row.calls).toLocaleString()],
 				[t("res_observations"), finite(row.observations) == null ? t("res_unknown") : finite(row.observations).toLocaleString()]
@@ -14202,7 +14213,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 		const ticket = ++request, left = from.value, right = to.value, ids = [...selected].sort(), fixedCursor = cursor;
 		controls();
 		result.replaceChildren();
-		status.replaceChildren(h("p", { class: "muted" }, text("pm_diff_loading")));
+		status.replaceChildren(skeleton(2));
 		const query = new URLSearchParams({
 			from_revision_id: left,
 			to_revision_id: right
@@ -15124,7 +15135,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		});
 	}
 	function renderItems(rows, empty = "wb_unknown") {
-		if (!rows.length) return h("p", { class: "muted" }, t(empty));
+		if (!rows.length) return emptyState({ title: t(empty) });
 		const sources = disclosure({
 			label: t("wb_sources"),
 			body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))
@@ -15962,7 +15973,7 @@ function workspaceOverview(options) {
 				saved.title ? " · " + saved.title : ""
 			] : [t(reportLoading ? "ov_loading_report" : "ov_not_saved")]);
 			if (!saved) {
-				resetContent(reportLoading ? h("div", {}, h("p", { role: "status" }, t("ov_loading_report")), skeleton(3)) : h("p", {}, t("ov_not_saved")));
+				resetContent(reportLoading ? skeleton(3, { label: t("ov_loading_report") }) : emptyState({ title: t("ov_not_saved") }));
 				return;
 			}
 			const next = JSON.stringify(saved);
@@ -16539,7 +16550,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	const loaded = h("span", {
 		class: "dep-loaded",
 		"data-dep-loaded": ""
-	}, t("dep_loaded"));
+	}, `${Math.round(zoom * 100)}%`);
 	const graphHost = h("div", { "data-dep-graph-host": "" }, h("div", { class: "dep-graph-bar" }, loaded, zoomOut, zoomIn), graphScroll);
 	const detailBody = h("div");
 	const details = disclosure({
@@ -16863,6 +16874,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function setZoom(next) {
 		zoom = Math.min(1.8, Math.max(.6, Math.round(next * 10) / 10));
+		loaded.textContent = `${Math.round(zoom * 100)}%`;
 		remember();
 		drawGraph(filteredEdges());
 	}
@@ -18105,7 +18117,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					class: "ui-button ghost pm-requirement-open",
 					"data-rtm-select": req.id,
 					onclick: () => void select(req.id)
-				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? h$1("p", { class: "ui-meta" }, t("wb_no_work")) : null),
+				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? emptyState({ title: t("wb_no_work") }) : null),
 				compactRow: (req) => {
 					const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
 					const partialPRs = work.some((card) => sources.get(card.work_item_id)?.filtered || sources.get(card.work_item_id)?.next != null);
@@ -18351,7 +18363,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		const ticket = ++detailSerial, generation = serial;
 		if (!retain) {
 			detail.show({ title: firstLabel(card?.work.title, requirement?.text) });
-			detail.element.body.replaceChildren(h$1("p", { role: "status" }, t("wb_detail_loading")));
+			detail.element.body.replaceChildren(skeleton(2));
 		}
 		if (requirement) {
 			const blocked = linked(requirement).find(blockedWork);
@@ -18527,11 +18539,13 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		selected = localStorage.getItem(selectionStorage) || "";
 	} catch {}
 	const status = h("div", { role: "status" }), adapter = h("select", { "aria-label": t("ahp_adapter") }), body = h("div"), history = h("div"), detail = h("div");
-	const refreshButton = h("button", {
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("ahp_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("ahp_refresh"));
+	});
 	const more = h("button", {
 		type: "button",
 		class: "secondary",
@@ -18613,7 +18627,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			class: "secondary",
 			onclick: () => void showDetail(r.observation_id)
 		}, r.adapter_id, " · ", stamp(r.created_at), " · ", t(r.coverage_status === "observed" ? "ahp_observed" : "ahp_incomplete")), h("small", { class: "mono" }, r.observation_id))));
-		if (!rows.length) history.append(h("p", { class: "muted" }, t(value.visibility_filtered ? "ahp_hidden" : "ahp_empty")));
+		if (!rows.length) history.append(emptyState({ title: t(value.visibility_filtered ? "ahp_hidden" : "ahp_empty") }));
 		else if (value.visibility_filtered) history.append(h("p", { class: "muted" }, t("ahp_hidden")));
 		more.hidden = cursor === null;
 		more.disabled = false;
@@ -19194,15 +19208,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		hidden: true,
 		onclick: () => void loadMore()
 	}, t("pcp_more"));
-	const reload = conversation ? iconButton({
+	const reload = iconButton({
 		icon: "refresh-cw",
 		label: t("pcp_refresh"),
 		onClick: () => void refresh()
-	}) : h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
-	}, t("pcp_refresh"));
+	});
 	const prepareBox = h("details", {
 		open: true,
 		"data-proposal-prepare": ""
@@ -19845,11 +19855,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 	let workId = null, sequence = 0, busy = false, cursor = null, rows = [], packages = [];
 	const status = h("div", { role: "status" }), facts = h("div", {});
-	const refreshButton = h("button", {
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("wd_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("wd_refresh"));
+	});
 	const more = h("button", {
 		type: "button",
 		class: "secondary",
@@ -19874,7 +19886,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 	const boolean = (value) => value === true ? t("wd_yes") : value === false ? t("wd_no") : t("wd_unknown");
 	const code = (value) => h("p", { class: "pm-source" }, String(value ?? ""));
 	function render() {
-		facts.replaceChildren(h("p", { class: "muted" }, t("wd_packages")), ...packages.map((ref) => h("div", {}, code(ref.package_id), code(ref.document_digest), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")))), ...rows.map((row) => h("article", { class: "pm-spec-card" }, h("h5", {}, t("wd_action_" + row.action)), fact("wd_status", t("wd_status_" + row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), code(row.target?.repository), row.target?.pull_number ? fact("wd_pull", row.target.pull_number) : null, row.integration ? h("div", {}, fact("wd_pushed", boolean(row.integration.pushed)), code(row.integration.new_head), ...(row.integration.sources || []).map((source) => h("p", { class: "pm-source" }, source.pinned_sha + " · " + source.status))) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified)), code(row.merge.merged_sha)) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_state", row.deployment.state), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current)), code(row.deployment.source_sha), fact("wd_run", row.deployment.run_id)) : null)), !rows.length ? h("p", { class: "muted" }, t("wd_empty")) : null);
+		facts.replaceChildren(h("p", { class: "muted" }, t("wd_packages")), ...packages.map((ref) => h("div", {}, code(ref.package_id), code(ref.document_digest), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")))), ...rows.map((row) => h("article", { class: "pm-spec-card" }, h("h5", {}, t("wd_action_" + row.action)), fact("wd_status", t("wd_status_" + row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), code(row.target?.repository), row.target?.pull_number ? fact("wd_pull", row.target.pull_number) : null, row.integration ? h("div", {}, fact("wd_pushed", boolean(row.integration.pushed)), code(row.integration.new_head), ...(row.integration.sources || []).map((source) => h("p", { class: "pm-source" }, source.pinned_sha + " · " + source.status))) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified)), code(row.merge.merged_sha)) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_state", row.deployment.state), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current)), code(row.deployment.source_sha), fact("wd_run", row.deployment.run_id)) : null)), !rows.length ? emptyState({ title: t("wd_empty") }) : null);
 	}
 	function check(data, id) {
 		if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || data.requirement_acceptance !== "not_evaluated_by_delivery" || !Array.isArray(data.original_packages) || !Array.isArray(data.deliveries) || typeof data.source_visibility_filtered !== "boolean" || data.next_after !== null && (!Number.isSafeInteger(data.next_after) || data.next_after <= 0)) throw Error(t("wd_invalid"));
@@ -19902,7 +19914,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			facts.replaceChildren();
 		}
 		controls();
-		status.replaceChildren(h("p", { class: "muted" }, t("wd_loading")));
+		status.replaceChildren(skeleton(2));
 		try {
 			const data = check(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(id)}/deliveries?after=${after}&limit=20`), id);
 			if (!valid(ticket) || workId !== id) return;
@@ -20023,11 +20035,13 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, action = "pm.spec.materialize";
 	let selected = null, serial = 0, ready = false, record = null, eligible = false, editor = null;
 	const editors = new Map(), facts = h("div"), status = h("div", { role: "status" }), editorView = h("div"), summary = h("p", { class: "muted" });
-	const refreshButton = h("button", {
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("psm_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("psm_refresh"));
+	});
 	const element = h("section", {
 		class: "pm-packages",
 		"data-pm-spec-materialization": ""
@@ -20368,11 +20382,13 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	const element = h("section", {
 		class: "panel pm-work-batches",
 		"data-pm-work-batches": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmb_title")), text("pmb_intro")), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmb_title")), text("pmb_intro")), iconButton({
+		icon: "refresh-cw",
+		label: t("pmb_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmb_refresh"))), status, h("details", {
+	})), status, h("details", {
 		"data-batch-draft": "",
 		open: true
 	}, h("summary", {}, t("pmb_draft")), text("pmb_selection_help"), add, stale, rebase, startView), labelled("pmb_history", history), facts, proofView);
@@ -21067,11 +21083,13 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	const element = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-governance": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_gov_title")), h("p", { class: "muted" }, t("pm_gov_intro"))), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_gov_title")), h("p", { class: "muted" }, t("pm_gov_intro"))), iconButton({
+		icon: "refresh-cw",
+		label: t("pm_gov_refresh"),
 		class: "secondary",
 		type: "button",
 		onclick: () => void refresh()
-	}, t("pm_gov_refresh"))), status, list, detail, warning, review, editors);
+	})), status, list, detail, warning, review, editors);
 	const actor = () => caps()?.actor;
 	const can = () => loaded && permitted(false);
 	const owner = () => {
@@ -22076,7 +22094,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			class: "reg-swatch resolved",
 			"aria-hidden": "true"
 		}), t("reg_resolved"))), chart);
-		if (weeks.length) weekSection.append(h("div", { class: "reg-scale" }, h("span", {}, String(weeks[0].week_start).slice(5)), h("span", {}, String(weeks[weeks.length - 1].week_start).slice(5))));
+		if (weeks.length) weekSection.append(h("div", { class: "reg-scale" }, h("span", {}, day(weeks[0].week_start)), h("span", {}, day(weeks[weeks.length - 1].week_start))));
 		const reasons = Array.isArray(summary.blocking_reasons) ? summary.blocking_reasons : null;
 		const reasonSection = h("section", { "data-reg-reasons": "" }, h("h3", {}, t("reg_blocking")));
 		if (reasons && !reasons.length) reasonSection.append(h("p", {
@@ -22116,7 +22134,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	function displayTitle(row) {
 		const title = labelSegment(row?.title);
 		if (title) return title;
-		if (!(row?.source?.kind === "finding" || String(row?.row_id || "").startsWith("finding."))) return "";
+		if (!(row?.source?.kind === "finding" || String(row?.row_id || "").startsWith("finding."))) return [t("reg_type_" + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || labelSegment(row?.source?.id)].filter(Boolean).join(" · ");
 		const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
 		const kind = t("reg_kind_finding");
 		return qualifier ? `${kind} · ${qualifier}` : kind;
@@ -23436,7 +23454,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function renderWork() {
 		work.replaceChildren(h("h3", {}, t("pm_lifecycle_inflight")));
-		if (!rows.length) work.append(h("p", { class: "muted" }, t("pm_lifecycle_inflight_empty")));
+		if (!rows.length) work.append(emptyState({ title: t("pm_lifecycle_inflight_empty") }));
 		if (workFiltered) work.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		for (const row of rows) {
 			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, row.action, " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", row.operation_status), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
@@ -23515,7 +23533,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	async function refresh() {
 		withdraw();
 		const ticket = serial;
-		status.replaceChildren(h("p", { class: "muted" }, t("pm_lifecycle_loading")));
+		status.replaceChildren(skeleton(2));
 		try {
 			const value = checkScope(await api("GET", endpoint));
 			alive();
@@ -23616,11 +23634,13 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 	const id = /^pmim_[0-9a-f]{32}$/, revision = /^pmir_[0-9a-f]{32}$/, digest = /^[0-9a-f]{64}$/;
 	let serial = 0, loaded = false, rows = [], cursor = null, pages = 1, filtered = false, packageRow = null, selectedId = null, current = null;
 	const publishers = new Map(), cancellers = new Map(), status = h("div", { role: "status" }), catalog = h("div"), selected = h("div"), publication = h("div"), detail = h("div");
-	const refreshButton = h("button", {
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("pmi_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmi_refresh"));
+	});
 	const more = h("button", {
 		type: "button",
 		class: "secondary",
@@ -23872,7 +23892,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 			"aria-pressed": row.mapping_id === selectedId,
 			onclick: () => void selectMapping(row.mapping_id)
 		}, trackedIssue(row.document, stateLabel(row.document.state)))));
-		if (!rows.length) catalog.append(h("p", { class: "muted" }, t("pmi_empty")));
+		if (!rows.length) catalog.append(emptyState({ title: t("pmi_empty") }));
 		if (filtered) catalog.append(h("p", { class: "muted" }, t("pmi_filtered")));
 	}
 	function withdraw() {
@@ -23922,7 +23942,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 	async function refresh() {
 		withdraw();
 		const ticket = serial;
-		status.replaceChildren(h("p", { class: "muted" }, t("pmi_loading")));
+		status.replaceChildren(skeleton(2));
 		try {
 			let after = 0;
 			for (let page = 0; page < pages; page++) {
@@ -24917,11 +24937,13 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	const element = h("section", {
 		class: "panel pm-follow-up",
 		"data-pm-follow-up": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_fu_title")), note("pm_fu_intro")), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_fu_title")), note("pm_fu_intro")), iconButton({
+		icon: "refresh-cw",
+		label: t("pm_fu_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pm_fu_refresh"))), status, view, fold("pm_fu_history", labelled("pm_fu_history_choose", choose), more), editorFold);
+	})), status, view, fold("pm_fu_history", labelled("pm_fu_history_choose", choose), more), editorFold);
 	function metadataPage(data, after) {
 		check(data);
 		if (!number(data.head_version) || !Array.isArray(data.intakes) || data.next_cursor != null && (!number(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pm_fu_scope_error"));
@@ -25254,11 +25276,13 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	const idPattern = /^pmwp_[0-9a-f]{32}$/, digestPattern = /^[0-9a-f]{64}$/;
 	let sequence = 0, rows = [], cursor = null, pages = 1, selected = null, busy = false;
 	const status = h("div", { role: "status" }), list = h("div"), facts = h("div", { "data-pm-wp-detail": "" });
-	const refreshButton = h("button", {
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("wp_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("wp_refresh"));
+	});
 	const more = h("button", {
 		type: "button",
 		class: "secondary",
@@ -25305,7 +25329,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 			"aria-pressed": selected === row.package_id,
 			onclick: () => void select(row.package_id)
 		}, joinLabel([row.document.title, joinLabel([t("wp_preparation"), row.sequence], " ")])))));
-		if (!rows.length) list.append(h("p", { class: "muted" }, t("wp_empty")));
+		if (!rows.length) list.append(emptyState({ title: t("wp_empty") }));
 	}
 	function render(row, readiness) {
 		const doc = row.document, context = doc.context;
@@ -25361,7 +25385,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		onSelection(null);
 		renderList();
 		controls();
-		status.replaceChildren(paragraph(t("wp_loading")));
+		status.replaceChildren(skeleton(2));
 		try {
 			await readSelected(ticket);
 			if (valid(ticket)) status.replaceChildren();
@@ -25386,7 +25410,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		facts.replaceChildren();
 		onSelection(null);
 		controls();
-		status.replaceChildren(paragraph(t("wp_loading")));
+		status.replaceChildren(skeleton(2));
 		try {
 			let after = 0, next = null;
 			const loaded = [];
@@ -25463,11 +25487,13 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 	const box = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-sprints": ""
-	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_sprint_title")), h("button", {
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_sprint_title")), iconButton({
+		icon: "refresh-cw",
+		label: t("pm_sprint_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pm_sprint_refresh"))), labelled("pm_sprint_choose", choose), status, warning, review, view, editors);
+	})), labelled("pm_sprint_choose", choose), status, warning, review, view, editors);
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
 	const actor = () => caps()?.actor;
 	const can = (decide) => loaded && permitted(decide);
@@ -26205,11 +26231,13 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		if (operation$1.test(value || "")) selected = value;
 	} catch {}
 	const picker = h("select", { "aria-label": t("pmq_verify_execution") }), status = h("div", { role: "status" }), facts = h("div"), holder = h("div");
-	const element = h("details", { "data-pm-execution-verification": "" }, h("summary", {}, t("pmq_verify_heading")), h("p", { class: "muted" }, t("pmq_verify_help")), labelled("pmq_verify_execution", picker), h("div", { class: "actions" }, h("button", {
+	const element = h("details", { "data-pm-execution-verification": "" }, h("summary", {}, t("pmq_verify_heading")), h("p", { class: "muted" }, t("pmq_verify_help")), labelled("pmq_verify_execution", picker), h("div", { class: "actions" }, iconButton({
+		icon: "refresh-cw",
+		label: t("pmq_verify_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void load()
-	}, t("pmq_verify_refresh"))), status, facts, holder);
+	})), status, facts, holder);
 	const valid = (ticket) => {
 		try {
 			alive();
@@ -26241,7 +26269,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		const ticket = ++generation;
 		clear();
 		if (!selected || !sources.some((row) => row.operation_id === selected)) return;
-		status.replaceChildren(h("p", { class: "muted" }, t("pmq_verify_loading")));
+		status.replaceChildren(skeleton(2));
 		try {
 			const value = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);
 			if (!valid(ticket)) return;
@@ -26371,11 +26399,13 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 	const element = h("section", {
 		class: "panel pm-quality-reviews",
 		"data-pm-quality-reviews": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmq_title")), text("pmq_intro")), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmq_title")), text("pmq_intro")), iconButton({
+		icon: "refresh-cw",
+		label: t("pmq_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmq_refresh"))), labelled("pmq_work", workChoice), status, h("details", { "data-quality-create": "" }, h("summary", {}, t("pmq_create_heading")), draft), labelled("pmq_history", history), facts, assessment, withdrawal);
+	})), labelled("pmq_work", workChoice), status, h("details", { "data-quality-create": "" }, h("summary", {}, t("pmq_create_heading")), draft), labelled("pmq_history", history), facts, assessment, withdrawal);
 	const valid = (ticket) => {
 		try {
 			alive();
@@ -26873,7 +26903,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		clear();
 		filtered = false;
 		if (!supported()) return;
-		status.replaceChildren(text("pmq_loading"));
+		status.replaceChildren(skeleton(2));
 		try {
 			const catalog = await pages(`${base}/work-packages`, "packages", ticket);
 			if (!valid(ticket)) return;
@@ -27592,11 +27622,13 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	const element = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-meetings": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_meeting_title")), h("p", { class: "muted" }, t("pm_meeting_intro"))), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_meeting_title")), h("p", { class: "muted" }, t("pm_meeting_intro"))), iconButton({
+		icon: "refresh-cw",
+		label: t("pm_meeting_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pm_meeting_refresh"))), labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors);
+	})), labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors);
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
 	const fold = (key, contents, open = false) => h("details", {
 		open,
@@ -27854,7 +27886,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			return;
 		}
 		const context = detail.context.document;
-		view.append(h("section", { class: "pm-plans" }, h("h3", {}, detail.meeting.title, " · ", t("pm_meeting_" + detail.meeting.status)), h("p", {}, t("pm_meeting_" + detail.meeting.kind)), h("h4", {}, t("pm_meeting_goal")), h("p", { class: "pm-note-text" }, context.sprint_goal.text), fold("pm_meeting_fixed_context", h("div", {}, h("p", {}, context.sprint_definition.title), h("p", {}, t("pm_meeting_snapshot"), " · ", context.snapshot_ref.as_of), source(context.snapshot_ref.snapshot_id), h("p", {}, source(detail.context.context_revision_id)), h("p", {}, source(context.sprint_goal.revision_id)), workView(context.selected_items), h("h4", {}, t("pm_meeting_dod")), h("ul", {}, ...context.artifacts.dod.document.criteria.map((item) => h("li", {}, item.text))), note("pm_meeting_quality"))), note("pm_meeting_source_frozen")));
+		view.append(h("section", { class: "pm-plans" }, h("h3", {}, detail.meeting.title, " · ", t("pm_meeting_" + detail.meeting.status)), h("p", {}, t("pm_meeting_" + detail.meeting.kind)), h("h4", {}, t("pm_meeting_goal")), h("p", { class: "pm-note-text" }, context.sprint_goal.text), fold("pm_meeting_fixed_context", h("div", {}, h("p", {}, context.sprint_definition.title), h("p", {}, t("pm_meeting_snapshot"), " · ", timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id), h("p", {}, source(detail.context.context_revision_id)), h("p", {}, source(context.sprint_goal.revision_id)), workView(context.selected_items), h("h4", {}, t("pm_meeting_dod")), h("ul", {}, ...context.artifacts.dod.document.criteria.map((item) => h("li", {}, item.text))), note("pm_meeting_quality"))), note("pm_meeting_source_frozen")));
 		if (detail.draft) view.append(h("section", { class: "pm-plans" }, h("h3", {}, t("pm_meeting_saved_draft")), note("pm_meeting_draft_help"), outputView(detail.draft.document), source(detail.draft.revision_id)));
 		if (detail.completion) {
 			const record = detail.completion;
@@ -28958,7 +28990,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				"baseline",
 				"forecast",
 				"actual"
-			].filter((key) => row[key]).map((key) => `${t("sched_" + key)} ${row[key].start?.slice(0, 10) || "—"}${row[key].end && row[key].end !== row[key].start ? " → " + row[key].end.slice(0, 10) : ""}`);
+			].filter((key) => row[key]).map((key) => h$1("span", {}, t("sched_" + key), " ", timeStamp(row[key].start?.slice(0, 10), { dateOnly: true }), row[key].end && row[key].end !== row[key].start ? [" → ", timeStamp(row[key].end.slice(0, 10), { dateOnly: true })] : null));
 			const cell = h$1("div", {
 				class: "schedule-tree-cell",
 				role: "treeitem",
@@ -28972,7 +29004,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
 				class: "schedule-title",
 				title: row.title
-			}, label(row)), h$1("span", { class: "schedule-date-range" }, dates.join(" · ") || t("sched_no_dates"))), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null);
+			}, label(row)), h$1("span", { class: "schedule-date-range" }, ...dates.length ? dates.flatMap((date, index) => index ? [" · ", date] : [date]) : [t("sched_no_dates")])), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null);
 			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
 			const lane = h$1("div", {
 				class: "schedule-lane",
@@ -29025,7 +29057,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			});
 			const upcoming = data.rows.filter((row) => row.kind === "milestone" && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString())).sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
 			const delta = upcoming ? milestoneDelta(upcoming) : null;
-			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
+			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t(data.partial ? "sched_loaded" : "sched_count", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
 			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
 				variant: "ghost",
 				label: firstLine(row),
@@ -29171,7 +29203,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		milestones.value = JSON.stringify(list);
 		milestones.dispatchEvent(new Event("input"));
 	};
-	const textDate = (value) => value || t("pm_roadmap_unknown_date");
+	const textDate = (value) => value ? timeStamp(value, { dateOnly: true }) : t("pm_roadmap_unknown_date");
 	const can = () => Boolean(current && planHead) && permitted(true);
 	const lock = () => {
 		for (const field of rows.querySelectorAll("input,select,button")) field.disabled = milestones.disabled || field.dataset.pmIncompatible === "true";
@@ -29527,7 +29559,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 	function render() {
 		const base = current.baseline?.document;
 		if (!base) {
-			view.replaceChildren(h("p", { class: "muted" }, t("pm_roadmap_empty")));
+			view.replaceChildren(emptyState({ title: t("pm_roadmap_empty") }));
 			return;
 		}
 		const table = h("table", { class: "pm-roadmap-table" }, h("thead", {}, h("tr", {}, ...[
@@ -29710,7 +29742,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		view.replaceChildren();
 		status.replaceChildren();
 		if (!snapshot) {
-			view.append(h("p", { class: "muted" }, t("pm_brief_empty")));
+			view.append(emptyState({ title: t("pm_brief_empty") }));
 			exports?.update();
 			return;
 		}
@@ -30006,7 +30038,7 @@ function maintenanceFindingsView({ h, t, workspaceId, data }) {
 			for (const work of row.existing_work || []) detail.append(h("p", { class: "pm-source" }, t("pmf_existing_work") + ": " + work.work_item_id));
 			return detail;
 		});
-		rows.push(h("section", {}, h("h5", {}, t("pmf_" + kind)), h("p", {}, t("pmf_state_" + source.status)), source.status === "complete" && !items.length ? h("p", { class: "muted" }, t("pmf_empty")) : null, ...items));
+		rows.push(h("section", {}, h("h5", {}, t("pmf_" + kind)), h("p", {}, t("pmf_state_" + source.status)), source.status === "complete" && !items.length ? emptyState({ title: t("pmf_empty") }) : null, ...items));
 	}
 	return h("section", { "data-maintenance-findings": "" }, h("h4", {}, t("pmf_title")), h("p", { class: "muted" }, t("pmf_boundary")), ...data.visibility_filtered ? [h("p", { class: "muted" }, t("pmf_hidden"))] : [], ...rows, ref ? h("details", {}, h("summary", {}, t("pmf_original")), h("p", { class: "pm-source" }, ref.observation_id), h("p", { class: "pm-source" }, ref.document_digest)) : null);
 }
@@ -30268,11 +30300,13 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 		selected = localStorage.getItem(key) || "";
 	} catch {}
 	const status = h("div", { role: "status" }), body = h("div"), chooser = h("select", { "aria-label": t("pmrv_idea_choose") }), pages = h("div");
-	const refresh = h("button", {
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("pmrv_idea_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void load()
-	}, t("pmrv_idea_refresh"));
+	});
 	const element = h("details", { "data-review-candidate-import": event.event_id }, h("summary", {}, t("pmrv_add_to_idea")), h("p", { class: "muted" }, t("pmrv_idea_help")), labelled("pmrv_idea_choose", chooser), h("div", { class: "actions" }, refresh, pages), status, body);
 	function controls() {
 		chooser.disabled = reading || Boolean(request?.locked()) || !can();
@@ -30402,7 +30436,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			next = data.next_cursor;
 			loaded = true;
 			navigation();
-			if (!rows.some((row) => row.mode === "idea") && !selected) status.replaceChildren(h("p", { class: "muted" }, t("pmrv_idea_empty")));
+			if (!rows.some((row) => row.mode === "idea") && !selected) status.replaceChildren(emptyState({ title: t("pmrv_idea_empty") }));
 			if (selected && !more) await choose();
 		} catch (error) {
 			if (n === ticket && !dead) {
@@ -30512,11 +30546,13 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	const element = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-maintenance-review": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmrv_title")), text("pmrv_intro")), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmrv_title")), text("pmrv_intro")), iconButton({
+		icon: "refresh-cw",
+		label: t("pmrv_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmrv_refresh"))), labelled("pmrv_choose", choose), status, warning, rebase, scheduleView, view, editors);
+	})), labelled("pmrv_choose", choose), status, warning, rebase, scheduleView, view, editors);
 	const hidden = (value) => {
 		const field = h("input", {
 			type: "hidden",
@@ -31535,11 +31571,13 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	const element = h("section", {
 		class: "panel pm-maintenance-repairs",
 		"data-pm-maintenance-repairs": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmr_title")), text("pmr_intro")), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmr_title")), text("pmr_intro")), iconButton({
+		icon: "refresh-cw",
+		label: t("pmr_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmr_refresh"))), status, startView, labelled("pmr_history", history), facts, verifier.element, proofView);
+	})), status, startView, labelled("pmr_history", history), facts, verifier.element, proofView);
 	function options(field, rows, value = "") {
 		field.replaceChildren(h("option", { value: "" }, t("pmr_choose")), ...rows.map(([id, label]) => h("option", { value: id }, label)));
 		field.value = rows.some(([id]) => id === value) ? value : "";
@@ -31777,7 +31815,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	async function refresh() {
 		withdraw();
 		const ticket = epoch;
-		status.append(text("pmr_loading"));
+		status.append(skeleton(2));
 		try {
 			const [p, b, l, f] = (await Promise.all([
 				"maintenance-policies/current",
@@ -32110,11 +32148,13 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 	historyDetails.addEventListener("toggle", () => {
 		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
 	});
-	const element = h("div", { "data-pm-maintenance-checks": "" }, h("header", { class: "pm-heading" }, h("h3", {}, t("pmc_title")), h("button", {
+	const element = h("div", { "data-pm-maintenance-checks": "" }, h("header", { class: "pm-heading" }, h("h3", {}, t("pmc_title")), iconButton({
+		icon: "refresh-cw",
+		label: t("pmc_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmc_refresh"))), status, h("p", { class: "muted" }, t("pmc_intro")), facts, editor.box, historyDetails);
+	})), status, h("p", { class: "muted" }, t("pmc_intro")), facts, editor.box, historyDetails);
 	function run(row) {
 		if (row?.workspace_id !== workspaceId || !isId(row.run_id, "pmck") || !isId(row.operation_id, "op") || !isId(row.policy_id, "pmmp") || !isId(row.baseline_id, "pmrb") || !Number.isSafeInteger(row.policy_version) || !Number.isSafeInteger(row.lifecycle_revision) || !Number.isSafeInteger(row.execution_epoch) || typeof row.capacity_reserved !== "boolean" || !Number.isFinite(row.created_at) || !Number.isFinite(row.deadline_at) || typeof row.operation_status !== "string") throw Error(t("pmc_invalid"));
 		const box = h("article", { "data-check-run": row.run_id }), doc = row.document, proof = h("details", {}, h("summary", {}, t("pmc_proof")));
@@ -32427,17 +32467,19 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 		editors.push(editor);
 		editorsBox.append(editor.box);
 	}
-	const element = h("div", { "data-pm-maintenance-observations": "" }, h("header", { class: "pm-heading" }, h("h3", {}, t("pmo_title")), h("button", {
+	const element = h("div", { "data-pm-maintenance-observations": "" }, h("header", { class: "pm-heading" }, h("h3", {}, t("pmo_title")), iconButton({
+		icon: "refresh-cw",
+		label: t("pmo_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmo_refresh"))), status, h("p", { class: "muted" }, t("pmo_intro")), facts, context, editorsBox);
+	})), status, h("p", { class: "muted" }, t("pmo_intro")), facts, context, editorsBox);
 	function record(value, kind) {
 		const key = kind === "github" ? "observation" : "snapshot", row = check(value)[key];
 		if (typeof value.visibility_filtered !== "boolean" || value.visibility_filtered && row !== null) throw Error(t("pmo_invalid"));
 		const box = h("section", { "data-observation-kind": kind }, h("h4", {}, t(kind === "github" ? "pmo_github" : "pmo_workload")));
 		if (!row) {
-			box.append(h("p", { class: "muted" }, t(value.visibility_filtered ? "pmo_hidden" : "pmo_empty")));
+			box.append(emptyState({ title: t(value.visibility_filtered ? "pmo_hidden" : "pmo_empty") }));
 			return box;
 		}
 		const doc = row.document, id = kind === "github" ? "observation_id" : "snapshot_id", prefix = kind === "github" ? "pmgh_" : "pmwl_";
@@ -32833,11 +32875,13 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	const element = h("section", {
 		class: "pm-brief pm-maintenance-policy",
 		"data-pm-maintenance-policy": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmp_title")), h("p", { class: "muted" }, t("pmp_intro"))), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmp_title")), h("p", { class: "muted" }, t("pmp_intro"))), iconButton({
+		icon: "refresh-cw",
+		label: t("pmp_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("pmp_refresh"))), status, view, h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1 ? "pmr_policy_runtime" : maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
+	})), status, view, h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1 ? "pmr_policy_runtime" : maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
 	function controls() {
 		editorDetails.hidden = !owner() && !(editor.locked() && recover());
 		permission.hidden = owner();
@@ -33118,7 +33162,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			baseline = b;
 			lifecycle = l.lifecycle;
 			ready = true;
-			view.replaceChildren(p.policy ? record(p.policy, true) : h("p", { class: "muted" }, t(p.visibility_filtered || p.head.revision ? "pmp_hidden" : "pmp_empty")));
+			view.replaceChildren(p.policy ? record(p.policy, true) : emptyState({ title: t(p.visibility_filtered || p.head.revision ? "pmp_hidden" : "pmp_empty") }));
 			if (b.baseline) {
 				const row = b.baseline, doc = row.document;
 				source.append(h("h3", {}, t("pmp_baseline")), h("p", {}, doc.release_version.value, " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, doc.proof.maintenance_branch.status === "verified_at_observation" ? `${t("pmp_branch")}: ${doc.proof.maintenance_branch.ref}` : t("pmp_no_branch")), h("details", {}, h("summary", {}, t("pmp_versions")), line("pmp_revision", p.head.revision), line("pmp_lifecycle", l.lifecycle.revision), line("pmp_original_baseline", row.baseline_id), h("p", { class: "mono" }, row.document_digest)));
@@ -33254,11 +33298,13 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 	const element = h("section", {
 		class: "pm-brief",
 		"data-pm-release-baselines": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("prb_title")), h("p", { class: "muted" }, t("prb_intro"))), h("button", {
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("prb_title")), h("p", { class: "muted" }, t("prb_intro"))), iconButton({
+		icon: "refresh-cw",
+		label: t("prb_refresh"),
 		type: "button",
 		class: "secondary",
 		onclick: () => void refresh()
-	}, t("prb_refresh"))), status, view, historyDetails, permission, editorDetails);
+	})), status, view, historyDetails, permission, editorDetails);
 	function controls() {
 		const can = ready && allowed();
 		for (const field of [
@@ -33350,7 +33396,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 		check(data);
 		if (!Number.isSafeInteger(data.head?.version)) throw Error(t("prb_invalid"));
 		head = data.head;
-		view.replaceChildren(data.baseline ? baselineRow(data.baseline, true) : h("p", { class: "muted" }, t(data.visibility_filtered || head.version > 0 ? "prb_hidden" : "prb_empty")));
+		view.replaceChildren(data.baseline ? baselineRow(data.baseline, true) : emptyState({ title: t(data.visibility_filtered || head.version > 0 ? "prb_hidden" : "prb_empty") }));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? historyCursor : 0;
@@ -33715,7 +33761,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		if (!holder.isConnected) return;
 		holder.replaceChildren();
 		if (!last.capture) {
-			holder.append(h("p", { class: "muted" }, t("pm_evidence_empty")));
+			holder.append(emptyState({ title: t("pm_evidence_empty") }));
 			return;
 		}
 		if (last.capture.work_item_id !== workId) throw Error(t("pm_scope_mismatch"));
@@ -34135,7 +34181,7 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 				const ticket = ++generation, actor = caps()?.actor;
 				preview = null;
 				verified = null;
-				status.textContent = t("pm_cb_loading");
+				status.replaceChildren(skeleton(2));
 				details.replaceChildren();
 				update();
 				request?.update();
@@ -36313,7 +36359,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			time,
 			timestamp
 		})));
-		if (!data.messages?.length) notes.append(h("p", { class: "muted pm-empty" }, t("pm_no_notes")));
+		if (!data.messages?.length) notes.append(emptyState({ title: t("pm_no_notes") }));
 		transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
 		earlier.hidden = !historyCursor;
 		earlier.disabled = false;
@@ -36438,7 +36484,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			item.addEventListener("toggle", async () => {
 				if (!item.open || fetched || pending) return;
 				pending = true;
-				detail.replaceChildren(h("p", { class: "muted" }, t("pm_package_loading")));
+				detail.replaceChildren(skeleton(2));
 				try {
 					const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs/${encodeURIComponent(run.run_id)}`);
 					alive();
@@ -36461,7 +36507,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 			packages.append(item);
 		}
-		if (!packages.children.length) packages.append(h("p", { class: "muted" }, t("pm_packages_empty")));
+		if (!packages.children.length) packages.append(emptyState({ title: t("pm_packages_empty") }));
 		if (page.next_cursor) {
 			const more = h("button", {
 				type: "button",
@@ -36623,7 +36669,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}, t("pm_more_threads")));
 			if (data) renderThread(data);
 			else if (!content.querySelector(".pm-thread-layout")) {
-				if (!workspace) content.append(h("div", { class: "pm-empty" }, h("h2", {}, t("pm_start_title")), h("p", {}, t("pm_start_help"))));
+				if (!workspace) content.append(emptyState({
+					icon: "message-square",
+					title: t("pm_start_title"),
+					text: t("pm_start_help")
+				}));
 				else {
 					const name = input("pd_title", {
 						max: 160,
@@ -36688,7 +36738,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						title: launch.title,
 						limit: 3,
 						onMore: () => draftPanel.open("context")
-					})))), h("div", { class: "pd-transcript" }, h("p", { class: "muted pd-start" }, t("pd_empty"))), discussionComposer({
+					})))), h("div", { class: "pd-transcript" }, emptyState({ title: t("pd_empty") })), discussionComposer({
 						t,
 						form: create,
 						draft: true
@@ -37624,10 +37674,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			showError(error);
 		}
 	}
-	const refreshButton = h("button", {
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("setup_refresh"),
 		class: "secondary",
 		onclick: () => refresh().catch(showError)
-	}, t("setup_refresh"));
+	});
 	const retry = h("button", {
 		class: "secondary",
 		hidden: true,
@@ -39526,11 +39578,13 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		model.addEventListener("input", modified);
 		form.append(h("label", {}, t(`models_${role}_agent`), agent), h("label", {}, t(`models_${role}_model`), model));
 	}
-	const refresh = h("button", {
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("models_refresh"),
 		class: "secondary",
 		type: "button",
 		onclick: () => load(true)
-	}, t("models_refresh"));
+	});
 	const reset = h("button", {
 		class: "secondary",
 		type: "button",
@@ -39792,11 +39846,13 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		localStorage.setItem(storageKey, JSON.stringify(saved));
 	};
 	const coherent = () => doc && doc.host === saved.host && doc.workspace_id === saved.workspace;
-	const refresh = h("button", {
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("skills_refresh"),
 		class: "secondary",
 		type: "button",
 		onclick: () => discover(true)
-	}, t("skills_refresh"));
+	});
 	const discard = h("button", {
 		class: "secondary",
 		type: "button",
@@ -40052,11 +40108,13 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		class: "muted",
 		role: "status"
 	}), body = h("div");
-	const refresh = h("button", {
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("results_refresh"),
 		class: "mini",
 		type: "button",
 		onclick: () => load()
-	}, t("results_refresh"));
+	});
 	const more = h("button", {
 		class: "secondary",
 		type: "button",
@@ -40069,7 +40127,7 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 	}, warning, h("details", {}, h("summary", {}, t("results_title")), status, h("div", { class: "actions" }, refresh), body, more));
 	function renderSource(item, own = false) {
 		const content = h("div", {}, h("p", { class: "muted" }, t("results_completion", { state: t(`wi_state_${item.completion.display_state}`) })));
-		if (!item.links.length && !item.result_artifacts.length) content.append(h("p", { class: "muted" }, t("results_empty")));
+		if (!item.links.length && !item.result_artifacts.length) content.append(emptyState({ title: t("results_empty") }));
 		for (const link of item.links) {
 			const row = h("div", { class: "panel" }, linkTarget(link));
 			if (link.note) row.append(h("p", { class: "muted" }, link.note));
@@ -41752,11 +41810,13 @@ async function mountFleet(main, { h, t }) {
 					expected_monitor_epoch: draft.epoch,
 					expected_configuration_binding: binding
 				})
-			}, t("fleet_apply")), h("button", {
+			}, t("fleet_apply")), iconButton({
+				icon: "refresh-cw",
+				label: t("fleet_refresh"),
 				class: "secondary",
 				disabled: busy,
 				onclick: () => read(true)
-			}, t("fleet_refresh")), h("button", {
+			}), h("button", {
 				class: "secondary",
 				disabled: !readable || busy || !draft,
 				onclick: () => {
@@ -41964,11 +42024,13 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 					}
 					receipt = null;
 				})
-			}, t("tailscale_new")) : null, h("button", {
+			}, t("tailscale_new")) : null, iconButton({
+				icon: "refresh-cw",
+				label: t("tailscale_refresh"),
 				class: "secondary",
 				disabled: busy,
 				onclick: refresh
-			}, t("tailscale_refresh"))) : null
+			})) : null
 		].filter(Boolean));
 	};
 	const read = async () => {
@@ -42757,7 +42819,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 //#region src/operation-list.js
 function operationList({ h, t, api, guard, statuses, namespace }) {
 	const memory = viewState(namespace || "", "", "operations:" + (statuses || "all"));
-	let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, query = memory.query || "";
+	let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, sourceWithdrawn = false, query = memory.query || "";
 	let sheet = null, request = 0, busyListener = () => {};
 	const list = h("div", { "data-operation-list": "" });
 	const count = h("p", {
@@ -42870,7 +42932,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 				key: "operations." + op.operation_id,
 				body: h("div", {}, h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null), steps.length ? h("h3", {}, t("steps")) : null, ...steps.map((step) => h("p", {}, joinLabel([
 					step.name,
-					step.status,
+					operationStatusLabel(step.status),
 					step.error?.code
 				]))))
 			})
@@ -42921,6 +42983,12 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		sheet.body.replaceChildren(...body(record).filter(Boolean));
 	}
 	function paint() {
+		if (sourceWithdrawn) {
+			list.replaceChildren(emptyState({ title: t("global_operations_unavailable") }));
+			count.replaceChildren();
+			count.hidden = true;
+			return;
+		}
 		const focus = list.contains(document.activeElement) ? document.activeElement.closest("[data-row-key]")?.dataset.rowKey : null;
 		const shown = visible();
 		if (!rows.length) list.replaceChildren(emptyState({ title: t("operations_empty") }));
@@ -42937,8 +43005,8 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			}
 		}));
 		if (focus) list.querySelector(`[data-row-key="${CSS.escape(focus)}"]`)?.focus({ preventScroll: true });
-		count.hidden = before === null;
-		count.textContent = before === null ? "" : t("global_shown", { count: rows.length });
+		count.hidden = false;
+		count.textContent = t(before === null ? "global_operation_count" : "global_shown", { count: rows.length });
 		if (sheet?.isConnected && memory.selected) {
 			if (!rows.find((op) => op.operation_id === memory.selected)) sheet.dispose();
 		}
@@ -42971,6 +43039,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			pages = append ? pages + read : read;
 			before = next;
 			failed = false;
+			sourceWithdrawn = false;
 			paint();
 			status.replaceChildren();
 			const restored = anchorId ? list.querySelector(`[data-row-key="${CSS.escape(anchorId)}"]`) : null;
@@ -42981,6 +43050,18 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			}
 		}).catch((error) => {
 			if (current()) {
+				if ([403, 404].includes(error.status)) {
+					sourceWithdrawn = true;
+					rows = [];
+					before = null;
+					pages = 1;
+					request++;
+					memory.selected = "";
+					sheet?.dispose();
+					sheet = null;
+					layout.classList.remove("has-inspector");
+					paint();
+				}
 				failed = true;
 				status.replaceChildren(h("p", { class: "error" }, error.message));
 			}
@@ -43445,7 +43526,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 		rows.replaceChildren();
 		if (!saved.preview) return;
 		if (saved.preview.truncated) rows.append(h("p", { class: "note" }, t("bulk_truncated")));
-		if (!saved.preview.items.length) rows.append(h("p", { class: "panel" }, t("bulk_empty")));
+		if (!saved.preview.items.length) rows.append(emptyState({ title: t("bulk_empty") }));
 		for (const item of saved.preview.items) {
 			const choice = h("input", {
 				type: "checkbox",
@@ -43691,7 +43772,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		workspaces = [];
 		renderWorkspaces();
 		update();
-		discoveryStatus.textContent = t("start_loading_workspaces");
+		discoveryStatus.replaceChildren(skeleton(2));
 		try {
 			const doc = await api("GET", `/workspaces?host=${encodeURIComponent(selectedHost)}&limit=200`);
 			guard();
@@ -44348,7 +44429,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		rows = [];
 		renderSelection();
 		update();
-		discoveryStatus.textContent = t("orch_loading");
+		discoveryStatus.replaceChildren(skeleton(2));
 		try {
 			const doc = await api("GET", sessionMode(mode) ? `/sessions?host=${encodeURIComponent(expectedHost)}&access=managed&provenance=connector_managed&limit=200` : `/workspaces?host=${encodeURIComponent(expectedHost)}&limit=200`);
 			guard();
@@ -47381,7 +47462,8 @@ function opRow(op, open) {
 	const title = actionLabel(op.action);
 	const href = `#/op/${encodeURIComponent(op.operation_id)}`;
 	const key = op.operation_id;
-	const meta = operationMeta(op, formatTime(op.created_at));
+	const words = operationMeta(op);
+	const meta = h("span", {}, words, op.created_at ? [words ? " · " : "", timeStamp(op.created_at)] : null);
 	const needs = [
 		"needs_attention",
 		"uncertain",
@@ -47817,7 +47899,7 @@ function observationPanels(type, id, path) {
 						list.append(relations ? relationRow(item) : eventRow(item));
 					}
 				}
-				if (!seen.size) list.replaceChildren(h("p", { class: "muted" }, t("obs_empty")));
+				if (!seen.size) list.replaceChildren(emptyState({ title: t("obs_empty") }));
 				cursor = result.next_cursor;
 				more.hidden = !cursor;
 				loaded = true;
@@ -48263,7 +48345,7 @@ async function viewSession(main, host, sid, context = null) {
 		if (instructions.box.open) instructions.refresh();
 	});
 	const deliveryPills = h("div", { class: "session-delivery-pills" });
-	const sourcesBody = h("div", { "data-session-sources": "" }, h("p", { class: "muted session-quiet" }, t("session_sources_empty")));
+	const sourcesBody = h("div", { "data-session-sources": "" }, emptyState({ title: t("session_sources_empty") }));
 	const details = disclosure({
 		label: t("session_details"),
 		body: metadata,
@@ -48302,7 +48384,7 @@ async function viewSession(main, host, sid, context = null) {
 		items: [
 			{
 				key: "discuss",
-				label: t("session_discuss"),
+				label: t("ui_discuss"),
 				href: "#",
 				icon: "message-square"
 			},
@@ -48682,7 +48764,7 @@ async function viewSession(main, host, sid, context = null) {
 		}
 		fill(result, deliveryPills, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? sessionWorkLine(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
 		await loadDelivery(data.work_items);
-		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(h("p", { class: "muted" }, t("workspace_result_empty")));
+		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(emptyState({ title: t("workspace_result_empty") }));
 	};
 	const loadMessages = async (offset = messageOffset, latest = false) => {
 		if (offset == null) return;
@@ -49152,7 +49234,7 @@ function deliveryWork(item, repositories = [], compact = false) {
 	}, t("delivered_to", { n: receipt.pull_number }))))));
 }
 function deploymentIdentity(identity, empty = "dep_no_version") {
-	if (!identity?.source_sha && !identity?.artifact_id) return h("p", { class: "muted" }, t(empty));
+	if (!identity?.source_sha && !identity?.artifact_id) return emptyState({ title: t(empty) });
 	return h("div", { class: "deployment-identity" }, identity.source_sha ? h("code", {}, identity.source_sha) : null, identity.artifact_id ? h("p", {}, t("dep_artifact", { id: identity.artifact_id }), identity.artifact_digest ? [" · ", h("code", {}, identity.artifact_digest)] : null) : null);
 }
 function deploymentState(value) {
@@ -49978,7 +50060,7 @@ async function viewOperation(main, id) {
 			}), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(reasonText$1(op.error_code) || t("reason_unavailable"), "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, op.error_code))] : null, h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, t("global_refs")), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, t("global_result")), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
 				result: op.result
-			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, s.status), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
+			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
 		} catch (e) {
 			fill(panel, errorBox(e));
 		}

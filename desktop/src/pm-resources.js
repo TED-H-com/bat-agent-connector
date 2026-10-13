@@ -348,7 +348,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
   }
   function tableFor(visible) {
     if (!data?.rows?.length) return emptyState({title: t('res_empty')});
-    if (!visible.length) return h('p', {class: 'ui-meta'}, t('res_no_match'));
+    if (!visible.length) return emptyState({title:t('res_no_match')});
     if (listMedia.matches) return h('div', {class: 'pm-agents-list', role: 'list'}, ...visible.map(listRow));
     return dataTable({
       rows: visible, rowKey: 'source_id', selected,
@@ -461,7 +461,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
         [t('res_version'), item.cli_version || t('res_unknown')],
       ])));
       nodes.push(h('h3', {class: 'pm-agents-group'}, t('res_tokens_col')), facts([
-        [t('res_tokens_col'), tokenHeadline(row)],
+        [t('res_total'), tokenHeadline(row)],
         ...tokenBreakdown(row),
         [t('res_calls'), finite(row.calls) == null ? t('res_unknown') : finite(row.calls).toLocaleString()],
         [t('res_observations'), finite(row.observations) == null ? t('res_unknown') : finite(row.observations).toLocaleString()],

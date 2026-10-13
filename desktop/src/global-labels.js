@@ -184,6 +184,10 @@ export function actionLabel(action) {
   return humanizeAction(action) || t('action_unknown');
 }
 
+export function operationStatusLabel(status) {
+  const label = t('op_' + status);
+  return label === 'op_' + status ? t('ui_status_unknown') : label;
+}
 export function operationStatusKey(status) {
   return OPERATION_STATUS[status] || 'unknown';
 }

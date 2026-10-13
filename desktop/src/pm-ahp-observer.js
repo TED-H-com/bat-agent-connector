@@ -1,3 +1,4 @@
+import {emptyState, iconButton} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // A catalog selection is an original source, never managed-session authority.
 export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,workspace,form,errorBox}) {
@@ -6,7 +7,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
   let epoch=0,detailEpoch=0,ready=false,selected='',cursor=null,historyAfter=0,historyBusy=false,disposed=false;
   try{selected=localStorage.getItem(selectionStorage)||'';}catch{ /* preference only; durable requests enforce their own storage gate */ }
   const status=h('div',{role:'status'}),adapter=h('select',{'aria-label':t('ahp_adapter')}),body=h('div'),history=h('div'),detail=h('div');
-  const refreshButton=h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('ahp_refresh'));
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('ahp_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void historyPage(cursor)},t('ahp_more'));
   const element=h('details',{class:'panel pm-ahp','data-pm-ahp':''},h('summary',{},t('ahp_title')),
     h('p',{class:'muted'},t('ahp_intro')),h('div',{class:'capture-fields'},h('label',{},t('ahp_adapter'),adapter),refreshButton),status,body,
@@ -57,7 +58,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
     const rows=value.observations.map(r=>row(r));cursor=value.next_cursor;
     history.replaceChildren(...rows.map(r=>h('div',{class:'pm-ahp-history-row'},h('button',{type:'button',class:'secondary',onclick:()=>void showDetail(r.observation_id)},
       r.adapter_id, ' · ', stamp(r.created_at), ' · ', t(r.coverage_status==='observed'?'ahp_observed':'ahp_incomplete')),h('small',{class:'mono'},r.observation_id))));
-    if(!rows.length)history.append(h('p',{class:'muted'},t(value.visibility_filtered?'ahp_hidden':'ahp_empty')));
+    if(!rows.length)history.append(emptyState({title:t(value.visibility_filtered?'ahp_hidden':'ahp_empty')}));
     else if(value.visibility_filtered)history.append(h('p',{class:'muted'},t('ahp_hidden')));
     more.hidden=cursor===null;more.disabled=false;
   }

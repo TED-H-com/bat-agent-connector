@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 // Sourced management findings and explicit direction decisions share one journal.
 export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = ['risk', 'assumption', 'issue', 'dependency', 'drift', 'change'];
@@ -11,7 +12,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   const review = h('button', {class: 'secondary', type: 'button', hidden: true, onclick: () => {if (loaded) void renderEditors(true);}}, t('pm_gov_review_fresh'));
   const element = h('section', {class: 'panel pm-evidence', 'data-pm-governance': ''},
     h('header', {class: 'pm-heading'}, h('div', {}, h('h2', {}, t('pm_gov_title')), h('p', {class: 'muted'}, t('pm_gov_intro'))),
-      h('button', {class: 'secondary', type: 'button', onclick: () => void refresh()}, t('pm_gov_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pm_gov_refresh'), ...{class: 'secondary', type: 'button', onclick: () => void refresh()}})),
     status, list, detail, warning, review, editors);
   const actor = () => caps()?.actor;
   const can = () => loaded && permitted(false);

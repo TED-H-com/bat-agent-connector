@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Normalize empty/loading states and refresh icons, localize operation step status, distinguish complete schedule counts, and polish zoom, missing record titles and token totals.
+
 - Coalesce navigation reads for mixed event bursts and verify bounded requests across every authenticated view.
 
 - Fit shared search and filters to their columns, with measured select fallback for segmented controls.

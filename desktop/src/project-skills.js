@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const refs = value => Array.isArray(value) && value.length <= 20 && value.every(ref => ref && typeof ref.skill_id === 'string' && digest(ref.digest)) && new Set(value.map(ref => ref.skill_id)).size === value.length;
@@ -16,7 +17,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
   const status = h('p', {class: 'muted', role: 'status'}), source = h('div'), list = h('div');
   const persist = () => {guard(); localStorage.setItem(storageKey, JSON.stringify(saved));};
   const coherent = () => doc && doc.host === saved.host && doc.workspace_id === saved.workspace;
-  const refresh = h('button', {class: 'secondary', type: 'button', onclick: () => discover(true)}, t('skills_refresh'));
+  const refresh = iconButton({icon:'refresh-cw', label:t('skills_refresh'), ...{class: 'secondary', type: 'button', onclick: () => discover(true)}});
   const discard = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (busy || draft?.intent || !coherent()) return;
     try {guard(); const next = {...saved, drafts: {...saved.drafts}}; delete next.drafts[key(saved.host, saved.workspace)];

@@ -1,3 +1,4 @@
+import {iconButton, skeleton} from './ui/components.js';
 // The central selects the existing trusted verifier. No client command or Task is created.
 const ACTION='pm.execution.verify',sha=/^[0-9a-f]{40}$/,digest=/^[0-9a-f]{64}$/,operation=/^op_[0-9a-f]{32}$/;
 export function workspaceExecutionVerification({h,t,api,alive,workspaceId,workspace,caps,form,labelled,errorBox,namespace,onSaved,onConfiguration=()=>{},onUnavailable=()=>{}}){
@@ -6,7 +7,7 @@ export function workspaceExecutionVerification({h,t,api,alive,workspaceId,worksp
   const picker=h('select',{'aria-label':t('pmq_verify_execution')}),status=h('div',{role:'status'}),facts=h('div'),holder=h('div');
   const element=h('details',{'data-pm-execution-verification':''},h('summary',{},t('pmq_verify_heading')),
     h('p',{class:'muted'},t('pmq_verify_help')),labelled('pmq_verify_execution',picker),
-    h('div',{class:'actions'},h('button',{type:'button',class:'secondary',onclick:()=>void load()},t('pmq_verify_refresh'))),status,facts,holder);
+    h('div',{class:'actions'},iconButton({icon:'refresh-cw', label:t('pmq_verify_refresh'), ...{type:'button',class:'secondary',onclick:()=>void load()}})),status,facts,holder);
   const valid=ticket=>{try{alive();return ticket===generation;}catch{return false;}};
   const writer=()=>ready&&caps()?.scopes?.includes('observe')&&caps()?.scopes?.includes('operate')
     &&['owner','contributor'].includes(workspace()?.members?.find(row=>row.actor===caps()?.actor)?.role||workspace()?.membership?.role);
@@ -16,7 +17,7 @@ export function workspaceExecutionVerification({h,t,api,alive,workspaceId,worksp
   function withdraw(){generation++;clear();sources=[];picker.replaceChildren();status.replaceChildren();}
   async function load(){
     const ticket=++generation;clear();if(!selected||!sources.some(row=>row.operation_id===selected))return;
-    status.replaceChildren(h('p',{class:'muted'},t('pmq_verify_loading')));
+    status.replaceChildren(skeleton(2));
     try{
       const value=await api('GET',`/pm/workspaces/${encodeURIComponent(workspaceId)}/executions/${selected}/verification-config`);if(!valid(ticket))return;
       if(value.workspace_id!==workspaceId||value.execution_operation_id!==selected||value.profile!=='observed_runner_v1'||!digest.test(value.handoff_contract_digest)||typeof value.available!=='boolean'

@@ -2,7 +2,7 @@ import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
 import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
 import {icon} from './ui/icons.js';
-import {actionLabel, formatTime, operationMeta, operationStatusKey, reasonText, workStatusKey} from './global-labels.js';
+import {actionLabel, formatTime, operationMeta, operationStatusKey, operationStatusLabel, reasonText, workStatusKey} from './global-labels.js';
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
 import {joinLabel} from './label-text.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
@@ -838,7 +838,8 @@ function opRow(op, open) {
   const title = actionLabel(op.action);
   const href = `#/op/${encodeURIComponent(op.operation_id)}`;
   const key = op.operation_id;
-  const meta = operationMeta(op, formatTime(op.created_at));
+  const words = operationMeta(op);
+  const meta = h('span', {}, words, op.created_at ? [words ? ' · ' : '', timeStamp(op.created_at)] : null);
   const needs = ["needs_attention", "uncertain", "failed"].includes(op.status);
   const precise = t("op_" + op.status);
   return inboxRow({
@@ -1139,7 +1140,7 @@ function observationPanels(type, id, path) {
           const key = relations ? item.relation_id : item.seq;
           if (!seen.has(key)) {seen.add(key); list.append(relations ? relationRow(item) : eventRow(item));}
         }
-        if (!seen.size) list.replaceChildren(h("p", {class: "muted"}, t("obs_empty")));
+        if (!seen.size) list.replaceChildren(emptyState({title:t('obs_empty')}));
         cursor = result.next_cursor; more.hidden = !cursor; loaded = true; notice.hidden = latestSeen <= asOf;
         evidence.replaceChildren(...[t("obs_snapshot", {seq: asOf}), " ", t("obs_historical_limits"),
           !relations ? [" ", t("obs_first_recorded"), ": ", observationTime(result.coverage?.first_recorded_at)] : ""].flat());
@@ -1361,7 +1362,7 @@ async function viewSession(main, host, sid, context = null) {
     guard: () => assertView(connection), host, sessionId: sid, errorBox}) : null;
   instructions?.box.addEventListener("toggle", () => {if (instructions.box.open) instructions.refresh();});
   const deliveryPills = h("div", {class: "session-delivery-pills"});
-  const sourcesBody = h("div", {"data-session-sources": ""}, h("p", {class: "muted session-quiet"}, t("session_sources_empty")));
+  const sourcesBody = h("div", {"data-session-sources": ""}, emptyState({title:t('session_sources_empty')}));
   const details = disclosure({label: t("session_details"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
@@ -1378,7 +1379,7 @@ async function viewSession(main, host, sid, context = null) {
   syncChanges();
   const overflow = menu({button: iconButton({icon: "more-horizontal", label: t("ui_more")}),
     items: [
-      {key: "discuss", label: t("session_discuss"), href: "#", icon: "message-square"},
+      {key: "discuss", label: t("ui_discuss"), href: "#", icon: "message-square"},
       {key: "copy-title", label: t("bat_menu_title"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyTitle()},
       {key: "copy-id", label: t("bat_menu_id"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyId()},
       {key: "open-bat", label: t("bat_open"), icon: "external-link", title: t("bat_browser"), disabled: !nativeDesktop, onSelect: () => batHandoff?.open()},
@@ -1597,7 +1598,7 @@ async function viewSession(main, host, sid, context = null) {
       !work.some(item => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
     await loadDelivery(data.work_items);
     if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length)
-      result.append(h("p", {class: "muted"}, t("workspace_result_empty")));
+      result.append(emptyState({title:t('workspace_result_empty')}));
   };
   const loadMessages = async (offset = messageOffset, latest = false) => {
     if (offset == null) return;
@@ -1902,7 +1903,7 @@ function deliveryWork(item, repositories = [], compact = false) {
 }
 
 function deploymentIdentity(identity, empty = "dep_no_version") {
-  if (!identity?.source_sha && !identity?.artifact_id) return h("p", { class: "muted" }, t(empty));
+  if (!identity?.source_sha && !identity?.artifact_id) return emptyState({title:t(empty)});
   return h("div", { class: "deployment-identity" },
     identity.source_sha ? h("code", {}, identity.source_sha) : null,
     identity.artifact_id ? h("p", {}, t("dep_artifact", { id: identity.artifact_id }),
@@ -2483,7 +2484,7 @@ async function viewOperation(main, id) {
         refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null,
         h("h2", {}, t("steps")),
         ...op.steps.map(s => h("div", { class: "row" }, h("div", { class: "grow" }, s.name),
-          h("span", { class: `status-${s.status}` }, s.status), s.error ? chip(s.error.code || t("error"), "bad") : null)),
+          h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)),
         h("div", { class: "actions" }, opened,
           ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" &&
           /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0

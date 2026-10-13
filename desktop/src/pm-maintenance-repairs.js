@@ -1,3 +1,4 @@
+import {iconButton, skeleton} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
 // Every choice is an original server record. A refresh may withdraw it, never silently replace it.
@@ -64,7 +65,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   const verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,
     namespace:`${namespace}.repair`,onSaved:()=>refresh(),onUnavailable:error=>failure(error)});
   const element=h('section',{class:'panel pm-maintenance-repairs','data-pm-maintenance-repairs':''},h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmr_title')),text('pmr_intro')),
-    h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmr_refresh'))),status,startView,labelled('pmr_history',history),facts,verifier.element,proofView);
+    iconButton({icon:'refresh-cw', label:t('pmr_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,startView,labelled('pmr_history',history),facts,verifier.element,proofView);
   function options(field,rows,value=''){field.replaceChildren(h('option',{value:''},t('pmr_choose')),...rows.map(([id,label])=>h('option',{value:id},label)));field.value=rows.some(([id])=>id===value)?value:'';}
   async function pages(path,list,cursor,ticket){const result=[];let after=0;
     for(let page=0;page<20;page++){const data=check(await api('GET',`${base}/${path}${path.includes('?')?'&':'?'}after=${after}&limit=50`));if(!valid(ticket))return null;
@@ -154,7 +155,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   function withdraw(){epoch++;verifier.withdraw();verifier.element.hidden=true;filtered=false;ready=false;policy=baseline=lifecycle=findings=repair=null;proofReady=false;choices.clear();for(const field of [finding,rule,history,evidence])field.replaceChildren();facts.replaceChildren();budget.replaceChildren();status.replaceChildren();
     for(const editor of [start,...editors.values()])editor?.box.querySelector('.pm-receipt')?.replaceChildren();update();}
   function failure(error){withdraw();status.append(text('pmr_unavailable'),errorBox(error));}
-  async function refresh(){withdraw();const ticket=epoch;status.append(text('pmr_loading'));
+  async function refresh(){withdraw();const ticket=epoch;status.append(skeleton(2));
     try{const [p,b,l,f]=(await Promise.all(['maintenance-policies/current','release-baselines/current','lifecycle','maintenance-findings/current'].map(path=>api('GET',`${base}/${path}`)))).map(check);if(!valid(ticket))return;
       if(!Number.isSafeInteger(l.lifecycle?.revision)||p.policy&&(p.policy.workspace_id!==workspaceId||p.policy.document?.workspace_id!==workspaceId||p.policy.revision!==p.head?.revision)
         ||p.policy&&(p.policy.policy_id!==p.head.policy_id||p.policy.document.policy_id!==p.policy.policy_id||p.policy.document.revision!==p.policy.revision)

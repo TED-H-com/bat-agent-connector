@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // Saved discussion preparation. Model execution and adopted scope remain separate.
 import {followUpAssessments} from './pm-follow-up-analysis.js';
@@ -147,7 +148,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void loadMetadata(next)},t('pm_fu_more'));
   const element=h('section',{class:'panel pm-follow-up','data-pm-follow-up':''},
     h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pm_fu_title')),note('pm_fu_intro')),
-      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pm_fu_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pm_fu_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),
     status,view,fold('pm_fu_history',labelled('pm_fu_history_choose',choose),more),editorFold);
   function metadataPage(data,after) {
     check(data);if(!number(data.head_version)||!Array.isArray(data.intakes)||data.next_cursor!=null&&(!number(data.next_cursor)||data.next_cursor<=after))throw Error(t('pm_fu_scope_error'));

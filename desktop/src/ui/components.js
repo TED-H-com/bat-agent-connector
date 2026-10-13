@@ -143,11 +143,11 @@ export function metric({label, value, context, bar, pill} = {}) {
   return h('div', {class: 'ui-metric'}, h('div', {class: 'ui-meta'}, label),
     h('div', {class: 'ui-metric-value'}, unknown ? '—' : value, unknown ? statusPill('unknown') : pill || null), context ? h('div', {class: 'ui-metric-context'}, context) : null, track);
 }
-export function emptyState({icon, title, text, action}) {
+export function emptyState({icon = 'inbox', title, text, action}) {
   return h('div', {class: 'ui-empty'}, nodeIcon(icon), h('h2', {}, title), text ? h('p', {}, text) : null, action);
 }
-export function skeleton(rows = 3) {
-  return h('div', {class: 'ui-skeleton', role: 'status', 'aria-label': t('ui_loading')},
+export function skeleton(rows = 3, {label = t('ui_loading')} = {}) {
+  return h('div', {class: 'ui-skeleton', role: 'status', 'aria-label': label},
     ...Array.from({length: Math.min(100, Math.max(0, rows))}, () => h('div', {'aria-hidden': 'true'})));
 }
 const disclosures = new Map();

@@ -80,6 +80,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   page.on('response', response => {if (response.status() >= 400) httpErrors.push(`${response.status()} ${new URL(response.url()).pathname}`);});
   await page.setViewportSize({width: 1440, height: 900});
+  await page.clock.install({time:new Date('2026-10-13T09:00:00Z')});
   await mountConversation(page, false, harness.dispatch);
   await page.goto(demoRoute());
   await settle(page, locale);
@@ -87,7 +88,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
 
   await openView(page, 'dependencies');
   await expect(page.getByRole('heading', {level: 1})).toHaveText('Dependencies');
-  await expect(page.locator('[data-dependencies-meta]')).toHaveText('Captured at c0ffee1 · 9h ago');
+  await expect(page.locator('[data-dependencies-meta]')).toHaveText('Captured at c0ffee1 · just now');
   await expect(page.locator('.ui-page-header [data-status=partial]')).toBeVisible();
   await expect(page.locator('[data-status=stale]')).toHaveCount(0);
   await expect(page.locator('[data-dependencies-meta]')).not.toContainText(/fresh/i);
@@ -167,7 +168,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
 
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
   await expect(page.locator(`[data-dep-node="d:${ids.keys.pytest}"]`)).toHaveAttribute('data-dep-mark', 'selected');
-  await expect(page.locator('[data-dep-loaded]')).toHaveText('Loaded');
+  await expect(page.locator('[data-dep-loaded]')).toHaveText('100%');
   await page.getByRole('radio', {name: 'Matrix', exact: true}).click();
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-dep-inspector]')).toHaveCount(0);
@@ -198,6 +199,7 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
 test('a stale capture shows the pill and an unknown capture does not', async ({page}) => {
   const harness = mount(page, 'en', {stale: true});
   await page.setViewportSize({width: 1440, height: 900});
+  await page.clock.install({time:new Date('2026-10-13T09:00:00Z')});
   await mountConversation(page, false, harness.dispatch);
   await page.goto(demoRoute());
   await openView(page, 'dependencies');
@@ -218,6 +220,7 @@ test('a withdrawn dependency read removes rows, counts and the inspector togethe
     return fixture.dispatch(input);
   };
   await page.setViewportSize({width: 1440, height: 900});
+  await page.clock.install({time:new Date('2026-10-13T09:00:00Z')});
   await mountConversation(page, false, dispatch);
   await page.goto(demoRoute());
   await openView(page, 'dependencies');
@@ -236,6 +239,7 @@ test('a withdrawn dependency read removes rows, counts and the inspector togethe
 test('a late impact response does not replace the dependency now on screen', async ({page}) => {
   const harness = mount(page, 'en', {hold: ids.keys.pytest});
   await page.setViewportSize({width: 1440, height: 900});
+  await page.clock.install({time:new Date('2026-10-13T09:00:00Z')});
   await mountConversation(page, false, harness.dispatch);
   await page.goto(demoRoute());
   await openView(page, 'dependencies');
@@ -267,18 +271,19 @@ for (const locale of ['en', 'zh-TW'] as const) {
       const errors: string[] = [];
       page.on('pageerror', error => errors.push(error.message));
       page.on('console', message => {if (message.type() === 'error' && !message.text().startsWith('Failed to load resource:')) errors.push(message.text());});
-      await mountConversation(page, false, harness.dispatch);
+      await page.clock.install({time:new Date('2026-10-13T09:00:00Z')});
+  await mountConversation(page, false, harness.dispatch);
       await page.goto(demoRoute());
       await openView(page, 'dependencies');
       const zh = locale === 'zh-TW';
       await expect(page.getByRole('heading', {level: 1})).toHaveText(zh ? '技術相依' : 'Dependencies');
-      await expect(page.locator('[data-dependencies-meta]')).toContainText(zh ? '擷取於 c0ffee1 · 9 小時前' : 'Captured at c0ffee1 · 9h ago');
+      await expect(page.locator('[data-dependencies-meta]')).toContainText(zh ? '擷取於 c0ffee1 · 剛剛' : 'Captured at c0ffee1 · just now');
       await expect(page.locator('[data-dep-capture]')).toHaveText(zh ? '再次擷取' : 'Capture again');
       const searchBox = await page.locator('.dep-search').boundingBox();
       const searchIcon = await page.locator('.dep-search .ui-icon').boundingBox();
       const searchInput = await page.locator('.dep-search input').boundingBox();
       expect(searchBox && searchIcon && searchInput).toBeTruthy();
-      expect(Math.abs((searchBox?.height ?? 0) - (width <= 800 ? 44 : 32))).toBeLessThanOrEqual(2);
+      expect(Math.abs((searchBox?.height ?? 0) - 32)).toBeLessThanOrEqual(2);
       expect(searchIcon!.y).toBeGreaterThanOrEqual(searchInput!.y - 1);
       expect(searchIcon!.y + searchIcon!.height).toBeLessThanOrEqual(searchInput!.y + searchInput!.height + 1);
       expect(searchIcon!.x).toBeGreaterThanOrEqual(searchInput!.x);
@@ -316,7 +321,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
         await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
         await shot(page, 'dependencies-en-1440-dark');
         await page.getByRole('radio', {name: 'Graph', exact: true}).click();
-        await expect(page.locator('[data-dep-loaded]')).toHaveText('Loaded');
+        await expect(page.locator('[data-dep-loaded]')).toHaveText('100%');
         await expect(page.getByRole('button', {name: 'Zoom out', exact: true})).toBeVisible();
         await expect(page.getByRole('button', {name: 'Zoom in', exact: true})).toBeVisible();
         const viewBox = await page.locator('[data-dep-view]').boundingBox();

@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // The central owns cadence and execution. This view reads facts and submits one fixed intent.
 export function maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}) {
@@ -31,7 +32,7 @@ export function maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,perm
   const historyDetails=h('details',{'data-check-history':''},h('summary',{},t('pmc_history')),history);
   historyDetails.addEventListener('toggle',()=>{if(historyDetails.open&&!historyLoaded&&ready)void readHistory(false);});
   const element=h('div',{'data-pm-maintenance-checks':''},h('header',{class:'pm-heading'},h('h3',{},t('pmc_title')),
-    h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmc_refresh'))),status,
+    iconButton({icon:'refresh-cw', label:t('pmc_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,
     h('p',{class:'muted'},t('pmc_intro')),facts,editor.box,historyDetails);
   function run(row){
     if(row?.workspace_id!==workspaceId||!isId(row.run_id,'pmck')||!isId(row.operation_id,'op')||!isId(row.policy_id,'pmmp')

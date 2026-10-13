@@ -1,6 +1,6 @@
 import {discussHref} from './pm-discuss-link.js';
 import {timeStamp, timeText, timeLabel} from './ui/stamps.js';
-import {discussLink, disclosure, iconButton} from './ui/components.js';
+import {emptyState, discussLink, disclosure, iconButton} from './ui/components.js';
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
 import {viewState} from './ui/view-state.js';
@@ -71,7 +71,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     if (discuss) discuss.href = discussHref({workspaceId, from:'overview', report:snapshot?.snapshot_id, refs:snapshot ? [{kind:'snapshot', id:snapshot.snapshot_id}] : []});
   }
   function renderItems(rows, empty = 'wb_unknown') {
-    if (!rows.length) return h('p', {class: 'muted'}, t(empty));
+    if (!rows.length) return emptyState({title:t(empty)});
     const sources = disclosure({label: t('wb_sources'), body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))}); sources.classList.add('pm-charter-source');
     return h('div', {}, h('ul', {class: 'pm-charter-items'}, ...rows.map(row => h('li', {}, h('span', {}, labelSegment(row.text)),
       ['agent_assumption', 'unresolved', 'conflicting', 'repo_evidence'].includes(row.status)

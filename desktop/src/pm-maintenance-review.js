@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {maintenanceReviewView} from './pm-maintenance-review-view.js';
 import {reviewCandidateToIdea} from './pm-review-candidate.js';
@@ -23,7 +24,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
   const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(ready)renderEditors(true);}},t('pmrv_use_versions'));
   const element=h('section',{class:'panel pm-evidence','data-pm-maintenance-review':''},
     h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmrv_title')),text('pmrv_intro')),
-      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmrv_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pmrv_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),
     labelled('pmrv_choose',choose),status,warning,rebase,scheduleView,view,editors);
   const hidden=value=>{const field=h('input',{type:'hidden',value:JSON.stringify(value)});field.dataset.pmDefault=field.value;return field;};
   const lines=value=>value.split('\n').map(value=>value.trim()).filter(Boolean);

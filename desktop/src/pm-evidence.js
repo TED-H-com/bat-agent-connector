@@ -1,3 +1,4 @@
+import {emptyState} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 // Work stays in the Connector; this view preserves explicit PM associations and saved evidence.
 import {fixedQualityPicker} from './pm-quality-projections.js';
@@ -50,7 +51,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     const last = await api('GET', `${endpoint}/work/${workId}/capture`);
     alive(); verify(last); if (!holder.isConnected) return;
     holder.replaceChildren();
-    if (!last.capture) {holder.append(h('p', {class: 'muted'}, t('pm_evidence_empty'))); return;}
+    if (!last.capture) {holder.append(emptyState({title:t('pm_evidence_empty')})); return;}
     if (last.capture.work_item_id !== workId) throw Error(t('pm_scope_mismatch'));
     const capture = last.capture, coverage = capture.coverage;
     holder.append(h('p', {}, timeLabel(t, 'pm_evidence_saved_at', {time: sourceTime(capture.captured_at)})),

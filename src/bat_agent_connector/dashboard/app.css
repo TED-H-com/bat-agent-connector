@@ -214,8 +214,8 @@ a { color: var(--accent); }
 :root body :is(.chip, .message-chip) { overflow: hidden; }
 :root body .ui-context-chip .ui-icon-button { height: 24px; min-height: 24px; min-width: 24px; width: 24px; position: relative; }
 @media (max-width: 800px) {
-  :root body :is(button, a):is(.ui-context-chip, .reg-chip), :root body .ui-context-chip button { position: relative; }
-  :root body :is(button, a):is(.ui-context-chip, .reg-chip)::before, :root body .ui-context-chip button::before {
+  :root body :is(button, a):is(.ui-context-chip, .reg-chip, .dep-chip), :root body .ui-context-chip button { position: relative; }
+  :root body :is(button, a):is(.ui-context-chip, .reg-chip, .dep-chip)::before, :root body .ui-context-chip button::before {
     content: ''; position: absolute; inset: -10px 0; min-height: 44px;
   }
 }
@@ -231,7 +231,7 @@ a { color: var(--accent); }
 :root body .ui-search { display: flex; align-items: center; position: relative; height: 32px; min-width: 8rem; max-width: 100%; }
 :root body .ui-search > .ui-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-3); }
 :root body .ui-search > input { width: 100%; min-width: 0; height: 32px; min-height: 32px; padding: 4px 8px 4px 30px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
-:root body :is(.filters, [class$=toolbar], [class*=toolbar-], .global-ops-tools, .dep-toolbar, .ui-segmented) select { min-height: 32px; height: 32px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding-block: 4px; }
+:root body :is(.filters, [class$=toolbar], [class*=toolbar-], .global-ops-tools, .dep-toolbar, .pm-agents-list-tools, .ui-segmented) select { min-height: 32px; height: 32px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding-block: 4px; }
 @media (max-width: 800px) { :root body .ui-search > input { font-size: 16px; } }
 
 /* Secondary columns relinquish space inside the remaining main column. */
@@ -243,6 +243,8 @@ a { color: var(--accent); }
 @container ui-table (max-width: 900px) { .ui-data-table :is(th, td)[data-secondary] { display: none; } }
 .global-op-compact-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .global-op-compact > .ui-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+:root body .dep-chip { height: 24px; min-height: 24px; max-width: 100%; white-space: nowrap; overflow: visible; }
 .pm-project-views { gap: var(--space-1); border-bottom: 1px solid var(--line); padding-bottom: var(--space-3); margin-bottom: var(--space-4); }
 .pm-project-views button { background: transparent; border-color: transparent; }
 .pm-project-views button[aria-current="page"] { color: var(--accent); background: var(--panel); border-color: var(--line); font-weight: 650; }
@@ -408,6 +410,20 @@ a { color: var(--accent); }
   .schedule-meta { align-items: center; }
   .schedule-answer { flex-basis: 100%; }
 }
+/* Compact list rows match the shared 44px rhythm. */
+.schedule-unscheduled li { min-height: 44px; }
+.schedule-row, .schedule-tree-cell, .schedule-track { min-height: 44px; height: 44px; }
+.schedule-bar.baseline { top: 9px; }
+.schedule-bar.forecast, .schedule-bar.actual { top: 25px; }
+.schedule-bar.milestone.forecast { top: 23px; }
+.schedule-delta { top: 24px; }
+@media (max-width: 799px) {
+  .schedule-row { height: auto; }
+  .schedule-tree-cell { height: auto; min-height: 44px; }
+  .schedule-track { height: 44px; }
+}
+.schedule-head, .schedule-head > .schedule-tree-cell, .schedule-axis { height: 40px; min-height: 40px; }
+.schedule-date-range { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-pm-maintenance-review] .pm-review-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-5)}
 [data-pm-maintenance-review] .pm-review-columns>section{min-width:0}
 [data-pm-maintenance-review] .pm-review-columns h4{margin-top:0}

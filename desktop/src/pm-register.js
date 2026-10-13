@@ -152,7 +152,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       h('div', {class: 'reg-legend'}, h('span', {}, h('span', {class: 'reg-swatch', 'aria-hidden': 'true'}), t('reg_opened')),
         h('span', {}, h('span', {class: 'reg-swatch resolved', 'aria-hidden': 'true'}), t('reg_resolved'))),
       chart);
-    if (weeks.length) weekSection.append(h('div', {class: 'reg-scale'}, h('span', {}, String(weeks[0].week_start).slice(5)), h('span', {}, String(weeks[weeks.length - 1].week_start).slice(5))));
+    if (weeks.length) weekSection.append(h('div', {class: 'reg-scale'}, h('span', {}, day(weeks[0].week_start)), h('span', {}, day(weeks[weeks.length - 1].week_start))));
     const reasons = Array.isArray(summary.blocking_reasons) ? summary.blocking_reasons : null;
     const reasonSection = h('section', {'data-reg-reasons': ''}, h('h3', {}, t('reg_blocking')));
     if (reasons && !reasons.length) reasonSection.append(h('p', {class: 'reg-note', 'data-reg-no-reasons': ''}, t('reg_no_reasons')));
@@ -175,7 +175,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const title = labelSegment(row?.title);
     if (title) return title;
     const finding = row?.source?.kind === 'finding' || String(row?.row_id || '').startsWith('finding.');
-    if (!finding) return '';
+    if (!finding) return [t('reg_type_' + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || labelSegment(row?.source?.id)].filter(Boolean).join(' · ');
     const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
     const kind = t('reg_kind_finding');
     return qualifier ? `${kind} · ${qualifier}` : kind;

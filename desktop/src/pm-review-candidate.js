@@ -1,3 +1,4 @@
+import {iconButton, emptyState} from './ui/components.js';
 // A saved candidate is a fixed source. Only the destination and topic are chosen here.
 export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,labelled,event,errorBox,namespace}) {
   let dead=false,ticket=0,loaded=false,reading=false,thread=null,request=null,rows=[],next=null;
@@ -11,7 +12,7 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
   const key=`${namespace}.candidate-destination.${event.event_id}`;
   let selected='';try{selected=localStorage.getItem(key)||'';}catch{}
   const status=h('div',{role:'status'}),body=h('div'),chooser=h('select',{'aria-label':t('pmrv_idea_choose')}),pages=h('div');
-  const refresh=h('button',{type:'button',class:'secondary',onclick:()=>void load()},t('pmrv_idea_refresh'));
+  const refresh=iconButton({icon:'refresh-cw', label:t('pmrv_idea_refresh'), ...{type:'button',class:'secondary',onclick:()=>void load()}});
   const element=h('details',{'data-review-candidate-import':event.event_id},h('summary',{},t('pmrv_add_to_idea')),
     h('p',{class:'muted'},t('pmrv_idea_help')),labelled('pmrv_idea_choose',chooser),h('div',{class:'actions'},refresh,pages),status,body);
   function controls(){chooser.disabled=reading||Boolean(request?.locked())||!can();refresh.disabled=reading||Boolean(request?.locked());}
@@ -59,7 +60,7 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
       if(data.workspace_id!==workspaceId||!Array.isArray(data.threads)||data.threads.some(row=>row.workspace_id!==workspaceId)
         ||data.next_cursor!=null&&(!/^pmt_[0-9a-f]{32}$/.test(data.next_cursor)||data.next_cursor===after))throw Error(t('pmrv_candidate_unavailable'));
       rows=more?[...rows,...data.threads.filter(row=>!rows.some(old=>old.thread_id===row.thread_id))]:data.threads;next=data.next_cursor;loaded=true;navigation();
-      if(!rows.some(row=>row.mode==='idea')&&!selected)status.replaceChildren(h('p',{class:'muted'},t('pmrv_idea_empty')));
+      if(!rows.some(row=>row.mode==='idea')&&!selected)status.replaceChildren(emptyState({title:t('pmrv_idea_empty')}));
       if(selected&&!more)await choose();
     }catch(error){if(n===ticket&&!dead){thread=null;request?.update();status.replaceChildren(errorBox(error));}}
     finally{reading=false;update();}
