@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
@@ -49,7 +50,7 @@ async function withdrawnViews(page) {
 }
 for(const native of [false,true])test.describe(native?'native management workspace':'web management workspace',()=>{
   test('access revalidation keeps an open discussion input usable without exposing old facts',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     const fold=page.locator('[data-pm-add-input]');await fold.locator('summary').click();
     const statement=fold.getByLabel('Statement or question',{exact:true});await statement.fill('Keep an unsubmitted research question');
     const before=f.bootstrapReads();f.changeAccess();

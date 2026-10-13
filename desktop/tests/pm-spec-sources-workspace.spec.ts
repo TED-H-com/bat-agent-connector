@@ -1,4 +1,4 @@
-import {openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
+import {openThreadTab, openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId,threadId} from './pm-fixture.ts';
@@ -26,7 +26,7 @@ function fixture(){
 const route=`/dashboard/#/pm/${workspaceId}`,box=(page:any)=>page.locator('[data-pm-spec-sources]');
 for(const native of [false,true])test.describe(native?'native workspace specifications':'web workspace specifications',()=>{
   for(const thread of [false,true])test(`fixed sources are available on the shared ${thread?'discussion':'workspace'} page`,async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route+(thread?'/'+threadId:''));if(!thread)await openPmSection(page, 'requirements' , 'ui_specs');
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route+(thread?'/'+threadId:''));if(!thread)await openPmSection(page, 'requirements' , 'ui_specs');else {await openThreadTab(page,'context');await page.locator('[data-pm-section=ui_specs] > details > summary').click();}
     await expect(box(page)).toContainText('example/membership');expect(f.sources.state.reads).toHaveLength(0);
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();
     await expect(box(page)).toContainText(sourcePath);await expect(box(page)).toContainText('Scope adoption, implementation verification, merge and deployment remain unknown.');

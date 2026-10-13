@@ -917,6 +917,11 @@
 - Dependencies view: technology matrix, layered graph and impact for a captured inventory, with durable
   capture, declare and retract, and honest partial, stale and omitted states in English and zh-TW.
 
+- Discussions open from any 'Discuss with PM' link with the record already attached, an automatic title and
+  the composer focused. Threads support inline renaming, compact context chips and a paired Send / Ask PM
+  composer, and proposal adoption follows the central adoptability state while preserving drafts and
+  original-key recovery.
+
 ## 0.2.4 (unreleased)
 
 - Turn markers: `session_send` and `session_relay` return `turn_marker` / `after_ms` (the host-side id and

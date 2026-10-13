@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {reviewFixture,mount,boot,wid} from './pm-maintenance-review-fixture.ts';
@@ -89,7 +90,7 @@ test('empty Idea choice and source withdrawal do not create or copy a discussion
 
 for(const native of [false,true])test(`${native?'native':'web'} discussion keeps full original candidate before confirmation`,async({page})=>{
   const {event}=fixture(),f=pmFixture();f.state.inputs=[{...f.state.inputs[1],status:'unresolved',value:event.document.title,
-    source_ref:event.planning_source,source_candidate:event}];await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    source_ref:event.planning_source,source_candidate:event}];await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
   const proof=page.locator('[data-review-candidate-proof]');await proof.locator('summary').first().click();
   await expect(proof).toContainText(event.document.problem);await expect(proof).toContainText(event.document.rationale);
   await expect(proof).toContainText('candidate.record · proposal');expect(f.state.writes).toHaveLength(0);

@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture,workspaceId,threadId,pmRoute,pmPath} from './pm-fixture.ts';
@@ -121,14 +122,14 @@ for(const native of [false,true])test.describe(native?'Native receipt continuity
       if(input.method==='GET'&&input.path.startsWith('/operations/'))reads.push(input.path);
       return f.dispatch(input);
     });
-    await page.goto(pmRoute);await page.locator('[data-pm-add-input] summary').click();
+    await page.goto(pmRoute);await openThreadTab(page,'inputs');await page.locator('[data-pm-add-input] summary').click();
     const inputForm=page.locator('[data-pm-action="pm.input.record"]');
     await inputForm.getByLabel('Topic',{exact:true}).selectOption('unknowns');
     await inputForm.getByLabel('Statement or question',{exact:true}).fill('What belongs in the first visit?');
     await inputForm.getByRole('button',{name:'Save input',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
     await page.evaluate(wid=>{location.hash=`#/pm/${wid}`;},workspaceId);await expect(inputForm).toHaveCount(0);
     await page.evaluate(({wid,tid})=>{location.hash=`#/pm/${wid}/${tid}`;},{wid:workspaceId,tid:threadId});
-    await expect(inputForm).toHaveCount(1);
+    await expect(inputForm).toHaveCount(1);await openThreadTab(page,'inputs');
     if(!await page.locator('[data-pm-add-input]').evaluate((node:HTMLDetailsElement)=>node.open))await page.locator('[data-pm-add-input]>summary').click();
     await expect(inputForm.getByRole('button',{name:'Check original request',exact:true})).toBeVisible();release();
     await expect(inputForm.getByLabel('Topic',{exact:true})).toBeEnabled();

@@ -79,3 +79,23 @@ test('progress segments retain blocker and warning tones', async ({page}) => {
   await expect(page.locator('.ui-metric-bar .tone-bad')).toHaveCount(1);
   await expect(page.locator('.ui-metric-bar .tone-warn')).toHaveCount(1);
 });
+
+test('shared disclosure can retain existing lazy content and listeners', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const {disclosure} = await import('/src/ui/components.js');
+    const {h} = await import('/src/ui/dom.js');
+    const input = h('input', {'aria-label': 'Retained draft'}); input.value = 'Keep this draft';
+    const existing = h('details', {'data-existing-disclosure': '', open: true}, h('summary', {}, 'Existing tools'), input);
+    existing.addEventListener('toggle', () => existing.dataset.openState = String(existing.open));
+    document.getElementById('fixture')!.append(disclosure({element: existing}));
+    disclosure({element: existing});
+  });
+  const disclosure = page.locator('[data-existing-disclosure]');
+  await expect(disclosure.getByLabel('Retained draft')).toHaveValue('Keep this draft');
+  await expect(disclosure.locator(':scope > summary > svg')).toHaveCount(1);
+  await disclosure.locator(':scope > summary').press('Enter');
+  await expect(disclosure).toHaveAttribute('data-open-state', 'false');
+  await disclosure.locator(':scope > summary').press('Enter');
+  await expect(disclosure.getByLabel('Retained draft')).toHaveValue('Keep this draft');
+});

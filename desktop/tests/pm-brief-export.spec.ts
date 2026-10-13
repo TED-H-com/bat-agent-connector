@@ -1,3 +1,4 @@
+import {openThreadBrief} from './pm-navigation.ts';
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
 import {readFile,mkdir} from 'node:fs/promises';
@@ -69,7 +70,7 @@ async function mount(page:Page,native:boolean,f:ReturnType<typeof fixture>){
     await page.addInitScript(()=>Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{invoke:(command:string,args:any)=>(window as any).briefNativeCommand(command,args)}}));
     await page.route('**/api/v1/**',()=>{throw Error('Native report must use IPC');});
   }
-  await page.goto(pmRoute);await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
+  await page.goto(pmRoute);await openThreadBrief(page);await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
 }
 const brief=(page:Page)=>page.locator('[data-pm-brief]'),exports=(page:Page)=>page.locator('[data-pm-brief-export]');
 async function open(page:Page){await exports(page).locator(':scope > summary').click();}

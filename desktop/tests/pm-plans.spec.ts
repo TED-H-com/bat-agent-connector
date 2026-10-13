@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
@@ -17,7 +18,7 @@ async function savePlan(page:any, text = '# First visit\n\nKeep <script>literal 
   await page.getByLabel('Plan document (Markdown)', {exact:true}).fill(text);
   await page.getByRole('button',{name:'Save plan revision',exact:true}).click();
   await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
-  await page.locator('[data-pm-revision] > summary').click();
+  await openThreadTab(page,'plan');await page.locator('[data-pm-revision-open]').click();
   await expect(page.locator('[data-pm-revision] .pm-plan-document')).toBeVisible();
   const adoption = page.locator('[data-pm-plan-adopt]');
   if (await adoption.count()) await adoption.locator(':scope > summary').click();
@@ -25,10 +26,10 @@ async function savePlan(page:any, text = '# First visit\n\nKeep <script>literal 
 
 for (const native of [false,true]) test.describe(native ? 'native plans' : 'web plans', () => {
   test('Planning can select later inputs while keeping saved document revisions fixed', async({page}) => {
-    const f=planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute); await savePlan(page);
+    const f=planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan'); await savePlan(page);
     const original=structuredClone(f.state.revisions[0]);
-    await expect(page.locator('[data-pm-information]')).not.toHaveAttribute('open', '');
-    await page.locator('[data-pm-information] > summary').click();
+    await expect(page.locator('[data-discussion-tab=inputs]')).toBeHidden();
+    await openThreadTab(page,'inputs');
     await page.locator('[data-pm-add-input] > summary').click();
     const record=action(page,'pm.input.record');
     await record.getByLabel('Topic',{exact:true}).selectOption('finance');
@@ -36,13 +37,13 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await record.getByRole('button',{name:'Save input',exact:true}).click();
     const last=f.state.inputs.at(-1);
     await page.locator(`[data-input-id="${last.input_id}"] input[type=checkbox]`).check();
-    await page.locator('[data-pm-planning-revision] > summary').click();
+    await openThreadTab(page,'plan');await page.locator('[data-pm-planning-revision] > summary').click();
     const revise=action(page,'pm.thread.plan.revise');
     await revise.getByLabel('Why update this direction?',{exact:true}).fill('Include the budget question in this planning draft.');
     f.state.lost=true;
     await revise.getByRole('button',{name:'Save updated Planning draft',exact:true}).click();
     await expect(revise).toContainText('Reply unavailable');
-    await page.reload(); await expect(page.locator('[data-pm-information]')).toHaveAttribute('open',''); await page.locator('[data-pm-planning-revision] > summary').click();
+    await page.reload();await openThreadTab(page,'plan'); await expect(page.locator('[data-pm-information]')).toHaveAttribute('open',''); await openThreadTab(page,'plan');await page.locator('[data-pm-planning-revision] > summary').click();
     await revise.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(4);
     expect(f.state.writes[2].body.params.selected_input_ids).toEqual([inputA,last.input_id]);
@@ -53,7 +54,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
   });
   test('fixed plan draft and adoption stay in the discussion and do not dispatch', async({page}) => {
     const f = planning(); f.state.bound = true;
-    await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan');
     await savePlan(page);
     await expect(page.locator('.pm-plan-document')).toContainText('<script>literal text</script>');
     await expect(page.locator('.pm-plan-document').getByRole('heading', {name:'First visit',exact:true})).toBeVisible();
@@ -72,11 +73,11 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
   });
   test('lost adoption reply recovers the original key even when the plan is already accepted', async({page}) => {
     const f = planning(); f.state.bound = true;
-    await mountConversation(page,native,f.dispatch); await page.goto(pmRoute); await savePlan(page);
+    await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan'); await savePlan(page);
     const adopt = action(page,'pm.plan.adopt');
     await adopt.getByLabel('Why adopt this version?',{exact:true}).fill('Keep the original adoption.'); f.state.lost = true;
     await adopt.getByRole('button',{name:'Adopt this plan',exact:true}).click(); await expect(adopt).toContainText('Reply unavailable');
-    await page.reload(); await page.locator('[data-pm-revision] > summary').click();
+    await page.reload();await openThreadTab(page,'plan'); await openThreadTab(page,'plan');await page.locator('[data-pm-revision-open]').click();
     await expect(adopt.getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
     await adopt.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(3);
@@ -85,9 +86,9 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     expect(f.state.ops.size).toBe(2);
   });
   test('repository preview prepares an owned worktree before plan adoption becomes available', async({page}) => {
-    const f = planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute); await savePlan(page);
+    const f = planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan'); await savePlan(page);
     await expect(action(page,'pm.plan.adopt').getByRole('button',{name:'Adopt this plan',exact:true})).toBeDisabled();
-    await page.getByText('Prepare discussion context',{exact:true}).click();
+    await openThreadTab(page,'context');await page.getByText('Prepare discussion context',{exact:true}).click();
     const prepare = action(page,'pm.run.prepare');
     await prepare.getByLabel('What should this discussion help decide?',{exact:true}).fill('Prepare the plan worktree');
     await page.locator('[data-pm-worktree-choice] > summary').click();
@@ -97,7 +98,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await expect(page.locator('[data-pm-worktree-choice]')).toContainText('a'.repeat(40));
     await prepare.getByRole('button',{name:'Save context package',exact:true}).click();
     await expect.poll(()=>f.state.bound).toBe(true);
-    await page.locator('[data-pm-revision] > summary').click();
+    await openThreadTab(page,'plan');await page.locator('[data-pm-revision-open]').click();
     await page.locator('[data-pm-plan-adopt] > summary').click();
     await expect(action(page,'pm.plan.adopt').getByRole('button',{name:'Adopt this plan',exact:true})).toBeEnabled();
     expect(f.state.writes.at(-1).body.params.repository_binding).toEqual({...target,source_ref:'refs/heads/main',source_sha:'a'.repeat(40),repository_id:7,binding_digest:'b'.repeat(64)});
@@ -112,7 +113,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
       if(path===`/pm/workspaces/${workspaceId}/threads/${threadId}`)reads++;
       return f.dispatch(input);
     });
-    await page.goto(pmRoute);const editor=page.locator('[data-pm-revision-editor]');
+    await page.goto(pmRoute);await openThreadTab(page,'plan');const editor=page.locator('[data-pm-revision-editor]');
     await editor.locator(':scope > summary').click();
     await editor.getByLabel('Plan title',{exact:true}).fill('Original private plan draft');
     await editor.getByLabel('Plan document (Markdown)',{exact:true}).fill('Keep the same reviewed text.');
@@ -126,6 +127,7 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     await expect.poll(()=>reads).toBe(2);
     await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
     if(changedPrincipal){
+      await openThreadTab(page,'plan');
       await expect(editor).not.toHaveAttribute('open','');
       await editor.locator(':scope > summary').click();
       await expect(editor.getByLabel('Plan title',{exact:true})).not.toHaveValue('Original private plan draft');
@@ -142,12 +144,12 @@ for (const native of [false,true]) test.describe(native ? 'native plans' : 'web 
     }
   });
   test('unfinished plan edits survive refresh and readers cannot create or adopt revisions', async({page}) => {
-    const f = planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);
+    const f = planning(); await mountConversation(page,native,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan');
     await page.locator('[data-pm-revision-editor] > summary').click();
     await page.getByLabel('Plan document (Markdown)',{exact:true}).fill('A scope choice still being considered.');
     f.state.cursor++; await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(page.getByLabel('Plan document (Markdown)',{exact:true})).toHaveValue('A scope choice still being considered.');
-    f.state.role='reader'; await page.reload(); await page.locator('[data-pm-revision-editor] > summary').click();
+    f.state.role='reader'; await page.reload();await openThreadTab(page,'plan'); await page.locator('[data-pm-revision-editor] > summary').click();
     await expect(page.getByRole('button',{name:'Save plan revision',exact:true})).toBeDisabled();
     expect(f.state.writes).toHaveLength(0);
   });
@@ -158,8 +160,8 @@ for (const locale of ['en','zh-TW']) for (const width of [390,768,1440]) test(`p
   const f = planning(); f.state.bound = true;
   await f.dispatch({method:'POST',path:'/operations',idempotency_key:'visual-plan',body:{action:'pm.plan.draft',target:{workspace_id:workspaceId,thread_id:threadId},
     params:{title:'First visit / 首次使用',markdown:'A clear first action.\n\nScope: preserve the conversation and its sources.\n\n第一個操作清楚可見；討論與來源保留在同一個畫面。',previous_revision_id:null},preconditions:{expected_version:1,expected_plan_version:0}}});
-  await mountConversation(page,false,f.dispatch); await page.goto(pmRoute);
-  await page.locator('[data-pm-revision] > summary').click();
+  await mountConversation(page,false,f.dispatch); await page.goto(pmRoute);await openThreadTab(page,'plan');
+  await openThreadTab(page,'plan');await page.locator('[data-pm-revision-open]').click();
   await expect(page.locator('.pm-plan-document')).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await expect(page.locator('.pm-plans > h3')).toHaveText(locale==='zh-TW'?'專案計畫':'Project plan');

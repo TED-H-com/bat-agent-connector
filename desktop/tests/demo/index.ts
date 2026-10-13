@@ -1,4 +1,5 @@
 import {overview, overviewGovernance} from './overview.ts';
+import {discussionDemo} from './discussions.ts';
 // One dispatcher for the member sign-in demo. Shapes come from the current central reads.
 // Unknown routes throw. A known id that is not in this project is a 404. Nothing here writes.
 import {demoProject, type DemoProject} from './project.ts';
@@ -114,7 +115,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   throw new Error(`Unknown demo fixture route GET ${url.pathname}${url.search}`);
 }
 
-export function demoFixture({locale, now}: {locale?: string, now?: number} = {}) {
+export function demoFixture({locale, now, discussions = false}: {locale?: string, now?: number, discussions?: boolean} = {}) {
   const project = demoProject(locale, now);
   const root = `/pm/workspaces/${project.ids.workspaceId}`;
   const dispatch = async (input: DemoRequest) => {
@@ -150,7 +151,8 @@ export function demoFixture({locale, now}: {locale?: string, now?: number} = {})
     if (path === '/checkpoints') return ok({checkpoints: []});
     throw new Error(`Unknown demo fixture route ${method} ${input.path}`);
   };
-  return {dispatch, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates};
+  const discussion = discussions ? discussionDemo(project, dispatch) : null;
+  return {dispatch: discussion?.dispatch || dispatch, discussion: discussion?.state, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates};
 }
 
 // Workbench view names are in-memory. They are not URL selections, so charter/rtm/board/agents

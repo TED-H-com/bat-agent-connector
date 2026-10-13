@@ -37,3 +37,22 @@ export async function expectPmWithdrawn(page: Page, view: string, selector: stri
   await expect(page.locator(selector)).toBeHidden();
   for (const fact of facts) await expect(page.locator('#main')).not.toContainText(fact, {useInnerText: true});
 }
+
+export async function openThreadTab(page: Page, tab: 'context' | 'inputs' | 'plan') {
+  await expect(page.locator('[data-discussion-panel]')).toBeAttached();
+  if (!await page.locator('[data-discussion-panel]').isVisible()) await page.locator('[data-discussion-panel-toggle]').click();
+  const labels = {context: /^(Context|脈絡)$/, inputs: /^(Inputs|資訊)$/, plan: /^(Plan|計畫)$/};
+  await page.getByRole('tab', {name: labels[tab]}).click();
+}
+export async function openThreadAnalysis(page: Page) {
+  await openThreadTab(page, 'context');
+  const panel = page.locator('[data-pm-native-analysis]');
+  if (!await panel.count()) return;
+  const disclosure = panel.locator('..');
+  if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) await disclosure.locator(':scope > summary').click();
+}
+export async function openThreadBrief(page: Page) {
+  await openThreadTab(page, 'plan');
+  const fold = page.locator('[data-pm-section=pm_brief_title] > details');
+  if (!await fold.evaluate(node => (node as HTMLDetailsElement).open)) await fold.locator(':scope > summary').click();
+}

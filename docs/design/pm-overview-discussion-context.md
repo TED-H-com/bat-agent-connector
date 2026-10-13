@@ -142,3 +142,16 @@ journal sequence 顯示版本。未知值保留破折號；來源掃描不完整
 討論連結沿用 `pm-discuss-link.js`，逐筆傳遞原 attention ref；報告模式綁定
 報告及其固定計畫版本。快照建立、比較雙方的權限重查、原 operation key
 回復與匯出流程仍由原本的 charter／brief export 模組負責。
+## 共用前端討論入口
+
+`desktop/src/pm-discuss-link.js` 解析 new 討論 URL；開啟時只建立本機草稿，第一次
+傳送才依序呼叫原 `pm.thread.create` 與 `pm.message.append`。建立回執後保存 thread
+ID 與待傳訊息，重新載入不重建討論；結果不明時保留原 key，只有已知 operation ID
+可自動查回。來源 chip 使用本次讀取的 label，舊 bound_label 只放提示；不可用的來源
+不保留 ID、標題或快取內容。右側脈絡／資訊／計畫分頁保留原操作與草稿。
+
+提案顯示建議更新、納入選項及單次採用審閱。介面只依中央提案讀取回傳的
+`adoptable` 與 `adoptable_reason` 判斷是否仍可採用，不比較訊息、輸入、草稿 ID
+或 thread version。已知原因使用共用短標籤；未知原因仍顯示「已過期」，原始
+代碼只放在詳細資料。純改名保留中央可採用狀態。VERSION_CONFLICT 顯示
+「已過期／再次詢問 PM」，不清除審閱文字，也不以另一個 key 重送原採用。

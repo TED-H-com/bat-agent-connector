@@ -63,7 +63,7 @@ test('backend title rationale and stable requirement ID limits remain usable',as
   expect(f.state.writes[0].body.params.review.title).toHaveLength(160);expect(f.state.writes[0].body.params.review.requirements[0].id).toHaveLength(80);expect(f.state.writes[0].body.params.rationale).toHaveLength(4000);
 });
 test('a purported valid proposal with an empty candidate key fails closed',async({page})=>{
-  const f=proposalFixture(),p=f.save();p.document.candidates[0].key='';await mountProposal(page,f);await panel(page).getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(proposalId);
+  const f=proposalFixture(),p=f.save();p.document.candidates[0].key='';await mountProposal(page,f);
   await expect(panel(page)).toContainText('does not match its original discussion or sources');await expect(editor(page)).toHaveCount(0);expect(f.state.writes).toEqual([]);
 });
 test('known baseline changes preserve edits and refuse a fresh adoption',async({page})=>{
@@ -110,7 +110,7 @@ test('removing original requirements is visible and included in the one reviewed
 });
 test('a proposal that omits original commitments without declaring removal fails closed',async({page})=>{
   const f=proposalFixture(),p=f.save();p.context.accepted_plan={document:{title:'Original commitment',requirements:[{id:'original_scope',text:'Original commitment must not disappear'}]}};
-  await mountProposal(page,f);await panel(page).getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(proposalId);await expect(panel(page)).toContainText('does not match its original discussion or sources');await expect(editor(page)).toHaveCount(0);
+  await mountProposal(page,f);await expect(panel(page)).toContainText('does not match its original discussion or sources');await expect(editor(page)).toHaveCount(0);
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`proposal review ${locale} ${width}`,async({page},info)=>{
   const f=proposalFixture();f.save();await page.setViewportSize({width,height:900});await mountProposal(page,f,locale);await panel(page).locator('select').filter({has:page.locator(`option[value="${proposalId}"]`)}).selectOption(proposalId);await expect(editor(page)).toBeVisible();

@@ -87,7 +87,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     await editor.getByRole('button',{name:'Record stage',exact:true}).click();
     await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Planning');
     expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.preconditions).toEqual({expected_lifecycle_revision:0});
-    expect(f.base.state.thread.mode).toBe('idea');expect(f.base.state.writes).toHaveLength(0);await expect(page.getByRole('tab')).toHaveCount(0);
+    expect(f.base.state.thread.mode).toBe('idea');expect(f.base.state.writes).toHaveLength(0);await expect(activity(page).getByRole('tab')).toHaveCount(0);await expect(page.locator('[data-discussion-panel]').getByRole('tab')).toHaveCount(3);
   });
   test('pause distinguishes unknown in-flight results and explicit retention does not restart them',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');

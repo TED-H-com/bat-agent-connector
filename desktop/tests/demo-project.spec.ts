@@ -1,8 +1,9 @@
-import {openPmPanel} from './pm-navigation.ts';
+import {openPmPanel, openThreadTab} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
+import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
 const cases = [
   {locale: 'en' as const, width: 1440},
@@ -121,6 +122,33 @@ test('unknown demo routes fail loudly and pages keep their cursors', async () =>
 });
 
 for (const {locale, width} of cases) {
+  test(`Overview opens a bound discussion draft in ${locale} at ${width}`, async ({browser, baseURL}) => {
+    // Use the authorized discussion fixture for composer focus. The browsing demo below
+    // remains observe-only, with all of its write controls and manual sessions read-only.
+    const fixture = demoFixture({locale, discussions: true});
+    const context = await browser.newContext({locale, baseURL, viewport: {width, height: width === 390 ? 844 : 900}});
+    const page = await context.newPage();
+    await mountConversation(page, false, fixture.dispatch);
+    await page.goto(demoRoute());
+    const row = page.locator('[data-overview-row]').filter({hasText: fixture.copy.blocker});
+    const discuss = row.getByRole('link', {name: locale === 'zh-TW' ? '討論' : 'Discuss', exact: true});
+    const launch = parseDiscussRefs((await discuss.getAttribute('href'))!.split('?')[1]);
+    expect(launch.refs).toEqual([{kind: 'governance', id: 'pmgov_' + '1'.padStart(32, '0')}]);
+    await discuss.click();
+    await expect(page).toHaveURL(/\/discussions\/new\?/);
+    await expect(page.locator('[data-discussion-title]')).toHaveText(fixture.copy.blocker);
+    await expect(page.locator('[data-discussion-context=governance]').first()).toBeVisible();
+    await expect(page.locator('[data-discussion-composer]')).toBeFocused();
+    expect(fixture.discussion.writes).toHaveLength(0);
+    await shot(page, `discuss-launch-${locale}-${width}`);
+    await page.getByRole('link', {name: locale === 'zh-TW' ? '返回專案總覽' : 'Back to Overview', exact: true}).click();
+    await expectView(page, locale, width, 'overview', fixture.copy.name);
+    await expect(page.locator('[data-overview-status]')).toBeVisible();
+    await expectNoJunk(page);
+    expect(fixture.discussion.writes).toHaveLength(0);
+    await context.close();
+  });
+
   test(`member sign-in demo renders in ${locale} at ${width}`, async ({browser, baseURL}) => {
     test.setTimeout(60_000);
     const fixture = demoFixture({locale});
@@ -244,11 +272,13 @@ for (const {locale, width} of cases) {
     await threads.filter({hasText: copy.threads.planning}).click();
     await expectView(page, locale, width, 'discussions', copy.name);
     await expect(page.locator('.pm-notes')).toContainText(copy.planningNote);
-    await page.locator('[data-pm-information] > summary').click();
-    await expect(page.locator('[data-pm-information]')).toContainText(copy.draftRationale);
-    await expect(page.locator('[data-pm-information]')).toContainText(locale === 'zh-TW' ? '財務' : 'Finance');
+    await openThreadTab(page,'plan');
+    await expect(page.locator('.pm-draft')).toContainText(copy.draftRationale);
+    await expect(page.locator('.pm-draft')).toContainText(locale === 'zh-TW' ? '財務' : 'Finance');
     const proposals = page.locator('[data-pm-plan-proposals]');
-    await proposals.getByLabel(locale === 'zh-TW' ? '已保存提案' : 'Saved proposal').selectOption(ids.proposalId);
+    await page.locator('[data-proposal-history] > summary').click();
+    await page.getByLabel(locale === 'zh-TW' ? '已保存提案' : 'Saved proposal').selectOption(ids.proposalId);
+    if (width < 1200) await page.keyboard.press('Escape');
     await expect(proposals).toContainText(copy.proposalSummary);
     await expect(proposals.getByLabel(locale === 'zh-TW' ? '計畫名稱' : 'Plan title')).toHaveValue(copy.proposalTitle);
     await expectNoJunk(page);
