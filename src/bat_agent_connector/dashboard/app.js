@@ -516,7 +516,8 @@ var reasonLabels = Object.freeze({
 	never_observed: ["Not observed yet", "尚未觀測"],
 	SOURCE_MOVED: ["Source moved", "來源已移動"],
 	SOURCE_UNAVAILABLE: ["Source unavailable", "來源無法取得"],
-	invalid_proposal: ["Invalid proposal", "提案無效"],
+	invalid_proposal: ["Needs review", "待審閱"],
+	adopted: ["Update adopted", "已採用更新"],
 	content_changed: ["Discussion changed", "討論內容已變更"],
 	plan_head_changed: ["Plan changed", "計畫已變更"],
 	superseded: ["Replaced by a newer update", "已有較新的更新"],
@@ -3055,13 +3056,15 @@ var pmPackageHandoffStrings = {
 //#region src/pm-discussions-strings.js
 var discussionStrings = {
 	en: {
+		pd_status_unchecked: "Status not checked",
+		pd_accepted_revision: "Accepted revision",
 		pd_save: "Save",
 		pd_cancel: "Cancel",
 		pd_finished: "PM finished",
 		pd_retry: "Retry",
-		pd_more_context: "{count} more context items",
+		pd_more_context: "+{count} more context items",
 		pd_new: "New discussion",
-		pd_search: "Search discussions",
+		pd_search: "Search",
 		pd_message: "Message the PM…",
 		pd_send: "Send",
 		pd_ask: "Ask PM",
@@ -3124,13 +3127,15 @@ var discussionStrings = {
 		pm_mode_follow_up: "Follow-up"
 	},
 	"zh-TW": {
+		pd_status_unchecked: "尚未查詢狀態",
+		pd_accepted_revision: "已採用版本",
 		pd_save: "儲存",
 		pd_cancel: "取消",
 		pd_finished: "PM 已完成",
 		pd_retry: "重試",
-		pd_more_context: "還有 {count} 個脈絡項目",
+		pd_more_context: "+{count} 個脈絡項目",
 		pd_new: "新增討論",
-		pd_search: "搜尋討論",
+		pd_search: "搜尋",
 		pd_message: "傳訊息給 PM…",
 		pd_send: "傳送",
 		pd_ask: "詢問 PM",
@@ -3178,7 +3183,7 @@ var discussionStrings = {
 		pd_op_succeeded: "已完成",
 		pd_op_failed: "失敗",
 		pd_op_cancelled: "已取消",
-		pd_op_needs_attention: "待處理",
+		pd_op_needs_attention: "需要處理",
 		pd_op_uncertain: "結果不明",
 		pd_op_running: "執行中",
 		pd_op_queued: "排隊中",
@@ -5883,7 +5888,7 @@ var pmStrings = {
 		pm_plan_domain_unknown: "No selected source covers this domain yet.",
 		pm_plan_sources: "Management domains and source status",
 		pm_plan_adoption_evidence: "Adopted by {actor} · Git commit ",
-		pm_revision_edit: "Use this revision as a draft",
+		pm_revision_edit: "Draft from this",
 		pm_adopt_rationale: "Why adopt this version?",
 		pm_adopt_revision: "Adopt this plan",
 		pm_adopt_help: "This exact document will be saved in the PM worktree and recorded as the accepted version.",
@@ -5977,7 +5982,7 @@ var pmStrings = {
 		pm_pending: "The original operation is still pending. Check its receipt before another change.",
 		pm_terminal: "The original operation ended without success. Review its result before editing a new request.",
 		pm_check_original: "Check original request",
-		pm_edit_request: "Edit a new request",
+		pm_edit_request: "New request",
 		pm_operation: "View operation",
 		pm_receipt_mismatch: "The receipt does not match the original request. Its key and draft have been preserved.",
 		pm_damaged: "The saved request cannot be validated. It has been preserved; no replacement will be sent.",
@@ -6231,7 +6236,7 @@ var pmStrings = {
 		pm_plan_domain_unknown: "目前沒有選定來源涵蓋這個領域。",
 		pm_plan_sources: "管理領域與來源狀態",
 		pm_plan_adoption_evidence: "由 {actor} 採用 · Git commit ",
-		pm_revision_edit: "以此版本起草",
+		pm_revision_edit: "以此為草稿",
 		pm_adopt_rationale: "採用這個版本的理由",
 		pm_adopt_revision: "採用這份計畫",
 		pm_adopt_help: "這份確定的文件會保存到 PM 工作目錄，並記錄為正式採用版本。",
@@ -6325,7 +6330,7 @@ var pmStrings = {
 		pm_pending: "原操作仍待確認。請先查回原回執，再進行下一筆變更。",
 		pm_terminal: "原操作已結束，但未成功。請檢視結果後，再編輯新的請求。",
 		pm_check_original: "查回原請求",
-		pm_edit_request: "編輯新的請求",
+		pm_edit_request: "新請求",
 		pm_operation: "查看操作",
 		pm_receipt_mismatch: "回執與原請求不一致。已保留原 key 與草稿。",
 		pm_damaged: "無法驗證已存請求。原資料仍保留，不會另送一筆。",
@@ -9800,10 +9805,18 @@ function choices({ options, value, onChange = () => {}, label }, isTabs) {
 		type: "button",
 		role: isTabs ? "tab" : "radio",
 		id: option.id || uid(),
-		"aria-controls": isTabs ? option.panel : null,
+		"aria-controls": isTabs && typeof option.panel === "string" ? option.panel : null,
 		disabled: option.disabled,
 		onclick: () => select(option.value)
 	}, option.label));
+	if (isTabs) options.forEach((option, index) => {
+		if (!option.panel || typeof option.panel === "string") return;
+		const panel = option.panel;
+		panel.id ||= uid();
+		panel.setAttribute("role", "tabpanel");
+		panel.setAttribute("aria-labelledby", buttons[index].id);
+		buttons[index].setAttribute("aria-controls", panel.id);
+	});
 	function select(next, notify = true) {
 		value = next;
 		buttons.forEach((node, i) => {
@@ -11298,7 +11311,7 @@ var discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
 	}) : node;
 };
 function discussionTitle({ t, field, form, value, local = false }) {
-	let current = value;
+	let current = value, restoreFocus = false;
 	const title = h$1("h2", {
 		"data-discussion-title": "",
 		title: value
@@ -11306,9 +11319,10 @@ function discussionTitle({ t, field, form, value, local = false }) {
 	const pencil = iconButton({
 		icon: "pencil",
 		label: t("pd_rename"),
+		disabled: field.disabled,
 		"data-discussion-rename": "",
 		onClick: () => {
-			if (!form.hasDraft()) form.set("title", current);
+			if (!form.hasDraft()) field.value = current;
 			edit.hidden = false;
 			display.hidden = true;
 			field.focus();
@@ -11320,7 +11334,11 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		label: t("pd_cancel"),
 		onClick: () => {
 			if (form.locked()) return;
-			form.set("title", current);
+			if (local) form.set("title", current);
+			else {
+				form.discard();
+				field.value = current;
+			}
 			finish();
 			pencil.focus();
 		}
@@ -11332,10 +11350,11 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		title.title = current;
 		finish();
 		pencil.focus();
-	} }, field, h$1("div", { class: "actions" }, h$1("button", {
+	} }, field, h$1("div", { class: "actions" }, button({
 		type: "submit",
-		class: "primary"
-	}, t("pd_save")))) : form.box;
+		variant: "primary",
+		label: t("pd_save")
+	}))) : form.box;
 	edit.classList.add("pd-title-edit");
 	edit.querySelector(".actions").append(cancel);
 	edit.addEventListener("keydown", (event) => {
@@ -11345,7 +11364,8 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			cancel.click();
 		}
 	});
-	function finish() {
+	function finish({ focus = false } = {}) {
+		restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body);
 		edit.hidden = true;
 		display.hidden = false;
 	}
@@ -11363,6 +11383,10 @@ function discussionTitle({ t, field, form, value, local = false }) {
 			title.title = next;
 			pencil.disabled = field.disabled;
 			cancel.disabled = form.locked();
+			if (restoreFocus && !pencil.disabled) {
+				if (document.activeElement === document.body || edit.contains(document.activeElement)) pencil.focus();
+				restoreFocus = false;
+			}
 		}
 	};
 }
@@ -11393,20 +11417,45 @@ function discussionFeedback({ t, request, node, eligible }) {
 		"uncertain",
 		"needs_attention"
 	].includes(operation?.status);
-	const message = discussionOperation(t, operation) || error?.textContent || "";
-	node.replaceChildren(message);
-	if (failed) node.append(" · ", button({
-		size: "sm",
-		variant: "ghost",
-		label: t("pd_retry"),
-		disabled: request.replaceable() ? !eligible : !request.canSubmit(),
-		onClick: () => {
-			if (request.replaceable()) request.edit();
-			request.submit();
-		}
-	}));
+	const running = [
+		"running",
+		"accepted",
+		"queued",
+		"pending"
+	].includes(operation?.status);
+	const checked = request?.checking() === true;
+	const label = running ? t(checked ? "pd_working" : "pd_status_unchecked") : discussionOperation(t, operation) || error?.textContent || "";
+	let status = node.querySelector("[role=status]");
+	if (!status) {
+		node.removeAttribute("role");
+		status = h$1("span", { role: "status" });
+		node.append(status, h$1("span", {
+			"aria-hidden": "true",
+			"data-discussion-elapsed": ""
+		}), h$1("span", { "data-discussion-retry": "" }));
+	}
+	if (status.textContent !== label) status.textContent = label;
+	const elapsed = node.querySelector("[data-discussion-elapsed]");
+	const time = running && checked ? discussionOperation(t, operation).slice(t("pd_working").length) : "";
+	if (elapsed.textContent !== time) elapsed.textContent = time;
+	const retry = node.querySelector("[data-discussion-retry]"), disabled = request?.replaceable() ? !eligible : !request?.canSubmit();
+	const signature = JSON.stringify([Boolean(failed), disabled]);
+	if (retry.dataset.state !== signature) {
+		retry.dataset.state = signature;
+		retry.replaceChildren();
+		if (failed) retry.append(" · ", button({
+			size: "sm",
+			variant: "ghost",
+			label: t("pd_retry"),
+			disabled,
+			onClick: () => {
+				if (request.replaceable()) request.edit();
+				request.submit();
+			}
+		}));
+	}
 }
-function discussionPanel({ t, namespace, workspaceId, panes }) {
+function discussionPanel({ t, namespace, workspaceId, panes, onSelect = () => {} }) {
 	const state = viewState(namespace, workspaceId, "discussion-panel");
 	if (!Object.hasOwn(panes, state.tab)) state.tab = Object.keys(panes)[0];
 	const home = h$1("aside", { class: "pd-panel-home" }), body = h$1("div", {
@@ -11416,13 +11465,15 @@ function discussionPanel({ t, namespace, workspaceId, panes }) {
 	const select = (key) => {
 		state.tab = key;
 		for (const [id, node] of Object.entries(panes)) node.hidden = id !== key;
+		onSelect(key);
 	};
 	const controls = tabs({
 		label: t("pd_panel"),
 		value: state.tab || "context",
 		options: Object.keys(panes).map((value) => ({
 			value,
-			label: t("pd_tab_" + value)
+			label: t("pd_tab_" + value),
+			panel: panes[value]
 		})),
 		onChange: select
 	});
@@ -12450,8 +12501,9 @@ function planDocument(h, markdown) {
 	}
 	return body;
 }
-function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox }) {
-	let head = null, capability = null, signature = "", busy = false;
+function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox, deferReads = false }) {
+	let head = null, capability = null, signature = "", busy = false, active = !deferReads;
+	const readers = new Map();
 	const title = input("pm_revision_title", {
 		max: 200,
 		value: thread().thread.title
@@ -12639,13 +12691,17 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				pending = false;
 			}
 		}
-		queueMicrotask(() => {
+		readers.set(summary.revision_id, read);
+		if (active) queueMicrotask(() => {
 			if (item.isConnected) read();
 		});
 		return item;
 	}
 	function renderRows(page, append = false) {
-		if (!append) rows.replaceChildren();
+		if (!append) {
+			rows.replaceChildren();
+			readers.clear();
+		}
 		rows.append(...(page.revisions || []).map(revisionRow));
 		if (!rows.children.length) rows.append(h("p", { class: "muted" }, t("pm_plan_no_revisions")));
 		if (page.next_cursor !== null && page.next_cursor !== void 0) {
@@ -12676,6 +12732,18 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 	}
 	return {
 		box,
+		setActive(value) {
+			active = value;
+			if (active) for (const read of readers.values()) read();
+		},
+		open(id) {
+			const row = [...rows.querySelectorAll("[data-pm-revision]")].find((node) => node.dataset.pmRevision === id);
+			if (row) {
+				const control = row.querySelector("[data-pm-revision-open]");
+				if (control.getAttribute("aria-expanded") !== "true") control.click();
+				control.focus();
+			}
+		},
 		update(page, accepted, capabilities) {
 			if (page.workspace_id !== workspaceId || accepted.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 			if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("pm_stale"));
@@ -16736,17 +16804,18 @@ function validRequirements(values, included) {
 		"unresolved"
 	].includes(row.priority) && refs$1(row.depends_on, ids, 0)) && !cyclic(values);
 }
-function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {} }) {
+function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {}, onRevision = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, endpoint = base + "/conversation-proposals", target = {
 		workspace_id: workspaceId,
 		thread_id: threadId
 	};
-	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt;
+	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt, preferredId = null;
 	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adoptedId = null, reviewShell = false, adapterInitialized = false;
 	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
 	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
 	const deciding = () => writing() && permitted(true) && thread()?.capabilities?.decide === true && caps()?.scopes?.includes("start") && caps()?.actions?.some((row) => row.action === ADOPT && row.allowed === true) && capability?.plan_adoption_available !== false;
 	const fresh = () => !conflict && active?.adoptable === true;
+	const adopted = () => active?.adoptable_reason === "adopted";
 	const original = () => {
 		try {
 			return JSON.parse(adopt?.values().review || "null");
@@ -16807,9 +16876,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		label: "pcp_prepare",
 		onSaved: async (result) => {
 			const id = result?.outcome?.proposal_id || result?.proposal_id;
-			if (id) picker.value = id;
-			await refreshParent?.();
-			await refresh(id);
+			preferredId = id;
+			if (conversation && refreshParent) await refreshParent();
+			else {
+				await refreshParent?.();
+				await refresh(id);
+			}
 		},
 		onStateChange: () => {
 			if (ready) {
@@ -16855,8 +16927,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		},
 		onSaved: async () => {
 			adoptedId = active?.proposal_id;
-			await refreshParent?.();
-			await refresh();
+			if (conversation && refreshParent) await refreshParent();
+			else {
+				await refreshParent?.();
+				await refresh();
+			}
 			if (conversation) detail.replaceChildren(h("p", {
 				"data-proposal-adopted": "",
 				role: "status"
@@ -16994,7 +17069,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				reasons.hidden = !reason;
 				const retry = content.querySelector("[data-proposal-again]");
 				if (retry) {
-					retry.hidden = fresh();
+					retry.hidden = fresh() || adopted();
 					retry.disabled = !prepare.canSubmit();
 				}
 			}
@@ -17036,7 +17111,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	function renderReview() {
 		const p = active;
 		if (!p) return;
-		const sig = p.proposal_id + ":" + p.document_digest;
+		const sig = p.proposal_id + ":" + p.document_digest + ":" + (p.adoptable_reason === "adopted" ? p.adopted_revision_id : "");
 		if (rendered === sig) {
 			adopt.update();
 			return;
@@ -17047,6 +17122,31 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		detail.replaceChildren();
 		content.replaceChildren();
 		detail.append(h("h4", {}, p.document?.title || t("pcp_review")));
+		if (conversation && adoptedId === p.proposal_id) {
+			detail.replaceChildren(h("p", {
+				"data-proposal-adopted": "",
+				role: "status"
+			}, t("pd_adopted"), " · ", backLink()));
+			return;
+		}
+		if (conversation && adopted()) {
+			const confirmation = h("div", { "data-proposal-adopted": "" }, statusPill("adopted"));
+			if (typeof p.adopted_revision_id === "string" && /^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id)) confirmation.append(" · ", h("a", {
+				"data-proposal-adopted-revision": "",
+				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(threadId)}?revision=${encodeURIComponent(p.adopted_revision_id)}`,
+				onclick: (event) => {
+					event.preventDefault();
+					onRevision(p.adopted_revision_id);
+				}
+			}, t("pd_accepted_revision")));
+			detail.append(h("p", {}, p.document?.summary || ""), confirmation);
+			if (adopt.locked()) {
+				adopt.box.firstElementChild.hidden = true;
+				adopt.box.append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
+				detail.append(h("details", {}, h("summary", {}, t("pd_details")), adopt.box));
+			}
+			return;
+		}
 		if (!conversation && p.provenance?.adapter) detail.append(h("p", { class: "muted" }, t("pm_native_origin"), " ", p.provenance.adapter));
 		if (p.validation.status !== "format_valid") {
 			detail.append(note("pcp_invalid"), h("ul", {}, ...(p.validation.errors || []).map((error) => h("li", {}, String(error)))), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
@@ -17169,7 +17269,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 					content.append(group);
 				}
 				item.querySelector("label").remove();
-				summary.replaceChildren(wording);
+				summary.replaceChildren(icon("chevron-right"), wording);
 				group.append(h("div", { class: "pd-candidate" }, h("label", { "aria-label": t("pcp_include") }, include), item));
 			} else content.append(item);
 		}
@@ -17278,13 +17378,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			technical.append(raw);
 			content.append(technical);
 		} else content.append(raw);
-		if (conversation && adoptedId === p.proposal_id) {
-			detail.replaceChildren(h("p", {
-				"data-proposal-adopted": "",
-				role: "status"
-			}, t("pd_adopted"), " · ", backLink()));
-			return;
-		}
+		adopt.box.firstElementChild.hidden = false;
+		if (reviewShell) adopt.box.querySelector("[data-proposal-owner-review]").append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
 		detail.append(adopt.box);
 		if (conversation && !reviewShell) {
 			reviewShell = true;
@@ -17346,27 +17441,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		rows = append ? [...rows, ...value.proposals] : value.proposals;
 		cursor = next ?? null;
 		const selected = picker.value;
-		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")), ...rows.map((row) => h("option", { value: row.proposal_id }, [row.title || t("pd_proposed"), t(row.adoptable === false ? "pd_stale" : row.validation?.status === "format_valid" ? "pcp_proposal" : "pcp_invalid")].join(" · "))));
+		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")), ...rows.map((row) => h("option", { value: row.proposal_id }, [row.title ?? t("pd_proposed"), row.adoptable_reason === "adopted" ? t("ui_status_adopted") : row.validation?.status !== "format_valid" ? proposalReasonLabel(t, "invalid_proposal") : t(row.adoptable === false ? "pd_stale" : "pcp_proposal")].join(" · "))));
 		picker.value = selected;
 		more.hidden = cursor === null;
 		notice.replaceChildren(...!rows.length ? [note("pcp_empty")] : [], ...cursor !== null ? [note("pcp_partial")] : []);
-	}
-	async function summaries(list) {
-		if (list?.workspace_id !== workspaceId || !Array.isArray(list.proposals) || list.proposals.some((row) => row.thread_id !== threadId || typeof row.proposal_id !== "string")) throw fail();
-		const proposals = await Promise.all(list.proposals.map(async (row) => {
-			const p = checked(await api("GET", endpoint + "/" + encodeURIComponent(row.proposal_id)));
-			if (p.proposal_id !== row.proposal_id) throw fail();
-			return {
-				...row,
-				title: p.document?.title || t("pcp_invalid"),
-				adoptable: p.adoptable,
-				adoptable_reason: p.adoptable_reason
-			};
-		}));
-		return {
-			...list,
-			proposals
-		};
 	}
 	async function refresh(preferred) {
 		if (!enabled()) {
@@ -17384,15 +17462,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (own !== ticket) return;
 			if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
 			head = plans.head;
-			const detailed = await summaries(list);
-			alive();
-			if (own !== ticket) return;
 			visible = true;
 			box.hidden = false;
-			page(detailed);
-			const id = preferred || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? rows.at(-1)?.proposal_id : null);
+			page(list);
+			const id = preferred || preferredId || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? rows.at(-1)?.proposal_id : null);
 			if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, t("pd_proposed")));
 			picker.value = id || "";
+			preferredId = null;
 			if (id) {
 				const result = checked(await api("GET", endpoint + "/" + encodeURIComponent(id)));
 				alive();
@@ -17425,10 +17501,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			const result = await api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);
 			alive();
 			if (own !== ticket) return;
-			const detailed = await summaries(result);
-			alive();
-			if (own !== ticket) return;
-			page(detailed, true);
+			page(result, true);
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
@@ -17475,7 +17548,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		});
 		composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
 		clock = setInterval(() => {
-			if (composerNode.isConnected && [
+			if (composerNode.isConnected && prepare.checking() && [
 				"running",
 				"accepted",
 				"queued",
@@ -17493,6 +17566,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		composer,
 		refresh,
 		withdraw,
+		recheck: () => prepare.recheck(),
 		update(value = {}) {
 			if (value.capabilities) {
 				capability = value.capabilities;
@@ -31877,6 +31951,9 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 	return {
 		box,
 		update,
+		recheck() {
+			for (const { request } of requests) request.recheck();
+		},
 		composer(textarea) {
 			ask = h("button", {
 				type: "button",
@@ -31898,7 +31975,7 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 			composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
 			clock = setInterval(() => {
 				const request = requests.find((row) => row.spec.key === selected)?.request;
-				if (composerNode.isConnected && [
+				if (composerNode.isConnected && request?.checking() && [
 					"running",
 					"accepted",
 					"queued",
@@ -31949,7 +32026,7 @@ var retired = (error) => [
 ].includes(error.code);
 var receiptSubscribers = new Map();
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value) }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value), pruneEmpty = false }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -31963,7 +32040,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		2e3,
 		3e3
 	];
-	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false;
+	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false;
 	const stopTimer = () => {
 		clearTimeout(receiptTimer);
 		receiptTimer = null;
@@ -31980,7 +32057,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	const status = h("div", { role: "status" }), receipt = h("div", { class: "pm-receipt" });
 	const persist = () => {
 		guard();
-		localStorage.setItem(storage, JSON.stringify(saved));
+		if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage);
+		else localStorage.setItem(storage, JSON.stringify(saved));
 	};
 	const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
 	const changed = () => {
@@ -32077,8 +32155,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		button.textContent = t(saved.intent ? "pm_check_original" : label);
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
-		onStateChange();
 		pollReceipt();
+		onStateChange();
 	}
 	async function run(automatic = false) {
 		if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
@@ -32087,7 +32165,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			receiptAttempt = 0;
 			receiptPolling = true;
 		}
-		let firstAttempt = false;
+		let firstAttempt = stagedHere;
+		stagedHere = false;
 		try {
 			guard();
 			busy = true;
@@ -32150,7 +32229,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				for (const input of Object.values(fields)) input.value = input.dataset.pmDefault || "";
 				await onSaved(op.result);
 				guard();
-				status.replaceChildren(h("span", { class: "muted" }, t("pm_saved")));
+				status.replaceChildren(h("span", {
+					class: "muted",
+					"data-pm-saved": ""
+				}, t("pm_saved")));
 			} else if (!onError(op.error || {})) status.replaceChildren(h("p", { class: "muted" }, t(terminal() ? "pm_terminal" : "pm_pending")));
 		} catch (error) {
 			receiptPolling = false;
@@ -32190,6 +32272,36 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused,
 		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
+		stage: () => {
+			if (disposed || busy || saved.intent || damaged) return false;
+			guard();
+			saved.values = capture();
+			saved.intent = {
+				key: crypto.randomUUID(),
+				request: {
+					action,
+					target,
+					params: params(saved.values),
+					preconditions: preconditions()
+				}
+			};
+			persist();
+			stagedHere = true;
+			update();
+			return true;
+		},
+		discard: () => {
+			if (busy || saved.intent || damaged) return;
+			saved.values = {};
+			persist();
+		},
+		checking: () => busy || receiptTimer !== null,
+		recheck: () => {
+			if (disposed || busy || !saved.intent?.operation_id || !allowed()) return;
+			receiptAttempt = 0;
+			receiptPolling = true;
+			run(true);
+		},
 		dispose: () => {
 			disposed = true;
 			receiptPolling = false;
@@ -32217,17 +32329,29 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const uiState = viewState(namespace, workspaceId, "discussions");
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
 	const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
-	let sendHandoff = null;
+	const threadEventTypes = new Set();
+	let sendHandoff = null, firstMessagePending = false;
 	try {
 		sendHandoff = JSON.parse(localStorage.getItem(handoffKey));
 	} catch {}
-	if (threadId === "new" && /^pmt_[0-9a-f]{32}$/.test(sendHandoff?.threadId)) {
-		threadId = sendHandoff.threadId;
-		history.replaceState(null, "", `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);
-	}
 	let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
 	const threadRows = h("div", { class: "pd-thread-rows" });
 	const threadState = viewState(namespace, workspaceId, "discussion." + (threadId || "list"));
+	const rememberOrigin = (id, origin) => {
+		const indexKey = originKey + "index";
+		let index = [];
+		try {
+			index = JSON.parse(localStorage.getItem(indexKey)) || [];
+		} catch {}
+		if (!Array.isArray(index)) index = [];
+		index = [...new Set([...Object.keys(localStorage).filter((key) => key.startsWith(originKey) && key !== indexKey).map((key) => key.slice(originKey.length)), ...index])];
+		index = index.filter((value) => typeof value === "string" && /^pmt_[0-9a-f]{32}$/.test(value) && value !== id);
+		index.push(id);
+		while (index.length > 40) localStorage.removeItem(originKey + index.shift());
+		for (const key of Object.keys(localStorage)) if (key.startsWith(originKey) && key !== indexKey && !index.includes(key.slice(originKey.length))) localStorage.removeItem(key);
+		localStorage.setItem(originKey + id, JSON.stringify(origin));
+		localStorage.setItem(indexKey, JSON.stringify(index));
+	};
 	const backLink = () => {
 		let savedOrigin = {};
 		try {
@@ -32237,7 +32361,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			from: launch.from || savedOrigin.from || "",
 			report: launch.report || savedOrigin.report || ""
 		}));
-		const origin = source.from || "overview";
+		const origin = source.from || "discussions";
 		return h("a", {
 			class: "pd-back",
 			href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
@@ -32489,9 +32613,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}
 		},
 		...!liveOverview ? { onDiscuss: () => {
+			const report = brief?.current?.()?.snapshot_id;
 			location.hash = discussHref({
 				workspaceId,
-				from: "overview"
+				from: "overview",
+				report,
+				refs: report ? [{
+					kind: "snapshot",
+					id: report
+				}] : []
 			});
 		} } : {}
 	}) : projectBrief({
@@ -33081,9 +33211,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			else node.setAttribute("aria-disabled", "true");
 		}
 	};
+	const lazyThreadSections = new Map();
 	function secondary(label, node) {
 		if (!node) return null;
-		const card = sectionCard({ body: disclosure({
+		const details = disclosure({
 			label: t(label),
 			key: JSON.stringify([
 				namespace,
@@ -33091,7 +33222,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				label
 			]),
 			body: node
-		}) });
+		});
+		const card = threadId ? h("section", {}, details) : sectionCard({ body: details });
+		const section = node === meetings?.element ? meetings : node === followUp?.element ? followUp : null;
+		if (threadId && section) {
+			lazyThreadSections.set(section, details);
+			details.addEventListener("toggle", () => {
+				if (details.open && !details.closest("[data-discussion-tab]")?.hidden && loaded) section.refresh();
+			});
+		}
 		card.dataset.pmSection = label;
 		node.classList.add("pm-secondary-content");
 		return card;
@@ -33325,15 +33464,20 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				preconditions,
 				permitted: write,
 				label: "pd_send",
-				onSaved: () => {
-					localStorage.removeItem(handoffKey);
-					return load();
-				},
+				onSaved: () => load(),
 				extra: text
 			});
 			text.placeholder = t("pd_message");
 			text.dataset.discussionComposer = "";
-			if (sendHandoff?.threadId === threadId && !noteForm.locked()) noteForm.set("content", sendHandoff.content);
+			if (sendHandoff?.threadId === threadId) {
+				const handoff = sendHandoff;
+				sendHandoff = null;
+				if (!noteForm.locked() && !noteForm.values().content.trim() && typeof handoff.content === "string" && handoff.content.trim()) {
+					noteForm.set("content", handoff.content);
+					firstMessagePending = noteForm.stage();
+				}
+				localStorage.removeItem(handoffKey);
+			}
 			renameForm = form({
 				action: "pm.thread.rename",
 				target,
@@ -33346,7 +33490,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					threadTitle.dataset.pmDefault = values.title;
 				},
 				onSaved: () => {
-					titleView.finish();
+					titleView.finish({ focus: true });
 					return load();
 				},
 				onStateChange: () => {
@@ -33399,6 +33543,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					errorBox,
 					conversation: true,
 					backLink,
+					onRevision: (id) => {
+						discussionTools.open("plan");
+						revisions?.open(id);
+					},
 					onFollowUp: () => text.focus(),
 					onAnswer: (value) => {
 						if (!value || noteForm.locked()) return;
@@ -33422,7 +33570,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					labelled,
 					permitted,
 					refresh: load,
-					errorBox
+					errorBox,
+					deferReads: true
 				});
 				column.append(revisions.box);
 			}
@@ -33618,6 +33767,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					context: contextPane,
 					inputs: h("section", { "data-discussion-tab": "inputs" }, information),
 					plan: planPane
+				},
+				onSelect: (key) => {
+					revisions?.setActive(key === "plan");
+					if (key === "context" && initialReadComplete) {
+						for (const [section, details] of lazyThreadSections) if (details.open) section.refresh();
+					}
 				}
 			});
 			column.querySelector(".pd-header-main").append(discussionTools.trigger);
@@ -33867,6 +34022,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		for (const row of workspaceList.querySelectorAll(".pm-thread-link")) row.hidden = !row.textContent.toLocaleLowerCase().includes((uiState.search || "").toLocaleLowerCase());
 	}
 	async function load() {
+		const eventTypes = new Set(threadEventTypes);
+		threadEventTypes.clear();
 		const ticket = ++sequence;
 		refreshing = true;
 		refresh.disabled = true;
@@ -33928,17 +34085,19 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				});
 			}
 			const scroll = workspaceList.scrollTop;
-			if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h("div", { class: "pd-list-header" }, threadSearch, h("a", {
-				class: "ui-button primary ui-sm",
-				href: discussHref({ workspaceId }),
+			if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h("div", { class: "pd-list-header" }, threadSearch, iconButton({
+				icon: "plus",
+				label: t("pd_new"),
 				"data-discussion-new": "",
-				title: t("pd_new"),
-				"aria-label": t("pd_new")
-			}, icon("plus"), t("pd_new"))), threadRows);
+				onClick: () => {
+					location.hash = discussHref({ workspaceId });
+				}
+			})), threadRows);
 			threadRows.replaceChildren(...(threadList?.threads || []).map((thread) => h("a", {
 				class: "pm-thread-link",
 				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
-				"aria-current": thread.thread_id === threadId ? "page" : null
+				"aria-current": thread.thread_id === threadId ? "page" : null,
+				onclick: () => rememberOrigin(thread.thread_id, { from: "discussions" })
 			}, h("strong", { title: thread.title }, thread.title), h("span", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, discussionLabel(t, "pm_mode_", thread.mode)), " · ", h("time", {}, time(thread.updated_at))), ...discussionContext(t, thread.context?.slice(0, 1)))));
 			if (!workspaceId) workspaceList.replaceChildren(...lastList.map((row) => h("a", { href: `#/pm/${row.workspace_id}` }, row.name)), h("button", {
 				type: "button",
@@ -33974,6 +34133,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					text.dataset.discussionComposer = "";
 					const create = form({
 						action: "pm.thread.create",
+						pruneEmpty: true,
 						target: { workspace_id: workspaceId },
 						fields: {
 							title: name,
@@ -33992,10 +34152,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 								threadId: result.thread_id,
 								content: values.content
 							}));
-							localStorage.setItem(originKey + result.thread_id, JSON.stringify({
-								from: launch.from || "overview",
+							rememberOrigin(result.thread_id, {
+								from: launch.from || "discussions",
 								report: launch.report
-							}));
+							});
 						},
 						onSaved: (result) => {
 							alive();
@@ -34069,7 +34229,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				issues,
 				traceability
 			]) {
-				if (section) await section.refresh();
+				const lazy = lazyThreadSections.get(section);
+				const ownEvent = section === meetings && eventTypes.has("pm_meeting") || section === followUp && ["pm_follow_up", "pm_follow_up_assessment"].some((type) => eventTypes.has(type));
+				if (section && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden || ownEvent)) await section.refresh();
 				alive();
 				if (ticket !== sequence) return;
 			}
@@ -34094,6 +34256,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
 			register?.setActive(workbench?.selected() === "issues");
 			updateForms();
+			if (initialReadComplete) {
+				proposalReview?.recheck();
+				nativeAnalysis?.recheck();
+			}
 		} catch (error) {
 			if (!retired(error) && ticket === sequence) {
 				loaded = false;
@@ -34147,10 +34313,29 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	if (threadId === "new") setTimeout(() => {
 		if (!disposed) content.querySelector("[data-discussion-composer]")?.focus();
 	}, 0);
-	if (sendHandoff?.threadId === threadId && noteForm && !noteForm.locked()) setTimeout(() => {
-		if (!disposed) noteForm.submit();
+	proposalReview?.recheck();
+	nativeAnalysis?.recheck();
+	if (firstMessagePending) setTimeout(() => {
+		if (!disposed) {
+			firstMessagePending = false;
+			noteForm.submit();
+		}
 	}, 0);
+	const linkedRevision = new URLSearchParams(location.hash.split("?")[1] || "").get("revision");
+	if (/^pmrev_[0-9a-f]{32}$/.test(linkedRevision || "") && revisions) {
+		discussionTools.open("plan");
+		revisions.open(linkedRevision);
+	}
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
+	const subscribeEvents = onEvents;
+	onEvents = (listener) => subscribeEvents((event) => {
+		if (threadId && [
+			"pm_meeting",
+			"pm_follow_up",
+			"pm_follow_up_assessment"
+		].includes(event.resource_type)) threadEventTypes.add(event.resource_type);
+		return listener(event);
+	});
 	const pendingReads = new Map();
 	function eventRead(key, read) {
 		if (!pendingReads.has(key)) pendingReads.set(key, Promise.resolve().then(() => {

@@ -42,7 +42,7 @@ for (const nativeTransport of [false, true]) test.describe(nativeTransport ? 'na
     await expect(form(page)).toContainText('Reply unavailable');
     f.state.reject={status:403,code:'FORBIDDEN'};
     await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
-    await expect(form(page).getByRole('button',{name:'Edit a new request',exact:true})).toBeHidden();
+    await expect(form(page).getByRole('button',{name:'New request',exact:true})).toBeHidden();
     f.native.eligible=false; f.native.reason='PM_NATIVE_EXECUTABLE_UNAVAILABLE'; f.state.reject=null;
     await page.reload();await openThreadAnalysis(page);
     await expect(form(page).getByLabel('What should the PM help you work through?',{exact:true})).toBeDisabled();

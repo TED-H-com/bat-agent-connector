@@ -51,11 +51,11 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value)}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
-  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false;
+  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false;
   const stopTimer = () => {clearTimeout(receiptTimer); receiptTimer = null;};
   try {
     const raw = localStorage.getItem(storage);
@@ -69,7 +69,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     }
   } catch {damaged = true;}
   const status = h('div', {role: 'status'}), receipt = h('div', {class: 'pm-receipt'});
-  const persist = () => {guard(); localStorage.setItem(storage, JSON.stringify(saved));};
+  const persist = () => {guard(); if (pruneEmpty && !saved.intent && !Object.keys(saved.values).length) localStorage.removeItem(storage); else localStorage.setItem(storage, JSON.stringify(saved));};
   const capture = () => Object.fromEntries(Object.entries(fields).map(([name, input]) => [name, input.value]));
   const changed = () => {
     if (busy || saved.intent || damaged) return;
@@ -131,14 +131,14 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     button.textContent = t(saved.intent ? 'pm_check_original' : label);
     reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
     reset.disabled = busy || !allowed();
-    onStateChange();
     pollReceipt();
+    onStateChange();
   }
   async function run(automatic = false) {
     if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
     stopTimer();
     if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
-    let firstAttempt = false;
+    let firstAttempt = stagedHere; stagedHere = false;
     try {
       guard(); busy = true; status.replaceChildren();
       if (!saved.intent) {
@@ -179,7 +179,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         onBeforeSaved(op.result, saved.values);
         saved = {version: 1, values: {}}; persist();
         for (const input of Object.values(fields)) input.value = input.dataset.pmDefault || '';
-        await onSaved(op.result); guard(); status.replaceChildren(h('span', {class: 'muted'}, t('pm_saved')));
+        await onSaved(op.result); guard(); status.replaceChildren(h('span', {class: 'muted', 'data-pm-saved': ''}, t('pm_saved')));
       } else if (!onError(op.error || {})) status.replaceChildren(h('p', {class: 'muted'}, t(terminal() ? 'pm_terminal' : 'pm_pending')));
     } catch (error) {
       receiptPolling = false;
@@ -203,6 +203,18 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
   update();
   return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+    stage: () => {
+      if (disposed || busy || saved.intent || damaged) return false;
+      guard(); saved.values = capture();
+      saved.intent = {key: crypto.randomUUID(), request: {action, target, params: params(saved.values), preconditions: preconditions()}};
+      persist(); stagedHere = true; update(); return true;
+    },
+    discard: () => {if (busy || saved.intent || damaged) return; saved.values = {}; persist();},
+    checking: () => busy || receiptTimer !== null,
+    recheck: () => {
+      if (disposed || busy || !saved.intent?.operation_id || !allowed()) return;
+      receiptAttempt = 0; receiptPolling = true; void run(true);
+    },
     dispose: () => {
       disposed = true; receiptPolling = false; stopTimer(); subscribers.delete(receiveReceipt);
       if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
@@ -220,17 +232,30 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const uiState = viewState(namespace, workspaceId, 'discussions');
   const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
   const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
-  let sendHandoff = null;
+  const threadEventTypes = new Set();
+  let sendHandoff = null, firstMessagePending = false;
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
-  if (threadId === 'new' && /^pmt_[0-9a-f]{32}$/.test(sendHandoff?.threadId)) {threadId = sendHandoff.threadId; history.replaceState(null, '', `#/pm/${encodeURIComponent(workspaceId)}/discussions/${threadId}`);}
   let discussionTools = null, boundContext = null, panelContext = null, renameForm = null, threadSearch = null, titleView = null;
   const threadRows = h('div', {class: 'pd-thread-rows'});
   const threadState = viewState(namespace, workspaceId, 'discussion.' + (threadId || 'list'));
+  // Bound cosmetic return locations without evicting durable intents or drafts.
+  const rememberOrigin = (id, origin) => {
+    const indexKey = originKey + 'index';
+    let index = []; try {index = JSON.parse(localStorage.getItem(indexKey)) || [];} catch {}
+    if (!Array.isArray(index)) index = [];
+    index = [...new Set([...Object.keys(localStorage).filter(key => key.startsWith(originKey) && key !== indexKey).map(key => key.slice(originKey.length)), ...index])];
+    index = index.filter(value => typeof value === 'string' && /^pmt_[0-9a-f]{32}$/.test(value) && value !== id);
+    index.push(id);
+    while (index.length > 40) localStorage.removeItem(originKey + index.shift());
+    for (const key of Object.keys(localStorage)) if (key.startsWith(originKey) && key !== indexKey && !index.includes(key.slice(originKey.length))) localStorage.removeItem(key);
+    localStorage.setItem(originKey + id, JSON.stringify(origin));
+    localStorage.setItem(indexKey, JSON.stringify(index));
+  };
   const backLink = () => {
     let savedOrigin = {};
     try {savedOrigin = JSON.parse(localStorage.getItem(originKey + threadId)) || {};} catch {}
     const source = parseDiscussRefs(new URLSearchParams({from: launch.from || savedOrigin.from || '', report: launch.report || savedOrigin.report || ''}));
-    const origin = source.from || 'overview';
+    const origin = source.from || 'discussions';
     return h('a', {class: 'pd-back', href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`, 'data-discussion-back': '', onclick: () => {
       // Restore the originating fixed report even after a discussion-draft reload.
       if (origin === 'overview' && source.report) Object.assign(viewState(namespace, workspaceId, 'overview'), {snapshotId: source.report, mode: 'saved'});
@@ -326,7 +351,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
         } else {const returnFocus = heading.querySelector('h1'); returnFocus.tabIndex = -1; brief?.openRelated?.(row, main, returnFocus);}
       },
-      ...(!liveOverview ? {onDiscuss: () => {location.hash = discussHref({workspaceId, from: 'overview'});}} : {})})
+      ...(!liveOverview ? {onDiscuss: () => {const report = brief?.current?.()?.snapshot_id; location.hash = discussHref({workspaceId, from: 'overview', report, refs: report ? [{kind: 'snapshot', id: report}] : []});}} : {})})
       : projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, lifecycle?.element||content);
   const releaseBaselines = workspaceId && !threadId && caps()?.features?.pm_workspaces?.release_baselines
@@ -529,9 +554,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (on) node.removeAttribute('aria-disabled'); else node.setAttribute('aria-disabled', 'true');
     }
   };
+  const lazyThreadSections = new Map();
   function secondary(label, node) {
     if (!node) return null;
-    const card = sectionCard({body: disclosure({label: t(label), key: JSON.stringify([namespace, workspaceId, label]), body: node})});
+    const details = disclosure({label: t(label), key: JSON.stringify([namespace, workspaceId, label]), body: node});
+    const card = threadId ? h('section', {}, details) : sectionCard({body: details});
+    const section = node === meetings?.element ? meetings : node === followUp?.element ? followUp : null;
+    if (threadId && section) {
+      lazyThreadSections.set(section, details);
+      details.addEventListener('toggle', () => {if (details.open && !details.closest('[data-discussion-tab]')?.hidden && loaded) void section.refresh();});
+    }
     card.dataset.pmSection = label; node.classList.add('pm-secondary-content'); return card;
   }
   const groups = [];
@@ -629,13 +661,22 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const write = () => permitted(false) && threadData?.capabilities?.write === true;
       const decide = () => permitted(true) && threadData?.capabilities?.decide === true;
       noteForm = form({action: 'pm.message.append', target, fields: {content: text}, params: values => ({content: values.content}), preconditions,
-        permitted: write, label: 'pd_send', onSaved: () => {localStorage.removeItem(handoffKey); return load();},
+        permitted: write, label: 'pd_send', onSaved: () => load(),
         extra: text});
       text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
-      if (sendHandoff?.threadId === threadId && !noteForm.locked()) noteForm.set('content', sendHandoff.content);
+      if (sendHandoff?.threadId === threadId) {
+        const handoff = sendHandoff; sendHandoff = null;
+        if (!noteForm.locked() && !noteForm.values().content.trim() && typeof handoff.content === 'string' && handoff.content.trim()) {
+          noteForm.set('content', handoff.content);
+          // Transfer both the draft and exact intent on this first mount, before
+          // any secondary reads. A reload may recover it, never auto-submit it.
+          firstMessagePending = noteForm.stage();
+        }
+        localStorage.removeItem(handoffKey);
+      }
       renameForm = form({action: 'pm.thread.rename', target, fields: {title: threadTitle}, params: values => ({title: values.title.trim()}),
         preconditions, permitted: write, label: 'pd_save', onBeforeSaved: (_result, values) => {threadTitle.dataset.pmDefault = values.title;},
-        onSaved: () => {titleView.finish(); return load();}, onStateChange: () => {if (threadData) titleView?.update(threadData.thread.title);}, extra: threadTitle});
+        onSaved: () => {titleView.finish({focus: true}); return load();}, onStateChange: () => {if (threadData) titleView?.update(threadData.thread.title);}, extra: threadTitle});
       const threadDetails = h('details', {'data-discussion-details': ''}, h('summary', {}, t('pd_details')), renameForm.box.querySelector('.pm-receipt'));
       titleView = discussionTitle({t, field: threadTitle, form: renameForm, value: thread.title});
       boundContext = h('div', {class: 'pd-context'}); panelContext = h('div', {class: 'pd-context-details'});
@@ -648,13 +689,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
         proposalReview = planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,
-          thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink,
+          thread:()=>threadData,permitted,refresh:load,errorBox, conversation: true, backLink, onRevision: id => {discussionTools.open('plan'); revisions?.open(id);},
           onFollowUp: () => text.focus(), onAnswer: value => {if (!value || noteForm.locked()) return; noteForm.set('content', [text.value, value].filter(Boolean).join('\n\n')); void noteForm.submit();}});
         column.querySelector('.pd-transcript').append(proposalReview.box);
       }
       if (caps()?.features?.pm_workspaces?.plan_drafting) {
         revisions = planRevisions({h, t, api, alive, workspaceId, threadId, thread: () => threadData,
-          form, input, labelled, permitted, refresh: load, errorBox});
+          form, input, labelled, permitted, refresh: load, errorBox, deferReads: true});
         column.append(revisions.box);
       }
       if (caps()?.features?.pm_workspaces?.context_packages) {
@@ -730,7 +771,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         planningRevisionForm ? h('details', {'data-pm-planning-revision': ''}, h('summary', {}, t('pm_planning_revision_title')), planningRevisionForm.box) : '',
         proposalReview?.tools || '', revisions?.box || '', brief ? secondary('pm_brief_title', brief.box) : '');
       discussionTools = discussionPanel({t, namespace, workspaceId, panes: {context: contextPane,
-        inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane}});
+        inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane}, onSelect: key => {
+          revisions?.setActive(key === 'plan');
+          if (key === 'context' && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open) void section.refresh();
+        }});
       column.querySelector('.pd-header-main').append(discussionTools.trigger);
       const composer = discussionComposer({t, form: noteForm, details: threadDetails,
         analysis: proposalReview?.composer(text) || nativeAnalysis?.composer(text)});
@@ -900,6 +944,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   function filterThreads() {for (const row of workspaceList.querySelectorAll('.pm-thread-link')) row.hidden = !row.textContent.toLocaleLowerCase().includes((uiState.search || '').toLocaleLowerCase());}
   async function load() {
+    const eventTypes = new Set(threadEventTypes); threadEventTypes.clear();
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
     ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();
@@ -934,10 +979,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         threadSearch.addEventListener('input', () => {uiState.search = threadSearch.value; filterThreads();});
       }
       const scroll = workspaceList.scrollTop;
-      if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h('div', {class: 'pd-list-header'}, threadSearch, h('a', {class: 'ui-button primary ui-sm', href: discussHref({workspaceId}), 'data-discussion-new': '', title: t('pd_new'), 'aria-label': t('pd_new')}, icon('plus'), t('pd_new'))), threadRows);
+      if (!workspaceList.contains(threadSearch)) workspaceList.replaceChildren(h('div', {class: 'pd-list-header'}, threadSearch, iconButton({icon: 'plus', label: t('pd_new'), 'data-discussion-new': '', onClick: () => {location.hash = discussHref({workspaceId});}})), threadRows);
       threadRows.replaceChildren(...(threadList?.threads || []).map(thread => h('a', {class: 'pm-thread-link',
           href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
-          'aria-current': thread.thread_id === threadId ? 'page' : null}, h('strong', {title: thread.title}, thread.title),
+          'aria-current': thread.thread_id === threadId ? 'page' : null, onclick: () => rememberOrigin(thread.thread_id, {from: 'discussions'})}, h('strong', {title: thread.title}, thread.title),
           h('span', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, discussionLabel(t, 'pm_mode_', thread.mode)), ' · ', h('time', {}, time(thread.updated_at))),
           ...discussionContext(t, thread.context?.slice(0, 1)))));
       if (!workspaceId) workspaceList.replaceChildren(...lastList.map(row => h('a', {href: `#/pm/${row.workspace_id}`}, row.name)), h('button', {type: 'button', class: 'primary', onclick: showCreate}, t('ui_new_workspace')));
@@ -950,13 +995,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         else {
           const name = input('pd_title', {max: 160, value: threadId === 'new' ? launch.title || t('pd_new') : ''});
           const text = input('pd_message', {multiline: true, max: 12000, required: threadId === 'new'}); text.placeholder = t('pd_message'); text.dataset.discussionComposer = '';
-          const create = form({action: 'pm.thread.create', target: {workspace_id: workspaceId}, fields: {title: name, content: text},
+          const create = form({action: 'pm.thread.create', pruneEmpty: true, target: {workspace_id: workspaceId}, fields: {title: name, content: text},
             namespace: threadId === 'new' ? namespace + '.discussion.' + JSON.stringify(launch) : namespace,
             params: values => ({title: values.title.trim(), ...(launch.refs.length ? {context: launch.refs} : {})}), preconditions: () => ({expected_version: workspace.version}),
             permitted: () => permitted(false), label: threadId === 'new' ? 'pd_send' : 'pm_create_thread',
             onBeforeSaved: (result, values) => {
               if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({threadId: result.thread_id, content: values.content}));
-              localStorage.setItem(originKey + result.thread_id, JSON.stringify({from: launch.from || 'overview', report: launch.report}));
+              rememberOrigin(result.thread_id, {from: launch.from || 'discussions', report: launch.report});
             },
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
@@ -987,7 +1032,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       worktreeChoice?.update();
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
-        if (section) await section.refresh();
+        const lazy = lazyThreadSections.get(section);
+        const ownEvent = section === meetings && eventTypes.has('pm_meeting') || section === followUp && ['pm_follow_up', 'pm_follow_up_assessment'].some(type => eventTypes.has(type));
+        if (section && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden || ownEvent)) await section.refresh();
         alive(); if (ticket !== sequence) return;
       }
       nativeAnalysis?.update(runs?.runs || []);
@@ -1002,6 +1049,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (dependencies) await dependencies.setActive(workbench?.selected() === 'dependencies');
       register?.setActive(workbench?.selected() === 'issues');
       updateForms();
+      if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck();}
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
         loaded = false; workspace = null; threadData = null;
@@ -1023,8 +1071,20 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const initialTranscript = content.querySelector('.pd-transcript');
   if (initialTranscript && threadState.scroll) initialTranscript.scrollTop = threadState.scroll;
   if (threadId === 'new') setTimeout(() => {if (!disposed) content.querySelector('[data-discussion-composer]')?.focus();}, 0);
-  if (sendHandoff?.threadId === threadId && noteForm && !noteForm.locked()) setTimeout(() => {if (!disposed) void noteForm.submit();}, 0);
+  proposalReview?.recheck(); nativeAnalysis?.recheck();
+  if (firstMessagePending) setTimeout(() => {
+    if (!disposed) {firstMessagePending = false; void noteForm.submit();}
+  }, 0);
+  const linkedRevision = new URLSearchParams(location.hash.split('?')[1] || '').get('revision');
+  if (/^pmrev_[0-9a-f]{32}$/.test(linkedRevision || '') && revisions) {discussionTools.open('plan'); revisions.open(linkedRevision);}
   if (openCreate || !workspaceId && !lastList.length) showCreate();
+  // Accumulate lazy thread-tool invalidations before the unchanged shared event
+  // coalescer schedules its read. One burst can invalidate both source families.
+  const subscribeEvents = onEvents;
+  onEvents = listener => subscribeEvents(event => {
+    if (threadId && ['pm_meeting', 'pm_follow_up', 'pm_follow_up_assessment'].includes(event.resource_type)) threadEventTypes.add(event.resource_type);
+    return listener(event);
+  });
   // Coalesce only reads that have not started. Every event's ACK waits for a
   // post-event read, while a held older read cannot block a newer withdrawal.
   const pendingReads = new Map();

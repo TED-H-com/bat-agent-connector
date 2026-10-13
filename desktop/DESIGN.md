@@ -265,18 +265,25 @@ pinned below the scrolling transcript, and a Context / Inputs / Plan panel. Belo
 1200px the panel opens in the shared drawer; below 800px it becomes a sheet with
 Escape and focus return. A quiet origin link sits above the text title; its pencil
 opens inline Save / Cancel controls (Enter saves, Escape cancels) using the central
-rename action. Recovery remains attached to the original rename intent.
+rename action. Cancel discards unsubmitted title edits; a successful Save restores
+focus to the pencil after recovery controls unlock. Recovery remains attached to the
+original rename intent. Tabs associate their panels for assistive technology.
 Context chips use current labels and put differing admission labels in tooltips;
 withdrawn refs show only their kind and Unavailable, including in the thread list.
 Chips stay on one line with full accessible labels: up to three in the header, then
 +N opens Context; one per list row. The selected row has the table accent inset.
-The composer has one status/actions row with Send and Ask PM kept together.
+The composer has one status/actions row with Send and Ask PM kept together. Failed
+and pending note explanations stay visible. Search shares the list header with an
+icon-only New discussion button. A list-opened thread returns to Discussions.
 
 The shared `/discussions/new` link opens an editable draft and focuses the composer.
 Its first Send creates the bound thread and then appends the note. Both operations
-retain their own original keys; the acknowledged thread ID and unsent note bridge a
-reload between the two. Opening or reloading the draft performs no write. Thread
-origins retain the project-view route and fixed report ID through draft reloads; returning
+retain their own original keys. The first thread mount transfers the note into the
+composer draft and intent, consumes the handoff, and submits it once. A non-empty
+composer is never overwritten. Later mounts only recover the original request; they
+never auto-send. A new launch always keeps its own route and context. Completed
+launch draft keys are removed; a bounded index retains the last 40 return origins.
+Opening or reloading an unsent draft performs no write. Thread origins retain the project-view route and fixed report ID through draft reloads; returning
 to a report restores both its ID and Overview's saved mode. Source views retain their own
 preference state.
 
@@ -287,11 +294,18 @@ messages. Only central `adoptable` / `adoptable_reason` determine proposal fresh
 client does not compare source IDs or thread versions. Renaming alone leaves an
 adoptable proposal intact. Known reasons use shared short labels; future reasons
 and central VERSION_CONFLICT show Out of date and Ask PM again while retaining
-review drafts. Raw reason codes stay in Details.
-The operation's real state drives the static working/elapsed line and original-key
-recovery. Saved proposals, runtime options, planning inputs, immutable revisions,
+review drafts. An adopted proposal uses the central adopted reason and revision ID
+to show Adopted and open the accepted revision in Plan, without another adoption or
+Ask PM again action. Raw reason codes stay in Details.
+The clock runs only during actual operation checks. Exhausted polling shows Status
+not checked; refresh and PM events re-read the known original operation ID and reset
+the backoff. Only label changes update the live region; elapsed time is hidden from
+announcements. Original-key recovery is retained. Saved proposals, runtime options,
+planning inputs, immutable revisions,
 context packages, meetings, follow-ups and Brief remain in the thread panel.
-Proposal titles replace raw IDs in the picker; plan name, revision and status replace
+Each proposal refresh reads one list and its selected document; picker titles and
+status come directly from list rows. Proposal titles replace raw IDs in the picker;
+plan name, revision and status replace
 commit digests in the reading surface. Identifiers and copyable digests are in Details.
 All thread tools use shared chevron disclosures, including retained lazy controls.
 Thread disclosures have connection/principal/workspace/thread keys and keep the
@@ -299,7 +313,10 @@ reader’s choices across live reads and Refresh. A pending original request ope
 Inputs once when the thread is first shown, including after reload, and later
 reads never re-expand a reader-closed disclosure.
 The Plan tab lists revision rows with centrally read Accepted / Draft / Historical
-pills and a Compare action; explanatory planning copy is inside Details.
+pills and a Compare action; revision detail reads wait until Plan opens. Meetings
+and Follow-up read only while their Context disclosure is open or on their own
+events. The Brief uses the same borderless presentation as these sibling sections;
+explanatory planning copy is inside Details.
 
 ## Schedule
 

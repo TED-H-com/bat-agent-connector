@@ -170,3 +170,18 @@ test('inspector does not focus a hidden fallback opener', async ({page}) => {
   await expect(page.locator('.ui-inspector')).toHaveCount(0);
   expect(await page.evaluate(() => document.activeElement?.closest('[hidden], [inert]') === null)).toBe(true);
 });
+
+test('tabs associate supplied panel elements without changing string panel compatibility', async ({page}) => {
+  await mount(page); await page.evaluate(async () => {
+    const {tabs} = await import('/src/ui/components.js'), {h} = await import('/src/ui/dom.js');
+    const panels = {one: h('section', {}, 'First context'), two: h('section', {}, 'Second context')};
+    const controls = tabs({label: 'Bound panels', value: 'one', options: [{value: 'one', label: 'First', panel: panels.one}, {value: 'two', label: 'Second', panel: panels.two}],
+      onChange: key => {for (const [value, node] of Object.entries(panels)) node.hidden = value !== key;}});
+    panels.two.hidden = true; document.getElementById('fixture')!.append(controls, ...Object.values(panels));
+  });
+  const first = page.getByRole('tab', {name: 'First', exact: true}), second = page.getByRole('tab', {name: 'Second', exact: true});
+  await expect(page.getByRole('tabpanel', {name: 'First', exact: true})).toHaveAttribute('id', (await first.getAttribute('aria-controls'))!);
+  await first.focus(); await page.keyboard.press('ArrowRight'); await expect(second).toBeFocused();
+  await expect(page.getByRole('tabpanel', {name: 'Second', exact: true})).toHaveAttribute('aria-labelledby', (await second.getAttribute('id'))!);
+  await expect(page.getByRole('tab', {name: 'Context', exact: true})).toHaveAttribute('aria-controls', 'context');
+});

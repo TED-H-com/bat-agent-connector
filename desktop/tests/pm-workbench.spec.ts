@@ -30,12 +30,12 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   test('sidebar discussion entry opens the existing form from both workspace and thread',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await page.locator('[data-pm-view="discussions"]').click();
-    await page.getByRole('link',{name:'New discussion',exact:true}).click();
+    await page.getByRole('button',{name:'New discussion',exact:true}).click();
     await expect(page.locator('[data-pm-action="pm.thread.create"]')).toBeVisible();
     await page.getByRole('link',{name:/A clearer first visit/}).click();
     await expect(page).toHaveURL(/\/pmt_[a-f0-9]{32}$/);
     await page.locator('[data-pm-view="discussions"]').click();
-    await page.getByRole('link',{name:'New discussion',exact:true}).click();
+    await page.getByRole('button',{name:'New discussion',exact:true}).click();
     await expect(page.locator('[data-pm-action="pm.thread.create"]')).toBeVisible();
     expect(f.base.state.writes).toHaveLength(0);
   });

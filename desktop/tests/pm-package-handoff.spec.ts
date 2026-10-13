@@ -89,7 +89,7 @@ for(const native of [false,true])test.describe(native?'Native fixed handoff':'We
     const f=handoffFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_handoff');await select(page);await open(page);await review(page);await fill(page);f.state.version=4;
     await form(page).getByRole('button',{name:'Start implementation',exact:true}).click();await expect(form(page)).toContainText('Project version changed');
     expect(f.state.writes[0].body.preconditions.expected_project_version).toBe(3);expect(f.state.ops.size).toBe(0);
-    await form(page).getByRole('button',{name:'Edit a new request',exact:true}).click();await review(page);
+    await form(page).getByRole('button',{name:'New request',exact:true}).click();await review(page);
     await expect(form(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();
     await section(page).getByRole('button',{name:'Use this reviewed project version',exact:true}).click();await form(page).getByRole('button',{name:'Start implementation',exact:true}).click();
     await expect(section(page)).toContainText('Implementation was started');expect(f.state.writes[1].body.preconditions.expected_project_version).toBe(4);

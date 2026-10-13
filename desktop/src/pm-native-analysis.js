@@ -99,7 +99,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
   }
   ready = true;
   update();
-  return {box, update, composer(textarea) {
+  return {box, update, recheck() {for (const {request} of requests) request.recheck();}, composer(textarea) {
     ask = h('button', {type: 'button', class: 'secondary', 'data-discussion-ask': '', onclick: () => {
       const request = requests.find(row => row.spec.key === selected)?.request;
       if (!request) return;
@@ -110,7 +110,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
     working = h('p', {class: 'muted', role: 'status', 'data-discussion-working': ''});
     composerNode = h('div', {class: 'pd-ask'}, ask, connection, working);
     clock = setInterval(() => {const request = requests.find(row => row.spec.key === selected)?.request;
-      if (composerNode.isConnected && ['running', 'accepted', 'queued', 'pending'].includes(request?.operation()?.status)) render();}, 1000);
+      if (composerNode.isConnected && request?.checking() && ['running', 'accepted', 'queued', 'pending'].includes(request?.operation()?.status)) render();}, 1000);
     render(); return composerNode;
   }, dispose() {clearInterval(clock);}};
 }

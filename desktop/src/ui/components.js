@@ -19,8 +19,15 @@ export function iconButton({icon, label, ...attrs}) {
 function choices({options, value, onChange = () => {}, label}, isTabs) {
   const root = h('div', {class: isTabs ? 'ui-tabs' : 'ui-segmented', role: isTabs ? 'tablist' : 'radiogroup', 'aria-label': label});
   const buttons = options.map(option => h('button', {type: 'button', role: isTabs ? 'tab' : 'radio',
-    id: option.id || uid(), 'aria-controls': isTabs ? option.panel : null, disabled: option.disabled,
+    id: option.id || uid(), 'aria-controls': isTabs && typeof option.panel === 'string' ? option.panel : null, disabled: option.disabled,
     onclick: () => select(option.value)}, option.label));
+  if (isTabs) options.forEach((option, index) => {
+    if (!option.panel || typeof option.panel === 'string') return;
+    const panel = option.panel;
+    panel.id ||= uid(); panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', buttons[index].id);
+    buttons[index].setAttribute('aria-controls', panel.id);
+  });
   function select(next, notify = true) {
     value = next;
     buttons.forEach((node, i) => {const active = options[i].value === value;

@@ -28,8 +28,8 @@
 .pd-context button { flex-shrink: 0; }
 [data-discussions] .ui-context-chip, .pd-panel-overlay .ui-context-chip { display: inline-block; max-width: min(280px, 100%); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; height: 24px; line-height: 22px; vertical-align: middle; }
 .pd-list-header { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
-.pd-list-header input { min-width: 0; width: 100%; }
-.pd-list-header a { flex-shrink: 0; white-space: nowrap; }
+.pd-list-header input { flex: 1; min-width: 0; width: 100%; }
+.pd-list-header .ui-icon-button { flex-shrink: 0; }
 .pd-thread-rows { min-width: 0; }
 .pd-transcript { flex: 1; min-height: 0; overflow: auto; padding: var(--space-4); overflow-anchor: none; }
 [data-discussions] .pm-notes { max-height: none; overflow: visible; margin-block: 0; }
@@ -45,7 +45,7 @@
 .pd-composer .actions { margin: 0 0 0 auto; flex-wrap: nowrap; flex-shrink: 0; }
 .pd-composer-status { flex: 1 1 160px; min-width: 0; color: var(--text-2); font-size: var(--fs-small); }
 .pd-composer-status p { margin: 0; }
-.pd-composer-status > [role=status]:empty, .pd-composer-status .ui-disclosure:has(.pm-receipt:empty), .pd-composer-status > [role=status]:has(> .muted:only-child) { display: none; }
+.pd-composer-status > [role=status]:empty, .pd-composer-status .ui-disclosure:has(.pm-receipt:empty), .pd-composer-status > [role=status]:has(> [data-pm-saved]:only-child) { display: none; }
 .pd-ask { font-size: var(--fs-small); }
 .pd-ask p { margin: 0; }
 .pd-ask [data-discussion-working]:empty { display: none; }
