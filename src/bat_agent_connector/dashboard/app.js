@@ -32,6 +32,10 @@ function h$1(tag, attrs = {}, ...children) {
 		if (child === null || child === void 0 || child === false) continue;
 		el.append(child instanceof Node ? child : document.createTextNode(String(child)));
 	}
+	if (el.matches(".chip, .reg-chip, .message-chip")) {
+		if (!el.hasAttribute("title")) el.title = el.textContent;
+		if (!el.hasAttribute("aria-label")) el.setAttribute("aria-label", el.textContent);
+	}
 	return el;
 }
 //#endregion
@@ -10280,7 +10284,12 @@ function inlineError({ error, retry }) {
 	}) : null);
 }
 function contextChip({ icon, text, onRemove }) {
-	return h$1("span", { class: "ui-context-chip" }, nodeIcon(icon), text, onRemove ? iconButton({
+	return h$1("span", {
+		class: "ui-context-chip",
+		role: "group",
+		title: text,
+		"aria-label": text
+	}, nodeIcon(icon), h$1("span", { class: "ui-chip-label" }, text), onRemove ? iconButton({
 		icon: "x",
 		label: t("ui_remove", { text }),
 		onClick: onRemove
@@ -11925,10 +11934,10 @@ function discussionLabel(t, prefix, value) {
 	const key = prefix + value, label = t(key);
 	return label === key ? t("ui_status_unknown") : label;
 }
-function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
+function discussionContext(t, refs = [], { limit = refs.length, onMore, title = "" } = {}) {
 	const chips = refs.slice(0, limit).map((ref) => {
 		const kind = discussionLabel(t, "pd_kind_", ref.kind);
-		const text = ref.available === false ? `${kind} · ${t("pd_unavailable")}` : [kind, ref.label].filter(Boolean).join(" · ");
+		const text = ref.available === false ? `${kind} · ${t("pd_unavailable")}` : [kind, ref.label || ref.bound_label || ref.title || (refs.length === 1 ? title : "")].filter(Boolean).join(" · ");
 		const chip = contextChip({ text });
 		chip.dataset.discussionContext = ref.kind;
 		chip.title = text;
@@ -36547,10 +36556,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						t,
 						namespace,
 						workspaceId,
-						panes: { context: h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, launch.refs)) }
+						panes: { context: h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, launch.refs, { title: launch.title })) }
 					});
 					if (threadId === "new") discussionTools = draftPanel;
 					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, h("div", { class: "pd-header-main" }, h("div", { class: "pd-heading" }, backLink(), titleDraft?.box || h("h2", {}, t("pd_new")))), h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), h("div", { class: "pd-context" }, ...discussionContext(t, launch.refs, {
+						title: launch.title,
 						limit: 3,
 						onMore: () => draftPanel.open("context")
 					})))), h("div", { class: "pd-transcript" }, h("p", { class: "muted pd-start" }, t("pd_empty"))), discussionComposer({

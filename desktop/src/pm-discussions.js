@@ -7,10 +7,10 @@ export function discussionLabel(t, prefix, value) {
   const key = prefix + value, label = t(key);
   return label === key ? t('ui_status_unknown') : label;
 }
-export function discussionContext(t, refs = [], {limit = refs.length, onMore} = {}) {
+export function discussionContext(t, refs = [], {limit = refs.length, onMore, title = ''} = {}) {
   const chips = refs.slice(0, limit).map(ref => {
     const kind = discussionLabel(t, 'pd_kind_', ref.kind);
-    const text = ref.available === false ? `${kind} · ${t('pd_unavailable')}` : [kind, ref.label].filter(Boolean).join(' · ');
+    const text = ref.available === false ? `${kind} · ${t('pd_unavailable')}` : [kind, ref.label || ref.bound_label || ref.title || (refs.length === 1 ? title : '')].filter(Boolean).join(' · ');
     const chip = contextChip({text});
     chip.dataset.discussionContext = ref.kind;
     chip.title = text; chip.setAttribute('aria-label', text);

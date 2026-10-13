@@ -130,3 +130,17 @@
 :root body details > summary > .ui-icon:first-child { transition: transform var(--motion); }
 :root body details[open] > summary > .ui-icon:first-child { transform: rotate(90deg); }
 @media (max-width: 800px) { :root body :is(details, .ui-disclosure) > summary { min-height: 44px; } }
+
+:root body :is(.ui-context-chip, .chip, .reg-chip, .message-chip) {
+  max-width: 100%; min-width: 0; white-space: nowrap; text-overflow: ellipsis;
+}
+:root body .ui-context-chip { display: inline-flex; height: 24px; min-height: 24px; overflow: visible; }
+.ui-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root body :is(.chip, .message-chip) { overflow: hidden; }
+:root body .ui-context-chip .ui-icon-button { height: 24px; min-height: 24px; min-width: 24px; width: 24px; position: relative; }
+@media (max-width: 800px) {
+  :root body :is(button, a):is(.ui-context-chip, .reg-chip), :root body .ui-context-chip button { position: relative; }
+  :root body :is(button, a):is(.ui-context-chip, .reg-chip)::before, :root body .ui-context-chip button::before {
+    content: ''; position: absolute; inset: -10px 0; min-height: 44px;
+  }
+}

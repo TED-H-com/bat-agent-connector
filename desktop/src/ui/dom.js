@@ -11,5 +11,9 @@ export function h(tag, attrs = {}, ...children) {
     if (child === null || child === undefined || child === false) continue;
     el.append(child instanceof Node ? child : document.createTextNode(String(child)));
   }
+  if (el.matches('.chip, .reg-chip, .message-chip')) {
+    if (!el.hasAttribute('title')) el.title = el.textContent;
+    if (!el.hasAttribute('aria-label')) el.setAttribute('aria-label', el.textContent);
+  }
   return el;
 }

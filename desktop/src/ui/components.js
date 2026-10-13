@@ -109,7 +109,7 @@ export function inlineError({error, retry}) {
     retry ? button({size: 'sm', variant: 'ghost', label: t('ui_retry'), onClick: retry}) : null);
 }
 export function contextChip({icon, text, onRemove}) {
-  return h('span', {class: 'ui-context-chip'}, nodeIcon(icon), text,
+  return h('span', {class: 'ui-context-chip', role:'group', title:text, 'aria-label':text}, nodeIcon(icon), h('span', {class:'ui-chip-label'}, text),
     onRemove ? iconButton({icon: 'x', label: t('ui_remove', {text}), onClick: onRemove}) : null);
 }
 export function agentMark(cli) {

@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Keep context chips on one line with complete labels and larger invisible touch targets.
+
 - Unify retained and new disclosure labels and chevrons.
 
 - Share compact, bilingual timestamps across the Web/Tauri views, with timezone

@@ -1038,13 +1038,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
           titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
-          const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, launch.refs));
+          const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, launch.refs, {title:launch.title}));
           const draftPanel = discussionPanel({t, namespace, workspaceId, panes: {context: contextDraft}});
           if (threadId === 'new') discussionTools = draftPanel;
           content.append(h('div', {class: 'pm-thread-layout pd-new-layout'}, h('section', {class: 'pm-discussion'},
             h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new')))),
               h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
-                h('div', {class: 'pd-context'}, ...discussionContext(t, launch.refs, {limit: 3, onMore: () => draftPanel.open('context')})))),
+                h('div', {class: 'pd-context'}, ...discussionContext(t, launch.refs, {title:launch.title, limit: 3, onMore: () => draftPanel.open('context')})))),
             h('div', {class: 'pd-transcript'}, h('p', {class: 'muted pd-start'}, t('pd_empty'))), discussionComposer({t, form: create, draft: true})),
             launch.refs.length > 3 ? draftPanel.home : ''));
 

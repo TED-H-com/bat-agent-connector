@@ -98,6 +98,12 @@ and makes background content inert. `returnFocus` accepts an element or a callba
 resolved at close. It focuses a connected, rendered target outside hidden/inert
 ancestors, falling back to the creation-time opener under the same checks.
 
+Context chips keep a 24px visual height, one ellipsized line, a full tooltip and
+accessible label. Interactive chips use an invisible 44px touch area without moving
+neighbours. Discussion chips use authorized record labels; a single launch context
+can use its supplied record title until central returns its label. Withdrawn context
+never uses that fallback.
+
 All `details > summary` elements, including retained legacy forms, share the same
 chevron, 13px/500 label and 90-degree open rotation through `ui/components.css`.
 Native summary markers are hidden without rebuilding their contents.
