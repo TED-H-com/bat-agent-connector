@@ -390,3 +390,49 @@ async def test_runtime_imported_message_invalidates_pending_proposal(proposal_wo
         ops.create(OWNER, **adoption_request(w, proposal))
     out = pm_overview.read(ops, OWNER, w['workspace_id'])
     assert not any(a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']} for a in out['attention'])
+
+
+async def test_rename_during_adoption_is_retryable_after_original_children_finish(proposal_world):
+    from dataclasses import replace
+
+    from bat_agent_connector import pm_conversation_adoption as adoption
+    w, ops = proposal_world, proposal_world['d'].ops
+    proposal = await proposed(w)
+    original = ops.actions['pm.input.record']
+    attempts = []
+    key = uuid.uuid4().hex
+
+    def rename_request():
+        return dict(action='pm.thread.rename', target=plans.target(w),
+            params={'title': 'Reviewed direction / 已審閱的方向'},
+            preconditions={'expected_version': plans.version(w)}, idempotency_key=key)
+
+    async def racing(ctx):
+        if (ctx.op.get('external_refs') or {}).get(adoption.LINK) and not attempts:
+            ordinal = ops.db.execute('SELECT ordinal FROM pm_conversation_children WHERE operation_id=?',
+                (ctx.operation_id,)).fetchone()[0]
+            if ordinal == 1:
+                before = ops.db.total_changes
+                try:
+                    ops.create(OWNER, **rename_request())
+                except OperationError as refusal:
+                    attempts.append((refusal, ops.db.total_changes - before))
+                else:
+                    attempts.append((None, ops.db.total_changes - before))
+        return await original.run(ctx)
+
+    ops.actions['pm.input.record'] = replace(original, run=racing)
+    done = await complete(w, ops.create(OWNER, **adoption_request(w, proposal))[0])
+    assert attempts
+    refusal, writes = attempts[0]
+    assert refusal is not None
+    assert refusal.code == 'PM_CONVERSATION_ADOPTION_IN_PROGRESS' and refusal.status == 409
+    assert 'Adoption in progress. Try again in a moment.' in refusal.message
+    assert '正在採用提案，請稍後再試。' in refusal.message
+    assert writes == 0
+    assert done['status'] == 'succeeded', done
+    assert all(child['status'] == 'succeeded' for child in adoption._children(ops.db, done))
+    assert pm_plans.head(ops.db, w['workspace_id'])['accepted_revision_id'] == done['result']['revision_id']
+    renamed = await complete(w, ops.create(OWNER, **rename_request())[0])
+    assert renamed['status'] == 'succeeded', renamed
+    assert ops.create(OWNER, **{**rename_request(), 'preconditions': renamed['preconditions']})[0]['operation_id'] == renamed['operation_id']

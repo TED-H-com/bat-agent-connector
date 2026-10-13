@@ -11,6 +11,7 @@
   Saved reports retain their fixed snapshot semantics.
 - Bind up to eight original context items when creating a PM discussion and rename
   threads with durable version checks while preserving title-only proposal adoption.
+  Renaming waits for any in-flight adoption to finish, protecting its original children.
   Proposal views publish the same adoptability rule used by admission; the shared
   UI uses it after a rename. Version 3 profiles retain compatibility with version 2 plan documents. Bound
   analysis references use each original revision's operation. Source withdrawal redacts chips and
