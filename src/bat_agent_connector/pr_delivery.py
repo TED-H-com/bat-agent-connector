@@ -8,9 +8,9 @@ import re
 import time
 import uuid
 import weakref
-from datetime import datetime
 
 from .github import GitHubAmbiguous
+from .iso_time import parse_datetime
 from .operations import RERUN, NeedsAttention, OperationError, Wait
 
 METADATA_SETTLE_S = 10 * 60
@@ -345,7 +345,7 @@ async def verify_merge(ctx, pr: dict, doc: dict) -> dict:
                 merged_at = other.get("merged_at")
                 if merged_at:
                     try:
-                        if datetime.fromisoformat(merged_at.replace("Z", "+00:00")).timestamp() < int(ctx.op["created_at"]):
+                        if parse_datetime(merged_at).timestamp() < int(ctx.op["created_at"]):
                             continue
                     except (ValueError, TypeError):
                         raise OperationError("MERGE_RESULT_UNVERIFIABLE", "merged PR omitted a valid merge time") from None
@@ -412,7 +412,7 @@ async def recent_prs(gh, repository: str, created_at: float, ctx=None) -> list:
         items = (await read(gh.pulls(repository, page=page, state="all", sort="updated", direction="desc"), ctx))["items"]
         for pr in items:
             # REST timestamps have second precision; retain the whole admission second.
-            updated_at = datetime.fromisoformat(pr["updated_at"].replace("Z", "+00:00")).timestamp()
+            updated_at = parse_datetime(pr["updated_at"]).timestamp()
             if updated_at < int(created_at):
                 return result
             result.append(pr)

@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import calendar
-import datetime as dt
 import json
 import re
 import time
+from datetime import timedelta
 
 from . import pm_evidence, pm_plans, pm_workspace, work_items
+from .iso_time import parse_datetime
 from .operations import ActionDef, OperationError
 
 KINDS = ('product_goal', 'dod', 'backlog')
@@ -167,8 +168,8 @@ def _binding(ops, principal, wid, binding_id, *, current=False):
 
 def _date(value):
     try:
-        parsed = dt.datetime.fromisoformat(value.replace('Z', '+00:00')) if isinstance(value, str) else None
-        if parsed is None or parsed.tzinfo is None or parsed.utcoffset() != dt.timedelta(0):
+        parsed = parse_datetime(value) if isinstance(value, str) else None
+        if parsed is None or parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
             raise ValueError
         return parsed
     except (ValueError, OverflowError):

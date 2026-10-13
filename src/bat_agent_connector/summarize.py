@@ -7,6 +7,8 @@ import math
 from datetime import datetime, timezone
 from typing import Any
 
+from .iso_time import parse_datetime
+
 
 def ts_to_ms(v: Any) -> int | None:
     if v is None or v == "" or v == 0:
@@ -23,7 +25,7 @@ def ts_to_ms(v: Any) -> int | None:
         except ValueError:
             pass
         try:
-            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            dt = parse_datetime(s)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
             return int(dt.timestamp() * 1000)

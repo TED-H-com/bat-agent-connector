@@ -8,6 +8,47 @@ function Wait-FixtureUntil([scriptblock]$Condition, [string]$Failure, [int]$Seco
     }
     throw $Failure
 }
+function Get-FixtureViewTimeout([DateTime]$Deadline) {
+    # Keep the 8 s process cap inside the caller's original readiness deadline.
+    return [int][Math]::Max(0, [Math]::Floor([Math]::Min(8000, ($Deadline - [DateTime]::UtcNow).TotalMilliseconds)))
+}
+function New-FixtureViewAttempt([System.Collections.IDictionary]$Diagnostics) {
+    $Diagnostics.attempt_count++
+    $attempt = [ordered]@{
+        attempt = $Diagnostics.attempt_count; exit_code = $null; error_type = $null; error_hresult = $null; unavailable_nodes = 0
+        phases = [ordered]@{spawned=$false; started=$false; owner_verified=$false; assemblies_loaded=$false;
+            window_resolved=$false; query_started=$false; query_completed=$false; completed=$false; failed=$false; timed_out=$false}
+    }
+    $Diagnostics.attempts.Add($attempt)
+    if ($Diagnostics.attempts.Count -gt 20) { $Diagnostics.attempts.RemoveAt(0) }
+    return $attempt
+}
+function Set-FixtureViewDiagnostics([System.Collections.IDictionary]$Attempt, [string]$Stderr) {
+    foreach ($line in $Stderr.Split([char]10)) {
+        $line = $line.Trim()
+        if (@('started', 'owner_verified', 'assemblies_loaded', 'window_resolved',
+            'query_started', 'query_completed', 'completed', 'failed') -ccontains $line) { $Attempt.phases[$line] = $true }
+        elseif ($line -ceq 'node_unavailable') { $Attempt.unavailable_nodes++ }
+        elseif ($line -cmatch '^error_type:([A-Za-z_][A-Za-z0-9_.+]{0,199})$') {
+            $Attempt.error_type = $Matches[1]
+            $Attempt.error_hresult = $null
+        }
+        elseif ($line -cmatch '^error_hresult:(0x[0-9A-F]{8})$') { $Attempt.error_hresult = $Matches[1] }
+        # Never retain unrecognized stderr, provider messages, stacks or UI text.
+    }
+}
+function Test-FixtureViewResult {
+    param([System.Collections.IDictionary]$Attempt, [string]$Output, [System.Collections.IDictionary]$Observed)
+    # A failed read cannot leave the preceding attempt's readiness evidence behind.
+    $Observed.state = @{}
+    if ($Attempt.phases.timed_out) { throw 'Native UI Automation probe exceeded its deadline' }
+    if ($Attempt.exit_code -eq 3) { return $false }
+    if ($Attempt.exit_code -ne 0) { throw 'Native UI Automation readiness probe failed' }
+    $Observed.state = $Output | ConvertFrom-Json
+    return @('webContent', 'authenticated', 'setup', 'configurationLoaded', 'saveEnabled', 'bounded').Where({
+        $Observed.state.$_ -isnot [bool] -or $Observed.state.$_ -ne $true
+    }).Count -eq 0
+}
 function Test-FixtureTransportFailure([Exception]$Exception) {
     # HTTP status and invalid JSON/schema are contract failures, not readiness.
     for ($cause = $Exception; $null -ne $cause; $cause = $cause.InnerException) {

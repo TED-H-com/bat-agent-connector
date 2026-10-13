@@ -26,9 +26,12 @@ Quit supplies the observed epoch; it accepts no PID. The Kit performs ownership 
 Ensuring a monitor does not open BAT, launch a browser or run Kit self-update.
 
 Each call first verifies the fixed `desktop-facade-v1` contract. Rust chooses
-Windows PowerShell using the OS system-directory API, invokes a fixed `-File`
-argument with the same fixed process execution-policy option used by the Kit launcher,
-and sends one UTF-8 JSON request over stdin. UNC/device paths and mapped network drives
+Windows PowerShell using the OS system-directory API, invokes the fixed facade
+with the same fixed process execution-policy option used by the Kit launcher,
+and sends one UTF-8 JSON request over stdin. Actions use `-File`; the read-only
+contract uses the embedded native bootstrap via UTF-16LE `-EncodedCommand`, with
+the trusted facade path passed as environment data, never interpolated source.
+UNC/device paths and mapped network drives
 are refused before and after canonicalization. Validated local paths are converted
 to ordinary drive spelling for PowerShell 5.1; overlong installation paths are refused.
 No arbitrary executable,
@@ -40,12 +43,35 @@ credentials are not inherited. Only the packaged main window has command access,
 with the same native origin checks as the central transport.
 
 Requests are at most 64 KiB; stdout is at most 256 KiB; stderr is discarded.
-Contract checks have a ten-second deadline; actions have a 35-second deadline.
+Contract checks allow up to 60 seconds for cold PowerShell startup in the same
+adapter process. The bootstrap imports Utility and Management by absolute manifest
+paths under `$PSHOME/Modules`, exercises JSON conversion and a bounded read of the
+facade, then flushes a fixed readiness marker. Rust accepts exactly that marker
+before sending the single contract request; its ten-second deadline starts then
+and covers stdin, the bounded reply and process exit. Missing/malformed readiness
+fails closed. The facade's JSON protocol and request identity are unchanged.
+Actions keep their total 35-second deadline, including process launch; they get no
+startup extension. Installation and lifecycle checks still run between contract
+verification and action dispatch.
 Only one call runs at a time. On timeout Rust terminates its own facade process,
 never a monitor/tunnel or an arbitrary PID. An interrupted action may already have
 changed preferences or started a monitor: the client must read status and retain
 its reviewed intent before retrying. The bridge does not automatically retry.
 Closing or quitting the Dashboard sends no Fleet quit request.
+
+This separates runtime readiness from the request budget, rather than just raising
+the ten-second limit. Windows CI for `2bf152d` and PR #116 reached `input-closed`
+before that limit expired; identical later launches finished in 1.11/1.74 seconds.
+On `3bb4fff` the original timed out before the first fixture marker, and the next
+launch also timed out (last marker `output-written`). These observations establish
+a cold-process deadline problem in the product transport, not an stdin EOF bug;
+they do not identify the precise OS bottleneck. Microsoft documents
+[first-use module imports](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_modules?view=powershell-5.1)
+and [startup module-analysis cache reads](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_windows_powershell_5.1?view=powershell-5.1#module-analysis-cache).
+Module work, assembly/JIT and antivirus scanning remain candidate contributors.
+The 60-second startup ceiling is bounded headroom, not a measured startup guarantee;
+Windows CI must confirm the first call with this bootstrap. No test-only warm-up,
+automatic retry or effect resend is used.
 
 Responses must match the request ID/schema and process outcome. Rust constructs
 the returned fields explicitly. Configuration errors expose a count rather than
@@ -67,9 +93,13 @@ Synthetic JSON fixtures from the Fleet Kit compatibility implementation are reta
 for the native contract tests. They contain no live configuration. Unit tests cover
 forbidden IPC inputs, contract/reply mismatch, installation containment, output
 filtering, subprocess EOF/bounds, uncertain exits and cancellation. Linux process
-fixtures validate transport behavior; they do not prove Windows ownership or
+fixtures also cover slow readiness, no input before readiness, malformed/missing
+markers, independent startup/request deadlines, and owned-child-only termination
+without retry. They do not prove Windows ownership or
 PowerShell startup behavior. Windows CI calls a self-contained synthetic contract
-script through the actual system PowerShell, including installation paths with spaces.
+script through the actual system PowerShell, including installation paths with spaces,
+quotes and Unicode. Startup elapsed time and finer decode/load/encode phase markers
+are logged; diagnostic launches never replace the original failing result.
 It requires no cross-repository credential. The Kit's own Windows CI exercises its real
 entry point separately; this is not a combined installed-Kit acceptance test.
 Browser fixtures cover both languages at 390/768/1440, read-back after lost

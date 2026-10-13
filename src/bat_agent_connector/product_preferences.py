@@ -13,9 +13,9 @@ import json
 import math
 import re
 import time
-from datetime import datetime
 
 from . import catalog_sources, dashboard_sync
+from .iso_time import parse_datetime
 from .operations import ActionDef, OperationError
 from .orchestrate import PRESETS
 
@@ -125,7 +125,7 @@ def _epoch(value):
         return value / 1000
     if isinstance(value, str) and len(value) <= 64:
         try:
-            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            parsed = parse_datetime(value)
             return parsed.timestamp() if parsed.tzinfo else None
         except ValueError:
             pass
