@@ -83,59 +83,69 @@ its original adapter and key, including after a lost reply. An unavailable
 adapter does not silently fall back to another. Older servers retain their
 original native proposal and Follow-up behavior.
 
-1. Open **PM**, create a workspace and start an Idea discussion. Save the project
-   goal and constraints in ordinary notes—for example, member login and password
-   reset, with referral codes outside the first release.
-2. Open **Prepare discussion context** → **Save in a PM worktree**. Choose the
+1. Use the workspace switcher → **New workspace**. In **Discussions**, start a
+   **New discussion** in Idea mode. Save the goal and constraints in ordinary notes—
+   for example, member login and password reset, with referral codes outside the first release.
+   The project sidebar keeps Overview, Discussions, Requirements, Schedule, Dependencies,
+   Issues & changes, Agents and Board in the same workspace; **Work** opens bound Sessions.
+2. In **Discussions**, open **Thread panel → Context → Prepare discussion context**
+   → **Save in a PM worktree**. Choose the
    intended existing repository/host/workspace connection, enter the published
    branch and choose **Preview published revision**. Check the fixed commit,
    describe the purpose and **Save context package**. This needs the repository
    binding and managed Git/start prerequisites described above. **Discussion
    record only** does not prepare the Git worktree needed for adoption or BAT
    analysis. Later requests can select **Use the existing PM worktree**.
-3. Under **Plan update from this discussion**, choose an available analysis
-   adapter and prepare a proposal. Review its source quotes, retained
+3. In **Thread panel → Context → Analysis options**, choose an available analysis
+   adapter, then use **Ask PM**. A record's **Discuss with PM** entry opens Discussions
+   with its source chip and automatic title. Review the **Proposed update** card. Review its source quotes, retained
    requirements, exclusions, proposed removals and open questions. Edit the
-   wording as needed, then adopt the whole update once. Adoption needs workspace
+   wording as needed, then **Review & adopt** the whole update once. Adoption needs workspace
    owner authority and the prepared PM-owned Git worktree.
-4. Associate the adopted requirements with work, prepare the engineering packages
+4. In **Requirements**, inspect the adopted requirements and their bound work.
+   The header's **More actions → Work packages** opens the existing package catalogue.
+   Associate the adopted requirements with work, prepare the engineering packages
    and review their explicit repository/commit destinations. An accepted plan
    records direction; starting a package is a separate product action.
-5. Verify the fixed result using the configured command or original GitHub checks.
-   Appoint a **Quality review** against the fixed criteria and Definition of Done.
+5. In **Requirements → More actions → Quality reviews**, verify the fixed result
+   using the configured command or original GitHub checks. Appoint a **Quality review** against the fixed criteria and Definition of Done.
    The responsible reviewer records conclusions, reasons and original evidence.
    Select that assessment for the work or its dependency condition; the shared
    views use the same original result. Passing tests alone leave acceptance open.
-6. After publication, record the verified release baseline and review a maintenance
-   policy's sources, repair bounds and delivery ceiling. Maintenance Review shows
+6. In **Dependencies**, open **Release baselines** and **Maintenance policy**.
+   After publication, record the verified release baseline and review a maintenance
+   policy's sources, repair bounds and delivery ceiling. **Issues & changes → More actions
+   → Maintenance review** shows
    the original findings and repair receipts. A published PR, merged result,
    verified deployment and completed runtime remain distinct facts.
    Enable a reviewed policy with the explicit GitHub observation profile, sources,
    budget and repair rule before expecting scheduled checks or repairs. Maintain
    entry requires a fresh, complete eligible workload observation; an idle-looking
    session or a retained finished worktree does not decide the stage.
-7. In **Project Brief**, **Save project snapshot**, select that saved snapshot and
-   open its download controls. Choose SVG, Markdown or HTML and the language.
+7. In **Overview → Report → Save report**, save a snapshot. Use **Report → Versions**
+   to select it, then **Report → Export brief** for the download controls. Choose SVG, Markdown or HTML and the language.
    Every export uses that same fixed snapshot. In Review, select the intended
    snapshot, record discussion and feedback, then record the owner's outcome and
    owned next steps. A prepared report or downloaded SVG is not a completed Review.
    Select the previous Review when preparing the next one to retain its decisions
    and reported effects.
-8. To explore a saved Maintenance Review candidate, first create or select an
-   existing **Idea** in this workspace. Open that candidate's **Add to Idea
+8. In **Issues & changes → More actions → Maintenance review**, open a saved candidate.
+   First create or select an existing **Idea** in this workspace's **Discussions**. Open that candidate's **Add to Idea
    discussion**, choose the Idea and topic, and submit. The full original proposal,
    rationale and source identities remain attached; the new input starts
    unresolved. Open the selected discussion to confirm or select its direction,
    then explicitly prepare Planning or a plan proposal. Importing a candidate
    does not adopt it, create a discussion automatically or start work.
-9. For another analysis, open **Ask the PM** and choose the adapter. Under
+9. For another analysis, use **Discussions → Thread panel → Context → Analysis options**
+   to choose the adapter, then **Ask PM**. Under
    **Accepted plan for this analysis (optional)**, preview the accepted revision,
    check complete/omitted file coverage, then select that exact version. Without
    this selection the analysis uses the bounded discussion context. On the BAT
    adapter, a new request uses a new owned session on the same binding after the
    original turn and process death are proven. Service restart preserves the
    discussion and fixed files; an unknown old writer blocks a successor.
-10. Under **Project activity**, record a reason to pause or close. New managed work
+10. In **Overview → More actions → Change phase**, open **Project activity** and
+    record a reason to pause or close. New managed work
     stops; inspect original in-flight operations and readable results. Reopen is
     an explicit owner action with the current lifecycle version. It does not
     replay old commands or resume the old execution epoch. Retaining an unresolved
@@ -151,7 +161,7 @@ delivery receipts separately from offline tests and CI.
 
 ### Read an AHP host catalog
 
-In a PM workspace, expand **AHP observations**. An operator must first configure an
+In the workspace's **Agents** view, expand **AHP observations**. An operator must first configure an
 adapter for this workspace on central, including its endpoint, credential reference
 and credential transport; see the [AHP observation contract](design/pm-ahp-observer.md).
 The capture negotiates a supported protocol version, and its saved receipt identifies
