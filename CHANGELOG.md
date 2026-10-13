@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Keep Board card metadata on one centred line with wider fallback fonts, truncating
+  flexible labels while preserving their full accessible names and delivery evidence.
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,

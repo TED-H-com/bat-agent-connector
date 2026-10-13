@@ -27077,14 +27077,22 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => chip(firstLabel(req.text, req.id))) : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(" · ") : t("wv_no_requirement"))]),
 			h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
 				const node = contextChip({ text: `PR #${target.pull_number}` });
-				node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
+				node.title = joinLabel([
+					node.textContent,
+					target.repository,
+					t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")
+				]);
+				node.setAttribute("aria-label", node.title);
 				return node;
 			}), blockedWork(card) ? h$1("span", {
 				class: "pm-board-blocker",
 				tabindex: 0,
 				title: blockerText(t, card),
 				"aria-label": blockerText(t, card)
-			}, icon("circle-alert"), t("ui_status_blocked")) : null, group.value !== "status" ? h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))) : null, age ? h$1("span", {
+			}, icon("circle-alert"), h$1("span", { class: "pm-board-blocker-label" }, t("ui_status_blocked"))) : null, group.value !== "status" ? h$1("span", {
+				class: "pm-board-state",
+				title: t("ui_status_" + workStatus(card))
+			}, statusPill(workStatus(card))) : null, age ? h$1("span", {
 				class: "pm-board-age",
 				title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
 			}, age) : null),
