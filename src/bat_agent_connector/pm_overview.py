@@ -13,7 +13,7 @@ ATTENTION_LIMIT = 20
 MILESTONE_LIMIT = 20
 DECISION_LIMIT = 5
 DECIDED_SOURCE_LIMIT = 50
-GOAL_SLOTS = frozenset({'value', 'goal', 'problem', 'governance.goal'})
+GOAL_SLOTS = ('governance.goal', 'goal', 'value', 'problem')
 SEVERITY = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
 
 
@@ -120,8 +120,8 @@ class Projection:
                 self.add('decision', row['document']['title'], {'kind': 'plan_revision', 'id': latest}, row['created_at'])
         if not plan:
             return None, None
-        goal = next((item['value'] for item in plan['document']['selected_inputs']
-            if item['slot'] in GOAL_SLOTS and item['status'] in {'user_confirmed', 'repo_evidence'}), None)
+        goal = next((item['value'] for slot in GOAL_SLOTS for item in plan['document']['selected_inputs']
+            if item['slot'] == slot and item['status'] in {'user_confirmed', 'repo_evidence'}), None)
         if goal is None:
             self.missing('plan.goal', 'goal_unconfirmed' if any(item['slot'] in GOAL_SLOTS
                 for item in plan['document']['selected_inputs']) else 'no_explicit_goal')

@@ -30,8 +30,11 @@
 | `coverage` | `{complete, sources, basis, network_checked: false}`；每一 source 有 `complete`、`next_cursor` |
 | `unknown` | `[{field, reason}]`；缺資料保留 null 與機器可讀原因，不補零 |
 
-Goal 的唯一取值規則：按已採用文件 `selected_inputs` 的原順序，取第一個 slot **完全等於**
-`value`、`goal`、`problem` 或 `governance.goal`，且 status 為 `user_confirmed` 或 `repo_evidence` 的 value。
+Goal 的唯一取值規則：只使用已採用文件的 `selected_inputs`，依固定優先序 **`governance.goal` →
+`goal` → `value` → `problem`** 取值；每個 slot 只考慮 status 為 `user_confirmed` 或 `repo_evidence` 的 input。
+同一 slot 有多筆時，保留文件 `selected_inputs` 的原順序，取第一筆符合狀態者。
+審閱後的 governance.goal 即使排在舊 value／goal／problem 後面、文字與原目標不同，也優先呈現；
+未確認的 governance.goal 不遮蔽已確認的舊 slot。舊 slot 的固定優先序也不受選入順序影響。
 `pm.conversation.adopt` 把審閱後的 candidate 記為 `domain.key`；governance domain 的 goal candidate
 因此是 `governance.goal`。同一 input 保留在 `selected_inputs` 與 `sections.governance`，採用文件沒有丟失目標；
 總覽讀取這個明確 slot，不改 adoption、input 身分或 immutable revision。
@@ -39,6 +42,8 @@ Goal 的唯一取值規則：按已採用文件 `selected_inputs` 的原順序�
 不接受任意 `.goal` 後綴、其他 domain 或自由文字；未選入與已排除的 input 不參與。
 換行改為空白；只有未確認的符合 slot 輸入時為 null 與 `goal_unconfirmed`，完全缺少時為 null 與 `no_explicit_goal`，不從標題或任意 Markdown 猜測。沒有採用計畫時 `progress: null`，
 原因 `no_adopted_plan`；來源撤回則為 `source_unavailable`。
+例如 selected_inputs 依序保留 value「原本的帳號存取目標」與 user_confirmed governance.goal
+「讓會員安全恢復帳號存取」，plan.goal 回傳後者；兩個 input 的原 ID、文字、狀態與選入順序皆不改寫。
 
 進度分母僅是已採用版本的 distinct requirements。每條需求只進一類，優先順序為：
 

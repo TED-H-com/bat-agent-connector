@@ -98,6 +98,49 @@ async def test_goal_projection_reads_older_accepted_profile_without_rewriting(op
     assert ops.db.total_changes == changes
 
 
+async def selected_goals(ops, slots, *, reverse, reviewed_status='user_confirmed'):  # noqa: F811
+    target = await prepared(ops)
+    values = {'problem': 'Members cannot recover access', 'value': 'Original access benefit',
+        'goal': 'Original account access goal', 'governance.goal': 'Reviewed goal: restore member access safely'}
+    inputs = []
+    for slot in slots:
+        status = reviewed_status if slot == 'governance.goal' else 'user_confirmed'
+        result = await act(ops, target, 'pm.input.record', {'slot': slot, 'value': values[slot], 'status': status,
+            'source_ref': {'kind': 'repository', 'ref': 'example/product', 'revision': '1' * 40, 'path': 'README.md'}
+                if status == 'repo_evidence' else {'kind': 'statement', 'ref': 'Owner reviews this goal'}})
+        inputs.append(result['input_id'])
+    if reverse:
+        inputs.reverse()
+    await act(ops, target, 'pm.thread.plan', {'selected_input_ids': inputs, 'rationale': 'Confirm the revised goal'})
+    revision = await local_plans.draft(ops, target, sections={'governance': inputs})
+    local_plans.adopt(local_plans.adoption(ops, target, revision['revision_id']))
+    return target, revision, values
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+@pytest.mark.parametrize('reviewed_status', ['user_confirmed', 'repo_evidence', 'agent_assumption'])
+async def test_reviewed_governance_goal_precedes_legacy_slots_without_promoting_assumptions(ops, reverse, reviewed_status):  # noqa: F811
+    slots = ['problem', 'value', 'goal', 'governance.goal']
+    target, revision, values = await selected_goals(ops, slots, reverse=reverse, reviewed_status=reviewed_status)
+    saved = pm_plans.get_plan(ops, OWNER, target['workspace_id'], revision['revision_id'])['plan']
+    assert [r['slot'] for r in saved['document']['selected_inputs']] == (list(reversed(slots)) if reverse else slots)
+    assert len(saved['document']['sections']['governance']['statements']) == 4
+    expected = values['governance.goal'] if reviewed_status != 'agent_assumption' else values['goal']
+    assert expected != values['value']  # The review deliberately differs from the older raw input.
+    changes = ops.db.total_changes
+    assert pm_overview.read(ops, OWNER, target['workspace_id'])['plan']['goal'] == expected
+    assert pm_plans.get_plan(ops, OWNER, target['workspace_id'], revision['revision_id'])['plan'] == saved
+    assert ops.db.total_changes == changes
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+@pytest.mark.parametrize('slots', [['problem', 'value', 'goal'], ['problem', 'value'], ['problem']])
+async def test_legacy_goal_slots_have_fixed_precedence(ops, slots, reverse):  # noqa: F811
+    target, _, values = await selected_goals(ops, slots, reverse=reverse)
+    expected = next(values[slot] for slot in ('goal', 'value', 'problem') if slot in slots)
+    assert pm_overview.read(ops, OWNER, target['workspace_id'])['plan']['goal'] == expected
+
+
 @pytest.mark.parametrize('slot', ['scope.goal', 'governance.value', 'governance.goal.extra', 'scope'])
 async def test_goal_requires_selected_exact_slots_without_free_text(ops, slot):  # noqa: F811
     target = await prepared(ops)

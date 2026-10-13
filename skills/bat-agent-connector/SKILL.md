@@ -1671,9 +1671,13 @@ stay explicit in the row but never enter current progress. Those three current
 relation fields are null when no accepted plan is readable. Blocker counts count
 records; progress.blocked counts distinct current requirements. Adoption alone
 does not resolve a finding or discard its original context.
-The adopted goal uses the first selected, user_confirmed/repo_evidence input whose
-slot is exactly value, goal, problem or governance.goal. Conversation adoption
-records the reviewed governance goal as governance.goal; preserve its attribution.
+The adopted goal uses selected user_confirmed/repo_evidence inputs with fixed
+slot precedence: governance.goal, then goal, value, problem. Only within the same
+exact slot does selected_inputs order choose the first eligible input.
+Conversation adoption records the reviewed governance goal as governance.goal;
+it takes precedence even when its wording differs from older raw goal inputs.
+An unconfirmed reviewed goal cannot shadow confirmed legacy inputs. Preserve
+every input's original wording, status, order, ID and attribution.
 Never infer a goal from Markdown, a suffix or an unselected/unconfirmed input.
 recent_decisions lists up to five decided plan adoptions/governance directions,
 newest first, with key, title, decided_at (UTC epoch seconds), actor, status, ref
