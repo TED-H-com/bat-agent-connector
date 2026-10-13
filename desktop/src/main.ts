@@ -10,6 +10,7 @@ import "./pm-maintenance-policy.css";
 import "./pm-maintenance-repairs.css";
 import "./pm-release-baselines.css";
 import "./pm-kanban.css";
+import "./pm-dependencies.css";
 import "./pm-follow-up.css";
 import "./pm-lifecycle.css";
 import "./pm-issues.css";

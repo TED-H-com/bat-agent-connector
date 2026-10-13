@@ -52,4 +52,60 @@ export const uiStrings = {
     ui_maintenance_review: '維護審閱', ui_policy: '維護政策', ui_baselines: '發布基準',
     ui_batches: '工作批次', ui_observations: 'AHP 觀察'},
 };
+const reasonCopy = {
+  en: {
+    ui_reason_generic: 'Not available', ui_reason_generic_code: 'Not available ({code})',
+    ui_reason_repository_head_not_observed: 'Head not observed', ui_reason_source_unavailable: 'Source unavailable',
+    ui_reason_not_captured: 'Not captured', ui_reason_not_available: 'Not available',
+    ui_reason_not_named_in_visible_policy: 'Not named in policy', ui_reason_capture_budget: 'Capture stopped early',
+    ui_reason_dependency_omitted: 'Omitted from this view', ui_reason_dependency_not_observed: 'Not in this capture',
+    ui_reason_projection_byte_budget: 'Projection cut short', ui_reason_summary_not_recorded: 'Summary not recorded',
+    ui_reason_bounded_captured_graph: 'Loaded graph only', ui_reason_lockfile_does_not_cover_component: 'Lockfile does not cover this',
+    ui_reason_no_unique_lock_resolution: 'No single locked version', ui_reason_go_sum_not_lockfile: 'go.sum is not a lockfile',
+    ui_reason_lockfile_unparsable: 'Lockfile unreadable', ui_reason_not_lockfile_dependency: 'Not in a lockfile',
+    ui_reason_not_declared: 'Version not declared', ui_reason_owner_declaration: 'Owner declaration',
+    ui_reason_workspace_inheritance_unavailable: 'Inheritance unavailable', ui_reason_package_name_not_declared: 'Package name not declared',
+    ui_reason_missing_at_commit: 'Missing at this commit', ui_reason_document_too_large: 'File too large',
+    ui_reason_selection_byte_budget: 'Selection cut short', ui_reason_selection_wire_budget: 'Selection cut short',
+    ui_reason_symlink_or_nonregular_blob: 'Not a regular file', ui_reason_blob_unavailable: 'File content unavailable',
+    ui_reason_non_utf8_or_binary: 'Not UTF-8 text', ui_reason_unsupported_or_invalid_format: 'Unreadable format',
+    ui_reason_unsupported_manifest_structure: 'Unsupported manifest', ui_reason_unsupported_lock_structure: 'Unsupported lockfile',
+    ui_reason_unsupported_toolchain: 'Unsupported toolchain', ui_reason_unsupported_field: 'Unsupported field',
+    ui_reason_dev_unclassified: 'Dev dependency', ui_reason_workflow_step: 'CI step', ui_reason_same_ci_job: 'Same CI job',
+    ui_reason_python_group: 'Python group', ui_reason_exact_published_package: 'Published package',
+    ui_reason_python_dynamic_dependencies: 'Dynamic dependencies', ui_reason_manifest_without_package: 'Manifest has no package',
+    ui_reason_workflow_directory_unknown: 'Working directory unknown', ui_reason_npm_package_name_not_declared: 'Package name not declared',
+  },
+  'zh-TW': {
+    ui_reason_generic: '無法取得', ui_reason_generic_code: '無法取得（{code}）',
+    ui_reason_repository_head_not_observed: '尚未觀察到最新提交', ui_reason_source_unavailable: '無法取得來源',
+    ui_reason_not_captured: '尚未擷取', ui_reason_not_available: '無法取得',
+    ui_reason_not_named_in_visible_policy: '政策未指定負責人', ui_reason_capture_budget: '擷取提前結束',
+    ui_reason_dependency_omitted: '這次畫面未列入', ui_reason_dependency_not_observed: '這次擷取沒有這筆',
+    ui_reason_projection_byte_budget: '投影超出大小', ui_reason_summary_not_recorded: '沒有摘要',
+    ui_reason_bounded_captured_graph: '僅已載入的圖', ui_reason_lockfile_does_not_cover_component: '鎖定檔未涵蓋此元件',
+    ui_reason_no_unique_lock_resolution: '沒有唯一鎖定版本', ui_reason_go_sum_not_lockfile: 'go.sum 不是鎖定檔',
+    ui_reason_lockfile_unparsable: '鎖定檔無法解析', ui_reason_not_lockfile_dependency: '不在鎖定檔中',
+    ui_reason_not_declared: '未宣告版本', ui_reason_owner_declaration: '負責人宣告',
+    ui_reason_workspace_inheritance_unavailable: '無法取得繼承', ui_reason_package_name_not_declared: '未宣告套件名稱',
+    ui_reason_missing_at_commit: '這次提交沒有此檔', ui_reason_document_too_large: '檔案過大',
+    ui_reason_selection_byte_budget: '選取超出大小', ui_reason_selection_wire_budget: '選取超出傳輸大小',
+    ui_reason_symlink_or_nonregular_blob: '不是一般檔案', ui_reason_blob_unavailable: '無法取得檔案內容',
+    ui_reason_non_utf8_or_binary: '不是 UTF-8 文字', ui_reason_unsupported_or_invalid_format: '格式無法解析',
+    ui_reason_unsupported_manifest_structure: '不支援的清單結構', ui_reason_unsupported_lock_structure: '不支援的鎖定檔',
+    ui_reason_unsupported_toolchain: '不支援的工具鏈', ui_reason_unsupported_field: '不支援的欄位',
+    ui_reason_dev_unclassified: '開發用相依', ui_reason_workflow_step: 'CI 步驟', ui_reason_same_ci_job: '同一個 CI 工作',
+    ui_reason_python_group: 'Python 群組', ui_reason_exact_published_package: '已發布套件',
+    ui_reason_python_dynamic_dependencies: '動態相依', ui_reason_manifest_without_package: '清單沒有套件名稱',
+    ui_reason_workflow_directory_unknown: '工作目錄不明', ui_reason_npm_package_name_not_declared: '未宣告套件名稱',
+  },
+};
+for (const lang of ['en', 'zh-TW']) Object.assign(uiStrings[lang], reasonCopy[lang]);
 for (const lang of ['en', 'zh-TW']) for (const [key, row] of Object.entries(statusVocabulary)) uiStrings[lang]['ui_status_' + key] = row[lang];
+
+// Body text uses the generic label. Details may append an unrecognised code.
+export function reasonLabel(code, detail = false) {
+  const key = 'ui_reason_' + code;
+  if (code && Object.hasOwn(uiStrings.en, key)) return {key, code: ''};
+  return {key: detail ? 'ui_reason_generic_code' : 'ui_reason_generic', code: detail && code ? String(code) : ''};
+}
