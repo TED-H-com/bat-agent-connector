@@ -8164,6 +8164,14 @@ var STRINGS = {
 		session_delivery_more: "已顯示 {count} 筆 · 還有更多",
 		session_delivery_removed: "交付紀錄無法使用",
 		session_delivery_none: "尚無交付紀錄",
+		checkpoint_record: "記下",
+		checkpoint_agent: "代理",
+		checkpoint_notes: "檢查點說明",
+		checkpoint_limits: "執行限制",
+		checkpoint_op_details: "操作詳細資料",
+		checkpoint_manual_hint: "若要接續這項工作，請從記錄的提交另開工作階段。",
+		checkpoint_unavailable_keys: "managed_roots · SSH alias · write / orchestrate",
+		needs_start_scope_key: "--scope start",
 		session_results: "成果",
 		session_changes: "變更",
 		session_delivery: "交付",
@@ -8191,22 +8199,22 @@ var STRINGS = {
 		read_only_note: "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
 		continue_from_checkpoint: "從這裡接續",
 		checkpoints: "檢查點",
-		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的 clone 裡用新的 branch 與工作階段進行。",
-		create_checkpoint: "記下這個檢查點",
+		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的儲存庫複本裡，以新的分支與工作階段進行。",
+		create_checkpoint: "記下這個版本",
 		no_checkpoints: "還沒有記下的檢查點。",
 		excerpt_count: "{n} 則對話",
 		commit: "提交",
 		checkpoint_note_placeholder: "接下來要做什麼（原文，會一併記下，選填）…",
-		dirty_unknown: "未提交的修改：未觀測（這台主機沒有 SSH alias）；不會帶入新工作。",
+		dirty_unknown: "未提交修改尚未觀測，不會帶入新工作。",
 		source_advanced: "來源已有更新的提交；這個檢查點仍固定在原提交。要帶入新版本請再記一次。",
 		started_from: "這個工作階段從提交 {commit} 開出：",
 		source_session: "來源工作階段",
 		dirty_warning: "記錄時有 {n} 個未提交的修改，不會帶入新工作。",
-		continue_placeholder: "要 agent 接著做什麼…",
+		continue_placeholder: "要代理接著做什麼…",
 		start_agent_work: "開始代理工作",
 		open_new_session: "開啟新工作階段",
-		checkpoint_unavailable: "這台主機尚未設定 managed_roots、SSH alias 或 write／orchestrate 權限，不能從檢查點開工。",
-		needs_start_scope: "你的 token 沒有 start 權限，不能開新的 agent 工作；用 --scope start 重新發 token。",
+		checkpoint_unavailable: "此主機缺少受管理目錄、SSH 連線別名或寫入與協調權限，無法從檢查點開工。",
+		needs_start_scope: "這個登入沒有開工權限，請使用具開工權限的憑證。",
 		confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
 		confinement_none: "無已證實的執行限制",
 		confinement_prompt_gated: "權限詢問控管",
@@ -8230,12 +8238,12 @@ var STRINGS = {
 		confinement_gap_task_recipe_compatibility: "保留 Task Service 測試行為；未新增執行限制",
 		confinement_gap_execution_restriction_unverified: "尚無執行限制證據",
 		confinement_gap_legacy_evidence_missing: "舊 session 缺建立時證據；不自動升級",
-		confinement_claude_note: "Claude 使用 default：未預先授權的編輯及 Bash 會詢問。既有批准規則仍適用，沒有 OS 寫入隔離。建議使用 Codex；個別批准可能允許外部寫入。",
-		confinement_codex_note: "Codex 使用 workspace-write／on-request。未完成實機阻擋驗證；網路及可寫 roots 無法由 BAT 設定，安裝與 localhost 測試可能受限。個別批准可能越過限制。",
-		confinement_account_note: "已查核 BAT 帳號不能寫宣告的私人 roots。Claude 可使用 acceptEdits；限制只涵蓋已查核的 roots，啟動前會重新核對。",
+		confinement_claude_note: "Claude 使用一般權限模式：未預先授權的編輯及 Bash 會詢問。既有批准規則仍適用，沒有 OS 寫入隔離。建議使用 Codex；個別批准可能允許外部寫入。",
+		confinement_codex_note: "Codex 採用工作區寫入與要求批准的模式。未完成實機阻擋驗證；網路及可寫目錄 無法由 BAT 設定，安裝與 localhost 測試可能受限。個別批准可能越過限制。",
+		confinement_account_note: "已查核 BAT 帳號不能寫宣告的私人目錄。Claude 可自動接受編輯；限制只涵蓋已查核的目錄，啟動前會重新核對。",
 		confinement_account_blocked: "已宣告帳號限制，但查核尚未通過；新 session 會被拒絕。請修正主機配置。原因：{reason}。",
-		confinement_account_recheck: "啟動 session 時會重新查核帳號限制。通過後，Claude 可使用 acceptEdits；若僅缺少可降級處理的環境加固條件，Claude 仍可用 default 啟動。其他查核失敗會拒絕啟動。",
-		confinement_account_fallback: "帳號查核回報 {reason}。Claude 會使用 default，不啟用 acceptEdits。",
+		confinement_account_recheck: "啟動 session 時會重新查核帳號限制。通過後，Claude 可自動接受編輯；若僅缺少可降級處理的環境加固條件，Claude 仍可用一般權限模式啟動。其他查核失敗會拒絕啟動。",
+		confinement_account_fallback: "帳號查核回報 {reason}。Claude 會使用一般權限模式，不啟用自動接受編輯。",
 		repository: "Repository",
 		pull_number: "PR 編號",
 		load_pr: "讀取 PR",
@@ -9700,6 +9708,14 @@ var STRINGS = {
 		session_delivery_more: "{count} shown · more",
 		session_delivery_removed: "Delivery unavailable",
 		session_delivery_none: "No recorded deliveries",
+		checkpoint_record: "Record",
+		checkpoint_agent: "Agent",
+		checkpoint_notes: "Checkpoint notes",
+		checkpoint_limits: "Execution limits",
+		checkpoint_op_details: "Operation details",
+		checkpoint_manual_hint: "To continue this work, start a new session from its recorded commit.",
+		checkpoint_unavailable_keys: "managed_roots · SSH alias · write / orchestrate",
+		needs_start_scope_key: "--scope start",
 		session_results: "Results",
 		session_changes: "Changes",
 		session_delivery: "Delivery",
@@ -48279,7 +48295,7 @@ async function viewSession(main, host, sid, context = null) {
 	const accessRecovery = () => ({
 		label: t("obs_axis_connection"),
 		run: () => {
-			location.hash = "#/connection";
+			location.hash = "#/settings";
 		}
 	});
 	const goneRecovery = () => ({
@@ -48429,7 +48445,10 @@ async function viewSession(main, host, sid, context = null) {
 		errorBox,
 		opStatus
 	});
-	const cps = checkpointPanel(host, sid);
+	const cps = checkpointPanel(host, sid, {
+		namespace: connection.namespace,
+		manual: () => row?.provenance === "manual"
+	});
 	const observations = observationPanels("session", `${host}/${sid}`, path);
 	const instructions = state.caps?.features?.session_instructions?.version === 1 ? instructionReceiptPanel({
 		h,
@@ -48530,7 +48549,7 @@ async function viewSession(main, host, sid, context = null) {
 	results.body.append(...[
 		context?.itemBox,
 		changesSection,
-		sessionSection("list-checks", t("checkpoints"), cps.box),
+		sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
 		sessionSection("check", t("session_delivery"), result),
 		sessionSection("inbox", t("session_sources"), sourcesBody),
 		batSlot,
@@ -49204,25 +49223,26 @@ async function viewSession(main, host, sid, context = null) {
 		conversation.dispose();
 		mobileLayout?.dispose();
 		shortcut.dispose();
+		cps.clear();
 		results.dispose();
 		overflow.dispose();
 		sourcesPanel?.dispose();
 		wide.removeEventListener("change", syncWide);
 	};
 }
-function checkpointPanel(host, sid) {
+function checkpointPanel(host, sid, { namespace = state.namespace, manual = () => false } = {}) {
 	const can = (state.caps?.features?.checkpoints || []).includes(host);
 	const mayStart = (state.caps?.scopes || []).includes("start");
 	const list = h("div", {});
 	const status = h("div", { class: "muted" });
 	const rows = new Map();
-	let ticket = 0;
 	let preview = null;
+	let ticket = 0;
 	const row = (cp) => rows.get(cp.checkpoint_id) || rows.set(cp.checkpoint_id, buildRow(cp)).get(cp.checkpoint_id);
 	const buildRow = (cp) => {
 		const instr = h("textarea", { placeholder: t("continue_placeholder") });
-		const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
-		const out = h("div", { class: "muted" });
+		const agent = h("select", { "aria-label": t("checkpoint_agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+		const out = h("div", { class: "muted session-checkpoint-result" });
 		const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
 		draft.bindFields({ agent });
 		let expectedHead = null;
@@ -49240,32 +49260,55 @@ function checkpointPanel(host, sid) {
 						agent: agent.value,
 						...state.caps?.artifacts ? { artifacts: draft.refs() } : {}
 					}, state.caps?.artifacts ? { expected_source_head_sha: expectedHead } : {}, `continue.${cp.checkpoint_id}`);
-					out.replaceChildren(opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+					const resultHost = op.result?.host || cp.host;
+					const opened = op.result?.session_id && resultHost ? h("a", { href: `#/session/${encodeURIComponent(resultHost)}/${encodeURIComponent(op.result.session_id)}` }, t("open_new_session")) : null;
+					out.replaceChildren(h("p", { class: "session-checkpoint-op" }, statusPill(operationStatusKey(op.status)), opened ? " " : "", opened || ""), disclosure({
+						label: t("checkpoint_op_details"),
+						body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(op.operation_id)}` }, op.operation_id))
+					}));
 				} catch (e) {
-					out.replaceChildren(errorBox(e));
+					out.replaceChildren(sessionErrorBox(e, {
+						label: t("ui_retry"),
+						run: () => go.click()
+					}));
 				}
 				go.disabled = false;
 			}
 		}, t("start_agent_work"));
-		const form = h("div", { hidden: true }, confinementNote(host, agent), instr, draft.box, h("div", { class: "actions" }, agent, go), out);
-		return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
-			sessionWhen(cp.captured_at),
-			cp.actor,
-			t("excerpt_count", { n: cp.excerpt_messages })
-		].join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null, form), h("button", {
+		const limits = disclosure({
+			label: t("checkpoint_limits"),
+			body: confinementNote(host, agent)
+		});
+		const form = h("div", {
+			class: "session-checkpoint-form",
+			"data-checkpoint-form": "",
+			hidden: true
+		}, instr, draft.box, h("div", { class: "actions" }, agent, go), out, limits);
+		const start = h("button", {
 			class: "secondary",
+			type: "button",
 			disabled: !can || !mayStart,
-			title: !can ? t("checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
+			"aria-expanded": "false",
+			title: !can ? t("session_checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
 			onclick: async () => {
 				form.hidden = !form.hidden;
+				start.setAttribute("aria-expanded", String(!form.hidden));
 				if (state.caps?.artifacts && !form.hidden && !expectedHead) try {
 					expectedHead = (await api("GET", `/checkpoints/${cp.checkpoint_id}?live=true`)).source.head;
 					if (!expectedHead) fill(out, h("p", { class: "error" }, t("source_unavailable")));
 				} catch (e) {
-					fill(out, errorBox(e));
+					fill(out, sessionErrorBox(e, {
+						label: t("ui_retry"),
+						run: () => load().catch(() => {})
+					}));
 				}
 			}
-		}, t("continue_from_checkpoint")));
+		}, t("continue_from_checkpoint"));
+		return h("div", { class: "row session-checkpoint-row" }, h("div", { class: "session-checkpoint-head" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
+			sessionWhen(cp.captured_at),
+			cp.actor,
+			t("excerpt_count", { n: cp.excerpt_messages })
+		].filter(Boolean).join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null), start), form);
 	};
 	const load = async (mine = ticket) => {
 		try {
@@ -49277,7 +49320,10 @@ function checkpointPanel(host, sid) {
 			if (mine !== ticket) return;
 			list.replaceChildren(...page.checkpoints.length ? page.checkpoints.map(row) : can ? [h("p", { class: "muted" }, t("no_checkpoints"))] : []);
 		} catch (e) {
-			if (mine === ticket) list.replaceChildren(errorBox(e));
+			if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {
+				label: t("ui_retry"),
+				run: () => load().catch(() => {})
+			}));
 		}
 	};
 	const pick = h("select", {
@@ -49308,7 +49354,10 @@ function checkpointPanel(host, sid) {
 			if (mine !== ticket) return;
 			previewFailed = true;
 			create.disabled = true;
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(sessionErrorBox(error, {
+				label: t("ui_retry"),
+				run: () => loadPreview().catch(() => {})
+			}));
 		}
 	};
 	const create = h("button", {
@@ -49328,31 +49377,58 @@ function checkpointPanel(host, sid) {
 					session_id: sid
 				}, params, {}, `checkpoint.${host}.${sid}`);
 				if (op.status === "succeeded") note.value = "";
-				status.replaceChildren(...[
-					opStatus(op),
-					op.error_code ? chip(op.error_code, "bad") : null,
-					op.status_reason
-				].filter(Boolean).flatMap((x) => [x, " "]));
+				status.replaceChildren(opStatus(op), op.error_code || op.status_reason ? disclosure({
+					label: t("checkpoint_op_details"),
+					body: h("p", {}, h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))
+				}) : null);
 				await load();
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, {
+					label: t("ui_retry"),
+					run: () => load().catch(() => {})
+				}));
 			}
 			create.disabled = !can || previewFailed;
 		}
-	}, t("create_checkpoint"));
+	}, t("checkpoint_record"));
+	const recordForm = h("div", {
+		class: "session-checkpoint-record",
+		hidden: true
+	}, h("div", { class: "actions" }, pick), note, h("div", { class: "actions" }, create));
+	const action = can ? button({
+		variant: "ghost",
+		size: "sm",
+		label: t("create_checkpoint"),
+		"aria-expanded": "false",
+		onClick: () => {
+			recordForm.hidden = !recordForm.hidden;
+			action.setAttribute("aria-expanded", String(!recordForm.hidden));
+			if (!recordForm.hidden) pick.focus();
+		}
+	}) : null;
+	const notes = h("div", {});
+	const paintNotes = () => notes.replaceChildren(h("p", { class: "muted" }, t("checkpoint_help")), manual() ? h("p", { class: "muted" }, t("checkpoint_manual_hint")) : null, can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")), can ? null : h("p", { class: "muted" }, h("code", {}, t("checkpoint_unavailable_keys"))), mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")), mayStart ? null : h("p", { class: "muted" }, h("code", {}, t("needs_start_scope_key"))));
+	paintNotes();
 	const checkpointWhy = disclosure({
-		label: t("session_details"),
-		key: `session-checkpoint:${host}:${sid}`,
-		body: h("div", {}, h("p", { class: "muted" }, t("checkpoint_help")), h("p", { class: "muted" }, t("checkpoint_unavailable")), mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")))
+		label: t("checkpoint_notes"),
+		key: `session-checkpoint:${namespace}:${host}:${sid}`,
+		body: notes
 	});
+	checkpointWhy.addEventListener("toggle", () => {
+		if (checkpointWhy.open) paintNotes();
+	});
+	const box = h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), recordForm, status, list, checkpointWhy);
+	const clear = () => {
+		ticket += 1;
+		rows.clear();
+		list.replaceChildren();
+		status.replaceChildren();
+		preview = null;
+	};
 	return {
-		box: h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), note, can ? h("div", { class: "actions" }, pick, create) : null, status, list, checkpointWhy),
-		clear: () => {
-			ticket++;
-			rows.clear();
-			list.replaceChildren();
-			status.replaceChildren();
-		},
+		box,
+		action,
+		clear,
 		load: async () => {
 			const mine = ticket;
 			await loadPreview(mine);

@@ -1362,7 +1362,7 @@ async function viewSession(main, host, sid, context = null) {
     if (savedQueue === "true" || savedQueue === "false") {queue.checked = savedQueue === "true"; queueKnown = true;}
   } catch { /* unavailable */ }
   queue.onchange = () => {try {localStorage.setItem(draftKey + ".queue", String(queue.checked));} catch { /* unavailable */ }};
-  const accessRecovery = () => ({label: t("obs_axis_connection"), run: () => {location.hash = "#/connection";}});
+  const accessRecovery = () => ({label: t("obs_axis_connection"), run: () => {location.hash = "#/settings";}});
   const goneRecovery = () => ({label: t("ui_back"), run: () => {location.hash = originHref()?.href || "#/sessions";}});
   const sendRecovery = e => e?.code === "SESSION_BUSY" && !queue.checked
     ? {label: t("session_err_queue"), run: () => {queue.checked = true; send.click();}}
@@ -1420,7 +1420,7 @@ async function viewSession(main, host, sid, context = null) {
   const controls = h("div", { class: "panel workspace-composer", hidden: true }, pending, sendReason, composer);
   const labels = sessionLabelsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     target: {host, session_id: sid}, storageKey: `batc.labels.${connection.namespace}.${JSON.stringify([host, sid])}`, errorBox, opStatus});
-  const cps = checkpointPanel(host, sid);
+  const cps = checkpointPanel(host, sid, {namespace: connection.namespace, manual: () => row?.provenance === "manual"});
   const observations = observationPanels("session", `${host}/${sid}`, path);
   const instructions = state.caps?.features?.session_instructions?.version === 1 ? instructionReceiptPanel({h, t, when, api,
     guard: () => assertView(connection), host, sessionId: sid, errorBox}) : null;
@@ -1454,7 +1454,7 @@ async function viewSession(main, host, sid, context = null) {
   head.append(backSlot, header);
   results.body.append(...[context?.itemBox,
     changesSection,
-    sessionSection("list-checks", t("checkpoints"), cps.box),
+    sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
     sessionSection("check", t("session_delivery"), result),
     sessionSection("inbox", t("session_sources"), sourcesBody),
     batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details].filter(Boolean));
@@ -1866,25 +1866,25 @@ async function viewSession(main, host, sid, context = null) {
     });
   });
   return () => {disposed = true; clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
-    results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
+    cps.clear(); results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
 
 // A checkpoint records this session's commit and recent conversation (read-only); continuing starts a new
 // managed session at that commit in a connector clone. The person's session and folder are never written.
-function checkpointPanel(host, sid) {
+function checkpointPanel(host, sid, {namespace = state.namespace, manual = () => false} = {}) {
   const can = (state.caps?.features?.checkpoints || []).includes(host);
   const mayStart = (state.caps?.scopes || []).includes("start"); // continuing starts an agent: its own grant
   const list = h("div", {});
   const status = h("div", { class: "muted" });
   // A checkpoint never changes, so its row is built once: a reload on a new event keeps an open form and its draft.
   const rows = new Map();
-  let ticket = 0;
   let preview = null; // what the source looks like now (read-only): the commit picker and "source moved on"
+  let ticket = 0; // a withdrawn session's late list or preview never paints
   const row = cp => rows.get(cp.checkpoint_id) || rows.set(cp.checkpoint_id, buildRow(cp)).get(cp.checkpoint_id);
   const buildRow = cp => {
     const instr = h("textarea", { placeholder: t("continue_placeholder") });
-    const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
-    const out = h("div", { class: "muted" });
+    const agent = h("select", { "aria-label": t("checkpoint_agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+    const out = h("div", { class: "muted session-checkpoint-result" });
     const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
     draft.bindFields({agent});
     let expectedHead = null;
@@ -1898,26 +1898,35 @@ function checkpointPanel(host, sid) {
         const op = await draft.perform("checkpoint.continue", { checkpoint_id: cp.checkpoint_id },
             { instructions, agent: agent.value, ...(state.caps?.artifacts ? {artifacts: draft.refs()} : {}) },
             state.caps?.artifacts ? { expected_source_head_sha: expectedHead } : {}, `continue.${cp.checkpoint_id}`);
-        out.replaceChildren(opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
-      } catch (e) { out.replaceChildren(errorBox(e)); }
+        // The status and the way into the new session; the operation ID stays in Details.
+        const resultHost = op.result?.host || cp.host;
+        const opened = op.result?.session_id && resultHost
+          ? h("a", {href: `#/session/${encodeURIComponent(resultHost)}/${encodeURIComponent(op.result.session_id)}`}, t("open_new_session")) : null;
+        out.replaceChildren(h("p", {class: "session-checkpoint-op"}, statusPill(operationStatusKey(op.status)), opened ? " " : "", opened || ""),
+          disclosure({label: t("checkpoint_op_details"), body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(op.operation_id)}` }, op.operation_id))}));
+      } catch (e) { out.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => go.click()})); }
       go.disabled = false;
     } }, t("start_agent_work"));
-    const form = h("div", { hidden: true }, confinementNote(host, agent), instr, draft.box,
-      h("div", { class: "actions" }, agent, go), out);
-    return h("div", { class: "row" },
-      h("div", { class: "grow" },
-        h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""),
-        h("div", { class: "muted" }, [sessionWhen(cp.captured_at), cp.actor,
-          t("excerpt_count", { n: cp.excerpt_messages })].join(" · ")),
-        cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty }))
-          : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null,
-        preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null, form),
-      h("button", { class: "secondary", disabled: !can || !mayStart,
-        title: !can ? t("checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
-        onclick: async () => { form.hidden = !form.hidden;
-          if (state.caps?.artifacts && !form.hidden && !expectedHead) { try { expectedHead = (await api("GET", `/checkpoints/${cp.checkpoint_id}?live=true`)).source.head;
-            if (!expectedHead) fill(out, h("p", { class: "error" }, t("source_unavailable"))); } catch (e) { fill(out, errorBox(e)); } }
-        } }, t("continue_from_checkpoint")));
+    const limits = disclosure({label: t("checkpoint_limits"), body: confinementNote(host, agent)});
+    const form = h("div", { class: "session-checkpoint-form", "data-checkpoint-form": "", hidden: true }, instr, draft.box,
+      h("div", { class: "actions" }, agent, go), out, limits);
+    const start = h("button", { class: "secondary", type: "button", disabled: !can || !mayStart, "aria-expanded": "false",
+      title: !can ? t("session_checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
+      onclick: async () => { form.hidden = !form.hidden; start.setAttribute("aria-expanded", String(!form.hidden));
+        if (state.caps?.artifacts && !form.hidden && !expectedHead) { try { expectedHead = (await api("GET", `/checkpoints/${cp.checkpoint_id}?live=true`)).source.head;
+          if (!expectedHead) fill(out, h("p", { class: "error" }, t("source_unavailable"))); } catch (e) { fill(out, sessionErrorBox(e, {label: t("ui_retry"), run: () => load().catch(() => {})})); } }
+      } }, t("continue_from_checkpoint"));
+    return h("div", { class: "row session-checkpoint-row" },
+      h("div", { class: "session-checkpoint-head" },
+        h("div", { class: "grow" },
+          h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""),
+          h("div", { class: "muted" }, [sessionWhen(cp.captured_at), cp.actor,
+            t("excerpt_count", { n: cp.excerpt_messages })].filter(Boolean).join(" · ")),
+          cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty }))
+            : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null,
+          preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null),
+        start),
+      form);
   };
   const load = async (mine = ticket) => {
     try {
@@ -1926,7 +1935,7 @@ function checkpointPanel(host, sid) {
       if (mine !== ticket) return;
       list.replaceChildren(...(page.checkpoints.length ? page.checkpoints.map(row)
         : can ? [h("p", { class: "muted" }, t("no_checkpoints"))] : []));
-    } catch (e) { if (mine === ticket) list.replaceChildren(errorBox(e)); }
+    } catch (e) { if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => load().catch(() => {})})); }
   };
   const pick = h("select", { "aria-label": t("commit"), hidden: true });
   const note = h("textarea", { placeholder: t("checkpoint_note_placeholder"), hidden: true });
@@ -1949,7 +1958,7 @@ function checkpointPanel(host, sid) {
     } catch (error) {
       // A stale picker must never silently become a request to checkpoint HEAD.
       if (mine !== ticket) return;
-      previewFailed = true; create.disabled = true; status.replaceChildren(errorBox(error));
+      previewFailed = true; create.disabled = true; status.replaceChildren(sessionErrorBox(error, {label: t("ui_retry"), run: () => loadPreview().catch(() => {})}));
     }
   };
   const create = h("button", { class: "secondary", hidden: !can, disabled: !can, onclick: async () => {
@@ -1958,21 +1967,35 @@ function checkpointPanel(host, sid) {
       const params = { last_n: 20, ...(preview ? { commit: pick.value } : {}), ...(note.value.trim() ? { note: note.value.trim() } : {}) };
       const op = await submit("checkpoint.create", { host, session_id: sid }, params, {}, `checkpoint.${host}.${sid}`);
       if (op.status === "succeeded") note.value = "";
-      status.replaceChildren(...[opStatus(op), op.error_code ? chip(op.error_code, "bad") : null,
-        op.status_reason].filter(Boolean).flatMap(x => [x, " "]));
+      status.replaceChildren(opStatus(op),
+        op.error_code || op.status_reason ? disclosure({label: t("checkpoint_op_details"), body: h("p", {},
+          h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))}) : null);
       await load();
-    } catch (e) { status.replaceChildren(errorBox(e)); }
+    } catch (e) { status.replaceChildren(sessionErrorBox(e, {label: t("ui_retry"), run: () => load().catch(() => {})})); }
     create.disabled = !can || previewFailed;
-  } }, t("create_checkpoint"));
-  const checkpointWhy = disclosure({label: t("session_details"), key: `session-checkpoint:${host}:${sid}`, body: h("div", {},
+  } }, t("checkpoint_record"));
+  // Recording is a quiet section action; the commit picker opens only when asked for.
+  const recordForm = h("div", {class: "session-checkpoint-record", hidden: true}, h("div", {class: "actions"}, pick), note, h("div", {class: "actions"}, create));
+  const action = can ? button({variant: "ghost", size: "sm", label: t("create_checkpoint"), "aria-expanded": "false", onClick: () => {
+    recordForm.hidden = !recordForm.hidden; action.setAttribute("aria-expanded", String(!recordForm.hidden));
+    if (!recordForm.hidden) pick.focus();
+  }}) : null;
+  const notes = h("div", {});
+  const paintNotes = () => notes.replaceChildren(
     h("p", {class: "muted"}, t("checkpoint_help")),
-    h("p", {class: "muted"}, t("checkpoint_unavailable")),
-    mayStart ? null : h("p", {class: "muted"}, t("needs_start_scope")))});
+    manual() ? h("p", {class: "muted"}, t("checkpoint_manual_hint")) : null,
+    can ? null : h("p", {class: "muted"}, t("checkpoint_unavailable")),
+    can ? null : h("p", {class: "muted"}, h("code", {}, t("checkpoint_unavailable_keys"))),
+    mayStart ? null : h("p", {class: "muted"}, t("needs_start_scope")),
+    mayStart ? null : h("p", {class: "muted"}, h("code", {}, t("needs_start_scope_key"))));
+  paintNotes();
+  const checkpointWhy = disclosure({label: t("checkpoint_notes"), key: `session-checkpoint:${namespace}:${host}:${sid}`, body: notes});
+  checkpointWhy.addEventListener("toggle", () => {if (checkpointWhy.open) paintNotes();});
   const box = h("div", {class: "session-checkpoints"},
     can ? null : h("p", {class: "muted session-checkpoint-state"}, t("session_checkpoint_unavailable")),
-    note, can ? h("div", {class: "actions"}, pick, create) : null, status, list, checkpointWhy);
-  return {box, clear: () => {ticket++; rows.clear(); list.replaceChildren(); status.replaceChildren();},
-    load: async () => {const mine = ticket; await loadPreview(mine); if (mine === ticket) await load(mine);}};
+    recordForm, status, list, checkpointWhy);
+  const clear = () => {ticket += 1; rows.clear(); list.replaceChildren(); status.replaceChildren(); preview = null;};
+  return { box, action, clear, load: async () => {const mine = ticket; await loadPreview(mine); if (mine === ticket) await load(mine);} };
 }
 
 async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceRepository) {

@@ -2249,3 +2249,11 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-error { padding: var(--space-2); background: var(--bad-soft); border-radius: var(--r-sm); }
 .session-delivery-state { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; color: var(--text-3); }
 .session-withdrawn { padding-block: var(--space-6); }
+
+.session-checkpoint-row { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); }
+.session-checkpoint-head { display: flex; align-items: start; flex-wrap: wrap; gap: var(--space-2); width: 100%; }
+.session-checkpoint-head .grow { min-width: 0; }
+.session-checkpoint-head > button { flex: none; }
+.session-checkpoint-form { width: 100%; min-width: 0; }
+.session-checkpoint-record { margin-bottom: var(--space-2); }
+.session-checkpoint-op { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }

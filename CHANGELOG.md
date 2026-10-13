@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Make Session checkpoints quiet at rest, distinguish capable hosts and preserve
+  disclosure choices per connection. Continue forms expand below their actions and
+  link to the new session only when the central result identifies it.
+
 - Withdraw unavailable Sessions as one inline state, retain drafts and original retry
   keys, back off failed reads, and render message failures inside the transcript.
   Validate and group Session Delivery receipts without clearing them during refresh;

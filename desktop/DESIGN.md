@@ -598,3 +598,10 @@ a first transient failure and Not updated with Retry on a later one. A source
 withdrawal removes cached receipts and their derived counts. A partial window states
 the number shown and more; filtered sources stay Partial. Provider origins determine
 PR links; merging, verified current deployment and acceptance remain separate.
+
+Checkpoints keep the commit picker closed until Record this version is requested.
+Start from here precedes its form; the confinement caveat is in Execution limits.
+Checkpoint notes report missing host capability only when absent, and exact config
+keys remain in Details. Continue shows the central operation state and, when the
+result identifies a new session, Open the new session. The operation ID is in
+Operation details. Checkpoint disclosure state includes the central namespace.

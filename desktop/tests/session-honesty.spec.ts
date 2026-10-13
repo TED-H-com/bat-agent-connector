@@ -419,3 +419,27 @@ test('send retries and question drafts survive reload with their original operat
   expect(answers[1].idempotency_key).toBe(answer.idempotency_key); expect(answers[1].body).toEqual(answer.body);
   await s.context.close();
 });
+
+test('checkpoint disclosure choices stay with their central principal', async ({browser}) => {
+  let principal = 'principal-one';
+  const s = await openSession(browser, {overrides: [async (input, url) => {
+    if (url.pathname !== '/bootstrap') return undefined;
+    const base = await s.fixture.dispatch(input);
+    base.data.sync.principal_id = principal; return base;
+  }]});
+  const {page, ids} = s;
+  const notes = () => page.locator('.session-checkpoints details').filter({has: page.getByText('Checkpoint notes', {exact: true})});
+  await fromRequirements(page, ids, 'manual');
+  await notes().locator('summary').click();
+  await expect(notes()).toHaveAttribute('open');
+  await go(page, '#/settings');
+  await page.getByRole('button', {name: 'Disconnect', exact: true}).click();
+  principal = 'principal-two';
+  await page.locator('.connection-token input').fill('fixture-token-two');
+  await page.getByRole('button', {name: 'Connect', exact: true}).click();
+  await expect(page.locator('#live')).toHaveText('Connected');
+  await go(page, `#/session/${ids.host}/${ids.sessions.manual}`);
+  await expect(notes()).not.toHaveAttribute('open');
+  expect(s.writes).toEqual([]);
+  await s.context.close();
+});
