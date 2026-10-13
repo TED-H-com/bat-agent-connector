@@ -24,7 +24,8 @@ MAX_LINKS_TOTAL = 200
 MAX_ISSUES = 200
 MAX_BYTES = 2_000_000
 _BINDING_CHUNK = 200
-_RUNS_PER_SESSION = 3
+# Rows examined per session, hidden ones included. Visibility is decided before any run is chosen.
+_RUN_SCAN = 64
 _RANGE_BOUND = {"start": "0000-00-00", "end": "0000-00-00"}
 _PAGE_DEFAULT = 100
 _RANK = {"milestone": 0, "requirement": 1, "issue": 2, "work": 3, "attempt": 4}
@@ -570,10 +571,11 @@ def _runs(ops, principal, workspace_id, refs, notes, coverage):
     for host, sid, _ref in pairs:
         args.extend((host, sid))
     rows = db.execute(
-        f"""SELECT run_id, operation_id, context, host, session_id FROM (
+        f"""SELECT run_id, operation_id, context, host, session_id, created_at FROM (
                 SELECT r.run_id AS run_id, r.operation_id AS operation_id, r.context AS context,
                     json_extract(s.session_binding,'$.host') AS host,
                     json_extract(s.session_binding,'$.session_id') AS session_id,
+                    r.created_at AS created_at,
                     ROW_NUMBER() OVER (
                         PARTITION BY json_extract(s.session_binding,'$.host'),
                             json_extract(s.session_binding,'$.session_id')
@@ -581,15 +583,16 @@ def _runs(ops, principal, workspace_id, refs, notes, coverage):
                 FROM pm_runs r JOIN pm_run_state s USING(run_id)
                 WHERE r.workspace_id=? AND (json_extract(s.session_binding,'$.host'),
                     json_extract(s.session_binding,'$.session_id')) IN ({marks})
-            ) WHERE n<=?""", (*args, _RUNS_PER_SESSION)).fetchall()  # noqa: S608
+            ) WHERE n<=?""", (*args, _RUN_SCAN + 1)).fetchall()  # noqa: S608
     grouped = {}
     for row in rows:
         grouped.setdefault((row["host"], row["session_id"]), []).append(row)
     from . import pm_runs
-    found, ambiguous = {}, False
+    found, ambiguous, truncated = {}, False, False
     for host, sid, ref in pairs:
-        visible_ids = []
-        for match in grouped.get((host, sid), []):
+        matches = sorted(grouped.get((host, sid), []), key=lambda row: (row["created_at"], row["run_id"]))
+        visible_ids, decided = [], False
+        for match in matches[:_RUN_SCAN]:
             try:
                 body = json.loads(match["context"]) if match["context"] else {}
             except (TypeError, ValueError):
@@ -602,15 +605,23 @@ def _runs(ops, principal, workspace_id, refs, notes, coverage):
                 allowed = False
             if allowed:
                 visible_ids.append(match["run_id"])
+                if len(visible_ids) == 2:
+                    ambiguous = True
+                    decided = True
+                    break
             else:
                 coverage["visibility_filtered"] = True
-        if len(visible_ids) > 1:
-            ambiguous = True
+        if decided:
+            continue
+        if len(matches) > _RUN_SCAN:
+            truncated = True
             continue
         if len(visible_ids) == 1:
             found[ref] = visible_ids[0]
     if ambiguous:
         _note(notes, "attempt.run_id", "multiple_explicit_runs")
+    if truncated:
+        _note(notes, "attempt.run_id", "run_lookup_truncated")
     return found
 
 

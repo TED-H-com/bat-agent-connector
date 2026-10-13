@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "894f0f14ddfb99daff8c129a0d531e137f1e5f059df7cae7dddf057f6e3e7562"
+  canonical_sha256: "14b892b446ec3d2518b13bb49e53b9f60dea5da55fc4c8ce3dc22106be848103"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1604,6 +1604,8 @@ stay within 64. A page is not a total: honor `truncated`, `partial`, and `range_
 Requirement text is kept verbatim, including newlines and a leading slash. Hidden work,
 issues, and attempts are omitted from every page; a 200 does not reveal whether an id
 exists. `refs.run_id` appears only when one visible run is bound to that observed session.
+Hidden runs do not take that slot or remove the visible run. If the per-session scan reaches
+its bound before that decision, omit `run_id`.
 Withdrawn work items, runs, operations, sessions, and tasks disappear from rows and derived
 dates together; do not refill them from memory. Unknown fields stay null with a reason in
 `unknown`. See `docs/design/pm-schedule.md`.

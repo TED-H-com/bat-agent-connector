@@ -950,6 +950,80 @@ async def test_hidden_run_does_not_change_the_visible_run(ops):
     assert ("attempt.run_id", "run_index_truncated") not in reasons(schedule(ops, wid))
 
 
+def _run_row(service, wid, thread, generation, run, operation, binding, created):
+    service.db.execute("""INSERT INTO pm_runs(run_id,operation_id,workspace_id,thread_id,generation,requester,
+        request_authority,execution_authority,adapter,purpose,thread_version,context,context_digest,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (run, operation, wid, thread, generation, OWNER.actor, "{}", "{}", "fixture", "analysis", 1, "{}", "0" * 64, created))
+    service.db.execute("INSERT INTO pm_run_state(run_id,status,session_binding,gaps,updated_at) VALUES(?,?,?,?,?)",
+                       (run, "running", json.dumps(binding), "[]", created))
+
+
+async def test_older_hidden_runs_do_not_remove_the_visible_run(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    bound = {"host": "mock-host", "session_id": "run-session"}
+    visible_run = "pmr_" + "f" * 32
+    _run_row(ops, wid, thread, 1, visible_run, "op_" + "f" * 32, bound, 9.0)
+    row_id = f"attempt:session:{work['work_item_id']}:{ref}"
+    for generation in (2, 3, 4):
+        hidden_op = f"op_{generation:032x}"
+        _run_row(ops, wid, thread, generation, f"pmr_{generation:032x}", hidden_op, bound, float(generation - 1))
+        withdraw(ops, "operation", hidden_op)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[row_id]
+    assert row["refs"]["run_id"] == visible_run
+    assert ("attempt.run_id", "multiple_explicit_runs") not in reasons(body)
+    assert ("attempt.run_id", "run_lookup_truncated") not in reasons(body)
+    assert body["partial"] is False
+
+
+async def test_a_second_visible_run_omits_run_id(ops):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    bound = {"host": "mock-host", "session_id": "run-session"}
+    first, last = "pmr_" + "1" * 32, "pmr_" + "9" * 32
+    _run_row(ops, wid, thread, 1, first, "op_" + "1" * 32, bound, 1.0)
+    for generation in (2, 3):
+        hidden_op = f"op_{generation:032x}"
+        _run_row(ops, wid, thread, generation, f"pmr_{generation:032x}", hidden_op, bound, float(generation))
+        withdraw(ops, "operation", hidden_op)
+    _run_row(ops, wid, thread, 4, last, "op_" + "9" * 32, bound, 4.0)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:session:{work['work_item_id']}:{ref}"]
+    assert "run_id" not in row["refs"]
+    assert ("attempt.run_id", "multiple_explicit_runs") in reasons(body)
+    assert body["partial"] is False
+
+
+async def test_run_scan_bound_omits_run_id_before_a_decision(ops, monkeypatch):
+    target, _plan, work, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    ref = session(ops, "run-session")
+    await link(ops, work, "session", ref)
+    pm_runs.schema(ops.journal)
+    thread = ops.db.execute("SELECT thread_id FROM pm_threads WHERE workspace_id=?", (wid,)).fetchone()[0]
+    bound = {"host": "mock-host", "session_id": "run-session"}
+    monkeypatch.setattr(pm_schedule, "_RUN_SCAN", 1)
+    _run_row(ops, wid, thread, 1, "pmr_" + "1" * 32, "op_" + "1" * 32, bound, 1.0)
+    hidden_op = "op_" + "2" * 32
+    _run_row(ops, wid, thread, 2, "pmr_" + "2" * 32, hidden_op, bound, 2.0)
+    withdraw(ops, "operation", hidden_op)
+    body = check(schedule(ops, wid), wid)
+    row = by_id(body)[f"attempt:session:{work['work_item_id']}:{ref}"]
+    assert "run_id" not in row["refs"]
+    assert ("attempt.run_id", "multiple_explicit_runs") not in reasons(body)
+    assert ("attempt.run_id", "run_lookup_truncated") in reasons(body)
+
+
 async def test_a_lineage_error_hides_one_session_or_task_and_keeps_the_page(ops):
     target, _plan, work, *_ = await mapped(ops)
     wid = target["workspace_id"]
