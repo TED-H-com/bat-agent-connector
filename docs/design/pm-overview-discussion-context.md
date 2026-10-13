@@ -150,6 +150,8 @@ List 每列另含 `title`：與 get 的已驗證 document title 相同；無有�
 不附其他 document 內容。整頁以一次索引查詢取得採用回執，再套用既有 operation 可見性檢查，
 不逐列讀取完整 proposal。新增索引為 idempotent DDL，無 user_version 或 data step。
 同一 read snapshot 中使用採用 admission 共用的內容檢查與完整 plan head 比較；
+List 每頁只讀一次 plan head、以一次查詢取得該頁的 thread 列，同一 (thread, version) 的內容檢查只做一次，
+結果不跨頁或跨請求保留。逐列的來源可見性檢查不變。
 Proposal 原始來源不可見仍整筆撤回，不輸出隱藏來源資訊。
 這是內容／基線是否仍可採用，不取代 owner、scope、審閱與最後執行條件。UI 使用中央欄位，
 不可自行以 thread version 相等推測；缺欄位時不開放新採用，原 operation 查回不受影響。

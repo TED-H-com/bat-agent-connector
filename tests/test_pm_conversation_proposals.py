@@ -330,6 +330,29 @@ async def test_proposal_list_batches_adoption_evidence(proposal_world, monkeypat
         assert row['adoptable'] is False
         assert row['adoptable_reason'] == ('adopted' if index == 0 else 'plan_head_changed')
         assert row['adopted_revision_id'] == (done['result']['revision_id'] if index == 0 else None)
+    # Adoptability inputs are read once per page, not once per row.
+    assert sum('FROM pm_plan_heads' in sql for sql in statements) == 1
+    assert sum('FROM pm_threads' in sql for sql in statements) == 1
+
+
+async def test_proposal_list_checks_content_once_per_thread_version(proposal_world):
+    w, ops = proposal_world, proposal_world['d'].ops
+    candidates = [await proposed(w) for _ in range(3)]
+    statements = []
+    ops.db.set_trace_callback(statements.append)
+    try:
+        page = proposals.list_proposals(ops, OWNER, w['workspace_id'], limit=3)
+    finally:
+        ops.db.set_trace_callback(None)
+    assert [row['proposal_id'] for row in page['proposals']] == [item['proposal_id'] for item in candidates]
+    assert all(row['adoptable'] is True and row['adoptable_reason'] is None for row in page['proposals'])
+    assert sum('FROM pm_plan_heads' in sql for sql in statements) == 1
+    assert sum('FROM pm_threads' in sql for sql in statements) == 1
+    assert sum('FROM pm_discussion_applied a JOIN operations' in sql for sql in statements) == 1
+    # A later message changes every row's answer on the next page read, not a stale one.
+    await plans.act(w, 'pm.message.append', {'content': 'One more requirement'})
+    later = proposals.list_proposals(ops, OWNER, w['workspace_id'], limit=3)
+    assert {row['adoptable_reason'] for row in later['proposals']} == {'content_changed'}
 
 
 @pytest.mark.parametrize('receipt_source', ['parent_result', 'final_child'])
