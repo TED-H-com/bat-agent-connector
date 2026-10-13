@@ -1,21 +1,21 @@
 .pm-maintenance-repairs {display:grid;gap:14px;min-width:0}
-.pm-maintenance-repairs form,.pm-maintenance-repairs article,.pm-repair-rule {display:grid;gap:8px;min-width:0}
+.pm-maintenance-repairs form,.pm-maintenance-repairs article,.pm-repair-rule {display:grid;gap:var(--space-2);min-width:0}
 .pm-maintenance-repairs p,.pm-repair-rule p {margin:0;overflow-wrap:anywhere}
 .pm-maintenance-repairs select,[data-policy-group=pmr_rules] select {max-width:100%;min-width:0}
-.pm-maintenance-repairs article,.pm-repair-rule {border-top:1px solid var(--line);padding-top:14px;margin-top:8px}
+.pm-maintenance-repairs article,.pm-repair-rule {border-top:1px solid var(--line);padding-top:14px;margin-top:var(--space-2)}
 .pm-maintenance-repairs .pm-source,.pm-repair-rule .pm-source {font-size: var(--fs-body);overflow-wrap:anywhere}
-[data-policy-group=pmr_rules]>label {display:grid;gap:6px;margin-block:8px}
+[data-policy-group=pmr_rules]>label {display:grid;gap:6px;margin-block:var(--space-2)}
 [data-policy-group=pmr_rules] textarea {min-height:72px}
-.pm-maintenance-repairs .pm-heading {display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px}
+.pm-maintenance-repairs .pm-heading {display:flex;flex-wrap:wrap;align-items:flex-start;gap:var(--space-3)}
 .pm-maintenance-repairs .pm-heading>div {flex:1 1 220px;min-width:0}
 .pm-maintenance-repairs .pm-heading h2 {margin:0 0 6px;font-size: var(--fs-section)}
 .pm-maintenance-repairs label {display:grid;gap:6px;min-width:0}
-.pm-maintenance-repairs .pm-fields {display:flex;flex-wrap:wrap;gap:12px}
+.pm-maintenance-repairs .pm-fields {display:flex;flex-wrap:wrap;gap:var(--space-3)}
 .pm-maintenance-repairs .pm-fields>label {flex:1 1 220px}
 .pm-maintenance-repairs select {width:100%}
 .pm-maintenance-repairs .actions {justify-content:flex-start}
 .pm-maintenance-repairs form>div {min-width:0}
-.pm-maintenance-repairs h3,.pm-repair-rule h4 {font:600 16px/1.5 system-ui,sans-serif;margin:4px 0}
+.pm-maintenance-repairs h3,.pm-repair-rule h4 {font:600 16px/1.5 system-ui,sans-serif;margin:var(--space-1) 0}
 .pm-maintenance-repairs .muted,[data-policy-group=pmr_rules] .muted {font-size: var(--fs-body);line-height:1.5}
 .pm-maintenance-repairs>[role=status]:empty {display:none}
 .pm-repair-rule>button {justify-self:start}

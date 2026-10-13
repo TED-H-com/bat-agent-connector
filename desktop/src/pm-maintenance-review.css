@@ -1,18 +1,18 @@
-[data-pm-maintenance-review] .pm-review-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+[data-pm-maintenance-review] .pm-review-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-5)}
 [data-pm-maintenance-review] .pm-review-columns>section{min-width:0}
 [data-pm-maintenance-review] .pm-review-columns h4{margin-top:0}
-[data-pm-maintenance-review] [data-review-discussion]{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
-[data-pm-maintenance-review] h5{font-size: var(--fs-body);margin:8px 0}
-[data-pm-maintenance-review] .pm-review-selectors{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
+[data-pm-maintenance-review] [data-review-discussion]{margin-top:var(--space-4);border-top:1px solid var(--line);padding-top:var(--space-3)}
+[data-pm-maintenance-review] h5{font-size: var(--fs-body);margin:var(--space-2) 0}
+[data-pm-maintenance-review] .pm-review-selectors{display:flex;gap:var(--space-2);flex-wrap:wrap;align-items:end}
 [data-pm-maintenance-review] input[type=checkbox]{width:auto;min-height:0}
-[data-pm-maintenance-review] .pm-review-checks label{display:flex;gap:8px;align-items:start;margin:8px 0}
+[data-pm-maintenance-review] .pm-review-checks label{display:flex;gap:var(--space-2);align-items:start;margin:var(--space-2) 0}
 [data-pm-maintenance-review] [data-review-event]{overflow-wrap:anywhere}
-@media(max-width:720px){[data-pm-maintenance-review] .pm-review-columns{grid-template-columns:1fr;gap:8px}}
+@media(max-width:720px){[data-pm-maintenance-review] .pm-review-columns{grid-template-columns:1fr;gap:var(--space-2)}}
 
-[data-pm-maintenance-review] .pm-review-assignment{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+[data-pm-maintenance-review] .pm-review-assignment{border-top:1px solid var(--line);padding-top:var(--space-3);margin-top:var(--space-3)}
 [data-pm-maintenance-review] .pm-review-checks span{overflow-wrap:anywhere;min-width:0}
-[data-pm-maintenance-review] .pm-review-ack{display:flex;gap:8px;align-items:center}
-[data-pm-maintenance-review] [data-review-report] h3{margin-bottom:8px}
+[data-pm-maintenance-review] .pm-review-ack{display:flex;gap:var(--space-2);align-items:center}
+[data-pm-maintenance-review] [data-review-report] h3{margin-bottom:var(--space-2)}
 [data-pm-maintenance-review] .pm-review-proof{overflow-wrap:anywhere}
 [data-pm-maintenance-review] .pm-review-count{margin-top:-8px}
 @media(max-width:640px){

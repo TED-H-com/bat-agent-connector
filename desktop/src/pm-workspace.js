@@ -242,12 +242,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   let lastList = [], lastThreadList = null;
   function publishContext() {
-    const stage = lifecycle?.phase?.();
+    const stage = workspace ? lifecycle?.phase?.() : null;
     phasePill.hidden = !['idea','planning','development','maintain','paused','closed'].includes(stage);
     phasePill.textContent = phasePill.hidden ? '' : t('ui_phase_' + stage);
     onContext({workspace, workspaces: lastList, view: threadId ? 'discussions' : workbench?.selected() || view || 'discussions',
       views: threadId ? availableProjectViews(caps()) : workbench?.views || (workspace ? ['discussions'] : []), create: showCreate,
-      phase: lifecycle?.phase?.() && ['idea','planning','development','maintain','paused','closed'].includes(lifecycle.phase()) ? t('ui_phase_' + lifecycle.phase()) : null,
+      phase: phasePill.hidden ? null : phasePill.textContent,
       threadCount: lastThreadList?.threads?.length ?? null, threadMore: Boolean(lastThreadList?.next_cursor)});
   }
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,

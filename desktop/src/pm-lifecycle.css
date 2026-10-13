@@ -1,12 +1,12 @@
-.pm-lifecycle {padding:12px 0;margin-bottom:16px;border-bottom:1px solid var(--line);min-width:0;}
-.pm-lifecycle h2 {font-size: var(--fs-section);margin:0 0 8px;}
-.pm-lifecycle h3 {font-size: var(--fs-body);margin:16px 0 8px;}
-.pm-lifecycle p {margin:4px 0;overflow-wrap:anywhere;}
+.pm-lifecycle {padding:var(--space-3) 0;margin-bottom:var(--space-4);border-bottom:1px solid var(--line);min-width:0;}
+.pm-lifecycle h2 {font-size: var(--fs-section);margin:0 0 var(--space-2);}
+.pm-lifecycle h3 {font-size: var(--fs-body);margin:var(--space-4) 0 var(--space-2);}
+.pm-lifecycle p {margin:var(--space-1) 0;overflow-wrap:anywhere;}
 .pm-lifecycle .muted,.pm-lifecycle summary {font-size: var(--fs-body);}
 .pm-lifecycle details {padding:6px 0;}
 .pm-lifecycle summary {cursor:pointer;min-height:28px;}
-.pm-lifecycle form {max-width:680px;padding:8px 0;}
-.pm-lifecycle form label {display:block;margin:8px 0;}
+.pm-lifecycle form {max-width:680px;padding:var(--space-2) 0;}
+.pm-lifecycle form label {display:block;margin:var(--space-2) 0;}
 .pm-lifecycle label code {display:block;font-size: var(--fs-caption);overflow-wrap:anywhere;}
 .pm-lifecycle input[type=checkbox] {width:auto;}
 .pm-lifecycle textarea,.pm-lifecycle select {max-width:100%;}

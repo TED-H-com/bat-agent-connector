@@ -1,5 +1,6 @@
 .ui-icon { flex: none; vertical-align: middle; }
 .ui-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 32px; padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); font: inherit; cursor: pointer; text-decoration: none; transition: background var(--motion); }
+.ui-button.ui-md { min-height: 32px; padding: 4px 12px; }
 .ui-button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .ui-button.secondary { background: var(--surface); color: var(--text); }
 .ui-button.ghost { border-color: transparent; background: transparent; color: var(--text-2); }
@@ -75,7 +76,7 @@
   .ui-inspector { width: 100%; }
   .ui-inspector-back { display: inline-flex; }
   .ui-inspector > header > .ui-icon-button { display: none; }
-  .ui-button, .ui-button.ui-sm, .ui-button.ui-icon-button, .ui-menu-panel [role=menuitem], .ui-tabs button, .ui-segmented button, .ui-disclosure > summary { min-height: 44px; }
+  .ui-button, .ui-button.ui-md, .ui-button.ui-sm, .ui-button.ui-icon-button, .ui-menu-panel [role=menuitem], .ui-tabs button, .ui-segmented button, .ui-disclosure > summary { min-height: 44px; }
   .ui-button.ui-icon-button { min-width: 44px; }
   .ui-page-header { flex-wrap: wrap; }
 }

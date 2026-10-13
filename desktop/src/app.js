@@ -1112,7 +1112,7 @@ async function viewTask(main, id) {
       assertView(connection);
       if (data.task?.task_id !== id) throw new Error(t("task_control_invalid"));
       task = data.task;
-      head.replaceChildren(h("h1", {}, t("task_title")), h("p", {}, task.project || id),
+      head.replaceChildren(pageHeader({title: t("task_title")}), h("p", {}, task.project || id),
         h("p", {class: "actions"}, chip(t([true, false, 0, 1].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")),
           chip(["queued", "dispatching", "accepted", "running", "waiting_permission", "quota_limited", "human_owned", "needs_ted", "verifying", "done", "failed", "uncertain"].includes(task.state) ? t("task_state_" + task.state) : task.state || "?")),
         h("p", {class: "muted"}, task.host || "", " · ", h("code", {}, id)),
@@ -1148,7 +1148,7 @@ async function viewObservedResource(main, type, id) {
       const data = await api("GET", path); assertView(connection);
       const resource = data[type === "execution" ? "task" : "worktree"];
       const sessions = resource.known_sessions || [];
-      fill(head, h("h1", {}, t(type === "execution" ? "obs_execution" : "obs_worktree")), h("code", {}, id),
+      fill(head, pageHeader({title: t(type === "execution" ? "obs_execution" : "obs_worktree")}), h("code", {}, id),
         h("p", {class: "muted"}, t("obs_known_identity")),
         type === "worktree" ? [h("dl", {class: "kv"},
           h("dt", {}, t("host")), h("dd", {}, resource.host || t("obs_unknown")),
@@ -1177,7 +1177,7 @@ async function viewObservedResource(main, type, id) {
 }
 async function viewHostDiscovery(main, host) {
   const head = h("div", {class: "panel"});
-  main.append(h("h1", {}, host, " · ", t("obs_discovery")), h("p", {class: "note"}, t("obs_discovery_note")), head);
+  main.append(pageHeader({title: host + " · " + t("obs_discovery")}), h("p", {class: "note"}, t("obs_discovery_note")), head);
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const profile = state.caps?.hosts?.find(item => item.host === host)?.profile_id;
   const repair = profile && state.caps?.features?.managed_repairs?.version === 1 ? repairPanel({h, t, api,
@@ -1334,7 +1334,7 @@ async function viewSession(main, host, sid, context = null) {
     if (first) queue.checked = Boolean(row.streaming);
     const activity = sessionActivity(row);
     head.replaceChildren(h("div", {}, context?.project ? h("a", {class: "muted", href: `#/project/${encodeURIComponent(context.project.project_id)}`}, context.project.name) : null,
-      h("h1", {}, row.title || sid)), h("div", {class: "workspace-session-meta"},
+      pageHeader({title: row.title || sid})), h("div", {class: "workspace-session-meta"},
         chip(t(activity.key), activity.tone), h("span", {class: "muted"}, [row.agent_kind, row.model].filter(Boolean).join(" · ")),
         h("a", {class: "muted", href: `#/host/${encodeURIComponent(host)}`}, row.host),
         chip(t(row.api_access === "managed" ? "managed" : "read_only"), row.api_access === "managed" ? "managed" : "readonly")));
@@ -2238,7 +2238,7 @@ async function viewOperation(main, id) {
       if (!panel.isConnected) return;
       if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
       freshPage();
-      fill(panel, h("h1", {}, op.action),
+      fill(panel, pageHeader({title: op.action}),
         h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(op.error_code, "bad") : null),
         ...(linked?.length ? [linkedItems(linked)] : []),
         h("dl", { class: "kv" },
@@ -2794,7 +2794,7 @@ async function viewProject(main, pid) {
     fill(head,
       h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")),
         ...data.path.flatMap(x => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])),
-      h("h1", {}, p.name, " ", p.archived ? chip(t("archived"), "warn") : null),
+      pageHeader({title: p.name, pill: p.archived ? chip(t("archived"), "warn") : null}),
       p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""),
         h("p", {class: "pre"}, p.description)) : null,
       h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map(r => chip(r)),
@@ -3042,7 +3042,7 @@ async function viewWorkItem(main, wid) {
       h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), " / ",
         h("a", { href: `#/project/${data.project.project_id}` }, data.project.name),
         ...data.path.flatMap(x => [" / ", h("a", { href: `#/item/${x.work_item_id}` }, x.title)])),
-      h("h1", {}, w.title, " ", stateChip(c), w.archived ? [" ", chip(t("archived"), "warn")] : null),
+      pageHeader({title: w.title, pill: h("span", {class: "ui-title-row"}, stateChip(c), w.archived ? chip(t("archived"), "warn") : null)}),
       data.derived_from ? h("p", { class: "muted" }, t("derived_from"), " ",
         h("a", { href: `#/item/${data.derived_from.work_item_id}` }, data.derived_from.title)) : null,
       banner,
@@ -3465,7 +3465,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
       const record = await api("GET", `/work-items/${repairWid}/repair`); assertView(connection);
       validateRepairRecord(record, pid, repairWid);
       if (record.dispatch_operation_id) {
-        main.append(h("h1", {}, t("repair_title")), h("p", {}, t("repair_dispatched")),
+        main.append(pageHeader({title: t("repair_title")}), h("p", {}, t("repair_dispatched")),
           h("a", {href: `#/op/${record.dispatch_operation_id}`}, t("repair_open_dispatch")));
         return;
       }
@@ -3544,7 +3544,7 @@ async function viewProjectWork(main, pid, kind, id) {
     const item = data.work?.find(item => item.kind === kind && item.id === id);
     if (!item) throw new Error(t("workspace_work_missing"));
     if (item.host && item.session_id) return viewSession(main, item.host, item.session_id, {project: data.project});
-    main.append(h("h1", {}, item.title || item.action || item.id), deliveryWork(item, data.project.repositories));
+    main.append(pageHeader({title: item.title || item.action || item.id}), deliveryWork(item, data.project.repositories));
   } catch (error) {
     if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
   }

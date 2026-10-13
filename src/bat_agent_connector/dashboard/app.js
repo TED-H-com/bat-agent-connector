@@ -25401,7 +25401,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	let lastList = [], lastThreadList = null;
 	function publishContext() {
-		const stage = lifecycle?.phase?.();
+		const stage = workspace ? lifecycle?.phase?.() : null;
 		phasePill.hidden = ![
 			"idea",
 			"planning",
@@ -25417,14 +25417,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			view: threadId ? "discussions" : workbench?.selected() || view || "discussions",
 			views: threadId ? availableProjectViews(caps()) : workbench?.views || (workspace ? ["discussions"] : []),
 			create: showCreate,
-			phase: lifecycle?.phase?.() && [
-				"idea",
-				"planning",
-				"development",
-				"maintain",
-				"paused",
-				"closed"
-			].includes(lifecycle.phase()) ? t("ui_phase_" + lifecycle.phase()) : null,
+			phase: phasePill.hidden ? null : phasePill.textContent,
 			threadCount: lastThreadList?.threads?.length ?? null,
 			threadMore: Boolean(lastThreadList?.next_cursor)
 		});
@@ -27004,7 +26997,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		href: "#/projects",
 		title: t("workspace_manage"),
 		"aria-label": t("workspace_manage")
-	}, "+")), search, status, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
+	}, "+")), h("div", { class: "workspace-search" }, icon("search", { size: 16 }), search), status, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
 	const alive = () => {
 		guard();
 		if (disposed) throw new Error("Navigation disposed");
@@ -35391,7 +35384,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e)))
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
-	container.append(h("h1", {}, t("ar_title")), h("p", { class: "muted" }, t("ar_help")), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
+	container.append(pageHeader({ title: t("ar_title") }), h("p", { class: "muted" }, t("ar_help")), capturePanel, reviewPanel, h("div", { class: "actions" }, check), outcome, notice, catalogPanel);
 	function update() {
 		content.update();
 		const fixed = busy || frozen();
@@ -37286,7 +37279,7 @@ async function viewTask(main, id) {
 			assertView(connection);
 			if (data.task?.task_id !== id) throw new Error(t("task_control_invalid"));
 			task = data.task;
-			head.replaceChildren(h("h1", {}, t("task_title")), h("p", {}, task.project || id), h("p", { class: "actions" }, chip(t([
+			head.replaceChildren(pageHeader({ title: t("task_title") }), h("p", {}, task.project || id), h("p", { class: "actions" }, chip(t([
 				true,
 				false,
 				0,
@@ -37356,7 +37349,7 @@ async function viewObservedResource(main, type, id) {
 			assertView(connection);
 			const resource = data[type === "execution" ? "task" : "worktree"];
 			const sessions = resource.known_sessions || [];
-			fill(head, h("h1", {}, t(type === "execution" ? "obs_execution" : "obs_worktree")), h("code", {}, id), h("p", { class: "muted" }, t("obs_known_identity")), type === "worktree" ? [
+			fill(head, pageHeader({ title: t(type === "execution" ? "obs_execution" : "obs_worktree") }), h("code", {}, id), h("p", { class: "muted" }, t("obs_known_identity")), type === "worktree" ? [
 				h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, resource.host || t("obs_unknown")), h("dt", {}, t("delivery_worktree_branch")), h("dd", {}, h("code", {}, resource.branch || t("obs_unknown"))), h("dt", {}, t("delivery_worktree_path")), h("dd", {}, h("code", {}, resource.worktree_path || t("obs_unknown"))), h("dt", {}, t("delivery_worktree_owner")), h("dd", {}, resource.intent_type || t("obs_unknown"), " · ", resource.intent_type === "registry" ? h("code", {}, resource.intent_id || t("obs_unknown")) : observationLink(resource.intent_type === "task" ? "execution" : "operation", resource.intent_id))),
 				h("h2", {}, t("delivery_worktree_sessions")),
 				h("p", { class: "muted" }, t("delivery_worktree_recorded")),
@@ -37384,7 +37377,7 @@ async function viewObservedResource(main, type, id) {
 }
 async function viewHostDiscovery(main, host) {
 	const head = h("div", { class: "panel" });
-	main.append(h("h1", {}, host, " · ", t("obs_discovery")), h("p", { class: "note" }, t("obs_discovery_note")), head);
+	main.append(pageHeader({ title: host + " · " + t("obs_discovery") }), h("p", { class: "note" }, t("obs_discovery_note")), head);
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -37704,7 +37697,7 @@ async function viewSession(main, host, sid, context = null) {
 		head.replaceChildren(h("div", {}, context?.project ? h("a", {
 			class: "muted",
 			href: `#/project/${encodeURIComponent(context.project.project_id)}`
-		}, context.project.name) : null, h("h1", {}, row.title || sid)), h("div", { class: "workspace-session-meta" }, chip(t(activity.key), activity.tone), h("span", { class: "muted" }, [row.agent_kind, row.model].filter(Boolean).join(" · ")), h("a", {
+		}, context.project.name) : null, pageHeader({ title: row.title || sid })), h("div", { class: "workspace-session-meta" }, chip(t(activity.key), activity.tone), h("span", { class: "muted" }, [row.agent_kind, row.model].filter(Boolean).join(" · ")), h("a", {
 			class: "muted",
 			href: `#/host/${encodeURIComponent(host)}`
 		}, row.host), chip(t(row.api_access === "managed" ? "managed" : "read_only"), row.api_access === "managed" ? "managed" : "readonly")));
@@ -39028,7 +39021,7 @@ async function viewOperation(main, id) {
 				return;
 			}
 			freshPage();
-			fill(panel, h("h1", {}, op.action), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(op.error_code, "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, h("dt", {}, "Target"), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, "Refs"), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, "Result"), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
+			fill(panel, pageHeader({ title: op.action }), h("p", { class: "op-status" }, opStatus(op), " ", op.error_code ? chip(op.error_code, "bad") : null), ...linked?.length ? [linkedItems(linked)] : [], h("dl", { class: "kv" }, h("dt", {}, t("actor")), h("dd", {}, `${op.actor} (${op.entry})`), h("dt", {}, t("created")), h("dd", {}, when(epoch(op.created_at))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, h("dt", {}, "Target"), h("dd", {}, h("code", {}, JSON.stringify(op.target))), Object.keys(refs).length && op.action !== "worktree.merge" ? [h("dt", {}, "Refs"), h("dd", {}, h("code", {}, JSON.stringify(refs)))] : null, op.result && op.action !== "worktree.merge" ? [h("dt", {}, "Result"), h("dd", {}, h("code", {}, JSON.stringify(op.result)))] : null), ...receipts || [], mergeRecovery(op), op.action === "worktree.merge" ? h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify({
 				refs,
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, s.status), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
@@ -39924,7 +39917,10 @@ async function viewProject(main, pid) {
 				if (ok || draft) render();
 			}
 		}, t("save"))));
-		fill(head, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])), h("h1", {}, p.name, " ", p.archived ? chip(t("archived"), "warn") : null), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
+		fill(head, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])), pageHeader({
+			title: p.name,
+			pill: p.archived ? chip(t("archived"), "warn") : null
+		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
 			class: "session-project-link",
 			href: `#/dispatch/${pid}`
 		}, t("dispatch_title")) : null, p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null), d.box, data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ", ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
@@ -40306,7 +40302,10 @@ async function viewWorkItem(main, wid) {
 			class: "grow",
 			href: `#/item/${x.work_item_id}`
 		}, x.title));
-		fill(panel, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), " / ", h("a", { href: `#/project/${data.project.project_id}` }, data.project.name), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/item/${x.work_item_id}` }, x.title)])), h("h1", {}, w.title, " ", stateChip(c), w.archived ? [" ", chip(t("archived"), "warn")] : null), data.derived_from ? h("p", { class: "muted" }, t("derived_from"), " ", h("a", { href: `#/item/${data.derived_from.work_item_id}` }, data.derived_from.title)) : null, banner, h("div", { class: "actions" }, h("label", {}, t("state"), " ", stateSel), !c.pending && !c.approved && live ? approve : null, live && may("manage") ? d.toggle : null), d.box, ...section(t("goal"), w.goal), ...section(t("request"), w.request), ...section(t("acceptance"), w.acceptance), h("h2", {}, t("steps_title")), h("div", { class: "panel" }, ...stepRows.length ? stepRows : [h("p", { class: "muted" }, t("no_steps"))], live && may("manage") ? h("div", { class: "filters" }, newStep, addStep) : null), h("div", { class: "actions" }, h("a", { href: `#/cleanup/item/${wid}` }, t("nav_cleanup"))), h("h2", {}, t("links")), h("div", { class: "panel" }, ...linkRows.length ? linkRows : [h("p", { class: "muted" }, t("no_links"))], live && may("manage") ? h("div", { class: "filters" }, kind, ref, h("button", {
+		fill(panel, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), " / ", h("a", { href: `#/project/${data.project.project_id}` }, data.project.name), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/item/${x.work_item_id}` }, x.title)])), pageHeader({
+			title: w.title,
+			pill: h("span", { class: "ui-title-row" }, stateChip(c), w.archived ? chip(t("archived"), "warn") : null)
+		}), data.derived_from ? h("p", { class: "muted" }, t("derived_from"), " ", h("a", { href: `#/item/${data.derived_from.work_item_id}` }, data.derived_from.title)) : null, banner, h("div", { class: "actions" }, h("label", {}, t("state"), " ", stateSel), !c.pending && !c.approved && live ? approve : null, live && may("manage") ? d.toggle : null), d.box, ...section(t("goal"), w.goal), ...section(t("request"), w.request), ...section(t("acceptance"), w.acceptance), h("h2", {}, t("steps_title")), h("div", { class: "panel" }, ...stepRows.length ? stepRows : [h("p", { class: "muted" }, t("no_steps"))], live && may("manage") ? h("div", { class: "filters" }, newStep, addStep) : null), h("div", { class: "actions" }, h("a", { href: `#/cleanup/item/${wid}` }, t("nav_cleanup"))), h("h2", {}, t("links")), h("div", { class: "panel" }, ...linkRows.length ? linkRows : [h("p", { class: "muted" }, t("no_links"))], live && may("manage") ? h("div", { class: "filters" }, kind, ref, h("button", {
 			class: "secondary",
 			onclick: () => {
 				if (ref.value.trim()) link({
@@ -41018,7 +41017,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		assertView(connection);
 		validateRepairRecord(record, pid, repairWid);
 		if (record.dispatch_operation_id) {
-			main.append(h("h1", {}, t("repair_title")), h("p", {}, t("repair_dispatched")), h("a", { href: `#/op/${record.dispatch_operation_id}` }, t("repair_open_dispatch")));
+			main.append(pageHeader({ title: t("repair_title") }), h("p", {}, t("repair_dispatched")), h("a", { href: `#/op/${record.dispatch_operation_id}` }, t("repair_open_dispatch")));
 			return;
 		}
 		repairSeed = repairDispatchSeed(record);
@@ -41175,7 +41174,7 @@ async function viewProjectWork(main, pid, kind, id) {
 		const item = data.work?.find((item) => item.kind === kind && item.id === id);
 		if (!item) throw new Error(t("workspace_work_missing"));
 		if (item.host && item.session_id) return viewSession(main, item.host, item.session_id, { project: data.project });
-		main.append(h("h1", {}, item.title || item.action || item.id), deliveryWork(item, data.project.repositories));
+		main.append(pageHeader({ title: item.title || item.action || item.id }), deliveryWork(item, data.project.repositories));
 	} catch (error) {
 		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
 	}

@@ -299,7 +299,7 @@ for (const native of [false, true]) {
     await page.getByRole("button", {name: "Ask an agent to resolve", exact: true}).click();
     await page.getByRole("combobox", {name: "Agent"}).selectOption("codex");
     changed = true;
-    await expect(page.locator("#live")).toContainText("Waiting to refresh");
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','reconnecting');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     await expect(page.getByRole("combobox", {name: "Agent"})).toHaveValue("codex");
     await page.getByRole("button", {name: "Start agent work", exact: true}).click();
     await expect.poll(() => writes.length).toBe(1);
