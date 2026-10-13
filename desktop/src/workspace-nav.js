@@ -33,8 +33,9 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const link = (href, label, state = null, reading = null) => {
     const presented = railPresentation(state);
     const statusText = presented ? t(presented.labelKey) : '';
-    const unread = reading?.unread_count > 0
-      ? t('conversation_badge', {count: reading.unread_count}) + (reading.complete ? '' : '+') : '';
+    const unreadCount = reading?.unread_count > 0
+      ? String(reading.unread_count) + (reading.complete === false ? '+' : '') : '';
+    const unread = unreadCount ? t('conversation_badge', {count: reading.unread_count}) + (reading.complete === false ? '+' : '') : '';
     const full = joinLabel([label, statusText, unread]);
     let glyph = null;
     if (presented?.labelKey === 'rail_needs_you' || presented?.labelKey === 'rail_asking') {
@@ -46,10 +47,21 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     } else if (presented?.labelKey === 'rail_running') glyph = h('span', {class: 'workspace-dot info'});
     return h('a', {href, class: 'workspace-tree-link', 'data-tree-key': href, title: full, 'aria-label': full,
       'aria-current': selected === href ? 'page' : null}, h('span', {class: 'workspace-tree-label', title: label}, label),
+      unreadCount ? h('span', {class: 'workspace-unread-count'}, unreadCount) : null,
       presented ? h('span', {class: 'workspace-tree-state', 'aria-hidden': 'true'}, glyph) : null);
   };
+  const workActivity = item => {
+    if (item.status === 'failed') {
+      const key = item.kind === 'task' ? 'task_state_failed' : item.kind === 'operation' ? 'op_failed' : 'wi_state_failed';
+      return {key, tone: 'bad'};
+    }
+    if (item.status === 'needs_ted' || item.status === 'needs_you' || item.status === 'needs_attention')
+      return {key: 'workspace_needs_you', tone: 'stale'};
+    if (item.status === 'awaiting_approval') return {key: 'wi_state_awaiting_approval', tone: 'stale'};
+    return sessionActivity(item.session || {});
+  };
   const workLink = (pid, item) => link(`#/work/${[pid, item.kind, item.id].map(encodeURIComponent).join('/')}`,
-    item.title || item.branch || item.action || item.id, sessionActivity(item.session || {}), item.reading);
+    item.title || item.branch || item.action || item.id, workActivity(item), item.reading);
   const render = () => {
     if (disposed) return;
     const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;

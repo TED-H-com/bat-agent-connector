@@ -1,6 +1,8 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {actionLabel, formatTime, operationDuration, operationMeta, operationStatusKey, railPresentation, reasonText, workStatusKey} from '../src/global-labels.js';
+import {actionLabel, formatTime, operationDuration, operationMeta, operationStatusKey, operationTargetText, railPresentation, reasonText, workStatusKey} from '../src/global-labels.js';
+import {demoProject} from './demo/project.ts';
+import {globalRoutes} from './demo/global.ts';
 
 function either(actual: string, options: string[]) {
   assert.ok(options.includes(actual), `${actual} not in ${options.join(' | ')}`);
@@ -12,6 +14,12 @@ test('operation metadata omits empty separators and unknown durations', () => {
   assert.equal(formatTime(Number.NaN), '');
   assert.equal(operationDuration({created_at: 10}), '');
   assert.equal(operationDuration({created_at: 20, finished_at: 10}), '');
+  assert.equal(operationDuration({status: 'succeeded', created_at: 10}), '');
+  assert.equal(operationDuration({status: 'uncertain', created_at: 20, updated_at: 10}), '');
+  either(operationDuration({status: 'succeeded', created_at: 10, updated_at: 70}), ['1m', '1 分']);
+  either(operationDuration({status: 'failed', created_at: 10, updated_at: 10}), ['0s', '0 秒']);
+  either(operationDuration({status: 'running', created_at: 10}, 40), ['30s', '30 秒']);
+  either(operationDuration({status: 'accepted', created_at: 1000}, 1075), ['1m 15s', '1 分 15 秒']);
   assert.equal(operationStatusKey('uncertain'), 'unknown');
   assert.equal(operationStatusKey('running'), 'in_progress');
   assert.equal(operationStatusKey('needs_attention'), 'blocked');
@@ -29,15 +37,48 @@ test('rail words are loud only when the user is needed', () => {
   assert.equal(asking?.labelKey, 'rail_asking');
   assert.equal(railPresentation({key: 'workspace_needs_you'})?.loud, true);
   assert.equal(railPresentation({key: 'workspace_needs_you'})?.labelKey, 'rail_needs_you');
-  assert.equal(railPresentation({key: 'wi_state_doing', tone: ''})?.loud, false);
+  assert.equal(railPresentation({key: 'wi_state_doing', tone: ''}), null);
+  assert.equal(railPresentation({key: 'op_failed'})?.labelKey, 'rail_failed');
   assert.equal(railPresentation(null), null);
+});
+
+test('operation targets use discussion, plan and workspace words', () => {
+  either(operationTargetText({target: {plan_id: 'plan', plan_version: 3}}), ['Plan v3', '計畫 v3']);
+  either(operationTargetText({target: {revision_id: 'rev-9', version: 3}}), ['Plan v3', '計畫 v3']);
+  either(operationTargetText({target: {plan_id: 'plan'}}), ['Plan', '計畫']);
+  either(operationTargetText({target: {thread_id: 'thread-1', title: 'Rate limit'}}), ['Discussion · Rate limit', '討論 · Rate limit']);
+  either(operationTargetText({target: {thread_id: 'thread-1', thread_title: 'thread-1'}}), ['Discussion', '討論']);
+  either(operationTargetText({target: {workspace_id: 'ws', workspace_name: 'Acme'}}), ['Acme']);
+  either(operationTargetText({target: {workspace_id: 'ws', name: 'ws'}}), ['Workspace', '工作區']);
+});
+
+test('demo operations keep the backend fields and a manual asking session', () => {
+  const project = demoProject('en');
+  const listed = globalRoutes(project, new URL('http://fixture/operations'));
+  assert.ok(listed);
+  for (const op of listed.data.operations) {
+    assert.equal(Object.hasOwn(op, 'finished_at'), false);
+    assert.equal(typeof op.created_at, 'number');
+    assert.ok(op.created_at > 0);
+    assert.ok(op.updated_at >= op.created_at);
+    assert.equal(typeof op.actor, 'string');
+    assert.ok(op.actor);
+    assert.equal(typeof op.target?.repository, 'string');
+  }
+  const asking = globalRoutes(project, new URL('http://fixture/sessions?attention=true'));
+  const manual = asking.data.sessions.find(row => row.provenance === 'manual');
+  assert.equal(manual.api_access, 'read_only');
+  assert.equal(manual.pending.kind, 'ask_user');
+  assert.equal(manual.actor, undefined);
 });
 
 test('action labels and reason codes stay out of the raw id', () => {
   const label = actionLabel('checkpoint.continue');
   either(label, ['Continue from checkpoint', '從檢查點繼續']);
   assert.notEqual(label, 'checkpoint.continue');
-  either(actionLabel('not.a.real.action'), ['Operation', '操作']);
+  assert.equal(actionLabel('not.a.real.action'), 'Not a real action');
+  assert.notEqual(actionLabel('task.submit'), 'Operation');
+  assert.notEqual(actionLabel('task.submit'), '操作');
   const unknown = reasonText('totally_unknown_code');
   either(unknown, ['Not available', '無法取得']);
   assert.notEqual(unknown, 'totally_unknown_code');

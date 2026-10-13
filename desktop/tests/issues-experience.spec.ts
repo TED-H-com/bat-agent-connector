@@ -196,7 +196,7 @@ for (const locale of locales) {
     await expect(page.locator('[data-pm-view="requirements"]')).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('[data-pm-rtm] input[type=search]')).toHaveValue('');
     const requirement = page.locator(`[data-rtm-requirement="${copy.project.ids.requirements.email}"]`);
-    await expect(requirement).toHaveAttribute('aria-selected', 'true');
+    await expect(requirement).toHaveAttribute('aria-current', 'true');
     await expect(requirement.locator('button')).toBeFocused();
     await expect(requirement.locator('button')).toHaveAttribute('aria-expanded', 'true');
 

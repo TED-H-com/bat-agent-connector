@@ -708,7 +708,118 @@ var globalStrings = {
 		rail_needs_you: "Needs you",
 		rail_asking: "Asking you",
 		rail_failed: "Failed",
-		rail_running: "Running"
+		rail_running: "Running",
+		global_open_operation: "Open operation",
+		global_not_updated: "Not updated",
+		global_empty_active: "No active operations",
+		global_empty_unread: "No unread updates",
+		global_attempts: "Attempts",
+		global_token_rejected: "Token not accepted.",
+		global_discussion: "Discussion",
+		global_plan: "Plan",
+		global_plan_version: "Plan v{n}",
+		global_workspace: "Workspace",
+		action_artifact_capture_item: "Capture artifact",
+		action_checkpoint_create: "Create checkpoint",
+		action_deployment_rollback: "Roll back deployment",
+		action_fanout_plan: "Plan fan-out",
+		action_fanout_start: "Start fan-out",
+		action_github_pr_publish: "Publish pull request",
+		action_github_pr_update: "Update pull request",
+		action_integration_preview: "Preview integration",
+		action_pm_ahp_observe: "Observe AHP",
+		action_pm_backlog_revise: "Revise backlog",
+		action_pm_conversation_adopt: "Adopt discussion",
+		action_pm_conversation_propose: "Propose in discussion",
+		action_pm_dependencies_capture: "Capture dependency",
+		action_pm_dependencies_declare: "Declare dependency",
+		action_pm_dependencies_retract: "Retract dependency",
+		action_pm_dod_revise: "Revise definition of done",
+		action_pm_evidence_capture: "Capture evidence",
+		action_pm_execution_verify: "Verify execution",
+		action_pm_follow_up_analyze: "Analyze follow-up",
+		action_pm_follow_up_prepare: "Prepare follow-up",
+		action_pm_github_observe: "Observe GitHub",
+		action_pm_governance_adoption_link: "Link governance adoption",
+		action_pm_governance_decide: "Record governance decision",
+		action_pm_governance_record: "Record governance",
+		action_pm_governance_revise: "Revise governance",
+		action_pm_input_confirm: "Confirm input",
+		action_pm_input_record: "Record input",
+		action_pm_issue_cancel: "Cancel issue",
+		action_pm_issue_publish: "Publish issue",
+		action_pm_lifecycle_close: "Close lifecycle",
+		action_pm_lifecycle_pause: "Pause lifecycle",
+		action_pm_lifecycle_reopen: "Reopen lifecycle",
+		action_pm_lifecycle_retain_inflight: "Retain in-flight work",
+		action_pm_lifecycle_set_stage: "Set lifecycle stage",
+		action_pm_maintenance_check: "Check maintenance",
+		action_pm_maintenance_repair: "Repair maintenance item",
+		action_pm_maintenance_repair_evidence_record: "Record repair evidence",
+		action_pm_maintenance_repair_runtime_observe: "Observe repair runtime",
+		action_pm_maintenance_policy_adopt: "Adopt maintenance policy",
+		action_pm_maintenance_review_candidate_record: "Record maintenance candidate",
+		action_pm_maintenance_review_complete: "Complete maintenance review",
+		action_pm_maintenance_review_follow_up_record: "Record maintenance follow-up",
+		action_pm_maintenance_review_note: "Note maintenance review",
+		action_pm_maintenance_review_prepare: "Prepare maintenance review",
+		action_pm_meeting_complete: "Complete meeting",
+		action_pm_meeting_context_revise: "Revise meeting context",
+		action_pm_meeting_create: "Create meeting",
+		action_pm_meeting_draft: "Draft meeting",
+		action_pm_meeting_follow_up_record: "Record meeting follow-up",
+		action_pm_meeting_note: "Note meeting",
+		action_pm_message_append: "Append message",
+		action_pm_plan_adopt: "Adopt plan",
+		action_pm_plan_draft: "Draft plan",
+		action_pm_product_goal_revise: "Revise product goal",
+		action_pm_project_bind: "Bind project",
+		action_pm_quality_review_create: "Create quality review",
+		action_pm_quality_review_record: "Record quality review",
+		action_pm_quality_review_revoke: "Revoke quality review",
+		action_pm_release_baseline_register: "Register release baseline",
+		action_pm_roadmap_baseline_set: "Set roadmap baseline",
+		action_pm_roadmap_forecast_set: "Set roadmap forecast",
+		action_pm_roadmap_observe: "Observe roadmap",
+		action_pm_run_analyze: "Analyze run",
+		action_pm_run_bat_analyze: "Analyze BAT run",
+		action_pm_run_prepare: "Prepare run",
+		action_pm_snapshot_create: "Create snapshot",
+		action_pm_spec_materialize: "Materialize spec",
+		action_pm_sprint_cancel: "Cancel sprint",
+		action_pm_sprint_close: "Close sprint",
+		action_pm_sprint_create: "Create sprint",
+		action_pm_sprint_goal_revise: "Revise sprint goal",
+		action_pm_sprint_select: "Select sprint",
+		action_pm_sprint_start: "Start sprint",
+		action_pm_thread_create: "Create discussion",
+		action_pm_thread_plan: "Plan discussion",
+		action_pm_thread_plan_revise: "Revise discussion plan",
+		action_pm_thread_rename: "Rename discussion",
+		action_pm_work_bind: "Bind work",
+		action_pm_work_batch_evidence_record: "Record work-batch evidence",
+		action_pm_work_batch_start: "Start work batch",
+		action_pm_work_package_create: "Create work package",
+		action_pm_workload_capture: "Capture workload",
+		action_pm_workspace_create: "Create workspace",
+		action_pm_workspace_member_set: "Set workspace member",
+		action_project_skills_update: "Update project skills",
+		action_repair_create: "Create repair",
+		action_session_failover: "Fail over session",
+		action_session_interrupt: "Interrupt session",
+		action_session_labels_set: "Set session labels",
+		action_session_position: "Set session position",
+		action_session_read: "Mark session read",
+		action_session_record_verification: "Record session verification",
+		action_session_relay: "Relay session",
+		action_task_command_reconcile: "Reconcile task command",
+		action_task_mark_stage: "Mark task stage",
+		action_task_request_ted: "Request a decision",
+		action_task_submit: "Submit task",
+		action_work_item_approve: "Approve work item",
+		action_work_item_continue: "Continue work item",
+		action_work_item_order: "Reorder work items",
+		action_work_item_pin: "Pin work item"
 	},
 	"zh-TW": {
 		global_product: "BAT Dashboard",
@@ -763,7 +874,7 @@ var globalStrings = {
 		action_session_permissions: "設定工作階段權限",
 		action_session_approve: "核准待處理的工作階段",
 		action_repository_continue: "從已發布版本繼續",
-		action_github_merge: "合併拉取請求",
+		action_github_merge: "合併 PR",
 		action_delivery_merge: "合併並部署",
 		action_deployment_start: "開始部署",
 		action_cleanup_apply: "套用清理",
@@ -785,10 +896,121 @@ var globalStrings = {
 		action_setup_repository: "設定儲存庫",
 		action_setup_verification: "設定驗證",
 		action_models_update: "更新模型偏好",
-		rail_needs_you: "需要你",
-		rail_asking: "正在詢問",
+		rail_needs_you: "需要你處理",
+		rail_asking: "等你回答",
 		rail_failed: "失敗",
-		rail_running: "執行中"
+		rail_running: "執行中",
+		global_open_operation: "開啟操作",
+		global_not_updated: "未能更新",
+		global_empty_active: "沒有執行中的操作",
+		global_empty_unread: "沒有未讀更新",
+		global_attempts: "嘗試次數",
+		global_token_rejected: "權杖無效。",
+		global_discussion: "討論",
+		global_plan: "計畫",
+		global_plan_version: "計畫 v{n}",
+		global_workspace: "工作區",
+		action_artifact_capture_item: "擷取成果",
+		action_checkpoint_create: "建立檢查點",
+		action_deployment_rollback: "還原部署",
+		action_fanout_plan: "規劃分散執行",
+		action_fanout_start: "開始分散執行",
+		action_github_pr_publish: "發布 PR",
+		action_github_pr_update: "更新 PR",
+		action_integration_preview: "預覽整合",
+		action_pm_ahp_observe: "觀察 AHP",
+		action_pm_backlog_revise: "修訂待辦",
+		action_pm_conversation_adopt: "採用討論",
+		action_pm_conversation_propose: "在討論中提案",
+		action_pm_dependencies_capture: "記錄相依",
+		action_pm_dependencies_declare: "宣告相依",
+		action_pm_dependencies_retract: "撤回相依",
+		action_pm_dod_revise: "修訂完成定義",
+		action_pm_evidence_capture: "記錄證據",
+		action_pm_execution_verify: "驗證執行",
+		action_pm_follow_up_analyze: "分析後續",
+		action_pm_follow_up_prepare: "準備後續",
+		action_pm_github_observe: "觀察 GitHub",
+		action_pm_governance_adoption_link: "連結治理採用",
+		action_pm_governance_decide: "記錄治理決定",
+		action_pm_governance_record: "記錄治理",
+		action_pm_governance_revise: "修訂治理",
+		action_pm_input_confirm: "確認輸入",
+		action_pm_input_record: "記錄輸入",
+		action_pm_issue_cancel: "取消議題",
+		action_pm_issue_publish: "發布議題",
+		action_pm_lifecycle_close: "關閉生命週期",
+		action_pm_lifecycle_pause: "暫停生命週期",
+		action_pm_lifecycle_reopen: "重新開啟生命週期",
+		action_pm_lifecycle_retain_inflight: "保留進行中的工作",
+		action_pm_lifecycle_set_stage: "設定生命週期階段",
+		action_pm_maintenance_check: "檢查維護",
+		action_pm_maintenance_repair: "修復維護項目",
+		action_pm_maintenance_repair_evidence_record: "記錄修復證據",
+		action_pm_maintenance_repair_runtime_observe: "觀察修復執行",
+		action_pm_maintenance_policy_adopt: "採用維護政策",
+		action_pm_maintenance_review_candidate_record: "記錄維護候選",
+		action_pm_maintenance_review_complete: "完成維護審查",
+		action_pm_maintenance_review_follow_up_record: "記錄維護後續",
+		action_pm_maintenance_review_note: "記下維護審查",
+		action_pm_maintenance_review_prepare: "準備維護審查",
+		action_pm_meeting_complete: "完成會議",
+		action_pm_meeting_context_revise: "修訂會議脈絡",
+		action_pm_meeting_create: "建立會議",
+		action_pm_meeting_draft: "起草會議",
+		action_pm_meeting_follow_up_record: "記錄會議後續",
+		action_pm_meeting_note: "記下會議",
+		action_pm_message_append: "附加訊息",
+		action_pm_plan_adopt: "採用計畫",
+		action_pm_plan_draft: "起草計畫",
+		action_pm_product_goal_revise: "修訂產品目標",
+		action_pm_project_bind: "綁定專案",
+		action_pm_quality_review_create: "建立品質審查",
+		action_pm_quality_review_record: "記錄品質審查",
+		action_pm_quality_review_revoke: "撤回品質審查",
+		action_pm_release_baseline_register: "登錄發布基線",
+		action_pm_roadmap_baseline_set: "設定路線圖基線",
+		action_pm_roadmap_forecast_set: "設定路線圖預測",
+		action_pm_roadmap_observe: "觀察路線圖",
+		action_pm_run_analyze: "分析執行",
+		action_pm_run_bat_analyze: "分析 BAT 執行",
+		action_pm_run_prepare: "準備執行",
+		action_pm_snapshot_create: "建立快照",
+		action_pm_spec_materialize: "具體化規格",
+		action_pm_sprint_cancel: "取消衝刺",
+		action_pm_sprint_close: "關閉衝刺",
+		action_pm_sprint_create: "建立衝刺",
+		action_pm_sprint_goal_revise: "修訂衝刺目標",
+		action_pm_sprint_select: "選擇衝刺",
+		action_pm_sprint_start: "開始衝刺",
+		action_pm_thread_create: "建立討論",
+		action_pm_thread_plan: "規劃討論",
+		action_pm_thread_plan_revise: "修訂討論計畫",
+		action_pm_thread_rename: "重新命名討論",
+		action_pm_work_bind: "綁定工作",
+		action_pm_work_batch_evidence_record: "記錄工作批次證據",
+		action_pm_work_batch_start: "開始工作批次",
+		action_pm_work_package_create: "建立工作包",
+		action_pm_workload_capture: "記錄工作量",
+		action_pm_workspace_create: "建立工作區",
+		action_pm_workspace_member_set: "設定工作區成員",
+		action_project_skills_update: "更新專案技能",
+		action_repair_create: "建立修復",
+		action_session_failover: "工作階段容錯轉移",
+		action_session_interrupt: "中斷工作階段",
+		action_session_labels_set: "設定工作階段標籤",
+		action_session_position: "設定工作階段位置",
+		action_session_read: "標記工作階段已讀",
+		action_session_record_verification: "記錄工作階段驗證",
+		action_session_relay: "轉送工作階段",
+		action_task_command_reconcile: "核對任務指令",
+		action_task_mark_stage: "標記任務階段",
+		action_task_request_ted: "請求決定",
+		action_task_submit: "提交任務",
+		action_work_item_approve: "核准工作項目",
+		action_work_item_continue: "繼續工作項目",
+		action_work_item_order: "調整工作項目順序",
+		action_work_item_pin: "固定工作項目"
 	}
 };
 //#endregion
@@ -7459,7 +7681,7 @@ var STRINGS = {
 		attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
 		attention_completion: "待你確認",
 		attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
-		attention_problems: "失敗的操作",
+		attention_problems: "需要處理",
 		attention_problems_note: "包含結果尚不確定的操作；先查看原操作與回執。",
 		attention_hosts: "主機",
 		attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
@@ -8929,7 +9151,7 @@ var STRINGS = {
 		attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
 		attention_completion: "Reviews",
 		attention_completion_note: "Work reported done or with every step checked still needs your decision.",
-		attention_problems: "Failed operations",
+		attention_problems: "Needs attention",
 		attention_problems_note: "Includes uncertain outcomes. Review the original operation and its receipts.",
 		attention_hosts: "Hosts",
 		attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
@@ -9520,6 +9742,8 @@ function icon(name, { label, size = 16 } = {}) {
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
 var nodeIcon = (icon$1) => typeof icon$1 === "string" ? icon(icon$1) : icon$1;
+var choiceFocus = null;
+var choiceSerial = 0;
 function button({ variant = "secondary", size = "md", icon, iconPosition = "start", label, onClick, ...attrs } = {}) {
 	return h$1("button", {
 		type: "button",
@@ -9574,11 +9798,28 @@ function choices({ options, value, onChange = () => {}, label }, isTabs) {
 		const enabled = buttons.filter((node) => !node.disabled), current = enabled.indexOf(document.activeElement);
 		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (["ArrowLeft", "ArrowUp"].includes(event.key) ? -1 : 1) + enabled.length) % enabled.length];
 		if (!next) return;
+		const ticket = {
+			label,
+			id: ++choiceSerial
+		};
+		choiceFocus = ticket;
 		next.focus();
 		next.click();
+		setTimeout(() => {
+			if (choiceFocus === ticket) choiceFocus = null;
+		}, 80);
 	});
 	root.append(...buttons);
 	select(options.some((o) => o.value === value && !o.disabled) ? value : options.find((o) => !o.disabled)?.value, false);
+	if (choiceFocus?.label === label) {
+		choiceFocus = null;
+		const focusChecked = () => {
+			if (!root.isConnected) return;
+			buttons.find((node) => node.getAttribute(isTabs ? "aria-selected" : "aria-checked") === "true")?.focus();
+		};
+		queueMicrotask(focusChecked);
+		setTimeout(focusChecked, 50);
+	}
 	root.setValue = (next) => select(next, false);
 	return root;
 }
@@ -9685,23 +9926,27 @@ function menu({ button: trigger, items }) {
 	trigger.setAttribute("aria-haspopup", "menu");
 	trigger.setAttribute("aria-controls", panel.id);
 	trigger.setAttribute("aria-expanded", "false");
-	const controls = items.map((item) => h$1(item.href ? "a" : "button", {
-		type: item.href ? null : "button",
-		href: item.href,
-		role: "menuitem",
-		"data-menu-key": item.key,
-		tabindex: -1,
-		disabled: item.href ? null : item.disabled,
-		"aria-disabled": item.disabled ? "true" : null,
-		onclick: (event) => {
-			if (item.disabled) {
-				event.preventDefault();
-				return;
+	const controls = items.map((item) => {
+		let node;
+		node = h$1(item.href ? "a" : "button", {
+			type: item.href ? null : "button",
+			href: item.href,
+			role: "menuitem",
+			"data-menu-key": item.key,
+			tabindex: -1,
+			disabled: item.href ? null : item.disabled,
+			"aria-disabled": item.disabled ? "true" : null,
+			onclick: (event) => {
+				if (node.disabled || node.getAttribute("aria-disabled") === "true") {
+					event.preventDefault();
+					return;
+				}
+				close();
+				item.onSelect?.();
 			}
-			close();
-			item.onSelect?.();
-		}
-	}, nodeIcon(item.icon), item.label));
+		}, nodeIcon(item.icon), item.label);
+		return node;
+	});
 	panel.append(...controls);
 	const enabledControls = () => controls.filter((node) => node.getAttribute("aria-disabled") !== "true");
 	function close(restore = true) {
@@ -9763,8 +10008,8 @@ function trapFocus(root, event) {
 		first.focus();
 	}
 }
-function inspector({ title, onClose = () => {}, returnFocus = document.activeElement }) {
-	const media = matchMedia("(min-width: 1200px)"), titleId = uid();
+function inspector({ title, onClose = () => {}, returnFocus } = {}) {
+	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
 	const body = h$1("div", { class: "ui-inspector-body" });
 	const closeButton = iconButton({
 		icon: "x",
@@ -9826,7 +10071,15 @@ function inspector({ title, onClose = () => {}, returnFocus = document.activeEle
 		document.removeEventListener("keydown", keys);
 		media.removeEventListener("change", resize);
 		onClose();
-		if (returnFocus?.isConnected && returnFocus.getClientRects().length && !returnFocus.closest("[hidden], [inert]")) returnFocus.focus();
+		let target = null;
+		try {
+			target = typeof returnFocus === "function" ? returnFocus() : returnFocus;
+		} catch {
+			target = null;
+		}
+		const rendered = (node) => node?.isConnected && node.getClientRects().length && !node.closest("[hidden], [inert]");
+		if (rendered(target)) target.focus();
+		else if (rendered(opener)) opener.focus();
 	}
 	queueMicrotask(() => {
 		if (closed || !root.isConnected) return;
@@ -9854,7 +10107,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		const key = typeof rowKey === "function" ? rowKey(row) : row[rowKey], active = key === selected;
 		const tr = h$1("tr", {
 			"data-row-key": key,
-			tabindex: active || selected == null && i === 0 ? 0 : -1,
+			tabindex: active || !selected && i === 0 ? 0 : -1,
 			"aria-selected": String(active),
 			onclick: (event) => {
 				if (!event.target.closest("button, a, input, select")) select();
@@ -9904,6 +10157,21 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 			}
 		});
 		controls.push(tr);
+	});
+	root.addEventListener("keydown", (event) => {
+		if (event.target !== root || !controls.length) return;
+		if (![
+			"ArrowDown",
+			"ArrowUp",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		event.preventDefault();
+		const index = event.key === "End" || event.key === "ArrowUp" ? controls.length - 1 : 0;
+		controls.forEach((node, n) => {
+			node.tabIndex = n === index ? 0 : -1;
+		});
+		controls[index].focus();
 	});
 	return root;
 }
@@ -10430,7 +10698,108 @@ var ACTIONS = {
 	"setup.host": "action_setup_host",
 	"setup.repository": "action_setup_repository",
 	"setup.verification": "action_setup_verification",
-	"preferences.models.update": "action_models_update"
+	"preferences.models.update": "action_models_update",
+	"artifact.capture": "action_artifact_capture_item",
+	"checkpoint.create": "action_checkpoint_create",
+	"deployment.rollback": "action_deployment_rollback",
+	"fanout.plan": "action_fanout_plan",
+	"fanout.start": "action_fanout_start",
+	"github.pr.publish": "action_github_pr_publish",
+	"github.pr.update": "action_github_pr_update",
+	"integration.preview": "action_integration_preview",
+	"pm.ahp.observe": "action_pm_ahp_observe",
+	"pm.backlog.revise": "action_pm_backlog_revise",
+	"pm.conversation.adopt": "action_pm_conversation_adopt",
+	"pm.conversation.propose": "action_pm_conversation_propose",
+	"pm.dependencies.capture": "action_pm_dependencies_capture",
+	"pm.dependencies.declare": "action_pm_dependencies_declare",
+	"pm.dependencies.retract": "action_pm_dependencies_retract",
+	"pm.dod.revise": "action_pm_dod_revise",
+	"pm.evidence.capture": "action_pm_evidence_capture",
+	"pm.execution.verify": "action_pm_execution_verify",
+	"pm.follow_up.analyze": "action_pm_follow_up_analyze",
+	"pm.follow_up.prepare": "action_pm_follow_up_prepare",
+	"pm.github.observe": "action_pm_github_observe",
+	"pm.governance.adoption.link": "action_pm_governance_adoption_link",
+	"pm.governance.decide": "action_pm_governance_decide",
+	"pm.governance.record": "action_pm_governance_record",
+	"pm.governance.revise": "action_pm_governance_revise",
+	"pm.input.confirm": "action_pm_input_confirm",
+	"pm.input.record": "action_pm_input_record",
+	"pm.issue.cancel": "action_pm_issue_cancel",
+	"pm.issue.publish": "action_pm_issue_publish",
+	"pm.lifecycle.close": "action_pm_lifecycle_close",
+	"pm.lifecycle.pause": "action_pm_lifecycle_pause",
+	"pm.lifecycle.reopen": "action_pm_lifecycle_reopen",
+	"pm.lifecycle.retain_inflight": "action_pm_lifecycle_retain_inflight",
+	"pm.lifecycle.set_stage": "action_pm_lifecycle_set_stage",
+	"pm.maintenance.check": "action_pm_maintenance_check",
+	"pm.maintenance.repair": "action_pm_maintenance_repair",
+	"pm.maintenance.repair.evidence.record": "action_pm_maintenance_repair_evidence_record",
+	"pm.maintenance.repair.runtime.observe": "action_pm_maintenance_repair_runtime_observe",
+	"pm.maintenance_policy.adopt": "action_pm_maintenance_policy_adopt",
+	"pm.maintenance_review.candidate.record": "action_pm_maintenance_review_candidate_record",
+	"pm.maintenance_review.complete": "action_pm_maintenance_review_complete",
+	"pm.maintenance_review.follow_up.record": "action_pm_maintenance_review_follow_up_record",
+	"pm.maintenance_review.note": "action_pm_maintenance_review_note",
+	"pm.maintenance_review.prepare": "action_pm_maintenance_review_prepare",
+	"pm.meeting.complete": "action_pm_meeting_complete",
+	"pm.meeting.context.revise": "action_pm_meeting_context_revise",
+	"pm.meeting.create": "action_pm_meeting_create",
+	"pm.meeting.draft": "action_pm_meeting_draft",
+	"pm.meeting.follow_up.record": "action_pm_meeting_follow_up_record",
+	"pm.meeting.note": "action_pm_meeting_note",
+	"pm.message.append": "action_pm_message_append",
+	"pm.plan.adopt": "action_pm_plan_adopt",
+	"pm.plan.draft": "action_pm_plan_draft",
+	"pm.product_goal.revise": "action_pm_product_goal_revise",
+	"pm.project.bind": "action_pm_project_bind",
+	"pm.quality.review.create": "action_pm_quality_review_create",
+	"pm.quality.review.record": "action_pm_quality_review_record",
+	"pm.quality.review.revoke": "action_pm_quality_review_revoke",
+	"pm.release_baseline.register": "action_pm_release_baseline_register",
+	"pm.roadmap.baseline.set": "action_pm_roadmap_baseline_set",
+	"pm.roadmap.forecast.set": "action_pm_roadmap_forecast_set",
+	"pm.roadmap.observe": "action_pm_roadmap_observe",
+	"pm.run.analyze": "action_pm_run_analyze",
+	"pm.run.bat.analyze": "action_pm_run_bat_analyze",
+	"pm.run.prepare": "action_pm_run_prepare",
+	"pm.snapshot.create": "action_pm_snapshot_create",
+	"pm.spec.materialize": "action_pm_spec_materialize",
+	"pm.sprint.cancel": "action_pm_sprint_cancel",
+	"pm.sprint.close": "action_pm_sprint_close",
+	"pm.sprint.create": "action_pm_sprint_create",
+	"pm.sprint.goal.revise": "action_pm_sprint_goal_revise",
+	"pm.sprint.select": "action_pm_sprint_select",
+	"pm.sprint.start": "action_pm_sprint_start",
+	"pm.thread.create": "action_pm_thread_create",
+	"pm.thread.plan": "action_pm_thread_plan",
+	"pm.thread.plan.revise": "action_pm_thread_plan_revise",
+	"pm.thread.rename": "action_pm_thread_rename",
+	"pm.work.bind": "action_pm_work_bind",
+	"pm.work_batch.evidence.record": "action_pm_work_batch_evidence_record",
+	"pm.work_batch.start": "action_pm_work_batch_start",
+	"pm.work_package.create": "action_pm_work_package_create",
+	"pm.workload.capture": "action_pm_workload_capture",
+	"pm.workspace.create": "action_pm_workspace_create",
+	"pm.workspace.member.set": "action_pm_workspace_member_set",
+	"project.skills.update": "action_project_skills_update",
+	"repair.create": "action_repair_create",
+	"session.failover": "action_session_failover",
+	"session.interrupt": "action_session_interrupt",
+	"session.labels.set": "action_session_labels_set",
+	"session.position": "action_session_position",
+	"session.read": "action_session_read",
+	"session.record_verification": "action_session_record_verification",
+	"session.relay": "action_session_relay",
+	"task.command.reconcile": "action_task_command_reconcile",
+	"task.mark_stage": "action_task_mark_stage",
+	"task.request_ted": "action_task_request_ted",
+	"task.submit": "action_task_submit",
+	"work_item.approve": "action_work_item_approve",
+	"work_item.continue": "action_work_item_continue",
+	"work_item.order": "action_work_item_order",
+	"work_item.pin": "action_work_item_pin"
 };
 var OPERATION_STATUS = {
 	accepted: "waiting",
@@ -10450,11 +10819,18 @@ var WORK_STATUS = {
 	done: "done",
 	awaiting_approval: "in_review"
 };
+function humanizeAction(action) {
+	const words = String(action || "").split(/[._]+/).filter(Boolean);
+	if (!words.length) return "";
+	return words.map((word, index) => index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word).join(" ");
+}
 function actionLabel(action) {
 	const key = ACTIONS[action];
-	if (!key) return t("action_unknown");
-	const label = t(key);
-	return label === key ? t("action_unknown") : label;
+	if (key) {
+		const label = t(key);
+		if (label && label !== key) return label;
+	}
+	return humanizeAction(action) || t("action_unknown");
 }
 function operationStatusKey(status) {
 	return OPERATION_STATUS[status] || "unknown";
@@ -10462,9 +10838,22 @@ function operationStatusKey(status) {
 function workStatusKey(state) {
 	return WORK_STATUS[state] || "unknown";
 }
+function named(value, rawId) {
+	const text = labelSegment(value);
+	return text && text !== rawId ? text : "";
+}
 function operationTargetText(op) {
 	const target = op?.target;
 	if (!target || typeof target !== "object") return labelSegment(target);
+	if (target.plan_id || target.revision_id || target.plan_version != null) {
+		const version = [target.plan_version, target.version].map(Number).find((n) => Number.isInteger(n) && n > 0 && n < 100);
+		return version ? t("global_plan_version", { n: version }) : t("global_plan");
+	}
+	if (target.thread_id) {
+		const title = named(target.thread_title || target.title, target.thread_id);
+		return title ? joinLabel([t("global_discussion"), title]) : t("global_discussion");
+	}
+	if (target.workspace_id) return named(target.workspace_name || target.name, target.workspace_id) || t("global_workspace");
 	return labelSegment(target.title || target.name || target.recipe || target.branch || target.repository || target.host || target.session_id || target.project_id || target.work_item_id || target.checkpoint_id);
 }
 function operationMeta(op, whenText = "") {
@@ -10480,10 +10869,24 @@ function formatTime(seconds) {
 	const date = new Date(value * 1e3);
 	return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
 }
-function operationDuration(op) {
+var TERMINAL_OPERATION = new Set([
+	"succeeded",
+	"failed",
+	"cancelled",
+	"needs_attention",
+	"uncertain"
+]);
+var ACTIVE_OPERATION = new Set([
+	"accepted",
+	"running",
+	"waiting_checks",
+	"waiting_external"
+]);
+function operationDuration(op, nowSeconds) {
 	const start = Number(op?.created_at);
-	const end = Number(op?.finished_at ?? op?.completed_at);
-	if (!Number.isFinite(start) || start <= 0 || !Number.isFinite(end) || end < start) return "";
+	if (!Number.isFinite(start) || start <= 0) return "";
+	const end = TERMINAL_OPERATION.has(op?.status) ? Number(op?.updated_at) : ACTIVE_OPERATION.has(op?.status) ? Number(nowSeconds) : NaN;
+	if (!Number.isFinite(end) || end < start) return "";
 	const seconds = Math.round(end - start);
 	if (seconds < 60) return t("global_duration_s", { n: seconds });
 	const minutes = Math.floor(seconds / 60);
@@ -10515,11 +10918,7 @@ function railPresentation(state) {
 		loud: false,
 		tone: state.tone || "info"
 	};
-	return {
-		labelKey: state.key,
-		loud: false,
-		tone: state.tone || ""
-	};
+	return null;
 }
 function reasonText$1(code) {
 	const token = labelSegment(code);
@@ -10561,48 +10960,60 @@ function firstRunCard({ h, t, body, footer }) {
 		"aria-hidden": "true"
 	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
 }
-function settingsFrame({ h, t, sections, exclusive = false }) {
+function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSelect = () => {} }) {
 	const nav = h("nav", {
 		class: "global-settings-nav",
-		role: "tablist",
-		"aria-orientation": "vertical",
+		role: exclusive ? "tablist" : null,
+		"aria-orientation": exclusive ? "vertical" : null,
 		"aria-label": t("global_settings_nav")
 	});
 	const panels = h("div", { class: "global-settings-panels" });
 	const buttons = [];
 	const roots = [];
+	let preferred = selected || "";
 	for (const section of sections) {
 		const panel = h("section", {
 			class: "global-settings-section",
-			role: "tabpanel",
 			id: `settings-panel-${section.id}`,
 			"data-settings-panel": section.id,
-			"aria-labelledby": `settings-tab-${section.id}`
+			role: exclusive ? "tabpanel" : null,
+			"aria-labelledby": exclusive ? `settings-tab-${section.id}` : null
 		});
 		if (section.id === "models") panel.setAttribute("data-settings-models", "");
-		const button = h("button", {
+		const button = exclusive ? h("button", {
 			type: "button",
 			role: "tab",
 			id: `settings-tab-${section.id}`,
 			"data-settings-nav": section.id,
 			"aria-controls": panel.id
+		}, section.label) : h("a", {
+			href: `#settings-panel-${section.id}`,
+			id: `settings-tab-${section.id}`,
+			"data-settings-nav": section.id
 		}, section.label);
 		if (section.hidden) {
 			button.hidden = true;
 			panel.hidden = true;
 		}
-		button.addEventListener("click", () => select(section.id, true));
+		button.addEventListener("click", (event) => {
+			if (!exclusive) event.preventDefault();
+			select(section.id, true);
+		});
 		buttons.push(button);
 		roots.push(panel);
 		nav.append(button);
 		panels.append(panel);
 	}
 	const visible = () => buttons.filter((button) => !button.hidden);
+	const marked = (button) => exclusive ? button.getAttribute("aria-selected") === "true" : button.getAttribute("aria-current") === "true";
 	function apply(id) {
 		for (const button of buttons) {
 			const on = !button.hidden && button.dataset.settingsNav === id;
-			button.setAttribute("aria-selected", on ? "true" : "false");
-			button.tabIndex = on ? 0 : -1;
+			if (exclusive) {
+				button.setAttribute("aria-selected", on ? "true" : "false");
+				button.tabIndex = on ? 0 : -1;
+			} else if (on) button.setAttribute("aria-current", "true");
+			else button.removeAttribute("aria-current");
 		}
 		if (!exclusive) return;
 		for (const node of roots) {
@@ -10613,7 +11024,9 @@ function settingsFrame({ h, t, sections, exclusive = false }) {
 	function select(id, scroll) {
 		const button = buttons.find((item) => item.dataset.settingsNav === id);
 		if (!button || button.hidden) return;
+		preferred = id;
 		apply(id);
+		onSelect(id);
 		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
 	}
 	nav.addEventListener("keydown", (event) => {
@@ -10634,8 +11047,8 @@ function settingsFrame({ h, t, sections, exclusive = false }) {
 		next.focus();
 		select(next.dataset.settingsNav, true);
 	});
-	const first = sections.find((section) => !section.hidden);
-	if (first) apply(first.id);
+	const initial = buttons.find((button) => !button.hidden && button.dataset.settingsNav === preferred) || visible()[0];
+	if (initial) apply(initial.dataset.settingsNav);
 	function panel(id) {
 		return roots.find((node) => node.dataset.settingsPanel === id);
 	}
@@ -10645,14 +11058,14 @@ function settingsFrame({ h, t, sections, exclusive = false }) {
 		if (!button || !node) return;
 		button.hidden = false;
 		if (!exclusive) node.hidden = false;
-		const selected = visible().find((item) => item.getAttribute("aria-selected") === "true");
-		apply(selected ? selected.dataset.settingsNav : id);
+		if (preferred === id) apply(id);
+		else if (!visible().some(marked)) apply(id);
 	}
 	function hide(id) {
 		const button = buttons.find((node) => node.dataset.settingsNav === id);
 		const node = panel(id);
 		if (!button || !node) return;
-		const was = button.getAttribute("aria-selected") === "true";
+		const was = marked(button);
 		button.hidden = true;
 		node.hidden = true;
 		if (was) {
@@ -10660,14 +11073,20 @@ function settingsFrame({ h, t, sections, exclusive = false }) {
 			if (next) apply(next.dataset.settingsNav);
 		}
 	}
+	function reapply() {
+		if (buttons.find((node) => !node.hidden && node.dataset.settingsNav === preferred)) apply(preferred);
+	}
+	const root = h("div", {
+		class: "global-settings",
+		"data-settings-exclusive": exclusive ? "true" : "false"
+	}, nav, panels);
+	root.reapply = reapply;
 	return {
-		root: h("div", {
-			class: "global-settings",
-			"data-settings-exclusive": exclusive ? "true" : "false"
-		}, nav, panels),
+		root,
 		panel,
 		show,
-		hide
+		hide,
+		reapply
 	};
 }
 //#endregion
@@ -33727,10 +34146,12 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 	};
 	const link = (href, label, state = null, reading = null) => {
 		const presented = railPresentation(state);
+		const statusText = presented ? t(presented.labelKey) : "";
+		const unreadCount = reading?.unread_count > 0 ? String(reading.unread_count) + (reading.complete === false ? "+" : "") : "";
 		const full = joinLabel([
 			label,
-			presented ? t(presented.labelKey) : "",
-			reading?.unread_count > 0 ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete ? "" : "+") : ""
+			statusText,
+			unreadCount ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete === false ? "+" : "") : ""
 		]);
 		let glyph = null;
 		if (presented?.labelKey === "rail_needs_you" || presented?.labelKey === "rail_asking") {
@@ -33750,16 +34171,31 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		}, h("span", {
 			class: "workspace-tree-label",
 			title: label
-		}, label), presented ? h("span", {
+		}, label), unreadCount ? h("span", { class: "workspace-unread-count" }, unreadCount) : null, presented ? h("span", {
 			class: "workspace-tree-state",
 			"aria-hidden": "true"
 		}, glyph) : null);
+	};
+	const workActivity = (item) => {
+		if (item.status === "failed") return {
+			key: item.kind === "task" ? "task_state_failed" : item.kind === "operation" ? "op_failed" : "wi_state_failed",
+			tone: "bad"
+		};
+		if (item.status === "needs_ted" || item.status === "needs_you" || item.status === "needs_attention") return {
+			key: "workspace_needs_you",
+			tone: "stale"
+		};
+		if (item.status === "awaiting_approval") return {
+			key: "wi_state_awaiting_approval",
+			tone: "stale"
+		};
+		return sessionActivity(item.session || {});
 	};
 	const workLink = (pid, item) => link(`#/work/${[
 		pid,
 		item.kind,
 		item.id
-	].map(encodeURIComponent).join("/")}`, item.title || item.branch || item.action || item.id, sessionActivity(item.session || {}), item.reading);
+	].map(encodeURIComponent).join("/")}`, item.title || item.branch || item.action || item.id, workActivity(item), item.reading);
 	const render = () => {
 		if (disposed) return;
 		const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;
@@ -34812,42 +35248,71 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		}
 	});
 	tabs.classList.add("global-inbox-tabs");
+	const canApprove = caps?.actions?.some((action) => action.action === "session.approve_pending" && action.allowed === true);
+	const canStart = caps?.scopes?.includes("start") && caps?.actions?.some((action) => action.action === "session.start" && action.allowed === true);
+	const emptyLink = tab === "active" ? h("a", {
+		class: "ui-button secondary ui-sm",
+		href: "#/operations/active"
+	}, t("tab_to_confirm")) : tab === "unread" ? null : canApprove ? h("a", {
+		class: "ui-button secondary ui-sm",
+		href: "#/approvals"
+	}, t("global_approvals")) : canStart ? h("a", {
+		class: "ui-button secondary ui-sm",
+		href: "#/start"
+	}, t("start_title_page")) : h("a", {
+		class: "ui-button secondary ui-sm",
+		href: "#/projects"
+	}, t("sessions_projects"));
 	const empty = emptyState({
-		title: t("empty_needs_you"),
-		action: h("div", { class: "actions" }, h("a", {
-			class: "ui-button secondary ui-sm",
-			href: "#/projects"
-		}, t("sessions_projects")), caps?.scopes?.includes("start") && caps?.actions?.some((a) => a.action === "session.start" && a.allowed === true) ? h("a", {
-			class: "ui-button primary ui-sm",
-			href: "#/start"
-		}, t("start_title_page")) : null)
+		title: t(tab === "active" ? "global_empty_active" : tab === "unread" ? "global_empty_unread" : "empty_needs_you"),
+		action: emptyLink
 	});
 	empty.hidden = true;
+	const noteKeys = [
+		"replies",
+		"completion",
+		"problems",
+		"hosts",
+		"active",
+		...unread ? ["unread"] : []
+	];
 	const notes = disclosure({
 		label: t("global_details"),
 		key: storageKey + ".notes",
-		body: h("div", {}, ...[
-			"replies",
-			"completion",
-			"problems",
-			"hosts",
-			"active",
-			"unread"
-		].map((key) => h("p", {}, h("strong", {}, t("attention_" + key)), " ", t("attention_" + key + "_note"))), h("p", {}, t("empty_next_work")))
+		body: h("div", {}, ...noteKeys.map((key) => h("p", {}, h("strong", {}, t("attention_" + key)), " ", t("attention_" + key + "_note"))), h("p", {}, t("empty_next_work")))
 	});
 	let sheet = null;
+	const inspectorHost = h("div", { class: "global-ops-inspector" });
+	const column = h("div", { class: "global-pending-main" });
+	const layout = h("div", { class: "global-ops" }, column, inspectorHost);
+	const focusInbox = (key) => {
+		const current = column.querySelector(`[data-inbox-key="${CSS.escape(key)}"]`)?.querySelector("a, button");
+		if (current) return current;
+		const next = [...column.querySelectorAll("[data-inbox-key] a, [data-inbox-key] button")].find((node) => node.closest("[data-inbox-key]")?.dataset.inboxKey !== key);
+		if (next) return next;
+		const fallback = column.querySelector(".global-group h2") || main.querySelector("h1");
+		if (fallback) {
+			fallback.tabIndex = -1;
+			return fallback;
+		}
+		return null;
+	};
 	const open = (key, title, nodes) => {
 		if (!sheet?.isConnected || sheet.dataset.inboxKey !== key) {
 			sheet?.dispose();
 			const node = inspector({
 				title,
+				returnFocus: () => focusInbox(key),
 				onClose: () => {
-					if (sheet === node) sheet = null;
+					if (sheet !== node) return;
+					sheet = null;
+					layout.classList.remove("has-inspector");
 				}
 			});
 			node.dataset.inboxKey = key;
 			sheet = node;
-			main.append(node);
+			inspectorHost.append(node);
+			layout.classList.add("has-inspector");
 		}
 		sheet.body.replaceChildren(...[].concat(nodes).flat().filter((node) => node != null && node !== false));
 	};
@@ -34872,7 +35337,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			class: "global-view-all",
 			href: "#/operations/attention"
 		}, t("global_view_all")) : null;
-		const quiet = key === "active" ? h("a", { href: "#/operations/active" }, t("operations_view_active")) : null;
+		const quiet = key === "active" ? h("a", { href: "#/operations/active" }, t("tab_to_confirm")) : null;
 		const section = h("section", {
 			class: "global-group",
 			"aria-label": t("attention_" + key),
@@ -34915,50 +35380,48 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			body: h("dl", { class: "kv" }, h("dt", {}, t("global_code")), h("dd", {}, h("code", {}, x.stale_reason || x.error || "—")))
 		})])
 	});
-	const approvals = caps?.actions?.some((action) => action.action === "session.approve_pending" && action.allowed === true) ? h("section", {
-		class: "global-group",
-		"aria-label": t("global_approvals")
-	}, h("div", { class: "global-group-head" }, h("h2", {}, t("global_approvals"))), h("div", { class: "global-inbox-list" }, inboxRow({
-		h,
-		key: "approvals",
-		title: t("bulk_title"),
-		href: "#/approvals",
-		action: h("a", {
-			class: "ui-button secondary ui-sm",
-			href: "#/approvals"
-		}, t("global_review"))
-	}))) : null;
-	main.append(...[
-		pageHeader({
-			title: t("nav_home"),
-			actions: [iconButton({
-				icon: "refresh-cw",
-				label: t("global_refresh"),
-				onClick: () => refresh().catch(() => {})
-			})]
-		}),
-		tabs,
-		empty,
-		...tab === "needs" ? [
-			approvals,
-			add("replies", "/sessions?attention=true&limit=50", "sessions", sessionRow),
-			add("completion", "/work-items?pending=true&limit=50", "work_items", workItemRow),
-			add("problems", "/operations?status=needs_attention,uncertain&limit=50", "operations", opRow, {
-				cursor: "next_before",
-				param: "before"
-			}),
-			add("hosts", "/hosts", "hosts", hostRow, { filter: (x) => x.stale })
-		] : tab === "active" ? [add("active", "/operations?status=accepted,running,waiting_checks,waiting_external&limit=50", "operations", opRow, {
+	const groups = tab === "needs" ? [
+		add("replies", "/sessions?attention=true&limit=50", "sessions", sessionRow),
+		add("completion", "/work-items?pending=true&limit=50", "work_items", workItemRow),
+		add("problems", "/operations?status=needs_attention,uncertain&limit=50", "operations", opRow, {
 			cursor: "next_before",
 			param: "before"
-		})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)],
-		notes
-	].filter((node) => node != null && node !== false));
+		}),
+		add("hosts", "/hosts", "hosts", hostRow, { filter: (x) => x.stale })
+	] : tab === "active" ? [add("active", "/operations?status=accepted,running,waiting_checks,waiting_external&limit=50", "operations", opRow, {
+		cursor: "next_before",
+		param: "before"
+	})] : [add("unread", "/work-items?unread=true&limit=50", "work_items", workItemRow)];
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("global_refresh"),
+		onClick: () => refresh().catch(() => {})
+	});
+	const syncBusy = () => {
+		refreshButton.disabled = sections.some((section) => section.busy);
+	};
+	column.append(empty, ...groups, notes);
+	main.append(pageHeader({
+		title: t("nav_home"),
+		actions: [refreshButton]
+	}), tabs, layout);
 	let serial = Promise.resolve();
+	let lastPending = null;
+	const publishPending = () => {
+		if (tab !== "needs") return;
+		if (!sections.every((item) => item.section.dataset.fresh === "true")) return;
+		const value = {
+			count: sections.reduce((sum, item) => sum + item.size, 0),
+			partial: sections.some((item) => item.partial)
+		};
+		lastPending = value;
+		onPending(value);
+	};
 	const load = async (section, wanted) => {
 		guard();
 		section.busy = true;
 		section.more.disabled = true;
+		syncBusy();
 		if (section.size === null) section.status.replaceChildren(skeleton(3));
 		const focusKey = section.list.contains(document.activeElement) ? document.activeElement.closest("[data-inbox-key]")?.dataset.inboxKey : null;
 		const focusLabel = document.activeElement?.getAttribute("aria-label") || document.activeElement?.textContent || "";
@@ -34992,28 +35455,34 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 				([...row?.querySelectorAll("a, button") || []].find((node) => (node.getAttribute("aria-label") || node.textContent) === focusLabel) || row)?.focus({ preventScroll: true });
 			}
 			reconcile();
-			if (tab === "needs") onPending(sections.every((item) => item.section.dataset.fresh === "true") ? {
-				count: sections.reduce((sum, item) => sum + item.size, 0),
-				partial: sections.some((item) => item.partial)
-			} : {});
+			publishPending();
 		} catch (error) {
 			guard();
 			section.section.dataset.fresh = "false";
-			onPending({});
+			section.section.hidden = false;
 			if ([403, 404].includes(error.status)) {
 				section.list.replaceChildren();
 				section.count.replaceChildren();
 				section.badge.textContent = "";
+				section.badge.hidden = true;
 				section.size = null;
 				section.more.hidden = true;
-				section.section.hidden = false;
 				reconcile();
-			}
-			section.status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("attention_not_updated")));
+				if (tab === "needs") {
+					lastPending = null;
+					onPending({});
+				}
+			} else if (tab === "needs" && lastPending) onPending(lastPending);
+			errorBox(error);
+			section.status.replaceChildren(inlineError({
+				error: { message: t("global_not_updated") },
+				retry: () => refresh(section).catch(() => {})
+			}));
 			throw error;
 		} finally {
 			section.busy = false;
 			section.more.disabled = false;
+			syncBusy();
 		}
 	};
 	const refresh = (only, wanted) => {
@@ -35022,7 +35491,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			const results = await Promise.allSettled((only ? [only] : sections).map((item) => load(item, only ? wanted : item.pages)));
 			guard();
 			const settled = sections.every((item) => item.size === 0 && item.section.dataset.fresh === "true");
-			empty.hidden = tab !== "needs" || Boolean(approvals) || !settled;
+			empty.hidden = !settled;
 			const failed = results.find((item) => item.status === "rejected");
 			if (failed) throw failed.reason;
 		});
@@ -39215,7 +39684,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 function operationList({ h, t, api, guard, statuses, namespace }) {
 	const memory = viewState(namespace || "", "", "operations:" + (statuses || "all"));
 	let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, query = memory.query || "";
-	let sheet = null, request = 0;
+	let sheet = null, request = 0, busyListener = () => {};
 	const list = h("div", { "data-operation-list": "" });
 	const count = h("p", {
 		class: "muted",
@@ -39240,6 +39709,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 	const update = () => {
 		more.hidden = before === null;
 		more.disabled = pending > 0 || failed;
+		busyListener(pending > 0);
 	};
 	const visible = () => {
 		const needle = query.trim().toLocaleLowerCase();
@@ -39283,17 +39753,41 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 		{
 			key: "duration",
 			label: t("global_col_duration"),
-			render: (op) => operationDuration(op) || "—"
+			render: (op) => operationDuration(op, Date.now() / 1e3) || "—"
 		}
 	];
+	const focusRow = (id) => {
+		const row = list.querySelector(`[data-row-key="${CSS.escape(id)}"]`);
+		if (row) return row;
+		const next = list.querySelector("[data-row-key]");
+		if (next) {
+			next.tabIndex = -1;
+			return next;
+		}
+		const heading = document.querySelector("#main h1");
+		if (heading) {
+			heading.tabIndex = -1;
+			return heading;
+		}
+		return null;
+	};
+	function facts(op) {
+		const attempts = typeof op.attempts === "number" && Number.isFinite(op.attempts) ? String(op.attempts) : "—";
+		return h("dl", { class: "kv global-op-facts" }, h("dt", {}, t("actor")), h("dd", {}, op.actor || "—"), h("dt", {}, t("created")), h("dd", {}, formatTime(op.created_at) || "—"), h("dt", {}, t("global_col_duration")), h("dd", {}, operationDuration(op, Date.now() / 1e3) || "—"), h("dt", {}, t("global_attempts")), h("dd", {}, attempts));
+	}
 	function body(op) {
 		const steps = Array.isArray(op.steps) ? op.steps : [];
 		const precise = t("op_" + op.status);
 		return [
+			h("a", {
+				class: "ui-button secondary ui-sm",
+				href: `#/op/${encodeURIComponent(op.operation_id)}`
+			}, t("global_open_operation")),
 			statusPill(operationStatusKey(op.status)),
 			h("p", { class: "muted" }, operationMeta(op, formatTime(op.created_at)) || "—"),
 			op.status_reason ? h("p", {}, op.status_reason) : null,
 			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
+			facts(op),
 			disclosure({
 				label: t("global_details"),
 				key: "operations." + op.operation_id,
@@ -39314,6 +39808,7 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			previous?.dispose();
 			const node = inspector({
 				title: actionLabel(op.action),
+				returnFocus: () => focusRow(id),
 				onClose: () => {
 					if (sheet !== node) return;
 					memory.selected = "";
@@ -39339,7 +39834,6 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 			if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
 			if ([403, 404].includes(error.status)) {
 				rows = rows.filter((item) => item.operation_id !== id);
-				sheet.dispose();
 				paint();
 				return;
 			}
@@ -39424,6 +39918,9 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 	return {
 		box,
 		load,
+		onBusy(fn) {
+			busyListener = typeof fn === "function" ? fn : () => {};
+		},
 		filter(text) {
 			query = memory.query = text || "";
 			paint();
@@ -43531,6 +44028,7 @@ function updateOnline(value) {
 	if (!value) shell?.pending({});
 	for (const fn of onlineListeners) fn();
 }
+var connectionPainters = new Set();
 function paintConnection(waiting = false, paused = false) {
 	const live = document.getElementById("live");
 	const status = !state.token ? "offline" : state.pollHealth === "connected" ? "connected" : "reconnecting";
@@ -43542,6 +44040,7 @@ function paintConnection(waiting = false, paused = false) {
 	}[status];
 	live.textContent = t("ui_" + status);
 	live.title = t(paused ? "sync_actions_paused" : waiting ? "sync_waiting" : status === "connected" ? "desktop_polling" : "offline_actions_paused");
+	for (const paint of [...connectionPainters]) paint();
 }
 async function streamEvents() {
 	for (;;) {
@@ -43737,8 +44236,9 @@ function sessionRow(s, open) {
 	const title = s.title || s.session_id;
 	const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
 	const key = JSON.stringify([s.host, s.session_id]);
-	const asking = s.pending?.kind === "ask_user";
-	const permission = s.pending?.kind === "permission";
+	const managed = s.api_access === "managed";
+	const asking = managed && s.pending?.kind === "ask_user";
+	const permission = managed && s.pending?.kind === "permission";
 	const meta = joinLabel([
 		s.host,
 		s.agent_kind,
@@ -43752,14 +44252,14 @@ function sessionRow(s, open) {
 		title,
 		href,
 		meta,
-		pill: statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+		pill: !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
 		action: h("a", {
 			class: "ui-button secondary ui-sm",
 			href
 		}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
-			statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+			!managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
 			meta ? h("p", {}, meta) : null,
 			disclosure({
 				label: t("global_details"),
@@ -45958,13 +46458,17 @@ async function viewOperations(main, filter = "all") {
 			location.hash = "#/operations/" + value;
 		}
 	});
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("global_refresh"),
+		onClick: () => list.load().catch(() => {})
+	});
+	list.onBusy((busy) => {
+		refresh.disabled = busy;
+	});
 	main.append(pageHeader({
 		title: t("nav_operations"),
-		actions: [iconButton({
-			icon: "refresh-cw",
-			label: t("global_refresh"),
-			onClick: () => list.load().catch(() => {})
-		})]
+		actions: [refresh]
 	}), h("div", { class: "global-ops-tools" }, filters, searchField), list.box);
 	if (memory.query) list.filter(memory.query);
 	await list.load().catch(() => {});
@@ -46126,15 +46630,36 @@ function fleetEmpty() {
 }
 function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
-	const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
-	const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
-	return h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), h("dd", {}, h("span", { class: `ui-pill tone-${tone}` }, t(key))), h("dt", {}, t("global_last_event")), h("dd", {}, state.lastEventAt ? when(state.lastEventAt) : t("global_no_event")));
+	const stateCell = h("dd");
+	const eventCell = h("dd");
+	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell);
+	const render = () => {
+		const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
+		const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
+		stateCell.replaceChildren(h("span", { class: `ui-pill tone-${tone}` }, t(key)));
+		eventCell.textContent = state.lastEventAt ? when(state.lastEventAt) : t("global_no_event");
+	};
+	render();
+	const paint = () => {
+		if (!dl.isConnected) {
+			connectionPainters.delete(paint);
+			return;
+		}
+		render();
+	};
+	connectionPainters.add(paint);
+	return dl;
 }
 function openSettings(main, { exclusive = false } = {}) {
+	const memory = viewState(state.namespace || "", "", "settings");
 	const frame = settingsFrame({
 		h,
 		t,
 		exclusive,
+		selected: memory.section || "",
+		onSelect: (id) => {
+			memory.section = id;
+		},
 		sections: [
 			{
 				id: "connection",
@@ -46182,10 +46707,7 @@ function viewBrowserSettings(main) {
 	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
 	const facts = connectionFacts();
-	facts.append(h("dt", {}, t("global_access")), h("dd", {}, t("connected_as", {
-		actor: state.caps.actor,
-		scopes: state.caps.scopes.join(", ")
-	})));
+	facts.append(h("dt", {}, t("global_access")), h("dd", {}, joinLabel([state.caps.actor, ...state.caps.scopes || []])));
 	const footer = h("div", { class: "global-card-footer" });
 	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, managed ? disclosure({
 		label: t("global_details"),
@@ -46213,11 +46735,12 @@ function viewBrowserSignedOut(main) {
 		placeholder: "batc_…"
 	});
 	const remember = h("input", { type: "checkbox" });
-	const info = h("p", {
-		class: "muted",
-		role: "status"
-	});
-	if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
+	const info = h("div", { class: "global-connect-status" });
+	const showConnectError = (error) => {
+		info.setAttribute("role", "alert");
+		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error));
+	};
+	if (state.connectionError) showConnectError(state.connectionError);
 	const form = h("form", {
 		class: "global-connect-form",
 		onsubmit: async (event) => {
@@ -46231,7 +46754,7 @@ function viewBrowserSignedOut(main) {
 				await route();
 			} catch (e) {
 				state.token = null;
-				info.replaceChildren(errorBox(e));
+				showConnectError(e);
 			}
 		}
 	}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
@@ -48581,6 +49104,7 @@ async function route() {
 			slot.append(preferences.box);
 			if (tab) tab.hidden = false;
 			if (main.querySelector(".global-settings")?.dataset.settingsExclusive !== "true") slot.hidden = false;
+			main.querySelector(".global-settings")?.reapply?.();
 		} else main.append(preferences.box);
 	}
 	if (name === "project" && state.caps?.features?.project_skills?.version === 1) {

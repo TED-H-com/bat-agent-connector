@@ -9,8 +9,10 @@ function operation(project: DemoProject, id: string, action: string, status: str
   const created = Object.hasOwn(extra, 'created_at') ? extra.created_at : unix(project.now, -1);
   return {
     operation_id: id, action, status, status_reason: extra.status_reason ?? null, error_code: extra.error_code ?? null,
-    actor: extra.actor ?? null, entry: 'http', target: extra.target ?? null, params: {}, preconditions: {},
-    result: null, external_refs: null, created_at: created, updated_at: created, finished_at: extra.finished_at ?? null,
+    actor: extra.actor ?? project.ids.actor, entry: 'http', target: extra.target ?? {repository: project.ids.repository},
+    params: {}, preconditions: {},
+    result: null, external_refs: null, created_at: created,
+    updated_at: Object.hasOwn(extra, 'updated_at') ? extra.updated_at : created,
     attempts: status === 'uncertain' ? 1 : 0, uncertain_tries: status === 'uncertain' ? 1 : 0, cancel_requested: false,
     idem_key: null, idempotency_key: null, idempotency_enabled: false, version: 1, steps: extra.steps ?? [],
   };
@@ -19,7 +21,7 @@ function operation(project: DemoProject, id: string, action: string, status: str
 function catalog(project: DemoProject) {
   return [
     operation(project, UNCERTAIN_OPERATION, 'checkpoint.continue', 'uncertain', {
-      created_at: null, actor: null, target: null, status_reason: 'Checkpoint result is not confirmed',
+      status_reason: 'Checkpoint result is not confirmed',
       steps: [{seq: 1, name: 'continue', status: 'uncertain', external_ref: null, error: null, started_at: null, finished_at: null}],
     }),
     operation(project, RUNNING_OPERATION, 'artifact.upload', 'running', {
@@ -54,7 +56,7 @@ function sessions(project: DemoProject) {
     sessionRecord(project, project.ids.sessions.review, project.copy.sessionReview,
       {agent_kind: 'claude', api_access: 'managed', provenance: 'connector_managed', pending: {kind: 'ask_user'}}),
     sessionRecord(project, project.ids.sessions.manual, project.copy.manualTitle,
-      {api_access: 'read_only', provenance: 'manual'}),
+      {api_access: 'read_only', provenance: 'manual', pending: {kind: 'ask_user'}}),
   ];
 }
 

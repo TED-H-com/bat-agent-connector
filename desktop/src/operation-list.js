@@ -7,7 +7,7 @@ import {viewState} from './ui/view-state.js';
 export function operationList({h, t, api, guard, statuses, namespace}) {
   const memory = viewState(namespace || '', '', 'operations:' + (statuses || 'all'));
   let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, query = memory.query || '';
-  let sheet = null, request = 0;
+  let sheet = null, request = 0, busyListener = () => {};
   const list = h('div', {'data-operation-list': ''});
   const count = h('p', {class: 'muted', 'data-operation-count': ''});
   const status = h('div', {role: 'status'});
@@ -16,7 +16,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
   const current = () => {try {guard(); return true;} catch {return false;}};
   const more = h('button', {class: 'secondary', onclick: () => load(true).catch(() => {})}, t('operations_more'));
   const box = h('div', {}, count, layout, status, h('div', {class: 'actions'}, more));
-  const update = () => {more.hidden = before === null; more.disabled = pending > 0 || failed;};
+  const update = () => {more.hidden = before === null; more.disabled = pending > 0 || failed; busyListener(pending > 0);};
   const visible = () => {
     const needle = query.trim().toLocaleLowerCase();
     if (!needle) return rows;
@@ -29,16 +29,35 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     {key: 'status', label: t('global_col_status'), render: op => statusPill(operationStatusKey(op.status))},
     {key: 'actor', label: t('actor'), render: op => op.actor || '—'},
     {key: 'started', label: t('created'), render: op => formatTime(op.created_at) || '—'},
-    {key: 'duration', label: t('global_col_duration'), render: op => operationDuration(op) || '—'},
+    {key: 'duration', label: t('global_col_duration'), render: op => operationDuration(op, Date.now() / 1000) || '—'},
   ];
+  const focusRow = id => {
+    const row = list.querySelector(`[data-row-key="${CSS.escape(id)}"]`);
+    if (row) return row;
+    const next = list.querySelector('[data-row-key]');
+    if (next) { next.tabIndex = -1; return next; }
+    const heading = document.querySelector('#main h1');
+    if (heading) { heading.tabIndex = -1; return heading; }
+    return null;
+  };
+  function facts(op) {
+    const attempts = typeof op.attempts === 'number' && Number.isFinite(op.attempts) ? String(op.attempts) : '—';
+    return h('dl', {class: 'kv global-op-facts'},
+      h('dt', {}, t('actor')), h('dd', {}, op.actor || '—'),
+      h('dt', {}, t('created')), h('dd', {}, formatTime(op.created_at) || '—'),
+      h('dt', {}, t('global_col_duration')), h('dd', {}, operationDuration(op, Date.now() / 1000) || '—'),
+      h('dt', {}, t('global_attempts')), h('dd', {}, attempts));
+  }
   function body(op) {
     const steps = Array.isArray(op.steps) ? op.steps : [];
     const precise = t('op_' + op.status);
     return [
+      h('a', {class: 'ui-button secondary ui-sm', href: `#/op/${encodeURIComponent(op.operation_id)}`}, t('global_open_operation')),
       statusPill(operationStatusKey(op.status)),
       h('p', {class: 'muted'}, operationMeta(op, formatTime(op.created_at)) || '—'),
       op.status_reason ? h('p', {}, op.status_reason) : null,
       precise !== 'op_' + op.status ? h('p', {class: 'muted'}, precise) : null,
+      facts(op),
       disclosure({label: t('global_details'), key: 'operations.' + op.operation_id, body: h('div', {},
         h('dl', {class: 'kv'},
           h('dt', {}, t('global_action_id')), h('dd', {}, h('code', {}, op.action || '—')),
@@ -56,7 +75,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
       const previous = sheet;
       sheet = null;
       previous?.dispose();
-      const node = inspector({title: actionLabel(op.action), onClose: () => {
+      const node = inspector({title: actionLabel(op.action), returnFocus: () => focusRow(id), onClose: () => {
         if (sheet !== node) return;
         memory.selected = ''; sheet = null; layout.classList.remove('has-inspector');
       }});
@@ -75,7 +94,6 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
       if (!current() || token !== request || sheet?.dataset.operationId !== id) return;
       if ([403, 404].includes(error.status)) {
         rows = rows.filter(item => item.operation_id !== id);
-        sheet.dispose();
         paint();
         return;
       }
@@ -139,5 +157,5 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     queue = job; return job;
   }
   update();
-  return {box, load, filter(text) {query = memory.query = text || ''; paint();}};
+  return {box, load, onBusy(fn) { busyListener = typeof fn === 'function' ? fn : () => {}; }, filter(text) {query = memory.query = text || ''; paint();}};
 }

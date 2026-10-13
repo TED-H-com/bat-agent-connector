@@ -63,10 +63,10 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     if (width === 390) await page.screenshot({path: `${dir}/discussions-sheet-${locale}-390.png`});
     await page.getByRole('tab', {name: zh ? '計畫' : 'Plan', exact: true}).click();
     await page.locator('[data-pm-section=pm_brief_title] > details > summary').click();
-    await expect(page.locator('.pm-brief')).not.toContainText(/\b(undefined|null|NaN)\b/);
+    expect(await page.locator('.pm-brief').innerText()).not.toMatch(/\b(undefined|null|NaN)\b/);
     if (width < 1200) {await page.keyboard.press('Escape'); await expect(page.locator('[data-discussion-panel-toggle]')).toBeFocused();}
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await expect(page.locator('#main')).not.toContainText(/pm_mode_|\b(undefined|null|NaN)\b/);
+    expect(await page.locator('#main').innerText()).not.toMatch(/pm_mode_|\b(undefined|null|NaN)\b/);
     await page.screenshot({path: `${dir}/discussions-${locale}-${width}.png`});
     if (width === 1440 && !zh) {await page.evaluate(() => document.documentElement.dataset.theme = 'dark'); await page.screenshot({path: `${dir}/discussions-en-1440-dark.png`, animations: 'disabled'});}
     await page.locator('[data-discussion-back]').first().click(); await expect(page).toHaveURL(/\/overview$/);

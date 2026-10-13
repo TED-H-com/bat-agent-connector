@@ -73,7 +73,7 @@ test("browser retains observation compatibility when an older central has no boo
   await page.goto("/dashboard/");
   await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
   await page.locator("#live").click();
-  await expect(page.getByText(/Connected as/)).toBeVisible();
+  await expect(page.getByText('fixture-operator · observe · operate')).toBeVisible();
 });
 
 test("lost operation reply preserves draft and idempotency key across reopening", async ({page}) => {

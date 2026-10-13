@@ -203,6 +203,7 @@ export function demoProject(localeInput?: string, now = DEMO_NOW) {
       '客服要先確認哪個鎖定門檻，稽核紀錄才能繼續？'),
     proposalWhy: t('The audit log is blocked on that security decision.', '稽核紀錄正卡在這項資安決定。'),
     manualTitle: t('Reset notes from BAT', '在 BAT 記下的重設密碼筆記'),
+    failedTitle: t('Failed delivery run', '失敗的交付'),
     manualNote: t(
       'These notes were written in BAT while watching the reset flow. The connector does not send instructions to this session.',
       '這些筆記是在 BAT 裡看重設密碼流程時寫下的。Connector 不會對這個工作階段下指令。'),

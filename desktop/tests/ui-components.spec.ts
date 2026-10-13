@@ -122,3 +122,51 @@ test('button supports a trailing icon without changing default icon order', asyn
   const button = page.getByRole('button', {name: 'Report', exact: true});
   expect(await button.evaluate(node => node.firstChild?.nodeType === Node.TEXT_NODE && node.lastChild?.nodeName === 'svg')).toBe(true);
 });
+
+
+test('inspector resolves callback return focus after its close callback replaces a row', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const ui = await import('/src/ui/components.js');
+    let row = document.createElement('button'); row.textContent = 'Old row'; document.getElementById('fixture')!.append(row);
+    row.focus();
+    const panel = ui.inspector({title: 'Row details', returnFocus: () => row, onClose: () => {
+      const next = document.createElement('button'); next.textContent = 'Updated row'; row.replaceWith(next); row = next;
+    }});
+    document.getElementById('fixture')!.append(panel);
+  });
+  await expect(page.locator('.ui-inspector')).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', {name: 'Updated row', exact: true})).toBeFocused();
+});
+
+for (const form of ['element', 'callback']) for (const state of ['detached', 'unrendered', 'hidden', 'inert']) {
+  test(`inspector ${form} ${state} target falls back to its visible opener`, async ({page}) => {
+    await mount(page);
+    await page.evaluate(async ({form, state}) => {
+      const ui = await import('/src/ui/components.js');
+      const opener = document.createElement('button'); opener.textContent = 'Visible opener'; document.getElementById('fixture')!.append(opener);
+      const parent = document.createElement('div'), target = document.createElement('button'); target.textContent = 'Return target'; parent.append(target);
+      if (state !== 'detached') document.getElementById('fixture')!.append(parent);
+      if (state === 'unrendered') parent.style.display = 'none';
+      if (state === 'hidden') parent.hidden = true;
+      if (state === 'inert') parent.inert = true;
+      opener.focus();
+      document.getElementById('fixture')!.append(ui.inspector({title: 'Details', returnFocus: form === 'callback' ? () => target : target}));
+    }, {form, state});
+    await expect(page.locator('.ui-inspector')).toBeVisible(); await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', {name: 'Visible opener', exact: true})).toBeFocused();
+  });
+}
+
+test('inspector does not focus a hidden fallback opener', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const ui = await import('/src/ui/components.js');
+    const opener = document.querySelector('button')!; opener.focus();
+    document.getElementById('fixture')!.append(ui.inspector({title: 'Details', returnFocus: () => null}));
+    opener.hidden = true;
+  });
+  await expect(page.locator('.ui-inspector')).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(page.locator('.ui-inspector')).toHaveCount(0);
+  expect(await page.evaluate(() => document.activeElement?.closest('[hidden], [inert]') === null)).toBe(true);
+});

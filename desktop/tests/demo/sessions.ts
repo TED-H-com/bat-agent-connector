@@ -53,7 +53,10 @@ export function projectDetail(project: DemoProject) {
     work: [
       session(project.ids.sessions.implement, project.copy.sessionImplement, true, 'running', `op_${'7'.padStart(32, '0')}`),
       session(project.ids.sessions.review, project.copy.sessionReview, false, 'needs_ted'),
-      session(project.ids.sessions.manual, project.copy.manualTitle, false, 'human_owned'),
+      {...session(project.ids.sessions.manual, project.copy.manualTitle, false, 'human_owned'),
+        reading: {unread_count: 3, complete: true}},
+      {kind: 'execution', id: 'failed-delivery', title: project.copy.failedTitle, host: project.ids.host,
+        status: 'failed', session: {}},
     ],
   };
 }

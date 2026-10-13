@@ -10,7 +10,7 @@ for (const native of [false, true]) {
     const completion = page.getByRole('region', {name: 'Reviews'});
     await expect(replies).toContainText('Question from agent'); await expect(replies).toContainText('Permission requested');
     await expect(completion).toContainText('Review delivery');
-    const problems = page.getByRole('region', {name: 'Failed operations'});
+    const problems = page.getByRole('region', {name: 'Needs attention'});
     const bare = problems.locator('[data-inbox-key="op_' + '1'.repeat(32) + '"]');
     await expect(bare).toContainText('Continue from checkpoint');
     await expect(bare).toContainText('Unknown');
@@ -68,11 +68,12 @@ for (const native of [false, true]) {
     const completion = page.getByRole('region', {name: 'Reviews'});
     await expect(completion).toContainText('Review delivery');
     fixture.data.failure = '/work-items'; fixture.data.cursor = 1;
-    await expect(completion).toContainText('Could not refresh.');
+    await expect(completion).toContainText('Not updated');
+    await expect(completion.getByRole('button', {name: 'Retry', exact: true})).toBeVisible();
     await expect(completion).toContainText('Review delivery');
     await expect(page.getByText('Nothing needs you right now.')).toBeHidden();
     expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.')).some(([, v]) => JSON.parse(v).cursor === 1))).toBe(false);
-    fixture.data.failure = ''; await expect(completion).not.toContainText('Could not refresh.');
+    fixture.data.failure = ''; await expect(completion).not.toContainText('Not updated');
     await expect.poll(() => page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.')).some(([, v]) => JSON.parse(v).cursor === 1))).toBe(true);
   });
 
