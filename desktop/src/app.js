@@ -1,3 +1,4 @@
+import {h as dom} from './ui/dom.js';
 import {prSelector} from "./pr-selector.js";
 import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
 import {workspaceNavigation} from "./workspace-nav.js";
@@ -103,17 +104,7 @@ function clearToken() {
 
 // ------------------------------------------------------------------ DOM helpers
 function h(tag, attrs = {}, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs || {})) {
-    if (v === null || v === undefined || v === false) continue;
-    if (k === "class") el.className = v;
-    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-    else el.setAttribute(k, v === true ? "" : String(v));
-  }
-  for (const c of children.flat()) {
-    if (c === null || c === undefined || c === false) continue;
-    el.append(c instanceof Node ? c : document.createTextNode(String(c)));
-  }
+  const el = dom(tag, attrs, ...children);
   if (nativeDesktop && tag === "a" && attrs.href && !attrs.href.startsWith("#")) {
     el.addEventListener("click", async event => {
       event.preventDefault();
