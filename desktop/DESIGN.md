@@ -285,6 +285,9 @@ The shared `/discussions/new` link opens an editable draft and focuses the compo
 Its title can be renamed locally once the initial permission read completes; title
 controls follow the durable create form's gates and lock with its original intent.
 The draft title survives reload and becomes the central thread-create title.
+Governance context chips in an unsent draft read the current record title from
+central. A 403/404 removes the source label and ID and disables sending while
+retaining the local draft; a superseded read cannot restore withdrawn context.
 Its first Send creates the bound thread and then appends the note. Both operations
 retain their own original keys. The first thread mount transfers the note into the
 composer draft and intent, consumes the handoff, and submits it once. A non-empty

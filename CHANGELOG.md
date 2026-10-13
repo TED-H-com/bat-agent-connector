@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Name governance context in unsent PM discussions using the current central record;
+  retain local drafts and prevent sending when that source becomes unavailable.
+
 - Open Overview issue and risk attention items in the Issues & changes inspector,
   retaining the exact source and a meaningful title for Discuss with PM.
 

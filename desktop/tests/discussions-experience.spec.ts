@@ -19,7 +19,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     });
     const f = demoFixture({locale, discussions: true}), zh = locale === 'zh-TW';
     await mountConversation(page, false, f.dispatch);
-    const ref = {kind: 'governance', id: 'pmgov_' + 'a'.repeat(32)};
+    const ref = {kind: 'governance', id: 'pmgov_' + '1'.padStart(32, '0')};
     const href = discussHref({workspaceId: f.ids.workspaceId, refs: [ref], title: f.copy.blocker, from: 'overview', report: f.ids.snap1});
     expect(parseDiscussRefs(href.split('?')[1]).refs).toEqual([ref]);
     // Producer views share this exact link; the receiving contract is exercised here.
@@ -29,6 +29,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await expect(page.locator('[data-discussion-title]')).toHaveText(f.copy.blocker);
     await expect(page.getByLabel(zh ? '討論標題' : 'Discussion title', {exact: true})).toBeHidden();
     await expect(page.locator('[data-discussion-context=governance]')).toBeVisible();
+    await expect(page.locator('[data-discussion-context=governance]')).toContainText(f.copy.blocker);
     const draftTitle = zh ? '審閱復原阻礙' : 'Review the recovery blocker';
     await page.getByRole('button', {name: zh ? '重新命名' : 'Rename', exact: true}).click();
     await page.getByLabel(zh ? '討論標題' : 'Discussion title', {exact: true}).fill(draftTitle);
@@ -94,6 +95,54 @@ test('withdrawn context drops both labels and IDs from list, header and panel', 
   f.discussion.withdrawn = true; await page.getByRole('button', {name: 'Refresh', exact: true}).click();
   await expect(chips.first()).toContainText('Unavailable');
   expect(await page.locator('#main').textContent()).not.toMatch(/Current sensitive label|Earlier sensitive label|pmgov_cc/);
+  expect(f.discussion.writes).toHaveLength(0);
+});
+
+for (const status of [403, 404]) test(`draft governance context withdrawn with ${status} drops its label and prevents sending`, async ({page}) => {
+  const f = demoFixture({discussions: true}), id = 'pmgov_' + '1'.padStart(32, '0');
+  let withdrawn = false;
+  await mountConversation(page, false, async input => {
+    if (withdrawn && input.path.endsWith('/governance/' + id)) return {status, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
+    return f.dispatch(input);
+  });
+  await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, refs: [{kind: 'governance', id}], from: 'issues'}));
+  const chip = page.locator('[data-discussion-context=governance]');
+  await expect(chip).toContainText(f.copy.blocker);
+  const composer = page.locator('[data-discussion-composer]');
+  await composer.fill('Keep this local draft');
+  withdrawn = true; await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+  await expect(chip).toContainText('Unavailable');
+  await expect(page.locator('#main')).not.toContainText(f.copy.blocker);
+  await expect(chip).not.toContainText(id);
+  await expect(composer).toHaveValue('Keep this local draft');
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
+  expect(f.discussion.writes).toHaveLength(0);
+});
+
+test('a late draft context response cannot revive a withdrawn record', async ({page}) => {
+  const f = demoFixture({discussions: true}), id = 'pmgov_' + '1'.padStart(32, '0');
+  let count = 0, release: () => void;
+  const delayed = new Promise<void>(resolve => {release = resolve;});
+  await mountConversation(page, false, async input => {
+    if (input.path.endsWith('/governance/' + id)) {
+      count++;
+      if (count === 2) {await delayed; return f.dispatch(input);}
+      if (count > 2) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Unavailable'}}};
+    }
+    return f.dispatch(input);
+  });
+  await page.goto('/dashboard/' + discussHref({workspaceId: f.ids.workspaceId, refs: [{kind: 'governance', id}]}));
+  const chip = page.locator('[data-discussion-context=governance]');
+  await expect(chip).toContainText(f.copy.blocker);
+  const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
+  await refresh.click(); await expect.poll(() => count).toBe(2);
+  // A second projection refresh wins over the in-flight older read.
+  await refresh.dispatchEvent('click'); await expect(chip).toContainText('Unavailable');
+  const response = page.waitForResponse(response => response.url().endsWith('/governance/' + id) && response.status() === 200);
+  release!(); await response;
+  await expect(chip).toContainText('Unavailable');
+  await expect(page.locator('#main')).not.toContainText(f.copy.blocker);
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeDisabled();
   expect(f.discussion.writes).toHaveLength(0);
 });
 
@@ -311,10 +360,19 @@ for (const locale of ['en', 'zh-TW']) test(`missing PM adapter occupies only the
 });
 
 test('a new multi-context draft opens Context after leaving the Plan tab', async ({page}) => {
-  const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
+  const f = demoFixture({discussions: true});
+  const refs = Array.from({length: 5}, (_, i) => ({kind: 'governance', id: 'pmgov_' + String(i + 1).padStart(32, '0')}));
+  await mountConversation(page, false, async input => {
+    const ref = refs.find(ref => input.path === `/pm/workspaces/${f.ids.workspaceId}/governance/${ref.id}`);
+    if (input.method === 'GET' && ref) {
+      const result = structuredClone(await f.dispatch({...input, path: `/pm/workspaces/${f.ids.workspaceId}/governance/${refs[0].id}`}));
+      result.data.record.record_id = ref.id;
+      return result;
+    }
+    return f.dispatch(input);
+  });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   await page.getByRole('tab', {name: 'Plan', exact: true}).click();
-  const refs = Array.from({length: 5}, (_, i) => ({kind: 'governance', id: 'pmgov_' + String(i).repeat(32)}));
   const href = discussHref({workspaceId: f.ids.workspaceId, refs, title: 'Review five decisions', from: 'overview'});
   await page.evaluate(href => {location.hash = href;}, href);
   await expect(page.locator('[data-discussion-composer]')).toBeFocused();
