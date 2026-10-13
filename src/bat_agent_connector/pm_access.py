@@ -89,6 +89,10 @@ def event_visible(db, principal, event):
             return not event.get("body", {}).get("action", "").startswith("pm.")
         return visible(db, principal, {**dict(row), "target": json.loads(row["target"]),
                                       "result": json.loads(row["result"]) if row["result"] else None})
+    if event["kind"].startswith("pm.dependencies."):
+        from .pm_dependencies import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["resource_type"] == "pm_lifecycle" or event["kind"].startswith("pm.lifecycle."):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         operation_id = event.get("body", {}).get("operation_id")

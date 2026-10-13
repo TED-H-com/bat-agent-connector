@@ -11,10 +11,10 @@ import copy
 
 from .operations import OperationError
 
-VERSION = 2
+VERSION = 3
 DOMAINS = ("governance", "scope", "schedule", "finance", "stakeholders", "resources", "risk", "quality")
 STATUSES = ("user_confirmed", "repo_evidence", "agent_assumption", "unresolved", "conflicting", "not_applicable")
-LOCAL_COMMANDS = ("pm.message.append", "pm.input.record", "pm.input.confirm")
+LOCAL_COMMANDS = ("pm.message.append", "pm.thread.rename", "pm.input.record", "pm.input.confirm")
 EXECUTABLE_MODES = ("idea", "planning")
 
 

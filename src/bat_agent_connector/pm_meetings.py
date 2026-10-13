@@ -544,15 +544,17 @@ def _history_record(ops, principal, meeting, kind, sequence, checked_contexts):
     return {**dict(row), 'source_refs': json.loads(row['source_refs'])}
 
 
-def get_meeting(ops, principal, workspace_id, meeting_id, *, history_limit=50):
+def get_meeting(ops, principal, workspace_id, meeting_id, *, history_limit=50, follow_up_after=0):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)
         meeting = _meeting(ops.db, workspace_id, meeting_id)
         context, snapshot = _access(ops, principal, meeting)
-        rows = {kind: _history_rows(ops, meeting, kind, 0, history_limit) for kind in ('notes', 'follow_ups')}
+        rows = {'notes': _history_rows(ops, meeting, 'notes', 0, history_limit),
+                'follow_ups': _history_rows(ops, meeting, 'follow_ups', follow_up_after, history_limit)}
         draft = _document(ops.db, 'pm_meeting_drafts', 'revision_id', meeting['draft_revision_id']) if meeting['draft_revision_id'] else None
         completion = _document(ops.db, 'pm_meeting_completions', 'completion_id', meeting['completion_id']) if meeting['completion_id'] else None
-        coverage = {kind: pm_sprints._coverage(0, entries) for kind, entries in rows.items()}
+        coverage = {'notes': pm_sprints._coverage(0, rows['notes']),
+                    'follow_ups': pm_sprints._coverage(follow_up_after, rows['follow_ups'])}
         result = _checked_read({'version': 1, 'workspace_id': workspace_id, 'meeting': meeting, 'context': context,
                 'snapshot': snapshot, 'draft': draft, 'completion': completion,
                 'notes': [], 'follow_up_events': [],

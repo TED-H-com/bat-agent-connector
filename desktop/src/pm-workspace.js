@@ -37,8 +37,9 @@ const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].i
 // A remounted form can recover an acknowledged ID without resending an unknown
 // POST. Notifications contain no result; the active form reads with current access.
 const receiptSubscribers = new Map();
-// Only disclosure preferences survive a same-principal remount. Facts are always
-// removed and reread after an access reset; drafts retain their existing namespace.
+// Disclosure choices survive a same-principal remount. Facts are always removed
+// and reread after an access reset; drafts retain their existing namespace.
+// Live reads must not collapse or expand a disclosure the reader already set.
 const threadDisclosures = new Map();
 const threadDisclosureSelectors = ['[data-pm-information]', '[data-pm-add-input]', '[data-pm-planning-revision]', '[data-pm-note-only]', '[data-pm-prepare-context]', '[data-pm-revision-editor]'];
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
@@ -355,6 +356,17 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (forms[i].box.isConnected) forms[i].update(); else if (initialReadComplete) forms.splice(i, 1);}};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
+  function rememberDisclosures() {
+    if (!threadId || mountedThread !== threadId) return;
+    const disclosures = new Map();
+    for (const selector of threadDisclosureSelectors) {
+      const element = content.querySelector(selector);
+      if (element) disclosures.set(selector, element.open);
+    }
+    threadDisclosures.delete(disclosureKey);
+    threadDisclosures.set(disclosureKey, disclosures);
+    if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
+  }
   const sourceText = item => {
     const source = item.source_ref || {};
     if (source.kind === 'message') {
@@ -470,15 +482,20 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (brief) inspector.prepend(brief.box);
       if (lifecycle) inspector.prepend(lifecycle.element);
       content.append(h('div', {class: 'pm-thread-layout'}, column, inspector));
-      const disclosures = threadDisclosures.get(disclosureKey);
+      for (const selector of threadDisclosureSelectors) content.querySelector(selector)?.addEventListener('toggle', rememberDisclosures);
+      const savedDisclosures = threadDisclosures.get(disclosureKey);
+      const hadInformationChoice = Boolean(savedDisclosures?.has('[data-pm-information]'));
       for (const selector of threadDisclosureSelectors) {
         const element = content.querySelector(selector);
-        if (element && disclosures?.has(selector)) element.open = disclosures.get(selector);
+        if (element && savedDisclosures?.has(selector)) element.open = savedDisclosures.get(selector);
       }
+      // A pending original request stays discoverable when this thread is shown,
+      // including after a reload. A later refresh must not expand a section the
+      // reader has since closed; that choice is stored by the toggle listener.
+      if (!hadInformationChoice && (planForm.locked() || factForm.locked() || planningRevisionForm?.locked())) information.open = true;
+      rememberDisclosures();
     }
     threadTitle.textContent = thread.title; mode.textContent = t('pm_mode_' + thread.mode);
-    // A pending original request stays discoverable after a reload or mode change.
-    if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector('[data-pm-information]').open = true;
     discussionHint.textContent = nativeAnalysis || data.messages?.some(message => message.role === 'assistant') ? '' : t('pm_manual');
     const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
     notes.replaceChildren(...(data.messages || []).map(message => pmDiscussionMessage({h, t, message, time, timestamp})));
@@ -736,15 +753,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
   });
   return () => {
-    if (threadId && mountedThread === threadId) {
-      const disclosures = new Map();
-      for (const selector of threadDisclosureSelectors) {
-        const element = content.querySelector(selector);
-        if (element) disclosures.set(selector, element.open);
-      }
-      threadDisclosures.delete(disclosureKey); threadDisclosures.set(disclosureKey, disclosures);
-      if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
-    }
+    rememberDisclosures();
     disposed = true; sequence++; off(); navigationMedia.removeEventListener('change', resizeNavigation);
     traceability?.withdraw();resources?.dispose();
     proposalReview?.dispose();ahp?.dispose();

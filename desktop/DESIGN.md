@@ -64,6 +64,10 @@ traceability, work flow and existing editing tools. Summary sequence and adopted
 plan identity remain distinct. Report sources and full plan text expand on demand.
 RTM uses an expandable table with a work inspector; source IDs wrap below titles.
 Keep requirement order, expanded rows and filters stable during source refreshes.
+Discussion disclosures on a PM thread keep the open or closed state the reader
+chose. Live updates and Refresh do not collapse or expand them. A pending
+original request opens Inputs when that thread is first shown, including after
+a reload, and a later refresh leaves a reader-closed section closed.
 Remove withdrawn source facts from rows, counts and the inspector together.
 Composed labels drop a missing segment. A Brief section without a recorded status
 says Unknown, and an issue link uses the repository name on the mapping or, when
@@ -79,3 +83,9 @@ background reads; the toolbar can pause view updates without stopping collection
 The compact board retains an original-turn completion summary. Exact completion
 receipts and manual read-only observation controls remain in each card disclosure.
 Withdrawal clears board accounting and those controls in the same refresh.
+
+When the resources projection includes `buckets`, the usage trend is one stacked bar
+per local day and CLI. An incomplete day shows its observed tokens with the in-progress
+or settling marker; a null metric stays unknown.
+The resources read includes `buckets` only when the request sets `buckets=day`.
+Omit the chart when the projection has no buckets.

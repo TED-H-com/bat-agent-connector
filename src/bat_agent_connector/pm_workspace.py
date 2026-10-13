@@ -125,10 +125,20 @@ def operation_visible(db, principal: Principal, op: dict) -> bool:
         require_member(db, principal, workspace_id)
     except OperationError:
         return False
+    if op['action'] == 'pm.thread.create':
+        from .pm_thread_contexts import operation_visible as context_visible
+        return context_visible(db, principal, op)
     if op['action'] in {'pm.run.analyze', 'pm.run.bat.analyze'}:
+        from .pm_thread_contexts import frozen_visible
+        run = db.execute('SELECT context FROM pm_runs WHERE operation_id=?', (op['operation_id'],)).fetchone()
+        if run and not frozen_visible(db, principal, workspace_id, json.loads(run[0])):
+            return False
         from .pm_context_bundles import operation_visible as bundle_visible
         if not bundle_visible(db, principal, op):
             return False
+    if op['action'].startswith('pm.dependencies.'):
+        from .pm_dependencies import operation_visible as dependencies_visible
+        return dependencies_visible(db, principal, op)
     if op['action'].startswith('pm.lifecycle.'):
         from .pm_lifecycle import operation_visible as lifecycle_visible
         return lifecycle_visible(db, principal, op)

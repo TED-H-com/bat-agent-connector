@@ -12,7 +12,7 @@ import json
 import re
 import time
 
-from . import pm_discussions, pm_profiles, pm_workspace
+from . import pm_discussions, pm_profiles, pm_read_cache, pm_workspace
 from .operations import ActionDef, OperationError
 
 REVISION_ID = re.compile(r"pmrev_[0-9a-f]{32}")
@@ -94,6 +94,7 @@ def head(db, workspace_id):
                                 "latest_revision_id": None, "accepted_revision_id": None}
 
 
+@pm_read_cache.memoized
 def source_operation_ids(db, workspace_id, revision_id, *, include_adoption=True):
     """Original fixed revision inputs; never substitute a newer plan head."""
     revision = _revision(db, workspace_id, revision_id)
@@ -113,6 +114,7 @@ def source_operation_ids(db, workspace_id, revision_id, *, include_adoption=True
     return sorted(sources)
 
 
+@pm_read_cache.memoized
 def _require_revision_sources(db, principal, workspace_id, revision_id):
     from .pm_access import require_operation_sources
     require_operation_sources(db, principal, source_operation_ids(db, workspace_id, revision_id))
@@ -145,6 +147,7 @@ def _draft_sources(db, workspace_id, thread, current):
     return sorted(sources)
 
 
+@pm_read_cache.memoized
 def _revision(db, workspace_id, revision_id):
     if not isinstance(revision_id, str) or not REVISION_ID.fullmatch(revision_id):
         raise _bad("PM_PLAN_NOT_FOUND", "Plan revision not found", 404)
@@ -565,6 +568,7 @@ def _get_plan(ops, principal, workspace_id, revision_id):
     return {"version": 1, "plan": revision, **projection}
 
 
+@pm_read_cache.memoized
 def get_plan(ops, principal, workspace_id, revision_id):
     with ops.journal.tx():
         return _get_plan(ops, principal, workspace_id, revision_id)

@@ -183,6 +183,9 @@ def source_visible(db, principal, run):
 
 def _source_visible(db, principal, run):
     from .pm_access import operation_source_visible
+    from .pm_thread_contexts import frozen_visible
+    if not frozen_visible(db, principal, run['workspace_id'], run['context']):
+        return False
     if not operation_source_visible(db, principal, run["operation_id"]):
         return False
     row = db.execute("SELECT action FROM operations WHERE operation_id=?", (run["operation_id"],)).fetchone()

@@ -7,7 +7,7 @@ import time
 from contextvars import ContextVar
 
 from . import pm_github_observation as github
-from . import pm_lifecycle_gates, pm_source_lineage, pm_workspace, work_items
+from . import pm_lifecycle_gates, pm_read_cache, pm_source_lineage, pm_workspace, work_items
 from . import pm_maintenance_checks as checks
 from . import pm_maintenance_findings as findings
 from . import pm_maintenance_policy as policies
@@ -195,7 +195,8 @@ def _full_access_sources(ops, principal, op):
         # current policy/lifecycle and new-effect checks remain in the caller
         # and receive a fresh source scope on each synchronous invocation.
         from .pm_source_reads import scope
-        with scope(ops.db, principal):
+        # Nested answers assume this repair is visible; do not store them request-wide.
+        with scope(ops.db, principal), pm_read_cache.guarded():
             _access(ops, principal, op)
             from . import pm_maintenance_repair_evidence as evidence
             evidence.require_evidence_sources(ops, principal, op)

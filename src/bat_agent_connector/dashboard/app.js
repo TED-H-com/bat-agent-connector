@@ -2908,7 +2908,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
 	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
 	const deciding = () => writing() && permitted(true) && thread()?.capabilities?.decide === true && caps()?.scopes?.includes("start") && caps()?.actions?.some((row) => row.action === ADOPT && row.allowed === true) && capability?.plan_adoption_available !== false;
-	const fresh = () => active && head && thread()?.thread?.version === active.context.thread_version && head.version === active.context.plan_head.version && head.accepted_revision_id === active.context.plan_head.accepted_revision_id;
+	const fresh = () => active?.adoptable === true;
 	const original = () => {
 		try {
 			return JSON.parse(adopt?.values().review || "null");
@@ -17218,6 +17218,17 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const date = new Date(timestamp(value));
 		return Number.isNaN(date.valueOf()) ? String(value || "") : date.toLocaleString();
 	};
+	function rememberDisclosures() {
+		if (!threadId || mountedThread !== threadId) return;
+		const disclosures = new Map();
+		for (const selector of threadDisclosureSelectors) {
+			const element = content.querySelector(selector);
+			if (element) disclosures.set(selector, element.open);
+		}
+		threadDisclosures.delete(disclosureKey);
+		threadDisclosures.set(disclosureKey, disclosures);
+		if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
+	}
 	const sourceText = (item) => {
 		const source = item.source_ref || {};
 		if (source.kind === "message") {
@@ -17524,15 +17535,18 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (brief) inspector.prepend(brief.box);
 			if (lifecycle) inspector.prepend(lifecycle.element);
 			content.append(h("div", { class: "pm-thread-layout" }, column, inspector));
-			const disclosures = threadDisclosures.get(disclosureKey);
+			for (const selector of threadDisclosureSelectors) content.querySelector(selector)?.addEventListener("toggle", rememberDisclosures);
+			const savedDisclosures = threadDisclosures.get(disclosureKey);
+			const hadInformationChoice = Boolean(savedDisclosures?.has("[data-pm-information]"));
 			for (const selector of threadDisclosureSelectors) {
 				const element = content.querySelector(selector);
-				if (element && disclosures?.has(selector)) element.open = disclosures.get(selector);
+				if (element && savedDisclosures?.has(selector)) element.open = savedDisclosures.get(selector);
 			}
+			if (!hadInformationChoice && (planForm.locked() || factForm.locked() || planningRevisionForm?.locked())) information.open = true;
+			rememberDisclosures();
 		}
 		threadTitle.textContent = thread.title;
 		mode.textContent = t("pm_mode_" + thread.mode);
-		if (planForm.locked() || factForm.locked() || planningRevisionForm?.locked()) content.querySelector("[data-pm-information]").open = true;
 		discussionHint.textContent = nativeAnalysis || data.messages?.some((message) => message.role === "assistant") ? "" : t("pm_manual");
 		const bottom = notes.scrollHeight - notes.scrollTop - notes.clientHeight < 32, scroll = notes.scrollTop;
 		notes.replaceChildren(...(data.messages || []).map((message) => pmDiscussionMessage({
@@ -18005,16 +18019,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	});
 	return () => {
-		if (threadId && mountedThread === threadId) {
-			const disclosures = new Map();
-			for (const selector of threadDisclosureSelectors) {
-				const element = content.querySelector(selector);
-				if (element) disclosures.set(selector, element.open);
-			}
-			threadDisclosures.delete(disclosureKey);
-			threadDisclosures.set(disclosureKey, disclosures);
-			if (threadDisclosures.size > 40) threadDisclosures.delete(threadDisclosures.keys().next().value);
-		}
+		rememberDisclosures();
 		disposed = true;
 		sequence++;
 		off();
