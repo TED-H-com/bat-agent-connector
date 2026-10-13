@@ -55,6 +55,7 @@
   .pm-project-views button { flex: 0 1 auto; }
   .pm-rtm-table { max-width: 100%; }
 }
+.pm-rtm-table tr[aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 @media print {
   body:has(.pm-charter-report) .top,
   body:has(.pm-charter-report) .pm-shell > aside,

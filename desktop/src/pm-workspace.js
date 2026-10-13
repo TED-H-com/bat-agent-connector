@@ -291,7 +291,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         else if (ref.kind === 'milestone' && destination === 'schedule') {
           const node = roadmap?.box.querySelector(`[data-pm-milestone="${CSS.escape(ref.id)}"]`);
           if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
-        } else brief?.openRelated?.(row, main);
+        } else {const returnFocus = heading.querySelector('h1'); returnFocus.tabIndex = -1; brief?.openRelated?.(row, main, returnFocus);}
       },
       onDiscuss: () => {location.hash = `#/pm/${workspaceId}/discussions`; workbench?.select('discussions'); content.querySelector('input')?.focus();}})
       : projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
@@ -448,7 +448,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       }
       groups.push({id, sections: [region]});
     }
-    workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
+    workbench = projectViews({h, t, namespace, workspaceId, view, groups, beforeSelect: (_id, previous) => {if (previous === 'overview') brief?.setActive?.(false);}, onSelect: id => {
       if (id !== 'issues') brief?.closeRelated?.();
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents'); schedule?.setActive(id === 'schedule');
       void dependencies?.setActive(id === 'dependencies');

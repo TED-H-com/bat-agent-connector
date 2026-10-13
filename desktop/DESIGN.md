@@ -215,7 +215,11 @@ in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
 Attention retains the central severity/age ordering, with exact context identities
-passed to `discussHref`. Reading rows keep focus during refresh. Requirements and
+passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
+by identity within their own part. Cached ages advance with the projection timestamp.
+Overview records its scroll position before a view switch hides it. Repeated selection
+of the active view does not scroll. Related inspectors return focus to the destination
+heading; requirement and work links reveal their selection on narrow screens. Requirements and
 work open the existing requirements selection; governance opens its existing Issues
 selection. Attention without a governance record opens its exact central context
 in an Issues inspector; no new management record is inferred. The charter follows the live adopted document in six compact cards,

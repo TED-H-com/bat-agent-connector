@@ -248,12 +248,14 @@ export function workspaceTraceability({h, t, api, alive, namespace, workspaceId,
     if (!active || !plan) {active = true; await refresh();}
     if (ref.kind === 'work_item') {
       for (const card of cards.filter(row => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
-      renderTable(); await select(ref.id, true); return;
+      renderTable(); await select(ref.id, true);
+      if (!detail.hidden && matchMedia('(max-width: 1100px)').matches) detail.scrollIntoView({block: 'start'});
+      return;
     }
     if (ref.kind !== 'requirement' || ref.revision_id !== plan?.revision_id) return;
     expanded.add(ref.id); filter.value = ''; renderTable();
     const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
-    if (row) {row.setAttribute('aria-selected', 'true'); row.querySelector('button')?.focus(); row.scrollIntoView({block: 'nearest'});}
+    if (row) {row.setAttribute('aria-current', 'true'); row.querySelector('button')?.focus(); row.scrollIntoView({block: 'nearest'});}
   }
   controls(); return {element, refresh, withdraw, openRef, dispose: () => {Object.assign(preference, {selected, expanded: [...expanded], filter: filter.value}); withdraw();}, activate: async () => {if (!active) {active = true; await refresh();}}};
 }

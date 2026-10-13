@@ -72,12 +72,12 @@ export function workspaceOverview(options) {
     // Construction does not notify; callbacks run after the controls are mounted.
     if (mode === 'saved') render();
   }
-  function discuss(row) {
-    return h('a', {class: 'ui-button ghost ui-sm', 'data-overview-row-discuss': row.key || row.milestone_id,
+  function discuss(row, part = 'attention') {
+    return h('a', {class: 'ui-button ghost ui-sm', 'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`,
       href: discussHref({workspaceId, refs: row.ref ? [row.ref] : [], title: row.title, from: 'overview'})}, t('ov_discuss'));
   }
   function open(row) {onOpen(row.ref, row);}
-  function itemLink(row) {return row ? h('button', {type: 'button', class: 'pm-overview-link', onclick: () => open(row)}, row.title) : null;}
+  function itemLink(row, part) {return row ? h('button', {type: 'button', class: 'pm-overview-link', 'data-overview-link': `${part}:${row.key || row.milestone_id || row.work_item_id}`, onclick: () => open(row)}, row.title) : null;}
   function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date ? ` → ${date(row.forecast_date)}` : '',
     row.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null);}
   function statusStrip(data, fixed = false) {
@@ -99,7 +99,7 @@ export function workspaceOverview(options) {
     const metrics = ['blocker', 'decision'].map(kind => {
       const first = data?.attention?.find(row => row.kind === kind);
       const node = metric({label: t(kind === 'blocker' ? 'ov_blockers' : 'ov_decisions'), value: data?.attention_counts?.[kind] ?? null,
-        context: h('div', {}, itemLink(first), kind === 'decision' && first ? discuss(first) : null)});
+        context: h('div', {}, itemLink(first, 'status'), kind === 'decision' && first ? discuss(first, 'status') : null)});
       node.dataset.overviewMetric = kind; return node;
     });
     return h('div', {class: 'pm-overview-status', 'data-overview-status': ''}, goal, progress, ...metrics);
@@ -135,7 +135,7 @@ export function workspaceOverview(options) {
       }
       const label = ['blocker', 'decision', 'deviation', 'risk'].includes(row.kind) ? t('ov_' + row.kind) : reasonLabel(t, 'unknown');
       const elapsed = age(row.since);
-      const link = h('button', {type: 'button', class: 'pm-overview-attention-main', 'data-overview-open': row.key, onclick: () => open(row)},
+      const link = h('button', {type: 'button', class: 'pm-overview-attention-main', 'data-overview-open': row.key, 'data-overview-link': `attention:${row.key}:open`, onclick: () => open(row)},
         h('span', {class: 'pm-overview-kind', title: label, 'aria-label': label}, icon(row.kind === 'decision' ? 'message-square' : 'circle-alert')),
         h('span', {}, h('strong', {}, row.title), h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · '))));
       const node = h('div', {class: 'pm-overview-attention-row', 'data-overview-row': row.key}, link,
@@ -150,18 +150,18 @@ export function workspaceOverview(options) {
   }
   function sidebar(data) {
     const milestones = sectionCard({title: t('ov_milestones'), body: h('div', {}, ...data.milestones.map(row => h('div', {class: 'pm-overview-milestone', 'data-overview-milestone': row.milestone_id},
-      h('div', {}, itemLink(row), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null,
+      h('div', {}, itemLink(row, 'milestones'), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null,
       data.milestones_truncated ? h('div', {class: 'ui-meta'}, t('ov_showing', {n: data.milestones.length})) : null)});
     const deliveries = sectionCard({title: t(data.recent_deliveries_complete ? 'ov_deliveries' : 'ov_deliveries_loaded'), body: h('div', {},
       ...data.recent_deliveries.map(row => h('div', {class: 'pm-overview-delivery', 'data-overview-delivery': row.work_item_id},
-        itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}), statusPill(row.state))),
+        itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}, 'deliveries'), statusPill(row.state))),
       !data.recent_deliveries.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null)});
     return h('div', {class: 'pm-overview-side'}, milestones, deliveries);
   }
   function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
-  function openRelated(row, host) {
+  function openRelated(row, host, returnFocus) {
     closeReader(); relatedSelection = row;
-    reader = inspector({title: row.title, onClose: () => {reader = null; relatedSelection = null;}});
+    reader = inspector({title: row.title, returnFocus, onClose: () => {reader = null; relatedSelection = null;}});
     reader.classList.add('pm-overview-related'); reader.dataset.overviewRelated = row.key;
     reader.body.append(h('section', {'data-overview-related-row': row.key, 'aria-current': 'true'},
       h('p', {}, t('ov_' + row.kind)), h('p', {}, contextText(row)),
@@ -187,7 +187,7 @@ export function workspaceOverview(options) {
       const sources = disclosure({label: icon('list-checks'), key: `${namespace}:${workspaceId}:overview-source:${key}`,
         body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))});
       sources.classList.add('pm-overview-sources'); sources.querySelector('summary').setAttribute('aria-label', `${t('ov_sources')} · ${t('wb_' + key)}`);
-      sources.querySelector('summary').title = t('ov_sources');
+      sources.querySelector('summary').title = t('ov_sources'); sources.querySelector('summary').dataset.overviewLink = `charter:${key}:sources`;
       const decisions = key === 'decisions' && Object.hasOwn(source, 'decision_count');
       const count = source?.decision_count;
       const card = sectionCard({title: t('wb_' + key), body: h('div', {}, rows.length ? list : decisions && count !== 0 ? null : h('span', {class: 'ui-meta'}, t('ov_no_items')),
@@ -196,7 +196,7 @@ export function workspaceOverview(options) {
         decisions && count > rows.length ? h('a', {class: 'ui-button ghost ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ov_more', {n: count - rows.length})) : null, sources)});
       card.dataset.charterSection = key;
       if (rows.length > 3) {
-        const more = button({variant: 'ghost', size: 'sm', label: t(expanded ? 'ov_less' : 'ov_more', {n: rows.length - 3}), 'aria-expanded': String(Boolean(expanded)), onClick: () => {
+        const more = button({variant: 'ghost', size: 'sm', label: t(expanded ? 'ov_less' : 'ov_more', {n: rows.length - 3}), 'aria-expanded': String(Boolean(expanded)), 'data-overview-link': `charter:${key}:expand`, onClick: () => {
           const expand = more.getAttribute('aria-expanded') !== 'true'; more.setAttribute('aria-expanded', String(expand));
           [...list.children].forEach((node, i) => {node.hidden = i >= 3 && !expand;}); more.textContent = t(expand ? 'ov_less' : 'ov_more', {n: rows.length - 3});
           const keys = new Set(preference.expanded || []); expand ? keys.add(key) : keys.delete(key); preference.expanded = [...keys];
@@ -205,7 +205,7 @@ export function workspaceOverview(options) {
       grid.append(card);
     }
     return h('section', {'data-pm-charter': '', class: 'pm-overview-charter'}, h('header', {class: 'pm-overview-charter-heading'}, h('h2', {}, t('ov_charter')),
-      button({variant: 'ghost', label: t('ov_plan'), disabled: !document, 'data-charter-plan': '', onClick: () => fullPlan(document)})), grid);
+      button({variant: 'ghost', label: t('ov_plan'), disabled: !document, 'data-charter-plan': '', 'data-overview-link': 'charter:plan', onClick: () => fullPlan(document)})), grid);
   }
   function details(data, fixed) {
     const entries = new Map((data?.unknown || []).map(row => [row.reason, row]));
@@ -238,7 +238,7 @@ export function workspaceOverview(options) {
       let part = parts.get(entry.key);
       const value = JSON.stringify(entry.value);
       if (!part || part.value !== value) {
-        const node = entry.render(); if (part && node !== part.node) part.node.replaceWith(node);
+        const node = entry.render(); node.dataset.overviewPart = entry.key; if (part && node !== part.node) part.node.replaceWith(node);
         part = {node, value}; parts.set(entry.key, part);
       }
       if (content.children[index] !== part.node) content.insertBefore(part.node, content.children[index] || null);
@@ -257,6 +257,11 @@ export function workspaceOverview(options) {
       commitParts([{key: 'status', value: saved, render: () => statusStrip(savedData(), true)}, {key: 'charter', value: saved, render: () => charter(saved)}, {key: 'details', value: saved, render: () => details(savedData(), true)}]); return;
     }
     if (!projection) {resetContent(loading ? skeleton(4) : statusStrip(null)); return;}
+    // Advance ages without replacing cached rows, changing order or moving focus.
+    for (const row of projection.attention) {
+      const node = attentionNodes.get(row.key)?.node.querySelector('[data-overview-age]'), value = age(row.since);
+      if (node && value !== null && node.textContent !== value) node.textContent = value;
+    }
     // as_of changes on every read. It must not replace reading nodes or their focus.
     const next = JSON.stringify([{...projection, as_of: null}, plan]);
     if (signature === `live:${next}`) return;
@@ -264,17 +269,21 @@ export function workspaceOverview(options) {
     const source = {baseline: {document: plan?.document}, brief: {}, decision_count: projection.attention_counts.decision, attention_truncated: projection.attention_truncated};
     // Live decisions come from the projection, never from a previous snapshot.
     source.brief.decisions = {items: projection.attention.filter(row => row.kind === 'decision').map(row => ({text: row.title, source: row.ref}))};
-    const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute('data-overview-open') || document.activeElement?.getAttribute('data-overview-row-discuss') : null;
-    const discussFocused = document.activeElement?.hasAttribute('data-overview-row-discuss');
+    const focused = content.contains(document.activeElement) ? document.activeElement : null;
+    const focusId = focused?.getAttribute('data-overview-link'), focusPart = focused?.closest('[data-overview-part]')?.dataset.overviewPart;
     if (reader && (relatedSelection ? !projection.attention.some(row => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
     const main = attention(projection);
     commitParts([
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown], render: () => statusStrip(projection)},
-      {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete], render: () => h('div', {class: 'pm-overview-columns'}, main, sidebar(projection))},
+      {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete], render: () => {
+        const columns = parts.get('columns')?.node;
+        if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}
+        return h('div', {class: 'pm-overview-columns'}, main, sidebar(projection));
+      }},
       {key: 'charter', value: source, render: () => charter(source)},
       {key: 'details', value: [projection.coverage, projection.unknown], render: () => details(projection, false)},
     ]);
-    if (focused) content.querySelector(`[${discussFocused ? 'data-overview-row-discuss' : 'data-overview-open'}="${CSS.escape(focused)}"]`)?.focus({preventScroll: true});
+    if (focused && !focused.isConnected && focusId && focusPart) parts.get(focusPart)?.node.querySelector(`[data-overview-link="${CSS.escape(focusId)}"]`)?.focus({preventScroll: true});
   }
   async function refreshLive() {
     const ticket = ++serial; loading = true;

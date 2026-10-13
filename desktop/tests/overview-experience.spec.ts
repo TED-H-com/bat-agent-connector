@@ -357,3 +357,62 @@ for (const mode of ['live', 'saved', 'fallback']) test(`print includes the fixed
   await expect(page.locator('[data-charter-section=definition]')).toContainText(f.copy.goal);
   await expect(page.locator('[data-charter-section=scope]')).toBeVisible(); expect(f.state.writes).toEqual([]);
 });
+
+for (const target of ['attention', 'blocker', 'milestone', 'delivery']) test(`refresh retains the ${target} link identity and focus`, async ({page}) => {
+  const f = fixture(); await boot(page, f);
+  const link = target === 'attention' ? root(page).locator('[data-overview-row]').nth(1).locator('a')
+    : target === 'blocker' ? metric(page, 'blocker').locator('button')
+    : root(page).locator(target === 'milestone' ? '[data-overview-milestone] button' : '[data-overview-delivery] button').first();
+  const id = await link.getAttribute('data-overview-link'); await link.focus();
+  await link.evaluate(node => {(window as any).readingLink = node;});
+  f.state.data.attention_counts.blocker++;
+  f.state.data.milestones[0].status = 'in_progress'; f.state.data.recent_deliveries[0].state = 'rolled_back'; f.state.cursor++;
+  await expect(metric(page, 'blocker').locator('.ui-metric-value')).toHaveText('2');
+  await expect(root(page).locator(`[data-overview-link="${id}"]`)).toBeFocused();
+  if (target === 'attention') expect(await page.evaluate(() => document.activeElement === (window as any).readingLink)).toBe(true);
+  expect(f.state.writes).toEqual([]);
+});
+
+test('cached attention ages advance without moving the reading row', async ({page}) => {
+  const f = fixture(); await boot(page, f);
+  const row = root(page).locator('[data-overview-row]').first(), control = row.locator('button');
+  await expect(row.locator('[data-overview-age]')).toHaveText('5d'); await control.focus();
+  await row.evaluate(node => {(window as any).readingRow = node;});
+  const y = (await row.boundingBox())!.y;
+  f.state.data.as_of += 3 * 86400; f.state.cursor++;
+  await expect(row.locator('[data-overview-age]')).toHaveText('8d'); await expect(control).toBeFocused();
+  expect(await row.evaluate(node => node === (window as any).readingRow)).toBe(true); expect((await row.boundingBox())!.y).toBe(y);
+  f.state.data.as_of += 3 * 86400; f.state.data.attention_counts.decision++; f.state.cursor++;
+  await expect(row.locator('[data-overview-age]')).toHaveText('11d'); await expect(control).toBeFocused(); expect(f.state.writes).toEqual([]);
+});
+
+test('390px navigation selects visible requirement and work after an earlier visit', async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844}); const f = fixture();
+  f.state.data.attention[0].ref = {kind: 'requirement', id: f.ids.requirements.unlock, revision_id: f.ids.planV3};
+  await boot(page, f); await openPmSection(page, 'requirements'); await expect(page.locator('[data-rtm-toggle]').first()).toBeVisible();
+  await openPmSection(page, 'overview'); await root(page).locator('[data-overview-open]').first().click();
+  const row = page.locator(`[data-rtm-requirement="${f.ids.requirements.unlock}"]`);
+  await expect(row).toHaveAttribute('aria-current', 'true'); await expect(row.locator('button')).toBeInViewport({ratio: 1});
+  const bounds = (await row.boundingBox())!; expect(bounds.y).toBeGreaterThanOrEqual(0); expect(bounds.y + bounds.height).toBeLessThanOrEqual(844);
+  expect(await row.evaluate(node => getComputedStyle(node).boxShadow)).not.toBe('none');
+  await expect(row.locator('button')).toBeFocused();
+  await openPmSection(page, 'overview'); await root(page).locator('[data-overview-delivery] button').first().click();
+  await expect(page.locator('[data-rtm-detail] h3')).toBeFocused(); await expect(page.locator('[data-rtm-detail] h3')).toBeInViewport({ratio: 1});
+  expect(f.state.writes).toEqual([]);
+});
+
+test('Overview restores scroll after a shorter view', async ({page}) => {
+  await page.setViewportSize({width: 390, height: 844}); const f = fixture(); await boot(page, f);
+  await root(page).locator('[data-charter-section=decisions]').scrollIntoViewIfNeeded();
+  const before = await page.evaluate(() => scrollY); expect(before).toBeGreaterThan(500);
+  await openPmSection(page, 'requirements'); await openPmSection(page, 'overview');
+  await expect.poll(() => page.evaluate(() => scrollY)).toBe(before); expect(f.state.writes).toEqual([]);
+});
+
+for (const width of [390, 1440]) test(`related inspector Escape returns focus to Issues heading ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900}); const f = fixture(); await boot(page, f);
+  const row = f.state.data.attention.find((item: any) => item.kind === 'deviation');
+  await root(page).locator(`[data-overview-open="${row.key}"]`).click(); await expect(page.locator('[data-overview-related]')).toBeVisible();
+  await page.keyboard.press('Escape'); await expect(page.locator('[data-overview-related]')).toHaveCount(0);
+  await expect(page.locator('.pm-main > .ui-page-header h1')).toBeFocused(); expect(f.state.writes).toEqual([]);
+});

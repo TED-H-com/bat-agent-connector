@@ -9183,8 +9183,8 @@ function trapFocus(root, event) {
 		first.focus();
 	}
 }
-function inspector({ title, onClose = () => {} }) {
-	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
+function inspector({ title, onClose = () => {}, returnFocus = document.activeElement }) {
+	const media = matchMedia("(min-width: 1200px)"), titleId = uid();
 	const body = h$1("div", { class: "ui-inspector-body" });
 	const closeButton = iconButton({
 		icon: "x",
@@ -9246,7 +9246,7 @@ function inspector({ title, onClose = () => {} }) {
 		document.removeEventListener("keydown", keys);
 		media.removeEventListener("change", resize);
 		onClose();
-		if (opener?.isConnected) opener.focus();
+		if (returnFocus?.isConnected && returnFocus.getClientRects().length && !returnFocus.closest("[hidden], [inert]")) returnFocus.focus();
 	}
 	queueMicrotask(() => {
 		if (closed || !root.isConnected) return;
@@ -9323,7 +9323,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {} }) {
+function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -9356,7 +9356,8 @@ function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect =
 	}
 	function select(id) {
 		id = normalizeProjectView(id);
-		if (!buttons.has(id)) return;
+		if (!buttons.has(id) || id === selected) return;
+		beforeSelect(id, selected);
 		selected = id;
 		rememberProjectView(namespace, workspaceId, id);
 		apply();
@@ -11873,10 +11874,11 @@ function workspaceOverview(options) {
 		if (event === "error") status.replaceChildren(options.errorBox(error));
 		if (mode === "saved") render();
 	}
-	function discuss(row) {
+	function discuss(row, part = "attention") {
 		return h("a", {
 			class: "ui-button ghost ui-sm",
 			"data-overview-row-discuss": row.key || row.milestone_id,
+			"data-overview-link": `${part}:${row.key || row.milestone_id}:discuss`,
 			href: discussHref({
 				workspaceId,
 				refs: row.ref ? [row.ref] : [],
@@ -11888,10 +11890,11 @@ function workspaceOverview(options) {
 	function open(row) {
 		onOpen(row.ref, row);
 	}
-	function itemLink(row) {
+	function itemLink(row, part) {
 		return row ? h("button", {
 			type: "button",
 			class: "pm-overview-link",
+			"data-overview-link": `${part}:${row.key || row.milestone_id || row.work_item_id}`,
 			onclick: () => open(row)
 		}, row.title) : null;
 	}
@@ -11932,7 +11935,7 @@ function workspaceOverview(options) {
 			const node = metric({
 				label: t(kind === "blocker" ? "ov_blockers" : "ov_decisions"),
 				value: data?.attention_counts?.[kind] ?? null,
-				context: h("div", {}, itemLink(first), kind === "decision" && first ? discuss(first) : null)
+				context: h("div", {}, itemLink(first, "status"), kind === "decision" && first ? discuss(first, "status") : null)
 			});
 			node.dataset.overviewMetric = kind;
 			return node;
@@ -11995,6 +11998,7 @@ function workspaceOverview(options) {
 				type: "button",
 				class: "pm-overview-attention-main",
 				"data-overview-open": row.key,
+				"data-overview-link": `attention:${row.key}:open`,
 				onclick: () => open(row)
 			}, h("span", {
 				class: "pm-overview-kind",
@@ -12026,7 +12030,7 @@ function workspaceOverview(options) {
 			body: h("div", {}, ...data.milestones.map((row) => h("div", {
 				class: "pm-overview-milestone",
 				"data-overview-milestone": row.milestone_id
-			}, h("div", {}, itemLink(row), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
+			}, h("div", {}, itemLink(row, "milestones"), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
 		});
 		const deliveries = sectionCard({
 			title: t(data.recent_deliveries_complete ? "ov_deliveries" : "ov_deliveries_loaded"),
@@ -12039,7 +12043,7 @@ function workspaceOverview(options) {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}), statusPill(row.state))), !data.recent_deliveries.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null)
+			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
 	}
@@ -12049,11 +12053,12 @@ function workspaceOverview(options) {
 		readerDocument = null;
 		relatedSelection = null;
 	}
-	function openRelated(row, host) {
+	function openRelated(row, host, returnFocus) {
 		closeReader();
 		relatedSelection = row;
 		reader = inspector({
 			title: row.title,
+			returnFocus,
 			onClose: () => {
 				reader = null;
 				relatedSelection = null;
@@ -12105,6 +12110,7 @@ function workspaceOverview(options) {
 			sources.classList.add("pm-overview-sources");
 			sources.querySelector("summary").setAttribute("aria-label", `${t("ov_sources")} · ${t("wb_" + key)}`);
 			sources.querySelector("summary").title = t("ov_sources");
+			sources.querySelector("summary").dataset.overviewLink = `charter:${key}:sources`;
 			const decisions = key === "decisions" && Object.hasOwn(source, "decision_count");
 			const count = source?.decision_count;
 			const card = sectionCard({
@@ -12121,6 +12127,7 @@ function workspaceOverview(options) {
 					size: "sm",
 					label: t(expanded ? "ov_less" : "ov_more", { n: rows.length - 3 }),
 					"aria-expanded": String(Boolean(expanded)),
+					"data-overview-link": `charter:${key}:expand`,
 					onClick: () => {
 						const expand = more.getAttribute("aria-expanded") !== "true";
 						more.setAttribute("aria-expanded", String(expand));
@@ -12145,6 +12152,7 @@ function workspaceOverview(options) {
 			label: t("ov_plan"),
 			disabled: !document,
 			"data-charter-plan": "",
+			"data-overview-link": "charter:plan",
 			onClick: () => fullPlan(document)
 		})), grid);
 	}
@@ -12226,6 +12234,7 @@ function workspaceOverview(options) {
 			const value = JSON.stringify(entry.value);
 			if (!part || part.value !== value) {
 				const node = entry.render();
+				node.dataset.overviewPart = entry.key;
 				if (part && node !== part.node) part.node.replaceWith(node);
 				part = {
 					node,
@@ -12278,6 +12287,10 @@ function workspaceOverview(options) {
 			resetContent(loading ? skeleton(4) : statusStrip(null));
 			return;
 		}
+		for (const row of projection.attention) {
+			const node = attentionNodes.get(row.key)?.node.querySelector("[data-overview-age]"), value = age(row.since);
+			if (node && value !== null && node.textContent !== value) node.textContent = value;
+		}
 		const next = JSON.stringify([{
 			...projection,
 			as_of: null
@@ -12294,8 +12307,8 @@ function workspaceOverview(options) {
 			text: row.title,
 			source: row.ref
 		})) };
-		const focused = content.contains(document.activeElement) ? document.activeElement?.getAttribute("data-overview-open") || document.activeElement?.getAttribute("data-overview-row-discuss") : null;
-		const discussFocused = document.activeElement?.hasAttribute("data-overview-row-discuss");
+		const focused = content.contains(document.activeElement) ? document.activeElement : null;
+		const focusId = focused?.getAttribute("data-overview-link"), focusPart = focused?.closest("[data-overview-part]")?.dataset.overviewPart;
 		if (reader && (relatedSelection ? !projection.attention.some((row) => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
 		const main = attention(projection);
 		commitParts([
@@ -12319,7 +12332,14 @@ function workspaceOverview(options) {
 					projection.milestones_truncated,
 					projection.recent_deliveries_complete
 				],
-				render: () => h("div", { class: "pm-overview-columns" }, main, sidebar(projection))
+				render: () => {
+					const columns = parts.get("columns")?.node;
+					if (columns) {
+						columns.querySelector(".pm-overview-side").replaceWith(sidebar(projection));
+						return columns;
+					}
+					return h("div", { class: "pm-overview-columns" }, main, sidebar(projection));
+				}
 			},
 			{
 				key: "charter",
@@ -12332,7 +12352,7 @@ function workspaceOverview(options) {
 				render: () => details(projection, false)
 			}
 		]);
-		if (focused) content.querySelector(`[${discussFocused ? "data-overview-row-discuss" : "data-overview-open"}="${CSS.escape(focused)}"]`)?.focus({ preventScroll: true });
+		if (focused && !focused.isConnected && focusId && focusPart) parts.get(focusPart)?.node.querySelector(`[data-overview-link="${CSS.escape(focusId)}"]`)?.focus({ preventScroll: true });
 	}
 	async function refreshLive() {
 		const ticket = ++serial;
@@ -14347,6 +14367,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 			for (const card of cards.filter((row) => row.work_item_id === ref.id)) for (const id of card.binding.requirement_ids || []) expanded.add(id);
 			renderTable();
 			await select(ref.id, true);
+			if (!detail.hidden && matchMedia("(max-width: 1100px)").matches) detail.scrollIntoView({ block: "start" });
 			return;
 		}
 		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id) return;
@@ -14355,7 +14376,7 @@ function workspaceTraceability({ h, t, api, alive, namespace, workspaceId, caps,
 		renderTable();
 		const row = tableBody.querySelector(`[data-rtm-requirement="${CSS.escape(ref.id)}"]`);
 		if (row) {
-			row.setAttribute("aria-selected", "true");
+			row.setAttribute("aria-current", "true");
 			row.querySelector("button")?.focus();
 			row.scrollIntoView({ block: "nearest" });
 		}
@@ -29266,7 +29287,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					node.focus();
 					node.scrollIntoView({ block: "nearest" });
 				}
-			} else brief?.openRelated?.(row, main);
+			} else {
+				const returnFocus = heading.querySelector("h1");
+				returnFocus.tabIndex = -1;
+				brief?.openRelated?.(row, main, returnFocus);
+			}
 		},
 		onDiscuss: () => {
 			location.hash = `#/pm/${workspaceId}/discussions`;
@@ -29833,6 +29858,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			workspaceId,
 			view,
 			groups,
+			beforeSelect: (_id, previous) => {
+				if (previous === "overview") brief?.setActive?.(false);
+			},
 			onSelect: (id) => {
 				if (id !== "issues") brief?.closeRelated?.();
 				title.textContent = t("ui_" + id);

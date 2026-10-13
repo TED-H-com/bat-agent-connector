@@ -79,3 +79,15 @@ test('progress segments retain blocker and warning tones', async ({page}) => {
   await expect(page.locator('.ui-metric-bar .tone-bad')).toHaveCount(1);
   await expect(page.locator('.ui-metric-bar .tone-warn')).toHaveCount(1);
 });
+
+test('inspector accepts an explicit return target when its opener becomes hidden', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const ui = await import('/src/ui/components.js');
+    const heading = document.createElement('h2'); heading.textContent = 'Destination'; heading.tabIndex = -1; document.body.append(heading);
+    const opener = document.querySelector('button')!; opener.focus();
+    const panel = ui.inspector({title: 'Related', returnFocus: heading}); opener.hidden = true; document.body.append(panel);
+  });
+  await expect(page.locator('.ui-inspector')).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(page.getByRole('heading', {name: 'Destination'})).toBeFocused();
+});

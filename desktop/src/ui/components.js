@@ -123,8 +123,8 @@ export function trapFocus(root, event) {
   else if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {event.preventDefault(); last.focus();}
   else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {event.preventDefault(); first.focus();}
 }
-export function inspector({title, onClose = () => {}}) {
-  const opener = document.activeElement, media = matchMedia('(min-width: 1200px)'), titleId = uid();
+export function inspector({title, onClose = () => {}, returnFocus = document.activeElement}) {
+  const media = matchMedia('(min-width: 1200px)'), titleId = uid();
   const body = h('div', {class: 'ui-inspector-body'});
   const closeButton = iconButton({icon: 'x', label: t('ui_close'), onClick: close});
   const back = button({variant: 'ghost', icon: 'chevron-left', label: t('ui_back'), onClick: close, class: 'ui-button ghost ui-inspector-back'});
@@ -148,7 +148,7 @@ export function inspector({title, onClose = () => {}}) {
   function keys(event) {if (event.key === 'Escape') {event.preventDefault(); close();} else if (!media.matches) trapFocus(root, event);}
   let closed = false;
   function close() {if (closed) return; closed = true; release(); scrim.remove(); root.remove();
-    document.removeEventListener('keydown', keys); media.removeEventListener('change', resize); onClose(); if (opener?.isConnected) opener.focus();}
+    document.removeEventListener('keydown', keys); media.removeEventListener('change', resize); onClose(); if (returnFocus?.isConnected && returnFocus.getClientRects().length && !returnFocus.closest('[hidden], [inert]')) returnFocus.focus();}
   queueMicrotask(() => {if (closed || !root.isConnected) return; resize(); (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
     document.addEventListener('keydown', keys); media.addEventListener('change', resize);});
   return Object.assign(root, {body, close, dispose: close});
