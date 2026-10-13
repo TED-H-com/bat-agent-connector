@@ -1264,3 +1264,76 @@ body.pm-mode #main { padding: 0; }
 }
 
 .workspace-project-row .workspace-tree-state .workspace-dot { display: block; }
+/* Discussions owns this layout; shared controls retain the design-system tokens. */
+[data-discussions] { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 0; min-width: 0; height: calc(100dvh - 144px); min-height: 480px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
+[data-discussions] .pm-workspace-list { display: flex; flex-direction: column; gap: var(--space-2); overflow: auto; padding: var(--space-3); border-right: 1px solid var(--line); min-width: 0; }
+[data-discussions] .pm-thread-link { display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2); padding: var(--space-3); border-radius: var(--r-sm); color: var(--text); }
+[data-discussions] .pm-thread-link[aria-current=page] { background: var(--accent-soft); }
+[data-discussions] .pm-thread-link strong { font-weight: 600; overflow-wrap: anywhere; }
+[data-discussions] .pm-thread-link time { font-size: var(--fs-caption); color: var(--text-3); }
+[data-discussions] .pm-thread-link .ui-context-chip { align-self: start; max-width: 100%; white-space: normal; height: auto; min-height: 24px; }
+[data-discussions] .pm-thread-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; min-height: 0; min-width: 0; }
+[data-discussions] .pd-new-layout { grid-template-columns: minmax(0, 1fr); }
+[data-discussions] .pm-discussion { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.pd-thread-header { padding: var(--space-4); border-bottom: 1px solid var(--line); }
+.pd-thread-header > input { width: 100%; font-size: var(--fs-section); }
+.pd-thread-header form { border: 0; padding: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pd-thread-header form > input { flex: 1; min-width: 120px; font-weight: 600; }
+.pd-thread-header form .actions { margin: 0; }
+.pd-thread-header form .primary { color: var(--text-2); background: var(--surface); border: 1px solid var(--line); }
+.pd-thread-meta, .pd-context { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; margin-top: var(--space-2); }
+.pd-thread-meta a { font-size: var(--fs-small); margin-left: auto; }
+.pd-context .ui-context-chip, .pd-context-details .ui-context-chip { white-space: normal; height: auto; min-height: 24px; overflow-wrap: anywhere; }
+.pd-transcript { flex: 1; min-height: 0; overflow: auto; padding: var(--space-4); overflow-anchor: none; }
+[data-discussions] .pm-notes { max-height: none; overflow: visible; }
+[data-discussions] .pm-note { border: 0; background: none; padding: var(--space-3) 0; }
+[data-discussions] .pm-note[data-pm-role=assistant], [data-discussions] [data-pm-plan-proposals] { background: var(--accent-soft); border-radius: var(--r-md); padding: var(--space-4); }
+[data-discussions] .pm-note-stamp { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+[data-discussions] .pm-note-stamp time { margin-left: auto; font-size: var(--fs-caption); }
+[data-discussions] .pm-note-text { font-size: var(--fs-read); }
+.pd-composer { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--line); background: var(--surface); }
+.pd-composer form { border: 0; padding: 0; }
+.pd-composer textarea { min-height: 68px; max-height: 160px; width: 100%; resize: vertical; }
+.pd-composer .actions { margin-block: var(--space-2) 0; }
+.pd-ask { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.pd-ask p { margin: 0; font-size: var(--fs-small); }
+.pd-panel-home { min-width: 0; min-height: 0; overflow: auto; border-left: 1px solid var(--line); }
+.pd-panel { padding: var(--space-3); min-width: 0; }
+.pd-panel .ui-tabs { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.pd-panel > section { margin-top: var(--space-4); }
+.pd-panel .pm-plans, .pd-panel .pm-brief { border: 0; padding: 0; }
+.pd-panel h2, .pd-panel h3 { font-size: var(--fs-section); }
+.pd-panel .pm-fields { display: flex; flex-direction: column; }
+.pd-panel .pm-brief-row { display: block; }
+.pd-panel-toggle { display: none; }
+.pd-context-details { display: flex; flex-direction: column; gap: var(--space-2); }
+.pd-start { padding: var(--space-6) 0; }
+[data-discussions] [data-pm-plan-proposals] h3 { margin: 0 0 var(--space-3); font-size: var(--fs-section); }
+[data-discussions] [data-proposal-prepare] { font-size: var(--fs-small); }
+[data-discussions] [data-pm-plan-proposals] form { border: 0; }
+[data-discussions] [data-proposal-history] { margin-block: var(--space-2); }
+.pd-candidate-group h4 { font-size: var(--fs-small); color: var(--text-2); margin-block: var(--space-3) var(--space-1); }
+.pd-candidate { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--space-2); align-items: start; padding-block: var(--space-1); }
+.pd-candidate input[type=checkbox] { margin-top: var(--space-2); }
+.pd-candidate summary { padding-block: var(--space-1); cursor: pointer; }
+.pd-questions { display: grid; gap: var(--space-2); }
+.pd-questions label { display: flex; flex-direction: column; gap: var(--space-1); }
+.pd-panel-overlay .pd-panel { padding: 0; }
+@media (max-width: 1399px) and (min-width: 1200px) {
+  [data-discussions] .pm-thread-layout { grid-template-columns: minmax(0, 1fr) 260px; }
+}
+@media (max-width: 1199px) {
+  [data-discussions] .pm-thread-layout { grid-template-columns: minmax(0, 1fr); }
+  .pd-panel-home { display: none; }
+  .pd-panel-toggle { display: inline-flex; }
+}
+@media (max-width: 799px) {
+  [data-discussions] { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 144px); }
+  [data-discussions] .pm-workspace-list { max-height: 176px; border-right: 0; border-bottom: 1px solid var(--line); }
+  [data-discussions]:has(.pd-thread-header form) .pm-workspace-list, [data-discussions]:has(.pd-new-layout) .pm-workspace-list { display: none; }
+  [data-pm-region=discussions] [data-discussions] .pm-workspace-list { display: flex; }
+  [data-discussions] .pd-thread-header, .pd-transcript, .pd-composer { padding: var(--space-3); }
+  [data-discussions] .pm-thread-link { min-height: 44px; }
+  [data-discussions] .pd-thread-header input { font-size: 16px; }
+  .pd-panel input, .pd-panel select, .pd-panel textarea { font-size: 16px; }
+}

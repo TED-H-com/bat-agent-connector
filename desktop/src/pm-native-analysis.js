@@ -1,3 +1,4 @@
+import {agentMark} from './ui/components.js';
 import {pmContextBundle} from './pm-context-bundle.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
 export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard}) {
@@ -107,7 +108,7 @@ export function pmDiscussionMessage({h, t, message, time, timestamp}) {
     && typeof provenance.run_id === 'string' && /^pmr_[0-9a-f]{32}$/.test(provenance.run_id);
   const source = provenance?.source_refs || {};
   const article = h('article', {class: 'pm-note', 'data-note-id': message.message_id, 'data-pm-role': assistant ? 'assistant' : 'user'},
-    h('div', {class: 'pm-note-stamp'}, h('strong', {}, assistant ? t('pm_native_assistant') : message.actor),
+    h('div', {class: 'pm-note-stamp'}, assistant ? agentMark('pm') : h('span', {class: 'ui-agent-mark', 'aria-hidden': true}, (message.actor || '?').slice(0, 2).toUpperCase()), h('strong', {}, assistant ? t('pm_native_assistant') : message.actor),
       assistant ? h('span', {}, provenance?.model || t('pm_native_unknown_model')) : '',
       h('time', {datetime: new Date(timestamp(message.created_at)).toISOString()}, time(message.created_at))),
     h('div', {class: 'pm-note-text'}, message.content));

@@ -145,7 +145,8 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
     if (signature !== nextSignature) {
       signature = nextSignature;
       current.replaceChildren(h('p', {}, h('strong', {}, accepted.plan ? accepted.plan.document.title : t('pm_plan_none_accepted'))));
-      if (accepted.plan) current.append(h('p', {class: 'muted'}, t('pm_plan_accepted'), ' · ', h('code', {}, accepted.plan.adoption.commit_sha)));
+      if (accepted.plan) current.append(h('p', {class: 'muted'}, t('pm_revision_number', {number: accepted.plan.sequence}), ' · ', t('pm_plan_accepted')));
+      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: () => navigator.clipboard.writeText(accepted.plan.adoption.commit_sha)}, t('pd_copy'))));
       renderRows(page);
     }
     editor.update();

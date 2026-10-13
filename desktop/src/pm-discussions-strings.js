@@ -1,0 +1,28 @@
+export const discussionStrings = {
+  en: {
+    pd_new: 'New discussion', pd_search: 'Search discussions', pd_message: 'Message the PM…', pd_send: 'Send', pd_ask: 'Ask PM',
+    pd_panel: 'Thread panel', pd_tab_context: 'Context', pd_tab_inputs: 'Inputs', pd_tab_plan: 'Plan', pd_back: 'Back to {view}',
+    pd_title: 'Discussion title', pd_rename: 'Rename', pd_unavailable: 'Unavailable', pd_bound_label: 'Originally: {label}',
+    pd_not_connected: 'PM agent not connected', pd_setup: 'Set up', pd_working: 'PM is working', pd_proposed: 'Proposed update',
+    pd_review: 'Review & adopt', pd_follow_up: 'Ask follow-up', pd_stale: 'Out of date', pd_again: 'Ask PM again',
+    pd_adopted: 'Update adopted', pd_details: 'Details', pd_copy: 'Copy digest', pd_answer: 'Your answer', pd_answer_send: 'Send answers',
+    pd_empty: 'Start with what needs a decision.', pd_no_context: 'No bound context', pd_analysis: 'Analysis options', pd_history: 'Saved proposals',
+    pd_kind_snapshot: 'Report', pd_kind_plan_revision: 'Plan', pd_kind_requirement: 'Requirement', pd_kind_milestone: 'Milestone',
+    pd_kind_work_item: 'Work', pd_kind_governance: 'Decision', pd_kind_finding: 'Finding', pd_kind_repair: 'Repair',
+    pd_kind_follow_up: 'Follow-up', pd_kind_proposal: 'Proposal', pd_kind_issue_mapping: 'Issue', pd_kind_meeting: 'Meeting', pd_kind_lifecycle_transition: 'Phase',
+    pm_mode_follow_up: 'Follow-up',
+  },
+  'zh-TW': {
+    pd_new: '新增討論', pd_search: '搜尋討論', pd_message: '傳訊息給 PM…', pd_send: '傳送', pd_ask: '詢問 PM',
+    pd_panel: '討論資料', pd_tab_context: '脈絡', pd_tab_inputs: '資訊', pd_tab_plan: '計畫', pd_back: '返回{view}',
+    pd_title: '討論標題', pd_rename: '重新命名', pd_unavailable: '無法取得', pd_bound_label: '建立討論時：{label}',
+    pd_not_connected: '尚未連接 PM Agent', pd_setup: '設定', pd_working: 'PM 處理中', pd_proposed: '建議更新',
+    pd_review: '審閱並採用', pd_follow_up: '繼續追問', pd_stale: '已過期', pd_again: '再次詢問 PM',
+    pd_adopted: '已採用更新', pd_details: '詳細資料', pd_copy: '複製摘要碼', pd_answer: '你的回答', pd_answer_send: '傳送回答',
+    pd_empty: '從需要決定的事開始。', pd_no_context: '尚未連結脈絡', pd_analysis: '分析選項', pd_history: '已存提案',
+    pd_kind_snapshot: '報告', pd_kind_plan_revision: '計畫', pd_kind_requirement: '需求', pd_kind_milestone: '里程碑',
+    pd_kind_work_item: '工作', pd_kind_governance: '決策', pd_kind_finding: '發現', pd_kind_repair: '修復',
+    pd_kind_follow_up: '追蹤', pd_kind_proposal: '提案', pd_kind_issue_mapping: '議題', pd_kind_meeting: '會議', pd_kind_lifecycle_transition: '階段',
+    pm_mode_follow_up: '追蹤討論',
+  },
+};
