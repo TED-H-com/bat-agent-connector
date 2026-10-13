@@ -46,7 +46,7 @@ attempt id 帶工作項目，是為了同一目標連到兩項工作時仍然唯
 
 工作必須是目前的 binding，而且 binding id 在里程碑的 `work_binding_ids`，或 binding 的 plan revision 與該里程碑的需求有交集。範圍與可見性都在 200 筆上限之前套用。範圍外或隱藏的 binding 不佔名額；較新的範圍內工作不會被範圍外的 binding 擋住。超過 200 筆範圍內且可見的 binding 才設 `work_bindings_truncated`，順序仍是 sequence 由舊到新。不從標題、路徑或時間接近來推測關係。多個明確上層時 `parent_id` 是 null，並記 `work.parent` / `multiple_explicit_parents`。工作沒有依賴合約，`depends_on` 恒為 `[]`，有工作時記 `work.depends_on` / `no_work_dependency_contract`。不把需求依賴抄到工作上。
 
-Issue 只在已有 `pm_issue_revisions` 時讀取。沒有日期，狀態是 `unknown`，`refs.tracking_state` 保留紀錄上的狀態字，包含 `cancelled`。標題用非空白檢查：這一版的 `public_title`，否則先前已發布的最後一個非空白 `public_title`，否則 `repository#number`。`/` 與換行保留。三者都沒有時不列，並記 `issue.title` / `issue_title_unavailable`。上層必須同時符合需求 id 與該 binding 的 plan revision，而且那個里程碑涵蓋它在 baseline 內的全部需求；不能只靠需求 id 跨修訂對上。否則 `parent_id` 是 null。工作不會改掛到 issue 下面。沒有對應表時不發明 issue 列。工作項目隱藏時，issue 列一起不出現。
+Issue 只在已有 `pm_issue_revisions` 時讀取。沒有日期，狀態是 `unknown`，`refs.tracking_state` 保留紀錄上的狀態字，包含 `cancelled`。標題用非空白檢查：這一版的 `public_title`，否則先前已發布的最後一個非空白 `public_title`，否則 `repository#number`。`/` 與換行保留。三者都沒有時不列，並記 `issue.title` / `issue_title_unavailable`。上層必須同時符合需求 id 與該 binding 的 plan revision，而且那個里程碑涵蓋它在 baseline 內的全部需求；不能只靠需求 id 跨修訂對上。否則 `parent_id` 是 null。工作不會改掛到 issue 下面。沒有對應表時不發明 issue 列。工作項目隱藏時，issue 列一起不出現。只計會列出的列：隱藏工作的對應，以及套件存取拒絕的對應，都不佔 200 筆名額。持續翻頁直到列出 200 筆，或已經檢查 1000 筆對應而後面還有資料；只有這時設 `issues_truncated`。
 
 ## 實際起訖
 

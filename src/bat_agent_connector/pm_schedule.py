@@ -24,6 +24,8 @@ MAX_LINKS_TOTAL = 200
 MAX_ISSUES = 200
 MAX_BYTES = 2_000_000
 _BINDING_CHUNK = 200
+# Mappings examined, including ones list_mappings or work visibility will not emit.
+_ISSUE_SCAN = 1000
 # Rows examined per session, hidden ones included. Visibility is decided before any run is chosen.
 _RUN_SCAN = 64
 _RANGE_BOUND = {"start": "0000-00-00", "end": "0000-00-00"}
@@ -885,38 +887,48 @@ def _work_actual(completion, merged, attempts):
 
 
 def _issues(ops, principal, workspace_id, milestones, notes, coverage):
+    """Page mappings until 200 rows will be emitted, or the scan bound stops on more data."""
     if not _table(ops.db, "pm_issue_revisions"):
         return []
     from . import pm_issue_mappings
-    collected, after, pages = [], 0, 0
-    while pages < 4 and len(collected) < MAX_ISSUES:
-        page = pm_issue_mappings.list_mappings(ops, principal, workspace_id, after=after, limit=50)
+    emitted, after, scanned, truncated = [], 0, 0, False
+    while scanned < _ISSUE_SCAN and len(emitted) < MAX_ISSUES:
+        limit = min(50, _ISSUE_SCAN - scanned)
+        page = pm_issue_mappings.list_mappings(ops, principal, workspace_id, after=after, limit=limit)
         if page["coverage"]["visibility_filtered"]:
             coverage["visibility_filtered"] = True
-        collected.extend(page["mappings"])
-        pages += 1
-        if not page["coverage"]["has_more"] or page["next_cursor"] is None:
+        scanned += page["coverage"].get("scanned", len(page["mappings"]))
+        binding_ids, mapping_ids = [], []
+        for mapping in page["mappings"]:
+            document = mapping.get("document") if isinstance(mapping.get("document"), dict) else {}
+            relation = document.get("relation") if isinstance(document.get("relation"), dict) else {}
+            if isinstance(relation.get("binding_id"), str):
+                binding_ids.append(relation["binding_id"])
+            if isinstance(mapping.get("mapping_id"), str):
+                mapping_ids.append(mapping["mapping_id"])
+        plans = _binding_plans(ops.db, workspace_id, binding_ids)
+        published = _published_titles(ops.db, workspace_id, mapping_ids)
+        for mapping in page["mappings"]:
+            row = _issue(ops, principal, mapping, milestones, notes, coverage, plans, published)
+            if row is None:
+                continue
+            if len(emitted) >= MAX_ISSUES:
+                truncated = True
+                break
+            emitted.append(row)
+        if truncated:
+            break
+        more = page["coverage"]["has_more"] and page["next_cursor"] is not None and page["next_cursor"] > after
+        if not more:
+            break
+        if scanned >= _ISSUE_SCAN:
+            truncated = True
             break
         after = page["next_cursor"]
-    else:
+    if truncated:
         coverage["issues_truncated"] = True
         _note(notes, "issue", "mapping_page_truncated")
-    if len(collected) > MAX_ISSUES:
-        collected = collected[:MAX_ISSUES]
-        coverage["issues_truncated"] = True
-        _note(notes, "issue", "mapping_page_truncated")
-    binding_ids, mapping_ids = [], []
-    for mapping in collected:
-        document = mapping.get("document") if isinstance(mapping.get("document"), dict) else {}
-        relation = document.get("relation") if isinstance(document.get("relation"), dict) else {}
-        if isinstance(relation.get("binding_id"), str):
-            binding_ids.append(relation["binding_id"])
-        if isinstance(mapping.get("mapping_id"), str):
-            mapping_ids.append(mapping["mapping_id"])
-    plans = _binding_plans(ops.db, workspace_id, binding_ids)
-    published = _published_titles(ops.db, workspace_id, mapping_ids)
-    return [row for row in (_issue(ops, principal, mapping, milestones, notes, coverage, plans, published)
-                            for mapping in collected) if row]
+    return emitted
 
 
 def _binding_plans(db, workspace_id, binding_ids):

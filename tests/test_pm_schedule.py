@@ -16,6 +16,7 @@ from bat_agent_connector import (
     pm_runs,
     pm_schedule,
     pm_source_lineage,
+    pm_work_packages,
     work_items,
 )
 from bat_agent_connector.api_auth import Principal
@@ -899,6 +900,69 @@ async def test_issue_rows_keep_titles_cancelled_state_and_plan_revision(ops, mon
     assert work["work_item_id"] not in json.dumps(hidden)
     assert hidden["coverage"]["visibility_filtered"] is True
     assert not any(node["kind"] == "issue" for node in nodes(hidden))
+
+
+def _tracked_issue(service, wid, work_id, binding, title, *, mapping_id, package_id, revision_id, operation_id):
+    """Insert one digest-valid package and issue revision that list_mappings can read."""
+    row = service.db.execute("SELECT * FROM pm_work_bindings WHERE workspace_id=? AND binding_id=?",
+                             (wid, binding["binding_id"])).fetchone()
+    parsed = {**dict(row), "requirement_ids": json.loads(row["requirement_ids"])}
+    plan = pm_plans.get_plan(service, OWNER, wid, row["plan_revision_id"])["plan"]
+    plan_ref = pm_work_packages._plan_ref(plan)
+    item_row = work_items._get_item(service.db, work_id)
+    project = work_items._get_project(service.db, item_row["project_id"])
+    server_id = service.db.execute("SELECT server_id FROM pm_workspaces WHERE workspace_id=?", (wid,)).fetchone()[0]
+    context = {"server_id": server_id, "plan_ref": plan_ref,
+               "work_ref": {"binding_id": binding["binding_id"], "work_item_id": work_id,
+                            "project_id": item_row["project_id"],
+                            "binding_document_digest": pm_work_packages._digest(parsed),
+                            "work_version": item_row["version"], "work_fingerprint": work_items.fingerprint(item_row),
+                            "project_version": project["version"]},
+               "evidence_refs": [], "dod_ref": None, "git_binding": None}
+    package_op = "op_" + package_id[-32:]
+    document = {"workspace_id": wid, "package_id": package_id, "work_item_id": work_id,
+                "previous_package_id": None, "operation_id": package_op, "context": context}
+    pm_work_packages.schema(service.journal)
+    pm_issue_mappings.schema(service.journal)
+    service.db.execute("""INSERT INTO pm_work_packages(package_id,workspace_id,work_item_id,previous_package_id,
+        document_digest,document,actor,created_at,operation_id) VALUES(?,?,?,?,?,?,?,?,?)""",
+        (package_id, wid, work_id, None, pm_work_packages._digest(document), pm_work_packages._json(document),
+         OWNER.actor, 1.0, package_op))
+    issue = {"revision_id": revision_id, "mapping_id": mapping_id, "workspace_id": wid, "work_item_id": work_id,
+             "operation_id": operation_id, "state": "tracking",
+             "issue": {"id": 1, "number": 7, "repository": "o/r", "repository_id": 1},
+             "selected": {"public_title": title},
+             "relation": {"work_item_id": work_id, "binding_id": binding["binding_id"], "requirement_ids": ["login"],
+                          "repository_id": 1, "repository": "o/r"},
+             "package_ref": {"package_id": package_id, "document_digest": pm_work_packages._digest(document)}}
+    service.db.execute("""INSERT INTO pm_issue_revisions(revision_id,mapping_id,workspace_id,work_item_id,
+        previous_revision_id,document,document_digest,operation_id,created_at,actor) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+        (revision_id, mapping_id, wid, work_id, None, pm_work_packages._json(issue), pm_work_packages._digest(issue),
+         operation_id, 1.0, OWNER.actor))
+
+
+async def test_hidden_work_issue_does_not_consume_the_issue_cap(ops, monkeypatch):
+    target, plan, work, binding, *_ = await mapped(ops)
+    wid = target["workspace_id"]
+    pid = work_items._get_item(ops.db, work["work_item_id"])["project_id"]
+    hidden = {"workspace_id": wid, "work_item_id": await item(ops, pid, title="Hidden deliverable")}
+    hidden_binding = await bind_work(ops, hidden, plan_revision_id=plan["revision_id"], requirement_ids=["login"])
+    _tracked_issue(ops, wid, hidden["work_item_id"], hidden_binding, "Hidden issue",
+                   mapping_id="pmim_" + "a" * 32, package_id="pmwp_" + "a" * 32,
+                   revision_id="pmir_" + "a" * 32, operation_id="op_" + "a" * 16)
+    _tracked_issue(ops, wid, work["work_item_id"], binding, "Visible issue",
+                   mapping_id="pmim_" + "b" * 32, package_id="pmwp_" + "b" * 32,
+                   revision_id="pmir_" + "b" * 32, operation_id="op_" + "b" * 16)
+    withdraw(ops, "work_item", hidden["work_item_id"])
+    monkeypatch.setattr(pm_schedule, "MAX_ISSUES", 1)
+    listed = pm_issue_mappings.list_mappings(ops, OWNER, wid)
+    assert [row["mapping_id"] for row in listed["mappings"]] == ["pmim_" + "a" * 32, "pmim_" + "b" * 32]
+    body = check(schedule(ops, wid), wid)
+    assert f"issue:pmim_{'b' * 32}" in by_id(body)
+    assert f"issue:pmim_{'a' * 32}" not in by_id(body)
+    assert hidden["work_item_id"] not in json.dumps(body)
+    assert body["coverage"]["issues_truncated"] is False and body["partial"] is False
+    assert body["coverage"]["visibility_filtered"] is True
 
 
 async def test_schedule_cursor_round_trips_any_session_id(ops):

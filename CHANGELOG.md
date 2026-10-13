@@ -14,7 +14,8 @@
   the dates derived from them, and their ids do not appear in rows or cursors.
   A hidden run does not take a session's run slot or remove the visible `run_id`. The
   per-session scan stops at a second visible run, or after 64 rows when that choice is
-  still open, and then omits `run_id`.
+  still open, and then omits `run_id`. A hidden issue mapping does not consume the
+  200-row issue cap or mark the page partial.
   See `docs/design/pm-schedule.md`.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
