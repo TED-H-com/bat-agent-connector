@@ -1,3 +1,4 @@
+import {openThreadBrief} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,pmRoute,workspaceId} from './pm-fixture.ts';
@@ -32,7 +33,7 @@ function fixture(){
 const form=(page:any)=>page.locator('[data-pm-action="pm.snapshot.create"]');
 for(const native of [false,true])test.describe(native?'native Brief':'web Brief',()=>{
   test('one explicit snapshot renders all five questions with unassessed areas visible',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadBrief(page);
     await form(page).getByRole('button',{name:'Save project snapshot',exact:true}).click();
     await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
     await expect(page.locator('[data-pm-brief]')).toContainText('Keep the first useful action visible');
@@ -40,14 +41,14 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
     await expect(page.locator('[data-pm-brief-section="deviations"]')).toContainText('have not been evaluated for drift');
     expect(f.state.writes[0].body).toEqual({action:'pm.snapshot.create',target:{workspace_id:workspaceId},params:{},preconditions:{expected_plan_version:2}});
     expect(f.base.state.writes).toHaveLength(0);
-    f.state.goal='A later unselected direction';f.state.headVersion=3;await page.reload();
+    f.state.goal='A later unselected direction';f.state.headVersion=3;await page.reload();await openThreadBrief(page);
     await expect(page.locator('[data-pm-brief]')).toContainText('Keep the first useful action visible');
     await expect(page.locator('[data-pm-brief]')).not.toContainText('A later unselected direction');
   });
   test('lost snapshot response preserves original key and plan version across reload',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);f.state.lost=true;
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadBrief(page);f.state.lost=true;
     await form(page).getByRole('button',{name:'Save project snapshot',exact:true}).click();await expect(form(page)).toContainText('Reply unavailable');
-    f.state.headVersion=4;await page.reload();await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+    f.state.headVersion=4;await page.reload();await openThreadBrief(page);await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
     expect(f.state.snapshots).toHaveLength(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
@@ -59,7 +60,7 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
       if(new URL(input.path,'http://fixture').pathname===`/pm/workspaces/${workspaceId}/plans/head`&&hold){held=true;await gate;}
       return result;
     };
-    await mountConversation(page,native,dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,dispatch);await page.goto(pmRoute);await openThreadBrief(page);
     const editor=form(page),button=editor.getByRole('button',{name:'Save project snapshot',exact:true});
     await expect(button).toBeEnabled();await editor.locator('summary').click();
     const title=editor.getByLabel('Snapshot title',{exact:true});await title.fill('Original review title');
@@ -76,14 +77,14 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
   });
   test('reader sees fixed Brief without permission to save a new snapshot',async({page})=>{
     const f=fixture();f.state.snapshots.push(f.make());f.base.state.role='reader';f.base.state.manage=false;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadBrief(page);
     await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);await expect(form(page).getByRole('button')).toBeDisabled();
     expect(f.state.writes).toHaveLength(0);
   });
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Brief layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({locale,baseURL,viewport:{width,height:1100}}),page=await context.newPage();
-  const f=fixture();f.state.snapshots.push(f.make());await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
+  const f=fixture();f.state.snapshots.push(f.make());await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadBrief(page);
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   await expect(page.locator('[data-pm-brief] h2')).toHaveText(locale==='en'?'Project Brief':'專案總覽');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

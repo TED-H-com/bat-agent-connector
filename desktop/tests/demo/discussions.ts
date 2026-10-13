@@ -37,6 +37,7 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
           result = {thread_id: id, version: data.thread.version};
         } else if (body.action === 'pm.conversation.propose') {
           const proposal = proposalDetail(project).proposal;
+          proposal.proposal_id = hexId('pmcp_', 950 + state.operations.size, 32);
           proposal.thread_id = id; proposal.context.thread_version = data.thread.version;
           Object.assign(proposal.context, {messages: structuredClone(data.messages), inputs: structuredClone(data.inputs), draft_id: data.thread.draft_id});
           // Keep the complete demo requirements while presenting a focused blocker update.
@@ -51,7 +52,7 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
       return ok({operation});
     }
     if (path.startsWith('/operations/')) return ok({operation: [...state.operations.values()].find((op: any) => path.endsWith(op.operation_id))});
-    if (path === root + '/threads') return ok({workspace_id: project.ids.workspaceId, threads: state.threads.map((row: any) => state.details.get(row.thread_id).thread), next_cursor: null});
+    if (path === root + '/threads') return ok({workspace_id: project.ids.workspaceId, threads: state.threads.map((row: any) => {const thread = state.details.get(row.thread_id).thread; return {...thread, context: state.withdrawn ? context(thread.context || []) : thread.context};}), next_cursor: null});
     if (path.startsWith(root + '/threads/')) {
       const data = state.details.get(path.split('/').at(-1));
       if (state.withdrawn) data.thread.context = context(data.thread.context || []);
@@ -59,7 +60,7 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
     }
     if (path === root + '/capabilities') return ok({...workspaceCapabilities(project), plan_adoption_available: true,
       native_analysis: {authorized: true, eligible_for_preflight: true}});
-    if (path === root + '/conversation-proposals') return ok({workspace_id: project.ids.workspaceId, proposals: state.proposals.filter((p: any) => p.thread_id === url.searchParams.get('thread_id')).map((p: any) => ({proposal_id: p.proposal_id, thread_id: p.thread_id, validation: p.validation})), next_cursor: null});
+    if (path === root + '/conversation-proposals') return ok({workspace_id: project.ids.workspaceId, proposals: state.proposals.filter((p: any) => p.thread_id === url.searchParams.get('thread_id')).map((p: any) => ({sequence: p.sequence, proposal_id: p.proposal_id, thread_id: p.thread_id, operation_id: p.operation_id, run_id: p.run_id, document_digest: p.document_digest, created_by: p.created_by, created_at: p.created_at, validation: p.validation})), next_cursor: null});
     if (path.startsWith(root + '/conversation-proposals/')) return ok({workspace_id: project.ids.workspaceId, proposal: state.proposals.find((p: any) => path.endsWith(p.proposal_id))});
     const result = await fallback(input);
     if (path === '/bootstrap') result.data.capabilities = caps(result.data.capabilities);

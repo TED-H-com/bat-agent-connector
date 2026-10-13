@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
@@ -205,11 +206,13 @@ for (const {locale, width} of cases) {
     await threads.filter({hasText: copy.threads.planning}).click();
     await expectView(page, locale, width, 'discussions', copy.name);
     await expect(page.locator('.pm-notes')).toContainText(copy.planningNote);
-    await page.locator('[data-pm-information] > summary').click();
-    await expect(page.locator('[data-pm-information]')).toContainText(copy.draftRationale);
-    await expect(page.locator('[data-pm-information]')).toContainText(locale === 'zh-TW' ? '財務' : 'Finance');
+    await openThreadTab(page,'plan');
+    await expect(page.locator('.pm-draft')).toContainText(copy.draftRationale);
+    await expect(page.locator('.pm-draft')).toContainText(locale === 'zh-TW' ? '財務' : 'Finance');
     const proposals = page.locator('[data-pm-plan-proposals]');
-    await proposals.getByLabel(locale === 'zh-TW' ? '已保存提案' : 'Saved proposal').selectOption(ids.proposalId);
+    await page.locator('[data-proposal-history] > summary').click();
+    await page.getByLabel(locale === 'zh-TW' ? '已保存提案' : 'Saved proposal').selectOption(ids.proposalId);
+    if (width < 1200) await page.keyboard.press('Escape');
     await expect(proposals).toContainText(copy.proposalSummary);
     await expect(proposals.getByLabel(locale === 'zh-TW' ? '計畫名稱' : 'Plan title')).toHaveValue(copy.proposalTitle);
     await expectNoJunk(page);

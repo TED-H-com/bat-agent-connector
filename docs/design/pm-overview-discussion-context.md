@@ -128,3 +128,15 @@ PhaseProfile 為 version 3，原先記錄 profile_version 2 的 immutable plans 
 不是相關 operation IDs 排序後的第一個；維持原完整 context 字元上限，超出時拒絕，
 不默默丟棄來源。文件 bundle 維持原 UTF-8 上限，runtime／proposal／operation read
 重查已凍結來源的可見性。來源文字永遠是資料，不授權模式切換、採用或執行。
+
+## 共用前端討論入口
+
+`desktop/src/pm-discuss-link.js` 解析 new 討論 URL；開啟時只建立本機草稿，第一次
+傳送才依序呼叫原 `pm.thread.create` 與 `pm.message.append`。建立回執後保存 thread
+ID 與待傳訊息，重新載入不重建討論；結果不明時保留原 key，只有已知 operation ID
+可自動查回。來源 chip 使用本次讀取的 label，舊 bound_label 只放提示；不可用的來源
+不保留 ID、標題或快取內容。右側脈絡／資訊／計畫分頁保留原操作與草稿。
+
+提案顯示建議更新、納入選項及單次採用審閱。完整固定 messages、inputs 與 draft ID
+可供介面辨識純改名；中央仍是內容版本與採用的最後權威。VERSION_CONFLICT 顯示
+「已過期／再次詢問 PM」，不清除審閱文字，也不以另一個 key 重送原採用。

@@ -201,3 +201,29 @@ When the resources projection includes `buckets`, the usage trend is one stacked
 per local day and CLI. A day that is not `complete`, and any null metric, stays unknown.
 The resources read includes `buckets` only when the request sets `buckets=day`.
 Omit the chart when the projection has no buckets.
+
+## Discussions
+
+Discussions uses a 280px searchable thread list, a conversation with its composer
+pinned below the scrolling transcript, and a Context / Inputs / Plan panel. Below
+1200px the panel opens in the shared drawer; below 800px it becomes a sheet with
+Escape and focus return. The title is editable through the central rename action.
+Context chips use current labels and put differing admission labels in tooltips;
+withdrawn refs show only their kind and Unavailable, including in the thread list.
+
+The shared `/discussions/new` link opens an editable draft and focuses the composer.
+Its first Send creates the bound thread and then appends the note. Both operations
+retain their own original keys; the acknowledged thread ID and unsent note bridge a
+reload between the two. Opening or reloading the draft performs no write. Thread
+origins retain the project-view route; source views retain their own preference state.
+
+Structured analysis stays on the existing capability-checked native/BAT proposal
+path. A Proposed update card groups candidates with include toggles, at most three
+inline answers, and one owner adoption review. Notes and answers remain central
+messages. Renaming alone does not invalidate a proposal; content changes and central
+VERSION_CONFLICT show Out of date and Ask PM again while retaining review drafts.
+The operation's real state drives the static working/elapsed line and original-key
+recovery. Saved proposals, runtime options, planning inputs, immutable revisions,
+context packages, meetings, follow-ups and Brief remain in the thread panel.
+Proposal titles replace raw IDs in the picker; plan name, revision and status replace
+commit digests in the reading surface. Identifiers and copyable digests are in Details.

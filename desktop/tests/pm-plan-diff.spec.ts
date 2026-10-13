@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
@@ -7,7 +8,7 @@ const first='pmrev_'+'a'.repeat(32), second='pmrev_'+'b'.repeat(32), binding='pm
 const shots=process.env.PM_DIFF_SCREENSHOTS;
 test('before comparison fits the existing shared plan layout',async({page})=>{
   const f=pmFixture();f.state.plans=true;
-  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'plan');
   await expect(page.locator('[data-pm-plans]')).toBeVisible();
   if(shots){mkdirSync(shots,{recursive:true});for(const width of [1440,390]){
     await page.setViewportSize({width,height:900});await page.screenshot({path:`${shots}/before-${width}.png`,fullPage:true});}}
@@ -49,7 +50,7 @@ function fixture(){
 const box=(page:any)=>page.locator('[data-pm-plan-diff]');
 async function mount(page:any,native:boolean,f:any){
   await mountConversation(page,native,f.dispatch);
-  await page.goto(pmRoute);
+  await page.goto(pmRoute);await openThreadTab(page,'plan');
   await expect(page.locator('[data-pm-plans]')).toBeVisible();
   await expect(box(page)).toHaveCount(1);
   await expect(box(page)).toBeHidden();

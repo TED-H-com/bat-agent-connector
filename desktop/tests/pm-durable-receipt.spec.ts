@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture,pmRoute} from './pm-fixture.ts';
@@ -45,7 +46,7 @@ async function submit(page:any) {
 
 for(const native of [false,true])test.describe(native?'Native original PM receipt':'Web original PM receipt',()=>{
   test('visible input plus running receipt is reconciled by GET before editing another input',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     const form=await submit(page);
     await expect(page.locator('.pm-facts')).toContainText('A fixed original input');
     await expect(form.getByLabel('Topic',{exact:true})).toBeDisabled();
@@ -61,9 +62,9 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
   });
 
   test('reload checks an acknowledged original ID without another POST',async({page})=>{
-    const f=fixture();f.state.postStatus='accepted';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();f.state.postStatus='accepted';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     await submit(page);const saved=await draft(page);
-    await page.reload();f.state.complete=true;
+    await page.reload();await openThreadTab(page,'inputs');f.state.complete=true;
     await expect(action(page).getByLabel('Topic',{exact:true})).toBeEnabled();
     expect(f.base.state.writes).toHaveLength(1);
     expect(f.state.gets.every(path=>path==='/operations/'+saved.value.intent.operation_id)).toBe(true);
@@ -71,7 +72,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
   });
 
   test('bounded polling stops with the original key intact and retains manual recovery',async({page})=>{
-    const f=fixture();await page.clock.install();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    const f=fixture();await page.clock.install();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
     const form=await submit(page),saved=await draft(page);
     // Allow each asynchronous GET to settle before advancing the next backoff.
@@ -93,7 +94,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
 
   test('an uncertain original receipt needs explicit recovery and is never automatically resubmitted',async({page})=>{
     const f=fixture();f.state.postStatus='uncertain';await page.clock.install();
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     const form=await submit(page),saved=await draft(page);
     await page.clock.runFor(30000);
     expect(f.state.gets).toHaveLength(0);expect(f.base.state.writes).toHaveLength(1);
@@ -106,7 +107,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
 
   test('lost admission without an operation ID never starts an automatic POST',async({page})=>{
     const f=fixture();f.base.state.lost=true;await page.clock.install();
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     await page.locator('[data-pm-add-input] > summary').click();const form=action(page);
     await form.getByLabel('Topic',{exact:true}).selectOption('problem');
     await form.getByLabel('Statement or question',{exact:true}).fill('Preserve a lost original admission');
@@ -126,7 +127,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
 
   for(const failure of ['403','network','mismatch'])test(`a ${failure} receipt stops polling and never clears the intent`,async({page})=>{
     const f=fixture();f.state.getError=failure==='403'?403:failure==='network'?503:0;f.state.mismatch=failure==='mismatch';
-    await page.clock.install();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+    await page.clock.install();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     const form=await submit(page),saved=await draft(page);
     await page.clock.runFor(1000);await expect.poll(()=>f.state.gets.length).toBe(1);
     await expect(form).toContainText(failure==='mismatch'?'The receipt does not match':failure==='403'?'Your token lacks this scope':'Original receipt unavailable');
@@ -140,7 +141,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
 
   test('a late receipt after leaving the view cannot clear or replace the original request',async({page})=>{
     const f=fixture();let release=()=>{};f.state.hold=new Promise<void>(resolve=>release=resolve);
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await submit(page);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');await submit(page);
     await expect.poll(()=>f.state.gets.length).toBe(1);const saved=await draft(page);
     await page.locator('a[href="#/settings"]').first().click();
     await expect(page).toHaveURL(/#\/settings$/);
@@ -153,7 +154,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
 
   test('write access lost during receipt read preserves the original local intent',async({page})=>{
     const f=fixture();let release=()=>{};f.state.hold=new Promise<void>(resolve=>release=resolve);
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const form=await submit(page);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');const form=await submit(page);
     await expect.poll(()=>f.state.gets.length).toBe(1);const saved=await draft(page);
     f.base.state.role='reader';await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(page.getByText('You can read this workspace. Editing requires contributor access.',{exact:true})).toBeVisible();

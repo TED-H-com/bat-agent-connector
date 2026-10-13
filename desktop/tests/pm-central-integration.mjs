@@ -1,4 +1,4 @@
-import {openPmPanel} from './pm-navigation.ts';
+import {openPmPanel, openThreadTab} from './pm-navigation.ts';
 // One browser flow against actual PM HTTP actions; the central has no BAT hosts.
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
@@ -61,22 +61,26 @@ try {
   await page.getByRole('button', {name:'Create workspace', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}$/);
   await page.getByRole('button', {name:'Discuss with PM', exact:true}).click();
+  await expect(page.locator('[data-discussion-composer]')).toBeFocused();
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
-  await page.getByRole('button', {name:'Start discussion', exact:true}).click();
+  await page.locator('[data-discussion-composer]').fill('Keep the first action visible; retain a guided tour as an alternative.');
+  await page.getByRole('button', {name:'Send', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/pmt_[a-f0-9]{32}$/);
   const [workspaceId, , threadId] = page.url().split('/').slice(-3);
   const read = async () => {
     const response = await fetch(`${origin}/api/v1/pm/workspaces/${workspaceId}/threads/${threadId}`, {headers:{Authorization:'Bearer '+fixture.token}});
     assert.equal(response.status, 200); return response.json();
   };
-  await page.getByText('Save a note without requesting analysis', {exact:true}).click();
   const note = page.locator('[data-pm-action="pm.message.append"]');
-  await note.getByLabel('Add a discussion note', {exact:true}).fill('Keep the first action visible; retain a guided tour as an alternative.');
-  await note.getByRole('button', {name:'Save note', exact:true}).click();
   await expect(page.locator('.pm-notes')).toContainText('Keep the first action visible');
+  const rename=page.locator('[data-pm-action="pm.thread.rename"]');
+  await rename.getByLabel('Discussion title',{exact:true}).fill('Choose the first useful improvement');
+  await rename.getByRole('button',{name:'Rename',exact:true}).click();
+  await expect.poll(async()=>(await read()).thread.title).toBe('Choose the first useful improvement');
   const message = (await read()).messages[0];
   assert.equal(typeof message.created_at, 'number');
   await expect(page.locator('.pm-note time')).toHaveAttribute('datetime', new Date(message.created_at * 1000).toISOString());
+  await openThreadTab(page,'inputs');
   await page.locator('[data-pm-add-input] summary').click();
   const input = page.locator('[data-pm-action="pm.input.record"]');
   for (const [slot, value] of [['problem', 'Make the first action visible'], ['alternatives', 'Offer a guided tour later']]) {
@@ -97,11 +101,12 @@ try {
   assert.notEqual(confirmed.input_id, original.input_id); assert.equal(confirmed.supersedes_input_id, original.input_id);
   await page.getByRole('checkbox', {name:'Selected input outside this view', exact:true}).click();
   await page.locator(`[data-input-id="${confirmed.input_id}"] input[type=checkbox]`).check();
+  await openThreadTab(page,'plan');
   const plan = page.locator('[data-pm-action="pm.thread.plan"]');
   await plan.getByLabel('Why this direction', {exact:true}).fill('Prepare one change and retain the alternative');
   await plan.getByRole('button', {name:'Save Planning draft', exact:true}).click();
   await expect(page.locator('.pm-draft')).toContainText('Offer a guided tour later');
-  await page.reload(); await expect(page.locator('.pm-draft')).toContainText('Make the first action visible');
+  await page.reload(); await openThreadTab(page,'plan'); await expect(page.locator('.pm-draft')).toContainText('Make the first action visible');
   const data = await read(); assert.equal(data.thread.mode, 'planning'); assert.equal(data.draft.execution_authorized, false);
   assert.equal(data.draft.adopted, false); assert.deepEqual(data.draft.selected_input_ids, [confirmed.input_id]);
   assert.equal(data.draft.candidate_inputs.length, 1); assert.equal(data.messages.length, 1);
@@ -119,8 +124,8 @@ try {
   const revision = await revisionResponse.json();
   assert.deepEqual(revision.plan.document.selected_inputs.map(input=>input.input_id), [confirmed.input_id]);
   assert.equal(revision.plan.adoption, null); assert.equal(revision.plan.document.execution_authorized, false);
-  // Planning keeps inputs behind its normal disclosure after reload.
-  await page.locator('[data-pm-information] > summary').click();
+  // Inputs retain their own tab while the plan and immutable revisions remain selected.
+  await openThreadTab(page,'inputs');
   await page.locator('[data-pm-add-input] > summary').click();
   await input.getByLabel('Topic', {exact:true}).selectOption('finance');
   await input.getByLabel('Statement or question', {exact:true}).fill('Budget still needs an owner decision');
@@ -128,6 +133,7 @@ try {
   await expect(page.locator('.pm-facts')).toContainText('Budget still needs an owner decision');
   const later = (await read()).inputs.find(item=>item.slot==='finance');
   await page.locator(`[data-input-id="${later.input_id}"] input[type=checkbox]`).check();
+  await openThreadTab(page,'plan');
   await page.locator('[data-pm-planning-revision] > summary').click();
   const revise = page.locator('[data-pm-action="pm.thread.plan.revise"]');
   await revise.getByLabel('Why update this direction?', {exact:true}).fill('Include the new financial question without treating it as settled.');
