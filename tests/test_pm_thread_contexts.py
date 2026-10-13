@@ -102,6 +102,22 @@ async def test_meeting_origin_is_bound_through_its_fixed_snapshot(ops):
     assert result['bound_context'][0]['summary']['kind'] == 'planning'
 
 
+async def test_milestone_analysis_retains_original_plan_and_work_source_ids(ops):
+    target, refs = await origins(ops)
+    wid = target['workspace_id']
+    done, _ = await create(ops, wid, [refs[3]])
+    result = pm_discussions.context(ops, OWNER, wid, done['result']['thread_id'])
+    source_ids = set(result['source_operation_ids'])
+    assert set(pm_plans.source_operation_ids(ops.db, wid, refs[1]['id'])) <= source_ids
+    binding_ids = result['bound_context'][0]['summary']['work_binding_ids']
+    assert binding_ids
+    for binding_id in binding_ids:
+        binding_op = ops.db.execute('SELECT operation_id FROM pm_work_bindings WHERE workspace_id=? AND binding_id=?',
+            (wid, binding_id)).fetchone()[0]
+        assert binding_op in source_ids
+    assert pm_thread_contexts.frozen_visible(ops.db, OWNER, wid, result)
+
+
 @pytest.mark.parametrize('refs', [None, {}, [{}], [{'kind': 'requirement', 'id': 'login'}],
     [{'kind': 'snapshot', 'id': 'invalid'}], [{'kind': 'work_item', 'id': 'wi_' + '1' * 20, 'path': 'fixture'}],
     [{'kind': 'snapshot', 'id': 'pmsnap_' + '1' * 32}] * 9,

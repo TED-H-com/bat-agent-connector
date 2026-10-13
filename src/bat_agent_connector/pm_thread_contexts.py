@@ -115,12 +115,14 @@ def resolve(ops, principal, wid, ref):
         if summary is None:
             raise unavailable()
         # The roadmap reader preserves history; authorize its explicit plan/work roots too.
-        resolve(ops, principal, wid, {'kind': 'plan_revision', 'id': summary['plan_revision_id']})
+        plan = resolve(ops, principal, wid, {'kind': 'plan_revision', 'id': summary['plan_revision_id']})
+        sources = [record['operation_id'], *plan['source_operation_ids']]
         for bid in summary['work_binding_ids']:
             binding = pm_roadmap._binding(ops, wid, bid)
             pm_source_lineage.require(ops.db, principal, 'work_item', binding['work_item_id'])
             pm_access.require_operation_sources(ops.db, principal, [binding['operation_id']])
-        label, sources = summary['title'], [record['operation_id']]
+            sources.append(binding['operation_id'])
+        label = summary['title']
     elif kind == 'work_item':
         _table(ops, 'pm_work_bindings')
         binding = pm_evidence._binding(ops.db, wid, identity)
