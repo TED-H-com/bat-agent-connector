@@ -478,15 +478,32 @@ search predicates for local and cross-repository links; external nodes appear on
 with matching links. It starts with the same row prefix and always caps drawing at
 sixty nodes, retaining the focused key where present. Its limit describes shown nodes
 out of matching loaded nodes, never a complete graph total. Relation/evidence legends
-are visible in both matrix and graph. Selecting a node keeps upstream/downstream visible.
+are visible in both matrix and graph, with an entry for a component from another
+repository when a matching cross-repository link is shown. That component uses the
+review tokens and names its repository, or “Other repository” when the projection
+has no repository name. Matrix column headers and narrow list rows show the same
+peer and do not count the link as another dependency. Selecting a node keeps the
+nodes on its own edges at full strength and dims every other node and edge the
+same way. Keyboard focus alone does not change that treatment, and dimmed labels
+stay readable.
 
-The inspector shows a pinned version only when this capture resolved one, plus the
-allowed range, the evidence location, and the maintenance owner or the recorded reason.
+The inspector title is the dependency or component name. A loaded or partial count
+stays in Affected components. The version field is labelled by kind: a contract or
+API schema is a contract version, a reference is a reference version, a service is
+a service version, and a library or toolchain requirement stays an allowed range.
+A bare number is never shown without that label. The inspector shows a pinned
+version only when this capture resolved one, plus that version field, the evidence
+location, and the maintenance owner or the recorded reason.
 Component selections show component facts and a Dependencies list whose rows name
 the dependency, relation, version, evidence and joined source references. Tests to
-re-run come from the capture's verification hints. Affected components come
-from the impact read; owner declarations are listed separately from captured paths. Bounded/partial impact has a Partial pill and its reason, cross-repository reason
-and selection reasons. Positive counts describe returned components only; an empty
+re-run come from the capture's verification hints. When some are listed and the
+capture omitted others, the list ends with “More were omitted.” When none are
+listed and omitted hints or a dropped hint collection mean more may exist, it says
+“None listed in this capture. More may exist.” A complete capture with no matching
+hint says none were recorded. Affected components come
+from the impact read; owner declarations are listed separately from captured paths. Bounded/partial impact has a Partial pill and one sentence that combines the
+loaded-graph, peer-selection and manifest reasons. Each machine reason stays in a
+disclosure. Positive counts describe returned components only; an empty
 bounded prefix never says “0 loaded”. Declared-only reads list the declarations. An impact
 miss says why the dependency is outside this projection, which is not the same as no
 impact. Discuss with PM opens a discussion for dependency and component selections without

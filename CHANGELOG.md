@@ -117,6 +117,9 @@
   Component inspectors name their dependencies; Discuss with PM titles include the selected item and
   captured commit. Preserve Dependencies keyboard focus across activation, live reads and inspector
   close in the matrix, graph and narrow list; expose valid selection semantics.
+  Dim edges outside a selection, give a component from another repository its own
+  node and legend entry, and state partial impact, omitted tests and contract,
+  reference or service versions in plain language in English and zh-TW.
 - Show the central register in Issues & changes: type counts and the summary appear only when
   coverage is complete, pagination stays honest, and a processing timeline offers Discuss and
   Propose change. A selected row survives refreshes, and states read in the reader's language.
