@@ -22,7 +22,8 @@ function shotDir() {
 async function shot(page: Page, name: string) {
   if (process.env.BATC_DEMO_SCREENSHOTS !== '1') return;
   mkdirSync(shotDir(), {recursive: true});
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true, animations: 'disabled'});
+  const fullPage = await page.locator('[aria-modal="true"]:visible').count() === 0;
+  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage, animations: 'disabled'});
 }
 
 // The rail is still `.workspace-nav` (a drawer below 1000px). Scan it with the page.
@@ -241,6 +242,7 @@ for (const {locale, width} of cases) {
     const rtm = page.locator('[data-pm-rtm]');
     for (const requirement of copy.requirements) await expect(rtm).toContainText(requirement.text);
     await expect(rtm).toContainText(locale === 'zh-TW' ? '未評估' : 'Not assessed');
+    if (width < 800) await shot(page, `rtm-list-${locale}-${width}`);
     await rtm.locator(width < 800 ? `[data-rtm-requirement="${ids.requirements.email}"]` : `[data-rtm-toggle="${ids.requirements.email}"]`).click();
     await expect(rtm).toContainText(copy.work.email);
     await expect(rtm).toContainText(locale === 'en' ? 'example/membership · Issue #41' : 'example/membership · 議題 #41');
@@ -261,6 +263,7 @@ for (const {locale, width} of cases) {
     await expect(board.locator('[data-pm-kanban-column="in_progress"]')).toContainText(copy.work.resetEmail);
     await expect(board.locator('[data-pm-kanban-column="waiting"]')).toContainText(copy.work.audit);
     await expect(board.locator('[data-pm-kanban-column="backlog"]')).toContainText(copy.work.a11y);
+    if (width < 800) await shot(page, `board-lanes-${locale}-${width}`);
     const email = board.locator(`[data-pm-kanban-work="${ids.work.email}"]`);
     await email.locator('[data-board-open]').click();
     const workInspector = page.locator('[data-work-inspector]');
@@ -348,6 +351,7 @@ for (const {locale, width} of cases) {
     await expect(page.locator('[data-session-readonly]')).toContainText(locale === 'zh-TW' ? '這是有人在 BAT 開啟的工作階段' : 'Started in BAT by a person');
     await expect(page.locator('#main')).toContainText(copy.manualNote);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
+    if (width < 1200) await shot(page, `manual-transcript-${locale}-${width}`);
     if (width < 1200) await page.getByRole('button', {name: locale === 'zh-TW' ? '成果' : 'Results', exact: true}).click();
     await page.locator('[data-session-details] > summary').click();
     await expect(page.locator('[data-session-details]')).toContainText(locale === 'zh-TW' ? 'API 唯讀' : 'API read-only');
