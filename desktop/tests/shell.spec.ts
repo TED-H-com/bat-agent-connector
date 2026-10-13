@@ -181,17 +181,20 @@ for (const name of ['A workspace with a long descriptive project name that still
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
 test('missing binding capability is unknown; an accessible empty binding page is known empty',async({page})=>{
-  const f=fixture();let supported=false;
+  const f=fixture();let supported=false, hiddenProject=false;
   await mountConversation(page,false,async input=>{
     const result=await f.dispatch(input),path=input.path.split('?')[0];
     if(path==='/bootstrap'||path==='/capabilities') {
       const caps=path==='/bootstrap'?result.data.capabilities:result.data;caps.features.pm_workspaces.work_evidence=supported;
     }
-    if(path===`/pm/workspaces/${workspaceId}/projects`) result.data.bindings=[];
+    if(path===`/pm/workspaces/${workspaceId}/projects`&&!hiddenProject) result.data.bindings=[];
+    if(path==='/projects'&&hiddenProject) result.data.projects=[];
     return result;
   });
   await page.goto(route);const tree=page.locator('.workspace-tree').first();
   await expect(tree).toContainText('Work links unavailable');await expect(tree).not.toContainText('No linked projects');
   supported=true;await page.reload();await expect(tree).toContainText('No linked projects');
+  hiddenProject=true;await page.reload();await expect(tree).toContainText('Work links unavailable');
+  await expect(tree).not.toContainText('No linked projects');
   expect(f.pm.base.state.writes).toHaveLength(0);
 });

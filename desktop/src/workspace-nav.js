@@ -88,7 +88,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
       current();
       try {
         const data = await api('GET', '/projects'); current();
-        let nextRoots = data.projects || [];
+        let nextRoots = data.projects || [], nextBindingKnown = false;
         if (pmWorkspace && !globalTree) {
           const ids = new Set();
           if (bindingSource) {
@@ -108,8 +108,11 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
           // A parent binding grants no inferred binding to its children.
           const flatten = rows => rows.flatMap(row => [row, ...flatten(row.children || [])]);
           nextRoots = flatten(nextRoots).filter(row => ids.has(row.project_id)).map(row => ({...row, children: []}));
+          // Bindings can remain readable after the project catalog is withdrawn.
+          // An inaccessible linked project is not an empty binding inventory.
+          nextBindingKnown = bindingSource && (ids.size === 0 || nextRoots.length > 0);
         }
-        current(); roots = nextRoots; bindingKnown = bindingSource;
+        current(); roots = nextRoots; bindingKnown = nextBindingKnown;
         if (!roots.length) projects.clear();
         if (!hasPreference && !expanded.size && roots.length) {expanded.add(roots[0].project_id); hasPreference = true; persist();}
         const ids = new Set();

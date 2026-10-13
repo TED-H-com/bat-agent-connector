@@ -27091,7 +27091,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			try {
 				const data = await api("GET", "/projects");
 				current();
-				let nextRoots = data.projects || [];
+				let nextRoots = data.projects || [], nextBindingKnown = false;
 				if (pmWorkspace && !globalTree) {
 					const ids = new Set();
 					if (bindingSource) {
@@ -27114,10 +27114,11 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 						...row,
 						children: []
 					}));
+					nextBindingKnown = bindingSource && (ids.size === 0 || nextRoots.length > 0);
 				}
 				current();
 				roots = nextRoots;
-				bindingKnown = bindingSource;
+				bindingKnown = nextBindingKnown;
 				if (!roots.length) projects.clear();
 				if (!hasPreference && !expanded.size && roots.length) {
 					expanded.add(roots[0].project_id);
