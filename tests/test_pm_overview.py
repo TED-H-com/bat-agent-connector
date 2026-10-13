@@ -262,7 +262,8 @@ async def test_reacceptance_clears_superseded_revocation(reviewed):
     assert not any(a.get('reason') == 'quality_revoked' for a in result['attention'])
 
 
-async def test_revocation_survives_open_review_until_reaccepted(reviewed):
+@pytest.mark.parametrize('revoke_unassessed', [False, True])
+async def test_revocation_survives_open_review_until_reaccepted(reviewed, revoke_unassessed):
     w, service = reviewed, reviewed['d'].ops
     old = await _revoked(w)
     before = pm_overview.read(service, quality.OWNER, w['workspace_id'])
@@ -272,6 +273,14 @@ async def test_revocation_survives_open_review_until_reaccepted(reviewed):
     assert opened['attention_counts']['deviation'] == 1
     assert opened['progress']['accepted'] == 0 and opened['progress']['in_review'] == 1
     assert next(a for a in opened['attention'] if a.get('reason') == 'quality_revoked') == deviation
+    if revoke_unassessed:
+        await quality.execute(w, dict(action=quality.quality.REVOKE,
+            target={'workspace_id': w['workspace_id'], 'review_id': newer['review_id']},
+            params={'reason': 'Close the unassessed round'}, preconditions={'expected_version': 1},
+            idempotency_key=uuid.uuid4().hex), actor=quality.REVIEWER)
+        newer = await quality.new_review(w, previous=newer['review_id'])
+        still_revoked = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+        assert still_revoked['attention_counts']['deviation'] == 1
     await quality.execute(w, quality.assessment(w, newer), actor=quality.REVIEWER)
     accepted = pm_overview.read(service, quality.OWNER, w['workspace_id'])
     assert accepted['progress']['accepted'] == 1

@@ -193,6 +193,8 @@ class Projection:
             (SELECT old.review_id FROM pm_quality_reviews old
              JOIN pm_quality_review_records revoked ON revoked.review_id=old.review_id AND revoked.kind='revocation'
              WHERE old.workspace_id=r.workspace_id AND old.work_item_id=r.work_item_id AND old.subject_key=r.subject_key
+             AND (SELECT json_extract(document,'$.qualified') FROM pm_quality_review_records
+                  WHERE review_id=old.review_id AND kind='assessment' ORDER BY version DESC LIMIT 1)=1
              ORDER BY old.sequence DESC LIMIT 1) AS revoked_review_id
             FROM pm_quality_reviews r JOIN pm_quality_review_heads h ON h.review_id=r.review_id
             WHERE r.workspace_id=? ORDER BY r.sequence LIMIT ?""", decode)

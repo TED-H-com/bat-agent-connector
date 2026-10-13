@@ -11,7 +11,7 @@ metadata:
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "ab9894ecb93307ed6bcabf96bfee233e82e80dfc8daea146459689dfb08a9aa6"
+  canonical_sha256: "bdfb33944a249902ca5e652d90d4c63310c92e6de2fd93f3414ce8e5be6416fd"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1592,7 +1592,7 @@ This live projection is separate from fixed DocumentSnapshots. Read `unknown`,
 per-source `coverage`, `attention_truncated` and `recent_deliveries_complete` before
 stating totals. Progress uses only the adopted plan's requirements; accepted,
 merged, deployed and rolled_back are distinct evidence states. Only current review
-heads (plus each subject’s latest explicit revocation), unresolved governance and
+heads (plus each subject's latest revoked qualified acceptance), unresolved governance and
 still-adoptable proposals contribute. Opening a new review does not clear a revoked
 acceptance; current reacceptance clears the deviation. No maintenance policy means complete
 not_configured findings, not an unavailable source. source_limit means references
