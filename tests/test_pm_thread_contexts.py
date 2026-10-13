@@ -228,3 +228,47 @@ async def test_current_label_changes_without_rewriting_bound_label(ops):
     context = pm_discussions.get_thread(ops, OWNER, target['workspace_id'], done['result']['thread_id'])['thread']['context'][0]
     assert context['bound_label'] == original['title']
     assert context['label'] == 'Revised recovery risk'
+
+
+async def test_list_contexts_share_one_read_cache_and_recheck_next_request(ops, monkeypatch):
+    target, refs = await origins(ops)
+    for _ in range(10):
+        await create(ops, target['workspace_id'], refs)
+    statements = []
+    ops.db.set_trace_callback(statements.append)
+    try:
+        result = pm_discussions.list_threads(ops, OWNER, target['workspace_id'], limit=100)
+    finally:
+        ops.db.set_trace_callback(None)
+    assert sum(bool(t['context']) for t in result['threads']) == 10
+    assert sum('SELECT * FROM pm_plan_revisions WHERE' in sql for sql in statements) <= 2
+    assert statements[0] == 'BEGIN' and 'BEGIN IMMEDIATE' not in statements
+    from bat_agent_connector import pm_access
+    original = pm_access.operation_source_visible
+    primary = pm_plans.get_plan(ops, OWNER, target['workspace_id'], refs[1]['id'])['plan']['operation_id']
+    monkeypatch.setattr(pm_access, 'operation_source_visible', lambda db, who, oid: oid != primary and original(db, who, oid))
+    next_read = pm_discussions.list_threads(ops, OWNER, target['workspace_id'], limit=100)
+    assert all(not t['context'][1]['available'] for t in next_read['threads'] if t['context'])
+
+
+@pytest.mark.parametrize('group', ['core', 'meeting', 'lifecycle'])
+async def test_reader_facade_checks_every_core_origin_meeting_and_lifecycle(ops, group):
+    from bat_agent_connector import pm_lifecycle, pm_lifecycle_gates
+    from tests import test_pm_lifecycle as life
+    if group == 'core':
+        target, refs = await origins(ops)
+        cases = [(target['workspace_id'], ref) for ref in refs]
+    elif group == 'meeting':
+        data, _, _, meeting = await meetings.meeting(ops)
+        cases = [(data['workspace_id'], {'kind': 'meeting', 'id': meeting['meeting_id']})]
+    else:
+        pm_lifecycle.install(ops)
+        ws = await workspace(ops)
+        await life.decide(ops, ws['workspace_id'], 'set_stage', params={'stage': 'planning'})
+        cases = [(ws['workspace_id'], {'kind': 'lifecycle_transition', 'id': pm_lifecycle_gates.head(ops.db, ws['workspace_id'])['transition_id']})]
+    for wid, ref in cases:
+        done, _ = await create(ops, wid, [ref])
+        assert pm_thread_contexts.operation_visible(ops.db, OWNER, done)
+        assert pm_workspace.operation_visible(ops.db, OWNER, done)
+        assert pm_thread_contexts.frozen_visible(ops.db, OWNER, wid,
+            pm_discussions.context(ops, OWNER, wid, done['result']['thread_id']))

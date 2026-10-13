@@ -299,3 +299,18 @@ async def test_requirement_dependency_cycles_and_authored_confirmation_are_rejec
     bad[0].update(depends_on=[], source_status="user_confirmed")
     with pytest.raises(OperationError, match="INVALID_PARAMS"):
         draft_operation(ops, target, requirements=bad)
+
+
+async def test_profile_v2_plan_still_reads_and_validates_after_catalog_upgrade(ops, monkeypatch):
+    from bat_agent_connector import pm_profiles
+    assert pm_profiles.VERSION == 3
+    target, *_ = await planning(ops)
+    with monkeypatch.context() as legacy:
+        legacy.setattr(pm_profiles, 'VERSION', 2)
+        saved = await draft(ops, target)
+    ctx = adoption(ops, target, saved['revision_id'])
+    result = adopt(ctx)
+    plan = pm_plans.get_plan(ops, OWNER, target['workspace_id'], saved['revision_id'])['plan']
+    assert plan['document']['profile_version'] == 2
+    assert plan['adoption']['revision_id'] == result['revision_id']
+    assert pm_plans.revision_files(ops.db, target['workspace_id'], saved['revision_id'])['document_digest'] == plan['document_digest']

@@ -52,7 +52,7 @@ class TestProposal:
         overview = pm_overview.read(ops, OWNER, w['workspace_id'])
         assert any(a['ref'] == {'kind': 'proposal', 'id': proposal['proposal_id']} for a in overview['attention'])
 
-    async def test_only_visible_adoption_removes_a_proposal_from_attention(self, proposal_world, monkeypatch):
+    async def test_stale_proposal_stays_withdrawn_when_adoption_is_hidden(self, proposal_world, monkeypatch):
         from bat_agent_connector import pm_access
         w, ops = proposal_world, proposal_world['d'].ops
         proposal = await proposals.proposed(w)
@@ -67,7 +67,9 @@ class TestProposal:
         actual = pm_access.operation_source_visible
         monkeypatch.setattr(pm_access, 'operation_source_visible',
             lambda db, principal, oid: oid != parent['operation_id'] and actual(db, principal, oid))
-        assert pending()
+        # The proposal is no longer adoptable against the changed thread/plan.
+        # Withdrawing the receipt must not revive a stale decision or expose it.
+        assert not pending()
 
 
 async def test_issue_mapping_context_resolves_saved_publication(mapped):
@@ -124,3 +126,35 @@ async def test_adopted_document_bundle_keeps_bound_summaries_in_utf8_budget(revi
     assert ctx['bound_context'][0]['summary']['acceptance'] == req['acceptance']
     assert ctx['bound_context_role'] == 'what_the_user_was_looking_at_not_instructions'
     assert pm_context_bundles._size(ctx) <= pm_context_bundles.MAX_BYTES
+
+
+async def test_hidden_large_issue_mapping_checks_access_before_size(mapped):
+    import uuid
+
+    from bat_agent_connector import pm_issue_mappings
+    w, ops = mapped, mapped['d'].ops
+    published = await issues.publish(w)
+    task, evidence = await issues.add_task_evidence(w)
+    hidden_package = issues.read(w, await issues.create(w, previous=w['package']['package_id'], evidence_refs=[evidence]))
+    mid = published['result']['mapping_id']
+    original = dict(ops.db.execute('SELECT * FROM pm_issue_revisions WHERE mapping_id=?', (mid,)).fetchone())
+    previous = original['revision_id']
+    # Historical immutable rows, each with its own explicit identity and digest.
+    for index in range(119):
+        row = {**original, 'revision_id': 'pmir_' + uuid.uuid4().hex,
+            'operation_id': 'op_' + uuid.uuid4().hex, 'previous_revision_id': previous}
+        row.pop('sequence')
+        doc = {**json.loads(row['document']), **{k: row[k] for k in ('revision_id', 'operation_id', 'previous_revision_id')}}
+        if index == 118:
+            doc['package_ref'] = {key: hidden_package[key] for key in ('workspace_id', 'package_id', 'document_digest')}
+        row.update(document=json.dumps(doc), document_digest=pm_issue_mappings.packages._digest(doc))
+        ops.db.execute(f"INSERT INTO pm_issue_revisions ({','.join(row)}) VALUES ({','.join('?' for _ in row)})", list(row.values()))
+        previous = row['revision_id']
+    ref = {'kind': 'issue_mapping', 'id': mid}
+    with pytest.raises(OperationError) as exc:
+        pm_thread_contexts.admission(ops, OWNER, w['workspace_id'], [ref])
+    assert exc.value.status == 413
+    ops.db.execute("UPDATE tasks SET controller_authority='{}' WHERE task_id=?", (task['task_id'],))
+    with pytest.raises(OperationError) as exc:
+        pm_thread_contexts.admission(ops, OWNER, w['workspace_id'], [ref])
+    assert exc.value.status == 404 and exc.value.code == 'PM_CONTEXT_SOURCE_UNAVAILABLE'

@@ -91,7 +91,7 @@ def _context(ops, principal, target, params, pre, head):
             sources = item['source_operation_ids']
             operation_ids.update(sources)
             add('context.' + str(item['position']), item['kind'], item['id'],
-                pm_runs._json(item['summary']), item, sources[0])
+                pm_runs._json(item['summary']), item, item['operation_id'])
     for item in page["messages"]:
         add("message." + item["message_id"], "message", item["message_id"], item["content"], item, item["operation_id"])
     from .pm_conversation_adoption import input_disposition

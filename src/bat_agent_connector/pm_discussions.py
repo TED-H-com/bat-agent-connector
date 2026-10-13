@@ -10,8 +10,9 @@ import json
 import re
 import time
 
-from . import pm_profiles, pm_workspace
+from . import pm_profiles, pm_read_cache, pm_workspace
 from .operations import ActionDef, OperationError
+from .pm_release_baselines import _snapshot_read
 
 THREAD_ID = re.compile(r"pmt_[0-9a-f]{32}")
 INPUT_ID = re.compile(r"pmi_[0-9a-f]{32}")
@@ -57,6 +58,8 @@ def install(ops):
             "CREATE INDEX IF NOT EXISTS pm_thread_workspace ON pm_threads(workspace_id,created_at,thread_id)",
             "CREATE INDEX IF NOT EXISTS pm_messages_thread ON pm_messages(thread_id,sequence)",
             "CREATE INDEX IF NOT EXISTS pm_inputs_thread ON pm_inputs(thread_id,sequence)",
+            "CREATE INDEX IF NOT EXISTS pm_discussion_versions ON pm_discussion_applied "
+            "(json_extract(result,'$.thread_id'), json_extract(result,'$.version'))",
         ):
             ops.db.execute(statement)
         from . import pm_thread_contexts
@@ -388,7 +391,13 @@ def _capabilities(ops, workspace, principal):
             "adopt": False, "dispatch": False}
 
 
+@_snapshot_read
 def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
+    with pm_read_cache.scope(ops.db):
+        return _list_threads(ops, principal, workspace_id, limit=limit, after=after)
+
+
+def _list_threads(ops, principal, workspace_id, *, limit, after):
     workspace = _read(ops, principal, workspace_id)
     _limit(limit)
     if after is not None:
@@ -407,6 +416,25 @@ def list_threads(ops, principal, workspace_id, *, limit=50, after=None):
             "capabilities": _capabilities(ops, workspace, principal), **pm_profiles.catalog(),
             "runtime": {"available": False, "adapter": "bat", "legacy": True,
                         "reason": "external_tool_policy_unverified"}}
+
+
+@pm_read_cache.memoized
+def content_unchanged(db, thread, version, *, allowed_operations=()):
+    """Account for every version with one indexed aggregate, not a history page.
+
+    Only applied title changes and this adoption's own original children can
+    explain the delta. Runtime-imported messages also advance the thread and
+    therefore conflict. No legacy backfill or arbitrary rename limit is needed.
+    """
+    if type(version) is not int or not 1 <= version <= thread['version']:
+        return False
+    accounted = db.execute("""SELECT COUNT(DISTINCT json_extract(a.result,'$.version'))
+        FROM pm_discussion_applied a JOIN operations o USING(operation_id)
+        WHERE json_extract(a.result,'$.thread_id')=? AND json_extract(a.result,'$.version')>?
+        AND json_extract(a.result,'$.version')<=?
+        AND (o.action='pm.thread.rename' OR a.operation_id IN (SELECT value FROM json_each(?)))""",
+        (thread['thread_id'], version, thread['version'], json.dumps(allowed_operations))).fetchone()[0]
+    return accounted == thread['version'] - version
 
 
 def _thread_sources_visible(db, principal, thread_id):

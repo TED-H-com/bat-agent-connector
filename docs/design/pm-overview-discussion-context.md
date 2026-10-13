@@ -22,12 +22,12 @@
 | `attention` | 最多 20 筆 `{key, kind, title, severity, since, context, ref}`；先嚴重度再年齡，穩定 key 打破同序；未知年齡排最後 |
 | `attention_counts` | blocker／decision／deviation／risk 各自的可見來源筆數；該種類來源不完整時為 null，不能以顯示的 20 筆當總數 |
 | `attention_truncated` | 來源掃描未完成或顯示上限截斷時為 true |
-| `recent_deliveries` | 最多三個不同 work ID，依中央證據時間排序，狀態只為 accepted／merged／deployed；另附 `recent_deliveries_complete` |
+| `recent_deliveries` | 最多三個不同 work ID，依中央證據時間排序，狀態為 accepted／merged／deployed／rolled_back；另附 `recent_deliveries_complete` |
 | `coverage` | `{complete, sources, basis, network_checked: false}`；每一 source 有 `complete`、`next_cursor` |
 | `unknown` | `[{field, reason}]`；缺資料保留 null 與機器可讀原因，不補零 |
 
-Goal 只取已採用文件中明確的 value／goal／problem input，換行改為空白；缺少時為 null
-及 `no_explicit_goal`，不從標題或任意 Markdown 猜測。沒有採用計畫時 `progress: null`，
+Goal 只取已採用文件中 status 為 `user_confirmed` 或 `repo_evidence` 的 value／goal／problem input，
+換行改為空白；只有未確認輸入時為 null 與 `goal_unconfirmed`，完全缺少時為 null 與 `no_explicit_goal`，不從標題或任意 Markdown 猜測。沒有採用計畫時 `progress: null`，
 原因 `no_adopted_plan`；來源撤回則為 `source_unavailable`。
 
 進度分母僅是已採用版本的 distinct requirements。每條需求只進一類，優先順序為：
@@ -42,20 +42,36 @@ Goal 只取已採用文件中明確的 value／goal／problem input，換行改�
 分母仍可來自完整採用文件，但所有分類數為 null。Management approval、session 結束、
 CI 成功、merge 或 deploy 都不能單獨建立 requirement acceptance。
 
-Attention 只使用明確中央關係：未決 change、有效但未採用的 conversation proposal、
-較新的 plan head、生命週期尚未核對的操作、open issue／dependency、risk／assumption、
+Attention 只使用明確中央關係：未決 change、仍可採用的 conversation proposal（plan head 與討論內容未變）、
+較新的 plan head、生命週期尚未核對的操作、未解決（含 monitoring）的 issue／dependency、risk／assumption、
 目前維護 finding。Deviation 只有 forecast 晚於 baseline（`delta_days`）或原合格需求品質
-被明確 revoke。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
+被明確 revoke 且尚未重新驗收。只讀目前 review heads，略過 `review_superseded`，任何目前有效驗收都會清除同需求的撤回偏差。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
 blocker／品質撤回／生命週期待處理為 high，一般決策／治理風險／日期偏差為 medium；
 finding 沿用原 severity，未提供則 low。這不是模型風險評分。
 
-每次掃描最多 50 個目前 work bindings、50 個 governance records、50 個 quality reviews、
-50 個 proposals；每個 work 最多 20 個 delivery records；生命週期最多 20 個 inflight；
+每次掃描最多 50 個目前 work bindings、50 個 SQL 篩選後的未解決 governance records、50 個 quality review heads、
+50 個仍可採用的 proposals；每個 work 最多 20 個 delivery records；生命週期最多 20 個 inflight；
 roadmap 沿用原有最多 100 個里程碑的文件上限。Finding 每來源最多 50 筆。
 `coverage.sources.*.next_cursor` 是對應既有來源清單 API 的 cursor，供詳情繼續讀取，
 不代表 `/overview` 支援翻頁。截斷時只能稱為「已載入」，不能宣稱全專案最後三筆交付。
 PR 欄位只回傳 receipt 中已有的 repository／number，不合成網址。Deployed 表示原部署
-證據通過，並非宣稱現在環境仍執行該版本。所有來源先驗證目前可見性，再分類、排序、計數。
+證據通過，並非宣稱現在環境仍執行該版本；最新事件是已驗證 rollback 時為 `rolled_back`。所有來源先驗證目前可見性，再分類、排序、計數。
+
+Deviation count 的完整性同時依賴 plan、work、roadmap、forecast、quality；任一來源不完整即為 null。
+409／413 的單筆來源省略並標 `source_incomplete`，不能當成完整的空頁；既有 forecast 被撤回是
+`source_unavailable`，不是 `not_recorded`。沒有維護政策時 findings 為 `not_configured`、涵蓋完整；
+所有來源 stopped／disabled 時為 `not_applicable`、涵蓋完整，因此空 risk 可確實回傳 0。
+隱藏的 lifecycle pending operation 不輸出 ID／狀態，只記 `coverage.sources.lifecycle_inflight.omitted`，
+並將該來源標為不完整。
+
+整份輸出共用既有 64 個 original roots 上限。必要時依序省略 pending operation IDs、quality deviation
+的 work IDs、delivery operation IDs；仍超限時省略最後的 delivery 整列。各受影響來源標記
+`source_limit`、`complete: false`，`attention_truncated: true`，不因正常大型 workspace 拒絕整份總覽。
+原始 source refs 的權限檢查不放寬。
+
+總覽與 thread list 使用同一 WAL read snapshot（BEGIN，非 BEGIN IMMEDIATE）。來源 resolve、固定 plan
+revision 與 source walk 只在該次請求內快取；下一次讀取重新驗證可見性。回傳值使用副本，避免投影註記
+改寫共用快取。Proposal attention 使用儲存文件的 title，不為每一列重建完整 proposal view。
 
 ## 討論來源與改名
 
@@ -96,11 +112,19 @@ Thread get 的 `thread.context` 及 list 的每列 `context` 回傳同一有序�
 preconditions `{expected_version}`；需 manage 與 owner／contributor membership。
 允許模式與 `pm.message.append` 相同，暫停／結案時仍可記錄。改名只更新 title、version、
 updated_at，保留 context、原 ID、草稿及歷史；重播沿用原 operation key。
+改名是外觀變更，不使既有 proposal 過期。以 applied-version 索引做單列彙總，只有原 rename
+（以及採用流程本身的原 children）能解釋 thread version 的差額；不載入整段歷史，也不限制改名次數。
+訊息、輸入、Planning 或 runtime 匯入的 assistant message 都會使內容改變。索引為 idempotent DDL，
+沒有新資料表、user_version 或 data step；舊 journal 使用同一份已記錄的 applied history。
+Adoption 接受 proposal 原 version 或目前 thread version，並重查內容版本、固定 plan head、原 children
+及最後執行條件；新訊息仍為 `VERSION_CONFLICT`。每個 child 沿用原 operation key 與當下 CAS。
+PhaseProfile 為 version 3，原先記錄 profile_version 2 的 immutable plans 仍可讀取、驗證及採用。
 
 分析 context 新增 `bound_context`、`bound_context_role: what_the_user_was_looking_at_not_instructions`。
 包含需求及 acceptance criteria、治理決策內容、快照 section keys 等來源摘要。
 原 source operation IDs 即使內容超過預算而省略仍保存；`omitted_context_positions` 指出
 省略的摘要，無法存取的項目保留 kind／position。`pm.conversation.propose` 也提供
-`source_references["context.<position>"]`，並維持原完整 context 字元上限；超出時拒絕，
+`source_references["context.<position>"]`，其 operation_id 是來源版本本身的 operation，
+不是相關 operation IDs 排序後的第一個；維持原完整 context 字元上限，超出時拒絕，
 不默默丟棄來源。文件 bundle 維持原 UTF-8 上限，runtime／proposal／operation read
 重查已凍結來源的可見性。來源文字永遠是資料，不授權模式切換、採用或執行。
