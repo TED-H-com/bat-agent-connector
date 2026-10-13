@@ -14,7 +14,7 @@
 .pm-charter-plan-ref { margin: var(--space-2) 0 var(--space-4); color: var(--muted); }
 .pm-charter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-6); }
 .pm-charter-grid > section { border-top: 1px solid var(--line); padding-top: var(--space-3); min-width: 0; }
-.pm-charter-grid h3 { margin: 0 0 var(--space-2); font-size: 16px; }
+.pm-charter-grid h3 { margin: 0 0 var(--space-2); font-size: var(--fs-section); }
 .pm-charter-grid p, .pm-charter-items { margin: var(--space-2) 0; }
 .pm-charter-items { padding-left: var(--space-4); }
 .pm-charter-items li { margin-bottom: var(--space-2); overflow-wrap: anywhere; }
@@ -41,7 +41,7 @@
 .pm-rtm-criteria ul { margin: var(--space-1) 0; }
 .pm-rtm-group { background: var(--chip); }
 .pm-rtm-detail { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--space-4); }
-.pm-rtm-detail h3 { font-size: 16px; margin: 0; }
+.pm-rtm-detail h3 { font-size: var(--fs-section); margin: 0; }
 .pm-rtm-detail h4 { margin-bottom: var(--space-2); }
 .pm-rtm-detail p { margin: var(--space-2) 0; overflow-wrap: anywhere; }
 .pm-rtm-delivery { border-top: 1px solid var(--line); padding: var(--space-2) 0; }

@@ -1,14 +1,14 @@
 .pm-lifecycle {padding:12px 0;margin-bottom:16px;border-bottom:1px solid var(--line);min-width:0;}
-.pm-lifecycle h2 {font-size:16px;margin:0 0 8px;}
-.pm-lifecycle h3 {font-size:14px;margin:16px 0 8px;}
+.pm-lifecycle h2 {font-size: var(--fs-section);margin:0 0 8px;}
+.pm-lifecycle h3 {font-size: var(--fs-body);margin:16px 0 8px;}
 .pm-lifecycle p {margin:4px 0;overflow-wrap:anywhere;}
-.pm-lifecycle .muted,.pm-lifecycle summary {font-size:14px;}
+.pm-lifecycle .muted,.pm-lifecycle summary {font-size: var(--fs-body);}
 .pm-lifecycle details {padding:6px 0;}
 .pm-lifecycle summary {cursor:pointer;min-height:28px;}
 .pm-lifecycle form {max-width:680px;padding:8px 0;}
 .pm-lifecycle form label {display:block;margin:8px 0;}
-.pm-lifecycle label code {display:block;font-size:12px;overflow-wrap:anywhere;}
+.pm-lifecycle label code {display:block;font-size: var(--fs-caption);overflow-wrap:anywhere;}
 .pm-lifecycle input[type=checkbox] {width:auto;}
 .pm-lifecycle textarea,.pm-lifecycle select {max-width:100%;}
 .pm-lifecycle [data-pm-lifecycle-operation] {border-top:1px solid var(--line);}
-@media(max-width:640px){.pm-lifecycle :is(button,summary,select){min-height:44px}.pm-lifecycle :is(input,textarea,select){font-size:16px}}
+@media(max-width:640px){.pm-lifecycle :is(button,summary,select){min-height:44px}.pm-lifecycle :is(input,textarea,select){font-size: var(--fs-input-mobile)}}

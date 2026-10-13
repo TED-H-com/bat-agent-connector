@@ -1,17 +1,17 @@
 .pm-follow-up {margin-top:16px;min-width:0;}
 .pm-follow-up .pm-heading {margin-bottom:8px;}
-.pm-follow-up h2 {font-size:16px;margin:0 0 4px;}
-.pm-follow-up h3 {font-size:16px;margin:16px 0 8px;}
-.pm-follow-up h4 {font-size:14px;margin:4px 0;}
+.pm-follow-up h2 {font-size: var(--fs-section);margin:0 0 4px;}
+.pm-follow-up h3 {font-size: var(--fs-section);margin:16px 0 8px;}
+.pm-follow-up h4 {font-size: var(--fs-body);margin:4px 0;}
 .pm-follow-up p {margin:4px 0;}
-.pm-follow-up .muted,.pm-follow-up summary {font-size:14px;}
-.pm-follow-up .pm-fu-meta {display:flex;gap:8px 16px;flex-wrap:wrap;font-size:14px;padding:8px 0;}
+.pm-follow-up .muted,.pm-follow-up summary {font-size: var(--fs-body);}
+.pm-follow-up .pm-fu-meta {display:flex;gap:8px 16px;flex-wrap:wrap;font-size: var(--fs-body);padding:8px 0;}
 .pm-follow-up ol {padding-left:24px;}
 .pm-follow-up .pm-fu-domain {display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px 16px;border-top:1px solid var(--line);padding:12px 0;}
 .pm-follow-up details {padding:8px 0;}
 .pm-follow-up summary {cursor:pointer;min-height:28px;color:var(--accent);}
-.pm-follow-up .pm-source {font-size:12px;display:block;overflow-wrap:anywhere;}
-.pm-follow-up .pm-fu-refs {padding-left:20px;margin:8px 0;font-size:12px;overflow-wrap:anywhere;}
+.pm-follow-up .pm-source {font-size: var(--fs-caption);display:block;overflow-wrap:anywhere;}
+.pm-follow-up .pm-fu-refs {padding-left:20px;margin:8px 0;font-size: var(--fs-caption);overflow-wrap:anywhere;}
 .pm-follow-up .pm-fu-refs li {margin:4px 0;}
 .pm-follow-up label {display:block;max-width:100%;}
 .pm-follow-up select {max-width:100%;}
@@ -22,7 +22,7 @@
 .pm-fu-assessments {border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px 0;}
 .pm-fu-assessments :is(li,dt,dd) {margin-top:8px;overflow-wrap:anywhere;}
 .pm-fu-assessments dd {margin-left:16px;}
-.pm-fu-assessments pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size:14px;max-width:100%;}
+.pm-fu-assessments pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size: var(--fs-body);max-width:100%;}
 .pm-fu-assessments button[aria-pressed=true] {border-color:var(--accent);}
 @media(max-width:640px){
   .pm-follow-up .pm-heading {display:block;}
@@ -30,5 +30,5 @@
   .pm-follow-up .pm-fu-domain {grid-template-columns:minmax(0,1fr);gap:4px;}
   .pm-follow-up :is(button,summary,select) {min-height:44px;}
   .pm-follow-up summary {padding:8px 0;}
-  .pm-follow-up input,.pm-follow-up select {font-size:16px;}
+  .pm-follow-up input,.pm-follow-up select {font-size: var(--fs-input-mobile);}
 }

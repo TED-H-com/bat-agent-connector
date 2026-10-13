@@ -1,6 +1,6 @@
 .pm-issues {padding:16px 0;border-bottom:1px solid var(--line);min-width:0;}
-.pm-issues h3 {font-size:16px;margin:0;}
-.pm-issues h4 {font-size:14px;}
+.pm-issues h3 {font-size: var(--fs-section);margin:0;}
+.pm-issues h4 {font-size: var(--fs-body);}
 .pm-issues p,.pm-issues pre {overflow-wrap:anywhere;white-space:pre-wrap;}
 .pm-issues details {padding:8px 0;}
 .pm-issues summary {cursor:pointer;min-height:28px;}
@@ -8,4 +8,4 @@
 .pm-issues form label {display:block;margin:8px 0;}
 .pm-issues input,.pm-issues textarea {max-width:100%;}
 .pm-issues button {margin-right:6px;}
-@media(max-width:640px){.pm-issues :is(button,summary){min-height:44px}.pm-issues :is(input,textarea){font-size:16px}}
+@media(max-width:640px){.pm-issues :is(button,summary){min-height:44px}.pm-issues :is(input,textarea){font-size: var(--fs-input-mobile)}}

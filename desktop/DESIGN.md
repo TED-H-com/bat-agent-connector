@@ -5,12 +5,12 @@ browser and native shared source in `src/`; do not introduce a parallel visual t
 
 ## Palette and type
 
-Use the semantic variables in `src/app.css`, including its dark theme. Light values:
+Use the v2 semantic variables in `src/ui/tokens.css`, including system and explicit light/dark themes. Light values:
 background `--bg: #f6f7f9`, panel `--panel: #fff`, text `--text: #1d2330`, secondary
 `--muted: #5d6676`, border `--line: #dfe3ea`, action `--accent: #2f5bd3`, action text
 `--accent-text: #fff`. Reuse `--ok`, `--warn`, `--bad`, `--info` for evidence states.
-System UI / Segoe UI / Noto Sans TC is the shared stack; body is 15px/1.5,
-page headings 20px and section headings 16px. Supporting orchestration text is 14px.
+System UI / Segoe UI / Noto Sans TC is the shared stack; body is 14px/1.5,
+page headings 20px and section headings 15px. Supporting orchestration text is 14px.
 
 ## Components and layout
 

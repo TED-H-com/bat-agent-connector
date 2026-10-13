@@ -2,7 +2,7 @@
 [data-pm-maintenance-review] .pm-review-columns>section{min-width:0}
 [data-pm-maintenance-review] .pm-review-columns h4{margin-top:0}
 [data-pm-maintenance-review] [data-review-discussion]{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
-[data-pm-maintenance-review] h5{font-size:14px;margin:8px 0}
+[data-pm-maintenance-review] h5{font-size: var(--fs-body);margin:8px 0}
 [data-pm-maintenance-review] .pm-review-selectors{display:flex;gap:8px;flex-wrap:wrap;align-items:end}
 [data-pm-maintenance-review] input[type=checkbox]{width:auto;min-height:0}
 [data-pm-maintenance-review] .pm-review-checks label{display:flex;gap:8px;align-items:start;margin:8px 0}

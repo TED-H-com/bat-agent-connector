@@ -1,0 +1,64 @@
+/* Shared Web/Tauri design v2. Literal colours belong only in this token block. */
+:root {
+  color-scheme: light;
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f1f3f6; --surface-3: #e8ebf0;
+  --line: #e2e6ec; --line-strong: #cdd4de; --text: #161b26; --text-2: #4a5468; --text-3: #6b7487;
+  --accent: #2f5bd3; --accent-hover: #264bb4; --accent-soft: #edf1fd; --accent-text: #ffffff;
+  --ok: #167a4a; --ok-soft: #e7f5ee; --warn: #9a5b00; --warn-soft: #fdf3e1;
+  --bad: #c0362c; --bad-soft: #fdecea; --info: #2f5bd3; --info-soft: #edf1fd;
+  --review: #6a4bc4; --review-soft: #f1edfc; --neutral: #5b6577; --neutral-soft: #eef1f5;
+  --font-ui: system-ui, -apple-system, "Segoe UI", "Noto Sans TC", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+  --fs-caption: 12px; --fs-small: 13px; --fs-body: 14px; --fs-read: 15px;
+  --fs-section: 15px; --fs-title: 20px; --fs-metric: 26px; --fs-mono: 12.5px; --fs-input-mobile: 16px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px;
+  --space-6: 24px; --space-8: 32px; --space-10: 40px; --space-12: 48px;
+  --r-xs: 4px; --r-sm: 6px; --r-md: 8px; --r-lg: 10px; --r-pill: 999px;
+  --shadow-overlay: 0 8px 24px rgba(16,24,40,.12), 0 1px 2px rgba(16,24,40,.06);
+  --scrim: rgba(16,24,40,.36); --motion: 140ms ease-out;
+  --panel: var(--surface); --muted: var(--text-2); --chip: var(--surface-2); --readonly: var(--review);
+  --type-label: var(--fs-caption); --type-small: var(--fs-small); --type-body: var(--fs-body); --type-title: var(--fs-title);
+  --radius-small: var(--r-sm); --radius-panel: var(--r-md); --form-width: 640px; --reading-width: 760px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1217; --surface: #161a21; --surface-2: #1c212a; --surface-3: #252b36;
+  --line: #272e3a; --line-strong: #364052; --text: #e7eaf0; --text-2: #a9b1c0; --text-3: #8a93a4;
+  --accent: #7a9bff; --accent-hover: #93afff; --accent-soft: #1e2740; --accent-text: #0b0e14;
+  --ok: #4fc386; --warn: #e3a64d; --bad: #ff7a6e; --info: #7a9bff; --review: #b39cff; --neutral: #9aa3b2;
+  --ok-soft: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  --warn-soft: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  --bad-soft: color-mix(in srgb, var(--bad) 14%, var(--surface));
+  --info-soft: var(--accent-soft);
+  --review-soft: color-mix(in srgb, var(--review) 14%, var(--surface));
+  --neutral-soft: color-mix(in srgb, var(--neutral) 14%, var(--surface));
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1217; --surface: #161a21; --surface-2: #1c212a; --surface-3: #252b36;
+  --line: #272e3a; --line-strong: #364052; --text: #e7eaf0; --text-2: #a9b1c0; --text-3: #8a93a4;
+  --accent: #7a9bff; --accent-hover: #93afff; --accent-soft: #1e2740; --accent-text: #0b0e14;
+  --ok: #4fc386; --warn: #e3a64d; --bad: #ff7a6e; --info: #7a9bff; --review: #b39cff; --neutral: #9aa3b2;
+  --ok-soft: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  --warn-soft: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  --bad-soft: color-mix(in srgb, var(--bad) 14%, var(--surface));
+  --info-soft: var(--accent-soft);
+  --review-soft: color-mix(in srgb, var(--review) 14%, var(--surface));
+  --neutral-soft: color-mix(in srgb, var(--neutral) 14%, var(--surface));
+}
+:root[data-theme="light"] { color-scheme: light; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 var(--fs-body)/1.5 var(--font-ui); }
+h1 { font-size: var(--fs-title); font-weight: 600; line-height: 1.3; letter-spacing: -.01em; }
+h2, h3 { font-size: var(--fs-section); font-weight: 600; line-height: 1.35; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono, code { font-family: var(--font-mono); font-size: var(--fs-mono); overflow-wrap: anywhere; }
+.tabular, .numeric { font-variant-numeric: tabular-nums; }
+.numeric { text-align: right; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

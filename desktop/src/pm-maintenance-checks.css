@@ -1,5 +1,5 @@
 [data-pm-maintenance-checks] { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 8px; overflow-wrap: anywhere; }
-[data-pm-maintenance-checks] h4 { font-size: 14px; margin: 8px 0; }
+[data-pm-maintenance-checks] h4 { font-size: var(--fs-body); margin: 8px 0; }
 [data-pm-maintenance-checks] p { margin: 8px 0; }
 .pm-check-facts { display: grid; gap: 16px; }
 .pm-check-facts section { min-width: 0; }
