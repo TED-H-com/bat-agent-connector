@@ -105,6 +105,36 @@ in append-only history. Revising a change proposal clears its current direction
 and adoption links; the old decisions remain in history and the new proposal needs
 its own explicit decision.
 
+An issue recorded against adopted revision N can be set to `reported_resolved`
+after N+1 is adopted. No new snapshot or plan-head precondition is required for
+`pm.governance.revise`: its original snapshot remains the source boundary, and
+`expected_version` refers to the governance record. This also works when N+1
+removes an affected requirement; keep the original affected IDs and sources when
+reporting resolution. Resolution does not rebase the finding, verify acceptance
+or apply scope.
+
+The UI sequence for "Resolve issue" is:
+
+1. Read `pm_governance_get(workspace_id, record_id)` for the current record version
+   and full document. The assigned writer or current workspace owner needs observe
+   and manage scopes; the original snapshot must still be readable.
+2. Submit the existing `pm.governance.revise` action with that workspace/record
+   target and `preconditions: {expected_version: record.version}`. Send the full
+   finding fields, retaining original affected IDs and sources, with
+   `status: reported_resolved` and the user's resolution rationale. Build
+   `source_refs` as `{kind, id}` from the saved `document.sources`; keep optional
+   management fields and disambiguation. Do not send `snapshot_id`, a new plan
+   version, or server-derived decision/verification fields.
+3. Settle the original durable operation and re-read the record and Overview.
+   Recover a lost response using the same operation key. A version conflict needs
+   a fresh read; source withdrawal rejects the effect through the existing gate.
+
+The resolved record and its original context/history remain in the register;
+Overview omits it from blocker attention/counts and current blocked requirements.
+`verification_status` stays `unassessed`. Quoting fresh evidence outside the fixed
+snapshot is a separate context/follow-up requirement; a new snapshot alone cannot
+be substituted into this revision action.
+
 Direction decisions and adoption links require actual current **owner membership**;
 a generic administrator is not an impersonated direction owner. Decisions only
 apply to change proposals. The proposed accountable owner must still be a writer.

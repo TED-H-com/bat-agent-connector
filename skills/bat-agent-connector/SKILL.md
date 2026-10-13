@@ -348,6 +348,17 @@ Other actions target `{workspace_id,record_id}` with `expected_version`:
   for that exact proposed revision and its original baseline. It records the actual
   adoption result; it never sends another adoption request.
 
+To resolve an issue after adopting a newer plan, re-read pm_governance_get for
+the current record version and send the full finding fields to
+pm.governance.revise with status reported_resolved and the user's rationale.
+Keep the original affected requirement IDs and source_refs ({kind,id} from
+document.sources), even if a current plan removed some IDs. No new snapshot or
+expected_plan_version is needed; use expected_version for the governance record.
+The assigned writer or workspace owner and original source access are still
+required. Settle/recover that resolution operation with its own original key,
+then re-read the record and Overview. This removes the pending blocker without
+establishing acceptance or replacing the frozen snapshot with fresh evidence.
+
 Read every non-null cursor. Original source access is checked again on records,
 shared operation results and event feeds; do not recover a hidden quote from history.
 Unknown verification and remaining lifecycle work stay explicit. Automatic causal
@@ -1652,6 +1663,38 @@ were omitted to respect the whole document's lineage bound. Reference trimming i
 reported in coverage.sources.attention_references, independently of source scan
 completeness and progress/counts; inspect it before describing displayed deliveries.
 Source cursors belong to existing source-list tools, not to the overview call.
+Unresolved issue/dependency blockers follow their explicitly affected stable IDs
+into the current adopted plan. Their context.revision_id remains the recorded
+revision; current_revision_id identifies the comparison plan. Inspect
+blocked_requirement_ids and absent_requirement_ids together: removed requirements
+stay explicit in the row but never enter current progress. Those three current
+relation fields are null when no accepted plan is readable. Blocker counts count
+records; progress.blocked counts distinct current requirements. Adoption alone
+does not resolve a finding or discard its original context.
+The adopted goal uses selected user_confirmed/repo_evidence inputs with fixed
+slot precedence: governance.goal, then goal, value, problem. Only within the same
+exact slot does selected_inputs order choose the first eligible input.
+Conversation adoption records the reviewed governance goal as governance.goal;
+it takes precedence even when its wording differs from older raw goal inputs.
+An unconfirmed reviewed goal cannot shadow confirmed legacy inputs. Preserve
+every input's original wording, status, order, ID and attribution.
+Never infer a goal from Markdown, a suffix or an unselected/unconfirmed input.
+recent_decisions lists up to five decided plan adoptions/governance directions,
+newest first, with key, title, decided_at (UTC epoch seconds), actor, status, ref
+and original operation_id. Each key is the same pm_register_get row_id; the
+inspector retains original proposal/discussion links and decision history.
+There is one latest recorded decision per register identity, including older
+adopted revisions and decisions whose current governance head was later revised.
+These rows do not change pending attention_counts.decision. adopted_direction
+does not mean the plan was adopted or work executed. Hidden/withdrawn sources
+lose rows and counts together. recent_decisions_count is a visible total only
+when recent_decisions_complete is true; a display cap alone leaves that total
+known. Read recent_decisions_truncated and coverage.sources.decided_plans,
+decided_governance and decided_references. Each source scans at most 50 newest
+decided identities; scan_limit leaves the total null and next_cursor null (the
+reverse time scan has no existing source-list continuation). Missing sources and
+409/413 also leave totals unknown. History source_limit omissions cannot displace
+pending attention/delivery refs or change their counts/completeness.
 Hidden lifecycle inflight sources remain incomplete, including rows filtered by
 the source list; omitted is null when the transition itself is unavailable.
 409/413 size or lineage limits are source_incomplete, including pending operations

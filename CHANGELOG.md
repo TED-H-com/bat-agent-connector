@@ -14,7 +14,9 @@
   See the [dependency contract](docs/design/pm-dependencies.md).
 
 - Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
-  decisions, deviations and recent deliveries, separate from fixed saved reports.
+  decisions, deviations and recent deliveries, retaining confirmed goals and recent
+  decided history and unresolved requirement blockers across plan revisions,
+  separate from fixed saved reports.
   Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
   See the [overview contract](docs/design/pm-overview-discussion-context.md).
 
