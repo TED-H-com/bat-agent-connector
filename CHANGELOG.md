@@ -41,6 +41,18 @@
   opaque base64url keyset, so the next page resumes without gaps. Requirement text is kept
   verbatim. Withdrawn work items, runs, operations, sessions, and tasks leave together with
   the dates derived from them, and their ids do not appear in rows or cursors.
+  A hidden run does not take a session's run slot or remove the visible `run_id`. The
+  per-session scan stops at a second visible run, or after 64 rows when that choice is
+  still open, and then omits `run_id`. A hidden issue mapping does not consume the
+  200-row issue cap or mark the page partial. A link to a hidden operation, task,
+  or session does not consume the attempt-link caps or withhold a visible attempt.
+  A task's `waiting.since` uses the latest transition into the current state,
+  including named task events. Every schedule cursor the server issues is accepted
+  back, including a row id that contains a control character. A plan or one issue
+  mapping that lineage refuses is hidden; it does not fail the schedule read.
+  A cancelled or failed operation ends at the matching status event, including a
+  failure that never recorded a failed step. An attempt whose own lineage does not
+  fit is omitted before its work's dates and status are derived.
   See `docs/design/pm-schedule.md`.
 
 - Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
