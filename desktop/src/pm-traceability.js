@@ -52,7 +52,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   const linked = req => cards.filter(card => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id));
   const deliverySource = req => ({deliveries: [...new Map(linked(req).flatMap(card => sources.get(card.work_item_id)?.deliveries || []).map(row => [row.operation_id, row])).values()]});
   const milestoneFor = req => milestones.filter(row => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
-  const issueLabel = row => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t('wb_issue', {number: row.document.issue.number})]);
+  const issueLabel = row => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t('wv_issue', {number: row.document.issue.number})]);
   function controls() {for (const [kind, button] of Object.entries(moreButtons)) {button.disabled = busy; button.hidden = cursors[kind] == null;}}
   function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw() {
@@ -67,11 +67,13 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   }
   function workRow(card) {
     const source = sources.get(card.work_item_id);
+    const attempts = card.execution?.attempts?.length, limited = card.execution?.coverage?.unavailable_sources || card.execution?.coverage?.truncated;
+    const count = limited && !attempts ? '—' : attempts ?? '—';
     return h('div', {'data-rtm-work': card.work_item_id, class: 'pm-requirement-work'},
       h('button', {type: 'button', class: 'ui-button ghost pm-rtm-work', 'data-rtm-select': card.work_item_id,
         'aria-pressed': String(selected === card.work_item_id), onclick: () => void select(card.work_item_id)}, firstLabel(card.work.title, t('ui_work_item'))),
       h('div', {class: 'pm-work-inline'}, statusPill(workStatus(card)), ...workAgents(source).map(agentMark),
-        h('span', {class: 'ui-meta', title: t('wv_attempts', {n: card.execution?.attempts?.length ?? '—'})}, `×${card.execution?.attempts?.length ?? '—'}`), ...prPills(source)),
+        h('span', {class: 'ui-meta', title: t('wv_attempts', {n: count})}, `×${count}`), ...prPills(source)),
       ...issuesFor(card).map(row => h('span', {class: 'ui-meta'}, issueLabel(row))));
   }
   function renderTable() {
@@ -167,7 +169,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       const requirements = plan?.document?.requirements || [], partial = [work, mappings, quality].some(row => row?.filtered || row?.next != null) || [...sources.values()].some(row => row.filtered || row.next != null);
       meta.textContent = !plan ? t('ui_status_unknown') : partial ? t('wv_loaded', {n: requirements.length}) : joinLabel([
         t('wv_requirements_count', {n: requirements.length}), feature('quality_reviews') ? t('wv_accepted_count', {n: requirements.filter(req => requirementReviews(plan, req, reviews).length).length}) : null,
-        requirements.some(req => linked(req).some(blockedWork)) ? t('wv_blocked_count', {n: requirements.filter(req => linked(req).some(blockedWork)).length}) : null]);
+        requirements.some(req => linked(req).some(blockedWork)) ? t(requirements.filter(req => linked(req).some(blockedWork)).length === 1 ? 'wv_blocked_one' : 'wv_blocked_count', {n: requirements.filter(req => linked(req).some(blockedWork)).length}) : null]);
       status.replaceChildren(...(partial ? [h('span', {class: 'ui-meta'}, t('wb_partial'))] : []));
       const routeSelection = new URLSearchParams(location.hash.split('?')[1]).get('select');
       if (visible && routeSelection && routeSelection !== selected) await select(routeSelection, true);

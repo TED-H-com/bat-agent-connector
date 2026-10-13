@@ -1,6 +1,7 @@
 import {test, expect, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {openPmSection} from './pm-navigation.ts';
+import {handoffFixture} from './pm-package-handoff-fixture.ts';
 import {pmRoute} from './pm-fixture.ts';
 import {workbenchFixture, route, workspaceId} from './pm-workbench-fixture.ts';
 
@@ -48,7 +49,7 @@ for (const locale of ['en-US', 'zh-TW']) test(`PM views hide missing values (${l
 
   await page.locator('[data-pm-view="requirements"]').click();
   await expect(page.locator('[data-rtm-requirement]')).toHaveCount(2);
-  await expect(page.locator('[data-rtm-unassigned-issue]')).toContainText('example/library · Issue #42');
+  await expect(page.locator('[data-rtm-unassigned-issue]')).toContainText(zh ? 'example/library · 議題 #42' : 'example/library · Issue #42');
   await assertNoMissingLabels(page);
 
   await page.locator('[data-pm-view="board"]').click();
@@ -91,4 +92,16 @@ for (const locale of ['en-US', 'zh-TW']) test(`Requirements search and Board rej
   await search.fill(''); await assertNoMissingLabels(page);
   await openPmSection(page, 'board'); await expect(page.locator('[data-pm-kanban-column=unknown] [data-pm-kanban-work]')).toHaveCount(1);
   await assertNoMissingLabels(page); await context.close();
+});
+
+for (const locale of ['en-US', 'zh-TW']) test(`Selected work package omits missing preparation (${locale})`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale}); const page = await context.newPage();
+  const fixture = handoffFixture(); fixture.row.sequence = undefined as any;
+  await mountConversation(page, false, fixture.dispatch); await page.goto(route);
+  await openPmSection(page, 'requirements', 'ui_packages');
+  await page.locator('[data-pm-work-packages]').getByRole('button', {name: /Restore member access/}).click();
+  await openPmSection(page, 'requirements', 'ui_handoff');
+  await page.locator('[data-pm-package-handoff-controls] > summary').click();
+  await expect(page.locator('[data-pm-package-handoff]')).toContainText('Restore member access');
+  await assertNoMissingLabels(page); expect(fixture.state.writes).toHaveLength(0); await context.close();
 });

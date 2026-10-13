@@ -3,7 +3,7 @@
 import {demoProject, type DemoProject} from './project.ts';
 import {pagePlans, plans} from './plans.ts';
 import {pageSnapshots, snapshots} from './snapshots.ts';
-import {requirementsCard as kanbanCard, requirementsBoard as kanbanPage} from './requirements.ts';
+import {requirementsCard as kanbanCard, requirementsBoard as kanbanPage, requirementsBrowserSession} from './requirements.ts';
 import {deliveryPage, issueMappings, pageIssues} from './rtm.ts';
 import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap.ts';
 import {resources} from './resources.ts';
@@ -99,7 +99,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   throw new Error(`Unknown demo fixture route GET ${url.pathname}${url.search}`);
 }
 
-export function demoFixture({locale, now}: {locale?: string, now?: number} = {}) {
+export function demoFixture({locale, now, managedSession = false}: {locale?: string, now?: number, managedSession?: boolean} = {}) {
   const project = demoProject(locale, now);
   const root = `/pm/workspaces/${project.ids.workspaceId}`;
   const dispatch = async (input: DemoRequest) => {
@@ -109,6 +109,7 @@ export function demoFixture({locale, now}: {locale?: string, now?: number} = {})
     if (method !== 'GET') throw new Error(`Demo fixture does not perform ${method} ${input.path}`);
     // Web boot probes a managed browser session. This demo uses the bearer token, so the
     // central answer is the ordinary missing-route 404 (no csrf, no managed session).
+    if (path === '/browser-session' && managedSession) return ok(requirementsBrowserSession(project));
     if (path === '/browser-session') return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'no such route'}}};
     if (path === '/capabilities') return ok(capabilities(project));
     if (path === '/bootstrap') return ok(bootstrap(project));

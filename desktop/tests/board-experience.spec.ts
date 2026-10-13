@@ -5,9 +5,10 @@ import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, viewport: {width, height: 900}}), page = await context.newPage();
+  const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  const fixture = demoFixture({locale}), {ids} = fixture; await mountConversation(page, false, fixture.dispatch);
+  page.on('console', message => {if (message.type() === 'error') errors.push(message.text() + ' ' + message.location().url);});
+  const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture; await mountConversation(page, false, fixture.dispatch);
   await page.goto(`/dashboard/#/pm/${ids.workspaceId}/board`);
   const board = page.locator('[data-pm-kanban]'); await expect(board.locator('[data-pm-kanban-work]')).toHaveCount(12);
   await expect(page.locator('[data-pm-view="board"]')).toHaveAttribute('aria-current', 'page');
@@ -22,10 +23,11 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await card.focus(); await page.keyboard.press('Enter');
   const inspector = page.locator('[data-work-inspector]');
   await expect(inspector.locator('[data-work-section=status] [data-status=read_only]')).toBeVisible();
+  await expect(inspector.locator('.ui-inspector-body > :not([data-work-section])')).toHaveCount(0);
   expect(await inspector.locator('[data-work-section]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-work-section')))).toEqual(['requirements', 'status', 'result', 'blocker', 'delivery', 'details']);
   expect(parseDiscussRefs(new URLSearchParams((await inspector.locator('[data-work-discuss]').getAttribute('href'))!.split('?')[1])).refs).toEqual([{kind: 'work_item', id: ids.work.audit}]);
   await expect(inspector.locator('[data-work-section=blocker]')).toContainText(locale === 'en' ? 'A linked task is blocked' : '連結的任務受阻');
-  await page.screenshot({path: `${out}/board-inspector-${locale}-${width}.png`, fullPage: true});
+  await page.screenshot({path: `${out}/board-inspector-${locale}-${width}.png`, fullPage: false});
   await page.keyboard.press('Escape'); await expect(card).toBeFocused();
   await page.keyboard.press('ArrowLeft'); await expect(card).not.toBeFocused();
   if (width < 800) {

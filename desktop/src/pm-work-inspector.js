@@ -78,13 +78,14 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
   function show(data) {
     selection = data;
     if (!panel) {
-      panel = inspector({title: data.title || t('ui_work_item'), onClose: () => {actions?.dispose(); actions = null; panel = null; signature = ''; onClose();}});
+      panel = inspector({title: data.title || t('ui_work_item'), onClose: () => {actions?.dispose(); actions = null; panel = null; selection = null; signature = ''; onClose();}});
       panel.classList.add('pm-work-inspector'); panel.dataset.workInspector = ''; panel.dataset.rtmDetail = '';
       mount.append(panel);
     }
     const next = JSON.stringify(data);
     if (signature === next) return;
     signature = next;
+    for (const node of panel.body.querySelectorAll(':scope > :not([data-work-section])')) node.remove();
     panel.querySelector('h2').textContent = data.title || t('ui_work_item');
     const {card, plan, requirement, requirements = [], source = {}, issues = []} = data;
     const refs = card ? [{kind: 'work_item', id: card.work_item_id}] : requirement && plan ? [{kind: 'requirement', id: requirement.id, revision_id: plan.revision_id}] : [];
@@ -100,7 +101,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     const [served, state, result, blocker, delivery] = sections;
     const requirementRows = requirement ? [requirement] : requirements;
     served.append(...(requirementRows.length ? requirementRows.map(row => h('div', {}, paragraph(firstLabel(row.text, row.id)),
-      row.acceptance?.length ? h('ul', {}, ...row.acceptance.map(item => h('li', {}, labelSegment(item.text)))) : null)) : [paragraph(t('wv_no_requirement'))]));
+      row.acceptance?.length ? h('ul', {}, ...row.acceptance.map(item => h('li', {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? 'ui_reason_unavailable' : 'wv_no_requirement'))]));
     if (card) {
       state.append(h('div', {class: 'pm-work-inline'}, statusPill(workStatus(card)), card.column === 'accepted' ? h('span', {}, t('wv_content_approved')) : null,
         ...workAgents(source).map(agentMark)), paragraph(t('wv_owner'), ' · ', labelSegment(card.assignment?.actor) || reasonLabel(t, card.assignment?.reason)));

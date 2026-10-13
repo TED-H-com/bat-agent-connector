@@ -1,3 +1,4 @@
+import {joinLabel} from './label-text.js';
 import {readRequirementReviews,matchesRequirementReview,requirementSelection,boundedQualityMap} from './pm-requirement-quality.js';
 import {checkSpecMaterialization,readSpecMaterializations,fixedSpecSelection} from './pm-spec-materialization.js';
 
@@ -73,7 +74,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
   function update(){
     review.disabled=!active||reading||!write()||!hostReady(active);
     availabilityNotice.hidden=!active||Boolean(write()&&hostReady(active));
-    if(active)summary.textContent=`${active.document.title} · ${t('ph_preparation')} ${active.sequence}`;
+    if(active)summary.textContent=joinLabel([active.document.title, active.sequence == null ? '' : joinLabel([t('ph_preparation'), active.sequence], ' ')]);
     else summary.textContent=t('ph_select');
     if(editor)editor.update();onReviewChange();
   }

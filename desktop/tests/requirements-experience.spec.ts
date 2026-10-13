@@ -6,9 +6,10 @@ import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
 const order = ['requirements', 'status', 'result', 'blocker', 'delivery', 'details'];
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`requirements delivery experience ${locale} ${width}`, async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale, viewport: {width, height: 900}}), page = await context.newPage();
+  const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-  const fixture = demoFixture({locale}), {ids} = fixture;
+  page.on('console', message => {if (message.type() === 'error') errors.push(message.text() + ' ' + message.location().url);});
+  const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture;
   await mountConversation(page, false, fixture.dispatch);
   await page.goto(`/dashboard/#/pm/${ids.workspaceId}/requirements`);
   const rtm = page.locator('[data-pm-rtm]');
@@ -24,6 +25,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(work).toContainText('PR #87'); await expect(work).toContainText('PR #91');
   const select = work.locator('[data-rtm-select]'); await select.focus(); await page.keyboard.press('Enter');
   const inspector = page.locator('[data-work-inspector]'); await expect(inspector.locator('[data-work-attempt]')).toHaveCount(3);
+  await expect(inspector.locator('.ui-inspector-body > :not([data-work-section])')).toHaveCount(0);
   expect(await inspector.locator('[data-work-section]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-work-section')))).toEqual(order);
   const link = await inspector.locator('[data-work-discuss]').getAttribute('href');
   expect(parseDiscussRefs(new URLSearchParams(link!.split('?')[1])).refs).toEqual([{kind: 'work_item', id: ids.work.email}]);
@@ -31,7 +33,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(pr87.locator('[data-status=deployed]')).toHaveCount(0);
   await expect(inspector.locator('[data-rtm-pr="91"] [data-status=deployed]')).toHaveCount(1);
   await expect(inspector.locator('[data-status=accepted]')).toHaveCount(0);
-  await page.screenshot({path: `${out}/requirements-inspector-${locale}-${width}.png`, fullPage: true});
+  await page.screenshot({path: `${out}/requirements-inspector-${locale}-${width}.png`, fullPage: false});
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.locator('body').innerText()).not.toMatch(/\b(?:undefined|null|NaN|wv_\w+)\b/);
   await page.keyboard.press('Escape'); await expect(select).toBeFocused();

@@ -67,7 +67,9 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     const fill = (select, all, options, saved) => {
       const current = select.value || saved || '', values = new Map(options);
       if (current && !values.has(current)) values.set(current, t('ui_status_unknown'));
-      select.replaceChildren(h('option', {value: ''}, t(all)), ...[...values].map(([value, label]) => h('option', {value}, label))); select.value = current;
+      const signature = JSON.stringify([...values]);
+      if (select.dataset.options !== signature) {select.dataset.options = signature; select.replaceChildren(h('option', {value: ''}, t(all)), ...[...values].map(([value, label]) => h('option', {value}, label)));}
+      select.value = current;
     };
     fill(requirementFilter, 'wv_all_requirements', [...rows.values()].flatMap(({card}) => (card.binding.requirement_ids || []).map(id => [id, firstLabel(requirements(card).find(req => req.id === id)?.text, id)])), preference.requirement);
     fill(agentFilter, 'wv_all_agents', [...sources.values()].flatMap(source => workAgents(source).map(agent => [agent, agent])), preference.agent);
@@ -76,7 +78,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (!page) return;
     const partial = next != null || page.coverage?.byte_limited || [...sources.values()].some(source => source.filtered || source.next != null);
     const blocked = [...rows.values()].filter(({card}) => blockedWork(card)).length;
-    meta.textContent = joinLabel([t(partial ? 'wv_loaded' : 'wv_work_count', {n: rows.size}), blocked ? t('wv_blocked_count', {n: blocked}) : null]);
+    meta.textContent = joinLabel([t(partial ? 'wv_loaded' : 'wv_work_count', {n: rows.size}), blocked ? t(blocked === 1 ? 'wv_blocked_one' : 'wv_blocked_count', {n: blocked}) : null]);
     boardInfo.replaceChildren(...[h('p', {}, t('pm_kanban_wip', page.wip)),
       partial ? note('pm_kanban_partial') : null, page.coverage?.byte_limited ? note('pm_kanban_bounded') : null].filter(Boolean));
     more.hidden = next == null; more.disabled = reading;
@@ -103,7 +105,8 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         let target;
         if (['ArrowLeft', 'ArrowRight'].includes(event.key)) {
           const lanes = [...list.children], next = lanes[lanes.indexOf(lane) + (event.key === 'ArrowLeft' ? -1 : 1)];
-          target = next?.querySelectorAll('[data-pm-kanban-work]:not([hidden])')[index] || next?.querySelector('[data-pm-kanban-work]:not([hidden])') || next?.querySelector('button');
+          const available = next?.querySelector('.pm-kanban-cards')?.hidden ? [] : [...(next?.querySelectorAll('[data-pm-kanban-work]:not([hidden])') || [])];
+          target = available[index] || available[0] || next?.querySelector('button');
         } else target = cards[event.key === 'Home' ? 0 : event.key === 'End' ? cards.length - 1 : index + (event.key === 'ArrowUp' ? -1 : 1)];
         target?.focus();
       }
@@ -131,7 +134,9 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       lane.addEventListener('focusout', () => requestAnimationFrame(() => renderColumns()));
       currentLanes.set(key, lane); list.append(lane);
     }
-    for (const {card, node} of rows.values()) {
+    for (const entry of rows.values()) {
+      const {card, node} = entry;
+      if (entry.pending && (!node.contains(document.activeElement) || node === document.activeElement)) {node.replaceChildren(...preview(card)); entry.pending = false;}
       const matches = (!query || joinLabel([card.work.title, ...requirements(card).map(req => req.text)], ' ').toLocaleLowerCase().includes(query))
         && (!requirementFilter.value || card.binding.requirement_ids?.includes(requirementFilter.value))
         && (!agentFilter.value || workAgents(sources.get(card.work_item_id)).includes(agentFilter.value));
@@ -155,7 +160,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       if (previous) {
         // Preserve the card node and focus, even when its facts change.
         const contentSignature = JSON.stringify([card.work.title, card.column, card.flow?.age_seconds, card.flow?.cycle_seconds, blockedWork(card), sources.get(card.work_item_id)]);
-        if (previous.signature !== contentSignature && !previous.node.contains(document.activeElement)) previous.node.replaceChildren(...preview(card));
+        if (previous.signature !== contentSignature) previous.pending = true;
         previous.signature = contentSignature; previous.card = card; previous.node.setAttribute('aria-label', firstLabel(card.work.title, t('ui_work_item')));
       } else rows.set(card.work_item_id, {node: makeCard(card), card});
     }

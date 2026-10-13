@@ -1246,6 +1246,7 @@ body.pm-mode #main { padding: 0; }
 .pm-requirements-tables { min-width: 0; }
 .pm-requirements .ui-data-table { margin-bottom: var(--space-3); }
 .pm-requirements .ui-data-table table { min-width: 880px; table-layout: auto; }
+.pm-requirements .ui-data-table th { white-space: nowrap; }
 .pm-requirements .ui-data-table td { vertical-align: top; }
 .pm-requirements .ui-data-table td:nth-child(2) { min-width: 190px; width: 26%; font-weight: 500; }
 .pm-requirements .ui-data-table td:nth-child(3) { min-width: 100px; }

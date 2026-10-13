@@ -38,6 +38,10 @@ function h$1(tag, attrs = {}, ...children) {
 //#region src/pm-work-view-strings.js
 var workViewStrings = {
 	en: {
+		wv_requirements_unavailable: "Requirement records unavailable",
+		wv_board_unavailable: "Work records unavailable",
+		wv_blocked_one: "1 recorded blocker",
+		wv_issue: "Issue #{number}",
 		wv_search: "Search requirements or issues",
 		wv_group: "Group by",
 		wv_none: "None",
@@ -58,7 +62,7 @@ var workViewStrings = {
 		wv_no_milestone: "No milestone",
 		wv_unassigned: "Unassigned ({n})",
 		wv_criteria: "Acceptance criteria",
-		wv_attempts: "{n} attempts",
+		wv_attempts: "{n} visible attempts",
 		wv_served: "Requirements served",
 		wv_status_owner: "Status & ownership",
 		wv_result: "Latest result",
@@ -90,6 +94,10 @@ var workViewStrings = {
 		wv_refresh: "Refresh"
 	},
 	"zh-TW": {
+		wv_requirements_unavailable: "無法取得需求紀錄",
+		wv_board_unavailable: "無法取得工作紀錄",
+		wv_blocked_one: "1 項已記錄阻礙",
+		wv_issue: "議題 #{number}",
 		wv_search: "搜尋需求或議題",
 		wv_group: "分組方式",
 		wv_none: "不分組",
@@ -110,7 +118,7 @@ var workViewStrings = {
 		wv_no_milestone: "未指定里程碑",
 		wv_unassigned: "未指派（{n}）",
 		wv_criteria: "驗收條件",
-		wv_attempts: "{n} 次嘗試",
+		wv_attempts: "可見的 {n} 次嘗試",
 		wv_served: "對應需求",
 		wv_status_owner: "狀態與負責人",
 		wv_result: "最新成果",
@@ -11438,6 +11446,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 					actions?.dispose();
 					actions = null;
 					panel = null;
+					selection = null;
 					signature = "";
 					onClose();
 				}
@@ -11450,6 +11459,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		const next = JSON.stringify(data);
 		if (signature === next) return;
 		signature = next;
+		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
 		panel.querySelector("h2").textContent = data.title || t("ui_work_item");
 		const { card, plan, requirement, requirements = [], source = {}, issues = [] } = data;
 		const href = discussHref({
@@ -11492,7 +11502,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
 		const [served, state, result, blocker, delivery] = sections;
 		const requirementRows = requirement ? [requirement] : requirements;
-		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t("wv_no_requirement"))]);
+		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "ui_reason_unavailable" : "wv_no_requirement"))]);
 		if (card) {
 			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || reasonLabel(t, card.assignment?.reason)));
 			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
@@ -11673,7 +11683,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	const linked = (req) => cards.filter((card) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id));
 	const deliverySource = (req) => ({ deliveries: [...new Map(linked(req).flatMap((card) => sources.get(card.work_item_id)?.deliveries || []).map((row) => [row.operation_id, row])).values()] });
 	const milestoneFor = (req) => milestones.filter((row) => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
-	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wb_issue", { number: row.document.issue.number })]);
+	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wv_issue", { number: row.document.issue.number })]);
 	function controls() {
 		for (const [kind, button] of Object.entries(moreButtons)) {
 			button.disabled = busy;
@@ -11719,6 +11729,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	}
 	function workRow(card) {
 		const source = sources.get(card.work_item_id);
+		const attempts = card.execution?.attempts?.length;
+		const count = (card.execution?.coverage?.unavailable_sources || card.execution?.coverage?.truncated) && !attempts ? "—" : attempts ?? "—";
 		return h$1("div", {
 			"data-rtm-work": card.work_item_id,
 			class: "pm-requirement-work"
@@ -11730,8 +11742,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			onclick: () => void select(card.work_item_id)
 		}, firstLabel(card.work.title, t("ui_work_item"))), h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark), h$1("span", {
 			class: "ui-meta",
-			title: t("wv_attempts", { n: card.execution?.attempts?.length ?? "—" })
-		}, `×${card.execution?.attempts?.length ?? "—"}`), ...prPills(source)), ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
+			title: t("wv_attempts", { n: count })
+		}, `×${count}`), ...prPills(source)), ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
 	}
 	function renderTable() {
 		const focused = tables.contains(document.activeElement) ? [
@@ -11969,7 +11981,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			meta.textContent = !plan ? t("ui_status_unknown") : partial ? t("wv_loaded", { n: requirements.length }) : joinLabel([
 				t("wv_requirements_count", { n: requirements.length }),
 				feature("quality_reviews") ? t("wv_accepted_count", { n: requirements.filter((req) => requirementReviews(plan, req, reviews).length).length }) : null,
-				requirements.some((req) => linked(req).some(blockedWork)) ? t("wv_blocked_count", { n: requirements.filter((req) => linked(req).some(blockedWork)).length }) : null
+				requirements.some((req) => linked(req).some(blockedWork)) ? t(requirements.filter((req) => linked(req).some(blockedWork)).length === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: requirements.filter((req) => linked(req).some(blockedWork)).length }) : null
 			]);
 			status.replaceChildren(...partial ? [h$1("span", { class: "ui-meta" }, t("wb_partial"))] : []);
 			const routeSelection = new URLSearchParams(location.hash.split("?")[1]).get("select");
@@ -15235,7 +15247,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 	function update() {
 		review.disabled = !active || reading || !write() || !hostReady(active);
 		availabilityNotice.hidden = !active || Boolean(write() && hostReady(active));
-		if (active) summary.textContent = `${active.document.title} · ${t("ph_preparation")} ${active.sequence}`;
+		if (active) summary.textContent = joinLabel([active.document.title, active.sequence == null ? "" : joinLabel([t("ph_preparation"), active.sequence], " ")]);
 		else summary.textContent = t("ph_select");
 		if (editor) editor.update();
 		onReviewChange();
@@ -19531,7 +19543,11 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		const fill = (select, all, options, saved) => {
 			const current = select.value || saved || "", values = new Map(options);
 			if (current && !values.has(current)) values.set(current, t("ui_status_unknown"));
-			select.replaceChildren(h$1("option", { value: "" }, t(all)), ...[...values].map(([value, label]) => h$1("option", { value }, label)));
+			const signature = JSON.stringify([...values]);
+			if (select.dataset.options !== signature) {
+				select.dataset.options = signature;
+				select.replaceChildren(h$1("option", { value: "" }, t(all)), ...[...values].map(([value, label]) => h$1("option", { value }, label)));
+			}
 			select.value = current;
 		};
 		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, id)])), preference.requirement);
@@ -19541,7 +19557,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (!page) return;
 		const partial = next != null || page.coverage?.byte_limited || [...sources.values()].some((source) => source.filtered || source.next != null);
 		const blocked = [...rows.values()].filter(({ card }) => blockedWork(card)).length;
-		meta.textContent = joinLabel([t(partial ? "wv_loaded" : "wv_work_count", { n: rows.size }), blocked ? t("wv_blocked_count", { n: blocked }) : null]);
+		meta.textContent = joinLabel([t(partial ? "wv_loaded" : "wv_work_count", { n: rows.size }), blocked ? t(blocked === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: blocked }) : null]);
 		boardInfo.replaceChildren(...[
 			h$1("p", {}, t("pm_kanban_wip", page.wip)),
 			partial ? note("pm_kanban_partial") : null,
@@ -19597,7 +19613,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				let target;
 				if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
 					const lanes = [...list.children], next = lanes[lanes.indexOf(lane) + (event.key === "ArrowLeft" ? -1 : 1)];
-					target = next?.querySelectorAll("[data-pm-kanban-work]:not([hidden])")[index] || next?.querySelector("[data-pm-kanban-work]:not([hidden])") || next?.querySelector("button");
+					const available = next?.querySelector(".pm-kanban-cards")?.hidden ? [] : [...next?.querySelectorAll("[data-pm-kanban-work]:not([hidden])") || []];
+					target = available[index] || available[0] || next?.querySelector("button");
 				} else target = cards[event.key === "Home" ? 0 : event.key === "End" ? cards.length - 1 : index + (event.key === "ArrowUp" ? -1 : 1)];
 				target?.focus();
 			}
@@ -19638,7 +19655,12 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			currentLanes.set(key, lane);
 			list.append(lane);
 		}
-		for (const { card, node } of rows.values()) {
+		for (const entry of rows.values()) {
+			const { card, node } = entry;
+			if (entry.pending && (!node.contains(document.activeElement) || node === document.activeElement)) {
+				node.replaceChildren(...preview(card));
+				entry.pending = false;
+			}
 			node.hidden = !((!query || joinLabel([card.work.title, ...requirements(card).map((req) => req.text)], " ").toLocaleLowerCase().includes(query)) && (!requirementFilter.value || card.binding.requirement_ids?.includes(requirementFilter.value)) && (!agentFilter.value || workAgents(sources.get(card.work_item_id)).includes(agentFilter.value)));
 			const lane = currentLanes.get(laneKey(card)), previous = node.closest("[data-pm-kanban-column]");
 			if (previous !== lane && (force || !locked(previous) && !locked(lane))) lane.querySelector(".pm-kanban-cards").append(node);
@@ -19670,7 +19692,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					blockedWork(card),
 					sources.get(card.work_item_id)
 				]);
-				if (previous.signature !== contentSignature && !previous.node.contains(document.activeElement)) previous.node.replaceChildren(...preview(card));
+				if (previous.signature !== contentSignature) previous.pending = true;
 				previous.signature = contentSignature;
 				previous.card = card;
 				previous.node.setAttribute("aria-label", firstLabel(card.work.title, t("ui_work_item")));
@@ -26764,17 +26786,20 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const drawersHome = h("div", { hidden: true });
 	body.append(drawersHome);
 	let detailPanel = null;
+	const toolPreference = viewState(namespace, workspaceId, "work-tools");
 	function openPanel(label, node) {
 		if (!node || !loaded) return;
 		detailPanel?.close();
 		traceability?.hideInspector();
 		kanban?.hideInspector();
 		const home = node.parentNode, next = node.nextSibling;
+		toolPreference.open = node.dataset.pmTool || null;
 		detailPanel = inspector({
 			title: label,
 			onClose: () => {
 				home.insertBefore(node, next?.parentNode === home ? next : null);
 				detailPanel = null;
+				if (!disposed) toolPreference.open = null;
 			}
 		});
 		node.hidden = false;
@@ -26862,7 +26887,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		],
 		board: [["ui_batches", workBatches?.element]]
 	};
-	for (const [id, entries] of Object.entries(viewTools)) {
+	for (const [id, entries] of Object.entries(threadId ? {} : viewTools)) {
 		const available = entries.filter(([, node]) => node);
 		const items = available.map(([key, node]) => ({
 			key,
@@ -26929,7 +26954,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"requirements",
-				traceability?.element || (viewTools.requirements.some(([, node]) => node) ? h("div") : null),
+				traceability?.element || (viewTools.requirements.some(([, node]) => node) ? emptyState({ title: t("wv_requirements_unavailable") }) : null),
 				[]
 			],
 			[
@@ -26958,7 +26983,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			],
 			[
 				"board",
-				kanban?.element || (workBatches ? h("div") : null),
+				kanban?.element || (workBatches ? emptyState({ title: t("wv_board_unavailable") }) : null),
 				[]
 			]
 		];
@@ -26986,8 +27011,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			onSelect: (id) => {
 				title.textContent = t("ui_" + id);
 				resources?.setActive(id === "agents");
-				window.scrollTo(0, 0);
 				updateWorkView(id);
+				if (!["requirements", "board"].includes(id)) window.scrollTo(0, 0);
 				detailPanel?.close();
 				if (primary) primary.hidden = id !== "overview";
 				if (reportMenu) reportMenu.hidden = id !== "overview";
@@ -27780,6 +27805,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	await load();
 	initialReadComplete = true;
 	updateForms();
+	const rememberedTool = viewTools[workbench?.selected()]?.find(([key]) => key === toolPreference.open);
+	if (rememberedTool?.[1]) openPanel(t(rememberedTool[0]), rememberedTool[1]);
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
 	let eventReads = Promise.resolve();
 	const off = onEvents((event) => {

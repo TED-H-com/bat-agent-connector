@@ -1,4 +1,5 @@
-import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu} from './ui/components.js';
+import {viewState} from './ui/view-state.js';
+import {pageHeader, iconButton, inspector, disclosure, sectionCard, button, menu, emptyState} from './ui/components.js';
 import {projectViews, rememberProjectView, availableProjectViews, forgetWorkspace} from './pm-workbench.js';
 import {workspaceResources} from './pm-resources.js';
 import {workspaceCharter} from './pm-charter.js';
@@ -345,11 +346,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const drawersHome = h('div', {hidden: true});
   body.append(drawersHome);
   let detailPanel = null;
+  const toolPreference = viewState(namespace, workspaceId, 'work-tools');
   function openPanel(label, node) {
     if (!node || !loaded) return;
     detailPanel?.close(); traceability?.hideInspector(); kanban?.hideInspector();
     const home = node.parentNode, next = node.nextSibling;
-    detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null;}});
+    toolPreference.open = node.dataset.pmTool || null;
+    detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null;}});
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
   }
   if (lifecycle) drawersHome.append(lifecycle.element);
@@ -388,7 +391,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       ['ui_materialization', materialization?.element], ['ui_packages', engineering?.element], ['ui_handoff', handoff?.element], ['ui_publication', issues?.element]],
     board: [['ui_batches', workBatches?.element]],
   };
-  for (const [id, entries] of Object.entries(viewTools)) {
+  for (const [id, entries] of Object.entries(threadId ? {} : viewTools)) {
     const available = entries.filter(([, node]) => node);
     const items = available.map(([key, node]) => ({key, label: t(key), onSelect: () => openPanel(t(key), node)}));
     for (const [key, node] of available) {node.dataset.pmTool = key; drawersHome.append(node);}
@@ -415,12 +418,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const definitions = [
       ['overview', brief?.box || (lifecycle ? h('div') : null), []],
       ['discussions', content, [['ui_meetings', meetings?.element]]],
-      ['requirements', traceability?.element || (viewTools.requirements.some(([, node]) => node) ? h('div') : null), []],
+      ['requirements', traceability?.element || (viewTools.requirements.some(([, node]) => node) ? emptyState({title: t('wv_requirements_unavailable')}) : null), []],
       ['schedule', roadmap?.box, [['ui_sprints', sprints?.box]]],
       ['dependencies', null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
       ['issues', governance?.element, [['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
       ['agents', resources?.element, [['ui_observations', ahp?.element]]],
-      ['board', kanban?.element || (workBatches ? h('div') : null), []],
+      ['board', kanban?.element || (workBatches ? emptyState({title: t('wv_board_unavailable')}) : null), []],
     ];
     for (const [id, primarySection, secondaries] of definitions) {
       const sections = [primarySection, ...secondaries.map(([label, node]) => secondary(label, node))].filter(Boolean);
@@ -434,8 +437,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     workbench = projectViews({h, t, namespace, workspaceId, view, groups, onSelect: id => {
       title.textContent = t('ui_' + id); resources?.setActive(id === 'agents');
-      window.scrollTo(0, 0);
       updateWorkView(id);
+      if (!['requirements', 'board'].includes(id)) window.scrollTo(0, 0);
       detailPanel?.close(); if (primary) primary.hidden = id !== 'overview';
       if (reportMenu) reportMenu.hidden = id !== 'overview';
       publishContext();
@@ -826,6 +829,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   // The router admits POSTs only after this complete initial snapshot returns.
   // Do not expose forms that would freeze an unsent intent while that gate is closed.
   initialReadComplete = true; updateForms();
+  const rememberedTool = viewTools[workbench?.selected()]?.find(([key]) => key === toolPreference.open);
+  if (rememberedTool?.[1]) openPanel(t(rememberedTool[0]), rememberedTool[1]);
   if (openCreate || !workspaceId && !lastList.length) showCreate();
   let eventReads = Promise.resolve();
   const off = onEvents(event => {

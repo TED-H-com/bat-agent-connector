@@ -5,7 +5,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {handoffFixture,packageId,route,workspaceId,projectId,workId,codeSha,specSha,target} from './pm-package-handoff-fixture.ts';
 const section=(page:any)=>page.locator('[data-pm-package-handoff]'),form=(page:any)=>section(page).locator('[data-pm-action="repository.continue"]');
 async function select(page:any,sequence=1){await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:`Restore member access · Preparation ${sequence}`,exact:true}).click();}
-async function open(page:any){await openPmSection(page,'requirements','ui_handoff');await section(page).locator('summary').first().click();}
+async function open(page:any){await openPmSection(page,'requirements','ui_handoff');const fold=section(page).locator('[data-pm-package-handoff-controls]');if(!await fold.evaluate((node:any)=>node.open))await fold.locator(':scope > summary').click();}
 async function review(page:any){await section(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(section(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();}
 async function fill(page:any,text='Use the existing recovery module as the implementation base'){
   await form(page).getByLabel('Why use this implementation base?',{exact:true}).fill(text);
@@ -58,9 +58,9 @@ for(const native of [false,true])test.describe(native?'Native fixed handoff':'We
   });
   test('each immutable package owns its draft; older packages cannot create a new attempt',async({page})=>{
     const f=handoffFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_handoff');await select(page);await open(page);await review(page);await fill(page,'First package draft');
-    f.fixture.addPackage();await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();
-    await select(page,2);await expect(form(page).getByLabel('Why use this implementation base?',{exact:true})).toHaveValue('');await fill(page,'Second package draft');
-    await select(page,1);await expect(form(page).getByLabel('Why use this implementation base?',{exact:true})).toHaveValue('First package draft');
+    f.fixture.addPackage();await openPmSection(page,'requirements','ui_packages');await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();
+    await select(page,2);await open(page);await expect(form(page).getByLabel('Why use this implementation base?',{exact:true})).toHaveValue('');await fill(page,'Second package draft');
+    await select(page,1);await open(page);await expect(form(page).getByLabel('Why use this implementation base?',{exact:true})).toHaveValue('First package draft');
     await section(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(section(page)).toContainText('unresolved checks beyond');
     expect(f.state.writes).toHaveLength(0);
   });
@@ -75,7 +75,7 @@ for(const native of [false,true])test.describe(native?'Native fixed handoff':'We
     const f=handoffFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_handoff');await select(page);await open(page);await review(page);await fill(page,'Keep after refusal');f.state.reject=true;
     await form(page).getByRole('button',{name:'Start implementation',exact:true}).click();await expect(section(page)).toContainText('sources or permissions could not be verified');
     await expect(section(page)).not.toContainText('Restore member access');await expect(page.locator('[data-pm-wp-detail]')).not.toContainText('Private');
-    f.state.reject=false;await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();await select(page);
+    f.state.reject=false;await openPmSection(page,'requirements','ui_packages');await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();await select(page);await open(page);
     await expect(form(page).getByLabel('Why use this implementation base?',{exact:true})).toHaveValue('Keep after refusal');expect(f.state.writes).toHaveLength(1);
   });
   test('late ACK during a parent refresh recovers one original operation without resending',async({page})=>{

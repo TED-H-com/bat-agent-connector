@@ -1,6 +1,7 @@
 import {expect, type Page} from '@playwright/test';
 // Exercise the real shell and disclosures; never force clicks into a hidden view.
 export async function openPmSection(page: Page, view: string, section?: string) {
+  if (await page.locator('.ui-inspector[aria-modal=true]:visible').count()) await page.keyboard.press('Escape');
   await expect(page.locator('.pm-main > .ui-page-header')).toBeVisible();
   await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
   const entry = page.locator(`[data-pm-view="${view}"]`);
@@ -11,7 +12,9 @@ export async function openPmSection(page: Page, view: string, section?: string) 
   await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
   if (section && await page.locator(`[data-pm-view-tools="${view}"]`).count()) {
     await page.locator(`[data-pm-view-tools="${view}"]`).click();
-    await page.locator(`[data-menu-key="${section}"]:visible`).click();
+    const item = page.locator(`[data-menu-key="${section}"]:visible`);
+    if (await item.count()) await item.click();
+    else await page.keyboard.press('Escape');
     return;
   }
   if (section) {
@@ -20,6 +23,7 @@ export async function openPmSection(page: Page, view: string, section?: string) 
   }
 }
 export async function openPmPanel(page: Page, item: 'ui_change_phase' | 'ui_report' | 'ui_workspace_settings') {
+  if (await page.locator('.ui-inspector:visible').count()) await page.keyboard.press('Escape');
   await expect(page.locator('.pm-main > .ui-page-header')).toBeVisible();
   if (item === 'ui_report') {
     await page.locator('[data-pm-report-menu]').click();

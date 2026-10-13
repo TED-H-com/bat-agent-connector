@@ -235,3 +235,8 @@ remain owned by their existing modules. The shell provides the single refresh.
 `requirements?select=<work_item_id|requirement_id>` expands and scrolls to the
 selection. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
+
+The package entry preserves the existing read-only catalogue. This foundation has
+no package creation editor; creation remains the registered `pm.work_package.create`
+API action. Adding that editor requires the fixed source/admission workflow rather
+than an inferred package assembled from a selected row.

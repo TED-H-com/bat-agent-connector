@@ -18,3 +18,9 @@ export function requirementsBoard(project: DemoProject, url: URL) {
 export function requirementsCard(project: DemoProject, id: string) {
   const result = kanbanCard(project, id); if (result) result.card = executionFacts(project, result.card); return result;
 }
+
+// Matches BrowserSessions.describe; the default demo still exercises bearer fallback.
+export function requirementsBrowserSession(project: DemoProject) {
+  return {csrf: 'fixture-browser-csrf-'.repeat(3), expires_at: unix(project.now, 1), actor: project.ids.actor,
+    server_id: project.ids.serverId, principal_id: 'demo-reader'};
+}

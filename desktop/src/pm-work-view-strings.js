@@ -1,9 +1,10 @@
 export const workViewStrings = {
   en: {
-    wv_search: 'Search requirements or issues', wv_group: 'Group by', wv_none: 'None', wv_milestone: 'Milestone', wv_phase: 'Phase', wv_status: 'Status',
+    wv_requirements_unavailable: 'Requirement records unavailable', wv_board_unavailable: 'Work records unavailable', wv_blocked_one: '1 recorded blocker',
+    wv_issue: 'Issue #{number}', wv_search: 'Search requirements or issues', wv_group: 'Group by', wv_none: 'None', wv_milestone: 'Milestone', wv_phase: 'Phase', wv_status: 'Status',
     wv_requirements_count: '{n} requirements', wv_work_count: '{n} work items', wv_loaded: '{n} loaded', wv_accepted_count: '{n} accepted', wv_blocked_count: '{n} recorded blockers',
     wv_work: 'Work', wv_requirement: 'Requirement', wv_pr: 'PR', wv_acceptance: 'Acceptance', wv_deploy: 'Deploy', wv_next_blocker: 'Next blocker',
-    wv_no_milestone: 'No milestone', wv_unassigned: 'Unassigned ({n})', wv_criteria: 'Acceptance criteria', wv_attempts: '{n} attempts',
+    wv_no_milestone: 'No milestone', wv_unassigned: 'Unassigned ({n})', wv_criteria: 'Acceptance criteria', wv_attempts: '{n} visible attempts',
     wv_served: 'Requirements served', wv_status_owner: 'Status & ownership', wv_result: 'Latest result', wv_blocker: 'Blocker & next step', wv_delivery: 'Delivery', wv_details: 'Details',
     wv_owner: 'Owner', wv_agent: 'Agent', wv_all_requirements: 'All requirements', wv_all_agents: 'All agents', wv_session: 'Open session', wv_discuss: 'Discuss',
     wv_no_result: 'No result recorded', wv_no_delivery: 'No delivery recorded', wv_start_end: 'Start – end', wv_unknown_times: 'Start and end are not recorded',
@@ -12,10 +13,11 @@ export const workViewStrings = {
     wv_content_approved: 'Content approved', wv_read_only: 'Read-only', wv_source_details: 'Sources and original records', wv_refresh: 'Refresh',
   },
   'zh-TW': {
-    wv_search: '搜尋需求或議題', wv_group: '分組方式', wv_none: '不分組', wv_milestone: '里程碑', wv_phase: '階段', wv_status: '狀態',
+    wv_requirements_unavailable: '無法取得需求紀錄', wv_board_unavailable: '無法取得工作紀錄', wv_blocked_one: '1 項已記錄阻礙',
+    wv_issue: '議題 #{number}', wv_search: '搜尋需求或議題', wv_group: '分組方式', wv_none: '不分組', wv_milestone: '里程碑', wv_phase: '階段', wv_status: '狀態',
     wv_requirements_count: '{n} 項需求', wv_work_count: '{n} 項工作', wv_loaded: '已載入 {n} 筆', wv_accepted_count: '{n} 項已驗收', wv_blocked_count: '{n} 項已記錄阻礙',
     wv_work: '工作', wv_requirement: '需求', wv_pr: 'PR', wv_acceptance: '驗收', wv_deploy: '部署', wv_next_blocker: '待解阻礙',
-    wv_no_milestone: '未指定里程碑', wv_unassigned: '未指派（{n}）', wv_criteria: '驗收條件', wv_attempts: '{n} 次嘗試',
+    wv_no_milestone: '未指定里程碑', wv_unassigned: '未指派（{n}）', wv_criteria: '驗收條件', wv_attempts: '可見的 {n} 次嘗試',
     wv_served: '對應需求', wv_status_owner: '狀態與負責人', wv_result: '最新成果', wv_blocker: '阻礙與下一步', wv_delivery: '交付', wv_details: '詳細資料',
     wv_owner: '負責人', wv_agent: 'Agent', wv_all_requirements: '所有需求', wv_all_agents: '所有 Agent', wv_session: '開啟工作階段', wv_discuss: '討論',
     wv_no_result: '尚無成果紀錄', wv_no_delivery: '尚無交付紀錄', wv_start_end: '開始 – 結束', wv_unknown_times: '尚無開始與結束時間紀錄',
