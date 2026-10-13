@@ -1,8 +1,8 @@
 import {workspaceCharter, charterSections} from './pm-charter.js';
 import {planDocument} from './pm-plans.js';
 import {discussHref} from './pm-discuss-link.js';
-import {button, iconButton, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
-import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
+import {button, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
+import {reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 
@@ -40,9 +40,8 @@ export function workspaceOverview(options) {
   const reportLabel = h('span');
   reports.previous.setAttribute('aria-label', t('ov_report_previous'));
   reports.next.setAttribute('aria-label', t('ov_report_next'));
-  savedBar.append(reportLabel, reportPartial, historyHint,
-    iconButton({icon: 'chevron-left', label: t('ov_report_previous'), 'data-overview-report-control': 'previous', onClick: () => reports.previous.click()}),
-    iconButton({icon: 'chevron-right', label: t('ov_report_next'), 'data-overview-report-control': 'next', onClick: () => reports.next.click()}),
+  reports.previous.dataset.overviewReportControl = 'previous'; reports.next.dataset.overviewReportControl = 'next';
+  savedBar.append(reportLabel, reportPartial, historyHint, h('span', {class: 'pm-overview-report-arrows'}, reports.previous, reports.next),
     button({variant: 'ghost', label: t('ui_compare'), 'data-overview-report-control': 'compare', onClick: () => options.onCompare?.()}), back);
   reportControls(reports.controls());
   const date = value => {
@@ -78,7 +77,7 @@ export function workspaceOverview(options) {
   }
   function open(row) {onOpen(row.ref, row);}
   function itemLink(row, part) {return row ? h('button', {type: 'button', class: 'pm-overview-link', 'data-overview-link': `${part}:${row.key || row.milestone_id || row.work_item_id}`, onclick: () => open(row)}, row.title) : null;}
-  function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date ? ` → ${date(row.forecast_date)}` : '',
+  function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? ` → ${date(row.forecast_date)}` : '',
     row.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null);}
   function statusStrip(data, fixed = false) {
     const p = data?.progress, complete = p && classes.every(key => Number.isSafeInteger(p[key]));
@@ -137,9 +136,11 @@ export function workspaceOverview(options) {
       const elapsed = age(row.since);
       const link = h('button', {type: 'button', class: 'pm-overview-attention-main', 'data-overview-open': row.key, 'data-overview-link': `attention:${row.key}:open`, onclick: () => open(row)},
         h('span', {class: 'pm-overview-kind', title: label, 'aria-label': label}, icon(row.kind === 'decision' ? 'message-square' : 'circle-alert')),
-        h('span', {}, h('strong', {}, row.title), h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · '))));
+        h('span', {}, h('strong', {}, row.title)));
       const node = h('div', {class: 'pm-overview-attention-row', 'data-overview-row': row.key}, link,
-        elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed), discuss(row));
+        h('div', {class: 'pm-overview-attention-meta'}, h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · ')),
+          h('span', {class: 'pm-overview-attention-actions'}, elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed),
+            elapsed === null ? null : h('span', {'aria-hidden': 'true'}, '·'), discuss(row))));
       cached?.node.remove(); attentionNodes.set(row.key, {signature: rowSignature, node});
       rows.insertBefore(node, rows.children[position] || null); position++;
     }
@@ -184,7 +185,7 @@ export function workspaceOverview(options) {
       const rows = groups[key], expanded = preference.expanded?.includes(key);
       const list = h('ul', {class: 'pm-overview-bullets'}, ...rows.map((row, i) => h('li', {hidden: i >= 3 && !expanded}, row.text,
         ['agent_assumption', 'unresolved', 'conflicting'].includes(row.status) ? statusPill('unconfirmed') : null)));
-      const sources = disclosure({label: icon('list-checks'), key: `${namespace}:${workspaceId}:overview-source:${key}`,
+      const sources = disclosure({label: t('ov_sources'), key: `${namespace}:${workspaceId}:overview-source:${key}`,
         body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))});
       sources.classList.add('pm-overview-sources'); sources.querySelector('summary').setAttribute('aria-label', `${t('ov_sources')} · ${t('wb_' + key)}`);
       sources.querySelector('summary').title = t('ov_sources'); sources.querySelector('summary').dataset.overviewLink = `charter:${key}:sources`;
@@ -208,14 +209,22 @@ export function workspaceOverview(options) {
       button({variant: 'ghost', label: t('ov_plan'), disabled: !document, 'data-charter-plan': '', 'data-overview-link': 'charter:plan', onClick: () => fullPlan(document)})), grid);
   }
   function details(data, fixed) {
-    const entries = new Map((data?.unknown || []).map(row => [row.reason, row]));
-    for (const source of Object.values(data?.coverage?.sources || {})) if (source.status) entries.set(source.status, {reason: source.status});
+    const knownSources = ['plan', 'plan_candidate', 'work', 'governance', 'quality', 'roadmap', 'forecast', 'proposals', 'findings', 'lifecycle_inflight', 'deliveries', 'projects', 'evidence'];
+    const sourceLabel = key => t('ov_source_' + (knownSources.includes(key.split('.')[0]) ? key.split('.')[0] : 'other'));
+    const reasons = data?.unknown || [], shown = new Set(), lines = [];
+    const reasonText = reason => {if (!reason || shown.has(reason)) return ''; shown.add(reason); return ` · ${reasonLabel(t, reason)}`;};
+    const sources = fixed ? Object.fromEntries(Object.entries(saved?.coverage || {}).filter(([key]) => key.endsWith('_truncated')).map(([key, value]) => [key.slice(0, -10), {complete: !value, status: value ? 'source_limit' : null}])) : data?.coverage?.sources || {};
+    for (const [key, source] of Object.entries(sources)) {
+      const sourceReasons = reasons.filter(row => row.field === key).map(row => row.reason);
+      if (source.status) sourceReasons.push(source.status);
+      lines.push(h('li', {}, sourceLabel(key), ' · ', t(source.complete === true ? 'ov_scan_complete' : 'ui_status_partial'), ...sourceReasons.map(reasonText)));
+    }
+    for (const row of reasons) if (!shown.has(row.reason)) {shown.add(row.reason); lines.push(h('li', {}, reasonLabel(t, row.reason)));}
     const omitted = data?.coverage?.sources?.lifecycle_inflight?.omitted;
+    if (omitted > 0) lines.push(h('li', {}, t('ov_hidden', {n: omitted})));
     return disclosure({label: t('ov_details'), key: `${namespace}:${workspaceId}:overview-details`, body: h('div', {},
-      h('p', {}, t(fixed ? 'ov_saved_limits' : 'ov_caveat')),
-      h('ul', {}, ...[...entries.values()].map(row => h('li', {}, reasonLabel(t, row.reason), Object.hasOwn(reasonLabels, row.reason) ? null : h('code', {}, ` (${row.reason})`))),
-        omitted > 0 ? h('li', {}, t('ov_hidden', {n: omitted})) : null),
-      h('pre', {class: 'pm-brief-proof'}, JSON.stringify(fixed ? {coverage: saved?.coverage, visibility: saved?.visibility, snapshot_id: saved?.snapshot_id} : {coverage: data?.coverage, as_of: data?.as_of}, null, 2)))});
+      h('p', {}, t(fixed ? 'ov_saved_limits' : 'ov_caveat')), h('ul', {'data-overview-coverage': ''}, ...lines),
+      disclosure({label: t('ov_raw_coverage'), body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(fixed ? {coverage: saved?.coverage, visibility: saved?.visibility, snapshot_id: saved?.snapshot_id, unknown: data?.unknown} : {coverage: data?.coverage, unknown: data?.unknown, as_of: data?.as_of}, null, 2))}))});
   }
   function savedPartial() {return Boolean(saved?.visibility?.restricted || saved?.visibility?.filtered || Object.entries(saved?.coverage || {}).some(([key, value]) => key.endsWith('_truncated') && value));}
   function savedData() {

@@ -1,3 +1,4 @@
+import {disclosure, iconButton} from './ui/components.js';
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
 import {viewState} from './ui/view-state.js';
@@ -28,9 +29,9 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     params: values => values.title.trim() ? {title: values.title.trim()} : {},
     preconditions: () => ({expected_plan_version: head.version}), permitted: () => Boolean(head) && !busy && permitted(false),
     recoverPermitted: () => permitted(false), label: 'pm_brief_create', onSaved: result => refresh(result.snapshot_id),
-    extra: h('details', {}, h('summary', {}, t('pm_brief_name_optional')), labelled('pm_brief_snapshot_title', title))});
-  const previous = h('button', {type: 'button', class: 'secondary', 'aria-label': t('wb_previous'), onclick: () => move(-1)}, '←');
-  const next = h('button', {type: 'button', class: 'secondary', 'aria-label': t('wb_next'), onclick: () => move(1)}, '→');
+    extra: disclosure({label: t('pm_brief_name_optional'), body: labelled('pm_brief_snapshot_title', title)})});
+  const previous = iconButton({icon: 'chevron-left', label: t('wb_previous'), onClick: () => move(-1)});
+  const next = iconButton({icon: 'chevron-right', label: t('wb_next'), onClick: () => move(1)});
   const picker = h('select', {'aria-label': t('wb_history'), onchange: () => void select(picker.value)});
   const compare = h('button', {'data-report-compare': '', type: 'button', class: 'secondary', onclick: () => void comparePrevious()}, t('wb_compare'));
   const more = h('button', {type: 'button', class: 'secondary', onclick: () => void loadMore()}, t('wb_history_more'));
@@ -66,11 +67,11 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   }
   function renderItems(rows, empty = 'wb_unknown') {
     if (!rows.length) return h('p', {class: 'muted'}, t(empty));
+    const sources = disclosure({label: t('wb_sources'), body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))}); sources.classList.add('pm-charter-source');
     return h('div', {}, h('ul', {class: 'pm-charter-items'}, ...rows.map(row => h('li', {}, h('span', {}, labelSegment(row.text)),
       ['agent_assumption', 'unresolved', 'conflicting', 'repo_evidence'].includes(row.status)
         ? h('span', {class: 'chip'}, t('pm_status_' + row.status)) : ''))),
-      h('details', {class: 'pm-charter-source'}, h('summary', {}, t('wb_sources')),
-        h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))));
+      sources);
   }
   function render() {
     onChange(snapshot, 'updated');

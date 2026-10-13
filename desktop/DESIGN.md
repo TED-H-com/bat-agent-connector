@@ -223,7 +223,11 @@ heading; requirement and work links reveal their selection on narrow screens. Re
 work open the existing requirements selection; governance opens its existing Issues
 selection. Attention without a governance record opens its exact central context
 in an Issues inspector; no new management record is inferred. The charter follows the live adopted document in six compact cards,
-with three bullets before expansion and an icon disclosure for each source list.
+with three bullets before expansion and a labeled Sources disclosure on each card.
+Report controls use the same report terminology and shared disclosure chevrons;
+the saved history arrows remain together. Narrow attention rows keep age and Discuss
+together in their metadata. Details lists localized source coverage, with raw JSON
+behind a separate Raw coverage disclosure.
 Full plan uses the shared inspector and restores focus on Escape. At 768px the
 charter has two columns; at 390px all regions stack in reading order.
 

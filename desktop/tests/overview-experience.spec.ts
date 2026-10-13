@@ -74,12 +74,27 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     for (const key of ['goal', 'progress', 'blocker', 'decision']) await expect(metric(page, key)).toBeInViewport({ratio: 1});
     await expect(root(page).locator('[data-overview-attention]')).toBeInViewport({ratio: 1});
   }
-  const dir = `${process.env.TMPDIR}/shots`; mkdirSync(dir, {recursive: true});
+  const dir = `${process.env.TMPDIR}/shots2`; mkdirSync(dir, {recursive: true});
   await page.screenshot({path: `${dir}/overview-${locale}-${width}.png`, fullPage: true});
   if (width === 1440) {await page.screenshot({path: `${dir}/overview-${locale}-${width}-fold.png`});}
   if (width === 1440 && locale === 'en') {
-    await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${dir}/overview-en-1440-dark.png`, fullPage: true});
+    await page.emulateMedia({colorScheme: 'dark'}); await page.screenshot({path: `${dir}/overview-en-1440-dark.png`, fullPage: true}); await page.emulateMedia({colorScheme: 'light'});
   }
+  const details = root(page).locator(':scope > div > details'); await details.locator(':scope > summary').click();
+  expect(await root(page).innerText()).not.toMatch(/\b(undefined|null|NaN|ov_\w+)\b/);
+  await expect(details.locator('[data-overview-coverage]')).toContainText(locale === 'en' ? 'Plan · Complete' : '計畫 · 完整');
+  await expect(details.locator('details')).not.toHaveAttribute('open', ''); await details.locator(':scope > summary').click();
+  if (width === 1440) {await page.emulateMedia({media: 'print'}); await page.screenshot({path: `${dir}/overview-${locale}-print-live.png`, fullPage: true}); await page.emulateMedia({media: 'screen'});}
+  f.state.reportPatch = saved => {saved.visibility.restricted = true; saved.coverage.work_truncated = true;};
+  await report(page, f.ids.snap2); await expect(root(page).locator('.pm-overview-saved [data-status=partial]')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const arrows = root(page).locator('.pm-overview-report-arrows button'), first = (await arrows.nth(0).boundingBox())!, second = (await arrows.nth(1).boundingBox())!;
+  expect(first.y).toBe(second.y);
+  await page.screenshot({path: `${dir}/overview-${locale}-${width}-saved-partial.png`, fullPage: true});
+  await root(page).getByRole('button', {name: locale === 'en' ? 'Compare' : '比較', exact: true}).click();
+  await expect(page.locator('.pm-charter-comparison')).toBeVisible();
+  await page.screenshot({path: `${dir}/overview-${locale}-${width}-compare.png`}); await page.keyboard.press('Escape');
+  if (width === 1440) {await page.emulateMedia({media: 'print'}); await page.screenshot({path: `${dir}/overview-${locale}-print-saved.png`, fullPage: true});}
   expect(errors).toEqual([]); expect(f.state.writes).toEqual([]); await context.close();
 });
 
@@ -218,7 +233,7 @@ test('report pages survive refresh and comparisons reauthorize both snapshots', 
   const f = fixture(); f.state.reportPageSize = 1; await boot(page, f);
   await report(page, f.ids.snap1);
   await openPmPanel(page, 'ui_report');
-  await page.getByRole('button', {name: 'Load more summary versions', exact: true}).click();
+  await page.getByRole('button', {name: 'Load more report versions', exact: true}).click();
   await page.keyboard.press('Escape');
   await expect(root(page).getByRole('button', {name: 'Next report', exact: true})).toBeEnabled();
   const before = f.state.reads.filter(path => path.includes('/snapshots?')).length; f.state.cursor++;
@@ -415,4 +430,23 @@ for (const width of [390, 1440]) test(`related inspector Escape returns focus to
   await root(page).locator(`[data-overview-open="${row.key}"]`).click(); await expect(page.locator('[data-overview-related]')).toBeVisible();
   await page.keyboard.press('Escape'); await expect(page.locator('[data-overview-related]')).toHaveCount(0);
   await expect(page.locator('.pm-main > .ui-page-header h1')).toBeFocused(); expect(f.state.writes).toEqual([]);
+});
+
+
+test('requirement, finding, unbound and strip discussion links keep exact context', async ({page}) => {
+  const f = fixture(), original = f.state.data.attention[0];
+  const refs = [{kind: 'requirement', id: f.ids.requirements.email, revision_id: f.ids.planV3},
+    {kind: 'finding', id: 'pmfn_' + '1'.repeat(32), observation_id: 'pmgh_' + '2'.repeat(32), document_digest: 'a'.repeat(64)}, null];
+  f.state.data.attention = [...refs.map((ref, i) => ({...original, key: `ref-${i}`, title: `Context ${i}`, ref})), ...f.state.data.attention.slice(1)];
+  await boot(page, f);
+  for (let i = 0; i < refs.length; i++) {
+    const query = new URLSearchParams((await root(page).locator(`[data-overview-row="ref-${i}"] a`).getAttribute('href'))!.split('?')[1]);
+    expect(parseDiscussRefs(query).refs).toEqual(refs[i] ? [refs[i]] : []); expect(query.get('title')).toBe(`Context ${i}`); expect(query.get('from')).toBe('overview');
+  }
+  const decision = f.state.data.attention.find((row: any) => row.kind === 'decision');
+  const query = new URLSearchParams((await metric(page, 'decision').getByRole('link', {name: 'Discuss', exact: true}).getAttribute('href'))!.split('?')[1]);
+  expect(parseDiscussRefs(query).refs).toEqual([decision.ref]); expect(query.get('title')).toBe(decision.title); expect(query.get('from')).toBe('overview');
+  f.state.data.plan = null; f.state.data.progress = null; await refresh(page);
+  await expect(page.locator('[data-overview-discuss]')).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/discussions/new?from=overview`);
+  expect(f.state.writes).toEqual([]);
 });

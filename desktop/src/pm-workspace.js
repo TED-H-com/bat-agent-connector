@@ -293,7 +293,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           if (node) {node.tabIndex = -1; node.focus(); node.scrollIntoView({block: 'nearest'});}
         } else {const returnFocus = heading.querySelector('h1'); returnFocus.tabIndex = -1; brief?.openRelated?.(row, main, returnFocus);}
       },
-      onDiscuss: () => {location.hash = `#/pm/${workspaceId}/discussions`; workbench?.select('discussions'); content.querySelector('input')?.focus();}})
+      ...(!liveOverview ? {onDiscuss: () => {location.hash = `#/pm/${workspaceId}/discussions`; workbench?.select('discussions'); content.querySelector('input')?.focus();}} : {})})
       : projectBrief({h, t, api, alive, workspaceId, workspace: () => workspace, permitted, form, input, labelled, errorBox,caps,canRead:()=>loaded&&Boolean(workspace)}) : null;
   if (brief && !threadId) body.insertBefore(brief.box, lifecycle?.element||content);
   const releaseBaselines = workspaceId && !threadId && caps()?.features?.pm_workspaces?.release_baselines
@@ -399,7 +399,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const node of brief.box.querySelectorAll(':scope > details, :scope > [data-pm-brief-export]')) reportTools.append(node);
     drawersHome.append(reportTools);
   }
-  const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down'}), items: [
+  const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down', iconPosition: 'end'}), items: [
     {key: 'versions', label: t('ui_report_versions'), onSelect: () => openPanel(t('ui_report'), reportTools)},
     {label: t('ui_save_snapshot'), onSelect: () => openPanel(t('ui_report'), reportTools)},
     ...(charter ? [{label: t('ui_compare'), onSelect: () => {if (brief?.reportActions) {openPanel(t('ui_compare'), reportTools); void brief.prepareReports().then(() => brief.reportActions.compare());} else reportTools.querySelector('button[data-report-compare]')?.click();}},

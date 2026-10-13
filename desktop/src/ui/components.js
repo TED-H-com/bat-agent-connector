@@ -6,8 +6,8 @@ export {statusVocabulary};
 let sequence = 0;
 const uid = () => `ui-${++sequence}`;
 const nodeIcon = icon => typeof icon === 'string' ? drawIcon(icon) : icon;
-export function button({variant = 'secondary', size = 'md', icon, label, onClick, ...attrs} = {}) {
-  return h('button', {type: 'button', class: `ui-button ${variant} ui-${size}`, onclick: onClick, ...attrs}, nodeIcon(icon), label);
+export function button({variant = 'secondary', size = 'md', icon, iconPosition = 'start', label, onClick, ...attrs} = {}) {
+  return h('button', {type: 'button', class: `ui-button ${variant} ui-${size}`, onclick: onClick, ...attrs}, iconPosition === 'end' ? null : nodeIcon(icon), label, iconPosition === 'end' ? nodeIcon(icon) : null);
 }
 export function iconButton({icon, label, ...attrs}) {
   return button({variant: 'ghost', icon, 'aria-label': label, title: label, ...attrs, class: 'ui-button ghost ui-icon-button'});

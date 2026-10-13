@@ -91,3 +91,14 @@ test('inspector accepts an explicit return target when its opener becomes hidden
   await expect(page.locator('.ui-inspector')).toBeVisible(); await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', {name: 'Destination'})).toBeFocused();
 });
+
+
+test('button supports a trailing icon without changing default icon order', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const {button} = await import('/src/ui/components.js');
+    document.getElementById('fixture')!.append(button({label: 'Report', icon: 'chevron-down', iconPosition: 'end'}));
+  });
+  const button = page.getByRole('button', {name: 'Report', exact: true});
+  expect(await button.evaluate(node => node.firstChild?.nodeType === Node.TEXT_NODE && node.lastChild?.nodeName === 'svg')).toBe(true);
+});

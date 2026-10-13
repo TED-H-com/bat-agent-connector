@@ -33,7 +33,7 @@ const form=(page:any)=>page.locator('[data-pm-action="pm.snapshot.create"]');
 for(const native of [false,true])test.describe(native?'native Brief':'web Brief',()=>{
   test('one explicit snapshot renders all five questions with unassessed areas visible',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
-    await form(page).getByRole('button',{name:'Save project snapshot',exact:true}).click();
+    await form(page).getByRole('button',{name:'Save report',exact:true}).click();
     await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
     await expect(page.locator('[data-pm-brief]')).toContainText('Keep the first useful action visible');
     await expect(page.locator('[data-pm-brief-section="delivery"]')).toContainText('Definition of Done has not been assessed');
@@ -46,7 +46,7 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
   });
   test('lost snapshot response preserves original key and plan version across reload',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);f.state.lost=true;
-    await form(page).getByRole('button',{name:'Save project snapshot',exact:true}).click();await expect(form(page)).toContainText('Reply unavailable');
+    await form(page).getByRole('button',{name:'Save report',exact:true}).click();await expect(form(page)).toContainText('Reply unavailable');
     f.state.headVersion=4;await page.reload();await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
     expect(f.state.snapshots).toHaveLength(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
@@ -60,9 +60,9 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
       return result;
     };
     await mountConversation(page,native,dispatch);await page.goto(pmRoute);
-    const editor=form(page),button=editor.getByRole('button',{name:'Save project snapshot',exact:true});
+    const editor=form(page),button=editor.getByRole('button',{name:'Save report',exact:true});
     await expect(button).toBeEnabled();await editor.locator('summary').click();
-    const title=editor.getByLabel('Snapshot title',{exact:true});await title.fill('Original review title');
+    const title=editor.getByLabel('Report title',{exact:true});await title.fill('Original review title');
     hold=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     try{
       await expect.poll(()=>held).toBe(true);await expect(button).toBeDisabled();
@@ -94,7 +94,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Brief
 test('legacy workspace brief keeps its complete snapshot form in Report and recovers the original key',async({page})=>{
   const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}/overview`);
   await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
-  f.state.lost=true;await form(page).getByRole('button',{name:'Save project snapshot',exact:true}).click();
+  f.state.lost=true;await form(page).getByRole('button',{name:'Save report',exact:true}).click();
   await expect(form(page)).toContainText('Reply unavailable');f.state.headVersion=4;
   await page.reload();await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
   await form(page).getByRole('button',{name:'Check original request',exact:true}).click();

@@ -142,3 +142,8 @@ journal sequence 顯示版本。未知值保留破折號；來源掃描不完整
 討論連結沿用 `pm-discuss-link.js`，逐筆傳遞原 attention ref；報告模式綁定
 報告及其固定計畫版本。快照建立、比較雙方的權限重查、原 operation key
 回復與匯出流程仍由原本的 charter／brief export 模組負責。
+
+Overview review corrections: event pages coalesce post-event projection reads without
+rebuilding workspace sections. Restricted, filtered and truncated saved reports remain
+explicitly Partial, including in print. Coverage uses localized source labels with raw
+records on demand; a missing decision list never implies a known zero.
