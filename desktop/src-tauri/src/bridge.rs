@@ -2010,6 +2010,15 @@ mod tests {
             "{root}/meeting.pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.follow_up.verify_login"
         );
         assert!(validate_request(&get(&meeting)).is_ok());
+        // Item ids follow pm_sprints.ITEM_ID, so '.' is part of the id.
+        let dotted_follow = format!(
+            "{root}/meeting.pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.follow_up.check.quality"
+        );
+        let dotted_decision = format!(
+            "{root}/meeting.pmmeet_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.decision.retain.direction"
+        );
+        assert!(validate_request(&get(&dotted_follow)).is_ok());
+        assert!(validate_request(&get(&dotted_decision)).is_ok());
         assert!(validate_request(&get(&format!("{detail}?type=risk"))).is_err());
         assert!(validate_request(&get(&format!(
             "{root}/governance:pmgov_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

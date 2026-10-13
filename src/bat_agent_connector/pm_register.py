@@ -42,7 +42,7 @@ _ROW_ID = re.compile(rf"^(?:{_KINDS})\.[A-Za-z0-9._-]{{1,180}}$")
 _STATUS = re.compile(r"[a-z0-9_]{1,64}$")
 _ID = re.compile(r"[A-Za-z0-9._-]{1,180}$")
 _CURSOR = re.compile(r"[A-Za-z0-9_-]{1,400}$")
-_MEETING_ITEM = re.compile(r"^(pmmeet_[0-9a-f]{32})\.(follow_up|decision)\.([A-Za-z0-9_-]{1,80})$")
+_MEETING_ITEM = re.compile(r"^(pmmeet_[0-9a-f]{32})\.(follow_up|decision)\.([a-z][a-z0-9_.-]{0,79})$")
 _REVIEW_FOLLOW = re.compile(r"^(pmrevw_[0-9a-f]{32})\.follow_up\.([A-Za-z0-9_-]{1,80})$")
 
 

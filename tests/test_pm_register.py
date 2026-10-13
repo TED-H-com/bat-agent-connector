@@ -33,7 +33,7 @@ from tests.test_pm_evidence import capture, link, task
 from tests.test_pm_governance import change, fields, prepared, record
 from tests.test_pm_governance import ops as ops
 from tests.test_pm_governance_api import finding, send
-from tests.test_pm_meetings import apply, complete, meeting, note
+from tests.test_pm_meetings import apply, complete, draft_params, meeting, note
 from tests.test_pm_meetings import draft as meeting_draft
 from tests.test_pm_plans import adopt, adoption
 from tests.test_pm_plans import draft as plan_draft
@@ -1107,3 +1107,55 @@ async def test_one_unreadable_review_event_keeps_the_newer_candidate(ops, monkey
     assert view["total_by_type"] is None and view["summary"] is None
     risks = pm_register.list_register(ops, OWNER, data["wid"], row_type="risk")
     assert risks["coverage"]["complete"] is True and "review" not in risks["coverage"]["sources"]
+
+
+async def test_dotted_meeting_item_ids_open_on_http_rpc_and_mcp(served, monkeypatch, mock):
+    from bat_agent_connector import pm_sprints
+    from tests.test_pm_meetings import create_request as meeting_create
+    from tests.test_pm_sprints import NOW, active
+    monkeypatch.setattr(pm_sprints, "time", SimpleNamespace(time=lambda: NOW))
+    daemon, port, selection = served
+    data = await sprint_prepared(daemon, selection)
+    sprint = await active(daemon.ops, data)
+    snap = await snapshot(daemon.ops, data["workspace_id"])
+    operation, _ = daemon.ops.create(CONTRIBUTOR, **meeting_create(daemon.ops, sprint, snap, "retro"))
+    result = (await settle(daemon.ops, operation))["result"]
+    target = {"workspace_id": data["workspace_id"], "meeting_id": result["meeting_id"]}
+    params = draft_params("retro")
+    params["follow_ups"][0]["id"] = "check.quality"
+    params["decisions"][0]["id"] = "retain.direction"
+    await apply(daemon.ops, target, "draft", who=CONTRIBUTOR, **params)
+    await note(daemon.ops, target)
+    await complete(daemon.ops, target, decision_ids=["retain.direction"])
+    wid, mid = data["workspace_id"], target["meeting_id"]
+    follow = f"meeting.{mid}.follow_up.check.quality"
+    decision = f"meeting.{mid}.decision.retain.direction"
+    auth = token(daemon, READER.actor, "observe")
+    monkeypatch.setenv("BATC_TASK_URL", f"http://127.0.0.1:{port}/rpc")
+    monkeypatch.setenv("BATC_API_TOKEN", auth)
+    server, fleet = mcp_server.build_server(daemon.fleet.config, read_only=True, principal_only=True)
+    prefix = f"/api/v1/pm/workspaces/{wid}/register"
+    before = daemon.ops.db.total_changes
+    try:
+        status, body = await http(port, "GET", prefix, tok=auth)
+        assert status == 200, body
+        listed = {row["row_id"] for row in body["rows"]}
+        assert follow in listed and decision in listed
+        assert body["coverage"]["complete"] is True
+        rpc = await daemon.call_api("pm_register_list", {"workspace_id": wid}, READER)
+        mcp_list = unpack(await server.call_tool("pm_register_list", {"workspace_id": wid}))
+        assert {row["row_id"] for row in rpc["rows"]} >= {follow, decision}
+        assert {row["row_id"] for row in mcp_list["rows"]} >= {follow, decision}
+        for row_id in (follow, decision):
+            status, detail = await http(port, "GET", prefix + "/" + row_id, tok=auth)
+            assert status == 200, detail
+            assert detail["row"]["row_id"] == row_id
+            detail_params = {"workspace_id": wid, "row_id": row_id}
+            rpc_detail = await daemon.call_api("pm_register_get", detail_params, READER)
+            mcp_detail = unpack(await server.call_tool("pm_register_get", detail_params))
+            assert rpc_detail["row"]["source"] == detail["row"]["source"]
+            assert mcp_detail["row"]["source"] == detail["row"]["source"]
+        assert daemon.ops.db.total_changes == before
+        assert not write_frames(mock)
+    finally:
+        await fleet.close()
