@@ -66,7 +66,8 @@ async function expectView(page: Page, locale: DemoLocale, width: number, view: P
     ['[data-overview-discuss]', view === 'overview'], ['[data-pm-report-menu]', view === 'overview'],
     ['[data-schedule-tools]', view === 'schedule'], ['[data-dep-capture]', view === 'dependencies'],
     ['[data-dependencies-meta]', view === 'dependencies'], ['[data-pm-header-meta]', view === 'issues'],
-    ['[data-pm-overflow]', view === 'overview' || view === 'issues'],
+    ['[data-pm-overflow]', view === 'issues'],
+    ['[data-dep-capture-reason]', view === 'dependencies'],
   ] as const) {
     if (visible) await expect(page.locator(selector)).toBeVisible();
     else await expect(page.locator(selector)).toBeHidden();
@@ -167,9 +168,13 @@ for (const {locale, width} of cases) {
     await expectView(page, locale, width, 'issues', fixture.copy.name);
     await page.locator('[data-pm-overflow]').click();
     await expect(page.locator('[data-menu-key=governance]')).toBeVisible();
+    await expect(page.locator('[data-menu-key=governance]')).toBeFocused();
     await expect(page.locator('[data-menu-key=phase]')).toBeHidden();
     await expect(page.locator('[data-menu-key=settings]')).toBeHidden();
-    await page.keyboard.press('Escape');
+    await page.locator('[data-menu-key=governance]').click();
+    const governance = page.locator('[data-pm-section=ui_governance] > details');
+    await expect(governance).toHaveAttribute('open', '');
+    await governance.locator(':scope > summary').click();
     await page.locator('[data-reg-type=decision]').click();
     await page.locator('[data-row-key]').filter({hasText: fixture.copy.decisions.budget}).click();
     const issueDiscuss = page.locator('[data-reg-discuss]');

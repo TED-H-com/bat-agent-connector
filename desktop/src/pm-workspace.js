@@ -487,7 +487,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const overflow = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-overflow': ''}), items: [
     ...(lifecycle ? [{key: 'phase', label: t('ui_change_phase'), onSelect: () => openPanel(t('ui_change_phase'), lifecycle.element)}] : []),
     ...(evidence ? [{key: 'settings', label: t('ui_workspace_settings'), onSelect: () => openPanel(t('ui_workspace_settings'), evidence.box)}] : []),
-    ...issueTools.map(tool => ({key: tool.key, label: tool.label, disabled: true, onSelect: () => openIssueTool(tool.section)})),
+    ...issueTools.map(tool => ({key: tool.key, label: tool.label, onSelect: () => openIssueTool(tool.section)})),
   ]});
   if (lifecycle || evidence || issueTools.length) headerActions.append(overflow);
   const scheduleTools = schedule && (roadmap || sprints) ? menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-schedule-tools': ''}), items: [
@@ -498,10 +498,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
 
   const syncIssueTools = view => {
     const on = view === 'issues';
-    overflow.hidden = view !== 'overview' && !(on && issueTools.length);
+    overflow.hidden = view === 'overview' ? !(lifecycle || evidence) : !(on && issueTools.length);
     for (const key of ['phase', 'settings']) {
       const node = overflow.querySelector(`[data-menu-key="${key}"]`);
-      if (node) node.hidden = view !== 'overview';
+      if (!node) continue;
+      node.hidden = view !== 'overview'; node.disabled = view !== 'overview';
+      if (view === 'overview') node.removeAttribute('aria-disabled'); else node.setAttribute('aria-disabled', 'true');
     }
     for (const tool of issueTools) {
       const node = overflow.querySelector(`[data-menu-key="${tool.key}"]`);

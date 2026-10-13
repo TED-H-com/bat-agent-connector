@@ -352,6 +352,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     if (header?.meta) {header.meta.hidden = true; header.meta.textContent = '';}
     if (header?.pills) {header.pills.hidden = true; header.pills.replaceChildren();}
     captureButton.hidden = !active;
+    syncCapture();
     if (!active || !data) return;
     const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
     const date = capturedDate(data.capture?.captured_at);
@@ -361,7 +362,6 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     if (data.stale === true) marks.push(statusPill('stale'));
     if (data.partial === true) marks.push(statusPill('partial'));
     if (header?.pills) {header.pills.replaceChildren(...marks); header.pills.hidden = !marks.length;}
-    syncCapture();
   }
   function syncImpact() {
     const key = active ? selectedKey() : '';

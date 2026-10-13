@@ -14270,6 +14270,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			header.pills.replaceChildren();
 		}
 		captureButton.hidden = !active;
+		syncCapture();
 		if (!active || !data) return;
 		const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
 		const date = capturedDate(data.capture?.captured_at);
@@ -14288,7 +14289,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			header.pills.replaceChildren(...marks);
 			header.pills.hidden = !marks.length;
 		}
-		syncCapture();
 	}
 	function syncImpact() {
 		const key = active ? selectedKey() : "";
@@ -32143,7 +32143,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			...issueTools.map((tool) => ({
 				key: tool.key,
 				label: tool.label,
-				disabled: true,
 				onSelect: () => openIssueTool(tool.section)
 			}))
 		]
@@ -32170,10 +32169,14 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	const syncIssueTools = (view) => {
 		const on = view === "issues";
-		overflow.hidden = view !== "overview" && !(on && issueTools.length);
+		overflow.hidden = view === "overview" ? !(lifecycle || evidence) : !(on && issueTools.length);
 		for (const key of ["phase", "settings"]) {
 			const node = overflow.querySelector(`[data-menu-key="${key}"]`);
-			if (node) node.hidden = view !== "overview";
+			if (!node) continue;
+			node.hidden = view !== "overview";
+			node.disabled = view !== "overview";
+			if (view === "overview") node.removeAttribute("aria-disabled");
+			else node.setAttribute("aria-disabled", "true");
 		}
 		for (const tool of issueTools) {
 			const node = overflow.querySelector(`[data-menu-key="${tool.key}"]`);

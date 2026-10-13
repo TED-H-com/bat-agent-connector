@@ -353,6 +353,7 @@ change use the shared discussion link, bound only when the row source is a conte
 ref. Requirement and work links open the Requirements selection. A 403 or 404 drops
 the rows, counts and inspector together. Governance, repairs, review and follow-up
 keep their durable forms in collapsed disclosures, opened from the header overflow.
+Header actions and capture hints belong to their active view; an empty overflow is hidden.
 
 ## Agents
 
