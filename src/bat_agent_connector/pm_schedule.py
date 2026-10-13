@@ -108,11 +108,10 @@ def _label(value, limit):
 
 
 def _plain(value):
-    """Non-blank planning or issue text. Newlines, tabs and a leading slash stay."""
-    if not isinstance(value, str):
+    """Non-blank planning or issue text, verbatim: surrounding and inner whitespace and a leading slash stay."""
+    if not isinstance(value, str) or not value.strip():
         return None
-    text = value.strip()
-    return text or None
+    return value
 
 
 def _span(value):
@@ -909,10 +908,13 @@ def _issues(ops, principal, workspace_id, milestones, notes, coverage):
         return []
     from . import pm_issue_mappings
     emitted, after, scanned, truncated = [], 0, 0, False
-    while scanned < _ISSUE_SCAN and len(emitted) < MAX_ISSUES:
+    # The emitted cap is enforced in-page: stopping the loop when it is reached would end on a page
+    # boundary without noticing that a further visible row exists, and would report partial as total.
+    while scanned < _ISSUE_SCAN:
         limit = min(50, _ISSUE_SCAN - scanned)
         page = pm_issue_mappings.list_mappings(ops, principal, workspace_id, after=after, limit=limit)
-        if page["coverage"]["visibility_filtered"]:
+        # The schedule documents a 409-skipped mapping as hidden, the same as a 404.
+        if page["coverage"]["visibility_filtered"] or page["coverage"].get("source_incomplete"):
             coverage["visibility_filtered"] = True
         scanned += page["coverage"].get("scanned", len(page["mappings"]))
         binding_ids, mapping_ids = [], []

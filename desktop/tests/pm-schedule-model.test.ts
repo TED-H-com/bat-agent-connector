@@ -31,17 +31,25 @@ test('scope mismatch, revision changes and retirement cannot produce a chart', a
 test('session inventory dates never become bars; inconsistent ends are omitted', () => {
   const session = {id: 'attempt:session:w:h/s', kind: 'attempt', actual: {start: '2026-10-01', end: '2026-10-02'}};
   assert.deepEqual(spans(session), []); assert.equal(chartRange([session]), null);
-  assert.deepEqual(spans({actual: {start: '2026-10-08', end: '2026-10-02'}})[0], {kind: 'actual', start: dayNumber('2026-10-08'), end: null, open: true, recordedOpen: undefined});
+  assert.deepEqual(spans({actual: {start: '2026-10-08', end: '2026-10-02'}})[0], {kind: 'actual', start: dayNumber('2026-10-08'), end: null, open: true, unknownEnd: false});
+  assert.deepEqual(spans({actual: {start: '2026-10-08T10:00:00Z', end: null, open: false}})[0], {kind: 'actual', start: dayNumber('2026-10-08T10:00:00Z'), end: null, open: false, unknownEnd: true});
+  assert.deepEqual(spans({forecast: {start: '2026-10-21', end: null}})[0], {kind: 'forecast', start: dayNumber('2026-10-21'), end: null, open: false, unknownEnd: false});
 });
-test('tree uses explicit parents, preserves undated ancestors and never invents phase rows', () => {
+test('tree uses explicit parents, preserves undated ancestors and never invents phase rows', async () => {
   const rows = [{id: 'm', kind: 'milestone', parent_id: null}, {id: 'r', kind: 'requirement', parent_id: 'm'},
-    {id: 'w', kind: 'work', parent_id: 'r', actual: {start: '2026-10-01', end: null}},
-    {id: 'o', kind: 'work', parent_id: null, actual: {start: '2026-10-01', end: null}}];
+    {id: 'w', kind: 'work', parent_id: 'r', actual: {start: '2026-10-01', end: null, open: true}},
+    {id: 'o', kind: 'work', parent_id: null, actual: {start: '2026-10-01', end: null, open: true}},
+    {id: 'r_unsched', kind: 'requirement', parent_id: 'm'}];
   assert.deepEqual(scheduleTree(rows, new Set()).map(value => [value.row.id, value.depth]), [['m',1],['r',2],['w',3],['unassigned',1],['o',2]]);
   assert.deepEqual(scheduleTree(rows, new Set(['r'])).map(value => value.row.id), ['m','r','unassigned','o']);
+  const data = await readSchedule(async () => frame([rows[2], rows[3]], {unscheduled: [rows[0], rows[1], rows[4]]}), 'w', () => {});
+  assert.deepEqual(data.unscheduled.map(row => row.id), ['r_unsched']);
 });
 test('discussion references contain exact backend identities only', () => {
   assert.deepEqual(scheduleRef({kind: 'milestone', refs: {milestone_id: 'review', plan_revision_id: 'ignored'}}, {baseline: {revision_id: 'baseline'}}), {kind: 'milestone', id: 'review', revision_id: 'baseline'});
+  assert.equal(scheduleRef({kind: 'milestone', refs: {milestone_id: 'forecast_only'}, baseline: null, forecast: {start: '2026-10-20', end: '2026-10-20'}}, {baseline: {revision_id: 'baseline'}, forecast: {revision_id: 'forecast'}}), null);
+  assert.equal(scheduleRef({kind: 'milestone', refs: {milestone_id: 'mismatched', revision_id: 'other'}}, {baseline: {revision_id: 'baseline'}}), null);
+  assert.equal(scheduleRef({kind: 'milestone', refs: {milestone_id: 'no_baseline_doc'}}, {baseline: null}), null);
   assert.deepEqual(scheduleRef({kind: 'issue', id: 'issue:mapping', refs: {}}, {}), {kind: 'issue_mapping', id: 'mapping'});
   assert.deepEqual(scheduleRef({kind: 'attempt', parent_id: 'work:work-id', refs: {}}, {}), {kind: 'work_item', id: 'work-id'});
 });

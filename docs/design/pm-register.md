@@ -114,7 +114,9 @@ disposition 已明確是 `proposal`，所以類型是 `change`。
 缺表代表該功能未安裝，是完整的空來源，不是部分資料。
 
 掃描保留最新的可讀紀錄，不是最舊的。略過的 409／413 不進入清單，但該來源是部分，
-合計與摘要是 null。隱藏列不占名額，也不因此標成部分。上限在呼叫當下讀取：
+合計與摘要是 null。隱藏列不占名額，也不因此標成部分：issue mapping 與 repair 在進入名額之前
+就先過 lineage 檢查。issue mapping 清單頁回報 `coverage.source_incomplete` 時，等同略過一筆
+409，該來源標成 `source_incomplete`。上限在呼叫當下讀取：
 治理、repair、issue mapping 與單筆治理歷史是 200；會議、審查、intake、提案與計畫採用是 40；
 會議 follow-up 歷史是 50；審查事件是 20。
 

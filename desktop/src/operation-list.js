@@ -1,7 +1,7 @@
 // Refresh the loaded window through central cursors. A shown count is only the loaded page.
 import {dataTable, disclosure, emptyState, inlineError, inspector, skeleton, statusPill} from './ui/components.js';
 import {joinLabel} from './label-text.js';
-import {actionLabel, formatTime, operationDuration, operationMeta, operationStatusKey, operationTargetText, reasonText} from './global-labels.js';
+import {actionLabel, formatTime, operationDuration, operationStatusKey, operationTargetText, reasonText} from './global-labels.js';
 import {viewState} from './ui/view-state.js';
 
 export function operationList({h, t, api, guard, statuses, namespace}) {
@@ -51,18 +51,19 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
   function body(op) {
     const steps = Array.isArray(op.steps) ? op.steps : [];
     const precise = t('op_' + op.status);
+    const target = operationTargetText(op);
     return [
+      precise !== 'op_' + op.status ? h('p', {}, precise) : null,
       h('a', {class: 'ui-button secondary ui-sm', href: `#/op/${encodeURIComponent(op.operation_id)}`}, t('global_open_operation')),
       statusPill(operationStatusKey(op.status)),
-      h('p', {class: 'muted'}, operationMeta(op, formatTime(op.created_at)) || '—'),
-      op.status_reason ? h('p', {}, op.status_reason) : null,
-      precise !== 'op_' + op.status ? h('p', {class: 'muted'}, precise) : null,
+      target ? h('p', {class: 'muted'}, target) : null,
       facts(op),
       disclosure({label: t('global_details'), key: 'operations.' + op.operation_id, body: h('div', {},
         h('dl', {class: 'kv'},
           h('dt', {}, t('global_action_id')), h('dd', {}, h('code', {}, op.action || '—')),
           h('dt', {}, t('global_operation_id')), h('dd', {}, h('code', {}, op.operation_id || '—')),
           h('dt', {}, t('global_col_target')), h('dd', {}, h('code', {}, JSON.stringify(op.target ?? null))),
+          op.status_reason ? [h('dt', {}, t('reason')), h('dd', {}, op.status_reason)] : null,
           op.error_code ? [h('dt', {}, t('global_code')), h('dd', {}, reasonText(op.error_code), ' ', h('code', {}, String(op.error_code)))] : null),
         steps.length ? h('h3', {}, t('steps')) : null,
         ...steps.map(step => h('p', {}, joinLabel([step.name, step.status, step.error?.code]))))}),

@@ -121,6 +121,9 @@ opens the global tree. Manual sessions remain read-only. Tree names occupy one l
 with ellipsis; the complete name and state stay in the tooltip and accessible name.
 A fixed status column shows a dot and short label, or just the dot in a narrow rail.
 Rows are 36px on desktop and 44px on touch; children begin at the parent text column.
+Row layouts must hold with wider fallback fonts (DejaVu Sans, Segoe UI, Microsoft
+JhengHei); flexible text ellipsizes with its full accessible name. Time assertions
+pin a timezone.
 The global Projects block starts at the same top padding as the workspace block;
 New workspace remains available through Tools when no workspace is selected.
 The rail uses a shared icon/text grid. Missing capability and empty binding lists
@@ -165,7 +168,7 @@ extra fields (including display metadata) are rejected.
 
 ## Global screens
 
-Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header (`.ui-page-header`): header actions centre on the title row, with 16px before the next control. A meta line under the title does not move the actions. Below 800px the action row stays on that same line and scrolls inside the header when the buttons are wider than the column, so the title and the meta lines keep their width. Actions retain their intrinsic width so labels stay on one line. Marks beside the title stay on the title line as well; the title shrinks and wraps inside that line instead of letting the marks wrap underneath it. Pending is an inbox hosted like Operations: the groups and the Details disclosure stay in one column, and the inspector is the column on the right at 1200px and up (the same sheet below that). The Needs you / Active operations / Unread switch is the shared segmented control and keeps focus on the checked option after the view rebuilds. Each group is one surface list: a title and count, hairline rows, and one secondary action. The row selects; the inspector is what opens the next page. A manual or read-only session shows Open and the Read-only pill, never Answer or Review. The row title is not underlined until hover or focus. The status pill sits beside the meta, not at the far edge. A chevron opens the inspector only when that is different from the row action. Needs attention (unknown outcomes, not failures) offers a quiet View all link in the group header. “N shown · Load more” appears only while another page exists. A group hides only after a fresh, successful, empty load. A failed read stays visible as Not updated · Retry, and an error does not turn the Pending badge into zero. Each tab has its own empty state and at most one link: Approvals only when there is something to approve and the inbox is empty, otherwise inside that empty state. Explanations sit once in a Details disclosure after the groups and name only the tabs that are offered. Operations is a dense table (action, target, status, actor, created, duration). Duration is the elapsed time for an active operation and `updated_at − created_at` once it is terminal. The shared segmented filter and the shared search field stay. Selecting a row opens an inspector whose first action is Open operation; Actor, Created, Duration and Attempts sit above Details. Refresh stays disabled while a load is in progress. In the browser, the settings sub-nav (Connection, Desktop, Models, Fleet, Updates, About) shows only the selected section, remembers that section for the namespace, and stacks under 800px. Native settings keep mounted sections visible together and use links with `aria-current`, not tabs. Forms stay within 640px. Connection shows the endpoint, a live state pill, the live last-event time, access as Access · actor · scopes, and a secondary Disconnect. In the browser, the Tailscale note is one muted line inside that card, with no controls and no local calls. Fleet without configuration uses the shared empty state. About shows the product name, the version when one is known, and the setup guide. The signed-out screen is one centred card: the product mark, one sentence, the connect form with the setup guide on the connect row, and the same Tailscale note in the card footer. A rejected token says Token not accepted / 權杖無效 in an alert, with no raw status code. Sidebar names keep the row width minus a 16px mark: circle-alert for Needs you and Asking you, circle-x for Failed, an info dot for Running, and no mark for neutral states. The mark follows the work entry’s own status before the session’s activity. A numeric unread count sits after the name when the entry has one. The status word stays in the tooltip and accessible name. The Pending count badge stays. At 800px and below, row actions, row chevrons and View all keep a 44px hit area. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details. Registered operation names have an English and Traditional Chinese label; an unknown name is humanised rather than called Operation.
+Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header (`.ui-page-header`): header actions centre on the title row, with 16px before the next control. A meta line under the title does not move the actions. Below 800px the action row stays on that same line and scrolls inside the header when the buttons are wider than the column, so the title and the meta lines keep their width. Actions retain their intrinsic width so labels stay on one line. Marks beside the title stay on the title line as well; the title shrinks and wraps inside that line instead of letting the marks wrap underneath it. Pending is an inbox hosted like Operations: the groups and the Details disclosure stay in one column, and the inspector is the column on the right at 1200px and up (the same sheet below that). The Needs you / Active operations / Unread switch is the shared segmented control and keeps focus on the checked option after the view rebuilds. Each group is one surface list: a title and count, hairline rows, and one secondary action. The row selects; the inspector is what opens the next page, and its first action is that row’s Answer, Review or Open link. When the session read already includes the pending question, that question is the first paragraph. A manual or read-only session shows Open and the Read-only pill, never Answer or Review. The row title is not underlined until hover or focus. The status pill sits beside the meta, not at the far edge. A chevron opens the inspector only when that is different from the row action. Needs attention (unknown outcomes, not failures) offers a quiet View all link in the group header. “N shown · Load more” appears only while another page exists. A group hides only after a fresh, successful, empty load. A failed read keeps earlier rows, shows no count, and stays marked Not updated · Retry. When every group fails in the same refresh, one alert and one Retry sit at the top instead of a bar on each group. An error does not turn the Pending badge into zero. Each tab has its own empty state and at most one link: Approvals only when there is something to approve and the inbox is empty, otherwise inside that empty state. Explanations sit once in a Details disclosure after the groups and name only the tabs that are offered. Operations is a dense table (action, target, status, actor, created, duration). Duration is the elapsed time for an active operation and `updated_at − created_at` once it is terminal, written as seconds, minutes, hours and minutes, or days and hours, with a zero remainder omitted. The shared segmented filter and the shared search field stay. Selecting a row opens an inspector whose first text is the localized status and whose first action is Open operation. The meta line is only the target. Actor, Created, Duration and Attempts sit above Details, and a server reason is a Reason row inside Details. Refresh stays disabled while a load is in progress. In the browser, the settings sub-nav (Connection, Desktop, Models, Fleet, Updates, About) shows only the selected section, remembers that section for the namespace, and stacks under 800px. Native settings keep mounted sections visible together and use links with `aria-current`, not tabs. Forms stay within 640px. Connection shows the endpoint, a live state pill, the live last-event time, access as Access · actor · scopes, and a secondary Disconnect. In the browser, the Tailscale note is one muted line inside that card, with no controls and no local calls. Fleet without configuration uses the shared empty state. About shows the product name, the version when one is known, and the setup guide. The signed-out screen is one centred card: the product mark, one sentence, the connect form with the setup guide on the connect row, and the same Tailscale note in the card footer. A rejected token says Token not accepted / 權杖無效 in an alert, with no raw status code. Sidebar names keep the row width minus a 16px mark: circle-alert for Needs you and Asking you, circle-x for Failed, an info dot for Running, and no mark for neutral states. The mark follows the work entry’s own status before the session’s activity. A numeric unread count sits after the name when the entry has one. The status word stays in the tooltip and accessible name. The Pending count badge stays. At 800px and below, row actions, row chevrons and View all keep a 44px hit area. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details. Registered operation names have an English and Traditional Chinese label; an unknown name is humanised rather than called Operation.
 
 ## Headers, copy and acceptance
 
@@ -346,10 +349,14 @@ Milestone/phase grouping does not infer missing associations. Unassigned work an
 issue mappings remain in a final disclosure. Search includes exact issue numbers
 and omits missing label fragments. Header totals require complete catalogues;
 partial reads say “loaded”. Content approval, merge, deployment and requirement
-acceptance are separate states. An unknown blocker is never counted as zero.
+acceptance are separate states. Acceptance is Accepted when an exact qualifying review
+exists, Not assessed only after a complete unfiltered quality catalogue, and Unknown
+otherwise. Missing delivery capability or failed reads stays Unknown; paged or filtered
+receipts stay Partial in rows, compact summaries, inspectors and Board chips.
+An unknown blocker is never counted as zero.
 
 Below 800px the shared table's optional `compactRow` renders each requirement as
-one expandable summary target: two-line title, wrapping acceptance/deployment pills,
+one expandable summary target: two-line title, labelled acceptance/deployment pills with gaps,
 work/PR counts and milestone, followed only by recorded blockers. Enter/Space or a
 tap toggles it; Left/Right collapse/expand. The expanded content retains criteria,
 stacked work rows and an Open requirement action. Desktop selection stays unchanged.
@@ -358,12 +365,21 @@ remain in the inspector. Explicit column tracks reclaim that width, milestones
 ellipsis with full titles, PR pills wrap, and Work remains numeric and right-aligned.
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
-six ordered sections: Requirements served; Status & ownership; Latest result;
+six ordered work sections: Requirements served; Status & ownership; Latest result;
 Blocker & next step; Delivery; Details. Discuss uses exact context objects through
 `discussHref`. Managed and manual session links use central session identity and
 access metadata; manual sessions carry Read-only. Missing attempt start/end times
 and CI results remain unknown; observation or send-acceptance time does not imply
-execution duration. Technical records and source times appear in Details.
+execution duration. Technical records and source times appear in Details. A requirement instead shows
+Criteria, Bound work, Latest result, Decisions and changes, Delivery, then Details.
+Criterion results use the exact current plan, digest, scope and input identity; a recorded
+rejection stays visible even when no review qualifies the overall requirement as Accepted.
+Auxiliary source failures clear only their own facts and offer Retry; plan and work
+catalogue withdrawal clears the view. Inspector actions retain their nodes across live
+age updates, and closing returns to the current selection.
+Milestone destinations apply once for the current route. Live refresh retains the
+reader's search and restores group-heading focus by central milestone identity.
+An authorized unassigned-work read can resolve a work destination without an adopted plan.
 
 Existing quality, evidence, specs, package, handoff and publication controls move
 intact into drawers reached from the Requirements overflow and work inspector;
@@ -388,10 +404,15 @@ than an inferred package assembled from a selected row.
 Schedule uses the central `pm_schedule` projection. Day / Week / Month zoom, Today,
 and a shared legend sit above a sticky tree and time axis. The tree follows explicit
 `parent_id` relationships; there are no phase rows. Undated ancestors retain the tree
-structure, and the Unscheduled disclosure includes every loaded undated item.
+structure. Unscheduled lists only loaded rows that are not already in that tree, and
+the disclosure is omitted when none remain. Requirement rows do not show a status pill.
 Baseline is dashed, forecast outlined with a solid stroke, and actual filled. An actual
-without end evidence has a short fading marker labelled Open, never a finish at today.
-Only a `blocked` status produces hatching. Milestone delta compares recorded dates.
+the projection marks open has a short fading marker labelled Open, never a finish at
+today. A terminal attempt with no recorded end says End time not recorded and is not
+drawn as open. Waiting and blocked stay visible on an open bar. Only a `blocked`
+status produces hatching. Milestone delta compares recorded dates. Recorded baseline,
+forecast and actual dates stay visible in the inspector. Day labels are spaced so they
+do not collide, and the Today mark sits under the axis text.
 
 Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
 range uses all loaded rows; any partial/truncated page keeps a Partial pill and a
@@ -403,48 +424,80 @@ The inspector keeps the Requirements section order and a narrow
 `pm-schedule-inspector.render(row, context)` interface for shared-inspector integration.
 Session attempts have no dates or bars; their read-only session links and attempts
 remain available in the inspector and Unscheduled. Propose change uses `discussHref`
-with the exact context identity. Missing result and delivery evidence stays unavailable.
-Roadmap and Sprints keep their original durable forms in the header overflow drawer.
-Zoom, selection, expansion and scroll preferences are bounded and connection/workspace
-keyed. Below 800px, rows become a list with date ranges and independently scrolling
-mini timelines; the document never scrolls horizontally.
+with the exact context identity and a title of Change: {first line}. A milestone ref
+is sent only with the baseline revision that milestone belongs to. Missing result and
+delivery evidence stays unavailable. Roadmap and Sprints keep their original durable
+forms in the header overflow drawer. A live refresh does not open the schedule
+inspector beside that drawer. Zoom, selection, expansion and scroll preferences are
+bounded and connection/workspace keyed. A hidden Schedule does not fetch until the
+view is active; live updates keep focus in Unscheduled and Details. A response that
+exceeds the size limit says so. The schedule region does not nest a second vertical
+scroller. Below 800px, rows become a list with date ranges and one shared horizontal
+origin, so bars and the Today line line up; the document never scrolls horizontally.
 
 ## Dependencies
+
+The relation form uses a bounded two-column grid, one column on phones, 44px touch
+controls and labelled source commits. Graph fills the available layer width and
+keeps its legend beside 32px zoom controls (44px on touch). Active chips use the
+existing primary text token for contrast in both themes; selected matrix cells
+centre their marks with a separate inset selection ring.
+
+Distinct edge and declaration IDs retain their evidence even when they share a
+component, dependency and relation. Failed reads hide both view hosts as well as
+their rows, forms and inspector; late impact reads cannot restore withdrawn data.
+
+Matrix and list selection buttons use pressed state. Graph nodes do the same, with
+a distinct selected fill. Home/End follow the graph's visual column/row order.
+Activation, live reads and inspector close resolve focus by stable item key in the
+currently visible matrix, list or graph; inspectors receive a return-focus callback.
 
 The question on this view is which checks have to be run again if one dependency changes.
 It reads the current dependency projection, its revisions, and one impact query. Capture,
 declare, and retract stay the durable dependency actions, using the projection version,
 the workspace version, and the source binding digest. Capture again is the header action.
-It is primary only when this member can run it. Otherwise it is a secondary button with the
-blocking reason beside it. Maintenance policy, release baselines, maintenance checks, and
+It is primary only when this member can run it. Otherwise it is a secondary button with the blocking reason below the header,
+where it wraps without displacing Refresh. Maintenance policy, release baselines, maintenance checks, and
 workload observations stay in the secondary cards.
 
 The header names the capture commit and its UTC date. A Stale pill is shown only when
 the projection says `stale` is true. Unknown freshness stays out of the header and is
 stated once under Details. A Partial pill and the omitted total describe the returned
-capture, not a repository-wide total. Relation counts do the same, and they are omitted
-when the projection has no count object.
+capture, not a repository-wide total. Relation/evidence counts include captured edges and separate owner declarations;
+they are omitted without a capture or a count object. An uncaptured workspace has
+no Partial pill or freshness claim. Details includes parser/catalog reasons, omitted
+collections, cross-repository selection gaps and unreadable parent paths.
 
-The matrix lists every captured component. More than twelve rows start with the first
-twelve and Show all (M). Columns group dependencies by kind. A capture of twelve
-columns or fewer shows every dependency, so a second component is not an empty row.
-More than twelve columns start as the focused component's direct dependencies, with
-Show transitive. A cell mark is
-R, B, T, C, or Ref. A legend above the matrix names those marks and the evidence styles:
-solid verified, outline declared, dashed inferred. The accessible name is the dependency,
-relation, version, and evidence. At 800px and below the same rows become a list. The graph
-uses the width of the view and centres a drawing that is narrower than that width. It is
-labelled Loaded and is not a fleet-wide graph. Selecting a node keeps its upstream and
-downstream visible.
+Matrix and narrow list start with twelve loaded components. Show all (M) expands
+those rows. Matrix columns group by kind and start with at most twelve dependencies,
+covering each shown component before filling the budget; All columns (N) reveals the
+rest. These controls describe direct columns, not transitive impact. View limits say
+how many of the loaded components/dependencies are shown and offer search/filtering.
+Hidden desktop lists are not populated. Graph uses the same relation, evidence and
+search predicates for local and cross-repository links; external nodes appear only
+with matching links. It starts with the same row prefix and always caps drawing at
+sixty nodes, retaining the focused key where present. Its limit describes shown nodes
+out of matching loaded nodes, never a complete graph total. Relation/evidence legends
+are visible in both matrix and graph. Selecting a node keeps upstream/downstream visible.
 
 The inspector shows a pinned version only when this capture resolved one, plus the
 allowed range, the evidence location, and the maintenance owner or the recorded reason.
-Tests to re-run come from the capture's verification hints. Affected components come
-from the impact read. A bounded prefix says how many components were loaded. An impact
+Component selections show component facts and a Dependencies list whose rows name
+the dependency, relation, version, evidence and joined source references. Tests to
+re-run come from the capture's verification hints. Affected components come
+from the impact read; owner declarations are listed separately from captured paths. Bounded/partial impact has a Partial pill and its reason, cross-repository reason
+and selection reasons. Positive counts describe returned components only; an empty
+bounded prefix never says “0 loaded”. Declared-only reads list the declarations. An impact
 miss says why the dependency is outside this projection, which is not the same as no
-impact. Check impact opens a discussion with no context ref; the dependency name and
-the impact summary are in the title. Declare and retract stay owner actions in a
-disclosure. Details lists every manifest and unreadable path. Unknown reason codes use
+impact. Discuss with PM opens a discussion for dependency and component selections without
+a context ref (the backend has no dependency context kind). Its title names the item
+and captured commit. Declare and retract stay owner actions in a
+disclosure on the main page, never reparented into an inspector. Inferred drafts
+restore all five translated relations. The source commit and declaration select
+have labels; retract is secondary. Projection refresh rereads an open impact and
+retains focus on its action. Failed reads remove options, disable mutation forms,
+and hide the toolbar, Details and record disclosure with the rows and inspector;
+drafts and original operation keys remain intact. Details lists every manifest and unreadable path. Unknown reason codes use
 the shared wording, and the raw code appears only there.
 
 ## Issues & changes
@@ -517,7 +570,7 @@ plot is a summary image. Exact values is the keyboard path to each day's numbers
 bars themselves are not focused. Date labels use the same local day format as the meta
 line in that table, and a short month/day form on the axis. The y-axis is one step
 above the peak (1, 2, 2.5 or 5 × 10ⁿ) in compact numerals. Open days keep full colour,
-with a hatch and the in-progress or settling marker. A day that starts before the
+with a hatch and the in-progress or settling marker. An incomplete day shows its observed tokens; null metrics stay unknown. A day that starts before the
 window is "Partial day", never Settling. A null total is a dashed stub in that CLI's
 stack position. A covered zero is a baseline tick.
 
@@ -552,6 +605,16 @@ edge fade signals clipped desktop lanes. Opening a card or navigating with arrow
 scrolls it into view inside the board. Inspector facts state unknown/absent values
 once; a recorded blocker retains both its status and reason.
 
+Each lane is a list with an H2 heading. Cards are list items with an H3 title
+button, described by their requirement, status and recorded delivery/blocker/age
+facts. Visually hidden status text stays inside the card’s bounds; blocker flags are not tab stops. Paged lanes show loaded counts and one
+visible partial marker; an empty Board hides the lanes and shows one empty state.
+Opening the inspector reveals the selected card after docking. Closing restores
+focus to the latest selection, falling back to the view heading after withdrawal.
+Selections use `?select=` in both views and reopen after returning from another
+view. Current requirement chips link to Requirements; earlier-plan text is read
+from its bound revision and never replaced by a raw ID in a chip or filter.
+
 ## Session workspace
 
 Opened from Work or a project tree. The page header shows the session title and agent
@@ -559,16 +622,32 @@ mark, one status pill, and one quiet meta line: project, host, and a compact obs
 time (relative within a day, otherwise a short local time with no seconds). Send stays
 the only primary action, on the composer's queue row. Interrupt is a danger button.
 Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the overflow
-menu. A manual or unconfirmed session shows Read-only and has no send, answer, or
+menu. An absent title says Untitled session, and an unreported agent uses Unknown.
+A manual or unconfirmed session shows Read-only and has no send, answer, or
 interrupt control.
+On mobile, the Session title and metadata use the full header width, with actions
+on the next row. Wider fonts must not turn the title into a tall narrow column
+that squeezes the pending question scroller below a whole answer input.
 
 The conversation uses one grid for every message: a 24px mark, an 8px gap, and one
-body column for the name, compact time, chip, text, and disclosure. Agent and model
-share one inline chip that stays on the name row when it fits. Copy original is an
-icon at the row's right edge. The window caption is quiet. A tool event is one row
+body column for the name, compact time, chip, text, and disclosure. Agent marks use the same vocabulary as the header; tools and system rows use icons.
+The model chip adds only the model when the name already identifies the agent.
+Manual-session user turns say Person. Durations use seconds or minutes. Copy original is an
+icon at the row's right edge. The window caption counts received messages and says Latest only for a partial window.
+An empty transcript uses the shared empty state; an empty toolbar takes no space. A tool event is one row
 (name, compact time, status pill) and its command is a disclosure. New messages
-while the reader is scrolled up show a jump control and do not move the visible row.
-Approval prompts sit above the composer and keep their original operation keys. The
+while the reader is scrolled up show New messages and do not move the visible row.
+Scrolling up without new content shows Back to latest. Activating either restores
+transcript focus. A pinned reader follows layout changes and a successful own send.
+Tool disclosures preserve the reader's toggle until the tool changes state.
+Approval prompts sit above the composer and keep their original operation keys.
+Their preview is a wrapping block, separate from transcript rows. The composer
+occupies at most half the viewport; questions scroll inside it while Answer and
+Send remain reachable. On mobile, a pending prompt uses a compact reply field so
+the question scroller can show a whole answer input. Without a pending prompt, the
+reply composer keeps its natural height so Send stays visible before input focus.
+The transcript has a 160px minimum and the main Session region scrolls as a safety
+net. A manual session has one plain read-only line. The
 last send is one short line; the operation id stays in Details. On a narrow window
 the info and composer collapse icons sit on the caption row and the queue row.
 
@@ -583,3 +662,38 @@ receipts, and pull-request links use the normal link. Identifiers and raw timest
 stay in Details. From a project view, the shell breadcrumb is Workspace / Work /
 Session and the page offers Back to that view. Discuss uses the shared discussion
 link, binding only exact work item refs.
+
+Session inspector subsections use level-three headings under Results; there is
+one Messages landmark. Label details, Send record and Session details have distinct
+disclosure names. Session drawers inherit the shared 400px width, and mobile sheets
+fill the viewport.
+
+A session GET returning 403, 404 or 410 withdraws the whole Session workspace:
+clear transcript, title facts, Delivery and inspector, hide the composer, preserve
+the stored draft, and show one inline state with Back. Pending reads cannot repaint.
+Withdrawal stops timers; an explicit later session event may establish new evidence.
+Transient read failures use exponential retries from 1 to 30 seconds; replayed events
+obey the same delay. Message failures show a transcript state and Retry; oversized
+windows retry once with ten messages. Known error codes have localized recovery
+actions, with the code retained only in Error details.
+
+Session Delivery reuses the work inspector's contract validation and PR grouping.
+Keep validated rows during reads, replace only changed content, show Unknown on
+a first transient failure and Not updated with Retry on a later one. A source
+withdrawal removes cached receipts and their derived counts. A partial window states
+the number shown and more; filtered sources stay Partial. Provider origins determine
+PR links; merging, verified current deployment and acceptance remain separate.
+
+Checkpoints keep the commit picker closed until Record this version is requested.
+Start from here precedes its form; the confinement caveat is in Execution limits.
+Checkpoint notes report missing host capability only when absent, and exact config
+keys remain in Details. Continue shows the central operation state and, when the
+result identifies a new session, Open the new session. The operation ID is in
+Operation details. Checkpoint disclosure state includes the central namespace.
+
+Session return navigation is cosmetic and includes a validated from query. The
+history entry retains the workspace ID only within the exact central namespace
+and session identity, so a reload can return without treating a name or path as a
+binding. Discuss accepts a bounded Session hash as a return origin and returns to
+that session; Requirements/Board and Schedule session links carry their origin.
+The session-local navigation helper performs no writes or authority inference.

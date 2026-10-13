@@ -365,3 +365,131 @@ def test_lineage_roots_return_copies_and_keep_recursive_seen_state(db):
         assert seen == {('work_item', 'item')}
         assert pm_source_lineage.roots(db, 'work_item', 'item', _seen=seen) == set()
         assert pm_source_lineage.roots(db, 'work_item', 'item') == {'operation'}
+
+
+def test_guarded_loads_are_served_from_stored_entries_but_never_stored(db):
+    calls = []
+
+    def load(value):
+        calls.append(value)
+        return {'value': value}
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert pm_read_cache.remember('stored', 'id', lambda: load('outside')) == {'value': 'outside'}
+        with pm_read_cache.guarded(), pm_read_cache.guarded():
+            # An entry stored outside every guard is still the request-wide answer.
+            assert pm_read_cache.remember('stored', 'id', lambda: load('inside')) == {'value': 'outside'}
+            assert pm_read_cache.remember('guarded', 'id', lambda: load('assumed')) == {'value': 'assumed'}
+            with pytest.raises(OperationError):
+                pm_read_cache.remember('refused', 'id', lambda: (_ for _ in ()).throw(
+                    OperationError('NOT_FOUND', 'Traversal budget', 404)))
+        assert pm_read_cache._GUARDS.get() == 0
+        assert pm_read_cache.remember('guarded', 'id', lambda: load('fresh')) == {'value': 'fresh'}
+        assert pm_read_cache.remember('refused', 'id', lambda: 'visible') == 'visible'
+    assert calls == ['outside', 'assumed', 'fresh']
+
+
+def _cycle_world(guard):
+    """B is memoized; its loader re-enters A's traversal, which refuses the cycle.
+
+    A fresh decision for B (outside A's traversal) is True. A refusal computed
+    while A was in progress is local to that traversal and must not be stored.
+    """
+    @pm_read_cache.memoized
+    def b_visible(connection, principal):
+        return guard(connection, principal, 'a', lambda: (b_visible(connection, principal), True)[1])
+
+    return b_visible
+
+
+def test_proposal_access_cycle_refusals_are_not_cached_request_wide(db):
+    from bat_agent_connector import pm_conversation_proposals as proposals
+
+    def guard(connection, principal, identity, check):
+        return proposals._bounded_access(connection, principal, 'proposal', identity, check)
+
+    b_visible = _cycle_world(guard)
+    unscoped = b_visible(db, OWNER)
+    assert unscoped is True
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        # A's traversal first: its nested B answer meets the cycle refusal.
+        assert guard(db, OWNER, 'a', lambda: (b_visible(db, OWNER), True)[1]) is True
+        assert b_visible(db, OWNER) is unscoped
+
+
+def test_spec_source_cycle_refusals_are_not_cached_request_wide(db, monkeypatch):
+    from bat_agent_connector import pm_spec_materialization as spec
+
+    checks = {}
+    monkeypatch.setattr(spec, '_source_visible', lambda connection, principal, operation: checks[
+        operation['operation_id']]())
+
+    def guard(connection, principal, identity, check):
+        checks[identity] = check
+        return spec.source_visible(connection, principal, {'operation_id': identity})
+
+    b_visible = _cycle_world(guard)
+    unscoped = b_visible(db, OWNER)
+    assert unscoped is True
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert guard(db, OWNER, 'a', lambda: (b_visible(db, OWNER), True)[1]) is True
+        assert b_visible(db, OWNER) is unscoped
+
+
+@pytest.mark.parametrize('domain', ['proposal', 'spec', 'repair'])
+def test_traversal_budget_refusals_do_not_survive_in_the_request_memo(db, monkeypatch, domain):
+    from types import SimpleNamespace
+
+    from bat_agent_connector import pm_conversation_proposals as proposals
+    from bat_agent_connector import pm_maintenance_repair_delivery as delivery
+    from bat_agent_connector import pm_maintenance_repair_evidence as evidence
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+    from bat_agent_connector import pm_spec_materialization as spec
+
+    checks = {}
+    if domain == 'proposal':
+        depth = 64
+
+        def guard(identity, check):
+            return proposals._bounded_access(db, OWNER, 'proposal', identity, check)
+    elif domain == 'spec':
+        depth = 2
+        monkeypatch.setattr(pm_source_lineage, 'MAX_ROOTS', depth)
+        monkeypatch.setattr(spec, '_source_visible', lambda db, principal, op: checks[op['operation_id']]())
+
+        def guard(identity, check):
+            checks[identity] = check
+            return spec.source_visible(db, OWNER, {'operation_id': identity})
+    else:
+        depth = 64
+        monkeypatch.setattr(repairs, '_access', lambda ops, principal, op: checks[op['operation_id']]())
+        monkeypatch.setattr(evidence, 'require_evidence_sources', lambda *args: None)
+        monkeypatch.setattr(delivery, 'require_sources', lambda *args: None)
+
+        def guard(identity, check):
+            checks[identity] = check
+            try:
+                repairs._full_access(SimpleNamespace(db=db), OWNER, {'operation_id': identity})
+            except OperationError:
+                return False
+            return True
+
+    decisions = []
+
+    @pm_read_cache.memoized
+    def leaf(connection, principal):
+        result = guard('leaf', lambda: True)
+        decisions.append(result)
+        return result
+
+    def walk(remaining):
+        return guard(str(remaining), lambda: walk(remaining - 1) if remaining else leaf(db, OWNER))
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        walk(depth - 1)
+        assert decisions == [False]
+        # Refused at the budget inside the traversal, available when read as a new root.
+        assert not pm_read_cache._CURRENT.get().scope.values
+        assert leaf(db, OWNER) is True
+        assert leaf(db, OWNER) is True
+        assert decisions == [False, True]

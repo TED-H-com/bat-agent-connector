@@ -145,3 +145,32 @@ async def test_skill_tool_references_and_recovery_parameters_match_discovered_sc
             assert params <= tools[name]["properties"].keys()
     finally:
         await fleet.close()
+
+
+async def test_dependency_impact_description_teaches_the_captured_key_format():
+    server, fleet = build_server(Config(hosts={}))
+    try:
+        tool = next(t for t in await server.list_tools() if t.name == 'pm_dependencies_impact_get')
+        assert tool.input_schema['required'] == ['workspace_id', 'dependency']
+        for hint in ('pmdepkey_', 'pm_dependencies_get', 'dependencies.<kind>[].key',
+                     'edges[].dependency_key', 'declared[].dependency_key', 'package name', '422'):
+            assert hint in tool.description
+            assert hint in (ROOT / generator.SOURCE).read_text()
+    finally:
+        await fleet.close()
+
+
+def test_skill_thread_actions_and_context_failures_match_the_current_workflow():
+    text = (ROOT / generator.SOURCE).read_text()
+    actions = text.split('Use ordinary `operation_submit`', 1)[1].split('##', 1)[0]
+    assert '`pm.thread.create`: target `{workspace_id}`, params `{title, context?}`' in actions
+    rename = actions.split('- `pm.thread.rename`:', 1)[1].split('\n- ', 1)[0]
+    for hint in ('{workspace_id, thread_id}', '{title}', 'expected_version',
+                 'PM_CONVERSATION_ADOPTION_IN_PROGRESS', '409'):
+        assert hint in rename
+    contract = (ROOT / 'docs/design/pm-overview-discussion-context.md').read_text()
+    for code, status in (('PM_CONTEXT_SOURCE_UNAVAILABLE', '404'), ('PM_CONTEXT_INVALID', '422'),
+                         ('PM_CONTEXT_TOO_LARGE', '413')):
+        assert re.search(rf'{code}[^\n]*{status}', text)
+        assert re.search(rf'{code}[^\n]*{status}', contract)
+    assert 'workflow_version: "2026-10-13.1"' in text

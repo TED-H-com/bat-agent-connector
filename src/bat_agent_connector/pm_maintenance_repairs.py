@@ -7,7 +7,7 @@ import time
 from contextvars import ContextVar
 
 from . import pm_github_observation as github
-from . import pm_lifecycle_gates, pm_source_lineage, pm_workspace, work_items
+from . import pm_lifecycle_gates, pm_read_cache, pm_source_lineage, pm_workspace, work_items
 from . import pm_maintenance_checks as checks
 from . import pm_maintenance_findings as findings
 from . import pm_maintenance_policy as policies
@@ -155,11 +155,13 @@ def _full_access(ops, principal, op):
         raise _bad('NOT_FOUND', 'Repair source traversal is unavailable', 404)
     token = _READING.set(checking | {key})
     try:
-        _access(ops, principal, op)
-        from . import pm_maintenance_repair_evidence as evidence
-        evidence.require_evidence_sources(ops, principal, op)
-        from . import pm_maintenance_repair_delivery as delivery
-        delivery.require_sources(ops, principal, op)
+        # Nested answers assume this repair is visible; keep them out of the read memo.
+        with pm_read_cache.guarded():
+            _access(ops, principal, op)
+            from . import pm_maintenance_repair_evidence as evidence
+            evidence.require_evidence_sources(ops, principal, op)
+            from . import pm_maintenance_repair_delivery as delivery
+            delivery.require_sources(ops, principal, op)
     finally:
         _READING.reset(token)
 

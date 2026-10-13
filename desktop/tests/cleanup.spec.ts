@@ -264,9 +264,9 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
       await page.locator(".workspace-evidence > summary").click();
       await page.locator("button.secondary").filter({hasText: locale === "en-US" ? "Start from here" : "從這裡接續"}).click();
       const note = page.locator("[data-confinement-note]");
-      await expect(note).toContainText("acceptEdits");
-      await page.getByRole("combobox", {name: "Agent", exact: true}).selectOption("codex");
-      await expect(note).toContainText("workspace-write");
+      await expect(note).toContainText(locale === "en-US" ? "acceptEdits" : "自動接受編輯");
+      await page.getByRole("combobox", {name: locale === "en-US" ? "Agent" : "代理", exact: true}).selectOption("codex");
+      await expect(note).toContainText(locale === "en-US" ? "workspace-write" : "工作區寫入");
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.evaluate(() => scrollTo(0, 0));
       await page.screenshot({path: `test-results/confinement-${locale}-${width}.png`, fullPage: true});

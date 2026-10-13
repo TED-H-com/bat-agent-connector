@@ -77,7 +77,8 @@ for (const native of [false,true]) {
     const f=workspaceFixture(); f.data.session.api_access='read_only'; f.data.session.provenance='manual';
     await mountWorkspace(page,native,f); await page.goto('/dashboard/'+workspaceRoute);
     await expect(page.getByRole('button',{name:'Send',exact:true})).toBeHidden();
-    await expect(page.locator('.workspace-composer')).toContainText('API never writes to it');expect(f.data.posts).toEqual([]);
+    await expect(page.locator('[data-session-readonly]')).toContainText("read-only here");
+    await expect(page.locator('.workspace-composer')).toBeHidden();expect(f.data.posts).toEqual([]);
   });
 }
 for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`workspace layout ${locale} ${width}`,async({page})=>{

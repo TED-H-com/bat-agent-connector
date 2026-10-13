@@ -108,6 +108,12 @@ for (const {locale, width, dark} of layouts) {
     await expect(manual.getByRole('link', {name: words.answer, exact: true})).toHaveCount(0);
     await expect(manual.getByRole('link', {name: words.review, exact: true})).toHaveCount(0);
     await expect(manual.getByText(words.readOnly, {exact: true})).toBeVisible();
+    const askingRow = questions.locator('[data-inbox-key]').filter({hasText: fixture.copy.sessionReview});
+    await askingRow.getByRole('button').click();
+    const sessionInspector = page.locator('.ui-inspector');
+    await expect(sessionInspector.getByRole('link', {name: words.answer, exact: true})).toHaveAttribute('href', `#/session/${fixture.ids.host}/${fixture.ids.sessions.review}`);
+    await page.keyboard.press('Escape');
+    await expect(sessionInspector).toHaveCount(0);
     const reviews = page.getByRole('region', {name: words.reviews});
     await expect(reviews).toContainText(fixture.copy.work.rate);
     await expect(reviews).toContainText(fixture.copy.work.lockoutMessage);
@@ -195,9 +201,13 @@ for (const {locale, width, dark} of layouts) {
     const inspector = page.locator('.ui-inspector');
     await expect(inspector.getByRole('link', {name: words.openOperation, exact: true})).toHaveAttribute('href', `#/op/${UNCERTAIN_OPERATION}`);
     await expect(inspector).toContainText(words.attempts);
+    await expect(inspector.locator('p.muted').first()).toHaveText(fixture.ids.repository);
+    await expect(inspector).toContainText(locale === 'zh-TW' ? '結果不明，回查中' : 'outcome unknown, reading back');
+    await expect(inspector.locator('.ui-inspector-body > p').filter({hasText: 'Checkpoint result is not confirmed'})).toHaveCount(0);
     await expect(inspector.locator('details.ui-disclosure > summary')).toBeVisible();
     await inspector.locator('details.ui-disclosure > summary').click();
     await expect(inspector.locator('code').filter({hasText: 'checkpoint.continue'})).toBeVisible();
+    await expect(inspector.locator('details.ui-disclosure').getByText('Checkpoint result is not confirmed', {exact: true})).toBeVisible();
     await page.keyboard.press('Escape');
     await page.getByRole('radio', {name: words.filter, exact: true}).click();
     await expect(page).toHaveURL(/#\/operations\/attention$/);

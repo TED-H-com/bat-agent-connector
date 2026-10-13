@@ -1,12 +1,14 @@
 import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
+import {futureLocalTime} from './local-time.ts';
+test.use({timezoneId: 'Asia/Taipei'});
 import {mountConversation} from './conversation-fixture.ts';
 import {mkdir} from 'node:fs/promises';
 import {batchFixture,mountBatch,bootBatch,panel,start,proof,handoff,workspaceId,START,RECORD} from './pm-work-batches-fixture.ts';
 const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();
   await handoff(page).getByLabel('Why use this implementation base?',{exact:true}).fill('Implement this original reviewed base');await handoff(page).getByLabel('Instructions for this implementation',{exact:true}).fill('Preserve source identity and verify fixed result.');};
 const add=async(page:any)=>{await review(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await expect(start(page).locator('.pm-batch-entry')).toHaveCount(1);};
-const fill=async(page:any)=>{await start(page).getByLabel('Reason for this request',{exact:true}).fill('Run the selected bounded work');const value=new Date(Date.now()+3600000);value.setMinutes(value.getMinutes()-value.getTimezoneOffset());await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(value.toISOString().slice(0,16));};
+const fill=async(page:any)=>{await start(page).getByLabel('Reason for this request',{exact:true}).fill('Run the selected bounded work');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(await futureLocalTime(page));};
 const evidence=async(page:any,f:any)=>{await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await proof(page).getByLabel('Delivered integration receipt',{exact:true}).selectOption(f.state.deliveries[0].operation_id+':1');await proof(page).getByLabel('Saved GitHub observation',{exact:true}).selectOption(f.state.observations[0].observation_id);await proof(page).getByLabel('Reason for this request',{exact:true}).fill('Match the original delivered revision');};
 
 for(const native of [false,true])test(`mounted ${native?'native':'browser'} workspace selects and starts one fixed batch`,async({page})=>{

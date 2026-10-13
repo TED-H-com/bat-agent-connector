@@ -92,7 +92,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     let opened = false;
     row.addEventListener('toggle', async () => {
       if (!row.open || opened) return; opened = true;
-      detail.append(h('a', {href: `#/work/${item.work_item_id}`}, t('pm_evidence_open_work')));
+      detail.append(h('a', {href: `#/item/${item.work_item_id}`}, t('pm_evidence_open_work')));
       if (can(true)) {
         const editor = h('details', {}, h('summary', {}, t(binding ? 'pm_evidence_reassociate' : 'pm_evidence_associate_work')));
         detail.append(editor);

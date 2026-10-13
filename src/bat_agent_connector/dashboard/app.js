@@ -205,8 +205,10 @@ var scheduleStrings = {
 		sched_run: "Open run",
 		sched_requirements: "Open in Requirements",
 		sched_propose: "Propose change",
+		sched_change_title: "Change: {title}",
 		sched_roadmap: "Roadmap",
 		sched_error: "Schedule unavailable",
+		sched_too_large: "Schedule exceeds the size limit.",
 		sched_changed: "Schedule changed during loading. Refresh to read it again.",
 		sched_dates: "Recorded dates",
 		sched_partial: "Some schedule data is partial.",
@@ -249,8 +251,10 @@ var scheduleStrings = {
 		sched_run: "開啟執行紀錄",
 		sched_requirements: "在需求中開啟",
 		sched_propose: "提議變更",
+		sched_change_title: "變更：{title}",
 		sched_roadmap: "路線圖",
 		sched_error: "無法取得時程",
+		sched_too_large: "時程資料超過大小上限。",
 		sched_changed: "載入期間時程已變更，請重新整理。",
 		sched_dates: "已記錄日期",
 		sched_partial: "部分時程資料尚不完整。",
@@ -262,12 +266,37 @@ var scheduleStrings = {
 //#region src/pm-work-view-strings.js
 var workViewStrings = {
 	en: {
+		wv_load_more: "Load more",
+		wv_retry: "Retry",
+		wv_acceptance_unknown: "Acceptance unknown",
+		wv_delivery_unknown: "Delivery unknown",
+		wv_session_unavailable: "Session unavailable",
+		wv_source_unavailable: "Source unavailable",
+		wv_source_mismatch: "The source does not match this workspace.",
+		wv_detail_unavailable: "Work unavailable",
+		wv_earlier_plan: "Earlier plan",
+		wv_from_earlier_plan: "From an earlier plan",
+		wv_ci_times_missing: "CI and attempt times not recorded",
+		wv_bound_work: "Bound work",
+		wv_work_unknown: "Bound work unknown",
+		wv_quality_review: "Quality review",
+		wv_decisions_changes: "Decisions and changes",
+		wv_decisions_unknown: "Related records unknown",
+		wv_no_decisions: "No related decisions recorded",
+		wv_related_record: "Related record",
+		wv_not_in_plan: "Not in the current plan",
+		wv_show_board: "Show on Board",
+		wv_lane_loaded: "{n} loaded, more may exist",
 		wv_open_requirement: "Open requirement",
 		wv_not_recorded: "Not recorded",
 		wv_compact_prs_unknown: "PRs unknown",
-		wv_compact_work: "{n} work",
+		wv_compact_work_one: "1 work item",
+		wv_compact_work_one_loaded: "1 work item loaded",
+		wv_compact_pr_one: "1 PR",
+		wv_compact_pr_one_loaded: "1 PR loaded",
+		wv_compact_work: "{n} work items",
 		wv_compact_prs: "{n} PRs",
-		wv_compact_work_loaded: "{n} work loaded",
+		wv_compact_work_loaded: "{n} work items loaded",
 		wv_compact_prs_loaded: "{n} PRs loaded",
 		wv_requirements_unavailable: "Requirement records unavailable",
 		wv_board_unavailable: "Work records unavailable",
@@ -325,9 +354,34 @@ var workViewStrings = {
 		wv_refresh: "Refresh"
 	},
 	"zh-TW": {
+		wv_load_more: "載入更多",
+		wv_retry: "重試",
+		wv_acceptance_unknown: "驗收狀態未知",
+		wv_delivery_unknown: "交付狀態未知",
+		wv_session_unavailable: "無法取得工作階段",
+		wv_source_unavailable: "無法取得來源",
+		wv_source_mismatch: "來源與這個工作區不相符。",
+		wv_detail_unavailable: "無法取得工作",
+		wv_earlier_plan: "較早的計畫",
+		wv_from_earlier_plan: "來自較早的計畫",
+		wv_ci_times_missing: "尚無 CI 與嘗試起訖時間紀錄",
+		wv_bound_work: "關聯工作",
+		wv_work_unknown: "關聯工作未知",
+		wv_quality_review: "品質審閱",
+		wv_decisions_changes: "決策與變更",
+		wv_decisions_unknown: "相關紀錄未知",
+		wv_no_decisions: "尚無相關決策紀錄",
+		wv_related_record: "相關紀錄",
+		wv_not_in_plan: "不在目前的計畫中",
+		wv_show_board: "在看板顯示",
+		wv_lane_loaded: "已載入 {n} 筆，可能還有其他工作",
 		wv_open_requirement: "開啟需求",
 		wv_not_recorded: "未記錄",
 		wv_compact_prs_unknown: "PR 未知",
+		wv_compact_work_one: "1 項工作",
+		wv_compact_work_one_loaded: "已載入 1 項工作",
+		wv_compact_pr_one: "1 個 PR",
+		wv_compact_pr_one_loaded: "已載入 1 個 PR",
 		wv_compact_work: "{n} 項工作",
 		wv_compact_prs: "{n} 個 PR",
 		wv_compact_work_loaded: "已載入 {n} 項工作",
@@ -833,9 +887,12 @@ var globalStrings = {
 		global_code: "Code",
 		global_refs: "References",
 		global_result: "Result",
-		global_duration_s: "{n}s",
-		global_duration_m: "{n}m {s}s",
-		global_duration_m_only: "{n}m",
+		global_duration_s: "{n} s",
+		global_duration_m: "{n} min",
+		global_duration_h: "{n} h",
+		global_duration_hm: "{n} h {m} min",
+		global_duration_d: "{n} d",
+		global_duration_dh: "{n} d {h} h",
 		action_unknown: "Operation",
 		action_checkpoint_continue: "Continue from checkpoint",
 		action_checkpoint_revalidate: "Revalidate checkpoint source",
@@ -1025,8 +1082,11 @@ var globalStrings = {
 		global_refs: "參照",
 		global_result: "結果",
 		global_duration_s: "{n} 秒",
-		global_duration_m: "{n} 分 {s} 秒",
-		global_duration_m_only: "{n} 分",
+		global_duration_m: "{n} 分",
+		global_duration_h: "{n} 小時",
+		global_duration_hm: "{n} 小時 {m} 分",
+		global_duration_d: "{n} 天",
+		global_duration_dh: "{n} 天 {h} 小時",
 		action_unknown: "操作",
 		action_checkpoint_continue: "從檢查點繼續",
 		action_checkpoint_revalidate: "重新驗證檢查點來源",
@@ -2984,8 +3044,12 @@ var dependencyStrings = {
 		dep_inferred: "Inferred",
 		dep_filter_relation: "Relation",
 		dep_filter_evidence: "Evidence",
-		dep_show_transitive: "Show transitive",
-		dep_show_direct: "Direct only",
+		dep_all_columns: "All columns ({n})",
+		dep_fewer_columns: "Fewer columns",
+		dep_components_shown: "{shown} of {loaded} loaded components shown",
+		dep_dependencies_shown: "{shown} of {loaded} loaded dependencies shown",
+		dep_nodes_shown: "{shown} of {loaded} loaded nodes shown",
+		dep_narrow: "Search or filter to narrow",
 		dep_show_all_rows: "Show all ({n})",
 		dep_show_fewer: "Show fewer",
 		dep_legend_verified: "Solid verified",
@@ -3003,6 +3067,7 @@ var dependencyStrings = {
 		dep_tests: "Tests to re-run",
 		dep_affected: "Affected components",
 		dep_releases: "Affected releases",
+		dep_discuss: "Discuss with PM",
 		dep_check_impact: "Check impact",
 		dep_declare: "Declare relation",
 		dep_retract: "Retract",
@@ -3043,6 +3108,24 @@ var dependencyStrings = {
 		dep_revisions: "Captures",
 		dep_revisions_more: "More captures were not loaded",
 		dep_distance: "Distance {n}",
+		dep_source: "Sources",
+		dep_manifest: "Manifest path",
+		dep_declaration: "Declaration",
+		dep_edges_omitted: "More relations were omitted from this capture",
+		dep_no_components_returned: "No components returned",
+		dep_collection_files: "Files",
+		dep_collection_edges: "Relations",
+		dep_collection_components: "Components",
+		dep_collection_dependencies: "Dependencies",
+		dep_collection_verification_hints: "Test hints",
+		dep_collection_unreadable_paths: "Unreadable paths",
+		dep_omitted_collections: "Omitted collections: {names}",
+		dep_reason_tree_limit: "Tree limit reached",
+		dep_reason_file_limit: "File limit reached",
+		dep_reason_component_limit: "Component limit reached",
+		dep_reason_unsupported_tree_entry: "Unsupported tree entry",
+		dep_reason_selection_budget: "Peer selection stopped early",
+		dep_reason_unreadable_manifest: "Manifest unreadable",
 		dep_choose: "Choose",
 		dep_dash: "—"
 	},
@@ -3051,7 +3134,7 @@ var dependencyStrings = {
 		dep_meta: "擷取於 {commit} · {date}",
 		dep_meta_commit: "擷取於 {commit}",
 		dep_matrix: "矩陣",
-		dep_graph: "圖",
+		dep_graph: "關係圖",
 		dep_search: "搜尋相依",
 		dep_runtime: "執行期",
 		dep_build: "建置",
@@ -3063,8 +3146,12 @@ var dependencyStrings = {
 		dep_inferred: "推測",
 		dep_filter_relation: "關係",
 		dep_filter_evidence: "證據",
-		dep_show_transitive: "顯示間接相依",
-		dep_show_direct: "只顯示直接",
+		dep_all_columns: "全部欄位（{n}）",
+		dep_fewer_columns: "精簡欄位",
+		dep_components_shown: "顯示已載入的 {loaded} 個元件中的 {shown} 個",
+		dep_dependencies_shown: "顯示已載入的 {loaded} 個相依中的 {shown} 個",
+		dep_nodes_shown: "顯示已載入的 {loaded} 個節點中的 {shown} 個",
+		dep_narrow: "可用搜尋或篩選縮小範圍",
 		dep_show_all_rows: "顯示全部（{n}）",
 		dep_show_fewer: "少顯示一些",
 		dep_legend_verified: "實線為已核對",
@@ -3082,6 +3169,7 @@ var dependencyStrings = {
 		dep_tests: "要重跑的測試",
 		dep_affected: "受影響元件",
 		dep_releases: "受影響的發布",
+		dep_discuss: "與 PM 討論",
 		dep_check_impact: "檢查影響",
 		dep_declare: "宣告關係",
 		dep_retract: "撤回",
@@ -3122,6 +3210,24 @@ var dependencyStrings = {
 		dep_revisions: "擷取紀錄",
 		dep_revisions_more: "還有未載入的擷取",
 		dep_distance: "距離 {n}",
+		dep_source: "來源",
+		dep_manifest: "清單檔路徑",
+		dep_declaration: "已宣告關係",
+		dep_edges_omitted: "這次擷取還有未列入的關係",
+		dep_no_components_returned: "未回傳受影響元件",
+		dep_collection_files: "檔案清單",
+		dep_collection_edges: "關係",
+		dep_collection_components: "元件",
+		dep_collection_dependencies: "技術相依",
+		dep_collection_verification_hints: "測試提示",
+		dep_collection_unreadable_paths: "無法讀取的路徑",
+		dep_omitted_collections: "未列入的資料：{names}",
+		dep_reason_tree_limit: "已達目錄上限",
+		dep_reason_file_limit: "已達檔案上限",
+		dep_reason_component_limit: "已達元件上限",
+		dep_reason_unsupported_tree_entry: "不支援的目錄項目",
+		dep_reason_selection_budget: "跨儲存庫選取提前結束",
+		dep_reason_unreadable_manifest: "無法讀取清單檔",
 		dep_choose: "請選擇",
 		dep_dash: "—"
 	}
@@ -3624,9 +3730,9 @@ var workbenchStrings = {
 		wb_close: "Close details",
 		wb_open_work: "Open work and results",
 		wb_more: "Load more work",
-		wb_more_issues: "Load more Issue links",
-		wb_more_reviews: "Load more quality records",
-		wb_receipts_more: "Load more delivery records",
+		wb_more_issues: "More issue links",
+		wb_more_reviews: "More quality records",
+		wb_receipts_more: "More delivery records",
 		wb_issue: "Issue #{number}",
 		wb_attempts: "Execution records",
 		wb_approval: "Plan adoption",
@@ -3696,7 +3802,7 @@ var workbenchStrings = {
 		wb_current: "目前紀錄",
 		wb_requirements: "需求",
 		wb_milestone: "里程碑",
-		wb_work: "Issue／工作",
+		wb_work: "議題／工作",
 		wb_acceptance: "驗收",
 		wb_delivery: "PR／部署",
 		wb_blocker: "下一個阻擋",
@@ -3708,7 +3814,7 @@ var workbenchStrings = {
 		wb_close: "關閉詳情",
 		wb_open_work: "開啟工作與成果",
 		wb_more: "載入更多工作",
-		wb_more_issues: "載入更多 Issue 關聯",
+		wb_more_issues: "載入更多議題關聯",
 		wb_more_reviews: "載入更多品質紀錄",
 		wb_receipts_more: "載入更多交付紀錄",
 		wb_issue: "Issue #{number}",
@@ -5484,7 +5590,7 @@ var pmKanbanStrings = {
 		pm_kanban_attempts: "{count} accepted sends",
 		pm_kanban_attempt_basis: "Returned visible send identities; not a count of completed work.",
 		pm_kanban_no_execution: "No visible linked execution",
-		pm_kanban_quality_unknown: "DoD unassessed",
+		pm_kanban_quality_unknown: "Definition of done not assessed",
 		pm_kanban_detail: "Execution and sources",
 		pm_kanban_detail_loading: "Checking current source access…",
 		pm_kanban_execution: "Current execution read",
@@ -5511,8 +5617,8 @@ var pmKanbanStrings = {
 		pm_kanban_operation: "Operation",
 		pm_kanban_session: "Session",
 		pm_kanban_attempt: "Send identity",
-		pm_kanban_accepted: "Acceptance recorded",
-		pm_kanban_accept_unknown: "Acceptance unknown",
+		pm_kanban_accepted: "Send accepted",
+		pm_kanban_accept_unknown: "Send not confirmed",
 		pm_kanban_stream_unknown: "Live activity unknown",
 		pm_kanban_reopened: "Recorded reopenings",
 		pm_kanban_seconds: "Under 1 minute",
@@ -5587,7 +5693,7 @@ var pmKanbanStrings = {
 		pm_kanban_loaded: "已顯示 {count} 項不同工作",
 		pm_kanban_wip: "最近一頁：{count} 項 WIP・{unknown} 項未知・{cards} 項未封存工作",
 		pm_kanban_wip_basis: "WIP 從記錄的開始時間算至內容核可，封存工作不列入。",
-		pm_kanban_quality: "內容核可不代表符合 DoD、測試通過或部署已驗證。",
+		pm_kanban_quality: "內容核可不代表符合完成定義、測試通過或部署已驗證。",
 		pm_kanban_limits: "這裡尚未設定 WIP 上限、資源容量與工作依賴。",
 		pm_kanban_read_at: "讀取時間",
 		pm_kanban_page_at: "本頁摘要時間",
@@ -5599,7 +5705,7 @@ var pmKanbanStrings = {
 		pm_kanban_attempts: "{count} 次已受理派送",
 		pm_kanban_attempt_basis: "僅計算本次可見派送身分，不是完成工作數。",
 		pm_kanban_no_execution: "沒有可見的關聯執行",
-		pm_kanban_quality_unknown: "DoD 尚未評估",
+		pm_kanban_quality_unknown: "完成定義尚未評估",
 		pm_kanban_detail: "執行與來源",
 		pm_kanban_detail_loading: "正在核對目前來源存取權…",
 		pm_kanban_execution: "目前執行讀取",
@@ -7004,6 +7110,15 @@ var STRINGS = {
 		message_latest: "回到最新訊息",
 		message_new: "新訊息",
 		message_you: "你",
+		message_person: "使用者",
+		message_seconds: "{s} 秒",
+		message_minutes: "{m} 分 {s} 秒",
+		message_minutes_even: "{m} 分",
+		message_window_one: "1 則訊息",
+		message_window_count: "{count} 則訊息",
+		message_window_latest: "最近 {count} 則訊息",
+		message_window_failed: "無法載入訊息",
+		message_window_stale: "訊息尚未更新",
 		message_system: "系統",
 		message_window: "最近 30 則訊息",
 		message_window_showing: "顯示最近 30 則",
@@ -8125,13 +8240,45 @@ var STRINGS = {
 		only_managed: "只看受管理",
 		only_read_only: "只看唯讀",
 		load_more: "載入更多",
+		session_untitled: "未命名工作階段",
+		session_details_session: "工作階段詳細資料",
+		session_send_details: "傳送紀錄",
+		session_label_details: "標籤詳細資料",
+		session_readonly_manual: "這是有人在 BAT 開啟的工作階段，這裡只能檢視。",
+		session_readonly_unknown: "尚未確認控制權，這裡只能檢視。",
+		session_heading: "工作階段",
+		session_withdrawn_gone: "這個工作階段已無法使用",
+		session_withdrawn_forbidden: "已移除存取權限",
+		session_back_sessions: "返回工作階段",
+		session_error_details: "錯誤詳細資料",
+		session_err_busy: "正在處理另一輪",
+		session_err_changed: "問題已更新",
+		session_err_gone: "這個工作階段已無法使用",
+		session_err_too_large: "訊息量過大，無法載入",
+		session_err_server: "伺服器發生錯誤",
+		session_err_forbidden: "已移除存取權限",
+		session_err_unknown: "無法完成這個請求",
+		session_err_queue: "排在後面",
+		session_err_review: "重新查看",
+		session_delivery_stale: "尚未更新",
+		session_delivery_more: "已顯示 {count} 筆 · 還有更多",
+		session_delivery_removed: "交付紀錄無法使用",
+		session_delivery_none: "尚無交付紀錄",
+		checkpoint_record: "記下",
+		checkpoint_agent: "代理",
+		checkpoint_notes: "檢查點說明",
+		checkpoint_limits: "執行限制",
+		checkpoint_op_details: "操作詳細資料",
+		checkpoint_manual_hint: "若要接續這項工作，請從記錄的提交另開工作階段。",
+		checkpoint_unavailable_keys: "managed_roots · SSH alias · write / orchestrate",
+		needs_start_scope_key: "--scope start",
 		session_results: "成果",
 		session_changes: "變更",
 		session_delivery: "交付",
 		session_sources: "成果來源",
 		session_sources_empty: "尚無成果來源",
 		session_details: "詳細資料",
-		session_discuss: "與專案討論",
+		session_discuss: "與 PM 討論",
 		session_checkpoint_unavailable: "此主機無法建立檢查點",
 		session_sent_now: "已送出 · 剛剛",
 		session_send_queued: "已排隊",
@@ -8152,28 +8299,28 @@ var STRINGS = {
 		read_only_note: "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
 		continue_from_checkpoint: "從這裡接續",
 		checkpoints: "檢查點",
-		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的 clone 裡用新的 branch 與工作階段進行。",
-		create_checkpoint: "記下這個檢查點",
+		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的儲存庫複本裡，以新的分支與工作階段進行。",
+		create_checkpoint: "記下這個版本",
 		no_checkpoints: "還沒有記下的檢查點。",
 		excerpt_count: "{n} 則對話",
 		commit: "提交",
 		checkpoint_note_placeholder: "接下來要做什麼（原文，會一併記下，選填）…",
-		dirty_unknown: "未提交的修改：未觀測（這台主機沒有 SSH alias）；不會帶入新工作。",
+		dirty_unknown: "未提交修改尚未觀測，不會帶入新工作。",
 		source_advanced: "來源已有更新的提交；這個檢查點仍固定在原提交。要帶入新版本請再記一次。",
 		started_from: "這個工作階段從提交 {commit} 開出：",
 		source_session: "來源工作階段",
 		dirty_warning: "記錄時有 {n} 個未提交的修改，不會帶入新工作。",
-		continue_placeholder: "要 agent 接著做什麼…",
+		continue_placeholder: "要代理接著做什麼…",
 		start_agent_work: "開始代理工作",
 		open_new_session: "開啟新工作階段",
-		checkpoint_unavailable: "這台主機尚未設定 managed_roots、SSH alias 或 write／orchestrate 權限，不能從檢查點開工。",
-		needs_start_scope: "你的 token 沒有 start 權限，不能開新的 agent 工作；用 --scope start 重新發 token。",
+		checkpoint_unavailable: "此主機缺少受管理目錄、SSH 連線別名或寫入與協調權限，無法從檢查點開工。",
+		needs_start_scope: "這個登入沒有開工權限，請使用具開工權限的憑證。",
 		confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
 		confinement_none: "無已證實的執行限制",
 		confinement_prompt_gated: "權限詢問控管",
 		confinement_host_account: "帳號限制",
-		confinement_os_sandbox: "OS sandbox",
-		confinement_os_pending: "OS sandbox（尚未實機驗證）",
+		confinement_os_sandbox: "作業系統沙箱",
+		confinement_os_pending: "作業系統沙箱（尚未實機驗證）",
 		confinement_evidence: "限制證據",
 		confinement_creation: "建立時限制",
 		confinement_current: "目前核對",
@@ -8187,16 +8334,16 @@ var STRINGS = {
 		confinement_status_mismatch: "與紀錄不符",
 		confinement_status_pending: "等待核對",
 		confinement_gap_sandbox_enforcement_unverified: "尚未由 W12 實機驗證阻擋效果",
-		confinement_gap_prompt_rules_are_not_os_isolation: "既有批准規則及 shell 可能允許外部寫入",
+		confinement_gap_prompt_rules_are_not_os_isolation: "既有批准規則及命令介面可能允許外部寫入",
 		confinement_gap_task_recipe_compatibility: "保留 Task Service 測試行為；未新增執行限制",
 		confinement_gap_execution_restriction_unverified: "尚無執行限制證據",
-		confinement_gap_legacy_evidence_missing: "舊 session 缺建立時證據；不自動升級",
-		confinement_claude_note: "Claude 使用 default：未預先授權的編輯及 Bash 會詢問。既有批准規則仍適用，沒有 OS 寫入隔離。建議使用 Codex；個別批准可能允許外部寫入。",
-		confinement_codex_note: "Codex 使用 workspace-write／on-request。未完成實機阻擋驗證；網路及可寫 roots 無法由 BAT 設定，安裝與 localhost 測試可能受限。個別批准可能越過限制。",
-		confinement_account_note: "已查核 BAT 帳號不能寫宣告的私人 roots。Claude 可使用 acceptEdits；限制只涵蓋已查核的 roots，啟動前會重新核對。",
-		confinement_account_blocked: "已宣告帳號限制，但查核尚未通過；新 session 會被拒絕。請修正主機配置。原因：{reason}。",
-		confinement_account_recheck: "啟動 session 時會重新查核帳號限制。通過後，Claude 可使用 acceptEdits；若僅缺少可降級處理的環境加固條件，Claude 仍可用 default 啟動。其他查核失敗會拒絕啟動。",
-		confinement_account_fallback: "帳號查核回報 {reason}。Claude 會使用 default，不啟用 acceptEdits。",
+		confinement_gap_legacy_evidence_missing: "舊工作階段缺少建立時證據；不自動升級",
+		confinement_claude_note: "Claude 使用一般權限模式：未預先授權的編輯及 Bash 會詢問。既有批准規則仍適用，沒有作業系統的寫入隔離。建議使用 Codex；個別批准可能允許外部寫入。",
+		confinement_codex_note: "Codex 採用工作區寫入與要求批准的模式。未完成實機阻擋驗證；網路及可寫目錄無法由 BAT 設定，安裝與本機測試可能受限。個別批准可能越過限制。",
+		confinement_account_note: "已查核 BAT 帳號不能寫宣告的私人目錄。Claude 可自動接受編輯；限制只涵蓋已查核的目錄，啟動前會重新核對。",
+		confinement_account_blocked: "已宣告帳號限制，但查核尚未通過；新工作階段會被拒絕。請修正主機配置。原因：{reason}。",
+		confinement_account_recheck: "啟動工作階段時會重新查核帳號限制。通過後，Claude 可自動接受編輯；若僅缺少可降級處理的環境加固條件，Claude 仍可用一般權限模式啟動。其他查核失敗會拒絕啟動。",
+		confinement_account_fallback: "帳號查核回報 {reason}。Claude 會使用一般權限模式，不啟用自動接受編輯。",
 		repository: "Repository",
 		pull_number: "PR 編號",
 		load_pr: "讀取 PR",
@@ -8507,6 +8654,15 @@ var STRINGS = {
 		message_latest: "Back to latest",
 		message_new: "New messages",
 		message_you: "You",
+		message_person: "Person",
+		message_seconds: "{s} s",
+		message_minutes: "{m} min {s} s",
+		message_minutes_even: "{m} min",
+		message_window_one: "1 message",
+		message_window_count: "{count} messages",
+		message_window_latest: "Latest {count} messages",
+		message_window_failed: "Messages unavailable",
+		message_window_stale: "Messages not updated",
 		message_system: "System",
 		message_window: "Latest 30 messages",
 		message_window_showing: "Showing latest 30",
@@ -9628,6 +9784,38 @@ var STRINGS = {
 		only_managed: "Connector-managed only",
 		only_read_only: "Read-only only",
 		load_more: "Load more",
+		session_untitled: "Untitled session",
+		session_details_session: "Session details",
+		session_send_details: "Send record",
+		session_label_details: "Label details",
+		session_readonly_manual: "Started in BAT by a person, so it's read-only here.",
+		session_readonly_unknown: "Control is unconfirmed, so it is read-only here.",
+		session_heading: "Session",
+		session_withdrawn_gone: "This session is no longer available",
+		session_withdrawn_forbidden: "Access removed",
+		session_back_sessions: "Back to sessions",
+		session_error_details: "Error details",
+		session_err_busy: "Busy with another turn",
+		session_err_changed: "The question changed",
+		session_err_gone: "This session is no longer available",
+		session_err_too_large: "Too many messages to load",
+		session_err_server: "Server error",
+		session_err_forbidden: "Access removed",
+		session_err_unknown: "Unable to complete this request",
+		session_err_queue: "Queue it",
+		session_err_review: "Review it",
+		session_delivery_stale: "Not updated",
+		session_delivery_more: "{count} shown · more",
+		session_delivery_removed: "Delivery unavailable",
+		session_delivery_none: "No recorded deliveries",
+		checkpoint_record: "Record",
+		checkpoint_agent: "Agent",
+		checkpoint_notes: "Checkpoint notes",
+		checkpoint_limits: "Execution limits",
+		checkpoint_op_details: "Operation details",
+		checkpoint_manual_hint: "To continue this work, start a new session from its recorded commit.",
+		checkpoint_unavailable_keys: "managed_roots · SSH alias · write / orchestrate",
+		needs_start_scope_key: "--scope start",
 		session_results: "Results",
 		session_changes: "Changes",
 		session_delivery: "Delivery",
@@ -10696,7 +10884,7 @@ var lastWorkspace = (namespace) => workspaces.get(namespace);
 function forgetWorkspace(namespace, workspaceId) {
 	if (workspaces.get(namespace) === workspaceId) workspaces.delete(namespace);
 }
-function projectViews$1({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
+function projectViews$2({ h, t, namespace, workspaceId, groups, view, onSelect = () => {}, beforeSelect = () => {} }) {
 	const views = groups.map((group) => ({
 		...group,
 		id: normalizeProjectView(group.id)
@@ -11359,12 +11547,21 @@ function operationDuration(op, nowSeconds) {
 	if (!Number.isFinite(end) || end < start) return "";
 	const seconds = Math.round(end - start);
 	if (seconds < 60) return t("global_duration_s", { n: seconds });
-	const minutes = Math.floor(seconds / 60);
-	const rest = seconds % 60;
-	return rest ? t("global_duration_m", {
-		n: minutes,
-		s: rest
-	}) : t("global_duration_m_only", { n: minutes });
+	if (seconds < 3600) return t("global_duration_m", { n: Math.floor(seconds / 60) });
+	if (seconds < 86400) {
+		const hours = Math.floor(seconds / 3600);
+		const minutes = Math.floor(seconds % 3600 / 60);
+		return minutes ? t("global_duration_hm", {
+			n: hours,
+			m: minutes
+		}) : t("global_duration_h", { n: hours });
+	}
+	const days = Math.floor(seconds / 86400);
+	const hours = Math.floor(seconds % 86400 / 3600);
+	return hours ? t("global_duration_dh", {
+		n: days,
+		h: hours
+	}) : t("global_duration_d", { n: days });
 }
 function railPresentation(state) {
 	if (!state?.key) return null;
@@ -11559,6 +11756,42 @@ function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSel
 		reapply
 	};
 }
+//#endregion
+//#region src/session-navigation.js
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function sessionHref({ host, sessionId, from = "" }) {
+	const query = projectViews$1.has(from) ? "?" + new URLSearchParams({ from }) : "";
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$1.has(from)) return "";
+		return sessionHref({
+			host,
+			sessionId,
+			from
+		});
+	} catch {
+		return "";
+	}
+}
 var contextFields = {
 	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
 	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
@@ -11620,7 +11853,7 @@ function normalizeRefs(refs) {
 function normalizeDetails(title, from, report) {
 	return {
 		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews.has(from) ? from : "",
+		from: projectViews.has(from) ? from : sessionOrigin(from),
 		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
 	};
 }
@@ -11642,6 +11875,476 @@ function parseDiscussRefs(query) {
 			}
 		})),
 		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/pm-quality-projections.js
+function qualityFact({ h, t, fact, current = false }) {
+	if (!fact) return "";
+	const label = (value) => t("pq_" + ([
+		"accepted",
+		"rejected",
+		"unassessed",
+		"not_defined"
+	].includes(value) ? value : "unassessed"));
+	const reference = fact.reference || fact.selected_assessment?.reference;
+	return h("div", {
+		"data-pm-quality-fact": "",
+		class: "pm-note-text"
+	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
+}
+function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
+	let editor = null, pending = false;
+	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
+	const read = () => {
+		const value = JSON.parse(field.value || (multiple ? "{}" : "null"));
+		return multiple ? value[workItemId] : value;
+	};
+	function write(value) {
+		if (!editor || editor.locked()) return;
+		const values = multiple ? JSON.parse(field.value || "{}") : null;
+		if (multiple) {
+			if (value) values[workItemId] = value;
+			else delete values[workItemId];
+		}
+		field.value = JSON.stringify(multiple ? values : value);
+		editor.changed();
+		update();
+	}
+	const use = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: async () => {
+			if (!editor || editor.locked() || pending) return;
+			const selected = readSelection(workItemId);
+			if (!selected) {
+				status.replaceChildren(h("p", {}, t("pq_choose_help")));
+				return;
+			}
+			pending = true;
+			update();
+			status.replaceChildren();
+			try {
+				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`);
+				alive();
+				if (!element.isConnected || editor.locked()) return;
+				const row = data.review, context = row?.context, assessment = row?.assessment;
+				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
+					"operation_id",
+					"version",
+					"document_digest"
+				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
+				write(selected);
+			} catch (error) {
+				if (element.isConnected) status.replaceChildren(errorBox(error));
+			} finally {
+				pending = false;
+				update();
+			}
+		}
+	}, t("pq_include"));
+	const clear = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => write(null)
+	}, t("pq_clear"));
+	const element = h("div", { "data-pm-quality-picker": workItemId }, chosen, h("div", { class: "actions" }, use, clear), status);
+	function update() {
+		const reference = read();
+		chosen.replaceChildren(reference ? h("code", { class: "pm-source" }, reference.candidate_commit) : t("pq_none"));
+		use.disabled = !editor || editor.locked() || pending;
+		clear.disabled = !editor || editor.locked() || pending || !reference;
+	}
+	update();
+	return {
+		element,
+		update,
+		attach: (value) => {
+			editor = value;
+			update();
+		}
+	};
+}
+//#endregion
+//#region src/pm-work-inspector.js
+var workStatus = (card) => ({
+	backlog: "not_started",
+	in_progress: "in_progress",
+	waiting: "waiting",
+	review: "in_review",
+	accepted: "done",
+	archived: "historical"
+})[typeof card?.column === "string" ? card.column : ""] || "unknown";
+var blockedWork = (card) => card?.flow?.blocked === true || card?.execution?.tasks?.some((task) => task.state === "blocked") === true;
+var blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason) : blockedWork(card) ? t("wv_task_blocked") : t("wv_blocker_unknown");
+var workAgents = (source) => [...new Set((source?.sessions || []).map((row) => labelSegment(row.agent_kind)).filter(Boolean))];
+function prGroups(deliveries = []) {
+	const groups = new Map();
+	for (const row of deliveries) {
+		const target = row.target;
+		if (!target?.provider_origin || !Number.isSafeInteger(target.repository_id) || !Number.isSafeInteger(target.pull_number)) continue;
+		const key = JSON.stringify([
+			target.provider_origin,
+			target.repository_id,
+			target.pull_number
+		]);
+		if (!groups.has(key)) groups.set(key, {
+			target,
+			rows: []
+		});
+		groups.get(key).rows.push(row);
+	}
+	return [...groups.values()];
+}
+var deliveryCoverage = (source) => !source || source.available !== true ? "unknown" : source.filtered || source.next != null ? "partial" : "complete";
+function aggregateDelivery(sources, incomplete = false) {
+	const coverage = sources.map(deliveryCoverage);
+	return {
+		deliveries: [...new Map(sources.flatMap((source) => source?.deliveries || []).map((row) => [row.operation_id, row])).values()],
+		available: !coverage.includes("unknown"),
+		filtered: incomplete || coverage.includes("partial"),
+		next: null
+	};
+}
+function deployStatus(source) {
+	const coverage = deliveryCoverage(source);
+	if (coverage !== "complete") return coverage;
+	const groups = prGroups(source.deliveries), deployed = groups.filter((group) => group.rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true)).length;
+	return deployed && deployed === groups.length ? "deployed" : deployed ? "partial" : "unknown";
+}
+function prPills(source) {
+	const pills = prGroups(source?.deliveries).map(({ target, rows }) => h$1("span", {
+		class: "pm-work-pr",
+		title: labelSegment(target.repository)
+	}, contextChip({ text: `PR #${target.pull_number}` }), rows.some((row) => row.merge?.merged === true) ? statusPill("merged") : statusPill("unknown")));
+	const coverage = deliveryCoverage(source);
+	if (coverage !== "complete") pills.push(statusPill(coverage));
+	return pills;
+}
+function elapsed(t, value) {
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
+	if (value < 60) return t("pm_kanban_seconds");
+	const [key, divisor] = value < 3600 ? ["minutes", 60] : value < 86400 ? ["hours", 3600] : ["days", 86400];
+	return t("pm_kanban_" + key, { count: Math.floor(value / divisor) });
+}
+var workHref = (binding) => binding?.work_item_id ? `#/item/${encodeURIComponent(binding.work_item_id)}` : null;
+function checkDelivery(data, workspaceId, id, after, t) {
+	if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
+	for (const row of data.deliveries) if (!/^op_[0-9a-f]{32}$/.test(row.operation_id || "") || row.requirement_acceptance !== "not_evaluated_by_delivery") throw Error(t("pm_scope_mismatch"));
+	return data;
+}
+async function readWorkSources({ api, workspaceId, cards, caps, valid, t, deliveryPages = 1 }) {
+	const result = new Map(), sessions = new Map();
+	async function read(card) {
+		const id = card.work_item_id, source = {
+			deliveries: [],
+			available: false,
+			next: null,
+			filtered: false,
+			sessions: [],
+			errors: []
+		};
+		if (caps?.features?.pm_workspaces?.engineering_delivery) try {
+			let after = 0;
+			for (let index = 0; index < deliveryPages; index++) {
+				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${id}/deliveries?after=${after}&limit=20`), workspaceId, id, after, t);
+				if (!valid()) return;
+				source.deliveries.push(...data.deliveries);
+				source.filtered ||= Boolean(data.source_visibility_filtered || data.coverage?.byte_limited);
+				source.next = data.next_after ?? null;
+				if (source.next === null) break;
+				after = source.next;
+			}
+			source.available = true;
+		} catch (error) {
+			source.deliveries = [];
+			source.next = null;
+			source.errors.push({
+				kind: "delivery",
+				code: error.code
+			});
+		}
+		const reads = (card.execution?.sessions || []).map((ref) => {
+			const resource = labelSegment(ref.resource_id), slash = resource.indexOf("/");
+			if (slash < 1 || !resource.slice(slash + 1)) return Promise.reject(Error(t("wv_source_mismatch")));
+			const host = resource.slice(0, slash), sessionId = resource.slice(slash + 1);
+			if (!sessions.has(resource)) sessions.set(resource, api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}`).then((data) => {
+				if (data.session?.host !== host || data.session.session_id !== sessionId) throw Error(t("wv_source_mismatch"));
+				return data.session;
+			}));
+			return sessions.get(resource);
+		});
+		const settled = await Promise.allSettled(reads);
+		if (!valid()) return;
+		for (const row of settled) if (row.status === "fulfilled") source.sessions.push(row.value);
+		else source.errors.push({
+			kind: "session",
+			code: row.reason?.code
+		});
+		result.set(id, source);
+	}
+	const queue = [...cards];
+	await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+		while (queue.length && valid()) await read(queue.shift());
+	}));
+	return result;
+}
+async function readEarlierPlans({ api, workspaceId, cards, currentId, valid }) {
+	const ids = [...new Set(cards.map((card) => card.binding?.plan_revision_id).filter((id) => id && id !== currentId))];
+	const rows = await Promise.allSettled(ids.map(async (id) => {
+		const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/${encodeURIComponent(id)}`);
+		if (!valid() || data.plan?.workspace_id !== workspaceId || data.plan.revision_id !== id) return null;
+		return [id, data.plan];
+	}));
+	return new Map(rows.flatMap((row) => row.status === "fulfilled" && row.value ? [row.value] : []));
+}
+function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [], returnFocus }) {
+	let panel = null, actions = null, signature = "", selection = null, returnTarget = null;
+	const unknown = () => statusPill("unknown");
+	const paragraph = (...nodes) => h$1("p", {}, ...nodes);
+	const stamp = (value) => {
+		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
+		return date && Number.isFinite(date.valueOf()) ? h$1("time", { datetime: date.toISOString() }, date.toISOString().replace("T", " ").replace(".000Z", " UTC")) : "—";
+	};
+	const captureFacts = (capture) => (capture.evidence || []).map((row) => paragraph(t("pm_kanban_fact"), " · ", ...Object.entries(row.assessment || {}).map(([key, value]) => {
+		const label = t("pm_kanban_field_" + key), state = t("pm_kanban_state_" + labelSegment(value));
+		return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
+	})));
+	function close() {
+		panel?.close();
+	}
+	function show(data) {
+		selection = data;
+		if (!panel) {
+			panel = inspector({
+				title: data.title || t("ui_work_item"),
+				returnFocus: () => returnTarget,
+				onClose: () => {
+					returnTarget = typeof returnFocus === "function" ? returnFocus() : returnFocus;
+					actions?.dispose();
+					actions = null;
+					panel = null;
+					selection = null;
+					signature = "";
+					onClose();
+				}
+			});
+			panel.classList.add("pm-work-inspector");
+			panel.dataset.workInspector = "";
+			panel.dataset.rtmDetail = "";
+			mount.append(panel);
+		}
+		const next = JSON.stringify(data, (key, value) => [
+			"age_seconds",
+			"waiting_seconds",
+			"observed_at",
+			"updated_at"
+		].includes(key) ? void 0 : value);
+		if (signature === next) return;
+		signature = next;
+		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
+		panel.querySelector("h2").textContent = data.title || t("ui_work_item");
+		const { card, plan, requirement, requirements = [], source = {}, issues = [] } = data;
+		const href = discussHref({
+			workspaceId,
+			refs: card ? [{
+				kind: "work_item",
+				id: card.work_item_id
+			}] : requirement && plan ? [{
+				kind: "requirement",
+				id: requirement.id,
+				revision_id: plan.revision_id
+			}] : [],
+			title: data.title,
+			from
+		});
+		let actionRow = panel.querySelector("[data-work-actions]");
+		if (!actionRow) {
+			actionRow = h$1("div", {
+				class: "pm-work-inspector-actions",
+				"data-work-actions": ""
+			}, h$1("a", {
+				href,
+				class: "ui-button primary",
+				"data-work-discuss": ""
+			}, t("wv_discuss")));
+			panel.querySelector(":scope > header").append(actionRow);
+		}
+		if (!actions && tools().length) {
+			actions = menu({
+				button: iconButton({
+					icon: "more-horizontal",
+					label: t("ui_more")
+				}),
+				items: tools()
+			});
+			actionRow.append(actions);
+		}
+		panel.querySelector("[data-work-discuss]").href = href;
+		if (data.error) {
+			panel.body.replaceChildren(h$1("section", { "data-work-section": "error" }, paragraph(t("wv_detail_unavailable")), button({
+				label: t("wv_retry"),
+				onClick: data.onRetry
+			})), disclosure({
+				label: t("wv_details"),
+				body: paragraph(labelSegment(data.error.code))
+			}));
+			return;
+		}
+		const sections = [
+			["requirements", "wv_served"],
+			["status", "wv_status_owner"],
+			["result", "wv_result"],
+			["blocker", "wv_blocker"],
+			["delivery", "wv_delivery"]
+		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
+		const [served, state, result, blocker, delivery] = sections;
+		const requirementRows = requirement ? [] : requirements;
+		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(data.earlierPlan ? firstLabel(row.text, t("wv_earlier_plan")) : h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(row.id)}` }, firstLabel(row.text, t("wv_earlier_plan")))), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "wv_earlier_plan" : "wv_no_requirement"))]);
+		if (data.earlierPlan) served.prepend(paragraph(t("wv_from_earlier_plan")));
+		if (from === "requirements" && card) state.append(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(card.work_item_id)}` }, t("wv_show_board")));
+		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
+		if (card) {
+			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
+			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref({
+				host: session.host,
+				sessionId: session.session_id,
+				from
+			}) }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
+			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
+			if (workHref(card.binding)) state.append(h$1("a", { href: workHref(card.binding) }, t("wv_work_details")));
+			if (source.errors?.some((row) => row.kind === "session")) state.append(paragraph(t("wv_session_unavailable")));
+			if (card.quality?.selected_assessment) result.append(qualityFact({
+				h: h$1,
+				t,
+				fact: card.quality,
+				current: true
+			}));
+			else result.append(paragraph(t("pm_kanban_quality_unknown")));
+			const capture = card.latest_capture;
+			if (capture) {
+				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
+				if (card.capture_matches_binding === false || card.capture_matches_work_version === false) result.append(paragraph(t("pm_kanban_capture_different")));
+				result.append(...captureFacts(capture));
+			} else result.append(paragraph(t("wv_no_result")));
+			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null));
+			const groups = prGroups(source.deliveries);
+			for (const { target, rows } of groups) delivery.append(h$1("div", {
+				class: "pm-work-delivery",
+				"data-rtm-pr": target.pull_number
+			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown")), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
+			for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t("wv_deploy"), " · ", statusPill(row.deployment?.verified === true ? "deployed" : "unknown")));
+			if (deliveryCoverage(source) === "unknown") delivery.append(paragraph(t("wv_delivery_unknown")));
+			else if (!source.deliveries.length && deliveryCoverage(source) === "complete") delivery.append(paragraph(t("wv_no_delivery")));
+			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
+			if (source.next != null && data.onMore) delivery.append(button({
+				label: t("wv_load_more"),
+				"aria-label": t("wb_receipts_more"),
+				"data-delivery-more": "",
+				onClick: data.onMore
+			}));
+			delivery.append(h$1("h4", {}, t("wb_attempts")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
+				class: "pm-work-attempt",
+				"data-work-attempt": row.attempt_id
+			}, paragraph(row.accepted === true ? t("pm_kanban_accepted") : t("pm_kanban_accept_unknown"), " · ", t("pm_kanban_state_" + labelSegment(row.status)).startsWith("pm_kanban_") ? t("ui_status_unknown") : t("pm_kanban_state_" + labelSegment(row.status))))));
+		} else if (requirement) {
+			served.dataset.workSection = "criteria";
+			served.querySelector("h3").textContent = t("wv_criteria");
+			const criterionPill = (item) => {
+				const result = item.source_input_id && data.criteriaResults?.find((row) => row.criterion?.kind === "acceptance" && row.criterion.requirement_id === requirement.id && row.criterion.input_id === item.source_input_id);
+				const pill = statusPill(result ? {
+					accepted: "accepted",
+					rejected: "failed",
+					unassessed: "not_assessed"
+				}[result.status] || "unknown" : data.acceptance === "not_assessed" ? "not_assessed" : "unknown");
+				if (result?.status === "rejected") {
+					pill.textContent = t("pq_rejected");
+					pill.dataset.qualityResult = "rejected";
+				}
+				return pill;
+			};
+			served.replaceChildren(h$1("h3", {}, t("wv_criteria")), statusPill(data.acceptance || "unknown"), h$1("ul", {}, ...(requirement.acceptance || []).map((item) => h$1("li", {}, labelSegment(item.text), " ", criterionPill(item)))));
+			state.dataset.workSection = "work";
+			state.querySelector("h3").textContent = t("wv_bound_work");
+			for (const work of data.work || []) state.append(paragraph(button({
+				variant: "ghost",
+				label: work.work.title,
+				onClick: () => data.onWork?.(work.work_item_id)
+			}), " ", statusPill(workStatus(work))));
+			if (!data.work?.length) state.append(paragraph(t(data.workIncomplete ? "wv_work_unknown" : "wb_no_work")));
+			if (data.workIncomplete) state.append(statusPill("partial"));
+			for (const row of data.milestones || []) state.append(paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}` }, row.title)));
+			const review = data.reviews?.at(-1);
+			if (review) result.append(statusPill("accepted"), paragraph(t("wv_quality_review")), h$1("ul", {}, ...(review.assessment?.document?.criteria || []).filter((row) => row.criterion?.requirement_id === requirement.id).map((row) => h$1("li", {}, labelSegment(requirement.acceptance?.find((item) => item.source_input_id === row.criterion.input_id)?.text), " ", statusPill(row.status === "accepted" ? "accepted" : "unknown")))));
+			else {
+				const work = (data.work || []).filter((work) => work.latest_capture).sort((a, b) => (b.latest_capture.captured_at || 0) - (a.latest_capture.captured_at || 0))[0];
+				if (work) result.append(h$1("div", { "data-requirement-capture": "" }, paragraph(work.work.title), paragraph(t("pm_kanban_capture"), " · ", stamp(work.latest_capture.captured_at)), ...captureFacts(work.latest_capture)));
+				if (data.acceptance === "unknown") result.append(paragraph(t("wv_acceptance_unknown")));
+				else if (!work) result.append(paragraph(t("wv_no_result")));
+			}
+			blocker.dataset.workSection = "decisions";
+			blocker.querySelector("h3").textContent = t("wv_decisions_changes");
+			for (const row of data.register?.rows || []) blocker.append(paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/issues?select=${encodeURIComponent(row.row_id)}` }, firstLabel(row.title, t("wv_related_record")))));
+			if (!data.register?.rows.length) blocker.append(paragraph(t(data.register?.complete ? "wv_no_decisions" : "wv_decisions_unknown")));
+			if (data.register && !data.register.complete) blocker.append(statusPill("partial"));
+			delivery.append(statusPill(deployStatus(source)));
+			for (const { target, rows } of prGroups(source.deliveries)) delivery.append(h$1("div", {
+				class: "pm-work-delivery",
+				"data-rtm-pr": target.pull_number
+			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), " ", statusPill(rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true) ? "deployed" : "unknown")));
+			if (deliveryCoverage(source) === "unknown") delivery.append(paragraph(t("wv_delivery_unknown")));
+			else if (!source.deliveries.length && deliveryCoverage(source) === "complete") delivery.append(paragraph(t("wv_no_delivery")));
+		}
+		const details = disclosure({
+			label: t("wv_details"),
+			body: h$1("div", {}, plan?.adoption ? paragraph(t("wb_approved_by", { actor: labelSegment(plan.adoption.adopted_by) }), " · ", stamp(plan.adoption.created_at)) : null, card ? paragraph(t("pm_kanban_attempts", { count: Number.isSafeInteger(card.execution?.accepted_attempts) ? card.execution.accepted_attempts : t("ui_status_unknown") })) : null, card?.flow?.history !== "available_central_events" ? paragraph(t("pm_kanban_history_unknown")) : null, card ? paragraph(t("pm_kanban_age"), ": ", elapsed(t, card.flow?.age_seconds) || t("ui_status_unknown")) : null, card?.execution?.coverage?.unavailable_sources || card?.latest_capture?.coverage?.inaccessible_sources ? paragraph(t("pm_kanban_missing")) : null, card?.execution?.coverage?.truncated ? paragraph(t("pm_kanban_truncated")) : null, paragraph(t("pm_kanban_execution")), ...[
+				"tasks",
+				"operations",
+				"sessions",
+				"attempts"
+			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), paragraph(t("wv_ci_times_missing")), h$1("pre", { class: "mono" }, JSON.stringify({
+				reviews: data.reviews,
+				criteria_results: data.criteriaResults,
+				register: data.register,
+				work_captures: data.work?.map((work) => ({
+					work_item_id: work.work_item_id,
+					capture: work.latest_capture
+				})),
+				errors: source.errors,
+				plan_revision: plan?.revision_id || card?.binding?.plan_revision_id,
+				binding: card?.binding,
+				work: card?.work,
+				execution: card?.execution,
+				flow: card?.flow,
+				capture: card?.latest_capture,
+				issues,
+				deliveries: source.deliveries,
+				quality: card?.quality
+			}, (key, value) => value === null ? "—" : value, 2))),
+			open: panel.body.querySelector("[data-work-section=\"details\"]")?.open || false
+		});
+		details.dataset.workSection = "details";
+		const keys = new Set([...sections, details].map((node) => node.dataset.workSection));
+		for (const node of panel.body.querySelectorAll("[data-work-section]")) if (!keys.has(node.dataset.workSection)) node.remove();
+		for (const node of [...sections, details]) {
+			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
+			if (!previous) panel.body.append(node);
+			else if (!previous.isEqualNode(node)) {
+				if (node.dataset.workSection === "details") previous.querySelector("div").replaceWith(node.querySelector("div"));
+				else previous.replaceChildren(...node.childNodes);
+			}
+		}
+	}
+	return {
+		show,
+		close,
+		dispose: close,
+		get element() {
+			return panel;
+		},
+		get selection() {
+			return selection;
+		}
 	};
 }
 //#endregion
@@ -13996,7 +14699,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 		if (changes.markdown.replacement) prose.append(h("h4", {}, text("pm_diff_removed")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.removed), h("h4", {}, text("pm_diff_added")), h("div", { class: "pm-plan-document" }, changes.markdown.replacement.added));
 		const work = h("div", {}, h("h4", {}, text("pm_diff_impact")));
 		if (!value.impact_candidates.length) work.append(h("p", { class: "muted" }, text("pm_diff_no_impact_selection")));
-		for (const candidate of value.impact_candidates) work.append(detail(candidate.binding.work_item_id + " · " + text(candidate.assessment === "review_candidate" ? "pm_diff_candidate" : "pm_diff_no_identified"), h("p", { class: "muted" }, text("pm_diff_work_unknown")), h("p", {}, text("pm_diff_work_version", { version: candidate.binding.source_work_version })), h("p", { class: "pm-source" }, text("pm_diff_bound"), ": ", candidate.binding.plan_revision_id || text("pm_diff_no_plan")), h("p", { class: "pm-source" }, candidate.binding.binding_id), ...candidate.reasons.map((reason) => h("p", {}, text("pm_diff_reason_" + reason))), h("p", { class: "pm-source" }, text("pm_diff_requirements"), ": ", raw(candidate.binding.requirement_ids)), h("a", { href: `#/work/${encodeURIComponent(candidate.binding.work_item_id)}` }, text("pm_diff_open_work"))));
+		for (const candidate of value.impact_candidates) work.append(detail(candidate.binding.work_item_id + " · " + text(candidate.assessment === "review_candidate" ? "pm_diff_candidate" : "pm_diff_no_identified"), h("p", { class: "muted" }, text("pm_diff_work_unknown")), h("p", {}, text("pm_diff_work_version", { version: candidate.binding.source_work_version })), h("p", { class: "pm-source" }, text("pm_diff_bound"), ": ", candidate.binding.plan_revision_id || text("pm_diff_no_plan")), h("p", { class: "pm-source" }, candidate.binding.binding_id), ...candidate.reasons.map((reason) => h("p", {}, text("pm_diff_reason_" + reason))), h("p", { class: "pm-source" }, text("pm_diff_requirements"), ": ", raw(candidate.binding.requirement_ids)), h("a", { href: `#/item/${encodeURIComponent(candidate.binding.work_item_id)}` }, text("pm_diff_open_work"))));
 		const fixed = detail(text("pm_diff_evidence"), h("p", { class: "pm-source" }, text("pm_diff_from"), ": ", value.from_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_to"), ": ", value.to_revision.revision_id), h("p", { class: "pm-source" }, text("pm_diff_cursor"), ": ", value.context.journal_cursor), ...[
 			["pm_diff_from_digest", value.from_revision.document_digest],
 			["pm_diff_to_digest", value.to_revision.document_digest],
@@ -15981,6 +16684,29 @@ function workspaceOverview(options) {
 }
 //#endregion
 //#region src/pm-dependencies-layout.js
+function limitColumns(rows, columns, edges, limit) {
+	const picked = new Set();
+	for (const row of rows) {
+		const key = columns.find((key) => edges.some((edge) => edge.component_id === row.component_id && edge.dependency_key === key));
+		if (key && picked.size < limit) picked.add(key);
+	}
+	for (const key of columns) {
+		if (picked.size >= limit) break;
+		picked.add(key);
+	}
+	return columns.filter((key) => picked.has(key));
+}
+function boundGraph(nodes, links, { limit = 60, required = [] } = {}) {
+	const ids = new Set(required.filter((id) => nodes.some((node) => node.id === id)).slice(0, limit));
+	for (const node of nodes) {
+		if (ids.size >= limit) break;
+		ids.add(node.id);
+	}
+	return {
+		nodes: nodes.filter((node) => ids.has(node.id)),
+		links: links.filter((link) => ids.has(link.from) && ids.has(link.to))
+	};
+}
 function layoutGraph(nodes, links) {
 	const ids = [];
 	const seen = new Set();
@@ -16105,12 +16831,19 @@ var FILE_STATUS = {
 var SVG = "http://www.w3.org/2000/svg";
 var NODE_W = 148;
 var NODE_H = 36;
-var GAP_X = 72;
 var GAP_Y = 18;
 var PAD = 20;
-var knownReason = (code) => Object.hasOwn(reasonLabels, code);
+var LOCAL_REASONS = new Set([
+	"tree_limit",
+	"file_limit",
+	"component_limit",
+	"unsupported_tree_entry",
+	"selection_budget",
+	"unreadable_manifest"
+]);
+var knownReason = (code) => LOCAL_REASONS.has(code) || Object.hasOwn(reasonLabels, code);
 var reasonText = (t, code, detail = false) => {
-	const label = reasonLabel(t, code);
+	const label = LOCAL_REASONS.has(code) ? t("dep_reason_" + code) : reasonLabel(t, code);
 	return detail && code && !knownReason(code) ? t("ui_reason_detail", {
 		label,
 		code
@@ -16151,7 +16884,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	let selection = preference.selection && typeof preference.selection === "object" ? preference.selection : null;
 	let focusId = typeof preference.focus === "string" ? preference.focus : "";
 	let zoom = Number.isFinite(preference.zoom) ? Math.min(1.8, Math.max(.6, preference.zoom)) : 1;
-	let panel = null;
+	let panel = null, graphRows = [];
 	const levelText = (level) => EVIDENCE.includes(level) ? t("dep_" + level) : reasonText(t, level);
 	const remember = () => Object.assign(preference, {
 		mode,
@@ -16195,10 +16928,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const seen = new Set(), rows = [];
 		const add = (edge) => {
 			if (!edge?.component_id || !edge?.dependency_key || !RELATIONS.includes(edge.relation)) return;
-			const id = [
+			const id = edge.declaration_id || edge.edge_id || [
 				edge.component_id,
 				edge.dependency_key,
-				edge.relation
+				edge.relation,
+				edge.evidence_level
 			].join("|");
 			if (seen.has(id)) return;
 			seen.add(id);
@@ -16214,9 +16948,19 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		});
 		return rows;
 	}
-	function filteredEdges() {
+	function matchesFilters(edge) {
 		const query = search.value.trim().toLocaleLowerCase();
-		return allEdges().filter((edge) => relationFilter.includes(edge.relation) && evidenceFilter.includes(edge.evidence_level) && (!query || componentName(edge.component_id).toLocaleLowerCase().includes(query) || dependencyName(edge.dependency_key).toLocaleLowerCase().includes(query)));
+		return relationFilter.includes(edge.relation) && evidenceFilter.includes(edge.evidence_level) && (!query || [
+			componentName(edge.component_id),
+			dependencyName(edge.dependency_key),
+			componentName(edge.target_component_id)
+		].some((name) => name.toLocaleLowerCase().includes(query)));
+	}
+	function filteredEdges() {
+		return allEdges().filter(matchesFilters);
+	}
+	function filteredCrossEdges() {
+		return (data?.cross_repository_edges || []).filter(matchesFilters);
 	}
 	const selectedKey = () => selection?.type === "dependency" || selection?.type === "edge" ? selection.dependencyKey : "";
 	const selectionEdges = () => allEdges().filter((edge) => selection?.type === "component" ? edge.component_id === selection.componentId : selection?.type === "edge" ? edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey : edge.dependency_key === selection?.dependencyKey);
@@ -16226,11 +16970,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (selection.type === "component") return (data.components || []).some((row) => row.component_id === selection.componentId) || (data.external_components || []).some((row) => row.component_id === selection.componentId);
 		return allEdges().some((edge) => edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey);
 	}
-	const focusKeyFor = (value) => value?.type === "edge" ? `cell:${value.componentId}|${value.dependencyKey}` : value?.type === "dependency" ? `col:${value.dependencyKey}` : value?.type === "component" ? `row:${value.componentId}` : "";
+	const narrow = () => matchMedia("(max-width: 800px)").matches;
+	const focusKeyFor = (value) => value?.type === "edge" ? mode === "graph" ? `col:${value.dependencyKey}` : `${narrow() ? "pick" : "cell"}:${value.componentId}|${value.dependencyKey}` : value?.type === "dependency" ? `col:${value.dependencyKey}` : value?.type === "component" ? `row:${value.componentId}` : "";
+	const activeFocusHost = () => mode === "graph" ? graphHost : narrow() ? listHost : matrixScroll;
+	const focusTarget = (key) => key ? activeFocusHost().querySelector(`[data-dep-focus="${CSS.escape(key)}"]`) : null;
 	const focusSelection = () => {
-		const key = focusKeyFor(selection);
-		if (!key) return;
-		element.querySelector(`[data-dep-focus="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+		focusTarget(focusKeyFor(selection))?.focus({ preventScroll: true });
 	};
 	const search = h("input", {
 		type: "search",
@@ -16270,7 +17015,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		};
 	}
 	const showAllButton = button({
-		label: t("dep_show_transitive"),
+		label: t("dep_all_columns", { n: 0 }),
 		"data-dep-show-all": ""
 	});
 	showAllButton.classList.add("dep-show-all");
@@ -16307,12 +17052,15 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	});
 	const filterGroup = (name, chips) => h("div", { class: "dep-filter" }, h("span", { class: "dep-filter-label" }, t(name)), h("div", { class: "dep-chips" }, ...chips.map((chip) => chip.node)));
 	const toolbar = h("div", { class: "dep-toolbar" }, modeSwitch, h("div", { class: "dep-filters" }, filterGroup("dep_filter_relation", relationChips), filterGroup("dep_filter_evidence", evidenceChips)), searchWrap, showAllButton, showRowsButton);
+	const coverage = h("p", {
+		class: "dep-note",
+		"data-dep-coverage": "",
+		hidden: true
+	});
 	const statusBox = h("div", { role: "status" });
 	const matrixScroll = h("div", {
 		class: "dep-matrix-scroll",
 		"data-dep-matrix": "",
-		tabindex: "0",
-		role: "grid",
 		"aria-label": t("dep_matrix")
 	});
 	const listHost = h("div", {
@@ -16324,7 +17072,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"data-dep-legend": "",
 		hidden: true
 	});
-	const matrixHost = h("div", { "data-dep-matrix-host": "" }, legend, matrixScroll, listHost);
+	const matrixHost = h("div", { "data-dep-matrix-host": "" }, matrixScroll, listHost);
 	const graphScroll = h("div", {
 		class: "dep-graph-scroll",
 		"data-dep-graph": ""
@@ -16347,7 +17095,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		class: "dep-loaded",
 		"data-dep-loaded": ""
 	}, t("dep_loaded"));
-	const graphHost = h("div", { "data-dep-graph-host": "" }, h("div", { class: "dep-graph-bar" }, loaded, zoomOut, zoomIn), graphScroll);
+	const graphBar = h("div", { class: "dep-graph-bar" }, h("div", { class: "dep-graph-controls" }, loaded, zoomOut, zoomIn));
+	const graphHost = h("div", { "data-dep-graph-host": "" }, graphBar, graphScroll);
 	const detailBody = h("div");
 	const details = disclosure({
 		label: t("dep_details"),
@@ -16480,7 +17229,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			captureButton.removeAttribute("aria-describedby");
 			captureButton.removeAttribute("title");
 		}
-		if (captureButton.parentElement) captureButton.after(captureHint);
 	}
 	const captureForm = form({
 		action: "pm.dependencies.capture",
@@ -16532,11 +17280,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"aria-label": t("dep_note"),
 		maxlength: 1e3
 	});
-	const sourceCommit = h("p", {
+	const sourceCommit = h("span", {
 		class: "dep-note",
 		"data-dep-source-commit": ""
 	});
-	const labelled = (key, node) => h("label", {}, t(key), node);
+	const labelled = (key, node, note = "") => h("label", {}, t(key), node, note);
 	function relationOptions() {
 		const allowed = evidenceSelect.value === "declared" ? ["contract", "reference"] : RELATIONS;
 		const current = relationSelect.value;
@@ -16555,8 +17303,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			ecosystem: ecosystemInput,
 			kind: kindSelect,
 			version: versionInput,
-			relation: relationSelect,
 			evidence: evidenceSelect,
+			relation: relationSelect,
 			path: pathInput,
 			url: urlInput,
 			note: noteInput
@@ -16585,9 +17333,10 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				...note ? { note } : {}
 			};
 		},
-		extra: h("div", { class: "dep-fields" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput), sourceCommit, labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
+		extra: h("div", { class: "dep-fields dep-declare-grid" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput, sourceCommit), labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
 	});
-	const retractSelect = h("select", { "aria-label": t("dep_retract") });
+	relationOptions();
+	const retractSelect = h("select", { "aria-label": t("dep_declaration") });
 	const retractForm = form({
 		action: "pm.dependencies.retract",
 		target: { workspace_id: workspaceId },
@@ -16597,8 +17346,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		preconditions,
 		onSaved: () => refresh(),
 		params: (values) => ({ declaration_id: values.declaration_id }),
-		extra: h("div", { class: "dep-fields" }, labelled("dep_retract", retractSelect))
+		extra: h("div", { class: "dep-fields" }, labelled("dep_declaration", retractSelect))
 	});
+	retractForm.box.querySelector("button[type=submit]").className = "secondary";
 	const record = disclosure({
 		label: t("dep_record"),
 		body: h("div", {}, declareForm.box, retractForm.box),
@@ -16608,11 +17358,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			"dep-record"
 		])
 	});
+	record.dataset.depRecord = "";
 	const holder = h("div", {}, record);
 	const element = h("section", {
 		class: "dep-view",
 		"data-dep-view": ""
-	}, toolbar, statusBox, captureForm.box, matrixHost, graphHost, details, holder);
+	}, captureHint, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
 	function fillComponents() {
 		const value = componentSelect.value;
 		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, row.name || row.component_id)));
@@ -16621,7 +17372,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function fillRetract() {
 		const value = retractSelect.value;
 		const rows = data?.declared || [];
-		retractSelect.replaceChildren(...rows.length ? rows.map((row) => h("option", { value: row.declaration_id }, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t("dep_" + row.relation) : ""]))) : [h("option", { value: "" }, t("dep_none_recorded"))]);
+		retractSelect.replaceChildren(...!data ? [] : rows.length ? rows.map((row) => h("option", { value: row.declaration_id }, joinLabel([row.dependency?.name, RELATIONS.includes(row.relation) ? t("dep_" + row.relation) : ""]))) : [h("option", { value: "" }, t("dep_none_recorded"))]);
 		if ([...retractSelect.options].some((option) => option.value === value)) retractSelect.value = value;
 	}
 	function moveGrid(event, root) {
@@ -16723,7 +17474,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		captureButton.hidden = !active;
 		syncCapture();
 		if (!active || !data) return;
-		const commit = shortSha(data.capture?.commit_sha || data.source?.commit_sha);
+		const commit = shortSha(data.capture?.commit_sha);
 		const date = capturedDate(data.capture?.captured_at);
 		const line = commit && date ? t("dep_meta", {
 			commit,
@@ -16735,7 +17486,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		const marks = [];
 		if (data.stale === true) marks.push(statusPill("stale"));
-		if (data.partial === true) marks.push(statusPill("partial"));
+		if (data.capture?.revision_id && data.partial === true) marks.push(statusPill("partial"));
 		if (header?.pills) {
 			header.pills.replaceChildren(...marks);
 			header.pills.hidden = !marks.length;
@@ -16746,8 +17497,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (key === impactKey) return;
 		impactKey = key;
 		impact = null;
-		if (!key) return;
 		const ticket = ++impactTicket;
+		if (!key) return;
 		(async () => {
 			try {
 				const result = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/dependencies/impact?dependency=${encodeURIComponent(key)}`);
@@ -16828,7 +17579,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		const name = dependencyName(selectedKey());
 		if (!impact || impact.dependency !== selectedKey() || impact.error) return name || t("ui_dependencies");
 		if (MISS.has(impact.reason)) return joinLabel([name, reasonText(t, impact.reason)]);
-		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
+		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components) && (impact.counts.components > 0 || !partialImpact())) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
 		return name || t("ui_dependencies");
 	}
 	function openInspector() {
@@ -16836,10 +17587,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (!panel) {
 			panel = inspector({
 				title: inspectorTitle(),
+				returnFocus: () => focusTarget(focusKeyFor(selection)),
 				onClose: () => {
 					panel = null;
-					holder.append(record);
-					focusSelection();
 				}
 			});
 			panel.dataset.depInspector = "";
@@ -16850,6 +17600,17 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function closeInspector() {
 		panel?.close();
+	}
+	function partialImpact() {
+		return impact?.partial === true || impact?.counts?.partial === true || impact?.reason === "bounded_captured_graph" || ["bounded", "partial"].includes(impact?.cross_repository?.status) || impact?.cross_repository?.complete === false;
+	}
+	function dependencyRow(edge) {
+		const refs = (edge.evidence_refs || (edge.source_ref ? [edge.source_ref] : [])).map(evidenceLine).filter(Boolean);
+		return h("section", { "data-dep-dependency-row": edge.dependency_key }, h("h4", {}, dependencyName(edge.dependency_key)), h("p", {}, joinLabel([
+			t("dep_" + edge.relation),
+			versionLabel(edge) || t("dep_dash"),
+			levelText(edge.evidence_level)
+		])), refs.length ? h("dl", { class: "dep-facts" }, h("dt", {}, t("dep_source")), h("dd", {}, refs.join(" · "))) : "");
 	}
 	function renderInspector() {
 		if (!panel || !selection || !data) return;
@@ -16863,36 +17624,38 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		if (title) title.textContent = inspectorTitle();
 		const edges = selectionEdges();
 		const dep = dependencyByKey().get(selectedKey());
-		const owner = ownerFact((data.components || []).find((row) => row.component_id === (selection.componentId || edges[0]?.component_id)) || data);
+		const component = [...data.components || [], ...data.external_components || []].find((row) => row.component_id === (selection.componentId || edges[0]?.component_id));
+		const owner = ownerFact(component || data);
 		const facts = h("dl", { class: "dep-facts" });
 		const add = (label, value, note) => {
 			facts.append(h("dt", {}, label), h("dd", {}, value));
 			if (note) facts.append(h("dd", { class: "dep-note" }, note));
 		};
 		if (dep || selection.type !== "component") add(t("dep_name"), dep?.name || dependencyName(selectedKey()) || t("dep_dash"));
-		if (selection.type === "component") add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
-		for (const edge of edges) {
-			const pinned = typeof edge.resolved === "string" && edge.resolved ? edge.resolved : t("dep_dash");
-			const range = typeof edge.version === "string" && edge.version ? edge.version : t("dep_dash");
-			add(t("dep_pinned"), pinned, edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
-			add(t("dep_range"), range, !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
+		if (selection.type === "component") {
+			facts.dataset.depComponentFacts = "";
+			add(t("dep_component"), componentName(selection.componentId) || t("dep_dash"));
+			add(t("dep_ecosystem"), component?.ecosystem || t("dep_dash"));
+			add(t("dep_manifest"), component?.manifest_path || t("dep_dash"));
+			add(t("dep_version"), component?.version || t("dep_dash"));
+		} else for (const edge of edges) {
+			add(t("dep_component"), componentName(edge.component_id) || t("dep_dash"));
+			add(t("dep_pinned"), edge.resolved || t("dep_dash"), edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
+			add(t("dep_range"), edge.version || t("dep_dash"), !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
 			add(t("dep_level"), levelText(edge.evidence_level));
 			if (edge.basis) add(t("dep_why"), reasonText(t, edge.basis));
-			for (const ref of edge.evidence_refs || []) {
-				const line = evidenceLine(ref);
-				if (line) add(t("dep_level"), line);
-			}
+			const refs = (edge.evidence_refs || []).map(evidenceLine).filter(Boolean);
+			if (refs.length) add(t("dep_source"), refs.join(" · "));
 		}
 		add(t("dep_owner"), owner.actor || t("dep_dash"), owner.reason ? reasonText(t, owner.reason) : "");
 		const tests = h("div", { "data-dep-tests": "" }, h("h3", {}, t("dep_tests")));
 		const jobs = hintRows();
 		if (jobs.length) for (const hint of jobs) tests.append(h("p", {}, joinLabel([hint.job_id, hint.command])));
 		else tests.append(h("p", {}, Number(data.omitted_hints) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
-		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t("dep_affected")));
+		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t(selectedKey() ? "dep_affected" : "ui_dependencies")));
 		if (!selectedKey()) {
-			const names = [...new Set(edges.map((edge) => dependencyName(edge.dependency_key)).filter(Boolean))];
-			if (names.length) for (const name of names) affected.append(h("p", {}, name));
-			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
+			if (edges.length) affected.append(...edges.map(dependencyRow));
+			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_edges_omitted") : t("dep_none_recorded")));
 		} else if (!impact || impact.dependency !== selectedKey()) affected.append(skeleton(2));
 		else if (impact.error) affected.append(inlineError({
 			error: impact.error,
@@ -16901,11 +17664,29 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				syncImpact();
 			}
 		}));
-		else if (MISS.has(impact.reason)) affected.append(h("p", {}, reasonText(t, impact.reason)));
 		else {
+			if (partialImpact()) affected.append(statusPill("partial"));
+			const reasons = new Set([
+				impact.reason,
+				impact.cross_repository?.reason,
+				...impact.selection_reasons || [],
+				...impact.cross_repository?.selection_reasons || []
+			].filter(Boolean));
+			for (const code of reasons) affected.append(h("p", {
+				class: "dep-note",
+				"data-dep-impact-reason": code
+			}, reasonText(t, code)));
 			for (const row of impact.components || []) affected.append(h("p", {}, joinLabel([row.name, Number.isFinite(row.distance) ? t("dep_distance", { n: row.distance }) : ""])));
-			if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components)) affected.append(h("p", { class: "dep-note" }, t("dep_loaded_count", { n: impact.counts.components })));
-			if (!(impact.components || []).length && !(impact.counts && Number.isFinite(impact.counts.components))) affected.append(h("p", {}, t("dep_none_recorded")));
+			for (const row of impact.declared || []) affected.append(h("section", { "data-dep-impact-declaration": row.declaration_id }, h("p", {}, joinLabel([
+				componentName(row.component_id),
+				row.dependency?.name,
+				t("dep_" + row.relation),
+				versionLabel(row) || t("dep_dash"),
+				levelText(row.evidence_level)
+			])), h("p", { class: "dep-note" }, (row.evidence_refs || (row.source_ref ? [row.source_ref] : [])).map(evidenceLine).filter(Boolean).join(" · "))));
+			const count = impact.counts?.components;
+			if (impact.counts?.basis === "returned_components" && Number.isFinite(count) && (count > 0 || !partialImpact())) affected.append(h("p", { class: "dep-note" }, t("dep_loaded_count", { n: count })));
+			if (!(impact.components || []).length && !(impact.declared || []).length && !MISS.has(impact.reason)) affected.append(h("p", {}, t("dep_no_components_returned")));
 		}
 		const releases = impact && Object.hasOwn(impact, "affected_releases") ? impact.affected_releases : Object.hasOwn(data, "affected_releases") ? data.affected_releases : null;
 		const releaseBlock = Array.isArray(releases) ? h("div", { "data-dep-releases": "" }, h("h3", {}, t("dep_releases")), ...releases.length ? releases.map((row) => h("p", {}, typeof row === "string" ? row : joinLabel([
@@ -16914,17 +17695,19 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			row?.revision_id,
 			row?.id
 		]) || t("dep_dash"))) : [h("p", {}, t("dep_dash"))]) : "";
-		const discuss = selectedKey() ? h("a", {
+		const discussionTitle = joinLabel([selectedKey() ? dependencyName(selectedKey()) : componentName(selection.componentId), shortSha(data.capture?.commit_sha) ? t("dep_meta_commit", { commit: shortSha(data.capture.commit_sha) }) : ""]);
+		const discuss = selection ? h("a", {
 			class: "ui-button secondary ui-md",
 			"data-dep-discuss": "",
 			href: discussHref({
 				workspaceId,
 				refs: [],
-				title: inspectorTitle(),
+				title: discussionTitle,
 				from: "dependencies"
 			})
-		}, t("dep_check_impact")) : "";
-		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss), record);
+		}, t("dep_discuss")) : "";
+		panel.body.replaceChildren(facts, tests, affected, releaseBlock, h("div", { class: "dep-actions" }, discuss));
+		if (activeEl?.matches("[data-dep-discuss]")) panel.querySelector("[data-dep-discuss]")?.focus({ preventScroll: true });
 	}
 	function drawGraph(edges) {
 		const nodes = new Map();
@@ -16938,18 +17721,21 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				name: dependencyName(edge.dependency_key) || edge.dependency_key
 			});
 		}
-		const visible = new Set([...nodes.keys()].map((id) => id.slice(2)));
 		const cross = [];
-		for (const link of data?.cross_repository_edges || []) {
-			if (!visible.has(link.component_id) && !visible.has(link.target_component_id)) continue;
-			const target = data.external_components?.find((row) => row.component_id === link.target_component_id) || data.components?.find((row) => row.component_id === link.target_component_id);
-			if (target) nodes.set("c:" + link.target_component_id, {
-				id: "c:" + link.target_component_id,
-				name: target.name || link.target_component_id
+		for (const link of filteredCrossEdges()) {
+			const source = componentName(link.component_id), target = componentName(link.target_component_id);
+			if (!source || !target) continue;
+			nodes.set("c:" + link.component_id, {
+				id: "c:" + link.component_id,
+				name: source
 			});
-			if (nodes.has("c:" + link.component_id) && nodes.has("c:" + link.target_component_id)) cross.push(link);
+			nodes.set("c:" + link.target_component_id, {
+				id: "c:" + link.target_component_id,
+				name: target
+			});
+			cross.push(link);
 		}
-		const links = [...edges.map((edge) => ({
+		const fullLinks = [...edges.map((edge) => ({
 			from: "d:" + edge.dependency_key,
 			to: "c:" + edge.component_id,
 			relation: edge.relation,
@@ -16960,11 +17746,29 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			relation: link.relation,
 			level: link.evidence_level
 		}))];
+		const rows = new Set(graphRows.map((row) => "c:" + row.component_id));
+		const rowLinks = fullLinks.filter((link) => rows.has(link.to));
+		const candidateIds = new Set(rowLinks.flatMap((link) => [link.from, link.to]));
+		const previous = document.activeElement?.getAttribute?.("data-dep-node");
+		const bounded = boundGraph([...nodes.values()].filter((node) => candidateIds.has(node.id)), rowLinks, { required: previous ? [previous] : [] });
+		const loadedNodes = nodes.size;
+		nodes.clear();
+		for (const node of bounded.nodes) nodes.set(node.id, node);
+		const links = bounded.links;
+		if (mode === "graph") {
+			coverage.hidden = nodes.size >= loadedNodes;
+			coverage.textContent = t("dep_nodes_shown", {
+				shown: nodes.size,
+				loaded: loadedNodes
+			}) + " · " + t("dep_narrow");
+		}
 		const layout = layoutGraph([...nodes.values()], links);
 		const placed = new Map(layout.positions.map((position) => [position.id, position]));
-		const width = Math.max(1, 40 + (layout.layers ? layout.layers * NODE_W + (layout.layers - 1) * GAP_X : 0));
+		const nodeHeight = narrow() ? 44 : NODE_H;
+		const strideX = Math.max(280, (graphScroll.clientWidth - 40 - NODE_W) / Math.max(1, layout.layers - 1));
+		const width = Math.max(1, 188 + Math.max(0, layout.layers - 1) * strideX);
 		const depth = layout.positions.reduce((max, position) => Math.max(max, position.y), 0);
-		const height = Math.max(76, 40 + (layout.positions.length ? (depth + 1) * NODE_H + depth * GAP_Y : 0));
+		const height = Math.max(nodeHeight + 40, 40 + (layout.positions.length ? (depth + 1) * nodeHeight + depth * GAP_Y : 0));
 		const selectedIds = new Set();
 		if (selection?.type === "dependency" || selection?.type === "edge") selectedIds.add("d:" + selection.dependencyKey);
 		if (selection?.type === "component" || selection?.type === "edge") selectedIds.add("c:" + selection.componentId);
@@ -17010,25 +17814,28 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			if (!from || !to) return;
 			const group = arrivals.get(link.to) || [index];
 			const bow = (group.indexOf(index) - (group.length - 1) / 2) * 8;
-			const x1 = PAD + from.x * 220 + NODE_W, y1 = PAD + from.y * 54 + NODE_H / 2;
-			const x2 = PAD + to.x * 220, y2 = PAD + to.y * 54 + NODE_H / 2;
+			const x1 = PAD + from.x * strideX + NODE_W, y1 = PAD + from.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
+			const x2 = PAD + to.x * strideX, y2 = PAD + to.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
 			const mid = (x1 + x2) / 2;
 			const path = svg("path", {
 				d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`,
+				"data-dep-edge": "",
 				class: `dep-edge dep-rel-${link.relation}${link.level === "inferred" ? " evidence-inferred" : ""}`
 			});
 			path.dataset.depMark = markOf(link.from) === "dim" && markOf(link.to) === "dim" ? "dim" : "";
 			picture.append(path);
 		});
-		for (const [id, node] of nodes) {
+		const visualOrder = [...nodes].sort(([a], [b]) => placed.get(a).x - placed.get(b).x || placed.get(a).y - placed.get(b).y);
+		for (const [id, node] of visualOrder) {
 			const position = placed.get(id);
 			if (!position) continue;
-			const left = PAD + position.x * 220, top = PAD + position.y * 54;
+			const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
 			const group = svg("g", {
 				class: "dep-node",
 				tabindex: "-1",
 				role: "button",
 				"aria-label": node.name,
+				"aria-pressed": String(selectedIds.has(id)),
 				"data-dep-node": id,
 				"data-dep-focus": id.startsWith("d:") ? `col:${id.slice(2)}` : `row:${id.slice(2)}`,
 				"data-dep-mark": markOf(id)
@@ -17037,12 +17844,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				x: left,
 				y: top,
 				width: NODE_W,
-				height: NODE_H,
+				height: nodeHeight,
 				rx: 6,
 				class: "dep-node-shape"
 			}), svg("text", {
 				x: left + 10,
-				y: top + 23
+				y: top + nodeHeight / 2 + 5
 			}, abbreviate(node.name)));
 			picture.append(group);
 		}
@@ -17055,46 +17862,62 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function render() {
 		const previous = document.activeElement?.getAttribute?.("data-dep-focus");
 		element.dataset.depMode = mode;
-		matrixHost.hidden = mode !== "matrix";
-		graphHost.hidden = mode !== "graph";
-		const counted = typeof data?.counts?.edges === "number";
+		toolbar.hidden = !data;
+		details.hidden = !data;
+		holder.hidden = !data;
+		if (mode === "graph") graphBar.prepend(legend);
+		else matrixHost.before(legend);
+		matrixHost.hidden = !data || mode !== "matrix";
+		graphHost.hidden = !data || mode !== "graph";
+		const counted = Boolean(data?.capture?.revision_id) && Number.isFinite(data?.counts?.edges);
+		const countedEdges = allEdges();
 		for (const chip of relationChips) {
-			const count = counted ? (data.edges || []).filter((edge) => edge.relation === chip.value).length : null;
+			const count = counted ? countedEdges.filter((edge) => edge.relation === chip.value).length : null;
 			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
 			chip.label.textContent = text;
 			chip.node.setAttribute("aria-label", text);
 			chip.node.setAttribute("aria-pressed", String(relationFilter.includes(chip.value)));
 		}
 		for (const chip of evidenceChips) {
-			const count = counted ? (data.edges || []).filter((edge) => edge.evidence_level === chip.value).length : null;
+			const count = counted ? countedEdges.filter((edge) => edge.evidence_level === chip.value).length : null;
 			const text = count == null ? t("dep_" + chip.value) : `${t("dep_" + chip.value)} ${count}`;
 			chip.label.textContent = text;
 			chip.node.setAttribute("aria-label", text);
 			chip.node.setAttribute("aria-pressed", String(evidenceFilter.includes(chip.value)));
 		}
-		sourceCommit.textContent = shortSha(data?.source?.commit_sha);
+		sourceCommit.textContent = data?.source?.commit_sha ? t("dep_meta_commit", { commit: shortSha(data.source.commit_sha) }) : "";
 		const edges = data ? filteredEdges() : [];
 		const names = new Map();
 		for (const edge of edges) names.set(edge.dependency_key, dependencyName(edge.dependency_key));
 		showAllButton.hidden = mode !== "matrix" || names.size <= COLUMN_LIMIT;
-		showAllButton.textContent = t(showAll ? "dep_show_direct" : "dep_show_transitive");
-		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
-		showRowsButton.hidden = mode !== "matrix" || components.length <= ROW_LIMIT;
+		showAllButton.textContent = showAll ? t("dep_fewer_columns") : t("dep_all_columns", { n: names.size });
+		const components = [...data?.components || []].filter((row) => edges.some((edge) => edge.component_id === row.component_id) || mode === "graph" && filteredCrossEdges().some((edge) => edge.component_id === row.component_id)).sort((a, b) => a.name.localeCompare(b.name));
+		showRowsButton.hidden = components.length <= ROW_LIMIT;
 		showRowsButton.textContent = showAllRows ? t("dep_show_fewer") : t("dep_show_all_rows", { n: components.length });
 		const visibleRows = !showAllRows && components.length > ROW_LIMIT ? components.slice(0, ROW_LIMIT) : components;
 		if (!focusId || !components.some((row) => row.component_id === focusId)) focusId = components[0]?.component_id || focusId;
-		let columns = [...names.keys()];
-		if (mode === "matrix" && !showAll && columns.length > COLUMN_LIMIT && focusId) {
-			const direct = new Set(edges.filter((edge) => edge.component_id === focusId).map((edge) => edge.dependency_key));
-			const limited = columns.filter((key) => direct.has(key));
-			if (limited.length) columns = limited;
-		}
-		const columnDeps = columns.map((key) => ({
+		graphRows = visibleRows;
+		let columnDeps = [...names.keys()].map((key) => ({
 			key,
 			...dependencyByKey().get(key) || { name: key }
 		}));
 		columnDeps.sort((a, b) => KINDS.findIndex((kind) => (a.kinds || []).includes(kind)) - KINDS.findIndex((kind) => (b.kinds || []).includes(kind)) || String(a.name).localeCompare(String(b.name)));
-		legend.hidden = mode !== "matrix" || !visibleRows.length;
+		if (!showAll && columnDeps.length > COLUMN_LIMIT) {
+			const kept = new Set(limitColumns(visibleRows, columnDeps.map((dep) => dep.key), edges, COLUMN_LIMIT));
+			columnDeps = columnDeps.filter((dep) => kept.has(dep.key));
+		}
+		const summaries = [];
+		if (visibleRows.length < components.length) summaries.push(t("dep_components_shown", {
+			shown: visibleRows.length,
+			loaded: components.length
+		}));
+		if (!narrow() && columnDeps.length < names.size) summaries.push(t("dep_dependencies_shown", {
+			shown: columnDeps.length,
+			loaded: names.size
+		}));
+		coverage.hidden = !data || !summaries.length;
+		coverage.textContent = [...summaries, t("dep_narrow")].join(" · ");
+		legend.hidden = mode === "matrix" && narrow() || !edges.length && !filteredCrossEdges().length;
 		if (!legend.hidden) paintLegend();
 		if (!data || !visibleRows.length) {
 			const reason = data?.reason === "not_captured" ? t("dep_not_captured") : data && data.capture?.status === "complete" && data.counts?.components === 0 ? t("dep_empty") : data?.reason ? reasonText(t, data.reason) : data ? t("dep_no_match") : "";
@@ -17137,7 +17960,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-row": "-1",
 						"data-col": String(col),
 						tabindex: "-1",
-						"aria-selected": String(selectedCol),
+						"aria-pressed": String(selectedCol),
 						onclick: () => choose({
 							type: "dependency",
 							dependencyKey: dep.key
@@ -17156,7 +17979,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					"data-row": String(row),
 					"data-col": "-1",
 					tabindex: "-1",
-					"aria-selected": String(selectedRow),
+					"aria-pressed": String(selectedRow),
 					onclick: () => choose({
 						type: "component",
 						componentId: component.component_id
@@ -17176,7 +17999,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						tabindex: "-1",
 						title: label || dep.name,
 						"aria-label": label || joinLabel([component.name, dep.name]),
-						"aria-selected": String(selectedCell),
+						"aria-pressed": String(selectedCell),
 						onclick: cellEdges.length ? () => choose({
 							type: "edge",
 							componentId: component.component_id,
@@ -17192,9 +18015,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			matrixScroll.replaceChildren(h("table", { class: "dep-matrix" }, h("thead", {}, headKind, headName), body));
 			matrixScroll.scrollLeft = preference.matrixLeft || 0;
 			matrixScroll.scrollTop = preference.matrixTop || 0;
-			listHost.replaceChildren(...components.map((component) => {
+			listHost.replaceChildren(...(narrow() && mode === "matrix" ? visibleRows : []).map((component) => {
 				const own = edges.filter((edge) => edge.component_id === component.component_id);
-				return h("section", { class: "dep-group" }, h("h3", {}, component.name), ...own.map((edge) => {
+				return h("section", { class: "dep-group" }, h("h2", {}, component.name), ...own.map((edge) => {
 					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
 					return h("button", {
 						type: "button",
@@ -17202,7 +18025,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 						"data-dep-pick": `${edge.component_id}|${edge.dependency_key}`,
 						"data-dep-focus": `pick:${edge.component_id}|${edge.dependency_key}`,
 						tabindex: selectedPick ? "0" : "-1",
-						"aria-selected": String(selectedPick),
+						"aria-pressed": String(selectedPick),
 						"aria-label": edgeLabel(edge),
 						onclick: () => choose({
 							type: "edge",
@@ -17218,14 +18041,23 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		detailBody.replaceChildren();
 		if (data) {
-			if (data.stale == null) detailBody.append(h("p", { "data-dep-freshness": "" }, t("dep_freshness_unknown", { reason: reasonText(t, data.stale_reason, true) })));
+			if (data.capture?.revision_id && data.stale == null) detailBody.append(h("p", { "data-dep-freshness": "" }, t("dep_freshness_unknown", { reason: reasonText(t, data.stale_reason, true) })));
 			const omitted = [
 				"omitted_edges",
 				"omitted_hints",
 				"omitted_components"
 			].reduce((sum, key) => Number.isFinite(data[key]) && data[key] > 0 ? sum + data[key] : sum, 0);
 			if (omitted > 0) detailBody.append(h("p", { "data-dep-omitted": "" }, t("dep_omitted", { n: omitted })));
-			for (const code of data.parser_reasons || []) detailBody.append(h("p", { "data-dep-reason": code }, knownReason(code) ? reasonText(t, code) : reasonText(t, code, true)));
+			for (const code of new Set([
+				...data.parser_reasons || [],
+				...data.catalog_reasons || [],
+				data.cross_repository?.reason,
+				...data.cross_repository?.selection_reasons || []
+			].filter(Boolean))) detailBody.append(h("p", { "data-dep-reason": code }, knownReason(code) ? reasonText(t, code) : reasonText(t, code, true)));
+			if (data.projection_omitted_collections?.length) {
+				const names = data.projection_omitted_collections.map((code) => t("dep_collection_" + code) === "dep_collection_" + code ? t("ui_reason_generic") : t("dep_collection_" + code));
+				detailBody.append(h("p", {}, t("dep_omitted_collections", { names: names.join(" · ") })));
+			}
 			const files = h("div", { class: "dep-files" });
 			for (const file of data.files || []) {
 				const status = FILE_STATUS[file.status] ? t(FILE_STATUS[file.status]) : reasonText(t, file.status, true);
@@ -17236,15 +18068,15 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				}, h("span", {}, file.path || t("dep_dash")), h("span", {}, joinLabel([status, note]))));
 			}
 			for (const row of data.unreadable_paths || []) {
-				const path = typeof row === "string" ? row : row?.path;
+				const path = typeof row === "string" ? row : row?.path || row?.parent_path;
 				files.append(h("div", {
 					class: "dep-file",
 					"data-dep-file": path || ""
-				}, h("span", {}, path || t("dep_dash")), h("span", {}, t("dep_file_unreadable"))));
+				}, h("span", {}, path || t("dep_dash")), h("span", {}, joinLabel([t("dep_file_unreadable"), row?.reason ? reasonText(t, row.reason, true) : ""]))));
 			}
 			if (files.childNodes.length) detailBody.append(files);
 			if ((revisions?.revisions || []).length || revisions?.next_cursor) {
-				detailBody.append(h("h3", {}, t("dep_revisions")));
+				detailBody.append(h("h2", {}, t("dep_revisions")));
 				for (const row of revisions?.revisions || []) detailBody.append(h("p", {}, joinLabel([
 					shortSha(row.commit_sha),
 					capturedDate(row.captured_at),
@@ -17257,7 +18089,13 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		syncChrome();
 		syncImpact();
 		if (panel) renderInspector();
-		if (previous) element.querySelector(`[data-dep-focus="${CSS.escape(previous)}"]`)?.focus({ preventScroll: true });
+		if (previous) {
+			const target = focusTarget(previous);
+			if (target) {
+				for (const node of activeFocusHost().querySelectorAll("[data-dep-focus]")) node.tabIndex = node === target ? 0 : -1;
+				target.focus({ preventScroll: true });
+			}
+		}
 	}
 	async function refresh() {
 		if (!active) return;
@@ -17271,6 +18109,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			data = projection;
 			revisions = history;
 			statusBox.replaceChildren();
+			impactTicket++;
+			impactKey = "";
 			if (!selectionAlive()) {
 				selection = null;
 				closeInspector();
@@ -17293,14 +18133,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				403,
 				404
 			].includes(error.status)) withdraw();
-			else {
-				data = null;
-				revisions = null;
-				impact = null;
-				impactKey = "";
-				closeInspector();
-				render();
-			}
+			else clearData();
 			statusBox.replaceChildren(inlineError({
 				error,
 				retry: () => {
@@ -17308,6 +18141,20 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				}
 			}));
 		}
+	}
+	function clearData() {
+		impactTicket++;
+		data = null;
+		revisions = null;
+		impact = null;
+		impactKey = "";
+		closeInspector();
+		fillComponents();
+		fillRetract();
+		render();
+		captureForm.update();
+		declareForm.update();
+		retractForm.update();
 	}
 	function withdraw() {
 		serial++;
@@ -17320,8 +18167,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		preference.selection = null;
 		closeInspector();
 		statusBox.replaceChildren();
+		fillComponents();
+		fillRetract();
 		render();
-		syncChrome();
+		captureForm.update();
+		declareForm.update();
+		retractForm.update();
 	}
 	function setActive(value) {
 		const next = Boolean(value);
@@ -17342,6 +18193,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		syncChrome();
 		return refresh();
 	}
+	const media = matchMedia("(max-width: 800px)");
+	const onResize = () => render();
+	media.addEventListener("change", onResize);
 	render();
 	return {
 		element,
@@ -17349,346 +18203,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		setActive,
 		withdraw,
 		dispose() {
+			media.removeEventListener("change", onResize);
 			active = false;
 			serial++;
 			impactTicket++;
 			closeInspector();
 			syncChrome();
-		}
-	};
-}
-//#endregion
-//#region src/pm-quality-projections.js
-function qualityFact({ h, t, fact, current = false }) {
-	if (!fact) return "";
-	const label = (value) => t("pq_" + ([
-		"accepted",
-		"rejected",
-		"unassessed",
-		"not_defined"
-	].includes(value) ? value : "unassessed"));
-	const reference = fact.reference || fact.selected_assessment?.reference;
-	return h("div", {
-		"data-pm-quality-fact": "",
-		class: "pm-note-text"
-	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
-}
-function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
-	let editor = null, pending = false;
-	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
-	const read = () => {
-		const value = JSON.parse(field.value || (multiple ? "{}" : "null"));
-		return multiple ? value[workItemId] : value;
-	};
-	function write(value) {
-		if (!editor || editor.locked()) return;
-		const values = multiple ? JSON.parse(field.value || "{}") : null;
-		if (multiple) {
-			if (value) values[workItemId] = value;
-			else delete values[workItemId];
-		}
-		field.value = JSON.stringify(multiple ? values : value);
-		editor.changed();
-		update();
-	}
-	const use = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: async () => {
-			if (!editor || editor.locked() || pending) return;
-			const selected = readSelection(workItemId);
-			if (!selected) {
-				status.replaceChildren(h("p", {}, t("pq_choose_help")));
-				return;
-			}
-			pending = true;
-			update();
-			status.replaceChildren();
-			try {
-				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/quality-reviews/${encodeURIComponent(selected.review_id)}`);
-				alive();
-				if (!element.isConnected || editor.locked()) return;
-				const row = data.review, context = row?.context, assessment = row?.assessment;
-				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
-					"operation_id",
-					"version",
-					"document_digest"
-				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
-				write(selected);
-			} catch (error) {
-				if (element.isConnected) status.replaceChildren(errorBox(error));
-			} finally {
-				pending = false;
-				update();
-			}
-		}
-	}, t("pq_include"));
-	const clear = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => write(null)
-	}, t("pq_clear"));
-	const element = h("div", { "data-pm-quality-picker": workItemId }, chosen, h("div", { class: "actions" }, use, clear), status);
-	function update() {
-		const reference = read();
-		chosen.replaceChildren(reference ? h("code", { class: "pm-source" }, reference.candidate_commit) : t("pq_none"));
-		use.disabled = !editor || editor.locked() || pending;
-		clear.disabled = !editor || editor.locked() || pending || !reference;
-	}
-	update();
-	return {
-		element,
-		update,
-		attach: (value) => {
-			editor = value;
-			update();
-		}
-	};
-}
-//#endregion
-//#region src/pm-work-inspector.js
-var workStatus = (card) => ({
-	backlog: "not_started",
-	in_progress: "in_progress",
-	waiting: "waiting",
-	review: "in_review",
-	accepted: "done",
-	archived: "historical"
-})[typeof card?.column === "string" ? card.column : ""] || "unknown";
-var blockedWork = (card) => card?.flow?.blocked === true || card?.execution?.tasks?.some((task) => task.state === "blocked") === true;
-var blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason) : blockedWork(card) ? t("wv_task_blocked") : t("wv_blocker_unknown");
-var workAgents = (source) => [...new Set((source?.sessions || []).map((row) => labelSegment(row.agent_kind)).filter(Boolean))];
-function prGroups(deliveries = []) {
-	const groups = new Map();
-	for (const row of deliveries) {
-		const target = row.target;
-		if (!target?.provider_origin || !Number.isSafeInteger(target.repository_id) || !Number.isSafeInteger(target.pull_number)) continue;
-		const key = JSON.stringify([
-			target.provider_origin,
-			target.repository_id,
-			target.pull_number
-		]);
-		if (!groups.has(key)) groups.set(key, {
-			target,
-			rows: []
-		});
-		groups.get(key).rows.push(row);
-	}
-	return [...groups.values()];
-}
-function prPills(source) {
-	return prGroups(source?.deliveries).map(({ target, rows }) => h$1("span", {
-		class: "pm-work-pr",
-		title: labelSegment(target.repository)
-	}, contextChip({ text: `PR #${target.pull_number}` }), rows.some((row) => row.merge?.merged === true) ? statusPill("merged") : statusPill("unknown")));
-}
-function checkDelivery(data, workspaceId, id, after, t) {
-	if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || !Array.isArray(data.deliveries) || data.requirement_acceptance !== "not_evaluated_by_delivery" || data.next_after != null && (!Number.isSafeInteger(data.next_after) || data.next_after <= after)) throw Error(t("pm_scope_mismatch"));
-	for (const row of data.deliveries) if (!/^op_[0-9a-f]{32}$/.test(row.operation_id || "") || row.requirement_acceptance !== "not_evaluated_by_delivery") throw Error(t("pm_scope_mismatch"));
-	return data;
-}
-async function readWorkSources({ api, workspaceId, cards, caps, valid, t, deliveryPages = 1 }) {
-	const result = new Map(), sessions = new Map();
-	async function read(card) {
-		const id = card.work_item_id, source = {
-			deliveries: [],
-			next: null,
-			filtered: false,
-			sessions: []
-		};
-		if (caps?.features?.pm_workspaces?.engineering_delivery) {
-			let after = 0;
-			for (let index = 0; index < deliveryPages; index++) {
-				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${id}/deliveries?after=${after}&limit=20`), workspaceId, id, after, t);
-				if (!valid()) return;
-				source.deliveries.push(...data.deliveries);
-				source.filtered ||= Boolean(data.source_visibility_filtered);
-				source.next = data.next_after ?? null;
-				if (source.next === null) break;
-				after = source.next;
-			}
-		}
-		if (caps) for (const ref of card.execution?.sessions || []) {
-			const resource = labelSegment(ref.resource_id), slash = resource.indexOf("/");
-			if (slash < 1 || !resource.slice(slash + 1)) continue;
-			const host = resource.slice(0, slash), id = resource.slice(slash + 1);
-			if (!sessions.has(resource)) sessions.set(resource, api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(id)}`).then((data) => {
-				if (data.session?.host !== host || data.session.session_id !== id) throw Error(t("pm_scope_mismatch"));
-				return data.session;
-			}));
-			const session = await sessions.get(resource);
-			if (!valid()) return;
-			source.sessions.push(session);
-		}
-		result.set(id, source);
-	}
-	const queue = [...cards];
-	await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
-		while (queue.length && valid()) await read(queue.shift());
-	}));
-	return result;
-}
-function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools = () => [] }) {
-	let panel = null, actions = null, signature = "", selection = null;
-	const unknown = () => statusPill("unknown");
-	const paragraph = (...nodes) => h$1("p", {}, ...nodes);
-	const stamp = (value) => {
-		const date = typeof value === "number" && Number.isFinite(value) ? new Date(value * 1e3) : null;
-		return date && Number.isFinite(date.valueOf()) ? h$1("time", { datetime: date.toISOString() }, date.toISOString().replace("T", " ").replace(".000Z", " UTC")) : "—";
-	};
-	function close() {
-		panel?.close();
-	}
-	function show(data) {
-		selection = data;
-		if (!panel) {
-			panel = inspector({
-				title: data.title || t("ui_work_item"),
-				onClose: () => {
-					actions?.dispose();
-					actions = null;
-					panel = null;
-					selection = null;
-					signature = "";
-					onClose();
-				}
-			});
-			panel.classList.add("pm-work-inspector");
-			panel.dataset.workInspector = "";
-			panel.dataset.rtmDetail = "";
-			mount.append(panel);
-		}
-		const next = JSON.stringify(data);
-		if (signature === next) return;
-		signature = next;
-		for (const node of panel.body.querySelectorAll(":scope > :not([data-work-section])")) node.remove();
-		panel.querySelector("h2").textContent = data.title || t("ui_work_item");
-		const { card, plan, requirement, requirements = [], source = {}, issues = [] } = data;
-		const href = discussHref({
-			workspaceId,
-			refs: card ? [{
-				kind: "work_item",
-				id: card.work_item_id
-			}] : requirement && plan ? [{
-				kind: "requirement",
-				id: requirement.id,
-				revision_id: plan.revision_id
-			}] : [],
-			title: data.title,
-			from
-		});
-		actions?.dispose();
-		panel.querySelector("[data-work-actions]")?.remove();
-		actions = menu({
-			button: iconButton({
-				icon: "more-horizontal",
-				label: t("ui_more")
-			}),
-			items: tools()
-		});
-		const actionRow = h$1("div", {
-			class: "pm-work-inspector-actions",
-			"data-work-actions": ""
-		}, h$1("a", {
-			href,
-			class: "ui-button primary",
-			"data-work-discuss": ""
-		}, t("wv_discuss")), tools().length ? actions : null);
-		panel.querySelector(":scope > header").append(actionRow);
-		const sections = [
-			["requirements", "wv_served"],
-			["status", "wv_status_owner"],
-			["result", "wv_result"],
-			["blocker", "wv_blocker"],
-			["delivery", "wv_delivery"]
-		].map(([key, label]) => h$1("section", { "data-work-section": key }, h$1("h3", {}, t(label))));
-		const [served, state, result, blocker, delivery] = sections;
-		const requirementRows = requirement ? [requirement] : requirements;
-		served.append(...requirementRows.length ? requirementRows.map((row) => h$1("div", {}, paragraph(firstLabel(row.text, row.id)), row.acceptance?.length ? h$1("ul", {}, ...row.acceptance.map((item) => h$1("li", {}, labelSegment(item.text)))) : null)) : [paragraph(t(card?.binding?.requirement_ids?.length ? "ui_reason_unavailable" : "wv_no_requirement"))]);
-		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
-		if (card) {
-			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), card.column === "accepted" ? h$1("span", {}, t("wv_content_approved")) : null, ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
-			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, firstLabel(session.title, t("wv_session"))), " ", session.api_access === "managed" && session.provenance === "connector_managed" ? null : statusPill("read_only")));
-			if (!workAgents(source).length) state.append(paragraph(t("wv_agent"), " · ", unknown()));
-			state.append(h$1("a", { href: `#/work/${encodeURIComponent(card.work_item_id)}` }, t("wv_work_details")));
-			if (card.quality?.selected_assessment) result.append(qualityFact({
-				h: h$1,
-				t,
-				fact: card.quality,
-				current: true
-			}));
-			else result.append(paragraph(t("pm_kanban_quality_unknown")));
-			const capture = card.latest_capture;
-			if (capture) {
-				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
-				if (card.capture_matches_binding === false || card.capture_matches_work_version === false) result.append(paragraph(t("pm_kanban_capture_different")));
-				result.append(...(capture.evidence || []).map((row) => paragraph(t("pm_kanban_fact"), " · ", ...Object.entries(row.assessment || {}).map(([key, value]) => {
-					const label = t("pm_kanban_field_" + key), state = t("pm_kanban_state_" + labelSegment(value));
-					return joinLabel([label.startsWith("pm_kanban_") ? t("pm_kanban_fact") : label, state.startsWith("pm_kanban_") ? t("ui_status_unknown") : state]);
-				}))));
-			} else result.append(paragraph(t("wv_no_result")));
-			blocker.append(paragraph(blockedWork(card) ? statusPill("blocked") : unknown(), blockedWork(card) ? " " + blockerText(t, card) : null), paragraph(t("wv_next"), " · ", h$1("a", { href }, t("wv_discuss"))));
-			const groups = prGroups(source.deliveries);
-			for (const { target, rows } of groups) delivery.append(h$1("div", {
-				class: "pm-work-delivery",
-				"data-rtm-pr": target.pull_number
-			}, h$1("h4", {}, joinLabel([target.repository, `PR #${target.pull_number}`])), h$1("div", { class: "pm-work-inline" }, h$1("span", {}, t("wv_merge")), statusPill(rows.some((row) => row.merge?.merged === true) ? "merged" : "unknown"), h$1("span", {}, t("wv_ci")), unknown()), !rows.some((row) => row.deployment) ? paragraph(t("wv_deploy"), " · ", unknown()) : null, ...rows.filter((row) => row.deployment).map((row) => paragraph(t("wv_deploy"), " · ", statusPill(row.deployment.verified === true ? "deployed" : "unknown"), " ", row.deployment.is_current === false ? t("wb_historical_deployment") : row.deployment.is_current === true ? t("wb_current_environment") : t("ui_status_unknown")))));
-			for (const row of source.deliveries || []) if (!row.target?.pull_number) delivery.append(paragraph(t("wv_deploy"), " · ", statusPill(row.deployment?.verified === true ? "deployed" : "unknown")));
-			if (!(source.deliveries || []).length) delivery.append(paragraph(t("wv_no_delivery")));
-			if (source.filtered || source.next != null) delivery.append(statusPill("partial"));
-			if (source.next != null && data.onMore) delivery.append(button({
-				label: t("wb_receipts_more"),
-				onClick: data.onMore
-			}));
-			delivery.append(h$1("h4", {}, t("wb_attempts")), paragraph(t("wv_start_end")), ...(card.execution?.attempts || []).map((row) => h$1("div", {
-				class: "pm-work-attempt",
-				"data-work-attempt": row.attempt_id
-			}, paragraph(row.accepted === true ? t("pm_kanban_accepted") : t("pm_kanban_accept_unknown"), " · ", t("pm_kanban_state_" + labelSegment(row.status)).startsWith("pm_kanban_") ? t("ui_status_unknown") : t("pm_kanban_state_" + labelSegment(row.status))), paragraph(h$1("span", { title: t("wv_unknown_times") }, "— – —")))));
-		} else {
-			state.append(statusPill(data.accepted ? "accepted" : "not_assessed"));
-			result.append(paragraph(t("wv_no_result")));
-			blocker.append(data.blocker ? paragraph(statusPill("blocked"), " ", data.blocker) : unknown());
-			delivery.append(paragraph(t("wb_acceptance_separate")));
-		}
-		const details = disclosure({
-			label: t("wv_details"),
-			body: h$1("div", {}, plan?.adoption ? paragraph(t("wb_approved_by", { actor: labelSegment(plan.adoption.adopted_by) }), " · ", stamp(plan.adoption.created_at)) : null, card ? paragraph(t("pm_kanban_attempts", { count: Number.isSafeInteger(card.execution?.accepted_attempts) ? card.execution.accepted_attempts : t("ui_status_unknown") })) : null, card?.flow?.history !== "available_central_events" ? paragraph(t("pm_kanban_history_unknown")) : null, card ? paragraph(t("pm_kanban_age"), ": ", typeof card.flow?.age_seconds === "number" ? String(card.flow.age_seconds) : t("ui_status_unknown")) : null, card?.execution?.coverage?.unavailable_sources || card?.latest_capture?.coverage?.inaccessible_sources ? paragraph(t("pm_kanban_missing")) : null, card?.execution?.coverage?.truncated ? paragraph(t("pm_kanban_truncated")) : null, paragraph(t("pm_kanban_execution")), ...[
-				"tasks",
-				"operations",
-				"sessions",
-				"attempts"
-			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), h$1("pre", { class: "mono" }, JSON.stringify({
-				plan_revision: plan?.revision_id || card?.binding?.plan_revision_id,
-				binding: card?.binding,
-				work: card?.work,
-				execution: card?.execution,
-				flow: card?.flow,
-				capture: card?.latest_capture,
-				issues,
-				deliveries: source.deliveries,
-				quality: card?.quality
-			}, (key, value) => value === null ? "—" : value, 2))),
-			open: panel.body.querySelector("[data-work-section=\"details\"]")?.open || false
-		});
-		details.dataset.workSection = "details";
-		for (const node of [...sections, details]) {
-			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
-			if (!previous) panel.body.append(node);
-			else if (!previous.isEqualNode(node)) {
-				if (node.dataset.workSection === "details") previous.querySelector("div").replaceWith(node.querySelector("div"));
-				else previous.replaceChildren(...node.childNodes);
-			}
-		}
-	}
-	return {
-		show,
-		close,
-		dispose: close,
-		get element() {
-			return panel;
-		},
-		get selection() {
-			return selection;
 		}
 	};
 }
@@ -17701,8 +18221,9 @@ function requirementReviews(plan, requirement, reviews) {
 }
 function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map();
-	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, scrollGeneration = 0;
+	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
+	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
+	let qualityComplete = false, workIncomplete = false, catalogueErrors = [], stale = true;
 	let selected = preference.selected || null, signature = "", deliveryPages = 1, preserveSelection = false, tools = () => [];
 	const pages = {
 		work: 1,
@@ -17741,17 +18262,18 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		type: "button",
 		class: "ui-button secondary",
 		hidden: true,
+		"aria-label": t(kind === "work" ? "wb_more" : kind === "issues" ? "wb_more_issues" : "wb_more_reviews"),
 		onclick: () => {
 			pages[kind]++;
 			refresh();
 		}
-	}, t(kind === "work" ? "wb_more" : kind === "issues" ? "wb_more_issues" : "wb_more_reviews"))]));
+	}, t("wv_load_more"))]));
 	const element = h$1("section", {
 		"data-pm-rtm": "",
 		class: "pm-requirements"
 	}, h$1("div", { class: "pm-requirements-toolbar" }, h$1("label", { class: "pm-work-search" }, icon("search"), filter), h$1("label", {}, t("wv_group"), group)), status, layout, h$1("div", { class: "actions" }, ...Object.values(moreButtons)), disclosure({
 		label: t("wb_sources"),
-		body: h$1("div", {}, h$1("p", {}, t("wb_acceptance_separate")), h$1("p", {}, t("wb_no_phase")))
+		body: h$1("div", {}, h$1("p", {}, t("wb_no_phase")))
 	}));
 	const detail = workInspector({
 		t,
@@ -17759,6 +18281,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		from: "requirements",
 		mount: layout,
 		tools: () => tools(),
+		returnFocus: () => selectionTarget(selected) || viewHeading(),
 		onClose: () => {
 			detailSerial++;
 			if (!preserveSelection) {
@@ -17785,14 +18308,20 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 	};
 	const issuesFor = (card) => issues.filter((row) => row.work_item_id === card.work_item_id && row.document.relation?.binding_id === card.binding.binding_id);
 	const linked = (req) => cards.filter((card) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id));
-	const deliverySource = (req) => ({ deliveries: [...new Map(linked(req).flatMap((card) => sources.get(card.work_item_id)?.deliveries || []).map((row) => [row.operation_id, row])).values()] });
+	const deliverySource = (req) => {
+		const source = aggregateDelivery(linked(req).map((card) => sources.get(card.work_item_id)), workIncomplete);
+		if (!feature("engineering_delivery")) source.available = false;
+		return source;
+	};
 	const milestoneFor = (req) => milestones.filter((row) => row.plan_revision_id === plan?.revision_id && row.requirement_ids?.includes(req.id));
 	const issueLabel = (row) => joinLabel([firstLabel(row.document.relation?.repository, row.document.issue?.repository), t("wv_issue", { number: row.document.issue.number })]);
-	const acceptancePill = (req) => statusPill(requirementReviews(plan, req, reviews).length ? "accepted" : "not_assessed");
-	const deployPill = (req) => {
-		const groups = prGroups(deliverySource(req).deliveries), deployed = groups.filter((group) => group.rows.some((row) => row.deployment?.verified === true && row.deployment.is_current === true)).length;
-		return statusPill(deployed && deployed === groups.length ? "deployed" : deployed ? "partial" : "unknown");
+	const acceptance = (req) => requirementReviews(plan, req, reviews).length ? "accepted" : qualityComplete ? "not_assessed" : "unknown";
+	const criteriaResults = (req) => {
+		const qualified = requirementReviews(plan, req, reviews);
+		return (qualified.length ? qualified : reviews.filter((row) => row.applicable === true && plan?.document_digest && plan?.adoption?.scope_revision && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption.scope_revision && Array.isArray(row.assessment?.document?.criteria) && row.assessment.document.criteria.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === req.id))).at(-1)?.assessment?.document?.criteria || [];
 	};
+	const acceptancePill = (req) => statusPill(acceptance(req));
+	const deployPill = (req) => statusPill(deployStatus(deliverySource(req)));
 	const milestoneLabel = (req) => {
 		const label = milestoneFor(req).map((row) => labelSegment(row.title)).filter(Boolean).join(" · ");
 		return h$1("span", {
@@ -17801,7 +18330,20 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			"aria-label": label || t("wv_no_milestone")
 		}, label || "—");
 	};
-	const selectionTarget = (id) => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"], [data-row-key="${CSS.escape(id)}"]`)].find((node) => node.getClientRects().length);
+	const selectionTarget = (id) => [...tables.querySelectorAll(`[data-rtm-select="${CSS.escape(id)}"]`), ...tables.querySelectorAll(`[data-row-key="${CSS.escape(id)}"]`)].find((node) => node.getClientRects().length);
+	const viewHeading = () => {
+		const heading = element.closest("main")?.querySelector("h1");
+		if (heading) heading.tabIndex = -1;
+		return heading;
+	};
+	function writeSelection(id) {
+		const [path, query] = location.hash.split("?");
+		if (!path.endsWith("/requirements")) return;
+		const params = new URLSearchParams(query);
+		if (id) params.set("select", id);
+		else params.delete("select");
+		history.replaceState(null, "", path + (params.size ? "?" + params : ""));
+	}
 	function controls() {
 		for (const [kind, button] of Object.entries(moreButtons)) {
 			button.disabled = busy;
@@ -17814,10 +18356,11 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		detail.close();
 		preserveSelection = false;
 	}
-	function withdraw() {
+	function withdraw({ forgetRoute = true } = {}) {
 		pendingFocus = null;
 		pendingNavigation = null;
 		currentRequirement = null;
+		currentMilestone = null;
 		scrollGeneration++;
 		serial++;
 		detailSerial++;
@@ -17828,11 +18371,14 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		reviews = [];
 		milestones = [];
 		sources.clear();
+		earlierPlans.clear();
 		signature = "";
+		if (forgetRoute) writeSelection(null);
 		closeRetaining();
 		tables.replaceChildren();
 		meta.replaceChildren();
 		status.replaceChildren();
+		if (forgetRoute && visible) viewHeading()?.focus({ preventScroll: true });
 		for (const kind of Object.keys(pages)) cursors[kind] = null;
 		controls();
 	}
@@ -17843,8 +18389,16 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		} catch {
 			return;
 		}
+		errorBox(error);
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(h$1("p", { class: "error" }, t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_requirements_unavailable")), ...error.code ? [disclosure({
+			label: t("wv_details"),
+			body: h$1("p", {}, labelSegment(error.code))
+		})] : [], h$1("button", {
+			type: "button",
+			class: "ui-button secondary",
+			onclick: () => void refresh()
+		}, t("wv_retry")));
 	}
 	function markSelection() {
 		for (const row of tables.querySelectorAll("[data-row-key]")) {
@@ -17867,16 +18421,17 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			"data-rtm-select": card.work_item_id,
 			"aria-pressed": String(selected === card.work_item_id),
 			onclick: () => void select(card.work_item_id)
-		}, firstLabel(card.work.title, t("ui_work_item"))), h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark), h$1("span", {
+		}, firstLabel(card.work.title, t("ui_work_item"))), h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark), count !== 0 ? h$1("span", {
 			class: "ui-meta",
 			title: t("wv_attempts", { n: count })
-		}, `×${count}`), ...prPills(source)), ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
+		}, `×${count}`) : null, ...prPills(source)), card.binding.plan_revision_id && card.binding.plan_revision_id !== plan?.revision_id ? h$1("span", { class: "ui-meta" }, t("wv_from_earlier_plan")) : null, ...issuesFor(card).map((row) => h$1("span", { class: "ui-meta" }, issueLabel(row))));
 	}
 	function renderTable() {
 		const focused = tables.contains(document.activeElement) ? [
 			"data-rtm-select",
 			"data-rtm-toggle",
-			"data-row-key"
+			"data-row-key",
+			"data-rtm-group"
 		].map((attribute) => [attribute, document.activeElement?.getAttribute(attribute)]).find(([, value]) => value) : null;
 		const scrolls = [...tables.querySelectorAll(".ui-data-table")].map((node) => node.scrollLeft);
 		const query = filter.value.trim().toLocaleLowerCase(), requirements = plan?.document?.requirements || [];
@@ -17916,7 +18471,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					tables.querySelector(`[data-row-key="${CSS.escape(id)}"]`)?.focus();
 					select(id);
 				},
-				expandable: (req) => h$1("div", { class: "pm-requirement-expanded" }, h$1("h3", {}, t("wv_criteria")), h$1("ul", {}, ...(req.acceptance || []).map((row) => h$1("li", {}, labelSegment(row.text)))), h$1("button", {
+				expandable: (req) => h$1("div", { class: "pm-requirement-expanded" }, h$1("h2", {}, t("wv_criteria")), h$1("ul", {}, ...(req.acceptance || []).map((row) => h$1("li", {}, labelSegment(row.text)))), h$1("button", {
 					type: "button",
 					class: "ui-button ghost pm-requirement-open",
 					"data-rtm-select": req.id,
@@ -17924,11 +18479,13 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				}, t("wv_open_requirement")), ...linked(req).map(workRow), !linked(req).length ? h$1("p", { class: "ui-meta" }, t("wb_no_work")) : null),
 				compactRow: (req) => {
 					const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
-					const partialPRs = work.some((card) => sources.get(card.work_item_id)?.filtered || sources.get(card.work_item_id)?.next != null);
+					const coverage = deliveryCoverage(source), prs = prGroups(source.deliveries).length;
+					const workLabel = work.length === 1 ? "wv_compact_work_one" : "wv_compact_work";
+					const prLabel = prs === 1 ? "wv_compact_pr_one" : "wv_compact_prs";
 					return h$1("div", { class: "pm-requirement-summary" }, h$1("span", {
 						class: "pm-requirement-title",
 						title: labelSegment(req.text)
-					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", { "aria-label": t("wv_acceptance") }, acceptancePill(req)), h$1("span", { "aria-label": t("wv_deploy") }, deployPill(req)), h$1("span", {}, t(cursors.work != null ? "wv_compact_work_loaded" : "wv_compact_work", { n: work.length })), h$1("span", {}, t(!feature("engineering_delivery") ? "wv_compact_prs_unknown" : partialPRs ? "wv_compact_prs_loaded" : "wv_compact_prs", { n: prGroups(source.deliveries).length })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
+					}, labelSegment(req.text)), h$1("div", { class: "pm-requirement-facts" }, h$1("span", {}, t("wv_acceptance") + ": ", acceptancePill(req)), h$1("span", {}, t("wv_deploy") + ": ", deployPill(req)), h$1("span", {}, t(workLabel + (workIncomplete ? "_loaded" : ""), { n: work.length })), h$1("span", {}, t(coverage === "unknown" ? "wv_compact_prs_unknown" : prLabel + (coverage === "partial" ? "_loaded" : ""), { n: prs })), milestoneLabel(req)), blocked ? h$1("div", { class: "pm-requirement-blocker" }, icon("circle-alert"), blockerText(t, blocked)) : null);
 				},
 				columns: [
 					{
@@ -17944,7 +18501,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 						key: "work",
 						label: t("wv_work"),
 						numeric: true,
-						render: (req) => cursors.work != null ? t("wv_loaded", { n: linked(req).length }) : String(linked(req).length)
+						render: (req) => workIncomplete ? t("wv_loaded", { n: linked(req).length }) : String(linked(req).length)
 					},
 					{
 						key: "pr",
@@ -17979,7 +18536,13 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		};
 		tables.replaceChildren();
 		for (const [label, rows] of [...groups].sort(([a], [b]) => a ? b ? 0 : -1 : b ? 1 : 0)) {
-			if (group.value !== "none") tables.append(h$1("h2", { class: "pm-requirement-group" }, label || t("wv_unassigned", { n: rows.length })));
+			const ids = milestoneFor(rows[0]).map((row) => row.milestone_id).sort().join(",");
+			if (group.value !== "none") tables.append(h$1("h2", {
+				class: "pm-requirement-group",
+				tabindex: -1,
+				"data-rtm-group": group.value + ":" + (group.value === "milestone" ? ids : label),
+				"data-rtm-milestones": ids
+			}, label || t("wv_unassigned", { n: rows.length })));
 			tables.append(tableFor(rows));
 		}
 		const unassigned = cards.filter((card) => !requirements.some((req) => card.binding.plan_revision_id === plan?.revision_id && card.binding.requirement_ids?.includes(req.id))).filter((card) => matches(null, [card]));
@@ -18008,7 +18571,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			});
 		});
 		markSelection();
-		if (focused) tables.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`)?.focus({ preventScroll: true });
+		if (focused) (tables.querySelector(`[${focused[0]}="${CSS.escape(focused[1])}"]`) || viewHeading())?.focus({ preventScroll: true });
 	}
 	async function catalogue(kind, ticket) {
 		const config = {
@@ -18036,7 +18599,11 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		};
 	}
 	async function refresh() {
-		if (!active) return;
+		if (!active || !visible) {
+			stale = true;
+			return;
+		}
+		stale = false;
 		const ticket = ++serial;
 		detailSerial++;
 		busy = true;
@@ -18046,19 +18613,36 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 			if (accepted.head?.workspace_id !== workspaceId || accepted.plan && (accepted.plan.workspace_id !== workspaceId || accepted.plan.revision_id !== accepted.head.accepted_revision_id)) throw Error(t("pm_scope_mismatch"));
-			const [work, mappings, quality, roadmap] = await Promise.all([
-				catalogue("work", ticket),
-				feature("issue_mapping") ? catalogue("issues", ticket) : null,
-				feature("quality_reviews") ? catalogue("reviews", ticket) : null,
-				feature("roadmap") ? api("GET", `${endpoint}/roadmap`) : null
-			]);
+			const work = await catalogue("work", ticket);
 			alive();
 			if (ticket !== serial) return;
 			work.rows.forEach((row) => cardCheck(row));
-			if (new Set(work.rows.map((row) => row.work_item_id)).size !== work.rows.length) throw Error(t("pm_scope_mismatch"));
-			for (const row of mappings?.rows || []) if (row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.work_item_id !== row.work_item_id || row.document.relation?.work_item_id !== row.work_item_id || !row.document.issue?.repository || !Number.isSafeInteger(row.document.issue.number)) throw Error(t("pm_scope_mismatch"));
-			for (const row of quality?.rows || []) if (row.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
-			if (roadmap) scope(roadmap);
+			if (new Set(work.rows.map((row) => row.work_item_id)).size !== work.rows.length) throw Error(t("wv_source_mismatch"));
+			const settled = await Promise.allSettled([
+				feature("issue_mapping") ? catalogue("issues", ticket) : null,
+				feature("quality_reviews") ? catalogue("reviews", ticket) : null,
+				feature("roadmap") ? api("GET", `${endpoint}/roadmap`).then(scope) : null
+			]);
+			alive();
+			if (ticket !== serial) return;
+			catalogueErrors = settled.flatMap((row, i) => row.status === "rejected" ? [{
+				kind: [
+					"issues",
+					"reviews",
+					"roadmap"
+				][i],
+				code: row.reason?.code
+			}] : []);
+			let [mappings, quality, roadmap] = settled.map((row) => row.status === "fulfilled" ? row.value : null);
+			if (mappings?.rows.some((row) => row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId || row.document.work_item_id !== row.work_item_id || row.document.relation?.work_item_id !== row.work_item_id || !row.document.issue?.repository || !Number.isSafeInteger(row.document.issue.number))) {
+				mappings = null;
+				catalogueErrors.push({ kind: "issues" });
+			}
+			if (quality?.rows.some((row) => row.workspace_id !== workspaceId)) {
+				quality = null;
+				catalogueErrors.push({ kind: "reviews" });
+			}
+			qualityComplete = Boolean(quality && !quality.filtered && quality.next == null);
 			const read = await readWorkSources({
 				api,
 				workspaceId,
@@ -18074,11 +18658,24 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 			if (end.head?.workspace_id !== workspaceId || end.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t("wb_plan_changed"));
+			earlierPlans = await readEarlierPlans({
+				api,
+				workspaceId,
+				cards: work.rows,
+				currentId: accepted.plan?.revision_id,
+				valid: () => {
+					alive();
+					return ticket === serial;
+				}
+			});
+			alive();
+			if (ticket !== serial) return;
 			plan = accepted.plan;
 			cards = work.rows;
 			issues = mappings?.rows || [];
 			reviews = quality?.rows || [];
 			sources = read;
+			workIncomplete = work.filtered || work.next != null;
 			milestones = roadmap?.baseline?.document?.milestones || [];
 			for (const [kind, data] of Object.entries({
 				work,
@@ -18097,10 +18694,17 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				]),
 				issues,
 				reviews,
+				qualityComplete,
+				workIncomplete,
+				cursors,
 				milestones,
 				[...sources].map(([id, source]) => [
 					id,
 					source.deliveries,
+					source.available,
+					source.filtered,
+					source.next,
+					source.errors,
 					workAgents(source)
 				])
 			]);
@@ -18108,19 +18712,24 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				signature = next;
 				renderTable();
 			}
-			const requirements = plan?.document?.requirements || [], partial = [
+			const requirements = plan?.document?.requirements || [], partial = !qualityComplete || catalogueErrors.length > 0 || [
 				work,
 				mappings,
 				quality
-			].some((row) => row?.filtered || row?.next != null) || [...sources.values()].some((row) => row.filtered || row.next != null);
+			].some((row) => row?.filtered || row?.next != null) || [...sources.values()].some((row) => deliveryCoverage(row) !== "complete");
 			meta.textContent = !plan ? t("ui_status_unknown") : partial ? t("wv_loaded", { n: requirements.length }) : joinLabel([
 				t("wv_requirements_count", { n: requirements.length }),
 				feature("quality_reviews") ? t("wv_accepted_count", { n: requirements.filter((req) => requirementReviews(plan, req, reviews).length).length }) : null,
 				requirements.some((req) => linked(req).some(blockedWork)) ? t(requirements.filter((req) => linked(req).some(blockedWork)).length === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: requirements.filter((req) => linked(req).some(blockedWork)).length }) : null
 			]);
-			status.replaceChildren(...partial ? [h$1("span", { class: "ui-meta" }, t("wb_partial"))] : []);
+			status.replaceChildren(...partial ? [h$1("span", { class: "ui-meta" }, t("wb_partial"))] : [], ...catalogueErrors.map((row) => h$1("span", {}, t(row.kind === "reviews" ? "wv_acceptance_unknown" : "wv_source_unavailable"))), ...catalogueErrors.length ? [h$1("button", {
+				type: "button",
+				class: "ui-button secondary",
+				onclick: () => void refresh()
+			}, t("wv_retry"))] : []);
 			const routeSelection = new URLSearchParams(location.hash.split("?")[1]).get("select");
-			if (visible && routeSelection && routeSelection !== selected) await select(routeSelection, true);
+			if (!routeSelection) currentMilestone = null;
+			if (visible && routeSelection && routeSelection !== selected && routeSelection !== currentRequirement && (routeSelection !== currentMilestone || !milestones.some((row) => "milestone:" + row.milestone_id === currentMilestone))) await select(routeSelection, true);
 			else if (visible && selected) await select(selected, false, true);
 			busy = false;
 			if (pendingFocus) await applyPending();
@@ -18139,14 +18748,52 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		}
 	}
 	async function select(id, scroll = false, retain = false) {
+		if (id.startsWith("milestone:")) {
+			const milestone = milestones.find((row) => row.milestone_id === id.slice(10));
+			selected = null;
+			preference.selected = null;
+			currentRequirement = null;
+			currentMilestone = null;
+			closeRetaining();
+			if (!milestone) {
+				markSelection();
+				status.textContent = t("wv_not_in_plan");
+				return;
+			}
+			currentMilestone = id;
+			group.value = "milestone";
+			preference.group = "milestone";
+			filter.value = "";
+			preference.filter = "";
+			renderTable();
+			const heading = [...tables.querySelectorAll(".pm-requirement-group")].find((node) => node.dataset.rtmMilestones.split(",").includes(milestone.milestone_id));
+			if (heading) {
+				heading.tabIndex = -1;
+				heading.focus();
+				heading.scrollIntoView({ block: "nearest" });
+			}
+			return;
+		}
+		currentMilestone = null;
 		const card = cards.find((row) => row.work_item_id === id), requirement = plan?.document?.requirements?.find((row) => row.id === id);
 		if (!card && !requirement) {
+			const withdrawn = selected === id;
+			selected = null;
+			preference.selected = null;
+			currentRequirement = null;
 			closeRetaining();
+			markSelection();
+			status.textContent = t("wv_not_in_plan");
+			if (withdrawn) {
+				writeSelection(null);
+				viewHeading()?.focus();
+			}
 			return;
 		}
 		if (selected !== id) deliveryPages = 1;
 		selected = id;
 		preference.selected = id;
+		writeSelection(id);
 		if (scroll) {
 			scrollGeneration++;
 			filter.value = "";
@@ -18168,14 +18815,41 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			detail.element.body.replaceChildren(h$1("p", { role: "status" }, t("wb_detail_loading")));
 		}
 		if (requirement) {
-			const blocked = linked(requirement).find(blockedWork);
+			let register = null;
+			if (caps()?.features?.pm_register?.version === 1) try {
+				const data = scope(await api("GET", `${endpoint}/register?limit=100`));
+				alive();
+				if (ticket !== detailSerial || generation !== serial) return;
+				if (!Array.isArray(data.rows)) throw Error(t("wv_source_mismatch"));
+				register = {
+					rows: data.rows.filter((row) => [
+						"decision",
+						"change",
+						"action",
+						"issue",
+						"risk"
+					].includes(row.type) && row.related?.requirement_ids?.includes(id)),
+					complete: data.coverage?.complete === true && data.next_cursor == null
+				};
+			} catch {
+				register = null;
+			}
+			alive();
+			if (ticket !== detailSerial || generation !== serial) return;
 			detail.show({
 				title: requirement.text,
 				plan,
 				requirement,
+				acceptance: acceptance(requirement),
+				reviews: requirementReviews(plan, requirement, reviews),
+				criteriaResults: criteriaResults(requirement),
+				register,
+				work: linked(requirement),
+				workIncomplete,
+				source: deliverySource(requirement),
 				milestones: milestoneFor(requirement),
-				blocker: blocked ? blockerText(t, blocked) : null,
-				accepted: requirementReviews(plan, requirement, reviews).length > 0
+				onWork: (id) => void select(id),
+				onRetry: () => void refresh()
 			});
 			return;
 		}
@@ -18206,35 +18880,54 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				title: data.card.work.title,
 				card: data.card,
 				source: read.get(id),
-				plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : null,
+				plan: data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id),
+				earlierPlan: data.card.binding.plan_revision_id !== plan?.revision_id,
 				issues: issuesFor(data.card),
 				milestones: milestones.filter((row) => row.plan_revision_id === data.card.binding.plan_revision_id && row.requirement_ids?.some((id) => data.card.binding.requirement_ids?.includes(id))),
-				requirements: plan?.document?.requirements?.filter((req) => data.card.binding.plan_revision_id === plan.revision_id && data.card.binding.requirement_ids?.includes(req.id)) || [],
+				requirements: (data.card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(data.card.binding.plan_revision_id))?.document?.requirements?.filter((req) => data.card.binding.requirement_ids?.includes(req.id)) || [],
 				onMore: () => {
 					deliveryPages++;
 					select(id, false, true);
 				}
 			});
 		} catch (error) {
-			if (ticket === detailSerial) fail(error, generation);
+			if (ticket === detailSerial && generation === serial) {
+				if ([403, 404].includes(error.status)) {
+					cards = cards.filter((row) => row.work_item_id !== id);
+					sources.delete(id);
+					workIncomplete = true;
+					renderTable();
+					meta.textContent = plan ? t("wv_loaded", { n: plan.document.requirements.length }) : t("ui_status_unknown");
+				}
+				detail.show({
+					title: card.work.title,
+					error,
+					onRetry: () => void refresh()
+				});
+			}
 		}
 	}
 	function setActive(value) {
 		if (visible === value) {
-			if (value) {
+			if (value && signature) {
 				const id = new URLSearchParams(location.hash.split("?")[1]).get("select");
-				if (id && id !== selected) select(id, true);
+				if (!id) currentMilestone = null;
+				if (id && id !== currentMilestone && (id !== selected || !detail.element)) select(id, id !== selected);
 			}
 			return;
 		}
 		visible = value;
 		if (!value) {
+			active = false;
+			stale = true;
+			serial++;
+			detailSerial++;
 			preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
 			activate();
-			if (selected && cards.length) select(selected, false, true);
+			if (!stale && selected && cards.length) select(selected, false, true);
 			requestAnimationFrame(() => {
 				if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);
 			});
@@ -18263,11 +18956,20 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 			return;
 		}
-		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id || !plan.document?.requirements?.some((row) => row.id === ref.id)) return;
+		if (ref.kind !== "requirement" || ref.revision_id !== plan?.revision_id || !plan.document?.requirements?.some((row) => row.id === ref.id)) {
+			selected = null;
+			currentRequirement = null;
+			closeRetaining();
+			markSelection();
+			status.textContent = t("wv_not_in_plan");
+			return;
+		}
 		closeRetaining();
 		selected = null;
 		preference.selected = null;
 		currentRequirement = ref.id;
+		currentMilestone = null;
+		writeSelection(ref.id);
 		expanded.add(ref.id);
 		preference.expanded = [...expanded];
 		filter.value = "";
@@ -18327,7 +19029,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				expanded: [...expanded],
 				filter: filter.value
 			});
-			withdraw();
+			withdraw({ forgetRoute: false });
 		}
 	};
 }
@@ -25396,7 +26098,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		return h("div", { class: "pm-evidence-rows pm-sprint-work-list" }, ...items.length ? items.map((item) => h("article", {
 			class: "pm-fact",
 			"data-pm-sprint-work": item.work_item_id
-		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
+		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
 	}
 	function renderView() {
 		view.replaceChildren();
@@ -25423,7 +26125,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		const endingItems = (items) => h("div", { class: "pm-evidence-rows" }, ...items.map((item) => h("article", {
 			class: "pm-fact",
 			"data-pm-sprint-ended-work": item.work_item_id
-		}, h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.quality_assessment ? qualityFact({
+		}, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.quality_assessment ? qualityFact({
 			h,
 			t,
 			fact: item.quality_assessment
@@ -26880,12 +27582,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
-	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, milestones = [], pages = 1;
-	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1;
-	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", {
-		class: "pm-kanban-list",
-		"aria-label": t("ui_board")
-	}), boardInfo = h$1("div");
+	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
+	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("wv_refresh"),
@@ -26954,23 +27653,24 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		from: "board",
 		mount: layout,
 		tools: () => toolItems(),
+		returnFocus: () => rows.get(selected)?.node.querySelector("[data-board-open]") || viewHeading(),
 		onClose: () => {
 			detailSerial++;
 			if (!preserveSelection) {
 				selected = null;
 				preference.selected = null;
+				writeSelection(null);
 				markSelection();
 			}
 			requestAnimationFrame(updateEdges);
 		}
 	});
-	const note = (key) => h$1("p", { class: "ui-meta" }, t(key));
-	const elapsed = (value) => {
-		if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
-		if (value < 60) return t("pm_kanban_seconds");
-		const [key, divisor] = value < 3600 ? ["minutes", 60] : value < 86400 ? ["hours", 3600] : ["days", 86400];
-		return t("pm_kanban_" + key, { count: Math.floor(value / divisor) });
+	const viewHeading = () => {
+		const heading = element.closest("main")?.querySelector("h1");
+		if (heading) heading.tabIndex = -1;
+		return heading;
 	};
+	const note = (key) => h$1("p", { class: "ui-meta" }, t(key));
 	function checkCard(card, expectedId = null) {
 		if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || "") || expectedId && card.work_item_id !== expectedId || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t("pm_kanban_scope_error"));
 		if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
@@ -26992,12 +27692,20 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (data.next_cursor != null && (!data.cards.length || data.next_cursor < data.cards.at(-1).binding.sequence)) throw Error(t("pm_kanban_scope_error"));
 		return data;
 	}
+	function writeSelection(id) {
+		const [path, query] = location.hash.split("?");
+		if (!path.endsWith("/board")) return;
+		const params = new URLSearchParams(query);
+		if (id) params.set("select", id);
+		else params.delete("select");
+		history.replaceState(null, "", path + (params.size ? "?" + params : ""));
+	}
 	function closeRetaining() {
 		preserveSelection = true;
 		detail.close();
 		preserveSelection = false;
 	}
-	function withdraw() {
+	function withdraw({ forgetRoute = true } = {}) {
 		++serial;
 		++detailSerial;
 		reading = false;
@@ -27006,7 +27714,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		page = null;
 		next = null;
 		plan = null;
+		earlierPlans.clear();
 		milestones = [];
+		if (forgetRoute) writeSelection(null);
 		closeRetaining();
 		list.replaceChildren();
 		meta.replaceChildren();
@@ -27014,10 +27724,21 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		more.hidden = true;
 		more.disabled = false;
 		element.removeAttribute("aria-busy");
+		list.hidden = true;
+		content.querySelector(".ui-empty")?.remove();
+		element.querySelector("[data-board-partial]")?.remove();
+		requirementFilter.replaceChildren(h$1("option", { value: "" }, t("wv_all_requirements")));
+		delete requirementFilter.dataset.options;
+		agentFilter.replaceChildren(h$1("option", { value: "" }, t("wv_all_agents")));
+		delete agentFilter.dataset.options;
 	}
 	function unavailable(error) {
+		errorBox?.(error);
 		withdraw();
-		status.replaceChildren(errorBox ? errorBox(error) : h$1("p", { class: "error" }, error.message), h$1("button", {
+		status.replaceChildren(h$1("p", { class: "error" }, error.message === t("pm_kanban_scope_error") ? error.message : t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_board_unavailable")), ...error.code ? [disclosure({
+			label: t("wv_details"),
+			body: h$1("p", {}, labelSegment(error.code))
+		})] : [], h$1("button", {
 			type: "button",
 			class: "ui-button secondary",
 			onclick: () => {
@@ -27027,7 +27748,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}, t("pm_kanban_retry")));
 	}
 	function requirements(card) {
-		return (plan?.document?.requirements || []).filter((row) => card.binding.plan_revision_id === plan.revision_id && card.binding.requirement_ids?.includes(row.id));
+		return ((card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id))?.document?.requirements || []).filter((row) => card.binding.requirement_ids?.includes(row.id));
 	}
 	function fillFilters() {
 		const fill = (select, all, options, saved) => {
@@ -27040,67 +27761,86 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			}
 			select.value = current;
 		};
-		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, id)])), preference.requirement);
+		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, t("wv_earlier_plan"))])), preference.requirement);
 		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, agent])), preference.agent);
 	}
+	const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
 	function renderMetrics() {
 		if (!page) return;
-		const partial = next != null || page.coverage?.byte_limited || [...sources.values()].some((source) => source.filtered || source.next != null);
+		const partial = partialWorkPage() || [...sources.values()].some((source) => deliveryCoverage(source) !== "complete");
 		const blocked = [...rows.values()].filter(({ card }) => blockedWork(card)).length;
 		meta.textContent = joinLabel([t(partial ? "wv_loaded" : "wv_work_count", { n: rows.size }), blocked ? t(blocked === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: blocked }) : null]);
 		boardInfo.replaceChildren(...[
-			h$1("p", {}, t("pm_kanban_wip", page.wip)),
+			page.wip ? h$1("p", {}, t("pm_kanban_wip", page.wip)) : note("wv_source_unavailable"),
 			partial ? note("pm_kanban_partial") : null,
 			page.coverage?.byte_limited ? note("pm_kanban_bounded") : null
 		].filter(Boolean));
+		element.querySelector("[data-board-partial]")?.remove();
+		if (partialWorkPage()) more.before(h$1("span", {
+			class: "ui-meta",
+			"data-board-partial": ""
+		}, t("pm_kanban_partial")));
 		more.hidden = next == null;
 		more.disabled = reading;
 	}
 	function preview(card) {
 		const source = sources.get(card.work_item_id), reqs = requirements(card), coverage = card.execution?.coverage || {};
+		const earlier = card.binding.plan_revision_id !== plan?.revision_id;
 		const chip = (text) => {
 			const node = contextChip({ text });
 			node.title = text;
 			return node;
 		};
-		const age = elapsed(card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
-		return [
-			h$1("h3", { title: firstLabel(card.work.title, t("ui_work_item")) }, firstLabel(card.work.title, t("ui_work_item"))),
-			h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => chip(firstLabel(req.text, req.id))) : [chip(card.binding.requirement_ids?.length ? card.binding.requirement_ids.map(labelSegment).join(" · ") : t("wv_no_requirement"))]),
-			h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
-				const node = contextChip({ text: `PR #${target.pull_number}` });
-				node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
-				return node;
-			}), blockedWork(card) ? h$1("span", {
-				class: "pm-board-blocker",
-				tabindex: 0,
-				title: blockerText(t, card),
-				"aria-label": blockerText(t, card)
-			}, icon("circle-alert"), t("ui_status_blocked")) : null, group.value !== "status" ? h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))) : null, age ? h$1("span", {
-				class: "pm-board-age",
-				title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
-			}, age) : null),
-			coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null
-		].filter(Boolean);
+		const coverageState = deliveryCoverage(source);
+		const age = elapsed(t, card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
+		const title = firstLabel(card.work.title, t("ui_work_item")), metaId = `board-facts-${card.work_item_id}`;
+		return [h$1("h3", { title }, h$1("button", {
+			type: "button",
+			class: "pm-board-open",
+			"data-board-open": card.work_item_id,
+			"aria-describedby": metaId
+		}, title)), h$1("div", {
+			id: metaId,
+			class: "pm-board-facts"
+		}, h$1("span", { class: "sr-only" }, t("ui_status_" + workStatus(card))), h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => {
+			const text = firstLabel(req.text, t("wv_earlier_plan"));
+			return earlier ? chip(joinLabel([t("wv_earlier_plan"), text])) : h$1("a", {
+				class: "ui-context-chip",
+				title: text,
+				href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`
+			}, text);
+		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
+			const node = contextChip({ text: `PR #${target.pull_number}` });
+			node.title = joinLabel([
+				node.textContent,
+				target.repository,
+				t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")
+			]);
+			node.setAttribute("aria-label", node.title);
+			return node;
+		}), coverageState !== "complete" ? statusPill(coverageState) : null, blockedWork(card) ? h$1("span", {
+			class: "pm-board-blocker",
+			title: blockerText(t, card),
+			"aria-label": blockerText(t, card)
+		}, icon("circle-alert"), h$1("span", { class: "pm-board-blocker-label" }, t("ui_status_blocked"))) : null, group.value !== "status" ? h$1("span", {
+			class: "pm-board-state",
+			title: t("ui_status_" + workStatus(card))
+		}, statusPill(workStatus(card))) : null, age ? h$1("span", {
+			class: "pm-board-age",
+			title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
+		}, age) : null), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];
 	}
 	function makeCard(card) {
 		const node = h$1("article", {
 			class: "pm-kanban-card",
 			"data-pm-kanban-work": card.work_item_id,
-			role: "button",
-			tabindex: 0,
-			"aria-label": firstLabel(card.work.title, t("ui_work_item")),
-			onclick: () => {
-				node.focus();
-				select(card.work_item_id);
-			}
+			role: "listitem"
 		}, ...preview(card));
+		node.addEventListener("click", (event) => {
+			if (event.target.closest("[data-board-open]")) select(card.work_item_id);
+		});
 		node.addEventListener("keydown", (event) => {
-			if (event.target !== node) return;
-			if (["Enter", " "].includes(event.key)) {
-				event.preventDefault();
-				select(card.work_item_id);
-			}
+			if (!event.target.matches("[data-board-open]")) return;
 			if ([
 				"ArrowUp",
 				"ArrowDown",
@@ -27117,11 +27857,17 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					const available = next?.querySelector(".pm-kanban-cards")?.hidden ? [] : [...next?.querySelectorAll("[data-pm-kanban-work]:not([hidden])") || []];
 					target = available[index] || available[0] || next?.querySelector("button");
 				} else target = cards[event.key === "Home" ? 0 : event.key === "End" ? cards.length - 1 : index + (event.key === "ArrowUp" ? -1 : 1)];
-				target?.focus({ preventScroll: true });
+				(target?.querySelector("[data-board-open]") || target)?.focus({ preventScroll: true });
 				if (target) revealCard(target);
 			}
 		});
 		return node;
+	}
+	function patchCard(node, card) {
+		const [title, facts] = preview(card);
+		node.querySelector("h3").title = title.title;
+		node.querySelector("[data-board-open]").textContent = title.textContent;
+		node.querySelector(".pm-board-facts").replaceWith(facts);
 	}
 	const locked = (lane) => lane && (lane.matches(":hover") || lane.contains(document.activeElement));
 	function laneKey(card) {
@@ -27129,13 +27875,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		return [...columns, "archived"].includes(card.column) ? card.column : "unknown";
 	}
 	function renderColumns(force = false) {
+		if (!page || !rows.size) return;
 		const query = search.value.trim().toLocaleLowerCase();
 		const groupKeys = group.value === "status" ? [...columns] : milestones.map((row) => row.milestone_id);
 		const currentLanes = new Map([...list.children].map((node) => [node.dataset.pmKanbanColumn, node]));
 		for (const { card } of rows.values()) if (!groupKeys.includes(laneKey(card))) groupKeys.push(laneKey(card));
 		for (const key of groupKeys) if (!currentLanes.has(key)) {
 			const name = group.value === "milestone" ? firstLabel(milestones.find((row) => row.milestone_id === key)?.title, t("wb_unassigned")) : key === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus({ column: key }));
-			const holder = h$1("div", { class: "pm-kanban-cards" }), collapsed = preference.collapsed?.includes(key) === true;
+			const holder = h$1("div", {
+				class: "pm-kanban-cards",
+				role: "list",
+				"aria-label": name
+			}), collapsed = preference.collapsed?.includes(key) === true;
 			const toggle = h$1("button", {
 				type: "button",
 				class: "pm-board-lane-toggle",
@@ -27151,7 +27902,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				class: "pm-kanban-column",
 				"data-pm-kanban-column": key,
 				"aria-label": name
-			}, h$1("header", {}, toggle), holder);
+			}, h$1("header", {}, h$1("h2", {}, toggle)), holder);
 			lane.addEventListener("pointerleave", () => requestAnimationFrame(() => renderColumns()));
 			lane.addEventListener("focusout", () => requestAnimationFrame(() => renderColumns()));
 			currentLanes.set(key, lane);
@@ -27159,8 +27910,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 		for (const entry of rows.values()) {
 			const { card, node } = entry;
-			if ((entry.pending || force) && (!node.contains(document.activeElement) || node === document.activeElement)) {
-				node.replaceChildren(...preview(card));
+			if (entry.pending || force) {
+				patchCard(node, card);
 				entry.pending = false;
 			}
 			node.hidden = !((!query || joinLabel([card.work.title, ...requirements(card).map((req) => req.text)], " ").toLocaleLowerCase().includes(query)) && (!requirementFilter.value || card.binding.requirement_ids?.includes(requirementFilter.value)) && (!agentFilter.value || workAgents(sources.get(card.work_item_id)).includes(agentFilter.value)));
@@ -27169,12 +27920,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			else if (!previous) lane.querySelector(".pm-kanban-cards").append(node);
 		}
 		for (const [key, lane] of currentLanes) if (!groupKeys.includes(key) && !lane.querySelector("[data-pm-kanban-work]")) lane.remove();
-		else lane.querySelector(".pm-kanban-count").textContent = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length;
+		else {
+			const count = lane.querySelectorAll("[data-pm-kanban-work]:not([hidden])").length, partial = partialWorkPage();
+			const label = lane.querySelector(".pm-kanban-count");
+			label.textContent = partial ? t("wv_loaded", { n: count }) : count;
+			if (partial) label.setAttribute("aria-label", t("wv_lane_loaded", { n: count }));
+			else label.removeAttribute("aria-label");
+		}
 		markSelection();
 		requestAnimationFrame(updateEdges);
 	}
 	function markSelection() {
-		for (const { node, card } of rows.values()) node.setAttribute("aria-pressed", String(selected === card.work_item_id));
+		for (const { node, card } of rows.values()) node.querySelector("[data-board-open]").setAttribute("aria-pressed", String(selected === card.work_item_id));
 	}
 	function present(data, append = false) {
 		const ids = new Set(data.cards.map((card) => card.work_item_id));
@@ -27198,27 +27955,39 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				if (previous.signature !== contentSignature) previous.pending = true;
 				previous.signature = contentSignature;
 				previous.card = card;
-				previous.node.setAttribute("aria-label", firstLabel(card.work.title, t("ui_work_item")));
+				previous.node.querySelector("[data-board-open]").textContent = firstLabel(card.work.title, t("ui_work_item"));
 			} else rows.set(card.work_item_id, {
 				node: makeCard(card),
 				card
 			});
 		}
 		page = data;
+		const routeId = new URLSearchParams(location.hash.split("?")[1]).get("select");
+		if (routeId && rows.has(routeId)) {
+			selected = routeId;
+			preference.selected = routeId;
+		}
 		next = data.next_cursor ?? null;
 		fillFilters();
 		renderColumns();
 		renderMetrics();
+		list.hidden = !rows.size;
 		status.replaceChildren(...!rows.size ? [emptyState({ title: t("pm_kanban_empty") })] : []);
-		if (selected && !rows.has(selected)) closeRetaining();
-		else if (selected && active && detail.element) showDetail(rows.get(selected).card);
+		if (selected && !rows.has(selected)) {
+			selected = null;
+			preference.selected = null;
+			writeSelection(null);
+			closeRetaining();
+			viewHeading()?.focus();
+		} else if (selected && active) select(selected, true);
 	}
 	function showDetail(card) {
 		const opening = !detail.element;
 		detail.show({
 			title: card.work.title,
 			card,
-			plan: card.binding.plan_revision_id === plan?.revision_id ? plan : null,
+			plan: card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id),
+			earlierPlan: card.binding.plan_revision_id !== plan?.revision_id,
 			requirements: requirements(card),
 			milestones: milestones.filter((row) => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some((id) => card.binding.requirement_ids?.includes(id))),
 			source: sources.get(card.work_item_id),
@@ -27238,6 +28007,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (selected !== id) deliveryPages = 1;
 		selected = id;
 		preference.selected = id;
+		writeSelection(id);
 		markSelection();
 		const generation = serial, ticket = ++detailSerial;
 		if (!retain) {
@@ -27269,13 +28039,45 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			if (generation !== serial || ticket !== detailSerial) return;
 			sources.set(id, source.get(id));
 			current.card = data.card;
-			current.node.replaceChildren(...preview(data.card));
-			current.node.setAttribute("aria-label", firstLabel(data.card.work.title, t("ui_work_item")));
+			patchCard(current.node, data.card);
 			renderColumns();
 			renderMetrics();
 			showDetail(data.card);
 		} catch (error) {
-			if (generation === serial && ticket === detailSerial) unavailable(error);
+			if (generation === serial && ticket === detailSerial) {
+				if (error.message === t("pm_kanban_scope_error")) {
+					unavailable(error);
+					return;
+				}
+				if ([403, 404].includes(error.status)) try {
+					checkPage(await api("GET", path(0)), 0);
+					alive();
+					if (generation !== serial || ticket !== detailSerial) return;
+				} catch (parentError) {
+					if (generation === serial && ticket === detailSerial) unavailable(parentError);
+					return;
+				}
+				if ([403, 404].includes(error.status)) {
+					current.node.remove();
+					rows.delete(id);
+					sources.delete(id);
+					page = {
+						...page,
+						wip: null,
+						coverage: {
+							...page.coverage,
+							withdrawn: true
+						}
+					};
+					renderColumns();
+					renderMetrics();
+				}
+				detail.show({
+					title: current.card.work.title,
+					error,
+					onRetry: () => void refresh()
+				});
+			}
 		}
 	}
 	const path = (after) => `${endpoint}/kanban?${new URLSearchParams({
@@ -27284,6 +28086,11 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		limit: String(pageSize)
 	})}`;
 	async function refresh() {
+		if (!active) {
+			stale = true;
+			return;
+		}
+		stale = false;
 		const ticket = ++serial;
 		detailSerial++;
 		reading = true;
@@ -27305,13 +28112,17 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			const features = caps()?.features?.pm_workspaces;
 			const [accepted, roadmap, read] = await Promise.all([
 				features?.plan_drafting ? api("GET", `${endpoint}/plans/accepted`) : null,
-				features?.roadmap ? api("GET", `${endpoint}/roadmap`) : null,
+				features?.roadmap ? api("GET", `${endpoint}/roadmap`).then((data) => {
+					if (data.workspace_id !== workspaceId) throw Error(t("wv_source_mismatch"));
+					return data;
+				}).catch(() => null) : null,
 				readWorkSources({
 					api,
 					workspaceId,
 					cards: [...combined.values()],
 					caps: caps(),
 					t,
+					deliveryPages,
 					valid: () => {
 						alive();
 						return ticket === serial;
@@ -27321,6 +28132,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			alive();
 			if (ticket !== serial) return;
 			if (accepted && (accepted.head?.workspace_id !== workspaceId || accepted.plan && accepted.plan.workspace_id !== workspaceId) || roadmap && roadmap.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+			earlierPlans = await readEarlierPlans({
+				api,
+				workspaceId,
+				cards: [...combined.values()],
+				currentId: accepted?.plan?.revision_id,
+				valid: () => {
+					alive();
+					return ticket === serial;
+				}
+			});
+			alive();
+			if (ticket !== serial) return;
 			plan = accepted?.plan || null;
 			milestones = roadmap?.baseline?.document?.milestones || [];
 			sources = read;
@@ -27360,20 +28183,34 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		});
 		updateEdges();
 	}
-	const resize = new ResizeObserver(updateEdges);
+	const resize = new ResizeObserver(() => {
+		updateEdges();
+		if (detail.element && selected) {
+			const node = rows.get(selected)?.node;
+			if (node) requestAnimationFrame(() => revealCard(node));
+		}
+	});
 	resize.observe(list);
 	list.addEventListener("scroll", () => {
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
 	function setActive(value) {
-		if (active === value) return;
+		const routeId = new URLSearchParams(location.hash.split("?")[1]).get("select");
+		if (active === value) {
+			if (value && routeId && routeId !== selected) select(routeId);
+			return;
+		}
 		active = value;
 		if (!value) {
+			stale = true;
+			serial++;
+			detailSerial++;
 			preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
-			if (selected && rows.has(selected)) select(selected, true);
+			if (stale || !page) refresh();
+			else if (selected && rows.has(selected)) select(selected, true);
 			list.scrollLeft = preference.laneScroll || 0;
 			requestAnimationFrame(() => window.scrollTo(0, preference.scroll || 0));
 		}
@@ -27392,7 +28229,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		},
 		dispose: () => {
 			resize.disconnect();
-			withdraw();
+			withdraw({ forgetRoute: false });
 		}
 	};
 }
@@ -28312,12 +29149,14 @@ function spans(row) {
 		if (!span) return [];
 		const start = dayNumber(span.start), end = dayNumber(span.end);
 		if (start === null && end === null) return [];
+		const invalidEnd = start !== null && end !== null && end < start;
+		const cleanEnd = invalidEnd ? null : end;
 		return [{
 			kind,
 			start,
-			end: start !== null && end !== null && end < start ? null : end,
-			open: kind === "actual" && (end === null || start !== null && end < start),
-			recordedOpen: span.open
+			end: cleanEnd,
+			open: kind === "actual" && cleanEnd === null && (span.open === true || span.open == null && invalidEnd),
+			unknownEnd: kind === "actual" && span.open === false && cleanEnd === null
 		}];
 	});
 }
@@ -28334,11 +29173,15 @@ function milestoneDelta(row) {
 }
 function scheduleRef(row, data) {
 	const refs = row.refs || {};
-	if (row.kind === "milestone") return {
-		kind: "milestone",
-		id: refs.milestone_id,
-		revision_id: data.baseline?.revision_id
-	};
+	if (row.kind === "milestone") {
+		const hasBaseline = row.baseline ? Boolean(row.baseline.start || row.baseline.end) : row.baseline !== null && !row.forecast;
+		if (!refs.milestone_id || !data?.baseline?.revision_id || !hasBaseline || refs.revision_id && refs.revision_id !== data.baseline.revision_id) return null;
+		return {
+			kind: "milestone",
+			id: refs.milestone_id,
+			revision_id: data.baseline.revision_id
+		};
+	}
 	if (row.kind === "requirement") return {
 		kind: "requirement",
 		id: refs.requirement_id,
@@ -28385,18 +29228,18 @@ async function readSchedule(api, workspaceId, check) {
 			reasons.add("schedule_page_limit");
 		}
 	}
-	const rows = [...all.values()];
+	const rows = [...all.values()], { included } = treeIds(rows);
 	return {
 		...frame,
 		rows,
-		unscheduled: rows.filter((row) => !spans(row).length),
+		unscheduled: rows.filter((row) => !spans(row).length && !included.has(row.id)),
 		range: chartRange(rows),
 		unknown: [...notes.values()],
 		partial,
 		reasons: [...reasons]
 	};
 }
-function scheduleTree(rows, collapsed) {
+function treeIds(rows) {
 	const byId = new Map(rows.map((row) => [row.id, row])), included = new Set();
 	for (const row of rows.filter((row) => spans(row).length)) {
 		let next = row;
@@ -28407,6 +29250,13 @@ function scheduleTree(rows, collapsed) {
 			next = byId.get(next.parent_id);
 		}
 	}
+	return {
+		byId,
+		included
+	};
+}
+function scheduleTree(rows, collapsed) {
+	const { byId, included } = treeIds(rows);
 	const children = new Map();
 	for (const row of rows.filter((row) => included.has(row.id) && !sessionAttempt(row))) {
 		const parent = included.has(row.parent_id) ? row.parent_id : row.kind === "milestone" ? null : "unassigned";
@@ -28448,22 +29298,39 @@ function dateRange(span) {
 		timeStyle: "short",
 		timeZone: "UTC"
 	}).format(new Date(value)) + " UTC" : value;
-	return [format(span.start) || "—", span.end && (!span.start || span.end >= span.start) ? format(span.end) : t("sched_open")].join(" → ");
+	const endBeforeStart = Boolean(span.start && span.end && span.end < span.start);
+	const validEnd = span.end && !endBeforeStart ? span.end : null;
+	if (validEnd && validEnd === span.start) return format(span.start) || "—";
+	if (validEnd) return [format(span.start) || "—", format(validEnd)].join(" → ");
+	if (span.open === true || span.open == null && endBeforeStart) return [format(span.start) || "—", t("sched_open")].join(" → ");
+	if (span.open === false) return [format(span.start) || "—", reasonLabel(t, "terminal_time_unrecorded")].join(" → ");
+	return format(span.start) || "—";
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
 function render(row, { workspaceId, data }) {
-	const refs = row.refs || {}, work = row.kind === "attempt" ? data.rows.find((value) => value.id === row.parent_id) : row;
-	const served = work?.refs || refs;
-	const requirements = data.rows.filter((value) => value.kind === "requirement" && value.refs?.plan_revision_id === served.plan_revision_id && (served.requirement_ids || [served.requirement_id]).includes(value.refs?.requirement_id));
+	const refs = row.refs || {}, work = row.kind === "attempt" || row.kind === "issue" ? data.rows.find((value) => value.id === row.parent_id) : row;
+	const served = work?.refs || refs, reqIds = served.requirement_ids || (served.requirement_id ? [served.requirement_id] : []);
+	const requirements = data.rows.filter((value) => value.kind === "requirement" && (!served.plan_revision_id || value.refs?.plan_revision_id === served.plan_revision_id) && reqIds.includes(value.refs?.requirement_id));
 	const attempts = data.rows.filter((value) => value.kind === "attempt" && value.parent_id === (work?.id || row.id));
 	const sessions = row.kind === "attempt" ? [row] : attempts;
 	const status = section("status", rowStatus(row, data));
+	for (const key of [
+		"baseline",
+		"forecast",
+		"actual"
+	].filter((key) => row[key])) status.append(h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key])));
+	const delta = milestoneDelta(row);
+	if (row.kind === "milestone" && delta !== null && delta !== 0) status.append(h$1("p", {}, t("sched_delta", { n: delta > 0 ? "+" + delta : delta })));
 	if (sessionAttempt(row)) status.append(h$1("p", { class: "ui-meta" }, row.status === "in_progress" ? t("sched_open") + " · " + t("sched_no_dates") : t("sched_no_dates")));
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
 		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
-		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}` }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
+		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref({
+			host: session.host,
+			sessionId: session.session_id,
+			from: "schedule"
+		}) }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
 	}
 	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", {}, attempt.title), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
 	if (attempts.length) status.append(disclosure({
@@ -28471,13 +29338,13 @@ function render(row, { workspaceId, data }) {
 		body: attemptList,
 		open: true
 	}));
-	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || row.id;
-	const links = h$1("div", { class: "schedule-inspector-actions" }, h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")), h$1("a", {
+	const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || refs.requirement_ids?.[0] || served.requirement_ids?.[0] || null;
+	const links = h$1("div", { class: "schedule-inspector-actions" }, select ? h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({ select })}` }, t("sched_requirements")) : null, h$1("a", {
 		class: "ui-button secondary",
 		href: discussHref({
 			workspaceId,
 			refs: [scheduleRef(row, data)],
-			title: row.title,
+			title: t("sched_change_title", { title: firstLine(row) }),
 			from: "schedule"
 		}),
 		"data-schedule-discuss": ""
@@ -28489,7 +29356,7 @@ function render(row, { workspaceId, data }) {
 			"baseline",
 			"forecast",
 			"actual"
-		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
+		].filter((key) => row[key]).map((key) => h$1("p", {}, t("sched_" + key), ": ", dateRange(row[key]))), ...notes.map((note) => h$1("p", {}, reasonLabel(t, note.reason), h$1("code", {}, note.reason))), h$1("code", {}, row.id), refs.issue ? h$1("code", {}, `${refs.issue.repository}#${refs.issue.number}`) : null, ...Object.values(refs).flatMap((value) => typeof value === "string" ? [h$1("code", {}, value)] : []), ...[
 			data.baseline?.revision_id,
 			data.forecast?.revision_id,
 			data.as_of
@@ -28509,7 +29376,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	let zoom = Object.hasOwn(ZOOM, preference.zoom) ? preference.zoom : "week";
 	const collapsed = new Set(preference.collapsed || []);
 	let selected = preference.selected || null, active = false, serial = 0, data = null, panel = null, panelSignature = "", signature = "";
-	let domain, scale, visible = [], focusId = null;
+	let domain, scale, visible = [], focusId = null, syncingLanes = false;
 	const viewport = h$1("div", {
 		class: "schedule-viewport",
 		tabindex: 0,
@@ -28568,7 +29435,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	function saveScroll() {
 		if (!domain || !viewport.clientWidth) return;
-		preference.anchor = domain.start + viewport.scrollLeft / scale;
+		if (matchMedia("(min-width: 800px)").matches) preference.anchor = domain.start + viewport.scrollLeft / scale;
 		preference.top = viewport.scrollTop;
 		const top = viewport.getBoundingClientRect().top + (matchMedia("(min-width: 800px)").matches ? 40 : 0);
 		const row = [...chart.querySelectorAll("[data-schedule-row]")].find((node) => node.getBoundingClientRect().bottom > top);
@@ -28578,7 +29445,11 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		};
 	}
 	function restoreScroll() {
-		viewport.scrollLeft = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		const left = Math.max(0, ((preference.anchor ?? domain.start) - domain.start) * scale);
+		viewport.scrollLeft = left;
+		syncingLanes = true;
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = left;
+		syncingLanes = false;
 		viewport.scrollTop = preference.top || 0;
 		if (preference.vertical) {
 			const row = chart.querySelector(`[data-schedule-row="${CSS.escape(preference.vertical.id)}"]`);
@@ -28590,8 +29461,13 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (!domain) return;
 		const x = (dayNumber(new Date().toISOString()) - domain.start) * scale;
 		viewport.scrollLeft = Math.max(0, x - Math.max(0, viewport.clientWidth - 328) / 2);
-		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = Math.max(0, x - mini.clientWidth / 2);
-		saveScroll();
+		const firstLane = chart.querySelector("[data-has-dates=\"true\"] .schedule-lane") || chart.querySelector(".schedule-lane");
+		const miniLeft = firstLane ? Math.max(0, x - firstLane.clientWidth / 2) : 0;
+		syncingLanes = true;
+		for (const mini of chart.querySelectorAll(".schedule-lane")) mini.scrollLeft = miniLeft;
+		syncingLanes = false;
+		if (matchMedia("(max-width: 799px)").matches && firstLane?.clientWidth) preference.anchor = domain.start + miniLeft / scale;
+		else saveScroll();
 	}
 	function closePanel(clear = true) {
 		const old = selected;
@@ -28649,10 +29525,18 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		panel.scrollTop = scroll;
 		if (focus >= 0) panel.body.querySelectorAll("a, summary")[focus]?.focus({ preventScroll: true });
 	}
+	const activeTreeId = () => [focusId, selected].find((id) => visible.some((v) => v.row.id === id)) || visible[0]?.row.id || null;
 	function markSelection() {
+		const tabId = activeTreeId();
 		for (const node of element.querySelectorAll("[data-schedule-select]")) {
 			const current = node.dataset.scheduleSelect === selected;
-			node.setAttribute("aria-selected", String(current));
+			if (node.getAttribute("role") === "treeitem") {
+				node.setAttribute("aria-selected", String(current));
+				node.tabIndex = node.dataset.scheduleSelect === tabId ? 0 : -1;
+			} else {
+				node.removeAttribute("aria-selected");
+				node.setAttribute("aria-pressed", String(current));
+			}
 			node.closest(".schedule-row")?.classList.toggle("selected", current);
 		}
 	}
@@ -28660,7 +29544,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (panel && id !== selected) closePanel();
 		opener?.focus({ preventScroll: true });
 		selected = id;
-		focusId = id;
+		if (visible.some((v) => v.row.id === id)) focusId = id;
 		remember();
 		markSelection();
 		showPanel();
@@ -28672,6 +29556,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		draw();
 	}
 	function focusRow(id) {
+		if (!id || !visible.some((v) => v.row.id === id)) return;
 		focusId = id;
 		for (const node of chart.querySelectorAll("[role=treeitem]")) node.tabIndex = node.dataset.scheduleSelect === id ? 0 : -1;
 		chart.querySelector(`[data-schedule-select="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
@@ -28730,7 +29615,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 		if (axis) {
 			const length = domain.end - domain.start + 1;
-			const step = zoom === "day" ? Math.max(1, Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
+			const step = zoom === "day" ? Math.max(2, Math.ceil(72 / scale), Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
 			for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
 				const instant = new Date(date * DAY$1);
 				const tick = h$1("span", { class: "schedule-tick" }, new Intl.DateTimeFormat(navigator.language, {
@@ -28751,16 +29636,24 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			for (const span of rowSpans) {
 				const start = span.start ?? span.end, end = span.end ?? start;
 				const marker = row.kind === "milestone";
+				const endText = span.open ? t("sched_open") : span.unknownEnd ? reasonLabel(t, "terminal_time_unrecorded") : span.end !== null ? row[span.kind].end : null;
+				const rangeText = endText && row[span.kind].end !== row[span.kind].start ? `${row[span.kind].start || "—"} → ${endText}` : row[span.kind].start || endText || "—";
+				const barTitle = `${t("sched_" + span.kind)} · ${rangeText}`;
 				const bar = h$1("span", {
 					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
+					role: "img",
+					"aria-label": barTitle,
 					"data-schedule-bar": span.kind,
 					"data-open": span.open ? "true" : null,
-					title: `${t("sched_" + span.kind)} · ${row[span.kind].start || "—"} → ${span.open ? t("sched_open") : row[span.kind].end || "—"}`
+					title: barTitle
 				}, marker ? "◆" : null);
 				bar.style.left = `${(start - domain.start) * scale}px`;
 				if (!marker) bar.style.width = `${span.open ? 44 : Math.max(8, (end - start + 1) * scale)}px`;
-				if (span.open) bar.append(h$1("span", { class: "schedule-bar-label" }, t("sched_open")));
-				else if (["waiting", "blocked"].includes(row.status)) bar.append(h$1("span", { class: "schedule-bar-label" }, t("ui_status_" + row.status)));
+				const labels = [];
+				if (["waiting", "blocked"].includes(row.status)) labels.push(t("ui_status_" + row.status));
+				if (span.open) labels.push(t("sched_open"));
+				else if (span.unknownEnd) labels.push(reasonLabel(t, "terminal_time_unrecorded"));
+				if (labels.length) bar.append(h$1("span", { class: "schedule-bar-label" }, labels.join(" · ")));
 				node.append(bar);
 			}
 			const delta = milestoneDelta(row);
@@ -28775,6 +29668,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		}
 		const line = h$1("span", {
 			class: "schedule-today",
+			role: axis ? "img" : null,
 			"aria-label": axis ? t("sched_today") : null,
 			"aria-hidden": axis ? null : "true"
 		});
@@ -28798,6 +29692,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			role: "tree",
 			"aria-label": t("sched_tree")
 		});
+		const tabId = activeTreeId();
 		visible.forEach((item, index) => {
 			const { row, depth, expandable } = item;
 			const expand = expandable ? button({
@@ -28813,38 +29708,42 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 					focusRow(row.id);
 				}
 			}) : h$1("span", { class: "schedule-indent" });
-			const dates = [
-				"baseline",
-				"forecast",
-				"actual"
-			].filter((key) => row[key]).map((key) => `${t("sched_" + key)} ${row[key].start?.slice(0, 10) || "—"}${row[key].end && row[key].end !== row[key].start ? " → " + row[key].end.slice(0, 10) : ""}`);
+			const dates = spans(row).map((span) => {
+				const s = row[span.kind].start?.slice(0, 10) || "—";
+				const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
+				const suffix = span.open ? " → " + t("sched_open") : span.unknownEnd ? " → " + reasonLabel(t, "terminal_time_unrecorded") : e && e !== s ? " → " + e : "";
+				return `${t("sched_" + span.kind)} ${s}${suffix}`;
+			});
+			const pill = row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null;
+			const descId = `sched-desc-${index}`, statusId = pill ? `sched-status-${index}` : null;
+			if (pill) pill.id = statusId;
 			const cell = h$1("div", {
 				class: "schedule-tree-cell",
 				role: "treeitem",
 				"aria-level": depth,
 				"aria-expanded": expandable ? String(!collapsed.has(row.id)) : null,
 				"aria-label": label(row),
-				tabindex: (focusId || selected || visible[0]?.row.id) === row.id ? 0 : -1,
+				"aria-describedby": [statusId, descId].filter(Boolean).join(" "),
+				tabindex: tabId === row.id ? 0 : -1,
 				"data-schedule-select": row.id,
 				onclick: (event) => row.kind === "group" ? toggle(row.id) : select(row.id, event.currentTarget),
 				onkeydown: (event) => keydown(event, item, index)
 			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
 				class: "schedule-title",
 				title: row.title
-			}, label(row)), h$1("span", { class: "schedule-date-range" }, dates.join(" · ") || t("sched_no_dates"))), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null);
+			}, label(row)), h$1("span", {
+				id: descId,
+				class: "schedule-date-range"
+			}, dates.join(" · ") || t("sched_no_dates"))), pill);
 			cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
-			const lane = h$1("div", {
-				class: "schedule-lane",
-				tabindex: 0,
-				role: "region",
-				"aria-label": `${t("sched_timeline")} · ${label(row)}`
-			}, track(row));
+			const lane = h$1("div", { class: "schedule-lane" }, track(row));
 			lane.addEventListener("scroll", () => {
-				if (lane.clientWidth) {
-					preference.mini ||= {};
-					preference.mini[row.id] = domain.start + lane.scrollLeft / scale;
-				}
-			});
+				if (syncingLanes || !lane.clientWidth) return;
+				syncingLanes = true;
+				preference.anchor = domain.start + lane.scrollLeft / scale;
+				for (const other of chart.querySelectorAll(".schedule-lane")) if (other !== lane) other.scrollLeft = lane.scrollLeft;
+				syncingLanes = false;
+			}, { passive: true });
 			const line = h$1("div", {
 				class: "schedule-row",
 				"data-schedule-row": row.id,
@@ -28856,16 +29755,9 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (!visible.length) chart.replaceChildren(emptyState({ title: t("sched_empty") }));
 		restoreScroll();
 		markSelection();
-		for (const lane of chart.querySelectorAll(".schedule-lane")) {
-			const id = lane.firstElementChild?.dataset.scheduleTrack;
-			if (preference.mini?.[id] !== void 0) lane.scrollLeft = (preference.mini[id] - domain.start) * scale;
-			else if (matchMedia("(max-width: 799px)").matches) {
-				const row = data.rows.find((row) => row.id === id), dates = row ? spans(row).map((span) => span.start ?? span.end) : [];
-				if (dates.length) lane.scrollLeft = Math.max(0, (Math.min(...dates) - domain.start) * scale - 32);
-			}
-		}
 		if (focused) focusRow(focused);
 	}
+	let stale = false, pendingRefresh = null;
 	function renderData() {
 		const next = JSON.stringify([
 			data.rows,
@@ -28877,6 +29769,10 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (next !== signature) {
 			saveScroll();
 			signature = next;
+			const activeEl = document.activeElement;
+			const focusMetaSummary = meta.contains(activeEl) && activeEl?.tagName === "SUMMARY";
+			const focusUnscheduledSummary = unscheduled.contains(activeEl) && activeEl?.tagName === "SUMMARY";
+			const focusUnscheduledId = unscheduled.contains(activeEl) ? activeEl?.closest("[data-schedule-select]")?.dataset.scheduleSelect : null;
 			const details = disclosure({
 				label: t("sched_details"),
 				key: `${namespace}:${workspaceId}:schedule:details`,
@@ -28884,20 +29780,23 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			});
 			const upcoming = data.rows.filter((row) => row.kind === "milestone" && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString())).sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
 			const delta = upcoming ? milestoneDelta(upcoming) : null;
-			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), data.partial ? statusPill("partial") : h$1("span"), details);
+			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t("sched_loaded", { n: data.rows.length })), ...data.partial ? [statusPill("partial")] : [], details);
 			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
 				variant: "ghost",
 				label: firstLine(row),
 				"data-schedule-select": row.id,
 				title: row.title,
 				onClick: (event) => select(row.id, event.currentTarget)
-			}), rowStatus(row, data))));
-			unscheduled.replaceChildren(disclosure({
+			}), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null)));
+			unscheduled.replaceChildren(...data.unscheduled.length ? [disclosure({
 				label: t("sched_unscheduled", { n: data.unscheduled.length }),
 				key: `${namespace}:${workspaceId}:schedule:unscheduled`,
 				body: list
-			}));
+			})] : []);
 			draw();
+			if (focusMetaSummary) meta.querySelector("summary")?.focus({ preventScroll: true });
+			else if (focusUnscheduledSummary) unscheduled.querySelector("summary")?.focus({ preventScroll: true });
+			else if (focusUnscheduledId) unscheduled.querySelector(`[data-schedule-select="${CSS.escape(focusUnscheduledId)}"]`)?.focus({ preventScroll: true });
 		}
 		if (selected && !data.rows.some((row) => row.id === selected)) {
 			closePanel();
@@ -28908,6 +29807,8 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	function withdraw() {
 		serial++;
+		stale = false;
+		pendingRefresh = null;
 		closePanel();
 		selected = null;
 		remember();
@@ -28919,43 +29820,58 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		unscheduled.replaceChildren();
 		error.replaceChildren();
 	}
-	async function refresh() {
+	async function refresh(force = false) {
 		if (!canRead()) {
 			withdraw();
 			return;
 		}
+		if (!force && element.closest("[hidden]")) {
+			stale = true;
+			return;
+		}
+		stale = false;
 		const ticket = ++serial;
-		if (!data) chart.replaceChildren(skeleton(6));
-		const check = () => {
-			alive();
-			if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
-		};
-		try {
-			const next = await readSchedule(api, workspaceId, check);
-			check();
-			if (data) {
-				const order = new Map(data.rows.map((row, index) => [row.id, index]));
-				next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
-			}
-			data = next;
-			error.replaceChildren();
-			renderData();
-		} catch (failure) {
-			try {
+		const run = (async () => {
+			if (!data) chart.replaceChildren(skeleton(6));
+			const check = () => {
 				alive();
-				if (ticket !== serial) return;
-			} catch {
-				return;
+				if (ticket !== serial || !canRead()) throw Error("PM_SCHEDULE_RETIRED");
+			};
+			try {
+				const next = await readSchedule(api, workspaceId, check);
+				check();
+				if (data) {
+					const order = new Map(data.rows.map((row, index) => [row.id, index]));
+					next.rows.sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
+				}
+				data = next;
+				error.replaceChildren();
+				renderData();
+			} catch (failure) {
+				try {
+					alive();
+					if (ticket !== serial) return;
+				} catch {
+					return;
+				}
+				withdraw();
+				const tooLarge = failure.status === 413 || failure.code === "PM_SCHEDULE_TOO_LARGE";
+				error.append(inlineError({
+					error: t(tooLarge ? "sched_too_large" : failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
+					retry: tooLarge ? null : () => refresh()
+				}));
 			}
-			withdraw();
-			error.append(inlineError({
-				error: t(failure.message === "PM_SCHEDULE_CHANGED" ? "sched_changed" : "sched_error"),
-				retry: refresh
-			}));
+		})();
+		pendingRefresh = run;
+		try {
+			await run;
+		} finally {
+			if (pendingRefresh === run) pendingRefresh = null;
 		}
 	}
 	async function openRef(ref) {
-		if (!data) await refresh();
+		if (pendingRefresh) await pendingRefresh;
+		else if (!data || stale) await refresh(true);
 		if (!active || !data) return;
 		const row = data.rows.find((row) => {
 			const identity = scheduleRef(row, data);
@@ -28985,15 +29901,20 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			if (!value) {
 				saveScroll();
 				closePanel(false);
-			} else if (data) {
-				restoreScroll();
-				showPanel();
+			} else {
+				if (data) {
+					restoreScroll();
+					showPanel();
+				}
+				if (stale && !element.closest("[hidden]")) refresh();
 			}
 		},
 		dispose() {
 			saveScroll();
 			remember();
 			active = false;
+			stale = false;
+			pendingRefresh = null;
 			serial++;
 			closePanel(false);
 			data = null;
@@ -29603,7 +30524,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
 				if (source.kind === "plan_input") details.append(h("p", { class: "muted" }, t("pm_brief_plan_source")), h("code", {}, source.revision_id), h("p", {}, source.source_ref?.ref || source.source_ref?.message_id || ""));
 				else if (source.kind === "plan_adoption") details.append(h("p", { class: "muted" }, t("pm_brief_decision_source")), h("code", {}, source.revision_id));
-				else if (source.kind === "work_binding") details.append(h("a", { href: `#/work/${source.work_item_id}` }, t("pm_evidence_open_work")));
+				else if (source.kind === "work_binding") details.append(h("a", { href: `#/item/${source.work_item_id}` }, t("pm_evidence_open_work")));
 				else if (source.kind === "evidence") {
 					const evidence = (snapshot.evidence || []).find((row) => row.evidence_id === source.evidence_id);
 					if (evidence) details.append(h("p", { class: "muted" }, readable("pm_evidence_kind_", evidence.source_kind), " · ", stamp(evidence.source_observed_at)));
@@ -33630,7 +34551,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		row.addEventListener("toggle", async () => {
 			if (!row.open || opened) return;
 			opened = true;
-			detail.append(h("a", { href: `#/work/${item.work_item_id}` }, t("pm_evidence_open_work")));
+			detail.append(h("a", { href: `#/item/${item.work_item_id}` }, t("pm_evidence_open_work")));
 			if (can(true)) {
 				const editor = h("details", {}, h("summary", {}, t(binding ? "pm_evidence_reassociate" : "pm_evidence_associate_work")));
 				detail.append(editor);
@@ -34687,9 +35608,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			report: launch.report || savedOrigin.report || ""
 		}));
 		const origin = source.from || "discussions";
+		const session = sessionOrigin(origin);
 		return h("a", {
 			class: "pd-back",
-			href: `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
+			href: session || `#/pm/${encodeURIComponent(workspaceId)}/${origin}`,
 			"data-discussion-back": "",
 			onclick: () => {
 				if (origin === "overview" && source.report) Object.assign(viewState(namespace, workspaceId, "overview"), {
@@ -34697,7 +35619,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					mode: "saved"
 				});
 			}
-		}, icon("chevron-left"), t("pd_back", { view: t("ui_" + origin) }));
+		}, icon("chevron-left"), t("pd_back", { view: t(session ? "ui_session" : "ui_" + origin) }));
 	};
 	if (threadId) h = discussionDom(h, JSON.stringify([
 		namespace,
@@ -35698,7 +36620,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 		}
 		let shownView = null;
-		workbench = projectViews$1({
+		workbench = projectViews$2({
 			h,
 			t,
 			namespace,
@@ -36663,7 +37585,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			brief?.setActive?.(workbench?.selected() === "overview");
 			updateWorkView(workbench?.selected());
 			resources?.setActive(workbench?.selected() === "agents");
-			schedule?.setActive(workbench?.selected() === "schedule");
+			schedule?.setActive(workbench?.selected() === "schedule" && !detailPanel);
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
 			register?.setActive(workbench?.selected() === "issues");
 			updateForms();
@@ -38124,6 +39046,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 		action: emptyLink
 	});
 	empty.hidden = true;
+	const pageAlert = h("div", { class: "global-pending-alert" });
 	const noteKeys = [
 		"replies",
 		"completion",
@@ -38213,7 +39136,8 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			more,
 			pages: 1,
 			size: null,
-			busy: false
+			busy: false,
+			readFailed: false
 		};
 		more.onclick = () => refresh(state, state.pages + 1).catch(() => {});
 		sections.push(state);
@@ -38256,7 +39180,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 	const syncBusy = () => {
 		refreshButton.disabled = sections.some((section) => section.busy);
 	};
-	column.append(empty, ...groups, notes);
+	column.append(pageAlert, empty, ...groups, notes);
 	main.append(pageHeader({
 		title: t("nav_home"),
 		actions: [refreshButton]
@@ -38304,6 +39228,7 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			section.count.textContent = section.partial ? t("global_shown", { count: items.size }) : "";
 			section.status.replaceChildren();
 			section.more.hidden = cursor === null;
+			section.readFailed = false;
 			section.section.hidden = items.size === 0;
 			section.section.dataset.fresh = "true";
 			if (focusKey) {
@@ -38314,13 +39239,14 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			publishPending();
 		} catch (error) {
 			guard();
+			section.readFailed = true;
 			section.section.dataset.fresh = "false";
 			section.section.hidden = false;
+			section.badge.textContent = "";
+			section.badge.hidden = true;
 			if ([403, 404].includes(error.status)) {
 				section.list.replaceChildren();
 				section.count.replaceChildren();
-				section.badge.textContent = "";
-				section.badge.hidden = true;
 				section.size = null;
 				section.more.hidden = true;
 				reconcile();
@@ -38346,6 +39272,27 @@ async function attentionView({ main, h, t, api, guard, caps, storageKey, route, 
 			guard();
 			const results = await Promise.allSettled((only ? [only] : sections).map((item) => load(item, only ? wanted : item.pages)));
 			guard();
+			const notUpdated = (item) => inlineError({
+				error: { message: t("global_not_updated") },
+				retry: () => refresh(item).catch(() => {})
+			});
+			if (sections.length && sections.every((item) => item.readFailed)) {
+				pageAlert.replaceChildren(inlineError({
+					error: { message: t("global_not_updated") },
+					retry: () => refresh().catch(() => {})
+				}));
+				for (const item of sections) {
+					item.status.replaceChildren();
+					item.section.hidden = item.list.childElementCount === 0;
+				}
+			} else {
+				pageAlert.replaceChildren();
+				for (const item of sections) {
+					if (!item.readFailed) continue;
+					if (!item.status.querySelector(".ui-inline-error")) item.status.replaceChildren(notUpdated(item));
+					item.section.hidden = false;
+				}
+			}
 			const settled = sections.every((item) => item.size === 0 && item.section.dataset.fresh === "true");
 			empty.hidden = !settled;
 			const failed = results.find((item) => item.status === "rejected");
@@ -38604,7 +39551,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		tags.hidden = !chips.length;
 		stateLine.hidden = Boolean(chips.length);
 		stateLine.textContent = t(readable ? "labels_empty" : "labels_unavailable");
-		foldLabel.textContent = t(showEdit ? "labels_edit" : "session_details");
+		foldLabel.textContent = t(showEdit ? "labels_edit" : "session_label_details");
 		const why = !readable ? t("labels_unreadable") : !permitted() ? t("labels_scope") : "";
 		reason.hidden = showEdit || !why;
 		reason.textContent = why;
@@ -38718,6 +39665,15 @@ async function readArtifactContent(reference, size, token, signal) {
 }
 //#endregion
 //#region src/conversation.js
+function messageDuration(t, ms) {
+	if (!(typeof ms === "number" && Number.isFinite(ms) && ms >= 0)) return "";
+	if (ms < 6e4) return t("message_seconds", { s: String(Number((ms / 1e3).toFixed(1))) });
+	const total = Math.round(ms / 1e3), m = Math.floor(total / 60), s = total % 60;
+	return s ? t("message_minutes", {
+		m,
+		s
+	}) : t("message_minutes_even", { m });
+}
 function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
@@ -38743,9 +39699,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				run(() => readingActions.latest());
 				return;
 			}
-			viewport.scrollTop = viewport.scrollHeight;
+			follow();
 			notice.hidden = true;
-			indicator();
+			viewport.focus({ preventScroll: true });
 		}
 	}, t("message_latest"));
 	const progress = h("span", {
@@ -38782,11 +39738,12 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		hidden: true,
 		onclick: () => run(() => readingActions.older())
 	}, t("message_load_earlier"));
-	const caption = h("p", { class: "muted conversation-window" }, t("message_window"));
+	const caption = h("p", { class: "muted conversation-window" });
 	const captionRow = h("div", { class: "conversation-caption" }, caption);
 	const readingBar = readingActions ? h("div", { class: "actions" }, progress, mark, remember) : null;
 	const box = h("section", { class: "panel conversation" }, captionRow, notice, viewport, h("div", { class: "conversation-toolbar" }, status, latest), readingBar, fallback);
 	let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
+	let pinned = true, unseen = 0, userLabel = null, last = null, resizing = false;
 	const alive = () => {
 		if (disposed) return false;
 		try {
@@ -38806,13 +39763,20 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		});
 	};
 	const indicator = () => {
-		latest.textContent = olderWindow ? t("message_latest") : t("message_new");
-		latest.hidden = !olderWindow && atBottom();
+		if (pinned) unseen = 0;
+		latest.textContent = !olderWindow && unseen ? t("message_new") : t("message_latest");
+		latest.hidden = !olderWindow && (pinned || !rows.size);
 		if (memory && initialized) memory.scrollTop = viewport.scrollTop;
 		if (!readingActions) return;
 		mark.disabled = busy || !visible().some((row) => row.reading?.can_mark && row.reading?.unread);
 		remember.disabled = busy || !visible().some((row) => row.reading);
 		older.disabled = busy;
+	};
+	const follow = () => {
+		pinned = true;
+		unseen = 0;
+		viewport.scrollTop = viewport.scrollHeight;
+		indicator();
 	};
 	const run = async (action) => {
 		if (!alive() || busy) return;
@@ -38828,9 +39792,29 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			if (alive()) indicator();
 		}
 	};
-	viewport.addEventListener("scroll", indicator, { passive: true });
+	const onScroll = () => {
+		if (initialized && !resizing) pinned = atBottom();
+		indicator();
+	};
+	viewport.addEventListener("scroll", onScroll, { passive: true });
+	viewport.addEventListener("focusin", () => requestAnimationFrame(onScroll));
 	window.addEventListener("scroll", indicator, { passive: true });
-	window.addEventListener("resize", indicator);
+	const onResize = () => {
+		resizing = true;
+		requestAnimationFrame(() => {
+			if (!alive()) return;
+			if (pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+			requestAnimationFrame(() => {
+				resizing = false;
+				indicator();
+			});
+		});
+	};
+	window.addEventListener("resize", onResize);
+	const resized = typeof ResizeObserver === "function" ? new ResizeObserver(() => {
+		if (alive() && pinned && initialized) viewport.scrollTop = viewport.scrollHeight;
+	}) : null;
+	resized?.observe(viewport);
 	const copy = async (text) => {
 		if (!alive()) return;
 		const attempt = ++copyAttempt;
@@ -38860,16 +39844,22 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			input.select();
 		}
 	};
+	const countCaption = (count, more) => count === 1 && !more ? t("message_window_one") : more ? t("message_window_latest", { count }) : t("message_window_count", { count });
 	const update = (messages, state = null) => {
 		if (!alive()) return;
+		last = {
+			messages,
+			state
+		};
 		const top = viewport.getBoundingClientRect().top;
 		const anchor = [...rows.entries()].find(([, row]) => row.node.getBoundingClientRect().bottom > top);
 		const selection = window.getSelection();
 		const readingSelection = selection && !selection.isCollapsed && viewport.contains(selection.anchorNode);
 		const savedScroll = !initialized && memory && Number.isFinite(memory.scrollTop) && !state?.restore && !state?.latest;
-		const follow = !savedScroll && (!initialized || !state?.preserve && atBottom() && !readingSelection);
+		const followNow = !savedScroll && (!initialized || !state?.preserve && pinned && !readingSelection);
 		const offset = anchor ? anchor[1].node.getBoundingClientRect().top - top : 0, scrollTop = viewport.scrollTop;
 		const next = new Map(), occurrences = new Map();
+		let added = 0;
 		for (const message of messages) {
 			const text = typeof message.text === "string" ? message.text : "";
 			const identity = JSON.stringify(message.id != null ? ["id", message.id] : [
@@ -38883,6 +39873,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			const key = JSON.stringify([identity, occurrence]);
 			let row = rows.get(key);
 			if (!row) {
+				added += 1;
 				row = {
 					text: null,
 					meta: null,
@@ -38913,22 +39904,28 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			}
 			const extras = [];
 			const pillKey = message.role !== "tool" && typeof message.status !== "string" ? "" : message.denied ? "blocked" : message.deferred ? "waiting" : message.status === "completed" ? "done" : message.status === "failed" || message.status === "error" ? "failed" : message.status === "running" ? "running" : "unknown";
+			const agent = typeof message.agent === "string" && message.agent ? message.agent : "";
+			const whoName = message.role === "user" ? userLabel || t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : agent || t("agent");
 			const chip = [];
-			if (typeof message.agent === "string") chip.push(message.agent);
-			if (typeof message.model === "string") chip.push(message.model);
-			if (typeof message.duration_ms === "number" && Number.isFinite(message.duration_ms) && message.duration_ms >= 0) extras.push(t("message_duration", { ms: message.duration_ms }));
-			const whoName = message.role === "user" ? t("message_you") : message.role === "tool" ? message.tool || t("message_tool_details") : message.role === "system" ? t("message_system") : message.agent || t("agent");
+			if (agent && whoName !== agent) chip.push(agent);
+			if (typeof message.model === "string" && message.model) chip.push(message.model);
+			const duration = messageDuration(t, message.duration_ms);
+			if (duration) extras.push(duration);
 			const stamp = when(message.ts);
 			const meta = JSON.stringify([
+				message.role,
 				whoName,
+				agent,
 				stamp,
 				chip,
 				extras,
 				pillKey
 			]);
 			if (row.meta !== meta) {
-				const glyphs = Array.from(whoName);
-				row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
+				if (message.role === "tool") row.mark.replaceChildren(icon("wrench"));
+				else if (message.role === "system") row.mark.replaceChildren(icon("settings"));
+				else if (message.role === "user") row.mark.textContent = Array.from(whoName)[0]?.toUpperCase() || "";
+				else row.mark.textContent = agentMark(agent).textContent;
 				row.name.textContent = whoName;
 				row.time.textContent = stamp;
 				row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
@@ -38953,6 +39950,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.text = null;
 				row.tool = folded;
 				row.toolDetails = null;
+				row.pill = void 0;
 			}
 			if (folded && !row.toolDetails) {
 				row.toolContent = h("div", {});
@@ -38965,16 +39963,16 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.toolDetails.classList.add("message-tool");
 				row.toolDetails.addEventListener("toggle", indicator);
 				row.body.append(row.toolDetails);
-			}
-			if (tool && !completed) row.toolDetails.open = true;
+			} else if (tool && !completed && row.pill !== pillKey) row.toolDetails.open = true;
+			row.pill = pillKey;
 			if (row.text !== text) {
+				if (row.text !== null) added += 1;
 				(folded ? row.toolContent : row.body).replaceChildren(...renderMessage(h, t, text, copy));
 				row.text = text;
 				if (folded && row.toolDetails) {
-					const summary = row.toolDetails.querySelector("summary");
-					const label = (text.includes("\n") ? text.split("\n").find((item) => item.trim()) : "") || t(tool ? "message_tool_details" : "message_system");
+					const label = text.split("\n").find((item) => item.trim())?.trim() || t(tool ? "message_tool_details" : "message_system");
 					row.toolLabel.textContent = label;
-					summary.title = text || label;
+					row.toolDetails.querySelector("summary").title = Array.from(label).slice(0, 200).join("");
 				}
 			}
 			next.set(key, row);
@@ -38989,9 +39987,15 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			position = old.nextSibling;
 			old.remove();
 		}
-		if (!next.size) viewport.replaceChildren(h("p", { class: "muted" }, t("no_messages")));
-		if (follow) {
+		if (!next.size) viewport.replaceChildren(emptyState({
+			icon: "message-square",
+			title: t("no_messages")
+		}));
+		if (initialized && !followNow && added) unseen += added;
+		if (followNow) {
 			viewport.scrollTop = viewport.scrollHeight;
+			pinned = true;
+			unseen = 0;
 			notice.hidden = true;
 		} else if (savedScroll) {
 			viewport.scrollTop = memory.scrollTop;
@@ -39016,33 +40020,82 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		if (state?.latest) {
 			viewport.scrollTop = viewport.scrollHeight;
 			notice.hidden = true;
+			viewport.focus({ preventScroll: true });
 		}
+		const more = state?.next_offset != null;
 		if (readingActions && state) {
 			reading = state.reading;
 			olderWindow = Boolean(state.olderWindow);
-			const canOlder = state.next_offset != null;
-			older.hidden = !canOlder;
+			older.hidden = !more;
 			older.textContent = t("message_load_earlier");
-			if (canOlder) caption.replaceChildren(t("message_window_showing") + "\xA0· ", older);
+			if (more) caption.replaceChildren(t("message_window_latest", { count: next.size }) + "\xA0· ", older);
 			else {
 				if (older.parentElement === caption) readingBar?.append(older);
-				caption.textContent = t("message_window");
+				caption.textContent = countCaption(next.size, false);
 			}
 			progress.textContent = reading?.unread_count == null ? t("conversation_unknown") : t(reading.complete ? "conversation_unread" : "conversation_partial", { count: reading.unread_count });
 			progress.title = t("conversation_count_note");
-		}
+		} else caption.textContent = countCaption(next.size, more);
+		if (!initialized || followNow || savedScroll || state?.latest || state?.restore) pinned = atBottom() || followNow;
 		initialized = true;
 		indicator();
+	};
+	const fail = ({ title, retry }) => {
+		if (!alive()) return;
+		const action = retry ? h("button", {
+			class: "ui-button secondary ui-sm",
+			type: "button",
+			onclick: retry
+		}, t("ui_retry")) : null;
+		if (!rows.size) {
+			viewport.replaceChildren(h("div", {
+				class: "conversation-state",
+				"data-conversation-state": "error"
+			}, emptyState({
+				icon: "circle-alert",
+				title,
+				action
+			})));
+			caption.textContent = t("message_window_failed");
+		} else caption.replaceChildren(t("message_window_stale"), action ? "\xA0· " : "", action || "");
+		indicator();
+	};
+	const clear = () => {
+		copyAttempt += 1;
+		rows = new Map();
+		initialized = false;
+		viewport.replaceChildren();
+		caption.textContent = "";
+		notice.hidden = true;
+		status.textContent = "";
+		fallback.replaceChildren();
+		last = null;
+		unseen = 0;
+		indicator();
+	};
+	const setUserLabel = (label) => {
+		if (label === userLabel) return;
+		userLabel = label;
+		if (last && initialized) update(last.messages, last.state ? {
+			...last.state,
+			restore: null,
+			latest: false
+		} : null);
 	};
 	return {
 		box,
 		update,
+		fail,
+		clear,
+		follow,
+		setUserLabel,
 		dispose() {
 			disposed = true;
 			if (memory) memory.scrollTop = viewport.scrollTop;
-			viewport.removeEventListener("scroll", indicator);
+			resized?.disconnect();
+			viewport.removeEventListener("scroll", onScroll);
 			window.removeEventListener("scroll", indicator);
-			window.removeEventListener("resize", indicator);
+			window.removeEventListener("resize", onResize);
 		}
 	};
 }
@@ -42763,20 +43816,20 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 	function body(op) {
 		const steps = Array.isArray(op.steps) ? op.steps : [];
 		const precise = t("op_" + op.status);
+		const target = operationTargetText(op);
 		return [
+			precise !== "op_" + op.status ? h("p", {}, precise) : null,
 			h("a", {
 				class: "ui-button secondary ui-sm",
 				href: `#/op/${encodeURIComponent(op.operation_id)}`
 			}, t("global_open_operation")),
 			statusPill(operationStatusKey(op.status)),
-			h("p", { class: "muted" }, operationMeta(op, formatTime(op.created_at)) || "—"),
-			op.status_reason ? h("p", {}, op.status_reason) : null,
-			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
+			target ? h("p", { class: "muted" }, target) : null,
 			facts(op),
 			disclosure({
 				label: t("global_details"),
 				key: "operations." + op.operation_id,
-				body: h("div", {}, h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null), steps.length ? h("h3", {}, t("steps")) : null, ...steps.map((step) => h("p", {}, joinLabel([
+				body: h("div", {}, h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null), steps.length ? h("h3", {}, t("steps")) : null, ...steps.map((step) => h("p", {}, joinLabel([
 					step.name,
 					step.status,
 					step.error?.code
@@ -47235,6 +48288,13 @@ function sessionBadges(s) {
 		s.pending ? chip(t("pending_" + s.pending.kind), "stale") : null
 	];
 }
+function sessionQuestions(pending) {
+	if (!Array.isArray(pending?.questions)) return [];
+	return pending.questions.flatMap((item) => {
+		const text = typeof item === "string" ? item : item?.question;
+		return typeof text === "string" && text.trim() ? [text.trim()] : [];
+	});
+}
 function sessionRow(s, open) {
 	const title = s.title || s.session_id;
 	const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
@@ -47249,19 +48309,23 @@ function sessionRow(s, open) {
 		s.pending?.kind ? t("pending_" + s.pending.kind) : "",
 		s.stale ? reasonText$1(s.stale_reason) : ""
 	]);
+	const pill = !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
+	const primary = () => h("a", {
+		class: "ui-button secondary ui-sm",
+		href
+	}, t(asking ? "global_answer" : permission ? "global_review" : "global_open"));
 	return inboxRow({
 		h,
 		key,
 		title,
 		href,
 		meta,
-		pill: !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
-		action: h("a", {
-			class: "ui-button secondary ui-sm",
-			href
-		}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
+		pill,
+		action: primary(),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
+			...sessionQuestions(s.pending).map((text) => h("p", {}, text)),
+			primary(),
 			!managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
 			meta ? h("p", {}, meta) : null,
 			disclosure({
@@ -47300,13 +48364,12 @@ function opRow(op, open) {
 		}, t(needs ? "global_review" : "global_open")),
 		detailsLabel: t("global_details_for", { title }),
 		onOpen: () => open?.(key, title, [
+			precise !== "op_" + op.status ? h("p", {}, precise) : null,
 			statusPill(operationStatusKey(op.status)),
 			meta ? h("p", { class: "muted" }, meta) : null,
-			op.status_reason ? h("p", {}, op.status_reason) : null,
-			precise !== "op_" + op.status ? h("p", { class: "muted" }, precise) : null,
 			disclosure({
 				label: t("global_details"),
-				body: h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)
+				body: h("dl", { class: "kv" }, h("dt", {}, t("global_action_id")), h("dd", {}, h("code", {}, op.action || "—")), h("dt", {}, t("global_operation_id")), h("dd", {}, h("code", {}, op.operation_id || "—")), h("dt", {}, t("global_col_target")), h("dd", {}, h("code", {}, JSON.stringify(op.target ?? null))), op.status_reason ? [h("dt", {}, t("reason")), h("dd", {}, op.status_reason)] : null, op.error_code ? [h("dt", {}, t("global_code")), h("dd", {}, reasonText$1(op.error_code), " ", h("code", {}, String(op.error_code)))] : null)
 			})
 		])
 	});
@@ -47946,13 +49009,60 @@ async function viewHostDiscovery(main, host) {
 		repair?.dispose();
 	};
 }
-async function viewSession(main, host, sid, context = null) {
-	const queryAt = String(sid).indexOf("?");
-	let fromQuery = "";
-	if (queryAt >= 0) {
-		fromQuery = new URLSearchParams(String(sid).slice(queryAt + 1)).get("from") || "";
-		sid = String(sid).slice(0, queryAt);
+var SESSION_ERROR_LINES = {
+	SESSION_BUSY: "session_err_busy",
+	PENDING_CHANGED: "session_err_changed",
+	NOT_FOUND: "session_err_gone",
+	PAYLOAD_TOO_LARGE: "session_err_too_large",
+	INTERNAL: "session_err_server",
+	FORBIDDEN: "session_err_forbidden"
+};
+function sessionErrorLine(e) {
+	const code = typeof e?.code === "string" ? e.code : "";
+	if (Object.hasOwn(SESSION_ERROR_LINES, code)) return t(SESSION_ERROR_LINES[code]);
+	if (e?.status === 403) return t("session_err_forbidden");
+	if (e?.status === 404 || e?.status === 410) return t("session_err_gone");
+	if (e?.status === 413) return t("session_err_too_large");
+	if (e?.status >= 500) return t("session_err_server");
+	if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
+	return t("session_err_unknown");
+}
+function sessionErrorDetails(e) {
+	const code = typeof e?.code === "string" ? e.code : "";
+	const detail = [
+		code,
+		e?.status ? `HTTP ${e.status}` : "",
+		e?.message && e.message !== code ? e.message : ""
+	].filter(Boolean).join(" · ");
+	return detail ? disclosure({
+		label: t("session_error_details"),
+		body: h("p", { class: "muted" }, h("code", {}, detail))
+	}) : null;
+}
+function sessionErrorBox(e, action = null) {
+	if (state.refreshCycle) state.refreshCycle.error ||= e;
+	return h("div", {
+		class: "session-error",
+		role: "alert",
+		"data-session-error": typeof e?.code === "string" ? e.code : ""
+	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, sessionErrorLine(e)), action ? h("button", {
+		type: "button",
+		class: "session-error-action",
+		onclick: action.run
+	}, action.label) : null), sessionErrorDetails(e));
+}
+function sessionPullHref(target) {
+	try {
+		const origin = new URL(target?.provider_origin);
+		if (origin.protocol !== "https:" || !/^[\w.-]+\/[\w.-]+$/.test(target.repository || "")) return null;
+		return `${origin.hostname === "api.github.com" ? "https://github.com" : origin.origin}/${target.repository}/pull/${target.pull_number}`;
+	} catch {
+		return null;
 	}
+}
+async function viewSession(main, host, sid, context = null) {
+	const params = new URLSearchParams(location.hash.split("?")[1] || "");
+	let fromQuery = params.get("from") || "";
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -47969,7 +49079,27 @@ async function viewSession(main, host, sid, context = null) {
 		"agents",
 		"board"
 	]);
-	const originView = () => projectViews.has(fromQuery) ? fromQuery : projectViews.has(sessionFromMemory) ? sessionFromMemory : "";
+	const storedOrigin = history.state?.batcSessionOrigin;
+	const sessionWorkspace = lastWorkspace(connection.namespace) || (storedOrigin?.namespace === connection.namespace && storedOrigin.host === host && storedOrigin.sessionId === sid ? storedOrigin.workspaceId : "");
+	if (!projectViews.has(fromQuery) && projectViews.has(sessionFromMemory)) {
+		fromQuery = sessionFromMemory;
+		params.set("from", fromQuery);
+		try {
+			history.replaceState(history.state, "", location.hash.split("?")[0] + "?" + params);
+		} catch {}
+	}
+	if (sessionWorkspace) try {
+		history.replaceState({
+			...history.state,
+			batcSessionOrigin: {
+				namespace: connection.namespace,
+				host,
+				sessionId: sid,
+				workspaceId: sessionWorkspace
+			}
+		}, "");
+	} catch {}
+	const originView = () => projectViews.has(fromQuery) ? fromQuery : "";
 	const head = h("div", { class: "workspace-session-heading" });
 	const titleNode = h("span");
 	const markSlot = h("span", { class: "session-mark" });
@@ -47984,7 +49114,7 @@ async function viewSession(main, host, sid, context = null) {
 		class: "workspace-result",
 		"data-workspace-result": ""
 	});
-	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0;
+	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30;
 	const readingSupported = state.caps?.features?.session_reading?.version === 1;
 	const saveReading = async (action, params, preconditions = {}) => {
 		const op = await submit(action, {
@@ -48000,7 +49130,7 @@ async function viewSession(main, host, sid, context = null) {
 		t,
 		when: sessionWhen,
 		guard: () => assertView(connection),
-		memory: viewState(connection.namespace, lastWorkspace(connection.namespace) || host, `session:${sid}`),
+		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
 		readingActions: readingSupported ? {
 			mark: (messages) => saveReading("session.read", { messages }),
 			remember: (position, version) => saveReading("session.position", position, { expected_version: version }),
@@ -48008,7 +49138,11 @@ async function viewSession(main, host, sid, context = null) {
 			latest: () => loadMessages(0, true)
 		} : null
 	});
-	const pending = h("div", { "data-pending-controls": "" }), status = h("div", { class: "muted" });
+	const pending = h("div", {
+		class: "session-asking-region",
+		"data-pending-controls": ""
+	});
+	const status = h("div", { class: "muted session-status" });
 	const scope = `send.${host}.${sid}`, draftKey = `batc.draft.${connection.namespace}.${scope}`;
 	const box = h("textarea", { placeholder: t("send_placeholder") });
 	try {
@@ -48020,8 +49154,9 @@ async function viewSession(main, host, sid, context = null) {
 		} catch {}
 	};
 	const queue = h("input", { type: "checkbox" });
-	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null;
-	const allowed = (action) => readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
+	let row, pendingIdentity, sending = false, readReady = false, refreshInFlight = null, readError = null, queueKnown = false;
+	let withdrawn = "", withdrawalVersion = 0, retryTimer = null, retryDelay = 1e3, retryAt = 0, disposed = false, observationRequest = 0;
+	const allowed = (action) => !withdrawn && readReady && row?.api_access === "managed" && may("operate") && state.caps?.hosts?.find((item) => item.host === host)?.writes !== false && state.caps?.actions?.find((item) => item.action === action)?.allowed !== false;
 	const identity = (pend) => pend ? JSON.stringify({
 		kind: pend.kind,
 		toolUseId: pend.toolUseId,
@@ -48029,16 +49164,51 @@ async function viewSession(main, host, sid, context = null) {
 		input_preview: pend.input_preview,
 		questions: pend.questions
 	}) : "";
+	try {
+		const savedQueue = localStorage.getItem(draftKey + ".queue");
+		if (savedQueue === "true" || savedQueue === "false") {
+			queue.checked = savedQueue === "true";
+			queueKnown = true;
+		}
+	} catch {}
+	queue.onchange = () => {
+		try {
+			localStorage.setItem(draftKey + ".queue", String(queue.checked));
+		} catch {}
+	};
+	const accessRecovery = () => ({
+		label: t("obs_axis_connection"),
+		run: () => {
+			location.hash = "#/settings";
+		}
+	});
+	const goneRecovery = () => ({
+		label: t("ui_back"),
+		run: () => {
+			location.hash = originHref()?.href || "#/sessions";
+		}
+	});
+	const sendRecovery = (e) => e?.code === "SESSION_BUSY" && !queue.checked ? {
+		label: t("session_err_queue"),
+		run: () => {
+			queue.checked = true;
+			send.click();
+		}
+	} : e?.status === 403 || e?.code === "FORBIDDEN" ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
+		label: t("ui_retry"),
+		run: () => send.click()
+	};
 	const send = h("button", {
 		class: "primary",
 		disabled: true,
 		onclick: async () => {
-			if (!box.value.trim()) return;
+			if (!box.value.trim() || send.disabled) return;
 			const submitted = box.value;
 			sending = true;
 			send.disabled = true;
 			try {
 				assertView(connection);
+				queue.onchange();
 				const op = await submit("session.send", {
 					host,
 					session_id: sid
@@ -48048,15 +49218,17 @@ async function viewSession(main, host, sid, context = null) {
 				}, {}, scope);
 				assertView(connection);
 				paintSend(op);
+				if (op.status === "succeeded") conversation.follow();
 				if (op.status === "succeeded" && box.value === submitted) {
 					box.value = "";
 					try {
 						localStorage.removeItem(draftKey);
+						localStorage.removeItem(draftKey + ".queue");
 					} catch {}
 					mobileLayout?.updateDraft();
 				}
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, sendRecovery(e)));
 			} finally {
 				sending = false;
 				send.disabled = !allowed("session.send");
@@ -48079,7 +49251,10 @@ async function viewSession(main, host, sid, context = null) {
 				assertView(connection);
 				status.replaceChildren(opStatus(op));
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
+					label: t("ui_retry"),
+					run: () => stop.click()
+				}));
 			}
 		}
 	});
@@ -48105,12 +49280,12 @@ async function viewSession(main, host, sid, context = null) {
 		}, t("session_send_retry")));
 		else line.textContent = t("op_" + op.status);
 		const record = id ? disclosure({
-			label: t("session_details"),
+			label: t("session_send_details"),
 			body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(id)}` }, id)),
 			key: `session-send:${connection.namespace}:${host}:${sid}`
 		}) : null;
 		if (record) record.classList.add("session-send-record");
-		status.replaceChildren(line, record);
+		status.replaceChildren(...[line, record].filter(Boolean));
 	};
 	const shortcut = composerShortcut({
 		h,
@@ -48129,10 +49304,17 @@ async function viewSession(main, host, sid, context = null) {
 		hidden: true,
 		id: "workspace-message-input"
 	}, box, composerRow);
-	const readonly = h("p", { class: "note" }, t("session_access_unknown"));
+	const readonly = h("p", {
+		class: "muted session-readonly",
+		"data-session-readonly": "",
+		hidden: true
+	});
 	let capture, permissions, batHandoff, sourcesPanel;
 	const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
-	const controls = h("div", { class: "panel workspace-composer" }, pending, readonly, sendReason, composer, status);
+	const controls = h("div", {
+		class: "panel workspace-composer",
+		hidden: true
+	}, pending, sendReason, composer);
 	const labels = sessionLabelsPanel({
 		h,
 		t,
@@ -48147,7 +49329,10 @@ async function viewSession(main, host, sid, context = null) {
 		errorBox,
 		opStatus
 	});
-	const cps = checkpointPanel(host, sid);
+	const cps = checkpointPanel(host, sid, {
+		namespace: connection.namespace,
+		manual: () => row?.provenance === "manual"
+	});
 	const observations = observationPanels("session", `${host}/${sid}`, path);
 	const instructions = state.caps?.features?.session_instructions?.version === 1 ? instructionReceiptPanel({
 		h,
@@ -48163,9 +49348,10 @@ async function viewSession(main, host, sid, context = null) {
 		if (instructions.box.open) instructions.refresh();
 	});
 	const deliveryPills = h("div", { class: "session-delivery-pills" });
-	const sourcesBody = h("div", { "data-session-sources": "" }, h("p", { class: "muted session-quiet" }, t("session_sources_empty")));
+	const sourcesEmpty = () => h("p", { class: "muted session-quiet" }, t("session_sources_empty"));
+	const sourcesBody = h("div", { "data-session-sources": "" }, sourcesEmpty());
 	const details = disclosure({
-		label: t("session_details"),
+		label: t("session_details_session"),
 		body: metadata,
 		key: `session-details:${connection.namespace}:${host}:${sid}`
 	});
@@ -48183,11 +49369,11 @@ async function viewSession(main, host, sid, context = null) {
 	});
 	const wide = matchMedia("(min-width: 1200px)");
 	const syncWide = () => {
-		openResults.hidden = wide.matches;
+		openResults.hidden = wide.matches || Boolean(withdrawn);
 	};
 	syncWide();
 	wide.addEventListener("change", syncWide);
-	const sessionSection = (name, title, body) => h("section", { class: "session-section" }, h("h2", { class: "session-section-title" }, icon(name, { size: 16 }), title), body);
+	const sessionSection = (name, title, body, action = null) => h("section", { class: "session-section" }, h("div", { class: "session-section-head" }, h("h3", { class: "session-section-title" }, icon(name, { size: 16 }), title), action), body);
 	const changesSection = sessionSection("folder", t("session_changes"), h("div", { class: "session-changes" }, captureSlot, artifactSlot));
 	const slotVisible = (slot) => [...slot.children].some((child) => !child.hidden);
 	const syncChanges = () => {
@@ -48247,7 +49433,7 @@ async function viewSession(main, host, sid, context = null) {
 	results.body.append(...[
 		context?.itemBox,
 		changesSection,
-		sessionSection("list-checks", t("checkpoints"), cps.box),
+		sessionSection("list-checks", t("checkpoints"), cps.box, cps.action),
 		sessionSection("check", t("session_delivery"), result),
 		sessionSection("inbox", t("session_sources"), sourcesBody),
 		batSlot,
@@ -48257,10 +49443,7 @@ async function viewSession(main, host, sid, context = null) {
 		observations.box,
 		details
 	].filter(Boolean));
-	const lane = h("section", {
-		class: "workspace-conversation",
-		"aria-label": t("messages")
-	}, conversation.box, controls);
+	const lane = h("section", { class: "workspace-conversation" }, conversation.box, readonly, controls, status);
 	const mobileLayout = setupMobileSessionLayout({
 		head,
 		composer: controls,
@@ -48271,26 +49454,35 @@ async function viewSession(main, host, sid, context = null) {
 		composerRow
 	});
 	if (context?.picker) main.append(context.picker);
-	main.append(head, h("div", {
+	const workspaceNode = h("div", {
 		class: "workspace-session session-workspace",
 		"data-session-view": ""
-	}, lane, results));
+	}, lane, results);
+	const withdrawnSlot = h("div", { class: "session-withdrawn" });
+	main.append(head, workspaceNode);
+	const originHref = () => {
+		const view = originView(), workspaceId = sessionWorkspace;
+		return view && workspaceId ? {
+			href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`,
+			view
+		} : null;
+	};
 	const paintOrigin = () => {
-		const view = originView(), workspaceId = lastWorkspace(connection.namespace);
+		const origin = originHref();
 		backSlot.replaceChildren();
-		if (!view || !workspaceId) {
+		if (!origin) {
 			backSlot.hidden = true;
 			return;
 		}
 		backSlot.hidden = false;
 		backSlot.append(h("a", {
-			href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`,
-			"data-session-back": view
-		}, t("session_back", { view: t("ui_" + view) })));
+			href: origin.href,
+			"data-session-back": origin.view
+		}, t("session_back", { view: t("ui_" + origin.view) })));
 	};
 	const paintDiscuss = (items) => {
 		const link = overflow.querySelector("[data-menu-key=discuss]");
-		const workspaceId = lastWorkspace(connection.namespace);
+		const workspaceId = sessionWorkspace;
 		if (!link) return;
 		if (!workspaceId) {
 			link.hidden = true;
@@ -48306,52 +49498,132 @@ async function viewSession(main, host, sid, context = null) {
 		link.setAttribute("href", discussHref({
 			workspaceId,
 			refs,
-			title: row?.title || sid,
-			from: originView()
+			title: row?.title || "",
+			from: sessionHref({
+				host,
+				sessionId: sid,
+				from: originView()
+			})
 		}));
 	};
-	let deliveryTicket = 0;
+	let deliveryTicket = 0, deliveryItems = [], sourceItemId = "";
+	const deliveryKnown = new Map();
 	const loadDelivery = async (items) => {
 		const ticket = ++deliveryTicket;
-		deliveryPills.replaceChildren();
-		const workspaceId = lastWorkspace(connection.namespace);
-		const linked = (items || []).filter((item) => isContextRef({
+		deliveryItems = items || [];
+		const workspaceId = sessionWorkspace;
+		const linked = [...new Map(deliveryItems.filter((item) => isContextRef({
 			kind: "work_item",
 			id: item.work_item_id
-		}));
-		if (!sourcesPanel && !context?.itemBox && state.caps?.features?.work_item_results?.version === 1 && linked[0]) {
+		})).map((item) => [item.work_item_id, item])).values()];
+		const current = () => {
+			assertView(connection);
+			return !disposed && ticket === deliveryTicket;
+		};
+		const sourceId = linked[0]?.work_item_id || "";
+		if (sourceItemId !== sourceId) {
+			sourcesPanel?.dispose();
+			sourcesPanel = null;
+			sourceItemId = sourceId;
+			sourcesBody.replaceChildren(sourcesEmpty());
+		}
+		if (!sourcesPanel && !context?.itemBox && state.caps?.features?.work_item_results?.version === 1 && sourceId) {
 			sourcesPanel = resultSourcesPanel({
 				h,
 				t,
 				api,
-				guard: () => assertView(connection),
-				workItemId: linked[0].work_item_id,
+				guard: () => {
+					assertView(connection);
+					if (withdrawn || disposed) throw Error(t("session_err_gone"));
+				},
+				workItemId: sourceId,
 				linkTarget,
 				onEvents,
 				errorBox
 			});
 			sourcesBody.replaceChildren(sourcesPanel.box);
 		}
-		if (!workspaceId || !linked.length) return;
-		for (const item of linked) try {
-			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(item.work_item_id)}/deliveries?limit=20`);
-			assertView(connection);
-			if (ticket !== deliveryTicket) return;
-			for (const receipt of data.deliveries || []) {
-				const pull = receipt.target?.pull_number;
-				const bits = [];
-				if (pull && receipt.target?.repository) bits.push(h("a", {
-					href: `https://github.com/${receipt.target.repository}/pull/${pull}`,
-					target: "_blank",
-					rel: "noopener"
-				}, `PR #${pull}`));
-				if (receipt.merge?.merged === true) bits.push(statusPill("merged"));
-				if (receipt.deployment?.verified === true && receipt.deployment?.is_current === true) bits.push(statusPill("deployed"));
-				if (bits.length) deliveryPills.append(h("div", { class: "session-delivery-row" }, ...bits));
-			}
-		} catch {
-			if (ticket !== deliveryTicket) return;
+		const ids = new Set(linked.map((item) => item.work_item_id));
+		for (const id of deliveryKnown.keys()) if (!ids.has(id)) deliveryKnown.delete(id);
+		if (!workspaceId || !linked.length || !state.caps?.features?.pm_workspaces?.engineering_delivery) {
+			deliveryKnown.clear();
+			deliveryPills.replaceChildren();
+			return;
 		}
+		const nextKnown = new Map(deliveryKnown), failed = new Set(), removed = new Set();
+		for (const item of linked) {
+			const id = item.work_item_id;
+			try {
+				const data = checkDelivery(await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(id)}/deliveries?after=0&limit=20`), workspaceId, id, 0, t);
+				if (!current()) return;
+				nextKnown.set(id, {
+					deliveries: data.deliveries,
+					next: data.next_after ?? null,
+					filtered: data.source_visibility_filtered === true
+				});
+			} catch (error) {
+				if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) && current()) {
+					if ([
+						403,
+						404,
+						410
+					].includes(error?.status)) {
+						nextKnown.delete(id);
+						removed.add(id);
+						if (sourceItemId === id) {
+							sourcesPanel?.dispose();
+							sourcesPanel = null;
+							sourcesBody.replaceChildren(sourcesEmpty());
+						}
+					} else failed.add(id);
+				} else throw error;
+			}
+		}
+		if (!current()) return;
+		deliveryKnown.clear();
+		for (const [id, known] of nextKnown) deliveryKnown.set(id, known);
+		const retry = () => button({
+			variant: "ghost",
+			size: "sm",
+			label: t("ui_retry"),
+			onClick: () => loadDelivery(deliveryItems).catch(() => {})
+		});
+		const receipts = linked.flatMap((item) => deliveryKnown.get(item.work_item_id)?.deliveries || []);
+		const groups = prGroups(receipts), pills = prPills({ deliveries: receipts });
+		const nodes = groups.map(({ target, rows }, index) => {
+			const href = sessionPullHref(target);
+			const deployed = rows.some((receipt) => receipt.deployment?.verified === true && receipt.deployment?.is_current === true);
+			return h("div", {
+				class: "session-delivery-row",
+				"data-session-pr": String(target.pull_number)
+			}, href ? h("a", {
+				href,
+				target: "_blank",
+				rel: "noopener",
+				class: "session-delivery-link"
+			}, pills[index]) : pills[index], deployed ? statusPill("deployed") : null);
+		});
+		for (const receipt of receipts.filter((receipt) => !receipt.target?.pull_number && receipt.deployment)) nodes.push(h("div", { class: "session-delivery-row" }, statusPill(receipt.deployment.verified === true && receipt.deployment.is_current === true ? "deployed" : "unknown")));
+		if (removed.size) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "removed"
+		}, t("session_delivery_removed")));
+		if (linked.some((item) => !deliveryKnown.has(item.work_item_id) && !removed.has(item.work_item_id))) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "unknown"
+		}, statusPill("unknown"), retry()));
+		if (linked.some((item) => failed.has(item.work_item_id) && deliveryKnown.has(item.work_item_id))) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "stale"
+		}, t("session_delivery_stale"), " · ", retry()));
+		if (linked.some((item) => deliveryKnown.get(item.work_item_id)?.next != null)) nodes.push(h("p", {
+			class: "session-delivery-state",
+			"data-session-delivery-state": "partial"
+		}, t("session_delivery_more", { count: groups.length })));
+		else if (linked.some((item) => deliveryKnown.get(item.work_item_id)?.filtered)) nodes.push(statusPill("partial"));
+		if (!nodes.length) nodes.push(h("p", { class: "muted" }, t("session_delivery_none")));
+		const content = h("div", { class: "session-delivery-pills" }, ...nodes);
+		if (!deliveryPills.isEqualNode(content)) deliveryPills.replaceChildren(...content.childNodes);
 	};
 	const renderPending = () => {
 		const pend = row.api_access === "managed" ? row.pending : null;
@@ -48369,8 +49641,25 @@ async function viewSession(main, host, sid, context = null) {
 		const answer = async (params) => {
 			try {
 				assertView(connection);
-				const latest = await api("GET", path);
+				const sourceVersion = withdrawalVersion;
+				let latest;
+				try {
+					latest = await api("GET", path);
+				} catch (error) {
+					assertView(connection);
+					if (disposed || sourceVersion !== withdrawalVersion) return;
+					if ([
+						403,
+						404,
+						410
+					].includes(error?.status)) {
+						withdraw(error.status === 403 ? "forbidden" : "gone", error);
+						return;
+					}
+					throw error;
+				}
 				assertView(connection);
+				if (disposed || withdrawn || sourceVersion !== withdrawalVersion) return;
 				applyObservation(latest);
 				if (latest.session.api_access !== "managed" || identity(latest.session.pending) !== current || !pend.toolUseId) throw new ApiError(409, "PENDING_CHANGED", t("pending_changed"));
 				const op = await submit("session.answer", {
@@ -48384,22 +49673,39 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(opStatus(op));
 				if (op.status === "succeeded") await loadObservation();
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, e?.code === "PENDING_CHANGED" ? {
+					label: t("session_err_review"),
+					run: async () => {
+						await refresh().catch(() => {});
+						pending.querySelector("button:not(:disabled), input")?.focus();
+					}
+				} : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
+					label: t("ui_retry"),
+					run: () => answer(params)
+				}));
 			}
 		};
-		const card = h("div", { class: "panel session-asking" }, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
-		if (pend.kind === "permission") card.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "msg" }, pend.input_preview || ""), h("div", { class: "actions" }, h("button", {
-			class: "primary",
-			"data-answer-action": "",
-			disabled: !pend.toolUseId || !allowed("session.answer"),
-			onclick: () => answer({ permission: "allow" })
-		}, t("allow")), h("button", {
-			class: "danger",
-			"data-answer-action": "",
-			disabled: !pend.toolUseId || !allowed("session.answer"),
-			onclick: () => answer({ permission: "deny" })
-		}, t("deny"))));
-		else if (pend.kind === "ask_user") {
+		const actions = h("div", { class: "actions session-asking-actions" });
+		const card = h("div", {
+			class: "session-asking",
+			role: "group",
+			"aria-label": t("pending_" + pend.kind)
+		}, h("div", { class: "title" }, statusPill("asking_you"), " ", t("pending_" + pend.kind)));
+		const content = h("div", { class: "session-asking-content" });
+		if (pend.kind === "permission") {
+			content.append(h("p", {}, h("code", {}, pend.toolName || "")), h("p", { class: "session-asking-preview" }, pend.input_preview || ""));
+			actions.append(h("button", {
+				class: "primary",
+				"data-answer-action": "",
+				disabled: !pend.toolUseId || !allowed("session.answer"),
+				onclick: () => answer({ permission: "allow" })
+			}, t("allow")), h("button", {
+				class: "danger",
+				"data-answer-action": "",
+				disabled: !pend.toolUseId || !allowed("session.answer"),
+				onclick: () => answer({ permission: "deny" })
+			}, t("deny")));
+		} else if (pend.kind === "ask_user") {
 			const fields = [];
 			const save = () => {
 				try {
@@ -48424,22 +49730,23 @@ async function viewSession(main, host, sid, context = null) {
 						save();
 					}
 				}, o));
-				card.append(h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question), picks.length ? h("div", { class: "actions" }, ...picks) : null, h("div", { class: "actions" }, input));
+				content.append(h("div", { class: "session-question" }, h("p", {}, q.header ? h("strong", {}, `${q.header} · `) : null, q.question), picks.length ? h("div", { class: "actions" }, ...picks) : null, input));
 			}
-			card.append(h("div", { class: "actions" }, h("button", {
+			actions.append(h("button", {
 				class: "primary",
 				"data-answer-action": "",
 				disabled: !pend.toolUseId || !allowed("session.answer"),
 				onclick: () => answer({ answers: fields.map((f) => f.value) })
-			}, t("answer"))));
+			}, t("answer")));
 		}
+		card.append(content, actions);
 		pending.append(card);
 	};
 	const updateControls = () => {
 		permissions?.update();
 		send.disabled = !allowed("session.send") || sending;
 		stop.disabled = !allowed("session.interrupt");
-		stop.hidden = row?.api_access !== "managed";
+		stop.hidden = withdrawn || row?.api_access !== "managed";
 		let reason = "";
 		if (row?.api_access === "managed" && send.disabled && !sending) {
 			if (!readReady) reason = t("session_send_waiting");
@@ -48452,7 +49759,6 @@ async function viewSession(main, host, sid, context = null) {
 		for (const control of pending.querySelectorAll("[data-answer-action]")) control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
 	};
 	const applyObservation = (data) => {
-		const first = !row;
 		row = data.session || (data.cleanup?.length ? {
 			host,
 			session_id: sid,
@@ -48466,9 +49772,12 @@ async function viewSession(main, host, sid, context = null) {
 			...(data.relations_summary || []).flatMap((relation) => [`execution:${relation.execution_id}`, `task:${relation.execution_id}`]),
 			...data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : []
 		]);
-		if (first) queue.checked = Boolean(row.streaming);
-		titleNode.textContent = row.title || sid;
-		markSlot.replaceChildren(agentMark(row.agent_kind || "bat"));
+		if (!queueKnown) {
+			queue.checked = Boolean(row.streaming);
+			queueKnown = true;
+		}
+		titleNode.textContent = row.title || t("session_untitled");
+		markSlot.replaceChildren(agentMark(row.agent_kind));
 		pillSlot.replaceChildren(statusPill(sessionStatus(row)));
 		const metaBits = [];
 		if (context?.project?.name) metaBits.push({
@@ -48503,7 +49812,7 @@ async function viewSession(main, host, sid, context = null) {
 		}));
 		paintOrigin();
 		mobileLayout?.updateInfo();
-		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
+		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
 			"manual",
 			"connector_managed",
 			"unknown"
@@ -48524,6 +49833,7 @@ async function viewSession(main, host, sid, context = null) {
 		if (data.work_items?.length) metadata.append(linkedItems(data.work_items));
 		if (data.discovery?.length) metadata.append(h("details", {}, h("summary", {}, t("obs_discovery")), discoveryEvidence(data.discovery)));
 		const managed = row.api_access === "managed";
+		conversation.setUserLabel(managed && row.provenance === "connector_managed" ? t("message_you") : t("message_person"));
 		artifactSlot.replaceChildren();
 		if (row.provenance === "connector_managed" && state.caps?.artifacts?.capture?.managed_single_file) artifactSlot.append(h("p", {}, h("a", { href: `#/artifact-review/session/${encodeURIComponent(host)}/${encodeURIComponent(sid)}` }, t("ar_open"))));
 		paintDiscuss(data.work_items);
@@ -48563,58 +49873,185 @@ async function viewSession(main, host, sid, context = null) {
 		if (capture) capture.hidden = !manualSource;
 		syncChanges();
 		composer.hidden = !managed;
+		controls.hidden = !managed;
 		readonly.hidden = managed;
-		readonly.textContent = t(row.provenance === "manual" ? "read_only_note" : "session_access_unknown");
+		readonly.textContent = t(row.provenance === "manual" ? "session_readonly_manual" : "session_readonly_unknown");
 		renderPending();
 		updateControls();
 	};
 	const loadObservation = async () => {
-		const data = await api("GET", path);
-		assertView(connection);
+		const request = ++observationRequest;
+		const current = () => {
+			assertView(connection);
+			return !disposed && request === observationRequest;
+		};
+		let data;
+		try {
+			data = await api("GET", path);
+		} catch (error) {
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status) && current()) {
+				error.sessionWithdrawn = error.status === 403 ? "forbidden" : "gone";
+				withdraw(error.sessionWithdrawn, error);
+			}
+			throw error;
+		}
+		if (!current()) return;
 		applyObservation(data);
 		let work = [], repositories = [];
 		if (context?.project) {
 			const project = await api("GET", `/projects/${encodeURIComponent(context.project.project_id)}`);
 			assertView(connection);
+			if (!current()) return;
 			work = (project.work || []).filter((item) => item.host === host && item.session_id === sid);
 			repositories = project.project?.repositories || [];
 		} else if (row.worktree_id && state.caps?.features?.execution_delivery?.version === 1) {
 			const detail = await api("GET", `/worktrees/${encodeURIComponent(row.worktree_id)}`);
 			assertView(connection);
+			if (!current()) return;
 			work = (detail.worktree?.work || []).filter((item) => item.host === host && item.session_id === sid);
 		}
-		fill(result, deliveryPills, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? sessionWorkLine(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+		if (!current()) return;
+		const content = h("div", {}, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? sessionWorkLine(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+		if (!deliveryPills.isConnected) result.append(deliveryPills);
+		const old = result.querySelector("[data-session-work]");
+		content.dataset.sessionWork = "";
+		if (!old) result.append(content);
+		else if (!old.isEqualNode(content)) old.replaceWith(content);
 		await loadDelivery(data.work_items);
-		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(h("p", { class: "muted" }, t("workspace_result_empty")));
+		if (!current()) return;
+		result.querySelector("[data-session-result-empty]")?.remove();
+		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(h("p", {
+			class: "muted",
+			"data-session-result-empty": ""
+		}, t("workspace_result_empty")));
 	};
 	const loadMessages = async (offset = messageOffset, latest = false) => {
 		if (offset == null) return;
 		const request = ++messageRequest;
-		const get = (offset) => api("GET", `${path}/messages?last_n=30&include_tools=true&offset=${offset}${readingSupported ? "&max_chars=60000&max_message_chars=60000" : ""}`);
-		let read = await get(offset);
-		assertView(connection);
-		if (request !== messageRequest) return;
-		const restore = firstMessages && readingSupported ? read.reading?.position : null;
-		if (restore && Number.isInteger(restore.page_offset) && restore.page_offset >= 0) {
-			const savedOffset = Math.max(0, restore.page_offset - 15);
-			if (savedOffset !== offset) {
-				offset = savedOffset;
+		const get = (offset, size = messageWindow) => api("GET", `${path}/messages?last_n=${size}&include_tools=true&offset=${offset}${readingSupported ? "&max_chars=60000&max_message_chars=60000" : ""}`);
+		let read;
+		try {
+			try {
 				read = await get(offset);
+			} catch (error) {
+				if (error?.status !== 413 || messageWindow <= 10) throw error;
 				assertView(connection);
+				if (request !== messageRequest) return;
+				read = await get(offset, 10);
+				messageWindow = 10;
 			}
+			assertView(connection);
 			if (request !== messageRequest) return;
+			const restore = firstMessages && readingSupported ? read.reading?.position : null;
+			if (restore && Number.isInteger(restore.page_offset) && restore.page_offset >= 0) {
+				const savedOffset = Math.max(0, restore.page_offset - Math.floor(messageWindow / 2));
+				if (savedOffset !== offset) {
+					offset = savedOffset;
+					read = await get(offset);
+					assertView(connection);
+				}
+				if (request !== messageRequest) return;
+			}
+			messageOffset = offset;
+			nextMessageOffset = read.next_offset;
+			firstMessages = false;
+			conversation.update(read.messages, readingSupported ? {
+				...read,
+				restore,
+				latest,
+				olderWindow: offset > 0
+			} : { next_offset: read.next_offset });
+		} catch (error) {
+			if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
+			conversation.fail({
+				title: error?.status === 413 ? t("session_err_too_large") : t("message_window_failed"),
+				retry: () => refresh().catch(() => {})
+			});
+			throw error;
 		}
-		messageOffset = offset;
-		nextMessageOffset = read.next_offset;
-		firstMessages = false;
-		conversation.update(read.messages, readingSupported ? {
-			...read,
-			restore,
-			latest,
-			olderWindow: offset > 0
-		} : null);
+	};
+	const scheduleRetry = () => {
+		if (retryTimer || withdrawn || disposed) return;
+		const delay = retryDelay;
+		retryDelay = Math.min(retryDelay * 2, 3e4);
+		retryAt = Date.now() + delay;
+		retryTimer = setTimeout(() => {
+			retryTimer = null;
+			if (!readReady && !refreshInFlight && !withdrawn && !disposed) refresh().catch(() => {});
+		}, delay);
+	};
+	const backLink = () => {
+		const origin = originHref();
+		return origin ? h("a", {
+			href: origin.href,
+			class: "ui-button secondary"
+		}, t("session_back", { view: t("ui_" + origin.view) })) : h("a", {
+			href: "#/sessions",
+			class: "ui-button secondary"
+		}, t("session_back_sessions"));
+	};
+	const withdraw = (kind, error = null) => {
+		const first = !withdrawn;
+		withdrawn = kind;
+		withdrawalVersion += 1;
+		clearTimeout(retryTimer);
+		retryTimer = null;
+		retryDelay = 1e3;
+		++observationRequest;
+		++deliveryTicket;
+		++messageRequest;
+		cps.clear();
+		deliveryKnown.clear();
+		state.observations?.delete(`session:${host}/${sid}`);
+		if (first && !results.hidden && !wide.matches) results.close();
+		conversation.clear();
+		pending.replaceChildren();
+		pendingIdentity = void 0;
+		status.replaceChildren();
+		readError = null;
+		deliveryPills.replaceChildren();
+		result.replaceChildren();
+		metadata.replaceChildren();
+		sourcesPanel?.dispose();
+		sourcesPanel = null;
+		sourcesBody.replaceChildren(sourcesEmpty());
+		titleNode.textContent = t("session_heading");
+		markSlot.replaceChildren();
+		pillSlot.replaceChildren();
+		meta.replaceChildren();
+		overflow.hidden = true;
+		row = null;
+		readReady = false;
+		updateControls();
+		syncWide();
+		if (first) {
+			workspaceNode.remove();
+			if (context?.picker) context.picker.hidden = true;
+			head.after(withdrawnSlot);
+		}
+		withdrawnSlot.replaceChildren(h("div", { "data-session-withdrawn": kind }, emptyState({
+			icon: "circle-alert",
+			title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"),
+			action: h("div", {}, backLink(), sessionErrorDetails(error))
+		})));
+	};
+	const reinstate = () => {
+		withdrawn = "";
+		withdrawnSlot.remove();
+		if (context?.picker) context.picker.hidden = false;
+		head.after(workspaceNode);
+		overflow.hidden = false;
+		syncWide();
+		settleRefreshes([cps.load(), labels.refresh()]).catch(() => {});
 	};
 	const refresh = async (fromEvent = false) => {
+		assertView(connection);
+		if (disposed) return;
+		if (fromEvent && retryTimer && Date.now() < retryAt && readError) throw readError.error;
 		if (refreshInFlight) {
 			await refreshInFlight;
 			if (fromEvent) return refresh(true);
@@ -48623,16 +50060,29 @@ async function viewSession(main, host, sid, context = null) {
 		refreshInFlight = (async () => {
 			try {
 				await settleRefreshes([loadObservation(), loadMessages()]);
+				if (withdrawn) reinstate();
 				await permissions?.refresh(fromEvent);
 				readReady = true;
+				retryDelay = 1e3;
+				clearTimeout(retryTimer);
+				retryTimer = null;
 				updateControls();
 				readError?.remove();
 				readError = null;
 			} catch (error) {
+				if (error?.sessionWithdrawn) {
+					withdraw(error.sessionWithdrawn, error);
+					return;
+				}
 				readReady = false;
 				updateControls();
-				readError = errorBox(error);
-				status.replaceChildren(readError);
+				readError = sessionErrorBox(error, {
+					label: t("ui_retry"),
+					run: () => refresh().catch(() => {})
+				});
+				readError.error = error;
+				if (!withdrawn) status.replaceChildren(readError);
+				scheduleRetry();
 				throw error;
 			}
 		})();
@@ -48643,61 +50093,62 @@ async function viewSession(main, host, sid, context = null) {
 		}
 	};
 	try {
-		await settleRefreshes([
-			refresh(),
-			cps.load(),
-			labels.refresh()
-		]);
+		await refresh();
+		if (!withdrawn) await settleRefreshes([cps.load(), labels.refresh()]);
 	} catch {}
-	const retry = setInterval(() => {
-		if (!readReady && !refreshInFlight) refresh().catch(() => {});
-	}, 1e3);
 	const reload = debounceRefresh(() => refresh(true), 500), reloadCps = debounceRefresh(cps.load, 500);
 	const off = onEvents((ev) => {
 		observations.changed(ev);
-		return settleRefreshes([
-			observationAffected("session", `${host}/${sid}`, ev) || [
-				"work_item",
-				"integration",
-				"worktree"
-			].includes(ev.resource_type) || context?.project && [
-				"project",
-				"operation",
-				"task",
-				"execution"
-			].includes(ev.resource_type) ? reload() : Promise.resolve(),
-			ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
-			ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
-			observationAffected("session", `${host}/${sid}`, ev) || ev.resource_type === "operation" ? labels.refresh(true) : Promise.resolve(),
-			instructions?.box.open && (observationAffected("session", `${host}/${sid}`, ev) || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
-		]);
+		const own = observationAffected("session", `${host}/${sid}`, ev);
+		if (withdrawn) return own ? reload() : Promise.resolve();
+		return (own || [
+			"work_item",
+			"integration",
+			"worktree"
+		].includes(ev.resource_type) || context?.project && [
+			"project",
+			"operation",
+			"task",
+			"execution"
+		].includes(ev.resource_type) ? reload() : Promise.resolve()).then(() => {
+			if (withdrawn || disposed) return;
+			return settleRefreshes([
+				ev.resource_type === "checkpoint" ? reloadCps() : Promise.resolve(),
+				ev.resource_type === "operation" ? permissions?.refresh(true) : Promise.resolve(),
+				own || ev.resource_type === "operation" ? labels.refresh(true) : Promise.resolve(),
+				instructions?.box.open && (own || ev.resource_type === "operation") ? instructions.refresh() : Promise.resolve()
+			]);
+		});
 	});
 	return () => {
-		clearInterval(retry);
+		disposed = true;
+		clearTimeout(retryTimer);
 		off();
 		instructions?.dispose();
 		batHandoff?.dispose();
 		conversation.dispose();
 		mobileLayout?.dispose();
 		shortcut.dispose();
+		cps.clear();
 		results.dispose();
 		overflow.dispose();
 		sourcesPanel?.dispose();
 		wide.removeEventListener("change", syncWide);
 	};
 }
-function checkpointPanel(host, sid) {
+function checkpointPanel(host, sid, { namespace = state.namespace, manual = () => false } = {}) {
 	const can = (state.caps?.features?.checkpoints || []).includes(host);
 	const mayStart = (state.caps?.scopes || []).includes("start");
 	const list = h("div", {});
 	const status = h("div", { class: "muted" });
 	const rows = new Map();
 	let preview = null;
+	let ticket = 0;
 	const row = (cp) => rows.get(cp.checkpoint_id) || rows.set(cp.checkpoint_id, buildRow(cp)).get(cp.checkpoint_id);
 	const buildRow = (cp) => {
 		const instr = h("textarea", { placeholder: t("continue_placeholder") });
-		const agent = h("select", { "aria-label": t("agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
-		const out = h("div", { class: "muted" });
+		const agent = h("select", { "aria-label": t("checkpoint_agent") }, h("option", { value: "claude" }, "Claude"), h("option", { value: "codex" }, "Codex"));
+		const out = h("div", { class: "muted session-checkpoint-result" });
 		const draft = attachmentDraft(`continue.${cp.checkpoint_id}`, instr, cp.artifacts || []);
 		draft.bindFields({ agent });
 		let expectedHead = null;
@@ -48715,43 +50166,70 @@ function checkpointPanel(host, sid) {
 						agent: agent.value,
 						...state.caps?.artifacts ? { artifacts: draft.refs() } : {}
 					}, state.caps?.artifacts ? { expected_source_head_sha: expectedHead } : {}, `continue.${cp.checkpoint_id}`);
-					out.replaceChildren(opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
+					const resultHost = op.result?.host || cp.host;
+					const opened = op.result?.session_id && resultHost ? h("a", { href: `#/session/${encodeURIComponent(resultHost)}/${encodeURIComponent(op.result.session_id)}` }, t("open_new_session")) : null;
+					out.replaceChildren(h("p", { class: "session-checkpoint-op" }, statusPill(operationStatusKey(op.status)), opened ? " " : "", opened || ""), disclosure({
+						label: t("checkpoint_op_details"),
+						body: h("p", {}, h("a", { href: `#/op/${encodeURIComponent(op.operation_id)}` }, op.operation_id))
+					}));
 				} catch (e) {
-					out.replaceChildren(errorBox(e));
+					out.replaceChildren(sessionErrorBox(e, {
+						label: t("ui_retry"),
+						run: () => go.click()
+					}));
 				}
 				go.disabled = false;
 			}
 		}, t("start_agent_work"));
-		const form = h("div", { hidden: true }, confinementNote(host, agent), instr, draft.box, h("div", { class: "actions" }, agent, go), out);
-		return h("div", { class: "row" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
-			sessionWhen(cp.captured_at),
-			cp.actor,
-			t("excerpt_count", { n: cp.excerpt_messages })
-		].join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null, form), h("button", {
+		const limits = disclosure({
+			label: t("checkpoint_limits"),
+			body: confinementNote(host, agent)
+		});
+		const form = h("div", {
+			class: "session-checkpoint-form",
+			"data-checkpoint-form": "",
+			hidden: true
+		}, instr, draft.box, h("div", { class: "actions" }, agent, go), out, limits);
+		const start = h("button", {
 			class: "secondary",
+			type: "button",
 			disabled: !can || !mayStart,
-			title: !can ? t("checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
+			"aria-expanded": "false",
+			title: !can ? t("session_checkpoint_unavailable") : mayStart ? null : t("needs_start_scope"),
 			onclick: async () => {
 				form.hidden = !form.hidden;
+				start.setAttribute("aria-expanded", String(!form.hidden));
 				if (state.caps?.artifacts && !form.hidden && !expectedHead) try {
 					expectedHead = (await api("GET", `/checkpoints/${cp.checkpoint_id}?live=true`)).source.head;
 					if (!expectedHead) fill(out, h("p", { class: "error" }, t("source_unavailable")));
 				} catch (e) {
-					fill(out, errorBox(e));
+					fill(out, sessionErrorBox(e, {
+						label: t("ui_retry"),
+						run: () => load().catch(() => {})
+					}));
 				}
 			}
-		}, t("continue_from_checkpoint")));
+		}, t("continue_from_checkpoint"));
+		return h("div", { class: "row session-checkpoint-row" }, h("div", { class: "session-checkpoint-head" }, h("div", { class: "grow" }, h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""), h("div", { class: "muted" }, [
+			sessionWhen(cp.captured_at),
+			cp.actor,
+			t("excerpt_count", { n: cp.excerpt_messages })
+		].filter(Boolean).join(" · ")), cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty })) : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null, preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null), start), form);
 	};
-	const load = async () => {
+	const load = async (mine = ticket) => {
 		try {
 			const page = await api("GET", `/checkpoints?${new URLSearchParams({
 				host,
 				session_id: sid,
 				limit: "10"
 			})}`);
+			if (mine !== ticket) return;
 			list.replaceChildren(...page.checkpoints.length ? page.checkpoints.map(row) : can ? [h("p", { class: "muted" }, t("no_checkpoints"))] : []);
 		} catch (e) {
-			list.replaceChildren(errorBox(e));
+			if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {
+				label: t("ui_retry"),
+				run: () => load().catch(() => {})
+			}));
 		}
 	};
 	const pick = h("select", {
@@ -48763,11 +50241,12 @@ function checkpointPanel(host, sid) {
 		hidden: true
 	});
 	let previewFailed = false;
-	const loadPreview = async () => {
+	const loadPreview = async (mine = ticket) => {
 		if (!can) return;
 		try {
 			const selectedCommit = pick.value;
 			const current = (await api("GET", `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}/checkpoint-preview`)).preview;
+			if (mine !== ticket) return;
 			if (!Array.isArray(current?.commits)) throw new Error("Invalid checkpoint preview");
 			preview = current;
 			pick.replaceChildren(...preview.commits.map((c) => h("option", { value: c.hash }, `${c.hash.slice(0, 10)} · ${c.message}`)));
@@ -48778,9 +50257,13 @@ function checkpointPanel(host, sid) {
 			previewFailed = false;
 			if (preview.dirty) status.replaceChildren(h("span", { class: "error" }, t("dirty_warning", { n: preview.dirty })));
 		} catch (error) {
+			if (mine !== ticket) return;
 			previewFailed = true;
 			create.disabled = true;
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(sessionErrorBox(error, {
+				label: t("ui_retry"),
+				run: () => loadPreview().catch(() => {})
+			}));
 		}
 	};
 	const create = h("button", {
@@ -48800,28 +50283,69 @@ function checkpointPanel(host, sid) {
 					session_id: sid
 				}, params, {}, `checkpoint.${host}.${sid}`);
 				if (op.status === "succeeded") note.value = "";
-				status.replaceChildren(...[
-					opStatus(op),
-					op.error_code ? chip(op.error_code, "bad") : null,
-					op.status_reason
-				].filter(Boolean).flatMap((x) => [x, " "]));
+				status.replaceChildren(...[opStatus(op), op.error_code || op.status_reason ? disclosure({
+					label: t("checkpoint_op_details"),
+					body: h("p", {}, h("code", {}, [op.error_code, op.status_reason].filter(Boolean).join(" · ")))
+				}) : null].filter(Boolean));
 				await load();
 			} catch (e) {
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(sessionErrorBox(e, {
+					label: t("ui_retry"),
+					run: () => load().catch(() => {})
+				}));
 			}
 			create.disabled = !can || previewFailed;
 		}
-	}, t("create_checkpoint"));
+	}, t("checkpoint_record"));
+	const recordForm = h("div", {
+		class: "session-checkpoint-record",
+		hidden: true
+	}, h("div", { class: "actions" }, pick), note, h("div", { class: "actions" }, create));
+	const action = can ? button({
+		variant: "ghost",
+		size: "sm",
+		label: t("create_checkpoint"),
+		"aria-expanded": "false",
+		onClick: () => {
+			recordForm.hidden = !recordForm.hidden;
+			action.setAttribute("aria-expanded", String(!recordForm.hidden));
+			if (!recordForm.hidden) pick.focus();
+		}
+	}) : null;
+	const notes = h("div", {});
+	const paintNotes = () => notes.replaceChildren(...[
+		h("p", { class: "muted" }, t("checkpoint_help")),
+		manual() ? h("p", { class: "muted" }, t("checkpoint_manual_hint")) : null,
+		can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")),
+		can ? null : h("p", { class: "muted" }, h("code", {}, t("checkpoint_unavailable_keys"))),
+		mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")),
+		mayStart ? null : h("p", { class: "muted" }, h("code", {}, t("needs_start_scope_key")))
+	].filter(Boolean));
+	paintNotes();
 	const checkpointWhy = disclosure({
-		label: t("session_details"),
-		key: `session-checkpoint:${host}:${sid}`,
-		body: h("div", {}, h("p", { class: "muted" }, t("checkpoint_help")), h("p", { class: "muted" }, t("checkpoint_unavailable")), mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")))
+		label: t("checkpoint_notes"),
+		key: `session-checkpoint:${namespace}:${host}:${sid}`,
+		body: notes
 	});
+	checkpointWhy.addEventListener("toggle", () => {
+		if (checkpointWhy.open) paintNotes();
+	});
+	const box = h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), recordForm, status, list, checkpointWhy);
+	const clear = () => {
+		ticket += 1;
+		rows.clear();
+		list.replaceChildren();
+		status.replaceChildren();
+		preview = null;
+	};
 	return {
-		box: h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), note, can ? h("div", { class: "actions" }, pick, create) : null, status, list, checkpointWhy),
+		box,
+		action,
+		clear,
 		load: async () => {
-			await loadPreview();
-			await load();
+			const mine = ticket;
+			await loadPreview(mine);
+			if (mine === ticket) await load(mine);
 		}
 	};
 }

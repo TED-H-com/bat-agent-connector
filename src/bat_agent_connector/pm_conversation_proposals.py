@@ -14,6 +14,7 @@ from . import (
     pm_native_operations,
     pm_plans,
     pm_profiles,
+    pm_read_cache,
     pm_runs,
     pm_workspace,
 )
@@ -152,7 +153,9 @@ def _bounded_access(db, principal, kind, identity, check):
             return False
         state["active"].add(key)
         try:
-            result = bool(check())
+            # Cycle and budget refusals are local to this traversal, not request-wide answers.
+            with pm_read_cache.guarded():
+                result = bool(check())
             state["memo"][key] = result
             return result
         finally:
@@ -305,21 +308,54 @@ def _adoptions(db, principal, workspace_id, proposal_ids):
     return found
 
 
-def adoptability(db, row, context, *, adoption=None):
+class _PageInputs:
+    """Adoptability inputs shared by one list page inside one read snapshot.
+
+    The plan head is read once, thread rows in one batch, and each
+    (thread, version) content check once. Values never outlive the page.
+    """
+
+    def __init__(self, db, workspace_id, thread_ids):
+        self.db, self.workspace_id, self._head, self._unchanged = db, workspace_id, None, {}
+        ids = sorted({value for value in thread_ids if isinstance(value, str)})
+        self._threads = {row['thread_id']: dict(row) for row in db.execute(
+            "SELECT * FROM pm_threads WHERE workspace_id=? AND thread_id IN (SELECT value FROM json_each(?))",
+            (workspace_id, json.dumps(ids)))} if ids else {}
+
+    def thread(self, thread_id):
+        if thread_id in self._threads:
+            return self._threads[thread_id]
+        return pm_discussions._thread(self.db, self.workspace_id, thread_id)
+
+    def head(self):
+        if self._head is None:
+            self._head = pm_plans.head(self.db, self.workspace_id)
+        return self._head
+
+    def unchanged(self, thread, version):
+        key = (thread['thread_id'], version)
+        if key not in self._unchanged:
+            self._unchanged[key] = pm_discussions.content_unchanged(self.db, thread, version)
+        return self._unchanged[key]
+
+
+def adoptability(db, row, context, *, adoption=None, inputs=None):
     """Current content and plan baseline, shared by reads and adoption admission.
 
     Call only after original-source visibility and context integrity checks.
     Scope, owner review, and final-frame authorization remain write-time gates.
     """
-    thread = pm_discussions._thread(db, row['workspace_id'], row['thread_id'])
+    if inputs is None:
+        inputs = _PageInputs(db, row['workspace_id'], ())
+    thread = inputs.thread(row['thread_id'])
     reason = None
     if row['document_digest'] is None:
         reason = 'invalid_proposal'
     elif adoption is not None:
         reason = 'adopted'
-    elif pm_plans.head(db, row['workspace_id']) != context['plan_head']:
+    elif inputs.head() != context['plan_head']:
         reason = 'plan_head_changed'
-    elif not pm_discussions.content_unchanged(db, thread, context['thread_version']):
+    elif not inputs.unchanged(thread, context['thread_version']):
         reason = 'content_changed'
     return {'adoptable': reason is None, 'adoptable_reason': reason,
         'adopted_revision_id': adoption['revision_id'] if reason == 'adopted' else None}
@@ -371,6 +407,7 @@ def list_proposals(ops, principal, workspace_id, *, thread_id=None, after=0, lim
         result = {"version": 1, "workspace_id": workspace_id, "proposals": [], "next_cursor": None,
             "coverage": {"visibility_filtered": False, "scanned": min(len(rows), limit)}}
         adoptions = _adoptions(ops.db, principal, workspace_id, [row['proposal_id'] for row in rows[:limit]])
+        inputs = _PageInputs(ops.db, workspace_id, [row['thread_id'] for row in rows[:limit]])
         for row in rows[:limit]:
             if operation_visible(ops.db, principal, row):
                 context = json.loads(row['context'])
@@ -380,7 +417,7 @@ def list_proposals(ops, principal, workspace_id, *, thread_id=None, after=0, lim
                 result["proposals"].append({**{key: row[key] for key in ("sequence", "proposal_id", "thread_id", "operation_id",
                     "run_id", "document_digest", "created_by", "created_at")}, "validation": json.loads(row["validation"]),
                     "title": document['title'] if document is not None else None,
-                    **adoptability(ops.db, row, context, adoption=adoptions.get(row['proposal_id']))})
+                    **adoptability(ops.db, row, context, adoption=adoptions.get(row['proposal_id']), inputs=inputs)})
             else:
                 result["coverage"]["visibility_filtered"] = True
         if len(rows) > limit:

@@ -22,7 +22,8 @@ function shotDir() {
 async function shot(page: Page, name: string) {
   if (process.env.BATC_DEMO_SCREENSHOTS !== '1') return;
   mkdirSync(shotDir(), {recursive: true});
-  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage: true});
+  const fullPage = await page.locator('[aria-modal="true"]:visible').count() === 0;
+  await page.screenshot({path: `${shotDir()}/${name}.png`, fullPage, animations: 'disabled'});
 }
 
 // The rail is still `.workspace-nav` (a drawer below 1000px). Scan it with the page.
@@ -167,6 +168,8 @@ for (const {locale, width} of cases) {
     await expect(page.locator('[data-overview-status]')).toBeVisible();
     await openView(page, 'issues');
     await expectView(page, locale, width, 'issues', fixture.copy.name);
+    if (process.env.BATC_DEMO_SCREENSHOTS === '1') await expect(page.locator('[data-reg-table] [data-row-key]').first()).toBeVisible();
+    await shot(page, `issues-${locale}-${width}`);
     await page.locator('[data-pm-overflow]').click();
     await expect(page.locator('[data-menu-key=governance]')).toBeVisible();
     await expect(page.locator('[data-menu-key=governance]')).toBeFocused();
@@ -200,7 +203,7 @@ for (const {locale, width} of cases) {
     test.setTimeout(60_000);
     const fixture = demoFixture({locale});
     const {copy, ids, dates} = fixture;
-    const accepted = locale === 'zh-TW' ? '已記錄受理' : 'Acceptance recorded';
+    const accepted = locale === 'zh-TW' ? '已記錄受理' : 'Send accepted';
     const context = await browser.newContext({locale, baseURL, viewport: {width, height: width === 390 ? 844 : 900}});
     const page = await context.newPage();
     const errors: string[] = [];
@@ -216,6 +219,7 @@ for (const {locale, width} of cases) {
     await expectView(page, locale, width, 'overview', copy.name);
     const charter = page.locator('[data-pm-charter]');
     await expect(page.locator('[data-overview-status]')).toContainText(locale === 'zh-TW' ? '8 項中 3 項已驗收' : '3 of 8 accepted');
+    await shot(page, `overview-live-${locale}-${width}`);
     await openPmPanel(page, 'ui_report');
     await page.locator('[data-pm-report-tools] select').selectOption(ids.snap2);
     await page.keyboard.press('Escape');
@@ -238,6 +242,7 @@ for (const {locale, width} of cases) {
     const rtm = page.locator('[data-pm-rtm]');
     for (const requirement of copy.requirements) await expect(rtm).toContainText(requirement.text);
     await expect(rtm).toContainText(locale === 'zh-TW' ? '未評估' : 'Not assessed');
+    if (width < 800) await shot(page, `rtm-list-${locale}-${width}`);
     await rtm.locator(width < 800 ? `[data-rtm-requirement="${ids.requirements.email}"]` : `[data-rtm-toggle="${ids.requirements.email}"]`).click();
     await expect(rtm).toContainText(copy.work.email);
     await expect(rtm).toContainText(locale === 'en' ? 'example/membership · Issue #41' : 'example/membership · 議題 #41');
@@ -258,8 +263,9 @@ for (const {locale, width} of cases) {
     await expect(board.locator('[data-pm-kanban-column="in_progress"]')).toContainText(copy.work.resetEmail);
     await expect(board.locator('[data-pm-kanban-column="waiting"]')).toContainText(copy.work.audit);
     await expect(board.locator('[data-pm-kanban-column="backlog"]')).toContainText(copy.work.a11y);
+    if (width < 800) await shot(page, `board-lanes-${locale}-${width}`);
     const email = board.locator(`[data-pm-kanban-work="${ids.work.email}"]`);
-    await email.click();
+    await email.locator('[data-board-open]').click();
     const workInspector = page.locator('[data-work-inspector]');
     await expect(workInspector.locator('[data-work-attempt]')).toHaveCount(3);
     await expect.poll(async () => (await workInspector.innerText()).split(accepted).length - 1).toBe(2);
@@ -283,6 +289,8 @@ for (const {locale, width} of cases) {
 
     await openView(page, 'schedule');
     await expectView(page, locale, width, 'schedule', copy.name);
+    if (process.env.BATC_DEMO_SCREENSHOTS === '1') await expect(page.locator('.schedule-chart [data-schedule-row]').first()).toBeVisible();
+    await shot(page, `schedule-${locale}-${width}`);
     await page.locator('[data-schedule-tools]').click();
     await page.getByRole('menuitem', {name: locale === 'zh-TW' ? '路線圖' : 'Roadmap', exact: true}).click();
     const recovery = page.locator('[data-pm-milestone="recovery_review"]');
@@ -307,7 +315,7 @@ for (const {locale, width} of cases) {
     await expect(inventory).toContainText('membership-api');
     await expectNoJunk(page);
     await shot(page, `dependencies-${locale}-${width}`);
-    await dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '圖' : 'Graph', exact: true}).click();
+    await dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '關係圖' : 'Graph', exact: true}).click();
     await expect(dependencies.locator('[data-dep-graph] svg')).toBeVisible();
     await openView(page, 'overview');
     await expectView(page, locale, width, 'overview', copy.name);
@@ -315,7 +323,7 @@ for (const {locale, width} of cases) {
     await expect(page.locator('.pm-overview-saved')).toContainText(copy.snapshotV3);
     await openView(page, 'dependencies');
     await expectView(page, locale, width, 'dependencies', copy.name);
-    await expect(dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '圖' : 'Graph', exact: true})).toHaveAttribute('aria-checked', 'true');
+    await expect(dependencies.getByRole('radio', {name: locale === 'zh-TW' ? '關係圖' : 'Graph', exact: true})).toHaveAttribute('aria-checked', 'true');
 
     await showThreads(page);
     await expectView(page, locale, width, 'discussions', copy.name);
@@ -340,9 +348,10 @@ for (const {locale, width} of cases) {
     await page.goto(demoRoute('manual'));
     await expect(page.locator('h1')).toContainText(copy.manualTitle);
     await expectProjectName(page, width, copy.name);
-    await expect(page.locator('#main')).toContainText(locale === 'zh-TW' ? '這個工作階段由人在 BAT 建立' : 'A person created this session in BAT');
+    await expect(page.locator('[data-session-readonly]')).toContainText(locale === 'zh-TW' ? '這是有人在 BAT 開啟的工作階段' : 'Started in BAT by a person');
     await expect(page.locator('#main')).toContainText(copy.manualNote);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
+    if (width < 1200) await shot(page, `manual-transcript-${locale}-${width}`);
     if (width < 1200) await page.getByRole('button', {name: locale === 'zh-TW' ? '成果' : 'Results', exact: true}).click();
     await page.locator('[data-session-details] > summary').click();
     await expect(page.locator('[data-session-details]')).toContainText(locale === 'zh-TW' ? 'API 唯讀' : 'API read-only');

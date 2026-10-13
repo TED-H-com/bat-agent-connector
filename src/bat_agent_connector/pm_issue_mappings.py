@@ -488,7 +488,8 @@ def list_mappings(ops, principal, workspace_id, *, after=0, limit=50):
             WHERE workspace_id=? GROUP BY mapping_id HAVING MIN(sequence)>? ORDER BY first_sequence LIMIT ?""",
             (workspace_id, after, limit + 1)).fetchall()
         result = {"version": 1, "workspace_id": workspace_id, "mappings": [], "next_cursor": None,
-            "coverage": {"returned": 0, "scanned": 0, "visibility_filtered": False, "byte_limited": False, "has_more": False}}
+            "coverage": {"returned": 0, "scanned": 0, "visibility_filtered": False, "source_incomplete": False,
+                         "byte_limited": False, "has_more": False}}
         cursor = after
         for index, row in enumerate(ids[:limit]):
             before = copy.deepcopy(result)
@@ -497,10 +498,15 @@ def list_mappings(ops, principal, workspace_id, *, after=0, limit=50):
                 _access(ops, principal, workspace_id, rows)
                 result["mappings"].append(rows[-1])
             except OperationError as error:
-                # A lineage limit on one mapping must not fail the rest of the page.
-                if error.status not in (404, 409):
+                # A hidden mapping (404) is filtered. A mapping whose sources cannot be
+                # checked (409, such as a lineage limit) is skipped without failing the page,
+                # and the page says so separately: it was not shown to be hidden.
+                if error.status == 404:
+                    result["coverage"]["visibility_filtered"] = True
+                elif error.status == 409:
+                    result["coverage"]["source_incomplete"] = True
+                else:
                     raise
-                result["coverage"]["visibility_filtered"] = True
             more = index + 1 < len(ids)
             result["next_cursor"] = row["first_sequence"] if more else None
             result["coverage"].update(scanned=index + 1, returned=len(result["mappings"]), has_more=more)

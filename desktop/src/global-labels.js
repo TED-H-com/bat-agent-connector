@@ -228,6 +228,7 @@ export function formatTime(seconds) {
 const TERMINAL_OPERATION = new Set(['succeeded', 'failed', 'cancelled', 'needs_attention', 'uncertain']);
 const ACTIVE_OPERATION = new Set(['accepted', 'running', 'waiting_checks', 'waiting_external']);
 
+// WebKitGTK has no Intl.DurationFormat. One formatter for the table and the inspector.
 export function operationDuration(op, nowSeconds) {
   const start = Number(op?.created_at);
   if (!Number.isFinite(start) || start <= 0) return '';
@@ -236,9 +237,15 @@ export function operationDuration(op, nowSeconds) {
   if (!Number.isFinite(end) || end < start) return '';
   const seconds = Math.round(end - start);
   if (seconds < 60) return t('global_duration_s', {n: seconds});
-  const minutes = Math.floor(seconds / 60);
-  const rest = seconds % 60;
-  return rest ? t('global_duration_m', {n: minutes, s: rest}) : t('global_duration_m_only', {n: minutes});
+  if (seconds < 3600) return t('global_duration_m', {n: Math.floor(seconds / 60)});
+  if (seconds < 86400) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return minutes ? t('global_duration_hm', {n: hours, m: minutes}) : t('global_duration_h', {n: hours});
+  }
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  return hours ? t('global_duration_dh', {n: days, h: hours}) : t('global_duration_d', {n: days});
 }
 
 // Loud labels are only the states that need the user. The words stay in the tooltip

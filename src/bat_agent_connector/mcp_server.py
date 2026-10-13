@@ -802,7 +802,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("pm_dependencies_revisions_list", workspace_id=workspace_id, after=after, limit=limit)
 
     async def pm_dependencies_impact_get(workspace_id: str, dependency: str) -> dict[str, Any]:
-        """Find direct and transitive captured dependents and verification hints."""
+        """Find direct and transitive captured dependents and verification hints.
+
+        dependency is the pmdepkey_ key from pm_dependencies_get (dependencies.<kind>[].key,
+        edges[].dependency_key or declared[].dependency_key). A package name is refused with 422.
+        """
         return await pm_daemon("pm_dependencies_impact_get", workspace_id=workspace_id, dependency=dependency)
 
     async def pm_ahp_adapters_list(workspace_id: str) -> dict[str, Any]:
