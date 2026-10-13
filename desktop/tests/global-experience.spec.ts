@@ -6,22 +6,22 @@ import {RUNNING_OPERATION, UNCERTAIN_OPERATION} from './demo/global.ts';
 
 const text = {
   en: {
-    pending: 'Pending', questions: 'Questions', reviews: 'Reviews', failed: 'Failed operations',
-    answer: 'Answer', details: 'Details', unknown: 'Unknown', action: 'Continue from checkpoint',
-    running: 'Running', needs: 'Needs you', operations: 'Operations', settings: 'Settings',
-    connection: 'Connection', about: 'About', disconnect: 'Disconnect', connected: 'Connected',
-    noEvent: 'No event yet', guide: 'Setup guide', connect: 'Connect',
+    pending: 'Pending', questions: 'Questions', reviews: 'Reviews', failed: 'Needs attention',
+    answer: 'Answer', open: 'Open', review: 'Review', readOnly: 'Read-only', details: 'Details', unknown: 'Unknown', action: 'Continue from checkpoint',
+    running: 'Running', needs: 'Needs you', failedRail: 'Failed', operations: 'Operations', settings: 'Settings',
+    connection: 'Connection', about: 'About', disconnect: 'Disconnect', connected: 'Connected', access: 'Access',
+    noEvent: 'No event yet', guide: 'Setup guide', connect: 'Connect', openOperation: 'Open operation', attempts: 'Attempts',
     sentence: 'Connect this dashboard to your Connector.', product: 'BAT Dashboard',
     note: 'Questions and permission requests reported by central. Reading does not resolve them.',
     noMatch: 'No matches on this page', inReview: 'In review', sections: 'Settings sections',
     filter: 'Needs you',
   },
   'zh-TW': {
-    pending: '待處理', questions: '提問', reviews: '待你確認', failed: '失敗的操作',
-    answer: '回答', details: '詳細資料', unknown: '未知', action: '從檢查點繼續',
-    running: '執行中', needs: '需要你', operations: '操作紀錄', settings: '設定',
-    connection: '連線', about: '關於', disconnect: '中斷', connected: '已連線',
-    noEvent: '尚無事件', guide: '設定說明', connect: '連線',
+    pending: '待處理', questions: '提問', reviews: '待你確認', failed: '需要處理',
+    answer: '回答', open: '開啟', review: '查看', readOnly: '唯讀', details: '詳細資料', unknown: '未知', action: '從檢查點繼續',
+    running: '執行中', needs: '需要你處理', failedRail: '失敗', operations: '操作紀錄', settings: '設定',
+    connection: '連線', about: '關於', disconnect: '中斷', connected: '已連線', access: '存取',
+    noEvent: '尚無事件', guide: '設定說明', connect: '連線', openOperation: '開啟操作', attempts: '嘗試次數',
     sentence: '將這個儀表板連到你的 Connector。', product: 'BAT Dashboard',
     note: '依中央實際問題與權限請求列出；閱讀不會解除請求。',
     noMatch: '這一頁沒有相符項目', inReview: '審閱中', sections: '設定分類',
@@ -99,10 +99,15 @@ for (const {locale, width, dark} of layouts) {
     if (dark) await page.evaluate(() => {document.documentElement.dataset.theme = 'dark';});
     await expect(page.getByRole('heading', {level: 1, name: words.pending})).toBeVisible();
     await expect(page.getByRole('link', {name: words.pending, exact: true})).toHaveCount(1);
-    await expect(page.locator('[data-pending-count]:visible')).toHaveText('5');
+    await expect(page.locator('[data-pending-count]:visible')).toHaveText('6');
     const questions = page.getByRole('region', {name: words.questions});
     await expect(questions).toContainText(fixture.copy.sessionReview);
     await expect(questions.getByRole('link', {name: words.answer, exact: true})).toHaveAttribute('href', `#/session/${fixture.ids.host}/${fixture.ids.sessions.review}`);
+    const manual = questions.locator('[data-inbox-key]').filter({hasText: fixture.copy.manualTitle});
+    await expect(manual.getByRole('link', {name: words.open, exact: true})).toHaveAttribute('href', `#/session/${fixture.ids.host}/${fixture.ids.sessions.manual}`);
+    await expect(manual.getByRole('link', {name: words.answer, exact: true})).toHaveCount(0);
+    await expect(manual.getByRole('link', {name: words.review, exact: true})).toHaveCount(0);
+    await expect(manual.getByText(words.readOnly, {exact: true})).toBeVisible();
     const reviews = page.getByRole('region', {name: words.reviews});
     await expect(reviews).toContainText(fixture.copy.work.rate);
     await expect(reviews).toContainText(fixture.copy.work.lockoutMessage);
@@ -111,7 +116,7 @@ for (const {locale, width, dark} of layouts) {
     const bare = failed.locator(`[data-inbox-key="${UNCERTAIN_OPERATION}"]`);
     await expect(bare).toContainText(words.action);
     await expect(bare).toContainText(words.unknown);
-    await expect(bare).not.toContainText('·');
+    await expect(bare).not.toContainText('· ·');
     await expect(bare).not.toContainText('checkpoint.continue');
     await expect(failed).not.toContainText('loaded (not a total)');
     await expect(questions.getByRole('button', {name: locale === 'zh-TW' ? '載入更多' : 'Load more'})).toBeHidden();
@@ -120,7 +125,7 @@ for (const {locale, width, dark} of layouts) {
     await expectNoOverflow(page);
     await shot(page, `pending-${locale}-${width}${dark ? '-dark' : ''}`);
     // The shared disclosure control is a summary, not a button.
-    await page.locator('#main > details.ui-disclosure > summary').click();
+    await page.locator('#main .global-pending-main > details.ui-disclosure > summary').click();
     await expect(page.getByText(words.note)).toBeVisible();
     await expectNoOverflow(page);
 
@@ -133,11 +138,33 @@ for (const {locale, width, dark} of layouts) {
     await expect(work).toHaveAttribute('aria-label', new RegExp(words.running));
     await expect(work.locator('.workspace-dot')).toBeVisible();
     await expect(work.locator('.workspace-tree-state-label')).toHaveCount(0);
+    const failedWork = page.locator(`[data-tree-key="#/work/${encodeURIComponent(fixture.ids.projectId)}/execution/failed-delivery"]`);
+    await expect(failedWork).toHaveAttribute('aria-label', new RegExp(words.failedRail));
+    await expect(failedWork.locator('.workspace-rail-failed')).toBeVisible();
+    const unreadWork = page.locator(`[data-tree-key="#/work/${encodeURIComponent(fixture.ids.projectId)}/session/${encodeURIComponent(fixture.ids.sessions.manual)}"]`);
+    await expect(unreadWork.locator('.workspace-unread-count')).toHaveText('3');
+    await expect(unreadWork.locator('.workspace-tree-state')).toHaveCount(0);
     await closeTree(page, width);
 
     await page.locator(`[aria-label="${words.details} for ${words.action}"], [aria-label="${words.action}的詳細資料"]`).click();
     const inbox = page.locator('.ui-inspector');
     await expect(inbox).toContainText(words.action);
+    if (width >= 1200) {
+      const placed = await page.evaluate(() => {
+        const box = (node: Element | null) => {
+          const rect = node?.getBoundingClientRect();
+          return rect ? {x: rect.x, width: rect.width} : null;
+        };
+        return {
+          group: box(document.querySelector('section[data-inbox-group="replies"]')),
+          inspector: box(document.querySelector('#main .ui-inspector')),
+          details: box(document.querySelector('#main .global-pending-main > details.ui-disclosure')),
+        };
+      });
+      expect(placed.group && placed.inspector && placed.details).toBeTruthy();
+      expect(placed.inspector!.x).toBeGreaterThan(placed.group!.x + placed.group!.width - 2);
+      expect(Math.abs(placed.details!.x - placed.group!.x)).toBeLessThanOrEqual(8);
+    }
     await inbox.locator('details.ui-disclosure > summary').click();
     await expect(inbox.locator('code', {hasText: 'checkpoint.continue'})).toBeVisible();
     await page.keyboard.press('Escape');
@@ -166,6 +193,8 @@ for (const {locale, width, dark} of layouts) {
     await shot(page, `operations-${locale}-${width}${dark ? '-dark' : ''}`);
     await row.click();
     const inspector = page.locator('.ui-inspector');
+    await expect(inspector.getByRole('link', {name: words.openOperation, exact: true})).toHaveAttribute('href', `#/op/${UNCERTAIN_OPERATION}`);
+    await expect(inspector).toContainText(words.attempts);
     await expect(inspector.locator('details.ui-disclosure > summary')).toBeVisible();
     await inspector.locator('details.ui-disclosure > summary').click();
     await expect(inspector.locator('code').filter({hasText: 'checkpoint.continue'})).toBeVisible();
@@ -190,6 +219,8 @@ for (const {locale, width, dark} of layouts) {
     const facts = page.locator('.global-connection-facts');
     await expect(facts).toContainText(words.connected);
     await expect(facts).toContainText(words.noEvent);
+    await expect(facts).toContainText(words.access);
+    await expect(facts).toContainText('reader · observe');
     await expect(facts.locator('dd').first()).not.toHaveText('—');
     await expect(page.getByRole('button', {name: words.disconnect, exact: true})).toBeVisible();
     await expectNoJunk(page);

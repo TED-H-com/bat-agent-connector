@@ -616,6 +616,7 @@ function updateOnline(value) {
   for (const fn of onlineListeners) fn();
 }
 // Transport health is independent of view readiness and mutation gates.
+const connectionPainters = new Set();
 function paintConnection(waiting = false, paused = false) {
   const live = document.getElementById('live');
   const status = !state.token ? 'offline' : state.pollHealth === 'connected' ? 'connected' : 'reconnecting';
@@ -623,6 +624,7 @@ function paintConnection(waiting = false, paused = false) {
   live.className = 'live ' + ({connected: 'ok', offline: 'down', reconnecting: 'reconnecting'}[status]);
   live.textContent = t('ui_' + status);
   live.title = t(paused ? 'sync_actions_paused' : waiting ? 'sync_waiting' : status === 'connected' ? 'desktop_polling' : 'offline_actions_paused');
+  for (const paint of [...connectionPainters]) paint();
 }
 async function streamEvents() {
   for (;;) {
@@ -787,17 +789,18 @@ function sessionRow(s, open) {
   const title = s.title || s.session_id;
   const href = `#/session/${encodeURIComponent(s.host)}/${encodeURIComponent(s.session_id)}`;
   const key = JSON.stringify([s.host, s.session_id]);
-  const asking = s.pending?.kind === "ask_user";
-  const permission = s.pending?.kind === "permission";
+  const managed = s.api_access === "managed";
+  const asking = managed && s.pending?.kind === "ask_user";
+  const permission = managed && s.pending?.kind === "permission";
   const meta = joinLabel([s.host, s.agent_kind, s.worktree_branch,
     s.pending?.kind ? t("pending_" + s.pending.kind) : "", s.stale ? reasonText(s.stale_reason) : ""]);
-  const pill = statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
+  const pill = !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
   return inboxRow({
     h, key, title, href, meta, pill,
     action: h("a", {class: "ui-button secondary ui-sm", href}, t(asking ? "global_answer" : permission ? "global_review" : "global_open")),
     detailsLabel: t("global_details_for", {title}),
     onOpen: () => open?.(key, title, [
-      statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
+      !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown"),
       meta ? h("p", {}, meta) : null,
       disclosure({label: t("global_details"), body: h("dl", {class: "kv"},
         h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, s.session_id || "—")),
@@ -2224,7 +2227,9 @@ async function viewOperations(main, filter = "all") {
     options: [["all", "operations_all"], ["attention", "tab_needs_you"], ["active", "tab_to_confirm"]].map(([value, label]) => ({value, label: t(label)})),
     onChange: value => {location.hash = "#/operations/" + value;},
   });
-  main.append(pageHeader({title: t("nav_operations"), actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => list.load().catch(() => {})})]}),
+  const refresh = iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => list.load().catch(() => {})});
+  list.onBusy(busy => { refresh.disabled = busy; });
+  main.append(pageHeader({title: t("nav_operations"), actions: [refresh]}),
     h("div", {class: "global-ops-tools"}, filters, searchField), list.box);
   if (memory.query) list.filter(memory.query);
   await list.load().catch(() => {});
@@ -2365,15 +2370,29 @@ function fleetEmpty() {
 }
 function connectionFacts() {
   const endpoint = state.endpoint || (state.token ? location.origin : "");
-  const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
-  const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
-  return h("dl", {class: "kv global-connection-facts"},
+  const stateCell = h("dd");
+  const eventCell = h("dd");
+  const dl = h("dl", {class: "kv global-connection-facts"},
     h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"),
-    h("dt", {}, t("global_state")), h("dd", {}, h("span", {class: `ui-pill tone-${tone}`}, t(key))),
-    h("dt", {}, t("global_last_event")), h("dd", {}, state.lastEventAt ? when(state.lastEventAt) : t("global_no_event")));
+    h("dt", {}, t("global_state")), stateCell,
+    h("dt", {}, t("global_last_event")), eventCell);
+  const render = () => {
+    const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
+    const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
+    stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
+    eventCell.textContent = state.lastEventAt ? when(state.lastEventAt) : t("global_no_event");
+  };
+  render();
+  const paint = () => {
+    if (!dl.isConnected) { connectionPainters.delete(paint); return; }
+    render();
+  };
+  connectionPainters.add(paint);
+  return dl;
 }
 function openSettings(main, {exclusive = false} = {}) {
-  const frame = settingsFrame({h, t, exclusive, sections: [
+  const memory = viewState(state.namespace || "", "", "settings");
+  const frame = settingsFrame({h, t, exclusive, selected: memory.section || "", onSelect: id => { memory.section = id; }, sections: [
     {id: "connection", label: t("global_nav_connection")},
     {id: "desktop", label: t("global_nav_desktop"), hidden: true},
     {id: "models", label: t("global_nav_models"), hidden: true},
@@ -2396,7 +2415,7 @@ function viewBrowserSettings(main) {
   const frame = openSettings(main, {exclusive: true});
   const managed = state.token === browserSessionToken;
   const facts = connectionFacts();
-  facts.append(h("dt", {}, t("global_access")), h("dd", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})));
+  facts.append(h("dt", {}, t("global_access")), h("dd", {}, joinLabel([state.caps.actor, ...(state.caps.scopes || [])])));
   const footer = h("div", {class: "global-card-footer"});
   frame.panel("connection").append(h("section", {class: "panel"},
     facts,
@@ -2412,8 +2431,12 @@ function viewBrowserSettings(main) {
 function viewBrowserSignedOut(main) {
   const input = h("input", {type: "password", autocomplete: "off", placeholder: "batc_…"});
   const remember = h("input", {type: "checkbox"});
-  const info = h("p", {class: "muted", role: "status"});
-  if (state.connectionError) info.replaceChildren(errorBox(state.connectionError));
+  const info = h("div", {class: "global-connect-status"});
+  const showConnectError = error => {
+    info.setAttribute("role", "alert");
+    info.replaceChildren(error?.status === 401 ? h("p", {class: "error"}, t("global_token_rejected")) : errorBox(error));
+  };
+  if (state.connectionError) showConnectError(state.connectionError);
   const form = h("form", {class: "global-connect-form", onsubmit: async event => {
     event.preventDefault();
     disconnect();
@@ -2423,7 +2446,7 @@ function viewBrowserSignedOut(main) {
       saveToken(state.token, remember.checked);
       location.hash = "#/home";
       await route();
-    } catch (e) {state.token = null; info.replaceChildren(errorBox(e));}
+    } catch (e) {state.token = null; showConnectError(e);}
   }}, h("label", {class: "connection-token"}, t("token"), input),
     h("label", {class: "global-remember"}, remember, " ", t("remember")),
     h("div", {class: "global-connect-actions"},
@@ -3775,6 +3798,7 @@ async function route() {
       slot.append(preferences.box);
       if (tab) tab.hidden = false;
       if (main.querySelector(".global-settings")?.dataset.settingsExclusive !== "true") slot.hidden = false;
+      main.querySelector(".global-settings")?.reapply?.();
     }
     else main.append(preferences.box);
   }

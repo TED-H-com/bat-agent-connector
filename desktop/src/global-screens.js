@@ -33,36 +33,51 @@ export function firstRunCard({h, t, body, footer}) {
       footer || null));
 }
 
-// Sections stay mounted. Exclusive frames show only the selected section.
-// Native settings keep every mounted section visible; their specs read them together.
-export function settingsFrame({h, t, sections, exclusive = false}) {
-  const nav = h('nav', {class: 'global-settings-nav', role: 'tablist', 'aria-orientation': 'vertical', 'aria-label': t('global_settings_nav')});
+// Sections stay mounted. Exclusive frames are a tab list and show one section.
+// Native settings are a list of links; every mounted section stays visible.
+export function settingsFrame({h, t, sections, exclusive = false, selected = '', onSelect = () => {}}) {
+  const nav = h('nav', {
+    class: 'global-settings-nav', role: exclusive ? 'tablist' : null,
+    'aria-orientation': exclusive ? 'vertical' : null, 'aria-label': t('global_settings_nav'),
+  });
   const panels = h('div', {class: 'global-settings-panels'});
   const buttons = [];
   const roots = [];
+  let preferred = selected || '';
   for (const section of sections) {
     const panel = h('section', {
-      class: 'global-settings-section', role: 'tabpanel', id: `settings-panel-${section.id}`,
-      'data-settings-panel': section.id, 'aria-labelledby': `settings-tab-${section.id}`,
+      class: 'global-settings-section', id: `settings-panel-${section.id}`,
+      'data-settings-panel': section.id,
+      role: exclusive ? 'tabpanel' : null,
+      'aria-labelledby': exclusive ? `settings-tab-${section.id}` : null,
     });
     if (section.id === 'models') panel.setAttribute('data-settings-models', '');
-    const button = h('button', {
-      type: 'button', role: 'tab', id: `settings-tab-${section.id}`, 'data-settings-nav': section.id,
-      'aria-controls': panel.id,
-    }, section.label);
+    const button = exclusive
+      ? h('button', {
+        type: 'button', role: 'tab', id: `settings-tab-${section.id}`, 'data-settings-nav': section.id,
+        'aria-controls': panel.id,
+      }, section.label)
+      : h('a', {href: `#settings-panel-${section.id}`, id: `settings-tab-${section.id}`, 'data-settings-nav': section.id}, section.label);
     if (section.hidden) {button.hidden = true; panel.hidden = true;}
-    button.addEventListener('click', () => select(section.id, true));
+    button.addEventListener('click', event => {
+      if (!exclusive) event.preventDefault();
+      select(section.id, true);
+    });
     buttons.push(button);
     roots.push(panel);
     nav.append(button);
     panels.append(panel);
   }
   const visible = () => buttons.filter(button => !button.hidden);
+  const marked = button => exclusive ? button.getAttribute('aria-selected') === 'true' : button.getAttribute('aria-current') === 'true';
   function apply(id) {
     for (const button of buttons) {
       const on = !button.hidden && button.dataset.settingsNav === id;
-      button.setAttribute('aria-selected', on ? 'true' : 'false');
-      button.tabIndex = on ? 0 : -1;
+      if (exclusive) {
+        button.setAttribute('aria-selected', on ? 'true' : 'false');
+        button.tabIndex = on ? 0 : -1;
+      } else if (on) button.setAttribute('aria-current', 'true');
+      else button.removeAttribute('aria-current');
     }
     if (!exclusive) return;
     for (const node of roots) {
@@ -73,7 +88,9 @@ export function settingsFrame({h, t, sections, exclusive = false}) {
   function select(id, scroll) {
     const button = buttons.find(item => item.dataset.settingsNav === id);
     if (!button || button.hidden) return;
+    preferred = id;
     apply(id);
+    onSelect(id);
     if (scroll) document.getElementById('settings-panel-' + id)?.scrollIntoView({block: 'nearest'});
   }
   nav.addEventListener('keydown', event => {
@@ -90,8 +107,9 @@ export function settingsFrame({h, t, sections, exclusive = false}) {
     next.focus();
     select(next.dataset.settingsNav, true);
   });
-  const first = sections.find(section => !section.hidden);
-  if (first) apply(first.id);
+  const remembered = buttons.find(button => !button.hidden && button.dataset.settingsNav === preferred);
+  const initial = remembered || visible()[0];
+  if (initial) apply(initial.dataset.settingsNav);
   function panel(id) {return roots.find(node => node.dataset.settingsPanel === id);}
   function show(id) {
     const button = buttons.find(node => node.dataset.settingsNav === id);
@@ -99,14 +117,14 @@ export function settingsFrame({h, t, sections, exclusive = false}) {
     if (!button || !node) return;
     button.hidden = false;
     if (!exclusive) node.hidden = false;
-    const selected = visible().find(item => item.getAttribute('aria-selected') === 'true');
-    apply(selected ? selected.dataset.settingsNav : id);
+    if (preferred === id) apply(id);
+    else if (!visible().some(marked)) apply(id);
   }
   function hide(id) {
     const button = buttons.find(node => node.dataset.settingsNav === id);
     const node = panel(id);
     if (!button || !node) return;
-    const was = button.getAttribute('aria-selected') === 'true';
+    const was = marked(button);
     button.hidden = true;
     node.hidden = true;
     if (was) {
@@ -114,6 +132,11 @@ export function settingsFrame({h, t, sections, exclusive = false}) {
       if (next) apply(next.dataset.settingsNav);
     }
   }
+  function reapply() {
+    const button = buttons.find(node => !node.hidden && node.dataset.settingsNav === preferred);
+    if (button) apply(preferred);
+  }
   const root = h('div', {class: 'global-settings', 'data-settings-exclusive': exclusive ? 'true' : 'false'}, nav, panels);
-  return {root, panel, show, hide};
+  root.reapply = reapply;
+  return {root, panel, show, hide, reapply};
 }

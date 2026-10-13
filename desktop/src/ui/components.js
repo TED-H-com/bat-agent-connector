@@ -6,6 +6,10 @@ export {statusVocabulary};
 let sequence = 0;
 const uid = () => `ui-${++sequence}`;
 const nodeIcon = icon => typeof icon === 'string' ? drawIcon(icon) : icon;
+// Keyboard moves on a segmented control or tab list rebuild the view. Remember the
+// group label long enough for the replacement to take focus; a click does not.
+let choiceFocus = null;
+let choiceSerial = 0;
 export function button({variant = 'secondary', size = 'md', icon, label, onClick, ...attrs} = {}) {
   return h('button', {type: 'button', class: `ui-button ${variant} ui-${size}`, onclick: onClick, ...attrs}, nodeIcon(icon), label);
 }
@@ -29,9 +33,23 @@ function choices({options, value, onChange = () => {}, label}, isTabs) {
     const enabled = buttons.filter(node => !node.disabled), current = enabled.indexOf(document.activeElement);
     const index = event.key === 'Home' ? 0 : event.key === 'End' ? enabled.length - 1
       : (current + (['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1) + enabled.length) % enabled.length;
-    const next = enabled[index]; if (!next) return; next.focus(); next.click();
+    const next = enabled[index]; if (!next) return;
+    const ticket = {label, id: ++choiceSerial};
+    choiceFocus = ticket;
+    next.focus(); next.click();
+    setTimeout(() => { if (choiceFocus === ticket) choiceFocus = null; }, 80);
   });
   root.append(...buttons); select(options.some(o => o.value === value && !o.disabled) ? value : options.find(o => !o.disabled)?.value, false);
+  if (choiceFocus?.label === label) {
+    choiceFocus = null;
+    const focusChecked = () => {
+      if (!root.isConnected) return;
+      const checked = buttons.find(node => node.getAttribute(isTabs ? 'aria-selected' : 'aria-checked') === 'true');
+      checked?.focus();
+    };
+    queueMicrotask(focusChecked);
+    setTimeout(focusChecked, 50);
+  }
   root.setValue = next => select(next, false);
   return root;
 }
@@ -95,9 +113,17 @@ export function menu({button: trigger, items}) {
   const panel = h('div', {class: 'ui-menu-panel', role: 'menu', id: uid(), hidden: true});
   const root = h('div', {class: 'ui-menu'}, trigger, panel);
   trigger.setAttribute('aria-haspopup', 'menu'); trigger.setAttribute('aria-controls', panel.id); trigger.setAttribute('aria-expanded', 'false');
-  const controls = items.map(item => h(item.href ? 'a' : 'button', {type: item.href ? null : 'button', href: item.href, role: 'menuitem', 'data-menu-key': item.key,
-    tabindex: -1, disabled: item.href ? null : item.disabled, 'aria-disabled': item.disabled ? 'true' : null,
-    onclick: event => {if (item.disabled) {event.preventDefault(); return;} close(); item.onSelect?.();}}, nodeIcon(item.icon), item.label));
+  const controls = items.map(item => {
+    let node;
+    node = h(item.href ? 'a' : 'button', {type: item.href ? null : 'button', href: item.href, role: 'menuitem', 'data-menu-key': item.key,
+      tabindex: -1, disabled: item.href ? null : item.disabled, 'aria-disabled': item.disabled ? 'true' : null,
+      onclick: event => {
+        // Read the live control. An item created disabled and enabled later must still run.
+        if (node.disabled || node.getAttribute('aria-disabled') === 'true') {event.preventDefault(); return;}
+        close(); item.onSelect?.();
+      }}, nodeIcon(item.icon), item.label);
+    return node;
+  });
   panel.append(...controls);
   const enabledControls = () => controls.filter(node => node.getAttribute('aria-disabled') !== 'true');
   function close(restore = true) {panel.hidden = true; trigger.setAttribute('aria-expanded', 'false');
@@ -128,7 +154,7 @@ export function trapFocus(root, event) {
   else if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {event.preventDefault(); last.focus();}
   else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {event.preventDefault(); first.focus();}
 }
-export function inspector({title, onClose = () => {}}) {
+export function inspector({title, onClose = () => {}, returnFocus} = {}) {
   const opener = document.activeElement, media = matchMedia('(min-width: 1200px)'), titleId = uid();
   const body = h('div', {class: 'ui-inspector-body'});
   const closeButton = iconButton({icon: 'x', label: t('ui_close'), onClick: close});
@@ -153,7 +179,12 @@ export function inspector({title, onClose = () => {}}) {
   function keys(event) {if (event.key === 'Escape') {event.preventDefault(); close();} else if (!media.matches) trapFocus(root, event);}
   let closed = false;
   function close() {if (closed) return; closed = true; release(); scrim.remove(); root.remove();
-    document.removeEventListener('keydown', keys); media.removeEventListener('change', resize); onClose(); if (opener?.isConnected) opener.focus();}
+    document.removeEventListener('keydown', keys); media.removeEventListener('change', resize); onClose();
+    let target = null;
+    try { target = returnFocus?.(); } catch { target = null; }
+    if (target?.isConnected) target.focus();
+    else if (opener?.isConnected) opener.focus();
+  }
   queueMicrotask(() => {if (closed || !root.isConnected) return; resize(); (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
     document.addEventListener('keydown', keys); media.addEventListener('change', resize);});
   return Object.assign(root, {body, close, dispose: close});
@@ -163,8 +194,8 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
     ...columns.map(column => h('th', {scope: 'col', class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
   const root = h('div', {class: 'ui-data-table', tabindex: 0}, table), controls = [];
   rows.forEach((row, i) => {
-    const key = typeof rowKey === 'function' ? rowKey(row) : row[rowKey], active = key === selected;
-    const tr = h('tr', {'data-row-key': key, tabindex: active || selected == null && i === 0 ? 0 : -1,
+    const key = typeof rowKey === 'function' ? rowKey(row) : row[rowKey], active = key === selected, none = !selected;
+    const tr = h('tr', {'data-row-key': key, tabindex: active || none && i === 0 ? 0 : -1,
       'aria-selected': String(active), onclick: event => {if (!event.target.closest('button, a, input, select')) select();}});
     function select() {controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1; node.setAttribute('aria-selected', String(node === tr));}); onSelect(key, row);}
     if (expandable) {
@@ -184,6 +215,14 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
         controls.forEach((node, n) => {node.tabIndex = n === next ? 0 : -1;}); controls[next]?.focus();
       }
     }); controls.push(tr);
+  });
+  root.addEventListener('keydown', event => {
+    if (event.target !== root || !controls.length) return;
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const index = event.key === 'End' || event.key === 'ArrowUp' ? controls.length - 1 : 0;
+    controls.forEach((node, n) => { node.tabIndex = n === index ? 0 : -1; });
+    controls[index].focus();
   });
   return root;
 }

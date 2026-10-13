@@ -70,7 +70,7 @@ for(const native of [false,true]) {
     await expect(page.getByText('Historical receipt 7',{exact:true})).toBeVisible();
     await page.goto('/dashboard/#/home');
     await page.getByRole('radio',{name:'Active operations',exact:true}).click();
-    await page.getByRole('link',{name:'View active operations'}).click();
+    await page.getByRole('link',{name:'To confirm', exact:true}).click();
     await page.locator('[data-row-key="op_'+String(2).padStart(32,'0')+'"]').click();
     await expect(page.getByText('Historical receipt 2',{exact:true})).toBeVisible();
     await expect(page.getByText('Historical receipt 1',{exact:true})).toHaveCount(0);

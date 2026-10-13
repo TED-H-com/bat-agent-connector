@@ -1,4 +1,4 @@
-import {disclosure, emptyState, iconButton, inspector, pageHeader, segmented, skeleton, statusPill} from './ui/components.js';
+import {disclosure, emptyState, iconButton, inlineError, inspector, pageHeader, segmented, skeleton, statusPill} from './ui/components.js';
 import {reasonText} from './global-labels.js';
 import {inboxRow} from './global-screens.js';
 // Each list has its own cursor and loaded-page count. No client-invented total or
@@ -14,29 +14,51 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     onChange: value => {guard(); sessionStorage.setItem(storageKey, value); route();},
   });
   tabs.classList.add('global-inbox-tabs');
-  const empty = emptyState({
-    title: t('empty_needs_you'),
-    action: h('div', {class: 'actions'},
-      h('a', {class: 'ui-button secondary ui-sm', href: '#/projects'}, t('sessions_projects')),
-      caps?.scopes?.includes('start') && caps?.actions?.some(a => a.action === 'session.start' && a.allowed === true)
-        ? h('a', {class: 'ui-button primary ui-sm', href: '#/start'}, t('start_title_page')) : null),
-  });
+  const canApprove = caps?.actions?.some(action => action.action === 'session.approve_pending' && action.allowed === true);
+  const canStart = caps?.scopes?.includes('start') && caps?.actions?.some(action => action.action === 'session.start' && action.allowed === true);
+  const emptyLink = tab === 'active'
+    ? h('a', {class: 'ui-button secondary ui-sm', href: '#/operations/active'}, t('tab_to_confirm'))
+    : tab === 'unread' ? null
+      : canApprove ? h('a', {class: 'ui-button secondary ui-sm', href: '#/approvals'}, t('global_approvals'))
+        : canStart ? h('a', {class: 'ui-button secondary ui-sm', href: '#/start'}, t('start_title_page'))
+          : h('a', {class: 'ui-button secondary ui-sm', href: '#/projects'}, t('sessions_projects'));
+  const emptyTitle = tab === 'active' ? 'global_empty_active' : tab === 'unread' ? 'global_empty_unread' : 'empty_needs_you';
+  const empty = emptyState({title: t(emptyTitle), action: emptyLink});
   empty.hidden = true;
+  const noteKeys = ['replies', 'completion', 'problems', 'hosts', 'active', ...(unread ? ['unread'] : [])];
   const notes = disclosure({
     label: t('global_details'),
     key: storageKey + '.notes',
-    body: h('div', {}, ...['replies', 'completion', 'problems', 'hosts', 'active', 'unread'].map(key =>
+    body: h('div', {}, ...noteKeys.map(key =>
       h('p', {}, h('strong', {}, t('attention_' + key)), ' ', t('attention_' + key + '_note'))),
       h('p', {}, t('empty_next_work'))),
   });
   let sheet = null;
+  const inspectorHost = h('div', {class: 'global-ops-inspector'});
+  const column = h('div', {class: 'global-pending-main'});
+  const layout = h('div', {class: 'global-ops'}, column, inspectorHost);
+  const focusInbox = key => {
+    const row = column.querySelector(`[data-inbox-key="${CSS.escape(key)}"]`);
+    const current = row?.querySelector('a, button');
+    if (current) return current;
+    const next = [...column.querySelectorAll('[data-inbox-key] a, [data-inbox-key] button')]
+      .find(node => node.closest('[data-inbox-key]')?.dataset.inboxKey !== key);
+    if (next) return next;
+    const fallback = column.querySelector('.global-group h2') || main.querySelector('h1');
+    if (fallback) { fallback.tabIndex = -1; return fallback; }
+    return null;
+  };
   const open = (key, title, nodes) => {
     if (!sheet?.isConnected || sheet.dataset.inboxKey !== key) {
       sheet?.dispose();
-      const node = inspector({title, onClose: () => {if (sheet === node) sheet = null;}});
+      const node = inspector({title, returnFocus: () => focusInbox(key), onClose: () => {
+        if (sheet !== node) return;
+        sheet = null; layout.classList.remove('has-inspector');
+      }});
       node.dataset.inboxKey = key;
       sheet = node;
-      main.append(node);
+      inspectorHost.append(node);
+      layout.classList.add('has-inspector');
     }
     sheet.body.replaceChildren(...[].concat(nodes).flat().filter(node => node != null && node !== false));
   };
@@ -53,7 +75,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     const count = h('span', {class: 'muted', 'data-shown': ''});
     const more = h('button', {class: 'secondary', hidden: true}, t('load_more'));
     const viewAll = key === 'problems' ? h('a', {class: 'global-view-all', href: '#/operations/attention'}, t('global_view_all')) : null;
-    const quiet = key === 'active' ? h('a', {href: '#/operations/active'}, t('operations_view_active')) : null;
+    const quiet = key === 'active' ? h('a', {href: '#/operations/active'}, t('tab_to_confirm')) : null;
     const section = h('section', {class: 'global-group', 'aria-label': t('attention_' + key), 'data-inbox-group': key},
       h('div', {class: 'global-group-head'}, h('h2', {}, t('attention_' + key)), badge, viewAll),
       status, list, h('div', {class: 'global-group-foot'}, count, more, quiet));
@@ -74,18 +96,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
         h('dt', {}, t('global_code')), h('dd', {}, h('code', {}, x.stale_reason || x.error || '—')))}),
     ]),
   });
-  const approvals = caps?.actions?.some(action => action.action === 'session.approve_pending' && action.allowed === true)
-    ? h('section', {class: 'global-group', 'aria-label': t('global_approvals')},
-      h('div', {class: 'global-group-head'}, h('h2', {}, t('global_approvals'))),
-      h('div', {class: 'global-inbox-list'}, inboxRow({
-        h, key: 'approvals', title: t('bulk_title'), href: '#/approvals',
-        action: h('a', {class: 'ui-button secondary ui-sm', href: '#/approvals'}, t('global_review')),
-      }))) : null;
-  main.append(...[pageHeader({
-    title: t('nav_home'),
-    actions: [iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => refresh().catch(() => {})})],
-  }), tabs, empty, ...(tab === 'needs' ? [
-    approvals,
+  const groups = tab === 'needs' ? [
     add('replies', '/sessions?attention=true&limit=50', 'sessions', sessionRow),
     add('completion', '/work-items?pending=true&limit=50', 'work_items', workItemRow),
     add('problems', '/operations?status=needs_attention,uncertain&limit=50', 'operations', opRow, {cursor: 'next_before', param: 'before'}),
@@ -93,10 +104,22 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
   ] : tab === 'active' ? [
     add('active', '/operations?status=accepted,running,waiting_checks,waiting_external&limit=50', 'operations', opRow,
       {cursor: 'next_before', param: 'before'}),
-  ] : [add('unread', '/work-items?unread=true&limit=50', 'work_items', workItemRow)]), notes].filter(node => node != null && node !== false));
+  ] : [add('unread', '/work-items?unread=true&limit=50', 'work_items', workItemRow)];
+  const refreshButton = iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => refresh().catch(() => {})});
+  const syncBusy = () => { refreshButton.disabled = sections.some(section => section.busy); };
+  column.append(empty, ...groups, notes);
+  main.append(pageHeader({title: t('nav_home'), actions: [refreshButton]}), tabs, layout);
   let serial = Promise.resolve();
+  let lastPending = null;
+  const publishPending = () => {
+    if (tab !== 'needs') return;
+    if (!sections.every(item => item.section.dataset.fresh === 'true')) return;
+    const value = {count: sections.reduce((sum, item) => sum + item.size, 0), partial: sections.some(item => item.partial)};
+    lastPending = value;
+    onPending(value);
+  };
   const load = async (section, wanted) => {
-    guard(); section.busy = true; section.more.disabled = true;
+    guard(); section.busy = true; section.more.disabled = true; syncBusy();
     if (section.size === null) section.status.replaceChildren(skeleton(3));
     const focusKey = section.list.contains(document.activeElement)
       ? document.activeElement.closest('[data-inbox-key]')?.dataset.inboxKey : null;
@@ -133,19 +156,25 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
         (next || row)?.focus({preventScroll: true});
       }
       reconcile();
-      if (tab === 'needs') onPending(sections.every(item => item.section.dataset.fresh === 'true')
-        ? {count: sections.reduce((sum, item) => sum + item.size, 0), partial: sections.some(item => item.partial)} : {});
+      publishPending();
     } catch (error) {
-      guard(); section.section.dataset.fresh = 'false'; onPending({});
+      guard();
+      section.section.dataset.fresh = 'false';
+      section.section.hidden = false;
       if ([403, 404].includes(error.status)) {
         section.list.replaceChildren(); section.count.replaceChildren(); section.badge.textContent = '';
-        section.size = null; section.more.hidden = true; section.section.hidden = false;
+        section.badge.hidden = true; section.size = null; section.more.hidden = true;
         reconcile();
-      }
-      section.status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('attention_not_updated')));
+        if (tab === 'needs') { lastPending = null; onPending({}); }
+      } else if (tab === 'needs' && lastPending) onPending(lastPending);
+      errorBox(error);
+      section.status.replaceChildren(inlineError({
+        error: {message: t('global_not_updated')},
+        retry: () => refresh(section).catch(() => {}),
+      }));
       throw error;
     } finally {
-      section.busy = false; section.more.disabled = false;
+      section.busy = false; section.more.disabled = false; syncBusy();
     }
   };
   const refresh = (only, wanted) => {
@@ -154,7 +183,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       const results = await Promise.allSettled((only ? [only] : sections).map(item => load(item, only ? wanted : item.pages)));
       guard();
       const settled = sections.every(item => item.size === 0 && item.section.dataset.fresh === 'true');
-      empty.hidden = tab !== 'needs' || Boolean(approvals) || !settled;
+      empty.hidden = !settled;
       const failed = results.find(item => item.status === 'rejected');
       if (failed) throw failed.reason;
     });
