@@ -10,13 +10,13 @@ import base64
 import json
 import math
 import re
-from contextvars import ContextVar
 from datetime import datetime, timezone
 
-from . import pm_evidence, pm_roadmap, pm_source_lineage, work_items
+from . import pm_evidence, pm_read_cache, pm_roadmap, pm_source_lineage, work_items
 from .operations import STATES as OPERATION_STATES
 from .operations import TERMINAL as OPERATION_TERMINAL
 from .operations import OperationError
+from .pm_release_baselines import _snapshot
 from .task_journal import STATES as TASK_STATES
 
 MAX_WORK = 200
@@ -45,7 +45,6 @@ _TASK_WAIT = {"waiting_permission": "permission", "quota_limited": "quota", "hum
 _OPERATION_WAIT = {"waiting_checks": "checks", "waiting_external": "external"}
 _SOURCE_FLAGS = ("attempts_truncated", "attempts_unavailable", "work_bindings_truncated", "issues_truncated")
 _OPERATION_KINDS = tuple(f"operation.{name}" for name in OPERATION_STATES)
-_CACHE = ContextVar("pm_schedule_cache", default=None)
 
 
 def capabilities():
@@ -59,18 +58,13 @@ def read(ops, principal, workspace_id, *, after=None, limit=None):
     if type(limit) is not int or not 1 <= limit <= _PAGE_DEFAULT:
         raise OperationError("INVALID_PARAMS", "limit must be 1-100", 422)
     cursor = _cursor(after)
-    token = _CACHE.set({})
-    try:
-        with pm_source_lineage.memoized_reads():
-            with ops.journal.read_tx():
-                pm_roadmap._member(ops, principal, workspace_id)
-                loaded = _load(ops, principal, workspace_id)
-                ordered = sorted(loaded["nodes"], key=lambda node: (_RANK[node["kind"]], node["id"]))
-                if cursor is not None:
-                    ordered = [node for node in ordered if (_RANK[node["kind"]], node["id"]) > cursor]
-                return _fit(loaded, ordered, limit)
-    finally:
-        _CACHE.reset(token)
+    with _snapshot(ops.db), pm_read_cache.scope(ops.db, principal):
+        pm_roadmap._member(ops, principal, workspace_id)
+        loaded = _load(ops, principal, workspace_id)
+        ordered = sorted(loaded["nodes"], key=lambda node: (_RANK[node["kind"]], node["id"]))
+        if cursor is not None:
+            ordered = [node for node in ordered if (_RANK[node["kind"]], node["id"]) > cursor]
+        return _fit(loaded, ordered, limit)
 
 
 def _encode_cursor(row_id):
@@ -91,15 +85,6 @@ def _cursor(after):
     if sep != ":" or kind not in _RANK or not rest or len(text) > _CURSOR_RAW_MAX:
         raise OperationError("INVALID_PARAMS", "after must be a schedule cursor", 422)
     return _RANK[kind], text
-
-
-def _cached(key, factory):
-    cache = _CACHE.get()
-    if cache is None:
-        return factory()
-    if key not in cache:
-        cache[key] = factory()
-    return cache[key]
 
 
 def _instant(value):
@@ -251,27 +236,16 @@ def _requirements(ops, principal, workspace_id, milestones, notes, coverage):
 
 
 def _plan(ops, principal, workspace_id, revision, coverage):
-    key = ("plan", workspace_id, revision)
-
-    def load():
-        from . import pm_plans
-        try:
-            return pm_plans.get_plan(ops, principal, workspace_id, revision)["plan"]
-        except OperationError as error:
-            if error.status == 403:
-                raise
-            if error.status in (404, 409):
-                coverage["visibility_filtered"] = True
-                return None
+    from . import pm_plans
+    try:
+        return pm_plans.get_plan(ops, principal, workspace_id, revision)["plan"]
+    except OperationError as error:
+        if error.status == 403:
             raise
-
-    cache = _CACHE.get()
-    if cache is not None and key in cache:
-        return cache[key]
-    plan = load()
-    if cache is not None:
-        cache[key] = plan
-    return plan
+        if error.status in (404, 409):
+            coverage["visibility_filtered"] = True
+            return None
+        raise
 
 
 def _works(ops, principal, workspace_id, milestones, requirements, notes, coverage):
@@ -327,13 +301,10 @@ def _current_bindings(db, workspace_id):
 
 
 def _work_visible(db, principal, work_id, coverage):
-    def load():
-        try:
-            return pm_source_lineage.visible(db, principal, "work_item", work_id)
-        except OperationError:
-            return False
-
-    allowed = _cached(("work", work_id), load)
+    try:
+        allowed = pm_source_lineage.visible(db, principal, "work_item", work_id)
+    except OperationError:
+        allowed = False
     if not allowed:
         coverage["visibility_filtered"] = True
     return allowed
@@ -1056,13 +1027,11 @@ def _dumps(payload):
     return json.dumps(payload, ensure_ascii=False).encode()
 
 
+@pm_read_cache.memoized
 def _lineage_open(db):
-    def load():
-        if not pm_source_lineage.installed(db):
-            return False
-        return db.execute("SELECT 1 FROM pm_source_lineage LIMIT 1").fetchone() is not None
-
-    return _cached("lineage_open", load)
+    if not pm_source_lineage.installed(db):
+        return False
+    return db.execute("SELECT 1 FROM pm_source_lineage LIMIT 1").fetchone() is not None
 
 
 def _row_roots(db, public):

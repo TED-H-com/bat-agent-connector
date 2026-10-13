@@ -11,12 +11,11 @@ import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 
+from . import pm_read_cache
 from .operations import OperationError, OperationService
 
 MAX_ROOTS = 64
 _EXECUTION = ContextVar("pm_source_execution", default=None)
-# Set only around one consistent read. Unset callers keep the uncached path.
-_MEMO = ContextVar("pm_source_lineage_memo", default=None)
 # Other derived writes must first implement fixed lineage and original recovery.
 DERIVED_ACTIONS = frozenset({"artifact.capture.managed", "artifact.accept", "github.pr.publish", "pm.execution.verify",
     "session.send", "session.answer", "session.interrupt", "session.read", "session.position",
@@ -47,24 +46,9 @@ def schema(journal):
         delivery_schema(journal)
 
 
-@contextmanager
-def memoized_reads():
-    """Reuse lineage lookups inside one read snapshot."""
-    token = _MEMO.set({})
-    try:
-        yield
-    finally:
-        _MEMO.reset(token)
-
-
+@pm_read_cache.memoized
 def installed(db):
-    memo = _MEMO.get()
-    if memo is not None and "installed" in memo:
-        return memo["installed"]
-    found = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_source_lineage'").fetchone() is not None
-    if memo is not None:
-        memo["installed"] = found
-    return found
+    return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_source_lineage'").fetchone() is not None
 
 
 def _table(db, name):
@@ -72,22 +56,14 @@ def _table(db, name):
 
 
 def roots(db, kind, identity, *, _seen=None):
-    memo = _MEMO.get() if _seen is None else None
-    key = ("roots", kind, identity)
-    if memo is not None and key in memo:
-        cached = memo[key]
-        if isinstance(cached, OperationError):
-            raise cached
-        return set(cached)
-    try:
-        found = _roots_collect(db, kind, identity, _seen=_seen)
-    except OperationError as error:
-        if memo is not None:
-            memo[key] = error
-        raise
-    if memo is not None:
-        memo[key] = set(found)
-    return found
+    if _seen is not None:
+        return _roots_collect(db, kind, identity, _seen=_seen)
+    return _root_read(db, kind, identity)
+
+
+@pm_read_cache.memoized
+def _root_read(db, kind, identity):
+    return _roots_collect(db, kind, identity)
 
 
 def _roots_collect(db, kind, identity, *, _seen=None):
@@ -254,23 +230,9 @@ def visible_roots(db, principal, original_ids):
     return True
 
 
+@pm_read_cache.memoized
 def visible(db, principal, kind, identity):
-    memo = _MEMO.get()
-    key = ("visible", getattr(principal, "actor", None), kind, identity)
-    if memo is not None and key in memo:
-        cached = memo[key]
-        if isinstance(cached, OperationError):
-            raise cached
-        return cached
-    try:
-        result = visible_roots(db, principal, roots(db, kind, identity))
-    except OperationError as error:
-        if memo is not None:
-            memo[key] = error
-        raise
-    if memo is not None:
-        memo[key] = result
-    return result
+    return visible_roots(db, principal, roots(db, kind, identity))
 
 
 def require(db, principal, kind, identity):

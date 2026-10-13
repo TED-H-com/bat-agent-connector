@@ -5,6 +5,7 @@ import json
 import re
 import sqlite3
 import uuid
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 from urllib.parse import quote
@@ -1569,3 +1570,48 @@ async def test_plan_timeline_links_the_visible_proposal_both_ways(ops, monkeypat
     assert _shows(reverse, "plan_revision", candidate["revision_id"])
     assert not _shows(baseline, "proposal", proposal_id)
     assert calls and set(calls) == {proposal_id}
+
+
+@pytest.mark.parametrize("source", ["snapshot", "evidence"])
+@pytest.mark.parametrize("difference", [
+    {"actor": "other-reader"}, {"scopes": frozenset()},
+    {"admin": True}, {"credential_id": "other-credential"},
+    {"workspace_id": "ws_" + "f" * 32},
+])
+async def test_register_source_memo_keys_principal_and_workspace(ops, monkeypatch, source, difference):
+    """MN-2: a cached source cannot skip access checks for another identity or workspace."""
+    from bat_agent_connector import pm_evidence, pm_read_cache, pm_snapshots
+    from bat_agent_connector.pm_release_baselines import _snapshot
+
+    data = await prepared(ops, evidence=True)
+    module = pm_snapshots if source == "snapshot" else pm_evidence
+    read = module.get_snapshot if source == "snapshot" else module.get_evidence
+    identity = (data["snapshot"]["snapshot_id"] if source == "snapshot" else
+                ops.db.execute("SELECT evidence_id FROM pm_evidence WHERE workspace_id=? LIMIT 1", (data["wid"],)).fetchone()[0])
+    original, calls = module._member, []
+
+    def member(service, principal, workspace_id, **kwargs):
+        calls.append((principal, workspace_id))
+        return original(service, principal, workspace_id, **kwargs)
+
+    monkeypatch.setattr(module, "_member", member)
+    other = replace(OWNER, **difference) if "workspace_id" not in difference else OWNER
+    workspace_id = difference.get("workspace_id", data["wid"])
+    with _snapshot(ops.db), pm_read_cache.scope(ops.db, OWNER):
+        expected = read(ops, OWNER, data["wid"], identity)
+        assert read(ops, OWNER, data["wid"], identity) == expected
+        assert len(calls) == 1
+        try:
+            changed = read(ops, other, workspace_id, identity)
+        except OperationError as exc:
+            assert exc.status in (403, 404)
+            with pytest.raises(OperationError) as repeated:
+                read(ops, other, workspace_id, identity)
+            assert repeated.value is not exc
+            assert (repeated.value.code, repeated.value.status) == (exc.code, exc.status)
+        else:
+            assert read(ops, other, workspace_id, identity) == changed
+        assert len(calls) == 2
+        assert calls[-1][0] is other and calls[-1][1] == workspace_id
+        assert read(ops, OWNER, data["wid"], identity) == expected
+        assert len(calls) == 2
