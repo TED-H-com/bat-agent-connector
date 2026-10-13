@@ -93,7 +93,9 @@
   Withdrawal clears selection and returns focus to the view heading; snapshot conflicts expose raw
   codes only in Details and offer a local retry. Live refresh of a Requirements milestone selection
   preserves search and group-heading focus. Requirements work links open authorized unassigned work
-  even before a plan is adopted.
+  even before a plan is adopted. Keep Board card metadata on one centred line with wider fallback
+  fonts, truncating flexible labels while preserving their full accessible names and delivery
+  evidence.
 - Add the Schedule view: Day, Week and Month zoom over the central schedule projection, with dashed
   baselines, outlined forecasts, filled actuals and an Open marker for an actual without end
   evidence. Partial reads keep a Partial pill, and narrow screens get list rows with mini timelines.

@@ -296,6 +296,7 @@ test('inline rename cancels without writing and recovers an unknown save with th
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   const title = page.locator('[data-discussion-title]'), original = await title.textContent();
   const rename = page.getByRole('button', {name: 'Rename', exact: true}), input = page.getByLabel('Discussion title', {exact: true});
+  await expect(rename).toBeEnabled();
   await expect(input).toBeHidden(); await rename.press('Enter'); await expect(input).toBeFocused();
   await input.fill('Discard this title'); await input.press('Escape');
   await expect(rename).toBeFocused(); await expect(title).toHaveText(original!); expect(f.discussion.writes).toHaveLength(0);

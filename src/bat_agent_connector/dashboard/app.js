@@ -27811,13 +27811,21 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			}, text);
 		}) : [chip(card.binding.requirement_ids?.length ? t("wv_earlier_plan") : t("wv_no_requirement"))]), h$1("div", { class: "pm-kanban-card-meta" }, ...workAgents(source).map(agentMark).filter((mark) => mark.textContent !== "?"), ...prGroups(source?.deliveries).map(({ target, rows }) => {
 			const node = contextChip({ text: `PR #${target.pull_number}` });
-			node.title = joinLabel([target.repository, t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")]);
+			node.title = joinLabel([
+				node.textContent,
+				target.repository,
+				t(rows.some((row) => row.merge?.merged === true) ? "ui_status_merged" : "ui_status_unknown")
+			]);
+			node.setAttribute("aria-label", node.title);
 			return node;
 		}), coverageState !== "complete" ? statusPill(coverageState) : null, blockedWork(card) ? h$1("span", {
 			class: "pm-board-blocker",
 			title: blockerText(t, card),
 			"aria-label": blockerText(t, card)
-		}, icon("circle-alert"), t("ui_status_blocked")) : null, group.value !== "status" ? h$1("span", { class: "pm-board-state" }, statusPill(workStatus(card))) : null, age ? h$1("span", {
+		}, icon("circle-alert"), h$1("span", { class: "pm-board-blocker-label" }, t("ui_status_blocked"))) : null, group.value !== "status" ? h$1("span", {
+			class: "pm-board-state",
+			title: t("ui_status_" + workStatus(card))
+		}, statusPill(workStatus(card))) : null, age ? h$1("span", {
 			class: "pm-board-age",
 			title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
 		}, age) : null), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];

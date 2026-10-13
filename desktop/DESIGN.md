@@ -121,6 +121,9 @@ opens the global tree. Manual sessions remain read-only. Tree names occupy one l
 with ellipsis; the complete name and state stay in the tooltip and accessible name.
 A fixed status column shows a dot and short label, or just the dot in a narrow rail.
 Rows are 36px on desktop and 44px on touch; children begin at the parent text column.
+Row layouts must hold with wider fallback fonts (DejaVu Sans, Segoe UI, Microsoft
+JhengHei); flexible text ellipsizes with its full accessible name. Time assertions
+pin a timezone.
 The global Projects block starts at the same top padding as the workspace block;
 New workspace remains available through Tools when no workspace is selected.
 The rail uses a shared icon/text grid. Missing capability and empty binding lists

@@ -1,8 +1,17 @@
-import {test, expect} from '@playwright/test';
+import {test, expect, type Locator} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
+
+async function expectMetaRows(board: Locator) {
+  expect(await board.locator('.pm-kanban-card-meta').evaluateAll(nodes => nodes.every(node => {
+    const row = node.getBoundingClientRect(), boxes = [...node.children].map(child => child.getBoundingClientRect());
+    const centres = boxes.map(box => box.top + box.height / 2);
+    return boxes.every(box => box.width > 0 && box.left >= row.left && box.right <= row.right + 1)
+      && (!centres.length || Math.max(...centres) - Math.min(...centres) <= 1);
+  }))).toBe(true);
+}
 
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
@@ -19,6 +28,13 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     node.getAttribute('title') === node.textContent && getComputedStyle(node).whiteSpace === 'nowrap' && node.clientHeight <= 24))).toBe(true);
   expect(await board.locator('[data-pm-kanban-work]').evaluateAll(nodes => nodes.every(node =>
     node.scrollWidth <= node.clientWidth && node.querySelectorAll('.pm-kanban-card-meta').length === 1))).toBe(true);
+  await expectMetaRows(board);
+  const emailMeta = board.locator(`[data-pm-kanban-work="${ids.work.email}"] .pm-kanban-card-meta`);
+  for (const number of [87, 91]) {
+    const pr = emailMeta.locator('.ui-context-chip').filter({hasText: `PR #${number}`});
+    await expect(pr).toHaveAccessibleName(`PR #${number} · example/membership · ${locale === 'en' ? 'Merged' : '已合併'}`);
+    await expect(pr).toHaveCSS('text-overflow', 'ellipsis');
+  }
   const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
   await page.screenshot({path: `${out}/board-${locale}-${width}.png`, fullPage: true});
   await board.getByLabel('Agent', {exact: true}).selectOption('codex');
@@ -31,6 +47,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   const grouping = board.getByLabel(locale === 'en' ? 'Group by' : '分組方式', {exact: true});
   await grouping.selectOption('milestone'); await expect(board.locator('[data-pm-kanban-column]')).toHaveCount(3);
   await expect(board.locator('.pm-board-state')).toHaveCount(12);
+  await expectMetaRows(board);
   await grouping.selectOption('status');
   await expect(board.locator('.pm-board-state')).toHaveCount(0);
   const card = board.locator(`[data-pm-kanban-work="${ids.work.audit}"]`);
@@ -44,6 +61,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(inspector.locator('[data-work-section=blocker]')).toContainText(locale === 'en' ? 'A linked task is blocked' : '連結的任務受阻');
   await expect(inspector.locator('[data-work-section=status]')).toContainText(locale === 'en' ? 'Owner · Not recorded' : '負責人 · 未記錄');
   if (width >= 1200) {
+    await expectMetaRows(board);
     expect(await board.locator(`[data-pm-kanban-work="${ids.work.email}"] .pm-kanban-card-meta`).evaluate(node => {
       const centres = [...node.children].map(child => {const box = child.getBoundingClientRect(); return box.top + box.height / 2;});
       return Math.max(...centres) - Math.min(...centres) <= 1;
