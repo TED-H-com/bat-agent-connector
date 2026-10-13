@@ -76,7 +76,7 @@ impl Fixture {
                     .take(MAX_OUTPUT + 1)
                     .read_to_end(&mut output)
                     .map_err(|_| "PowerShell fixture output read failed")
-                    .and_then(|_| {
+                    .and({
                         if output.len() > MAX_OUTPUT as usize {
                             Err("PowerShell fixture output exceeded its bound")
                         } else {
