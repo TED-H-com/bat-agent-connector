@@ -1,5 +1,6 @@
 """The shared read memo must never extend source authority or a snapshot."""
 import asyncio
+import json
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
@@ -337,6 +338,44 @@ def test_positive_only_reader_does_not_retain_refusals_or_exceptions(db):
         for _ in range(2):
             assert pm_read_cache.remember('positive', 'row', load, cache_errors=False, cache_if=bool)
         assert calls == [False, False, None, None, True]
+
+
+def test_json_projection_copies_preserve_values_and_withdraw_after_write(db):
+    calls = []
+
+    @pm_read_cache.memoized(freeze=pm_read_cache.json_snapshot, thaw=json.loads)
+    def read(connection, principal):
+        calls.append(principal.credential_id)
+        return {'label': '工程證據', 'count': None, 'rows': [
+            {'value': connection.execute('SELECT value FROM records').fetchone()[0], 'revision': 2**60}]}
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        first = read(db, OWNER)
+        first['rows'][0]['value'] = 'caller mutation'
+        first['count'] = 0
+        expected = {'label': '工程證據', 'count': None, 'rows': [{'value': 'original', 'revision': 2**60}]}
+        assert read(db, OWNER) == expected
+        assert pm_read_cache.recall(read.__wrapped__, ((OWNER,), [])) == (True, expected)
+        assert calls == [OWNER.credential_id]
+        other = replace(OWNER, credential_id='other')
+        assert read(db, other) == expected
+        assert calls == [OWNER.credential_id, 'other']
+        db.execute("UPDATE records SET value='withdrawn'")
+        assert read(db, OWNER)['rows'][0]['value'] == 'withdrawn'
+        assert read(db, OWNER)['rows'][0]['value'] == 'withdrawn'
+        assert calls == [OWNER.credential_id, 'other', OWNER.credential_id, OWNER.credential_id]
+        assert not pm_read_cache._CURRENT.get().scope.values
+
+
+def test_write_during_freeze_cannot_repopulate_scope(db):
+    def freeze(value):
+        db.execute("UPDATE records SET value='withdrawn'")
+        return pm_read_cache.json_snapshot(value)
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert pm_read_cache.remember('copy', 'row', lambda: {'value': 'original'},
+            freeze=freeze, thaw=json.loads) == {'value': 'original'}
+        assert not pm_read_cache._CURRENT.get().scope.values
 
 
 def test_recall_is_copy_safe_principal_scoped_and_disabled_by_write(db):

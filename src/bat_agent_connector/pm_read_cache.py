@@ -1,5 +1,6 @@
 """Memoization limited to one owner's immutable database read snapshot."""
 import asyncio
+import json
 import threading
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -54,6 +55,17 @@ class _Frame:
     scope: _Scope
     principal: object
     parent: object = None
+
+
+@dataclass(frozen=True)
+class _SavedValue:
+    value: object
+    thaw: object
+
+
+def json_snapshot(value):
+    """Freeze readers whose public values already consist entirely of JSON."""
+    return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
 
 
 def _key(value):
@@ -137,7 +149,7 @@ def _entry(entry):
     if not available:
         from .operations import OperationError
         raise OperationError(*value)
-    return deepcopy(value)
+    return value.thaw(value.value) if isinstance(value, _SavedValue) else deepcopy(value)
 
 
 def recall(kind, key):
@@ -153,7 +165,8 @@ def recall(kind, key):
     return (True, _entry(entry)) if entry is not None else (False, None)
 
 
-def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_independent=False):
+def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_independent=False,
+             freeze=deepcopy, thaw=deepcopy):
     """Remember a namespaced value; include explicit visibility inputs in key.
 
     The selected scope principal is also part of every key. Unsupported key
@@ -162,6 +175,8 @@ def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_indepen
     answers with cache_if=bool and leave exceptions uncached.
     guard_independent is only for raw snapshot metadata, never visibility,
     sanitized projections or answers depending on a traversal guard.
+    freeze/thaw may optimize copies of known value types; each returned value
+    must remain isolated from the loader, other callers and the saved envelope.
     """
     frame = _CURRENT.get()
     if frame is None or not frame.scope.usable():
@@ -188,13 +203,16 @@ def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_indepen
             if (not current.usable() or cache_if is not None and not cache_if(value)
                     or not guard_independent and generation != refusal_generation()):
                 return value
-            current.values[identity] = (True, deepcopy(value))
+            saved = freeze(value)
+            if not current.usable():
+                return value
+            current.values[identity] = (True, _SavedValue(saved, thaw))
     return _entry(current.values[identity])
 
 
-def memoized(fn=None, *, guard_independent=False):
+def memoized(fn=None, *, guard_independent=False, freeze=deepcopy, thaw=deepcopy):
     if fn is None:
-        return lambda reader: memoized(reader, guard_independent=guard_independent)
+        return lambda reader: memoized(reader, guard_independent=guard_independent, freeze=freeze, thaw=thaw)
     first_name = next(iter(signature(fn).parameters))
 
     @wraps(fn)
@@ -206,11 +224,18 @@ def memoized(fn=None, *, guard_independent=False):
             return fn(*args, **kwargs)
         key = (args[1:], sorted(kwargs.items())) if args else (
             (), sorted((name, value) for name, value in kwargs.items() if name != first_name))
-        return remember(fn, key, lambda: fn(*args, **kwargs), guard_independent=guard_independent)
+        return remember(fn, key, lambda: fn(*args, **kwargs), guard_independent=guard_independent,
+                        freeze=freeze, thaw=thaw)
     return read
 
 
-@memoized(guard_independent=True)
+def _copy_columns(row):
+    # Journal uses native SQLite scalar columns (including encoded JSON text),
+    # so a new envelope suffices: no column contains a mutable source document.
+    return row.copy() if row is not None else None
+
+
+@memoized(guard_independent=True, freeze=_copy_columns, thaw=_copy_columns)
 def operation_row(db, operation_id):
     """Raw canonical columns only; callers still decode and authorize each read.
 

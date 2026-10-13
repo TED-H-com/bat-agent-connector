@@ -545,7 +545,7 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=50):
                 "visibility_filtered": filtered}
 
 
-@pm_read_cache.memoized
+@pm_read_cache.memoized(freeze=pm_read_cache.json_snapshot, thaw=json.loads)
 def get_snapshot(ops, principal, workspace_id, snapshot_id):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)

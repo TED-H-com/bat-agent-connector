@@ -135,6 +135,11 @@ Raw canonical operation columns, action/table metadata and complete immutable
 lineage roots may be reused even inside a traversal guard: none depends on a
 partial source grant. Callers still decode and authorize the original records;
 parsed source documents and live/effect decisions are not stored by these readers.
+Existing authorized evidence/snapshot projections use immutable JSON envelopes
+in the read memo and parse a fresh copy for each caller. Raw SQLite scalar
+columns need only a copied envelope. These copy strategies preserve unknown
+values, integer precision and caller isolation; they do not change authorization
+or enable storing projections inside a traversal guard.
 The original execution-verifier visibility reader also reuses only a completed
 boolean for its canonical saved operation ID within that same scope. It has its
 own 64-node depth allowance so verifier wrappers do not shorten supported root
