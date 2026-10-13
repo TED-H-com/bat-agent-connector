@@ -5,6 +5,25 @@ const saved = (page: Page) => page.evaluate(() => JSON.parse(Object.entries(loca
 const bottom = (page: Page) => page.locator('.conversation-scroll').evaluate(el => el.scrollHeight-el.scrollTop-el.clientHeight);
 for (const native of [false,true]) {
   const platform = native ? 'IPC' : 'Web';
+  for (const timestamp of ['', 'not-a-time']) test(`missing message time stays empty after a ticker refresh (${platform}, ${timestamp ? 'invalid' : 'empty'})`, async ({page}) => {
+    const {data, dispatch} = conversationFixture(); await mountConversation(page, native, dispatch);
+    await page.goto('/dashboard/#/session/demo/session-1');
+    const time = page.locator('[data-message-id="message-0"] .message-time');
+    await expect(time).toHaveAttribute('datetime', /2026-10-09/);
+    await time.evaluate(node => (window as any).retainedMessageTime = node);
+    const draft = page.locator('textarea').first(); await draft.fill('Retain this draft.');
+    data.messages[0].ts = timestamp; data.cursor++;
+    await expect.poll(() => saved(page)).toEqual(checkpoint(1));
+    await expect(time).toHaveText('');
+    await expect(time).not.toHaveAttribute('datetime');
+    await expect(time).not.toHaveAttribute('title');
+    await expect(time).not.toHaveAttribute('data-ui-time');
+    await page.evaluate(async () => {const {refreshTimeStamps} = await import('/src/ui/stamps.js'); refreshTimeStamps();});
+    await expect(time).toHaveText('');
+    expect(await time.evaluate(node => node === (window as any).retainedMessageTime)).toBe(true);
+    await expect(page.locator('.msg')).toHaveCount(12); await expect(draft).toHaveValue('Retain this draft.');
+    expect(data.writes).toEqual([]);
+  });
   test(`safe rich content, exact clipboard and failed clipboard fallback (${platform})`, async ({page}) => {
     const {data,dispatch}=conversationFixture();
     data.messages[data.messages.length-1].text += '\n<img src=x onerror="window.attacked=1">\n[unsafe](javascript:alert(1))';

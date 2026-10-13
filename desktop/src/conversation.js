@@ -136,6 +136,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
         const stampNode = timeStamp(message.ts, {empty:''});
         row.time.textContent = stamp;
         if (stampNode instanceof Node) {row.time.dateTime = stampNode.dateTime; row.time.title = stampNode.title; row.time.dataset.uiTime = stampNode.dataset.uiTime;}
+        else {
+          for (const attr of ['datetime', 'title', 'data-ui-time']) row.time.removeAttribute(attr);
+        }
         const chipText = chip.join(" · ");
         row.chipText.textContent = chipText;
         row.chip.hidden = !chipText;

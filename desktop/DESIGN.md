@@ -62,8 +62,9 @@ older instants use month, day and local time. Include the year only outside the 
 year. Calendar dates preserve their written day in every timezone. `ui/stamps.js`
 uses the app locale and renders `<time datetime>` with a complete localized timezone
 tooltip. One document ticker updates only stamp text every minute, retains text selections
-inside stamps, pauses while hidden,
-and never rerenders a view or requests data. Native option labels use the same text
+inside stamps, pauses while hidden, and never rerenders a view or requests data.
+Missing message timestamps lose their datetime, tooltip and ticker marker together.
+Native option labels use the same text
 formatter because an option cannot contain a `<time>` element. ISO request parameters,
 exports and source documents retain their machine representation.
 

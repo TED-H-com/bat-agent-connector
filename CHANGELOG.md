@@ -18,7 +18,8 @@
 - Unify retained and new disclosure labels and chevrons.
 
 - Share compact, bilingual timestamps across the Web/Tauri views, with timezone
-  tooltips, calendar-safe dates and one visibility-aware minute ticker.
+  tooltips, calendar-safe dates and one visibility-aware minute ticker that retains
+  selected text. Missing message timestamps stay empty after refreshes.
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
