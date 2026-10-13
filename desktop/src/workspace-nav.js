@@ -219,8 +219,14 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     }
   };
   document.addEventListener('keydown', escape);
-  const off = onEvents(event => ['project', 'work_item', 'session', 'execution', 'task', 'operation', 'integration', 'pm_workspace', 'pm_evidence'].includes(event.resource_type)
-    ? refresh() : undefined);
+  let pendingEventRead = null;
+  const off = onEvents(event => {
+    if (!['project', 'work_item', 'session', 'execution', 'task', 'operation', 'integration', 'pm_workspace', 'pm_evidence'].includes(event.resource_type)) return;
+    // Coalesce events delivered together, but release the slot before starting.
+    // A later page always queues its own post-event read and retains ACK ordering.
+    if (!pendingEventRead) pendingEventRead = Promise.resolve().then(() => {pendingEventRead = null; return refresh();});
+    return pendingEventRead;
+  });
   refresh().catch(() => {});
   return {box, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;

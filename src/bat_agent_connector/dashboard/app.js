@@ -37340,17 +37340,25 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		}
 	};
 	document.addEventListener("keydown", escape);
-	const off = onEvents((event) => [
-		"project",
-		"work_item",
-		"session",
-		"execution",
-		"task",
-		"operation",
-		"integration",
-		"pm_workspace",
-		"pm_evidence"
-	].includes(event.resource_type) ? refresh() : void 0);
+	let pendingEventRead = null;
+	const off = onEvents((event) => {
+		if (![
+			"project",
+			"work_item",
+			"session",
+			"execution",
+			"task",
+			"operation",
+			"integration",
+			"pm_workspace",
+			"pm_evidence"
+		].includes(event.resource_type)) return;
+		if (!pendingEventRead) pendingEventRead = Promise.resolve().then(() => {
+			pendingEventRead = null;
+			return refresh();
+		});
+		return pendingEventRead;
+	});
 	refresh().catch(() => {});
 	return {
 		box,

@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Coalesce navigation reads for mixed event bursts and verify bounded requests across every authenticated view.
+
 - Fit shared search and filters to their columns, with measured select fallback for segmented controls.
 - Hide secondary table columns beside inspectors, keep identifiers intact, use mobile operation list rows, and extend the selected navigation rail through long pages.
 
