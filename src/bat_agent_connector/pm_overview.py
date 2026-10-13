@@ -446,23 +446,23 @@ class Projection:
                 return False
         candidates = []
         for item in output['attention']:
-            candidates.extend((row, 'operation_id', 'lifecycle_inflight')
+            candidates.extend((row, 'operation_id')
                 for row in item.get('pending_operations', []))
-        candidates.extend((item['context'], 'work_item_id', 'quality')
+        candidates.extend((item['context'], 'work_item_id')
             for item in output['attention'] if item.get('reason') == 'quality_revoked')
-        candidates.extend((row, 'operation_id', 'deliveries.' + row['work_item_id'])
+        candidates.extend((row, 'operation_id')
             for row in output['recent_deliveries'])
-        for row, key, field in candidates:
+        for row, key in candidates:
             if fits():
                 return
             if key in row:
                 del row[key]
-                self.incomplete(field, 'source_limit')
+                self.incomplete('attention_references', 'source_limit')
         # Even three individually readable work items may have disjoint roots.
         # A delivery without its work identity is unusable: omit that whole row.
         while not fits() and output['recent_deliveries']:
-            row = output['recent_deliveries'].pop()
-            self.incomplete('deliveries.' + row['work_item_id'], 'source_limit')
+            output['recent_deliveries'].pop()
+            self.incomplete('attention_references', 'source_limit')
 
     def read(self):
         lifecycle = self.lifecycle()
@@ -483,8 +483,6 @@ class Projection:
             'milestones': milestones[:MILESTONE_LIMIT], 'milestones_truncated': len(milestones) > MILESTONE_LIMIT,
             'attention': attention[:ATTENTION_LIMIT], 'recent_deliveries': recent}
         self.fit_sources(output)
-        if progress and not self.coverage.get('quality', {}).get('complete', False):
-            output['progress'], _ = self.progress(plan, work, blocked, accepted, reviewing)
         complete = all(value['complete'] for value in self.coverage.values())
         groups = {'blocker': ('governance',), 'decision': ('governance', 'plan_candidate', 'proposals', 'lifecycle_inflight'),
                   'deviation': ('plan', 'work', 'roadmap', 'forecast', 'quality'), 'risk': ('governance', 'findings')}

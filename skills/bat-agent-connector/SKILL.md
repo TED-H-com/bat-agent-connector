@@ -1573,7 +1573,9 @@ heads (plus each subject’s latest explicit revocation), unresolved governance 
 still-adoptable proposals contribute. Opening a new review does not clear a revoked
 acceptance; current reacceptance clears the deviation. No maintenance policy means complete
 not_configured findings, not an unavailable source. source_limit means references
-were omitted to respect the whole document's lineage bound; never infer totals.
+were omitted to respect the whole document's lineage bound. Reference trimming is
+reported in coverage.sources.attention_references, independently of source scan
+completeness and progress/counts; inspect it before describing displayed deliveries.
 Source cursors belong to existing source-list tools, not to the overview call.
 Hidden lifecycle inflight sources remain incomplete, including rows filtered by
 the source list; omitted is null when the transition itself is unavailable.

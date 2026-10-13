@@ -8,7 +8,7 @@
   state, rollback evidence and bounded source
   coverage. Hidden lifecycle transitions and filtered pending operations remain
   incomplete. Hidden or oversized sources stay partial; source references respect
-  the whole document's limit. Reads share a snapshot and request-local source cache.
+  the whole document's limit without withdrawing complete source counts. Reads share a snapshot and request-local source cache.
   Saved reports retain their fixed snapshot semantics.
 - Bind up to eight original context items when creating a PM discussion and rename
   threads with durable version checks while preserving title-only proposal adoption.

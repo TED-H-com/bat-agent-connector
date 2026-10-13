@@ -527,7 +527,7 @@ async def test_overview_budgets_combined_work_and_operation_roots(delivery_ready
     out = pm_overview.read(service, delivery_tests.DELIVERER, w['workspace_id'])
     assert pm_source_lineage.read_response(service.db, delivery_tests.DELIVERER, out) == out
     assert len(out['recent_deliveries']) == 2
-    assert out['attention_truncated'] and not out['recent_deliveries_complete']
+    assert out['attention_truncated'] and out['recent_deliveries_complete']
     assert any(u['reason'] == 'source_limit' for u in out['unknown'])
     # Also exercise the ordered shedding when pending and deviation references
     # accompany deliveries; these use the very same explicit central lineages.
@@ -539,5 +539,30 @@ async def test_overview_budgets_combined_work_and_operation_roots(delivery_ready
     assert len(pm_source_lineage.document_roots(service.db, output)) <= 64
     assert all('operation_id' not in row for row in output['attention'][0]['pending_operations'])
     assert all('work_item_id' not in row['context'] for row in output['attention'][1:])
-    assert {'field': 'quality', 'reason': 'source_limit'} in projection.unknown
-    assert {'field': 'lifecycle_inflight', 'reason': 'source_limit'} in projection.unknown
+    assert projection.unknown == [{'field': 'attention_references', 'reason': 'source_limit'}]
+
+
+async def test_trimming_attention_references_preserves_complete_source_counts(reviewed, monkeypatch):
+    w, service = reviewed, reviewed['d'].ops
+    await _revoked(w)
+    before = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+    original = pm_source_lineage.document_roots
+
+    def limited(db, value):
+        if isinstance(value, dict) and 'attention' in value and 'recent_deliveries' in value and any(
+                'work_item_id' in item['context'] for item in value['attention'] if item.get('reason') == 'quality_revoked'):
+            raise OperationError('PM_SOURCE_LINEAGE_LIMIT', 'Fixture union exceeds the document budget', 409)
+        return original(db, value)
+
+    monkeypatch.setattr(pm_source_lineage, 'document_roots', limited)
+    after = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+    assert before['progress']['complete'] and before['progress']['in_review'] == 1
+    assert after['progress'] == before['progress']
+    assert after['attention_counts'] == before['attention_counts']
+    assert after['recent_deliveries_complete'] == before['recent_deliveries_complete'] is True
+    assert after['coverage']['sources']['quality']['complete']
+    assert after['attention_truncated']
+    assert not after['coverage']['sources']['attention_references']['complete']
+    assert after['unknown'] == [*before['unknown'], {'field': 'attention_references', 'reason': 'source_limit'}]
+    assert all('work_item_id' not in item['context'] for item in after['attention'] if item.get('reason') == 'quality_revoked')
+    assert len(pm_source_lineage.document_roots(service.db, after)) <= 64

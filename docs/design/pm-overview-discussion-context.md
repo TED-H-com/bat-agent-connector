@@ -67,8 +67,11 @@ Deviation count 的完整性同時依賴 plan、work、roadmap、forecast、qual
 不可見時 omitted 為 null，不推測筆數。缺少 coverage 的來源不可當作完整。
 
 整份輸出共用既有 64 個 original roots 上限。必要時依序省略 pending operation IDs、quality deviation
-的 work IDs、delivery operation IDs；仍超限時省略最後的 delivery 整列。各受影響來源標記
-`source_limit`、`complete: false`，`attention_truncated: true`，不因正常大型 workspace 拒絕整份總覽。
+的 work IDs、delivery operation IDs；仍超限時省略最後的 delivery 整列。省略資訊記在獨立的
+`coverage.sources.attention_references`，標記 `source_limit`、`complete: false` 與 `attention_truncated: true`。
+已完整讀取的來源不改成未讀，progress、deviation counts 與 `recent_deliveries_complete` 保留原判定；
+後者描述來源掃描完整性，省略的輸出參照仍須搭配 `attention_references` 判讀。
+不因正常大型 workspace 拒絕整份總覽。
 原始 source refs 的權限檢查不放寬。
 
 總覽與 thread list 使用同一 WAL read snapshot（BEGIN，非 BEGIN IMMEDIATE）。來源 resolve、固定 plan
