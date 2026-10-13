@@ -156,7 +156,7 @@ const STRINGS = {
     bat_no_receipt: "尚未找到原開啟回執。保留原請求；重新啟動程式不會自動重送。", bat_saved_invalid: "已儲存的開啟請求不完整，無法安全建立另一筆。請先查明原啟動狀態。",
     labels_refresh: "重新讀取標籤", labels_title: "標籤", labels_edit: "編輯標籤", labels_input: "標籤（每行一個）", labels_help: "標籤只用於 Dashboard 整理，不會修改 BAT 標題或工作階段。",
     labels_limits: "最多 8 個標籤，每個最多 40 個字；空白清單可清除標籤。", labels_empty: "尚無標籤", labels_save: "儲存標籤", labels_saved: "已儲存這次標籤變更。",
-    labels_scope: "需要 manage 權限才能編輯標籤。", labels_unreadable: "尚未讀到可確認的標籤資料，暫時無法儲存。", labels_changed: "標籤已有新版本，原草稿保留。請檢視目前標籤後再準備變更。",
+    labels_scope: "需要 manage 權限才能編輯標籤。", labels_unavailable: "無法讀取標籤", labels_unreadable: "尚未讀到可確認的標籤資料，暫時無法儲存。", labels_changed: "標籤已有新版本，原草稿保留。請檢視目前標籤後再準備變更。",
     labels_review_current: "檢視目前版本並準備變更", labels_refused: "原請求因版本變更被拒絕，尚未套用。", labels_fixed: "原請求固定使用標籤版本 {version}。",
     labels_wrong_receipt: "回執與原標籤請求不符。", labels_damaged: "儲存的草稿無法讀取。請檢視目前版本後明確重新準備變更。",
 
@@ -1054,7 +1054,7 @@ const STRINGS = {
     bat_no_receipt: "No original launch receipt was found. The request is retained; restarting the app will not resend it automatically.", bat_saved_invalid: "The saved launch request is incomplete. Establish the original launch outcome before creating another.",
     labels_refresh: "Refresh labels", labels_title: "Labels", labels_edit: "Edit labels", labels_input: "Labels (one per line)", labels_help: "Labels organize the Dashboard. They do not change the BAT title or session.",
     labels_limits: "Up to 8 labels, 40 characters each. An empty list clears labels.", labels_empty: "No labels yet", labels_save: "Save labels", labels_saved: "This label change was saved.",
-    labels_scope: "Editing labels requires manage permission.", labels_unreadable: "Confirmed label data is unavailable. Saving is disabled.", labels_changed: "Labels have a newer version. Your draft is preserved; review the current labels before preparing a change.",
+    labels_scope: "Editing labels requires manage permission.", labels_unavailable: "Labels unavailable", labels_unreadable: "Confirmed label data is unavailable. Saving is disabled.", labels_changed: "Labels have a newer version. Your draft is preserved; review the current labels before preparing a change.",
     labels_review_current: "Review current version and prepare change", labels_refused: "The original request was refused because labels changed. It was not applied.", labels_fixed: "The original request uses label version {version}.",
     labels_wrong_receipt: "The receipt does not match the original label request.", labels_damaged: "The saved draft could not be read. Review the current version before explicitly preparing a change.",
 

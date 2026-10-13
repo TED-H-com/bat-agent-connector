@@ -15,6 +15,7 @@ export const statusVocabulary = Object.freeze({
   stale: {en: 'Stale', 'zh-TW': '過期', tone: 'warn'},
   read_only: {en: 'Read-only', 'zh-TW': '唯讀', tone: 'review'},
   running: {en: 'Running', 'zh-TW': '執行中', tone: 'info'},
+  failed: {en: 'Failed', 'zh-TW': '失敗', tone: 'bad'},
   needs_you: {en: 'Needs you', 'zh-TW': '需要你', tone: 'warn'},
   asking_you: {en: 'Asking you', 'zh-TW': '正在詢問', tone: 'warn'},
   stopped: {en: 'Stopped', 'zh-TW': '已停止', tone: 'neutral'},

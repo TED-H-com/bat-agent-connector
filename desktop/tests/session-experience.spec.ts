@@ -4,7 +4,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
-const shotDir = '/home/ted-h/agent-work/bac-ux/tmp/w1-session/shots2';
+const shotDir = '/home/ted-h/agent-work/bac-ux/tmp/w1-session/shots3';
 
 async function shot(page: Page, name: string) {
   mkdirSync(shotDir, {recursive: true});
@@ -64,6 +64,9 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await expect(page.locator('[data-session-back=requirements]')).toHaveText(back);
     await expect(page.locator('.shell-crumb-view')).toHaveText(zh ? ['工作', '工作階段'] : ['Work', 'Session']);
     await expect(page.locator('.session-pill')).toContainText(zh ? '執行中' : 'Running');
+    await expect(page.locator('.session-work-line')).toHaveText(zh ? '工作 · 電子郵件登入' : 'Work · Email sign-in');
+    await expect(page.locator('.session-label-state')).toHaveText(zh ? '無法讀取標籤' : 'Labels unavailable');
+    await expect(page.locator('[data-session-labels] summary')).not.toContainText(zh ? '編輯標籤' : 'Edit labels');
     await expect(page.locator('[data-workspace-result]')).toContainText('PR #87');
     await expect(page.locator('[data-workspace-result]')).toContainText(zh ? '已合併' : 'Merged');
     await expect(page.locator('[data-workspace-result]')).toContainText('PR #91');

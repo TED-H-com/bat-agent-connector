@@ -112,6 +112,11 @@ var statusVocabulary = Object.freeze({
 		"zh-TW": "執行中",
 		tone: "info"
 	},
+	failed: {
+		en: "Failed",
+		"zh-TW": "失敗",
+		tone: "bad"
+	},
 	needs_you: {
 		en: "Needs you",
 		"zh-TW": "需要你",
@@ -5558,6 +5563,7 @@ var STRINGS = {
 		labels_save: "儲存標籤",
 		labels_saved: "已儲存這次標籤變更。",
 		labels_scope: "需要 manage 權限才能編輯標籤。",
+		labels_unavailable: "無法讀取標籤",
 		labels_unreadable: "尚未讀到可確認的標籤資料，暫時無法儲存。",
 		labels_changed: "標籤已有新版本，原草稿保留。請檢視目前標籤後再準備變更。",
 		labels_review_current: "檢視目前版本並準備變更",
@@ -7055,6 +7061,7 @@ var STRINGS = {
 		labels_save: "Save labels",
 		labels_saved: "This label change was saved.",
 		labels_scope: "Editing labels requires manage permission.",
+		labels_unavailable: "Labels unavailable",
 		labels_unreadable: "Confirmed label data is unavailable. Saving is disabled.",
 		labels_changed: "Labels have a newer version. Your draft is preserved; review the current labels before preparing a change.",
 		labels_review_current: "Review current version and prepare change",
@@ -28330,7 +28337,7 @@ function setupSidebarResizer({ aside, workspace, t }) {
 		}
 	};
 }
-function setupMobileSessionLayout({ head, composer, textarea, t, guard }) {
+function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
 	if (!head || !composer) return {
 		updateInfo() {},
 		updateDraft() {},
@@ -28371,9 +28378,9 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard }) {
 	});
 	const updateInfo = () => {
 		if (!alive()) return;
-		const titleRow = head.querySelector(":scope > div:first-child");
-		if (titleRow && !titleRow.contains(infoToggle)) titleRow.appendChild(infoToggle);
-		else if (!head.contains(infoToggle)) head.appendChild(infoToggle);
+		if (infoRow) {
+			if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
+		} else if (!head.contains(infoToggle)) head.append(infoToggle);
 		renderInfoToggle();
 	};
 	let isComposerCollapsed = false;
@@ -28410,7 +28417,9 @@ function setupMobileSessionLayout({ head, composer, textarea, t, guard }) {
 	};
 	textarea?.addEventListener("input", onTextareaInput);
 	textarea?.addEventListener("change", onTextareaInput);
-	if (!composer.contains(composerToggle)) composer.prepend(composerToggle);
+	if (composerRow) {
+		if (!composerRow.contains(composerToggle)) composerRow.append(composerToggle);
+	} else if (!composer.contains(composerToggle)) composer.prepend(composerToggle);
 	const updateViewport = () => {
 		if (!alive()) return;
 		const isMob = isMobileLayout();
@@ -28678,7 +28687,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		maxlength: 1e3
 	});
 	input.value = saved.text || "";
-	const tags = h("div", { class: "actions" }), message = h("div", { role: "status" }), result = h("div"), restriction = h("p", { class: "muted" });
+	const tags = h("div", { class: "actions session-label-tags" }), message = h("div", { role: "status" }), result = h("div"), restriction = h("p", { class: "muted" });
 	const error = (e) => {
 		if (live()) {
 			message.replaceChildren(errorBox(e));
@@ -28815,23 +28824,43 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 		}
 		update();
 	};
-	const editor = h("details", {}, h("summary", {}, t("labels_edit")));
+	const editorMount = h("div", { class: "session-label-editor" });
+	const reason = h("p", { class: "muted session-label-reason" });
+	const foldLabel = h("span");
+	const fold = disclosure({
+		label: foldLabel,
+		body: h("div", {}, reason, editorMount)
+	});
+	const stateLine = h("p", { class: "muted session-label-state" });
 	let mounted = false;
-	editor.addEventListener("toggle", () => {
-		if (editor.open && !mounted) {
-			editor.append(h("p", { class: "muted" }, t("labels_help")), h("label", {}, t("labels_input"), input), h("p", { class: "muted" }, t("labels_limits")), h("div", { class: "actions" }, apply, check, renew), restriction, result, message);
-			mounted = true;
-			update();
-		}
+	const mountEditor = () => {
+		if (mounted) return;
+		editorMount.append(h("p", { class: "muted" }, t("labels_help")), h("label", {}, t("labels_input"), input), h("p", { class: "muted" }, t("labels_limits")), h("div", { class: "actions" }, apply, check, renew), restriction, result, message);
+		mounted = true;
+	};
+	fold.addEventListener("toggle", () => {
+		if (fold.open) update();
 	});
 	const box = h("section", {
-		class: "panel",
+		class: "session-labels",
 		"data-session-labels": ""
-	}, h("h2", {}, t("labels_title")), tags, editor);
+	}, stateLine, tags, fold);
 	function update() {
 		if (!live()) return;
 		const fixed = Boolean(saved.intent);
-		tags.replaceChildren(...current?.labels.length ? current.labels.map((v) => h("span", { class: "chip" }, v)) : [h("span", { class: "muted" }, t(current ? "labels_empty" : "labels_unreadable"))]);
+		const showEdit = readable && permitted() && !damaged || fixed || damaged || readable && Object.hasOwn(saved, "text");
+		const chips = current?.labels.length ? current.labels.map((v) => h("span", { class: "chip" }, v)) : [];
+		tags.replaceChildren(...chips);
+		tags.hidden = !chips.length;
+		stateLine.hidden = Boolean(chips.length);
+		stateLine.textContent = t(readable ? "labels_empty" : "labels_unavailable");
+		foldLabel.textContent = t(showEdit ? "labels_edit" : "session_details");
+		const why = !readable ? t("labels_unreadable") : !permitted() ? t("labels_scope") : "";
+		reason.hidden = showEdit || !why;
+		reason.textContent = why;
+		fold.hidden = !showEdit && !why;
+		editorMount.hidden = !showEdit;
+		if (showEdit && fold.open) mountEditor();
 		input.disabled = fixed || busy || Boolean(refreshing) || !readable || !permitted() || damaged;
 		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
 		apply.disabled = busy || Boolean(refreshing) || !readable || !permitted() || damaged || Boolean(fixed && !saved.intent.request) || !validLabels(parsed());
@@ -29004,8 +29033,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		onclick: () => run(() => readingActions.older())
 	}, t("message_load_earlier"));
 	const caption = h("p", { class: "muted conversation-window" }, t("message_window"));
+	const captionRow = h("div", { class: "conversation-caption" }, caption);
 	const readingBar = readingActions ? h("div", { class: "actions" }, progress, mark, remember) : null;
-	const box = h("section", { class: "panel conversation" }, caption, notice, viewport, h("div", { class: "conversation-toolbar" }, status, latest), readingBar, fallback);
+	const box = h("section", { class: "panel conversation" }, captionRow, notice, viewport, h("div", { class: "conversation-toolbar" }, status, latest), readingBar, fallback);
 	let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
 	const alive = () => {
 		if (disposed) return false;
@@ -29113,12 +29143,17 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 					}),
 					name: h("span", { class: "message-name" }),
 					time: h("time", { class: "message-time" }),
+					status: h("span", { class: "message-status" }),
 					extra: h("span", { class: "message-extra" }),
 					who: h("span", { class: "who" })
 				};
-				row.chip = h("span", { class: "message-chip" });
-				row.who.append(row.name, row.time, row.chip, row.extra);
-				row.node = h("article", { class: "msg" }, h("div", { class: "message-meta" }, row.mark, row.who, h("button", {
+				row.chipText = h("span", { class: "message-chip-text" });
+				row.chip = h("span", {
+					class: "message-chip",
+					hidden: true
+				}, row.chipText);
+				row.who.append(row.name, row.time, row.status, row.chip, row.extra);
+				row.node = h("article", { class: "msg" }, row.mark, h("div", { class: "message-meta" }, row.who, h("button", {
 					class: "message-copy",
 					type: "button",
 					"aria-label": t("message_copy"),
@@ -29127,18 +29162,7 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				}, icon("clipboard"))), row.body);
 			}
 			const extras = [];
-			const knownStatus = new Set([
-				"completed",
-				"error",
-				"running",
-				"unknown",
-				"failed",
-				"denied",
-				"deferred"
-			]);
-			const statusWord = (value) => knownStatus.has(value) ? t("message_status_" + value) : value;
-			if (message.role === "tool") extras.push(message.tool || t("obs_unknown"), t("message_tool_status", { status: statusWord(message.denied ? "denied" : message.deferred ? "deferred" : message.status || "unknown") }));
-			else if (typeof message.status === "string") extras.push(t("message_tool_status", { status: statusWord(message.status) }));
+			const pillKey = message.role !== "tool" && typeof message.status !== "string" ? "" : message.denied ? "blocked" : message.deferred ? "waiting" : message.status === "completed" ? "done" : message.status === "failed" || message.status === "error" ? "failed" : message.status === "running" ? "running" : "unknown";
 			const chip = [];
 			if (typeof message.agent === "string") chip.push(message.agent);
 			if (typeof message.model === "string") chip.push(message.model);
@@ -29149,7 +29173,8 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				whoName,
 				stamp,
 				chip,
-				extras
+				extras,
+				pillKey
 			]);
 			if (row.meta !== meta) {
 				const glyphs = Array.from(whoName);
@@ -29157,7 +29182,12 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.name.textContent = whoName;
 				row.time.textContent = stamp;
 				row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
-				row.chip.textContent = chip.join(" · ");
+				const chipText = chip.join(" · ");
+				row.chipText.textContent = chipText;
+				row.chip.hidden = !chipText;
+				if (chipText) row.chip.title = chipText;
+				else row.chip.removeAttribute("title");
+				row.status.replaceChildren(...pillKey ? [statusPill(pillKey)] : []);
 				row.extra.textContent = extras.join(" · ");
 				row.meta = meta;
 			}
@@ -29176,11 +29206,13 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 			}
 			if (folded && !row.toolDetails) {
 				row.toolContent = h("div", {});
-				const summary = t(tool ? "message_tool_details" : "message_system");
-				row.toolDetails = h("details", {
-					class: "message-tool",
+				row.toolLabel = h("span", { class: "message-tool-label" });
+				row.toolDetails = disclosure({
+					label: row.toolLabel,
+					body: row.toolContent,
 					open: tool ? !completed : false
-				}, h("summary", { title: summary }, summary), row.toolContent);
+				});
+				row.toolDetails.classList.add("message-tool");
 				row.toolDetails.addEventListener("toggle", indicator);
 				row.body.append(row.toolDetails);
 			}
@@ -29190,8 +29222,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				row.text = text;
 				if (folded && row.toolDetails) {
 					const summary = row.toolDetails.querySelector("summary");
-					summary.textContent = (text.includes("\n") ? text.split("\n").find((item) => item.trim()) : "") || t(tool ? "message_tool_details" : "message_system");
-					summary.title = text || summary.textContent;
+					const label = (text.includes("\n") ? text.split("\n").find((item) => item.trim()) : "") || t(tool ? "message_tool_details" : "message_system");
+					row.toolLabel.textContent = label;
+					summary.title = text || label;
 				}
 			}
 			next.set(key, row);
@@ -33094,10 +33127,12 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 			update();
 		}
 	}, t("permissions_new"));
-	const box = h("details", {
-		class: "permissions",
-		"data-permissions": ""
-	}, h("summary", {}, t("permissions_title")), h("p", { class: "muted" }, t("permissions_help")), h("label", { class: "permission-mode" }, t("permissions_mode"), mode), explanation, h("div", { class: "actions" }, apply, check, another), restriction, result, message);
+	const box = disclosure({
+		label: t("permissions_title"),
+		body: h("div", {}, h("p", { class: "muted" }, t("permissions_help")), h("label", { class: "permission-mode" }, t("permissions_mode"), mode), explanation, h("div", { class: "actions" }, apply, check, another), restriction, result, message)
+	});
+	box.classList.add("permissions");
+	box.dataset.permissions = "";
 	mode.addEventListener("change", () => {
 		if (!current() || saved.intent) {
 			mode.value = saved.mode;
@@ -37779,13 +37814,15 @@ function observationPanels(type, id, path) {
 				refresh.disabled = more.disabled = false;
 			}
 		}
-		const box = h("details", {
-			class: "panel observation-panel",
-			"data-observation": mode,
-			ontoggle: () => {
-				if (box.open && !loaded) load(true);
-			}
-		}, h("summary", {}, t(relations ? "obs_relations" : "obs_history")), h("div", { class: "filters" }, relations ? execution : kind, relations ? h("label", {}, closed, " ", t("obs_include_closed")) : null, refresh), notice, evidence, status, list, more);
+		const box = disclosure({
+			label: t(relations ? "obs_relations" : "obs_history"),
+			body: h("div", {}, h("div", { class: "filters" }, relations ? execution : kind, relations ? h("label", {}, closed, " ", t("obs_include_closed")) : null, refresh), notice, evidence, status, list, more)
+		});
+		box.classList.add("panel", "observation-panel");
+		box.dataset.observation = mode;
+		box.addEventListener("toggle", () => {
+			if (box.open && !loaded) load(true);
+		});
 		return {
 			box,
 			changed: (event) => {
@@ -38160,10 +38197,11 @@ async function viewSession(main, host, sid, context = null) {
 		class: "muted session-send-reason",
 		hidden: true
 	});
+	const composerRow = h("div", { class: "composer-row" }, h("label", { class: "composer-queue" }, queue, t("queue_behind")), send);
 	const composer = h("div", {
 		hidden: true,
 		id: "workspace-message-input"
-	}, box, h("div", { class: "composer-row" }, h("label", { class: "composer-queue" }, queue, t("queue_behind")), send));
+	}, box, composerRow);
 	const readonly = h("p", { class: "note" }, t("session_access_unknown"));
 	let capture, permissions, batHandoff, sourcesPanel;
 	const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
@@ -38222,6 +38260,12 @@ async function viewSession(main, host, sid, context = null) {
 	syncWide();
 	wide.addEventListener("change", syncWide);
 	const sessionSection = (name, title, body) => h("section", { class: "session-section" }, h("h2", { class: "session-section-title" }, icon(name, { size: 16 }), title), body);
+	const changesSection = sessionSection("folder", t("session_changes"), h("div", { class: "session-changes" }, captureSlot, artifactSlot));
+	const slotVisible = (slot) => [...slot.children].some((child) => !child.hidden);
+	const syncChanges = () => {
+		changesSection.hidden = !slotVisible(captureSlot) && !slotVisible(artifactSlot);
+	};
+	syncChanges();
 	const overflow = menu({
 		button: iconButton({
 			icon: "more-horizontal",
@@ -38274,7 +38318,8 @@ async function viewSession(main, host, sid, context = null) {
 	head.append(backSlot, header);
 	results.body.append(...[
 		context?.itemBox,
-		sessionSection("folder", t("session_changes"), h("div", {}, captureSlot, cps.box, artifactSlot)),
+		changesSection,
+		sessionSection("list-checks", t("checkpoints"), cps.box),
 		sessionSection("check", t("session_delivery"), result),
 		sessionSection("inbox", t("session_sources"), sourcesBody),
 		batSlot,
@@ -38293,7 +38338,9 @@ async function viewSession(main, host, sid, context = null) {
 		composer: controls,
 		textarea: box,
 		t,
-		guard: () => assertView(connection)
+		guard: () => assertView(connection),
+		infoRow: conversation.box.querySelector(".conversation-caption"),
+		composerRow
 	});
 	if (context?.picker) main.append(context.picker);
 	main.append(head, h("div", {
@@ -38586,6 +38633,7 @@ async function viewSession(main, host, sid, context = null) {
 			captureSlot.append(capture);
 		}
 		if (capture) capture.hidden = !manualSource;
+		syncChanges();
 		composer.hidden = !managed;
 		readonly.hidden = managed;
 		readonly.textContent = t(row.provenance === "manual" ? "read_only_note" : "session_access_unknown");
@@ -38607,7 +38655,7 @@ async function viewSession(main, host, sid, context = null) {
 			assertView(connection);
 			work = (detail.worktree?.work || []).filter((item) => item.host === host && item.session_id === sid);
 		}
-		fill(result, deliveryPills, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? linkedItems(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
+		fill(result, deliveryPills, ...work.map((item) => deliveryWork(item, repositories, true)), data.work_items?.length ? sessionWorkLine(data.work_items) : null, !work.some((item) => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
 		await loadDelivery(data.work_items);
 		if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length) result.append(h("p", { class: "muted" }, t("workspace_result_empty")));
 	};
@@ -38842,7 +38890,7 @@ function checkpointPanel(host, sid) {
 		body: h("div", {}, h("p", { class: "muted" }, t("checkpoint_help")), h("p", { class: "muted" }, t("checkpoint_unavailable")), mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")))
 	});
 	return {
-		box: h("div", { class: "session-checkpoints" }, h("h3", { class: "session-subsection" }, t("checkpoints")), can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), note, can ? h("div", { class: "actions" }, pick, create) : null, status, list, checkpointWhy),
+		box: h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), note, can ? h("div", { class: "actions" }, pick, create) : null, status, list, checkpointWhy),
 		load: async () => {
 			await loadPreview();
 			await load();
@@ -41274,6 +41322,9 @@ function eventDetail(b) {
 }
 function linkedItems(items) {
 	return h("p", { class: "muted" }, t("linked_items"), ": ", ...items.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/item/${x.work_item_id}` }, x.title)]));
+}
+function sessionWorkLine(items) {
+	return h("p", { class: "session-delivery-row session-work-line" }, t("ui_work"), "\xA0· ", ...items.flatMap((item, index) => [index ? " · " : "", h("a", { href: `#/item/${item.work_item_id}` }, item.title)]));
 }
 function workItemRow(w) {
 	return h("div", { class: "row" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {

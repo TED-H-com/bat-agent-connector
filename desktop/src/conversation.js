@@ -1,4 +1,5 @@
 import {renderMessage} from "./message-format.js";
+import {disclosure, statusPill} from "./ui/components.js";
 import {icon} from "./ui/icons.js";
 
 // Scrolling never marks messages read. Personal receipts require an explicit action.
@@ -24,9 +25,10 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
   const older = h("button", {class: "conversation-earlier", type: "button", hidden: true,
     onclick: () => run(() => readingActions.older())}, t("message_load_earlier"));
   const caption = h("p", {class: "muted conversation-window"}, t("message_window"));
+  const captionRow = h("div", {class: "conversation-caption"}, caption);
   const readingBar = readingActions ? h("div", {class: "actions"}, progress, mark, remember) : null;
   const box = h("section", {class: "panel conversation"},
-    caption, notice, viewport,
+    captionRow, notice, viewport,
     h("div", {class: "conversation-toolbar"}, status, latest),
     readingBar, fallback);
   let rows = new Map(), initialized = false, disposed = false, copyAttempt = 0, reading = null, busy = false, olderWindow = false;
@@ -99,19 +101,22 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
         row = {text: null, meta: null, body: h("div", {class: "message-body"}),
           mark: h("span", {class: "ui-agent-mark", "aria-hidden": "true"}),
           name: h("span", {class: "message-name"}), time: h("time", {class: "message-time"}),
+          status: h("span", {class: "message-status"}),
           extra: h("span", {class: "message-extra"}), who: h("span", {class: "who"})};
-        row.chip = h("span", {class: "message-chip"});
-        row.who.append(row.name, row.time, row.chip, row.extra);
-        row.node = h("article", {class: "msg"}, h("div", {class: "message-meta"}, row.mark, row.who,
-          h("button", {class: "message-copy", type: "button", "aria-label": t("message_copy"), title: t("message_copy"),
-            onclick: () => copy(row.text)}, icon("clipboard"))), row.body);
+        row.chipText = h("span", {class: "message-chip-text"});
+        row.chip = h("span", {class: "message-chip", hidden: true}, row.chipText);
+        row.who.append(row.name, row.time, row.status, row.chip, row.extra);
+        row.node = h("article", {class: "msg"}, row.mark,
+          h("div", {class: "message-meta"}, row.who,
+            h("button", {class: "message-copy", type: "button", "aria-label": t("message_copy"), title: t("message_copy"),
+              onclick: () => copy(row.text)}, icon("clipboard"))), row.body);
       }
       const extras = [];
-      const knownStatus = new Set(["completed", "error", "running", "unknown", "failed", "denied", "deferred"]);
-      const statusWord = value => knownStatus.has(value) ? t("message_status_" + value) : value;
-      if (message.role === "tool") extras.push(message.tool || t("obs_unknown"),
-        t("message_tool_status", {status: statusWord(message.denied ? "denied" : message.deferred ? "deferred" : message.status || "unknown")}));
-      else if (typeof message.status === "string") extras.push(t("message_tool_status", {status: statusWord(message.status)}));
+      const pillKey = message.role !== "tool" && typeof message.status !== "string" ? ""
+        : message.denied ? "blocked" : message.deferred ? "waiting"
+        : message.status === "completed" ? "done"
+        : message.status === "failed" || message.status === "error" ? "failed"
+        : message.status === "running" ? "running" : "unknown";
       const chip = [];
       if (typeof message.agent === "string") chip.push(message.agent);
       if (typeof message.model === "string") chip.push(message.model);
@@ -122,14 +127,18 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
         : message.role === "system" ? t("message_system")
         : (message.agent || t("agent"));
       const stamp = when(message.ts);
-      const meta = JSON.stringify([whoName, stamp, chip, extras]);
+      const meta = JSON.stringify([whoName, stamp, chip, extras, pillKey]);
       if (row.meta !== meta) {
         const glyphs = Array.from(whoName);
         row.mark.textContent = (message.role === "user" ? glyphs.slice(0, 1) : glyphs.slice(0, 2)).join("").toUpperCase();
         row.name.textContent = whoName;
         row.time.textContent = stamp;
         row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
-        row.chip.textContent = chip.join(" · ");
+        const chipText = chip.join(" · ");
+        row.chipText.textContent = chipText;
+        row.chip.hidden = !chipText;
+        if (chipText) row.chip.title = chipText; else row.chip.removeAttribute("title");
+        row.status.replaceChildren(...(pillKey ? [statusPill(pillKey)] : []));
         row.extra.textContent = extras.join(" · ");
         row.meta = meta;
       }
@@ -142,9 +151,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
       if (row.tool !== folded) {row.body.replaceChildren(); row.text = null; row.tool = folded; row.toolDetails = null;}
       if (folded && !row.toolDetails) {
         row.toolContent = h("div", {});
-        const summary = t(tool ? "message_tool_details" : "message_system");
-        row.toolDetails = h("details", {class: "message-tool", open: tool ? !completed : false},
-          h("summary", {title: summary}, summary), row.toolContent);
+        row.toolLabel = h("span", {class: "message-tool-label"});
+        row.toolDetails = disclosure({label: row.toolLabel, body: row.toolContent, open: tool ? !completed : false});
+        row.toolDetails.classList.add("message-tool");
         row.toolDetails.addEventListener("toggle", indicator); row.body.append(row.toolDetails);
       }
       if (tool && !completed) row.toolDetails.open = true; // errors, pending and unknown never fold out of sight
@@ -153,8 +162,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
         if (folded && row.toolDetails) {
           const summary = row.toolDetails.querySelector("summary");
           const line = text.includes("\n") ? text.split("\n").find(item => item.trim()) : "";
-          summary.textContent = line || t(tool ? "message_tool_details" : "message_system");
-          summary.title = text || summary.textContent;
+          const label = line || t(tool ? "message_tool_details" : "message_system");
+          row.toolLabel.textContent = label;
+          summary.title = text || label;
         }
       }
       next.set(key, row);

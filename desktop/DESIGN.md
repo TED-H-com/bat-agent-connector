@@ -211,18 +211,24 @@ Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the over
 menu. A manual or unconfirmed session shows Read-only and has no send, answer, or
 interrupt control.
 
-The conversation uses the same message rhythm as Discussions: mark, name, compact
-time, and a 15px measure of at most 760px. Agent and model share one quiet chip.
-Copy original is an icon. The window caption is quiet. Tool and system events stay
-one-line disclosures. New messages while the reader is scrolled up show a jump
-control and do not move the visible row. Approval prompts sit above the composer
-and keep their original operation keys. The last send is one short line; the
-operation id stays in Details.
+The conversation uses one grid for every message: a 24px mark, an 8px gap, and one
+body column for the name, compact time, chip, text, and disclosure. Agent and model
+share one inline chip that stays on the name row when it fits. Copy original is an
+icon at the row's right edge. The window caption is quiet. A tool event is one row
+(name, compact time, status pill) and its command is a disclosure. New messages
+while the reader is scrolled up show a jump control and do not move the visible row.
+Approval prompts sit above the composer and keep their original operation keys. The
+last send is one short line; the operation id stays in Details. On a narrow window
+the info and composer collapse icons sit on the caption row and the queue row.
 
 Results stay in the docked inspector at 1200px and wider, and in a drawer or sheet
-below that. Changes, Delivery, and Result sources sit in that one panel, separated
-by hairlines. Checkpoints say when this host cannot record a version, and keep the
-longer note in Details. Delivery pills come only from saved receipts. Identifiers
-and raw timestamps stay in Details. From a project view, the shell breadcrumb is
-Workspace / Work / Session and the page offers Back to that view. Discuss uses the
-shared discussion link, binding only exact work item refs.
+below that. Changes (only when it has its own content), Checkpoints, Delivery, and
+Result sources sit in that one panel, separated by hairlines, with one title style.
+Checkpoints say when this host cannot record a version, and keep the longer note in
+Details. Permissions, labels, and observation history use the same disclosure. Labels
+show one state line; the reason, and Edit labels when saving is possible, stay in
+Details. A linked work item reads Work · title. Delivery pills come only from saved
+receipts, and pull-request links use the normal link. Identifiers and raw timestamps
+stay in Details. From a project view, the shell breadcrumb is Workspace / Work /
+Session and the page offers Back to that view. Discuss uses the shared discussion
+link, binding only exact work item refs.

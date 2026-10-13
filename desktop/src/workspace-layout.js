@@ -230,7 +230,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
   };
 }
 
-export function setupMobileSessionLayout({ head, composer, textarea, t, guard }) {
+export function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
   if (!head || !composer) return { updateInfo() {}, updateDraft() {}, dispose() {} };
 
   let isDisposed = false;
@@ -278,12 +278,9 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
 
   const updateInfo = () => {
     if (!alive()) return;
-    const titleRow = head.querySelector(":scope > div:first-child");
-    if (titleRow && !titleRow.contains(infoToggle)) {
-      titleRow.appendChild(infoToggle);
-    } else if (!head.contains(infoToggle)) {
-      head.appendChild(infoToggle);
-    }
+    if (infoRow) {
+      if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
+    } else if (!head.contains(infoToggle)) head.append(infoToggle);
     renderInfoToggle();
   };
 
@@ -337,9 +334,9 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
   textarea?.addEventListener("input", onTextareaInput);
   textarea?.addEventListener("change", onTextareaInput);
 
-  if (!composer.contains(composerToggle)) {
-    composer.prepend(composerToggle);
-  }
+  if (composerRow) {
+    if (!composerRow.contains(composerToggle)) composerRow.append(composerToggle);
+  } else if (!composer.contains(composerToggle)) composer.prepend(composerToggle);
 
   // 3. visualViewport keyboard adaptation (ignoring pinch-zoom)
   const updateViewport = () => {

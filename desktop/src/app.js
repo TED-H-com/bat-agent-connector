@@ -1108,11 +1108,12 @@ function observationPanels(type, id, path) {
       } catch (error) { status.replaceChildren(errorBox(error)); }
       finally {busy = false; refresh.disabled = more.disabled = false;}
     }
-    const box = h("details", {class: "panel observation-panel", "data-observation": mode, ontoggle: () => {
-      if (box.open && !loaded) load(true);
-    }}, h("summary", {}, t(relations ? "obs_relations" : "obs_history")),
-    h("div", {class: "filters"}, relations ? execution : kind,
-      relations ? h("label", {}, closed, " ", t("obs_include_closed")) : null, refresh), notice, evidence, status, list, more);
+    const box = disclosure({label: t(relations ? "obs_relations" : "obs_history"), body: h("div", {},
+      h("div", {class: "filters"}, relations ? execution : kind,
+        relations ? h("label", {}, closed, " ", t("obs_include_closed")) : null, refresh), notice, evidence, status, list, more)});
+    box.classList.add("panel", "observation-panel");
+    box.dataset.observation = mode;
+    box.addEventListener("toggle", () => {if (box.open && !loaded) load(true);});
     return {box, changed: event => {latestSeen = Math.max(latestSeen, event.seq); if (loaded && latestSeen > asOf) notice.hidden = false;}};
   };
   const history = section("history"), relations = section("relations");
@@ -1307,8 +1308,8 @@ async function viewSession(main, host, sid, context = null) {
   const shortcut = composerShortcut({h, t, input: box, button: send,
     storageKey: `batc.composer-shortcut.${connection.namespace}`, guard: () => assertView(connection)});
   const sendReason = h("p", {class: "muted session-send-reason", hidden: true});
-  const composer = h("div", {hidden: true, id: "workspace-message-input"}, box,
-    h("div", {class: "composer-row"}, h("label", {class: "composer-queue"}, queue, t("queue_behind")), send));
+  const composerRow = h("div", {class: "composer-row"}, h("label", {class: "composer-queue"}, queue, t("queue_behind")), send);
+  const composer = h("div", {hidden: true, id: "workspace-message-input"}, box, composerRow);
   const readonly = h("p", { class: "note" }, t("session_access_unknown"));
   let capture, permissions, batHandoff, sourcesPanel;
   const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
@@ -1332,6 +1333,10 @@ async function viewSession(main, host, sid, context = null) {
   syncWide(); wide.addEventListener("change", syncWide);
   const sessionSection = (name, title, body) => h("section", {class: "session-section"},
     h("h2", {class: "session-section-title"}, icon(name, {size: 16}), title), body);
+  const changesSection = sessionSection("folder", t("session_changes"), h("div", {class: "session-changes"}, captureSlot, artifactSlot));
+  const slotVisible = slot => [...slot.children].some(child => !child.hidden);
+  const syncChanges = () => {changesSection.hidden = !slotVisible(captureSlot) && !slotVisible(artifactSlot);};
+  syncChanges();
   const overflow = menu({button: iconButton({icon: "more-horizontal", label: t("ui_more")}),
     items: [
       {key: "discuss", label: t("session_discuss"), href: "#", icon: "message-square"},
@@ -1343,12 +1348,14 @@ async function viewSession(main, host, sid, context = null) {
   const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: [stop, openResults], overflow});
   head.append(backSlot, header);
   results.body.append(...[context?.itemBox,
-    sessionSection("folder", t("session_changes"), h("div", {}, captureSlot, cps.box, artifactSlot)),
+    changesSection,
+    sessionSection("list-checks", t("checkpoints"), cps.box),
     sessionSection("check", t("session_delivery"), result),
     sessionSection("inbox", t("session_sources"), sourcesBody),
     batSlot, permissionsSlot, labels.box, instructions?.box, observations.box, details].filter(Boolean));
   const lane = h("section", {class: "workspace-conversation", "aria-label": t("messages")}, conversation.box, controls);
-  const mobileLayout = setupMobileSessionLayout({ head, composer: controls, textarea: box, t, guard: () => assertView(connection) });
+  const mobileLayout = setupMobileSessionLayout({ head, composer: controls, textarea: box, t, guard: () => assertView(connection),
+    infoRow: conversation.box.querySelector(".conversation-caption"), composerRow });
   if (context?.picker) main.append(context.picker);
   main.append(head, h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results));
   const paintOrigin = () => {
@@ -1529,6 +1536,7 @@ async function viewSession(main, host, sid, context = null) {
       captureSlot.append(capture);
     }
     if (capture) capture.hidden = !manualSource;
+    syncChanges();
     composer.hidden = !managed; readonly.hidden = managed;
     readonly.textContent = t(row.provenance === "manual" ? "read_only_note" : "session_access_unknown");
     renderPending(); updateControls();
@@ -1546,7 +1554,7 @@ async function viewSession(main, host, sid, context = null) {
     }
     fill(result, deliveryPills,
       ...work.map(item => deliveryWork(item, repositories, true)),
-      data.work_items?.length ? linkedItems(data.work_items) : null,
+      data.work_items?.length ? sessionWorkLine(data.work_items) : null,
       !work.some(item => item.worktree_id === row.worktree_id) && row.worktree_id ? h("p", {}, observationLink("worktree", row.worktree_id)) : null);
     await loadDelivery(data.work_items);
     if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length)
@@ -1698,7 +1706,7 @@ function checkpointPanel(host, sid) {
     h("p", {class: "muted"}, t("checkpoint_help")),
     h("p", {class: "muted"}, t("checkpoint_unavailable")),
     mayStart ? null : h("p", {class: "muted"}, t("needs_start_scope")))});
-  const box = h("div", {class: "session-checkpoints"}, h("h3", {class: "session-subsection"}, t("checkpoints")),
+  const box = h("div", {class: "session-checkpoints"},
     can ? null : h("p", {class: "muted session-checkpoint-state"}, t("session_checkpoint_unavailable")),
     note, can ? h("div", {class: "actions"}, pick, create) : null, status, list, checkpointWhy);
   return { box, load: async () => { await loadPreview(); await load(); } };
@@ -3293,6 +3301,10 @@ function eventDetail(b) {
 function linkedItems(items) {
   return h("p", { class: "muted" }, t("linked_items"), ": ",
     ...items.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/item/${x.work_item_id}` }, x.title)]));
+}
+function sessionWorkLine(items) {
+  return h("p", {class: "session-delivery-row session-work-line"}, t("ui_work"), "\u00a0· ",
+    ...items.flatMap((item, index) => [index ? " · " : "", h("a", {href: `#/item/${item.work_item_id}`}, item.title)]));
 }
 function workItemRow(w) {
   return h("div", { class: "row" }, stateChip(w.completion),
