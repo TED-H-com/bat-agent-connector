@@ -16189,7 +16189,6 @@ var FILE_STATUS = {
 var SVG = "http://www.w3.org/2000/svg";
 var NODE_W = 148;
 var NODE_H = 36;
-var GAP_X = 72;
 var GAP_Y = 18;
 var PAD = 20;
 var LOCAL_REASONS = new Set([
@@ -16453,7 +16452,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		class: "dep-loaded",
 		"data-dep-loaded": ""
 	}, t("dep_loaded"));
-	const graphHost = h("div", { "data-dep-graph-host": "" }, h("div", { class: "dep-graph-bar" }, loaded, zoomOut, zoomIn), graphScroll);
+	const graphBar = h("div", { class: "dep-graph-bar" }, h("div", { class: "dep-graph-controls" }, loaded, zoomOut, zoomIn));
+	const graphHost = h("div", { "data-dep-graph-host": "" }, graphBar, graphScroll);
 	const detailBody = h("div");
 	const details = disclosure({
 		label: t("dep_details"),
@@ -16586,7 +16586,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			captureButton.removeAttribute("aria-describedby");
 			captureButton.removeAttribute("title");
 		}
-		if (captureButton.parentElement) captureButton.after(captureHint);
 	}
 	const captureForm = form({
 		action: "pm.dependencies.capture",
@@ -16638,11 +16637,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		"aria-label": t("dep_note"),
 		maxlength: 1e3
 	});
-	const sourceCommit = h("p", {
+	const sourceCommit = h("span", {
 		class: "dep-note",
 		"data-dep-source-commit": ""
 	});
-	const labelled = (key, node) => h("label", {}, t(key), node);
+	const labelled = (key, node, note = "") => h("label", {}, t(key), node, note);
 	function relationOptions() {
 		const allowed = evidenceSelect.value === "declared" ? ["contract", "reference"] : RELATIONS;
 		const current = relationSelect.value;
@@ -16691,7 +16690,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				...note ? { note } : {}
 			};
 		},
-		extra: h("div", { class: "dep-fields" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput), sourceCommit, labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
+		extra: h("div", { class: "dep-fields dep-declare-grid" }, labelled("dep_component", componentSelect), labelled("dep_name", nameInput), labelled("dep_ecosystem", ecosystemInput), labelled("dep_kind", kindSelect), labelled("dep_version", versionInput), labelled("dep_level", evidenceSelect), labelled("dep_relation", relationSelect), labelled("dep_source_path", pathInput, sourceCommit), labelled("dep_source_url", urlInput), labelled("dep_note", noteInput))
 	});
 	relationOptions();
 	const retractSelect = h("select", { "aria-label": t("dep_declaration") });
@@ -16721,7 +16720,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	const element = h("section", {
 		class: "dep-view",
 		"data-dep-view": ""
-	}, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
+	}, captureHint, toolbar, coverage, statusBox, captureForm.box, legend, matrixHost, graphHost, details, holder);
 	function fillComponents() {
 		const value = componentSelect.value;
 		componentSelect.replaceChildren(...(data?.components || []).map((row) => h("option", { value: row.component_id }, row.name || row.component_id)));
@@ -17122,9 +17121,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		}
 		const layout = layoutGraph([...nodes.values()], links);
 		const placed = new Map(layout.positions.map((position) => [position.id, position]));
-		const width = Math.max(1, 40 + (layout.layers ? layout.layers * NODE_W + (layout.layers - 1) * GAP_X : 0));
+		const nodeHeight = narrow() ? 44 : NODE_H;
+		const strideX = Math.max(280, (graphScroll.clientWidth - 40 - NODE_W) / Math.max(1, layout.layers - 1));
+		const width = Math.max(1, 188 + Math.max(0, layout.layers - 1) * strideX);
 		const depth = layout.positions.reduce((max, position) => Math.max(max, position.y), 0);
-		const height = Math.max(76, 40 + (layout.positions.length ? (depth + 1) * NODE_H + depth * GAP_Y : 0));
+		const height = Math.max(nodeHeight + 40, 40 + (layout.positions.length ? (depth + 1) * nodeHeight + depth * GAP_Y : 0));
 		const selectedIds = new Set();
 		if (selection?.type === "dependency" || selection?.type === "edge") selectedIds.add("d:" + selection.dependencyKey);
 		if (selection?.type === "component" || selection?.type === "edge") selectedIds.add("c:" + selection.componentId);
@@ -17170,8 +17171,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			if (!from || !to) return;
 			const group = arrivals.get(link.to) || [index];
 			const bow = (group.indexOf(index) - (group.length - 1) / 2) * 8;
-			const x1 = PAD + from.x * 220 + NODE_W, y1 = PAD + from.y * 54 + NODE_H / 2;
-			const x2 = PAD + to.x * 220, y2 = PAD + to.y * 54 + NODE_H / 2;
+			const x1 = PAD + from.x * strideX + NODE_W, y1 = PAD + from.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
+			const x2 = PAD + to.x * strideX, y2 = PAD + to.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
 			const mid = (x1 + x2) / 2;
 			const path = svg("path", {
 				d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`,
@@ -17185,7 +17186,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		for (const [id, node] of visualOrder) {
 			const position = placed.get(id);
 			if (!position) continue;
-			const left = PAD + position.x * 220, top = PAD + position.y * 54;
+			const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
 			const group = svg("g", {
 				class: "dep-node",
 				tabindex: "-1",
@@ -17200,12 +17201,12 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				x: left,
 				y: top,
 				width: NODE_W,
-				height: NODE_H,
+				height: nodeHeight,
 				rx: 6,
 				class: "dep-node-shape"
 			}), svg("text", {
 				x: left + 10,
-				y: top + 23
+				y: top + nodeHeight / 2 + 5
 			}, abbreviate(node.name)));
 			picture.append(group);
 		}
@@ -17221,6 +17222,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		toolbar.hidden = !data;
 		details.hidden = !data;
 		holder.hidden = !data;
+		if (mode === "graph") graphBar.prepend(legend);
+		else matrixHost.before(legend);
 		matrixHost.hidden = mode !== "matrix";
 		graphHost.hidden = mode !== "graph";
 		const counted = Boolean(data?.capture?.revision_id) && Number.isFinite(data?.counts?.edges);

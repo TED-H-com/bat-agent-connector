@@ -1,9 +1,11 @@
+import {mkdirSync} from 'node:fs';
 import {expect, test, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
 import {dependencyDocument, dependencyFixtureIds, dependencyImpact} from './demo/dependencies.ts';
 import {demoProject} from './demo/project.ts';
 
+test.describe.configure({mode: 'parallel'});
 const ids = dependencyFixtureIds;
 type Document = ReturnType<typeof dependencyDocument>;
 
@@ -22,7 +24,7 @@ async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boo
       return {status: 200, data: {events, next_cursor: cursor, head_cursor: cursor, has_more: false, sync: {checkpoint: {cursor, token: `demo-${cursor}`}}}};
     }
     if (url.pathname.endsWith('/dependencies')) {
-      if (failure) return {status: failure, data: {error: {code: 'DEPENDENCY_READ_FAILED', message: 'Dependency read failed'}}};
+      if (failure) return {status: failure, data: {error: {code: 'DEPENDENCY_READ_FAILED', message: locale === 'en' ? 'Dependency read failed' : '無法讀取技術相依'}}};
       const doc = dependencyDocument(demoProject(locale));
       return {status: 200, data: options.projection ? options.projection(doc) : doc};
     }
@@ -346,3 +348,144 @@ test('SF-7: graph shows relation and evidence legend', async ({page}) => {
   await expect(page.locator('[data-dep-legend]')).toContainText('Outline declared');
   await expect(page.locator('[data-dep-legend]')).toContainText('Dashed inferred');
 });
+
+for (const locale of ['en', 'zh-TW'] as const) test.describe(`polish ${locale}`, () => {
+  test.use({locale: locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
+  test('BLOCKER-1: capture reason wraps outside header actions', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844});
+    await mount(page, {locale});
+    const hint = page.locator('[data-dep-capture-reason]');
+    await expect(hint).toBeVisible();
+    await expect(page.locator('.ui-header-actions [data-dep-capture-reason]')).toHaveCount(0);
+    const bounds = await hint.boundingBox();
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+    expect(await hint.evaluate(node => getComputedStyle(node).whiteSpace)).toBe('normal');
+    const refresh = await page.locator('[data-pm-refresh]').boundingBox();
+    expect(refresh!.x + refresh!.width).toBeLessThanOrEqual(390);
+  });
+
+  test('M4: Graph label and omitted-relation copy describe the selection', async ({page}) => {
+    let omit = false;
+    const harness = await mount(page, {locale, projection: doc => omit ? {...doc, edges: [], declared: []} : doc});
+    await expect(page.getByRole('radio', {name: locale === 'en' ? 'Graph' : '關係圖', exact: true})).toBeVisible();
+    await page.locator(`[data-dep-matrix] [data-dep-focus="row:${ids.api}"]`).click();
+    omit = true;
+    await harness.event();
+    await expect(page.locator('[data-dep-affected]')).toContainText(locale === 'en' ? 'More relations were omitted' : '還有未列入的關係');
+    await expect(page.locator('[data-dep-affected]')).not.toContainText(locale === 'en' ? 'More tests' : '未列入的測試');
+  });
+});
+
+for (const width of [1440, 768, 390]) test(`SF-9 and VP-1: form grid and controls are sized for ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  await mount(page, {manage: true});
+  await page.locator('[data-dep-view] .ui-disclosure').nth(1).locator('summary').click();
+  const form = page.locator('[data-pm-action="pm.dependencies.declare"]');
+  const inputBoxes = await form.locator('input, select').evaluateAll(nodes => nodes.map(node => ({height: node.getBoundingClientRect().height, width: node.getBoundingClientRect().width, font: parseFloat(getComputedStyle(node).fontSize)})));
+  expect(inputBoxes.every(box => box.height >= (width <= 800 ? 44 : 32))).toBe(true);
+  if (width === 390) expect(inputBoxes.every(box => box.font >= 16)).toBe(true);
+  if (width === 1440) {
+    const positions = await form.locator('input').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().x));
+    expect(new Set(positions).size).toBeGreaterThan(1);
+    expect((await form.locator('.dep-declare-grid').boundingBox())!.width).toBeLessThanOrEqual(720);
+  }
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  const buttons = await page.locator('.dep-graph-bar button').evaluateAll(nodes => nodes.map(node => ({width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height})));
+  expect(buttons.every(box => box.height >= (width <= 800 ? 44 : 32) && box.width >= (width <= 800 ? 44 : 32))).toBe(true);
+  const chips = await page.locator('.dep-chip').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
+  expect(chips.every(height => height >= (width <= 800 ? 44 : 32))).toBe(true);
+});
+
+test('VP-3: graph uses the available width and has a roomy zoom bar', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page);
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  const box = (await page.locator('[data-dep-graph]').boundingBox())!;
+  const picture = (await page.locator('[data-dep-graph] svg').boundingBox())!;
+  expect(picture.width).toBeGreaterThanOrEqual(box.width * 0.85);
+  const bar = await page.locator('.dep-graph-bar').boundingBox();
+  expect(bar!.height).toBeGreaterThanOrEqual(32);
+});
+
+test('VP-4: selected matrix cell centres and frames its badge', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page);
+  const cell = page.locator(`[data-dep-cell="${ids.api}|${ids.keys.pytest}"]`);
+  await cell.click();
+  const style = await cell.evaluate(node => {
+    const css = getComputedStyle(node), badge = node.querySelector('.dep-mark')!.getBoundingClientRect(), box = node.getBoundingClientRect();
+    return {align: css.justifyContent, ring: css.boxShadow, gap: Math.min(badge.x - box.x, badge.y - box.y, box.right - badge.right, box.bottom - badge.bottom)};
+  });
+  expect(style.align).toBe('center');
+  expect(style.ring).not.toBe('none');
+  expect(style.gap).toBeGreaterThanOrEqual(4);
+});
+
+test('M3: dark selected chip contrast meets 4.5 to 1', async ({page}) => {
+  await page.emulateMedia({reducedMotion: 'reduce'});
+  await mount(page);
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  const colors = await page.locator('[data-dep-relation=test]').evaluate(node => {
+    const rgb = (value: string) => value.match(/[\d.]+/g)!.map(Number);
+    const css = getComputedStyle(node);
+    return {fg: rgb(css.color), bg: rgb(css.backgroundColor), canvas: rgb(getComputedStyle(document.body).backgroundColor)};
+  });
+  const luminance = (rgb: number[]) => rgb.slice(0, 3).map(value => value / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+  const alpha = colors.bg[3] ?? 1;
+  const background = colors.bg.slice(0, 3).map((value, index) => value * alpha + colors.canvas[index] * (1 - alpha));
+  const a = luminance(colors.fg), b = luminance(background);
+  expect((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)).toBeGreaterThanOrEqual(4.5);
+});
+
+
+if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as const) {
+  for (const variant of [{width: 1440, dark: false}, {width: 1000, dark: false}, {width: 768, dark: false}, {width: 390, dark: false}, {width: 1440, dark: true}]) {
+    test(`screenshots: ${locale} ${variant.width} ${variant.dark ? 'dark' : 'light'}`, async ({browser, baseURL}) => {
+      const {width, dark} = variant;
+      const context = await browser.newContext({baseURL, locale: locale === 'en' ? 'en-US' : 'zh-TW', viewport: {width, height: width === 390 ? 844 : width === 768 ? 1024 : 900}, reducedMotion: 'reduce'});
+      const page = await context.newPage();
+      const errors: string[] = [];
+      page.on('pageerror', error => errors.push(error.message));
+      const harness = await mount(page, {locale});
+      await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), dark ? 'dark' : 'light');
+      const directory = process.env.BATC_DEP_SHOT_DIR || `${process.env.TMPDIR || '/tmp'}/shots`;
+      mkdirSync(directory, {recursive: true});
+      const shot = async (state: string) => {
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+        const text = await page.locator('#main').innerText();
+        expect(text).not.toMatch(/\b(?:undefined|null|NaN)\b|ui_reason_|dep_/);
+        await page.evaluate(() => scrollTo(0, 0));
+        await page.screenshot({path: `${directory}/dep-${locale}-${width}-${dark ? 'dark' : 'light'}-${state}.png`, fullPage: true, animations: 'disabled'});
+      };
+      await shot(width > 800 ? 'matrix' : 'list');
+      await page.getByRole('radio', {name: locale === 'en' ? 'Graph' : '關係圖', exact: true}).click();
+      await shot('graph');
+      await page.locator(`[data-dep-node="d:${ids.keys.pytest}"]`).focus();
+      await shot('graph-focus');
+      await page.locator(`[data-dep-node="c:${ids.api}"]`).click();
+      await expect(page.locator('[data-dep-component-facts]')).toBeVisible();
+      await shot('component');
+      await page.keyboard.press('Escape');
+      await page.locator(`[data-dep-node="d:${ids.keys.contract}"]`).click();
+      await expect(page.locator('[data-dep-impact-reason=selection_budget]')).toBeVisible();
+      await page.locator('[data-dep-affected]').scrollIntoViewIfNeeded();
+      await shot('partial-impact');
+      await page.keyboard.press('Escape');
+      await page.locator(`[data-dep-node="d:${ids.keys.legacy}"]`).click();
+      await expect(page.locator('[data-dep-impact-declaration]')).toBeVisible();
+      await page.locator('[data-dep-affected]').scrollIntoViewIfNeeded();
+      await shot('declared-only');
+      await page.keyboard.press('Escape');
+      await page.getByRole('radio', {name: locale === 'en' ? 'Matrix' : '矩陣', exact: true}).click();
+      await page.locator('[data-dep-record] > summary').click();
+      await shot('record');
+      harness.fail(404);
+      await page.locator('[data-pm-refresh]').click();
+      await expect(page.locator('.dep-toolbar')).toBeHidden();
+      await shot('withdrawn');
+      expect(harness.posts).toEqual([]);
+      expect(errors).toEqual([]);
+      await context.close();
+    });
+  }
+}

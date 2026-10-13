@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Move Dependencies capture reasons below header actions; improve form layout,
+  touch targets, dark chip contrast, graph spacing and selected-cell outlines.
+
 - Apply Dependencies graph filters to cross-repository links and bound large matrix,
   graph and narrow list views with explicit shown-versus-loaded counts and legends.
 

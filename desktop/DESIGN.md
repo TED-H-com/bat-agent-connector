@@ -395,6 +395,12 @@ mini timelines; the document never scrolls horizontally.
 
 ## Dependencies
 
+The relation form uses a bounded two-column grid, one column on phones, 44px touch
+controls and labelled source commits. Graph fills the available layer width and
+keeps its legend beside 32px zoom controls (44px on touch). Active chips use the
+existing primary text token for contrast in both themes; selected matrix cells
+centre their marks with a separate inset selection ring.
+
 Matrix and list selection buttons use pressed state. Graph nodes do the same, with
 a distinct selected fill. Home/End follow the graph's visual column/row order.
 Activation, live reads and inspector close resolve focus by stable item key in the
@@ -404,8 +410,8 @@ The question on this view is which checks have to be run again if one dependency
 It reads the current dependency projection, its revisions, and one impact query. Capture,
 declare, and retract stay the durable dependency actions, using the projection version,
 the workspace version, and the source binding digest. Capture again is the header action.
-It is primary only when this member can run it. Otherwise it is a secondary button with the
-blocking reason beside it. Maintenance policy, release baselines, maintenance checks, and
+It is primary only when this member can run it. Otherwise it is a secondary button with the blocking reason below the header,
+where it wraps without displacing Refresh. Maintenance policy, release baselines, maintenance checks, and
 workload observations stay in the secondary cards.
 
 The header names the capture commit and its UTC date. A Stale pill is shown only when
