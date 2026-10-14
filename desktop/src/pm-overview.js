@@ -297,10 +297,12 @@ export function workspaceOverview(options) {
     if (!scroller) return null;
     const bounds = scroller === document.scrollingElement ? {top: 0, bottom: innerHeight} : scroller.getBoundingClientRect();
     const hovered = rows.find(node => node.matches(':hover'));
+    const selection = attentionSelection() ? document.getSelection() : null;
+    const selected = selection && (rows.find(node => node.contains(selection.focusNode)) || rows.find(node => node.contains(selection.anchorNode)));
     // Reading from the list's top lets new rows push the rest down in place.
-    if (!attentionList.contains(document.activeElement) && !hovered && !attentionSelection()
+    if (!attentionList.contains(document.activeElement) && !hovered && !selection
       && attentionList.getBoundingClientRect().top >= Math.max(0, bounds.top)) return null;
-    const row = rows.find(node => node.contains(document.activeElement)) || hovered
+    const row = rows.find(node => node.contains(document.activeElement)) || hovered || selected
       || rows.find(node => {const rect = node.getBoundingClientRect(); return rect.bottom > Math.max(0, bounds.top) && rect.top < Math.min(innerHeight, bounds.bottom);});
     return row ? {key: row.dataset.overviewRow, top: row.getBoundingClientRect().top, scroller} : null;
   }

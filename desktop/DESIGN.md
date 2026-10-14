@@ -312,8 +312,8 @@ Attention retains the central severity/age ordering, with exact context identiti
 passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
 by identity within their own part, including the Progress Details summary and its open state.
 Before updating any Overview region, a focused or hovered attention row anchors
-the viewport. A non-collapsed selection inside the list keeps anchoring active,
-falling back to its first visible row. Without interaction, the first
+the viewport. Next in priority is the row containing a non-collapsed selection's
+focus node, falling back to its anchor node. Without interaction, the first
 visible row anchors only after the list's top has scrolled above its scroller's
 visible area; while the list's top is in view, new rows push the rest down without
 compensating scroll. Focus, hover or a non-collapsed text selection

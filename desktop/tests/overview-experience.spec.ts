@@ -128,7 +128,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (cons
   const key = f.state.data.attention[reading === 'visible' ? 4 : 1].key, row = root(page).locator(`[data-overview-row="${key}"]`), link = row.locator('[data-overview-open]');
   await row.evaluate((node, reading) => {
     document.activeElement instanceof HTMLElement && document.activeElement.blur();
-    window.scrollBy(0, node.getBoundingClientRect().top - (['visible', 'selected'].includes(reading) ? -10 : 200));
+    window.scrollBy(0, node.getBoundingClientRect().top - (reading === 'visible' ? -10 : 200));
     getSelection()?.removeAllRanges();
   }, reading);
   await page.mouse.move(0, 0);
@@ -144,9 +144,16 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (cons
     const selection = getSelection()!, range = document.createRange(); range.selectNodeContents(node);
     selection.removeAllRanges(); selection.addRange(range); return selection.toString();
   }) : '';
+  if (reading === 'selected') {
+    expect(await root(page).locator('[data-overview-row]').evaluateAll(nodes => nodes.find(node => node.getBoundingClientRect().bottom > 0 && node.getBoundingClientRect().top < innerHeight)?.getAttribute('data-overview-row'))).not.toBe(key);
+    await expect(root(page).locator('[data-overview-row]').first()).toBeInViewport({ratio: 1});
+    expect(await root(page).locator('[data-overview-attention]').evaluate(node => node.contains(document.activeElement))).toBe(false);
+    await expect(root(page).locator('[data-overview-row]:hover')).toHaveCount(0);
+  }
   const top = (await row.boundingBox())!.y, originalOrder = f.state.data.attention.map((item: any) => item.key);
-  const shots = reading === 'visible' && process.env.BATC_OVERVIEW_SHOTS ? `${process.env.TMPDIR}/follow-up-shots` : null;
-  if (shots) {mkdirSync(shots, {recursive: true}); await page.screenshot({path: `${shots}/${locale}-${width}-passive-before.png`, animations: 'disabled'});}
+  const scenario = reading === 'selected' ? 'selected' : 'passive';
+  const shots = ['visible', 'selected'].includes(reading) && process.env.BATC_OVERVIEW_SHOTS ? `${process.env.TMPDIR}/${reading === 'selected' ? 'fix3-shots' : 'follow-up-shots'}` : null;
+  if (shots) {mkdirSync(shots, {recursive: true}); await page.screenshot({path: `${shots}/${locale}-${width}-${scenario}-before.png`, animations: 'disabled'});}
   f.state.data.attention[0].title = (locale === 'en' ? 'A revised dependency blocker needs a longer maintenance assessment and remediation description. ' : '相依套件阻礙已更新，需要更詳細的維護評估與修正說明。').repeat(5);
   f.state.data.attention.reverse(); f.state.data.progress.accepted = 2; f.state.data.progress.in_review = 2;
   await burst(page, f);
@@ -156,7 +163,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (cons
     .toEqual(reading === 'visible' ? f.state.data.attention.map((item: any) => item.key) : originalOrder);
   if (reading === 'focused') await expect(link).toBeFocused();
   expect(await page.evaluate(() => getSelection()?.toString())).toBe(selected);
-  if (shots) await page.screenshot({path: `${shots}/${locale}-${width}-passive-after.png`, animations: 'disabled'});
+  if (shots) await page.screenshot({path: `${shots}/${locale}-${width}-${scenario}-after.png`, animations: 'disabled'});
   expect(f.state.writes).toEqual([]); await context.close();
 });
 

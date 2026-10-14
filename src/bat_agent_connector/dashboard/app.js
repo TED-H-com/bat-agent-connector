@@ -16691,8 +16691,10 @@ function workspaceOverview(options) {
 			bottom: innerHeight
 		} : scroller.getBoundingClientRect();
 		const hovered = rows.find((node) => node.matches(":hover"));
-		if (!attentionList.contains(document.activeElement) && !hovered && !attentionSelection() && attentionList.getBoundingClientRect().top >= Math.max(0, bounds.top)) return null;
-		const row = rows.find((node) => node.contains(document.activeElement)) || hovered || rows.find((node) => {
+		const selection = attentionSelection() ? document.getSelection() : null;
+		const selected = selection && (rows.find((node) => node.contains(selection.focusNode)) || rows.find((node) => node.contains(selection.anchorNode)));
+		if (!attentionList.contains(document.activeElement) && !hovered && !selection && attentionList.getBoundingClientRect().top >= Math.max(0, bounds.top)) return null;
+		const row = rows.find((node) => node.contains(document.activeElement)) || hovered || selected || rows.find((node) => {
 			const rect = node.getBoundingClientRect();
 			return rect.bottom > Math.max(0, bounds.top) && rect.top < Math.min(innerHeight, bounds.bottom);
 		});

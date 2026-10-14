@@ -40,6 +40,7 @@
   and on return to Overview; focus, hover or text selection holds the existing order.
   Passive anchoring starts after scrolling into the list; new top rows otherwise
   appear in place without moving the page.
+  A text selection anchors its own row when rows above it change height.
   Withdrawn rows and their counts still disappear immediately.
 
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
