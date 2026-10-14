@@ -90,7 +90,7 @@ for(const failure of [403,503])test(`failed full refresh ${failure} removes all 
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban]')).not.toContainText('command-1');
   await expect(page.locator('[data-pm-kanban]')).not.toContainText('Latest page: 2 WIP');
-  f.state.failRead=null;await page.getByRole('button',{name:'Retry work flow',exact:true}).click();
+  f.state.failRead=null;await page.getByRole('button',{name:'Retry',exact:true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(2);
   expect(f.state.reads.filter((path:string) => path.includes('/kanban?')).at(-1)).toContain('after=0');expect(f.state.writes).toHaveLength(0);
 });
@@ -98,7 +98,7 @@ for(const failure of [403,503])test(`failed full refresh ${failure} removes all 
 test('pagination failure clears facts and retry starts from the first page rather than skipping work',async({page})=>{
   const f=fixture();await mount(page,f);f.state.failMore=503;await page.getByRole('button',{name:'Load more work',exact:true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
-  f.state.failMore=null;await page.getByRole('button',{name:'Retry work flow',exact:true}).click();
+  f.state.failMore=null;await page.getByRole('button',{name:'Retry',exact:true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(2);
   await page.getByRole('button',{name:'Load more work',exact:true}).click();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);

@@ -683,7 +683,9 @@ still drops the row when it is gone, without opening the sheet. Leaving the view
 still in flight and closes the inspector.
 Search and owner accept at most 200 characters.
 
-The table shows the type word; Source stays in the inspector facts. A maintenance
+The table keeps type, title, status and next step. Related, impact, due, owner and
+priority drop in that order as the table gets narrower, so the type word stays whole.
+Source stays in the inspector facts. A maintenance
 finding with no title is named from its structured `finding` when the server sends
 one: a GitHub issue or Dependabot pull request uses its kind and number, and a
 security alert uses its package, or its number when the package is absent. The
@@ -697,15 +699,42 @@ Details also leaves out the missing-title line; a fallback name still lists it.
 A neutral type basis says the record has no type of its own, so the register
 lists it as an issue. Long owner text
 ellipsizes. Related requirement and work chips use a loaded name when one is known.
-Filters are one toolbar: type, status, exact owner and title search, with accessible
-names and no visible field labels. Pages follow `next_cursor`; row ids and cursors
-are passed through unchanged.
+Filters are one toolbar: type, status group, exact owner, age and title search, with
+accessible names and no visible field labels. Status choices are Open, In progress,
+Blocked, Waiting, In review, Done, Closed, Draft and Other. Every recorded status
+maps to one of those groups. A status outside the map is Other and stays in the
+list. A group with one recorded status is sent to the register. A group with
+several, and Other, filter the loaded rows. An open-by-age bar, a week point or
+the age menu filters the loaded rows and shows a removable chip. Age uses the
+server’s open-status list and `as_of`. A week point filters rows opened that week;
+the public rows do not expose the summary’s resolution timestamps.
+Those counts say how many loaded rows are shown. They use a matching total only
+when coverage is complete and the catalogue has no further page. The age bars
+themselves stay the server summary. Blocking reasons stay informational: the
+public row does not include the reason, so they do not filter. "N shown" is the
+header meta, including beside complete type totals when more rows can be loaded.
+The pagination group keeps its accessible loaded-count label without repeating
+that text visibly in the footer. The selected row uses a
+`--surface-3` selection token, separate from an info pill. Pages follow `next_cursor`;
+row ids and cursors are passed through unchanged.
 
-The inspector shows the processing timeline in the order the server sent. Status
-wording covers the operation, decision and direction states the register emits. An
-operation that is accepted for processing does not use the inspected-result word
-“Accepted”. An unrecognised status uses the generic wording, and the raw code is
-only in Details. Discuss and Propose change use the shared discussion link. A
+A filtered empty register offers a small secondary Clear filters action that resets
+type, status, owner, age, opening week and search. A complete filtered result with
+no matches hides trends until filters are cleared. Incomplete reads keep their own
+state and any available summary. Header type counts omit zeros; a successful read
+with no visible rows says None shown. A complete, unfiltered empty register says
+there are no issues or changes yet and has no reset action. An
+incomplete read says Records incomplete instead of implying there are no matches.
+Read errors use one shared inline error with an adjacent small secondary Retry.
+
+The inspector shows the processing timeline in the order the server sent. Rows,
+inspector facts and timeline entries use the exact recorded status label in the
+shared group's tone; grouping changes filtering only. An operation says “Accepted
+for processing”, distinct from the inspected-result word “Accepted”. An
+unrecognised status uses Other in the table, and the raw code
+is only in Details. A row with no title is named from its source: a finding keeps
+its finding name, and any other record uses a known name, then its kind and number,
+then its kind. It does not use “Not recorded” as the title. Discuss and Propose change use the shared discussion link. A
 finding binds the finding ref on its action when that object is a context ref.
 Requirement and work links open the Requirements selection. Below 1200px, a row
 action closes the sheet, keeps the selection, and moves focus to the form. Those
@@ -779,8 +808,13 @@ rows, counts, the chart and the inspector together.
 
 Board uses neutral lanes and compact cards with explicit requirement/session
 associations. Search, requirement/agent filters, grouping and collapsed lanes are
-view preferences. Below 800px lanes stack; wider boards scroll horizontally inside
-the board. Arrow keys navigate cards and lanes; Enter opens the inspector. Live
+view preferences. The toolbar wraps whole controls. Below 600px lanes stack; wider
+boards show a whole number of lanes that fill the width, at least about 168px, and
+scroll horizontally inside the board. A lane name uses an ellipsis and keeps its
+count. A lane that does not fit starts at the edge, so the edge fade still marks
+more lanes. Lanes in a horizontal row share the tallest lane's content height,
+with no fixed minimum; stacked lanes keep their own content height.
+Arrow keys navigate cards and lanes; Enter opens the inspector. Live
 updates defer lane movement while that lane is hovered or focused, but withdrawal
 removes inaccessible facts immediately. Local transitions are 140ms and respect
 reduced motion.
@@ -797,6 +831,15 @@ Each lane is a list with an H2 heading. Cards are list items with an H3 title
 button, described by their requirement, status and recorded delivery/blocker/age
 facts. Visually hidden status text stays inside the card’s bounds; blocker flags are not tab stops. Paged lanes show loaded counts and one
 visible partial marker; an empty Board hides the lanes and shows one empty state.
+A complete read with no filtered matches says No work matches these filters and
+offers a small secondary Clear filters action. It resets search, requirement and
+agent, retaining grouping. A complete Board with no associated work and no filters
+keeps its own empty state without that action. A partial read with no loaded
+matches says Work list incomplete. While filters are active the header appends
+N shown or None shown once; grouping alone does not add it. Board read errors use
+one shared inline error with an adjacent small secondary Retry. Details follows
+Retry inside the full-width banner only when an error code adds information beyond
+the sentence. Its open body occupies a separate full-width line inside the banner.
 Opening the inspector reveals the selected card after docking. Closing restores
 focus to the latest selection, falling back to the view heading after withdrawal.
 An unchanged read failure keeps its status, Details and Retry nodes, including

@@ -13,13 +13,43 @@ async function expectMetaRows(board: Locator) {
   }))).toBe(true);
 }
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]) test(`board filtering and inspector ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale, reducedMotion: 'reduce', viewport: {width, height: 900}}), page = await context.newPage();
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text() + ' ' + message.location().url);});
   const fixture = demoFixture({locale, managedSession: true}), {ids} = fixture; await mountConversation(page, false, fixture.dispatch);
   await page.goto(`/dashboard/#/pm/${ids.workspaceId}/board`);
   const board = page.locator('[data-pm-kanban]'); await expect(board.locator('[data-pm-kanban-work]')).toHaveCount(12);
+  const wholeLanes = () => board.locator('.pm-kanban-list').evaluate(list => {
+    const view = list.getBoundingClientRect();
+    return [...list.querySelectorAll('.pm-kanban-column')].every(lane => {
+      const box = lane.getBoundingClientRect();
+      const overlap = Math.min(box.right, view.right) - Math.max(box.left, view.left);
+      if (overlap <= 2) return true;
+      const name = lane.querySelector('.pm-board-lane-name');
+      const count = lane.querySelector('.pm-kanban-count');
+      if (!(name instanceof HTMLElement) || !(count instanceof HTMLElement)) return false;
+      const countBox = count.getBoundingClientRect();
+      const style = getComputedStyle(name);
+      return box.left >= view.left - 1 && box.right <= view.right + 1
+        && style.textOverflow === 'ellipsis' && style.whiteSpace === 'nowrap'
+        && name.title === name.textContent && name.textContent.length > 0
+        && countBox.left >= box.left - 1 && countBox.right <= box.right + 1 && countBox.width > 0;
+    });
+  });
+  const wholeToolbar = () => board.locator('.pm-board-toolbar').evaluate(toolbar => {
+    const box = toolbar.getBoundingClientRect();
+    return [...toolbar.querySelectorAll('select, input, label')].every(node => {
+      const rect = node.getBoundingClientRect();
+      return rect.width > 0 && rect.left >= box.left - 1 && rect.right <= box.right + 1 && rect.bottom <= box.bottom + 1;
+    });
+  });
+  expect(await wholeLanes()).toBe(true);
+  expect(await wholeToolbar()).toBe(true);
+  if (width === 1440) expect(await board.locator('.pm-board-toolbar').evaluate(toolbar => {
+    const controls = [...toolbar.children].map(node => node.getBoundingClientRect());
+    return Math.max(...controls.map(box => box.top)) - Math.min(...controls.map(box => box.top));
+  })).toBeLessThanOrEqual(2);
   await expect(page.locator('[data-pm-view="board"]')).toHaveAttribute('aria-current', 'page');
   await expect(board.locator('.pm-board-state')).toHaveCount(0);
   await expect(board.locator('.ui-agent-mark[aria-label="Unknown"], .ui-agent-mark[aria-label="未知"]')).toHaveCount(0);
@@ -73,6 +103,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     });
     await expect.poll(fullyVisible).toBe(true);
     await expect(board.locator('.pm-board-content')).toHaveClass(/pm-board-clipped-end/);
+    expect(await wholeLanes()).toBe(true);
+    expect(await wholeToolbar()).toBe(true);
     expect(await board.locator('.pm-board-content').evaluate(node => getComputedStyle(node, '::after').opacity)).toBe('1');
     await card.locator('[data-board-open]').focus(); await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
     const focused = board.locator('[data-pm-kanban-work]:has([data-board-open]:focus)'); await expect(focused).toHaveCount(1);
@@ -89,7 +121,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(inspector).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(card.locator('[data-board-open]')).toBeFocused();
   await page.keyboard.press('ArrowLeft'); await expect(card.locator('[data-board-open]')).not.toBeFocused();
-  if (width < 800) {
+  if (width < 600) {
     const lanes = board.locator('[data-pm-kanban-column]');
     const boxes = await lanes.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().x)); expect(new Set(boxes).size).toBe(1);
     const toggle = lanes.first().getByRole('button').first(); await toggle.click(); await expect(toggle).toHaveAttribute('aria-expanded', 'false');
