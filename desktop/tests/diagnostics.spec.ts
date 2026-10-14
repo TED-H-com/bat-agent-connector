@@ -101,6 +101,8 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,390])test(`review la
  }
  const page=await context.newPage();await diagnosticsFixture(page);await page.goto('/dashboard/#/session/private-box.internal/private-session');
  const error=page.locator('[data-session-error]').first();await error.locator('summary').click();
- await expect(error.locator('[data-export-diagnostics]')).toBeVisible();await error.locator('[data-export-diagnostics]').scrollIntoViewIfNeeded();await capture(page,'error-details');
+ await expect(error.locator('[data-export-diagnostics]')).toBeVisible();await error.locator('[data-export-diagnostics]').scrollIntoViewIfNeeded();
+ expect(await error.locator('xpath=ancestor::*[contains(@class,"session-status")][1]').evaluate(node=>node.scrollHeight<=node.clientHeight)).toBe(true);
+ await capture(page,'error-details');
  await context.close();
 });
