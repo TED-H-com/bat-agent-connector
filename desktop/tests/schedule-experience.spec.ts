@@ -773,6 +773,65 @@ for (const width of [1000, 1440]) for (const locale of ['en', 'zh-TW'] as const)
   await context.close();
 });
 
+for (const width of [1000, 1440]) for (const locale of ['en', 'zh-TW'] as const) test(`a scrolled redraw keeps the first axis labels ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage();
+  const project = demoProject(locale);
+  let stamp = 0;
+  const f = await start(page, locale, {mutate(data) {
+    if (!stamp) return;
+    const row = data.rows.find(row => row.id === `work:${project.ids.work.email}`);
+    if (row) row.title = `Redraw ${stamp}`;
+  }});
+  const region = page.locator('[data-pm-schedule]'), viewport = region.locator('.schedule-viewport');
+  const names = locale === 'en' ? {week: 'Week', day: 'Day', month: 'Month'} : {week: '週', day: '日', month: '月'};
+  const readAxis = () => page.evaluate(() => {
+    const row = document.querySelector('.schedule-head')!;
+    const sticky = row.querySelector('.schedule-tree-cell')!.getBoundingClientRect();
+    const ticks = [...row.querySelectorAll('.schedule-tick')].map(el => {
+      const box = el.getBoundingClientRect();
+      return {iso: (el as HTMLElement).dataset.scheduleTick || '', left: box.left, right: box.right, width: box.width};
+    });
+    return {stickyRight: sticky.right, ticks};
+  });
+  const scrollToEnd = () => viewport.evaluate(node => {
+    node.scrollLeft = node.scrollWidth;
+    node.dispatchEvent(new Event('scroll'));
+    return node.scrollLeft;
+  });
+  const scrollToStart = () => viewport.evaluate(node => {node.scrollLeft = 0; node.dispatchEvent(new Event('scroll'));});
+  async function expectLabels(expected: string[]) {
+    await scrollToStart();
+    const axis = await readAxis();
+    expect(axis.ticks.map(tick => tick.iso)).toEqual(expected);
+    expect(axis.ticks[0].left).toBeGreaterThanOrEqual(axis.stickyRight - 0.5);
+    for (let i = 1; i < axis.ticks.length; i++) expect(axis.ticks[i].left).toBeGreaterThanOrEqual(axis.ticks[i - 1].right - 0.5);
+  }
+  for (const zoom of ['week', 'day'] as const) {
+    await region.getByRole('radio', {name: names[zoom], exact: true}).click();
+    await scrollToStart();
+    const initial = await readAxis();
+    expect(initial.ticks.length).toBeGreaterThan(1);
+    if (zoom === 'week') expect(initial.ticks[0].iso).toBe('2026-09-28');
+    else expect(initial.ticks[0].iso).toBe('2026-09-25');
+    const expected = initial.ticks.map(tick => tick.iso);
+    expect(await scrollToEnd()).toBeGreaterThan(40);
+    stamp += 1;
+    const reads = f.calls.length;
+    f.state.cursor++;
+    await expect.poll(() => f.calls.length).toBeGreaterThan(reads);
+    await expect(region.locator('.schedule-title', {hasText: `Redraw ${stamp}`})).toBeAttached();
+    await expectLabels(expected);
+    const other = zoom === 'week' ? 'day' : 'week';
+    expect(await scrollToEnd()).toBeGreaterThan(40);
+    await region.getByRole('radio', {name: names[other], exact: true}).click();
+    expect(await scrollToEnd()).toBeGreaterThan(40);
+    await region.getByRole('radio', {name: names[zoom], exact: true}).click();
+    await expectLabels(expected);
+  }
+  expect(f.writes).toEqual([]);
+  await context.close();
+});
+
 test('a Day choice is kept while the phone layout shows Week', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   await start(page);

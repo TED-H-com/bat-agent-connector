@@ -487,9 +487,10 @@ drawn as open. Waiting and blocked stay visible on an open bar. Only a `blocked`
 status produces hatching. Milestone delta compares recorded dates. Recorded baseline,
 forecast and actual dates stay visible in the inspector. Week ticks label UTC
 Mondays only; a range that starts mid-week leaves that partial interval unlabelled.
-Month ticks label the 1st only. Day, Week and Month then drop any label that would
-sit closer than its own width to the next one, or that would sit under the sticky
-title column. The Today mark sits under the axis text. Month ticks show only
+Month ticks label the 1st only. Day, Week and Month then drop a label whose
+left edge falls before the start of the track, or that would sit closer than its
+own width to the next one. Both decisions use the track's own coordinates, so
+scrolling the board does not remove labels. The Today mark sits under the axis text. Month ticks show only
 the localized short month; Day and Week retain month and day. Scale labels use the
 shared time module without becoming event timestamps. Bar tooltips use the same
 calendar-date formatter as visible dates. Operation attempts use the shared action

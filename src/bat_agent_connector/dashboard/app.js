@@ -30657,12 +30657,11 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 	}
 	function trimAxis(axisRow) {
 		const trackNode = axisRow.querySelector(".schedule-axis");
-		const sticky = axisRow.querySelector(".schedule-tree-cell");
-		if (!trackNode || !sticky) return;
-		const stickyBox = sticky.getBoundingClientRect();
+		if (!trackNode) return;
+		const origin = trackNode.getBoundingClientRect().left;
 		for (const tick of [...trackNode.querySelectorAll(".schedule-tick")]) {
 			const box = tick.getBoundingClientRect();
-			if (box.width > 0 && box.left < stickyBox.right - .5) tick.remove();
+			if (box.width > 0 && box.left - origin < -.5) tick.remove();
 		}
 		const kept = [...trackNode.querySelectorAll(".schedule-tick")];
 		for (let i = 0; i < kept.length - 1;) {
