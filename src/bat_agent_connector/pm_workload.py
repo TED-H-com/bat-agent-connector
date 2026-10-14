@@ -136,10 +136,9 @@ class _Reader:
 
     def get(self, oid, *, steps=False, principal=None):
         from . import pm_access, pm_read_cache
-        row = pm_read_cache.operation_row(self.db, oid)
-        if not row:
+        operation = pm_read_cache.operation(self.db, oid)
+        if operation is None:
             raise _bad('NOT_FOUND', 'Original workload source unavailable', 404)
-        operation = OperationService._decode(row)
         if principal is not None:
             pm_access.require_visible(self.db, principal, operation)
         return operation

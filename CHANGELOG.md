@@ -8,6 +8,8 @@
   Reuse completed visibility without reopening source savepoints; still reject
   invalid borrowed source scopes before serving a cached decision. Reload canonical
   spec admission evidence for compact shared-operation read projections.
+  Retain bounded proofs within their exact live guard context and copy decoded
+  canonical operation/plan metadata without repeating its parsing.
 
 - Bound repeated original-source traversal in GitHub workload observation checks.
   Share only completed historical decisions within each synchronous policy read,

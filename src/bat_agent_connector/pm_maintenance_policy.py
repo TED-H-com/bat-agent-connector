@@ -12,7 +12,7 @@ import re
 import time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import controller_authority, pm_lifecycle_gates, pm_workspace
+from . import controller_authority, pm_lifecycle_gates, pm_read_cache, pm_workspace
 from . import pm_release_baselines as baselines
 from .operations import ActionDef, OperationError, OperationService
 
@@ -175,6 +175,7 @@ def head(db, wid):
     return dict(row) if row else {"policy_id": None, "revision": 0}
 
 
+@pm_read_cache.memoized(guard_independent=True, freeze=pm_read_cache.json_snapshot, thaw=json.loads)
 def _record(db, wid, policy_id):
     if not isinstance(policy_id, str) or not POLICY.fullmatch(policy_id):
         raise _bad("Maintenance policy not found", "NOT_FOUND", 404)

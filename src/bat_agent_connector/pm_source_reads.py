@@ -82,7 +82,7 @@ copied asynchronous context invalidates reuse rather than granting access.
     state = {'db': db, 'identity': identity, 'owner': _owner(), 'open': True,
         'yielded': False, 'changes': db.total_changes, 'active': set(), 'memo': {}, 'visibility': {},
         'remembering': False, 'local_only': set(), 'refused': set(), 'guarded_visibility': {},
-        'guard_contexts': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
+        'guard_contexts': {}, 'partial_sources': {}, 'repair_walks': set(), 'repair_completed': set(), 'repair_generation': None,
         'scope_depth': parent['scope_depth'] + 1 if parent and parent['open'] else 1,
         'budget': parent['budget'] if parent and parent['open'] else {'nodes': 0}}
     token, handle = _READ.set(state), None
@@ -129,6 +129,7 @@ copied asynchronous context invalidates reuse rather than granting access.
         state['local_only'].clear()
         state['refused'].clear()
         state['guard_contexts'].clear()
+        state['partial_sources'].clear()
         state['repair_walks'].clear()
         state['repair_completed'].clear()
         state['active'].clear()
@@ -165,12 +166,23 @@ def check(db, principal, kind, identity, predicate):
     """Reuse only completed booleans; never share mutable source documents."""
     with scope(db, principal) as state:
         key = kind, identity
+        context = _guard_context(db, principal) if key in state['guard_contexts'] else None
         if (key in state['guard_contexts'] and key not in state['refused']
-                and state['guard_contexts'][key] != _guard_context(db, principal)):
+                and state['guard_contexts'][key] != context):
             # A partial grant from another traversal is not a completed answer.
+            previous = state['guard_contexts'][key], key
+            if state['memo'].get(key) is True and len(state['partial_sources']) < MAX_NODES:
+                state['partial_sources'][previous] = True
             state['memo'].pop(key, None)
             state['local_only'].discard(key)
             del state['guard_contexts'][key]
+            # A nested guard must not evict its caller's completed partial
+            # proof. Reuse only on returning to that exact live guard/repair
+            # context. These bounded entries never enter the ordinary memo.
+            if state['partial_sources'].get((context, key)):
+                state['memo'][key] = True
+                state['local_only'].add(key)
+                state['guard_contexts'][key] = context
         if key in state['memo']:
             if key in state['refused'] or key in state['local_only'] and not pm_read_cache.is_guarded():
                 pm_read_cache.refuse()

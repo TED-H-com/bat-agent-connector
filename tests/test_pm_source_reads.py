@@ -42,6 +42,35 @@ def test_only_one_synchronous_snapshot_reuses_original_decision(db):
     assert len(calls) == 2
 
 
+def test_nested_guards_reuse_only_their_own_completed_source_proof(db):
+    calls, changes = [], db.total_changes
+    with reads.scope(db, OWNER):
+        with pm_read_cache.guarded():
+            assert decision(db, calls=calls)
+            with pm_read_cache.guarded():
+                assert decision(db, calls=calls)
+            assert decision(db, calls=calls)
+            assert len(calls) == 2
+        with pm_read_cache.guarded():
+            assert decision(db, calls=calls)
+            assert len(calls) == 3  # A new guard cannot borrow the old proof.
+        assert decision(db, calls=calls)
+        assert len(calls) == 4  # No partial proof becomes ordinary authority.
+    assert db.total_changes == changes
+
+
+def test_distinct_guard_contexts_keep_the_original_source_node_bound(db, monkeypatch):
+    monkeypatch.setattr(reads, 'MAX_NODES', 4)
+    calls = []
+    with reads.scope(db, OWNER):
+        for _ in range(4):
+            with pm_read_cache.guarded():
+                assert decision(db, calls=calls)
+        with pm_read_cache.guarded():
+            assert not decision(db, calls=calls)
+        assert len(calls) == 4
+
+
 def test_step_snapshot_reuses_completed_source_across_independent_readers(db):
     from bat_agent_connector.pm_release_baselines import _snapshot
     calls = []

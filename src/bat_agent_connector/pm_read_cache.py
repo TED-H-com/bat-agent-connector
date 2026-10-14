@@ -112,8 +112,9 @@ def guarded():
 
     Answers computed inside a guard can assume that an in-progress back edge is
     visible, or refuse because a traversal budget ran out. Neither is the
-    request-wide answer, so nothing loaded while any guard is active is stored.
-    Entries stored outside every guard may still be served.
+    request-wide answer, so visibility loaded while a guard is active is not
+    stored. Explicitly independent raw metadata is exempt. Entries stored
+    outside every guard may still be served.
     """
     token = _GUARDS.set(_GUARDS.get() + 1)
     identity = _GUARD_TOKEN.set(object())
@@ -244,3 +245,15 @@ def operation_row(db, operation_id):
     """
     row = db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
     return dict(row) if row is not None else None
+
+
+@memoized(guard_independent=True, freeze=json_snapshot, thaw=json.loads)
+def operation(db, operation_id):
+    """Decode canonical JSON columns once; return an isolated raw record.
+
+    This supplies no visibility grant. Domain readers still authorize the
+    record, and mutations disable both the raw-row and decoded-record memos.
+    """
+    from .operations import OperationService
+    row = operation_row(db, operation_id)
+    return OperationService._decode(row) if row is not None else None

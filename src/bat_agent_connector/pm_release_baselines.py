@@ -107,6 +107,7 @@ def _head(db, wid):
     return {"baseline_id": row[0], "version": row[1]} if row else {"baseline_id": None, "version": 0}
 
 
+@pm_read_cache.memoized(guard_independent=True, freeze=pm_read_cache.json_snapshot, thaw=json.loads)
 def _record(db, wid, bid):
     if not isinstance(bid, str) or not BASELINE.fullmatch(bid):
         raise _bad("Release baseline not found", "PM_BASELINE_NOT_FOUND", 404)

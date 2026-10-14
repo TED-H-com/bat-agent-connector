@@ -8,7 +8,7 @@ import time
 from . import pm_evidence, pm_plans, pm_sprints, pm_workspace, work_items
 from . import pm_quality_sources as sources
 from . import pm_release_baselines as snapshots
-from .operations import ActionDef, OperationError, OperationService
+from .operations import ActionDef, OperationError
 from .pm_work_batch_evidence import digest
 
 CREATE = 'pm.quality.review.create'
@@ -86,10 +86,10 @@ def _member(ops, principal, wid, *, write=False, decide=False):
 
 def _op(ops, oid):
     from . import pm_read_cache
-    row = pm_read_cache.operation_row(ops.db, oid)
-    if not row:
+    operation = pm_read_cache.operation(ops.db, oid)
+    if operation is None:
         raise sources.bad('Original quality operation is unavailable', 'NOT_FOUND', 404)
-    return OperationService._decode(row)
+    return operation
 
 
 def _review(ops, wid, rid):

@@ -23,7 +23,7 @@ from . import (
     pm_worktree,
 )
 from .errors import ResourceReadOnly
-from .operations import RERUN, ActionDef, Cancelled, OperationError, OperationService, StepFailed, Uncertain
+from .operations import RERUN, ActionDef, Cancelled, OperationError, StepFailed, Uncertain
 from .pm_release_baselines import _snapshot_read
 
 ACTION = "pm.spec.materialize"
@@ -95,8 +95,7 @@ def _source_visible(db, principal, operation):
         # Read surfaces can pass only the operation identity/action/target.
         # Admission evidence always comes from the canonical record, never a
         # caller's projection, even when its action already matches.
-        row = pm_read_cache.operation_row(db, operation.get("operation_id"))
-        operation = OperationService._decode(row) if row else {}
+        operation = pm_read_cache.operation(db, operation.get("operation_id")) or {}
         if operation.get("action") != ACTION:
             return False
         fixed = operation["external_refs"]["admission_binding"]["pm_spec_materialization"]

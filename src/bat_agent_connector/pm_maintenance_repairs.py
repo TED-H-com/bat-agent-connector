@@ -14,7 +14,7 @@ from . import pm_maintenance_policy as policies
 from . import pm_maintenance_repair_rules as rules
 from . import pm_release_baselines as baselines
 from . import pm_workload as workload
-from .operations import ActionDef, OperationError, OperationService, Wait
+from .operations import ActionDef, OperationError, Wait
 
 ACTION = 'pm.maintenance.repair'
 RECORD = 'pm.maintenance.repair.evidence.record'
@@ -97,10 +97,10 @@ def _bounded(value):
 
 
 def _operation(ops, oid):
-    row = pm_read_cache.operation_row(ops.db, oid)
-    if not row:
+    operation = pm_read_cache.operation(ops.db, oid)
+    if operation is None:
         raise _bad('NOT_FOUND', 'Original repair operation unavailable', 404)
-    return OperationService._decode(row)
+    return operation
 
 
 def _intent(op):

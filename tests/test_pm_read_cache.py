@@ -435,9 +435,11 @@ def test_raw_lineage_metadata_reuses_under_guard_and_invalidates_on_write(db):
         with _snapshot(db), pm_read_cache.scope(db, OWNER), pm_read_cache.guarded():
             first = pm_read_cache.operation_row(db, 'source')
             assert first['params'] == '{}'  # Raw columns, not a parsed permission/document.
-            assert pm_source_lineage.roots(db, 'operation', 'source') == {'original-one'}
+            roots = pm_source_lineage.roots(db, 'operation', 'source')
+            assert roots == {'original-one'}
             count = len(selects)
             first['params'] = 'caller mutation'
+            roots.add('caller-supplied-source')
             assert pm_read_cache.operation_row(db, 'source')['params'] == '{}'
             assert pm_source_lineage.roots(db, 'operation', 'source') == {'original-one'}
             assert len(selects) == count
@@ -447,6 +449,74 @@ def test_raw_lineage_metadata_reuses_under_guard_and_invalidates_on_write(db):
             # Restore valid JSON without reviving any pre-write metadata memo.
             db.execute("UPDATE operations SET params='{}'")
             assert pm_source_lineage.roots(db, 'operation', 'source') == {'original-one', 'original-two'}
+            assert pm_read_cache._CURRENT.get().scope.values == {}
+    finally:
+        db.set_trace_callback(None)
+
+
+def test_canonical_operation_decodes_once_and_isolates_nested_caller_changes(db, monkeypatch):
+    from bat_agent_connector.operations import OperationService
+
+    db.row_factory = sqlite3.Row
+    db.execute('''CREATE TABLE operations (operation_id TEXT,action TEXT,target TEXT,params TEXT,
+        preconditions TEXT,result TEXT,external_refs TEXT,cancel_requested INTEGER,idem_key TEXT,request_hash TEXT)''')
+    db.execute('INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?,?)', (
+        'source', 'ordinary', '{}', '{"items":[{"value":"original"}]}', '{}',
+        '{"receipt":{"key":"original-key"}}', '{"binding":{"sources":["original-source"]}}', 0, 'original-key', 'hash'))
+    decode, calls = OperationService._decode, []
+    def counted(row):
+        calls.append(row['operation_id'])
+        return decode(row)
+    monkeypatch.setattr(OperationService, '_decode', staticmethod(counted))
+    changes = db.total_changes
+    with _snapshot(db), pm_read_cache.scope(db, OWNER), pm_read_cache.guarded():
+        first = pm_read_cache.operation(db, 'source')
+        expected = decode(pm_read_cache.operation_row(db, 'source'))
+        first['params']['items'][0]['value'] = 'caller change'
+        first['result']['receipt']['key'] = 'replacement-key'
+        first['external_refs']['binding']['sources'].append('caller source')
+        assert pm_read_cache.operation(db, 'source') == expected
+        assert calls == ['source'] and db.total_changes == changes
+        db.execute('UPDATE operations SET params=?', ('{"items":[{"value":"changed"}]}',))
+        current = pm_read_cache.operation(db, 'source')
+        assert current['params']['items'][0]['value'] == 'changed'
+        assert current['idempotency_key'] == 'original-key'
+        assert calls == ['source', 'source']
+        assert pm_read_cache._CURRENT.get().scope.values == {}
+
+
+@pytest.mark.parametrize('kind', ['baseline', 'policy'])
+def test_fixed_maintenance_metadata_reuses_only_verified_isolated_records(db, kind):
+    from bat_agent_connector import pm_maintenance_policy, pm_release_baselines
+
+    db.row_factory = sqlite3.Row
+    if kind == 'baseline':
+        module, table, id_key, identity = pm_release_baselines, 'pm_release_baselines', 'baseline_id', 'pmrb_' + '1' * 32
+        document = {'workspace_id': 'workspace', 'operation_id': 'operation', 'baseline_id': identity,
+            'version': 1, 'previous_baseline_id': None}
+        code = 'PM_BASELINE_CORRUPT'
+    else:
+        module, table, id_key, identity = pm_maintenance_policy, 'pm_maintenance_policies', 'policy_id', 'pmmp_' + '1' * 32
+        document = {'workspace_id': 'workspace', 'operation_id': 'operation', 'policy_id': identity,
+            'revision': 1, 'previous_policy_id': None, 'baseline_id': 'pmrb_' + '1' * 32}
+        code = 'PM_MAINTENANCE_POLICY_CORRUPT'
+    columns = tuple(document)
+    document['source'] = {'ids': ['original']}
+    db.execute(f'CREATE TABLE {table} ({",".join(columns)},document TEXT,document_digest TEXT)')
+    db.execute(f'INSERT INTO {table} VALUES ({",".join("?" for _ in range(len(columns) + 2))})',
+        tuple(document[key] for key in columns) + (json.dumps(document), pm_release_baselines.sources.digest(document)))
+    selects, changes = [], db.total_changes
+    db.set_trace_callback(lambda sql: selects.append(sql) if sql.startswith('SELECT * FROM ' + table) else None)
+    try:
+        with _snapshot(db), pm_read_cache.scope(db, OWNER), pm_read_cache.guarded():
+            first = module._record(db, 'workspace', identity)
+            first['document']['source']['ids'].append('caller change')
+            assert module._record(db, 'workspace', identity)['document'] == document
+            assert len(selects) == 1 and db.total_changes == changes
+            db.execute(f'UPDATE {table} SET document=? WHERE {id_key}=?', ('{}', identity))
+            with pytest.raises(OperationError) as corrupt:
+                module._record(db, 'workspace', identity)
+            assert corrupt.value.code == code
             assert pm_read_cache._CURRENT.get().scope.values == {}
     finally:
         db.set_trace_callback(None)

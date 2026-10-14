@@ -134,7 +134,10 @@ every invocation; no provider result or budget survives across that boundary.
 Raw canonical operation columns, action/table metadata and complete immutable
 lineage roots may be reused even inside a traversal guard: none depends on a
 partial source grant. Callers still decode and authorize the original records;
-parsed source documents and live/effect decisions are not stored by these readers.
+live/effect decisions are not stored by these raw readers. Canonical operation
+JSON and raw plan metadata use immutable saved envelopes with fresh parsed copies;
+they grant no access, and callers still prove the original sources. Complete
+lineage sets and source-ID lists use immutable containers and fresh mutable copies.
 Existing authorized evidence/snapshot projections use immutable JSON envelopes
 in the read memo and parse a fresh copy for each caller. Raw SQLite scalar
 columns need only a copied envelope. These copy strategies preserve unknown
@@ -144,6 +147,9 @@ Completed operation visibility can return from the existing read memo without
 opening another source savepoint. It first validates any borrowed source scope,
 including loop-turn, owner, mutation and nested-scope depth checks. Active
 guards and repair traversals still enter their original bounded source reader.
+Nested guards retain earlier positive source proofs only for the exact live
+guard token and active repair set, within the existing node bound. These entries
+never enter the ordinary memo; refusals, writes and closing the read prevent reuse.
 The original execution-verifier visibility reader also reuses only a completed
 boolean for its canonical saved operation ID within that same scope. It has its
 own 64-node depth allowance so verifier wrappers do not shorten supported root

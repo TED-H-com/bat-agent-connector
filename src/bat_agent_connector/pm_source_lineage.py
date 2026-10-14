@@ -13,7 +13,7 @@ from contextvars import ContextVar
 from functools import wraps
 
 from . import pm_read_cache
-from .operations import OperationError, OperationService
+from .operations import OperationError
 
 MAX_ROOTS = 64
 _EXECUTION = ContextVar("pm_source_execution", default=None)
@@ -63,7 +63,7 @@ def roots(db, kind, identity, *, _seen=None):
     return _root_read(db, kind, identity)
 
 
-@pm_read_cache.memoized(guard_independent=True)
+@pm_read_cache.memoized(guard_independent=True, freeze=frozenset, thaw=set)
 def _root_read(db, kind, identity):
     return _roots_collect(db, kind, identity)
 
@@ -225,10 +225,9 @@ def visible_roots(db, principal, original_ids):
 def _visible_roots(db, principal, original_ids):
     from .pm_package_handoff import source_visible
     for original_id in original_ids:
-        row = pm_read_cache.operation_row(db, original_id)
-        if row is None:
+        operation = pm_read_cache.operation(db, original_id)
+        if operation is None:
             return False
-        operation = OperationService._decode(row)
         if operation['action'] == 'pm.input.record' and (operation.get('external_refs') or {}).get('admission_binding', {}).get('pm_review_candidate'):
             from .pm_review_candidate_sources import operation_visible as candidate_visible
             if not candidate_visible(db, principal, operation):
