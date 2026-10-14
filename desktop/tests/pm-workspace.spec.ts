@@ -98,7 +98,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     await expect(page.locator('.pm-notes')).toContainText('Keep literal <script>notes</script>');
     await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('');
     await page.reload();await expect(page.locator('.pm-notes')).toContainText('Keep literal <script>notes</script>');
-    await expect(page.getByText('PM agent not connected',{exact:true})).toBeVisible();
+    await expect(page.getByText('Messages are saved. The PM is not connected and will not reply.',{exact:true})).toBeVisible();
     await expect(page.locator('.pm-note time').first()).toHaveAttribute('datetime','2026-10-11T12:00:00.000Z');
     expect(f.state.writes.map(input=>input.body.action)).toEqual(['pm.message.append']);
     expect(await page.locator('.pm-notes script').count()).toBe(0);
@@ -116,11 +116,12 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     await expect(form.getByLabel('Source type or saved note',{exact:true})).toHaveValue('repository');
     await form.getByRole('button',{name:'Save input',exact:true}).click();
     await expect(page.locator('.pm-facts')).toContainText('example/library:src/home.js');
-    await expect(page.locator('.pm-facts')).toContainText('Not independently verified');
+    const caveat = page.locator('[data-pm-information] > details.ui-disclosure').filter({hasText:'Not independently verified'});
+    await caveat.locator(':scope > summary').click(); await expect(caveat).toContainText('Not independently verified');
     await openThreadTab(page,'inputs');await page.locator(`[data-input-id="${inputA}"] input[type=checkbox]`).check();
-    await openThreadTab(page,'plan');const plan=action(page,'pm.thread.plan');await plan.getByLabel('Why this direction',{exact:true}).fill('Keep the first action visible; compare the tour later.');
+    await openThreadTab(page,'plan');await page.locator('[data-pm-plan] > summary').click();const plan=action(page,'pm.thread.plan');await plan.getByLabel('Why this direction',{exact:true}).fill('Keep the first action visible; compare the tour later.');
     await page.reload();await expect(page.locator(`[data-input-id="${inputA}"] input[type=checkbox]`)).toBeChecked();
-    await openThreadTab(page,'plan');await plan.getByRole('button',{name:'Save Planning draft',exact:true}).click();
+    await openThreadTab(page,'plan');if(!await page.locator('[data-pm-plan]').evaluate(node=>(node as HTMLDetailsElement).open))await page.locator('[data-pm-plan] > summary').click();await plan.getByRole('button',{name:'Save Planning draft',exact:true}).click();
     await expect(page.locator('.pm-draft')).toContainText('Keep the first useful action visible');
     await expect(page.locator('.pm-draft')).toContainText('Offer a guided tour as another option');
     await expect(page.locator('.pm-draft')).toContainText('Requirements have not been adopted');
@@ -172,11 +173,11 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   });
   test('a lost Planning receipt remains recoverable after the mode already changed',async({page})=>{
     const f=pmFixture();f.state.lost=true;await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
-    await openThreadTab(page,'inputs');await page.locator(`[data-input-id="${inputA}"] input[type=checkbox]`).check();await openThreadTab(page,'plan');const plan=action(page,'pm.thread.plan');
+    await openThreadTab(page,'inputs');await page.locator(`[data-input-id="${inputA}"] input[type=checkbox]`).check();await openThreadTab(page,'plan');await page.locator('[data-pm-plan] > summary').click();const plan=action(page,'pm.thread.plan');
     await plan.getByLabel('Why this direction',{exact:true}).fill('Keep one reviewed direction');
-    await openThreadTab(page,'plan');await plan.getByRole('button',{name:'Save Planning draft',exact:true}).click();await expect(plan).toContainText('Reply unavailable');
+    await openThreadTab(page,'plan');if(!await page.locator('[data-pm-plan]').evaluate(node=>(node as HTMLDetailsElement).open))await page.locator('[data-pm-plan] > summary').click();await plan.getByRole('button',{name:'Save Planning draft',exact:true}).click();await expect(plan).toContainText('Reply unavailable');
     await page.reload();await openThreadTab(page,'plan');await expect(page.locator('.pm-draft')).toContainText('Keep one reviewed direction');
-    await openThreadTab(page,'plan');await plan.getByRole('button',{name:'Check original request',exact:true}).click();
+    await openThreadTab(page,'plan');if(!await page.locator('[data-pm-plan]').evaluate(node=>(node as HTMLDetailsElement).open))await page.locator('[data-pm-plan] > summary').click();await plan.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect(plan).toBeHidden();expect(f.state.ops.size).toBe(1);expect(f.state.writes).toHaveLength(2);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
@@ -195,7 +196,7 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const note=action(page,'pm.message.append');
     const field=note.getByLabel('Message the PM…',{exact:true});await field.fill('An unfinished comparison');
     await openThreadTab(page,'inputs');await page.locator(`[data-input-id="${inputB}"] input[type=checkbox]`).check();
-    await openThreadTab(page,'inputs');await page.locator(`[data-input-id="${inputB}"] summary`).click();const confirm=action(page,'pm.input.confirm');
+    await openThreadTab(page,'inputs');await page.locator(`[data-input-id="${inputB}"] details:has([data-pm-action="pm.input.confirm"]) > summary`).click();const confirm=action(page,'pm.input.confirm');
     await confirm.getByLabel('Why this statement is confirmed',{exact:true}).fill('Reviewed with the responsible person');
     await confirm.getByRole('button',{name:'Confirm statement',exact:true}).click();
     await expect(page.locator('[data-input-id="pmi_'+ 'c'.repeat(32)+'"]')).toContainText('User confirmed');

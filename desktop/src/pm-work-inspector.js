@@ -8,6 +8,13 @@ import {sessionHref} from './session-navigation.js';
 import {qualityFact} from './pm-quality-projections.js';
 
 export const workStatus = card => ({backlog: 'not_started', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
+// Content approval is a management fact, not proof of delivery or passing DoD.
+export const workStatusLabel = (t, card) => card?.column === 'accepted' ? t('wv_content_approved') : t('ui_status_' + workStatus(card));
+export function workStatusPill(t, card) {
+  const pill = statusPill(workStatus(card));
+  pill.textContent = workStatusLabel(t, card);
+  return pill;
+}
 export const blockedWork = card => card?.flow?.blocked === true || card?.execution?.tasks?.some(task => task.state === 'blocked') === true;
 export const blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason)
   : blockedWork(card) ? t('wv_task_blocked') : t('wv_blocker_unknown');
@@ -162,7 +169,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     if (from === 'requirements' && card) state.append(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(card.work_item_id)}`}, t('wv_show_board')));
     if (data.milestones) served.append(paragraph(t('wv_milestone'), ' · ', joinLabel(data.milestones.map(row => row.title)) || t('wv_no_milestone')));
     if (card) {
-      state.append(h('div', {class: 'pm-work-inline'}, statusPill(workStatus(card)),
+      state.append(h('div', {class: 'pm-work-inline'}, workStatusPill(t, card),
         ...workAgents(source).map(agentMark)), paragraph(t('wv_owner'), ' · ', labelSegment(card.assignment?.actor) ||
           (card.assignment?.reason === 'creator_is_not_assignee' ? t('wv_not_recorded') : reasonLabel(t, card.assignment?.reason))));
       for (const session of source.sessions || []) state.append(paragraph(h('a', {
@@ -213,7 +220,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
         h('ul', {}, ...(requirement.acceptance || []).map(item => h('li', {}, labelSegment(item.text), ' ',
           criterionPill(item)))));
       state.dataset.workSection = 'work'; state.querySelector('h3').textContent = t('wv_bound_work');
-      for (const work of data.work || []) state.append(paragraph(button({variant: 'ghost', label: work.work.title, onClick: () => data.onWork?.(work.work_item_id)}), ' ', statusPill(workStatus(work))));
+      for (const work of data.work || []) state.append(paragraph(button({variant: 'ghost', label: work.work.title, onClick: () => data.onWork?.(work.work_item_id)}), ' ', workStatusPill(t, work)));
       if (!data.work?.length) state.append(paragraph(t(data.workIncomplete ? 'wv_work_unknown' : 'wb_no_work')));
       if (data.workIncomplete) state.append(statusPill('partial'));
       for (const row of data.milestones || []) state.append(paragraph(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}`}, row.title)));

@@ -1,6 +1,6 @@
-import {timeStamp} from './ui/stamps.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {searchField, discussLink, dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {button, searchField, contextChip, discussLink, dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {statusVocabulary, reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
@@ -9,10 +9,21 @@ import {locale} from './i18n.js';
 import {acceptedFinding, findingName, findingSeverity} from './ui/finding-name.js';
 
 // Read-only projection. Row ids and cursors are opaque: pass them through unchanged.
-// Age bars are informational. The register API has no age filter.
+// The register API filters one raw status. Age, week and multi-status groups filter loaded rows.
 const TYPES = ['risk', 'issue', 'action', 'change', 'decision'];
 const ROW_ID = /^(?:governance|finding|repair|follow_up|proposal|issue_mapping|meeting|plan_revision)\.[A-Za-z0-9._-]{1,180}$/;
-const STATUSES = ['open', 'monitoring', 'observed_open', 'blocked', 'tracking', 'needs_review', 'proposed', 'in_progress', 'draft', 'reported_resolved', 'reported_done', 'adopted', 'rejected', 'cancelled', 'succeeded', 'failed', 'running', 'uncertain', 'needs_attention', 'waiting_checks', 'waiting_external', 'accepted', 'format_valid', 'recorded_discussion_decision', 'continue_maintenance', 'bounded_repair_proposal', 'adopted_direction'];
+const STATUS_GROUPS = [
+  ['open', ['open', 'monitoring', 'observed_open', 'tracking']],
+  ['in_progress', ['in_progress', 'running', 'accepted', 'continue_maintenance']],
+  ['blocked', ['blocked']],
+  ['waiting', ['waiting', 'waiting_checks', 'waiting_external']],
+  ['in_review', ['in_review', 'needs_review', 'proposed', 'uncertain', 'needs_attention', 'format_valid', 'bounded_repair_proposal']],
+  ['done', ['done', 'reported_resolved', 'reported_done', 'succeeded', 'adopted', 'adopted_direction', 'recorded_discussion_decision']],
+  ['closed', ['closed', 'rejected', 'cancelled', 'failed']],
+  ['draft', ['draft']],
+];
+const STATUS_GROUP = Object.fromEntries(STATUS_GROUPS.flatMap(([group, values]) => values.map(status => [status, group])));
+const GROUP_IDS = [...STATUS_GROUPS.map(([group]) => group), 'other'];
 const TYPE_ICON = {risk: 'circle-alert', issue: 'inbox', action: 'check', change: 'refresh-cw', decision: 'list-checks'};
 const ACTION_KEYS = {
   'pm.maintenance.repair': 'reg_action_repair',
@@ -26,7 +37,7 @@ const ACTION_KEYS = {
   'pm.maintenance_review.follow_up.record': 'reg_action_follow',
 };
 const AGE_KEYS = {'0-7d': 'reg_age_0_7', '8-30d': 'reg_age_8_30', '31-90d': 'reg_age_31_90', '90d+': 'reg_age_90'};
-const TONES = {open: 'info', monitoring: 'info', observed_open: 'info', tracking: 'info', failed: 'bad', proposed: 'review', needs_review: 'review', succeeded: 'ok', running: 'info', uncertain: 'review', needs_attention: 'review', waiting_checks: 'info', waiting_external: 'info', accepted: 'info', format_valid: 'review', recorded_discussion_decision: 'info', continue_maintenance: 'info', bounded_repair_proposal: 'review', adopted_direction: 'ok'};
+const GROUP_TONE = {open: 'info', closed: 'neutral', other: 'neutral'};
 const REPO = /^[\w.-]+\/[\w.-]+$/;
 const DEPTH_PAGES = 20;
 
@@ -37,10 +48,12 @@ const day = value => timeStamp(value, {dateOnly:true, empty:''});
 
 export function workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {}, nameFor = () => ''}) {
   const preference = viewState(namespace, workspaceId, 'issues');
-  let serial = 0, detailSerial = 0, active = false, busy = false, rows = [], nextCursor = null, coverage = null, totals = null, summary = null;
-  let trail = null, trailAgain = false, trailQuery = '';
+  let serial = 0, detailSerial = 0, active = false, busy = false, rows = [], nextCursor = null, coverage = null, totals = null, summary = null, asOf = null;
+  let trail = null, trailAgain = false, trailQuery = '', appliedQuery = '';
   let loaded = false, unavailable = false, failed = null, selected = preference.selected || null;
   let typeValue = TYPES.includes(preference.type) ? preference.type : '';
+  let ageValue = Object.hasOwn(AGE_KEYS, preference.age) ? preference.age : '';
+  let weekValue = /^\d{4}-\d{2}-\d{2}$/.test(preference.week || '') ? preference.week : '';
   let debounce = null, sheet = null, retainSheet = false, opening = false;
   const statusLine = h('div', {class: 'reg-status', role: 'status'});
   const summaryHost = h('div', {class: 'reg-summary', 'data-reg-summary': ''});
@@ -48,44 +61,72 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     h('summary', {}, icon('chevron-right'), t('reg_trends')), summaryHost);
   const tableHost = h('div', {'data-reg-table': ''});
   const footer = h('div', {class: 'reg-footer', 'data-reg-footer': '', hidden: true});
-  const statusSelect = h('select', {'data-reg-status': '', 'aria-label': t('reg_filter_status'), onchange: () => reloadNow()},
+  const statusSelect = h('select', {'data-reg-status': '', 'aria-label': t('reg_filter_status'), onchange: () => onStatus()},
     h('option', {value: ''}, t('reg_any_status')),
-    ...STATUSES.map(status => h('option', {value: status}, statusLabel(status))));
+    ...STATUS_GROUPS.map(([group]) => h('option', {value: group}, groupLabel(group))),
+    h('option', {value: 'other'}, t('reg_group_other')));
+  const ageSelect = h('select', {'data-reg-age-filter': '', 'aria-label': t('reg_filter_age'), onchange: () => setAge(ageSelect.value, false)},
+    h('option', {value: ''}, t('reg_any_age')),
+    ...Object.entries(AGE_KEYS).map(([bucket, key]) => h('option', {value: bucket}, t(key))));
   const ownerListId = `reg-owners-${workspaceId.replace(/[^\w-]/g, '')}`;
   const ownerList = h('datalist', {id: ownerListId});
   const ownerInput = h('input', {type: 'text', class: 'reg-owner', role: 'combobox', 'aria-autocomplete': 'list', 'data-reg-owner': '',
     list: ownerListId, 'aria-label': t('reg_filter_owner'), placeholder: t('reg_filter_owner'), autocomplete: 'off', maxlength: '200', oninput: queueReload});
   const searchInput = h('input', {type: 'search', 'data-reg-search': '', 'aria-label': t('reg_filter_search'), placeholder: t('reg_filter_search'), maxlength: '200', oninput: queueReload});
-  statusSelect.value = STATUSES.includes(preference.status) ? preference.status : '';
+  statusSelect.value = savedGroup(preference.status);
+  ageSelect.value = ageValue;
   ownerInput.value = preference.owner || '';
   searchInput.value = preference.q || '';
   const typeControl = segmented({label: t('reg_col_type'), value: typeValue, onChange: value => {typeValue = value || ''; reloadNow();},
     options: [{value: '', label: t('reg_all')}, ...TYPES.map(type => ({value: type, label: t('reg_type_' + type)}))]});
   [...typeControl.querySelectorAll('button')].forEach((node, index) => node.setAttribute('data-reg-type', index ? TYPES[index - 1] : ''));
   const filters = h('div', {class: 'reg-toolbar'}, typeControl,
-    h('div', {class: 'reg-toolbar-filters'}, statusSelect, ownerInput, ownerList,
+    h('div', {class: 'reg-toolbar-filters'}, statusSelect, ownerInput, ownerList, ageSelect,
       searchField(searchInput, {class:'reg-search'})));
-  const mainCol = h('div', {class: 'reg-main'}, filters, trends, statusLine, tableHost, footer);
+  const chipHost = h('div', {class: 'reg-filter-chips', 'data-reg-filters': '', hidden: true});
+  const mainCol = h('div', {class: 'reg-main'}, filters, chipHost, trends, statusLine, tableHost, footer);
   const layout = h('div', {class: 'reg-layout'}, mainCol);
   const element = h('section', {'data-pm-register': ''}, layout);
   const wideQuery = matchMedia('(min-width: 801px)');
   function onWide() {trends.open = wideQuery.matches; paintTable();}
   wideQuery.addEventListener('change', onWide);
   trends.open = wideQuery.matches;
-  function vocabularyStatus(status) {
-    // Operation "accepted" means accepted for processing, not the vocabulary's inspected result.
-    return status !== 'accepted' && Object.hasOwn(statusVocabulary, status);
+  function savedGroup(value) {
+    if (GROUP_IDS.includes(value)) return value;
+    return (Object.hasOwn(STATUS_GROUP, value) ? STATUS_GROUP[value] : '') || (labelSegment(value) ? 'other' : '');
   }
-  function statusKnown(status) {return vocabularyStatus(status) || Boolean(known(t, 'reg_status_' + status));}
-  function statusLabel(status) {
-    if (vocabularyStatus(status)) return t('ui_status_' + status);
-    return known(t, 'reg_status_' + status) || t('ui_reason_generic');
+  function groupOf(status) {
+    if (!labelSegment(status)) return 'unknown';
+    return Object.hasOwn(STATUS_GROUP, status) ? STATUS_GROUP[status] : 'other';
+  }
+  function apiStatus(group) {
+    const found = STATUS_GROUPS.find(([key]) => key === group);
+    return found && found[1].length === 1 ? found[1][0] : '';
+  }
+  function groupLabel(group) {
+    if (group === 'open') return t('reg_group_open');
+    if (group === 'closed') return t('reg_group_closed');
+    if (group === 'other') return t('reg_group_other');
+    if (Object.hasOwn(statusVocabulary, group)) return t('ui_status_' + group);
+    return t('ui_status_unknown');
+  }
+  function statusKnown(status) {
+    if (!labelSegment(status)) return true;
+    return Object.hasOwn(STATUS_GROUP, status);
   }
   function statusNode(status) {
     if (!labelSegment(status)) return statusPill('unknown');
-    if (vocabularyStatus(status)) return statusPill(status);
-    const label = known(t, 'reg_status_' + status);
-    return h('span', {class: `ui-pill tone-${TONES[status] || 'neutral'}`}, label || t('ui_reason_generic'));
+    const group = groupOf(status);
+    const label = known(t, 'reg_status_' + status) || known(t, 'ui_status_' + status) || groupLabel(group);
+    const pill = Object.hasOwn(statusVocabulary, group) ? statusPill(group)
+      : h('span', {class: `ui-pill tone-${GROUP_TONE[group] || 'neutral'}`, 'data-status': group});
+    pill.textContent = label; pill.dataset.recordStatus = status; pill.title = label;
+    return pill;
+  }
+  function preciseStatus(status) {
+    if (!labelSegment(status)) return '';
+    const precise = known(t, 'reg_status_' + status);
+    return precise && precise !== groupLabel(groupOf(status)) ? precise : '';
   }
   function kindLabel(kind) {return known(t, 'reg_kind_' + kind) || t('ui_reason_generic');}
   function stepLabel(step) {return known(t, 'reg_step_' + step) || t('ui_reason_generic');}
@@ -95,51 +136,114 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     preference.status = statusSelect.value;
     preference.owner = ownerInput.value;
     preference.q = searchInput.value;
+    preference.age = ageValue;
+    preference.week = weekValue;
   }
   function resetPage() {
-    rows = []; nextCursor = null; summary = null; totals = null; coverage = null; loaded = false; failed = null; unavailable = false;
+    rows = []; nextCursor = null; summary = null; totals = null; coverage = null; asOf = null; loaded = false; failed = null; unavailable = false;
     selected = null; preference.inspector = false; closeSheet(false); render();
   }
   function queueReload() {readFilters(); clearTimeout(debounce); debounce = setTimeout(() => {debounce = null; resetPage(); void refresh();}, 200);}
   function reloadNow() {readFilters(); clearTimeout(debounce); debounce = null; resetPage(); void refresh();}
+  function onStatus() {
+    const next = String(pageQuery());
+    readFilters();
+    if (next === appliedQuery) render();
+    else reloadNow();
+  }
+  function setAge(bucket, toggle = true) {
+    const next = Object.hasOwn(AGE_KEYS, bucket) ? bucket : '';
+    ageValue = toggle && ageValue === next ? '' : next;
+    ageSelect.value = ageValue;
+    readFilters();
+    render();
+  }
+  function setWeek(week) {
+    weekValue = weekValue === week ? '' : week;
+    readFilters();
+    render();
+  }
+  function clientFiltered() {
+    const group = statusSelect.value;
+    return Boolean(ageValue || weekValue || group === 'other' || (group && !apiStatus(group)));
+  }
+  function filtersActive() {return Boolean(typeValue || statusSelect.value || ownerInput.value.trim() || searchInput.value.trim() || ageValue || weekValue);}
+  function clearFilters() {
+    typeValue = ''; typeControl.setValue(''); statusSelect.value = '';
+    ownerInput.value = ''; searchInput.value = ''; ageValue = ''; ageSelect.value = ''; weekValue = '';
+    searchInput.focus(); reloadNow();
+  }
+  function catalogueComplete() {return coverage?.complete === true && !nextCursor;}
+  function ageBucket(row) {
+    if (!Array.isArray(coverage?.open_statuses) || !coverage.open_statuses.includes(row?.status)) return null;
+    if (!labelSegment(asOf) || !labelSegment(row?.created_at)) return null;
+    const created = Date.parse(row.created_at), origin = Date.parse(asOf);
+    if (!Number.isFinite(created) || !Number.isFinite(origin)) return null;
+    const days = (origin - created) / 86400000;
+    if (days < 0) return null;
+    if (days < 8) return '0-7d';
+    if (days < 31) return '8-30d';
+    if (days < 91) return '31-90d';
+    return '90d+';
+  }
+  function weekOf(row) {
+    if (!labelSegment(row?.created_at)) return null;
+    const created = Date.parse(row.created_at);
+    if (!Number.isFinite(created)) return null;
+    const date = new Date(created);
+    const monday = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    return new Date(monday).toISOString().slice(0, 10);
+  }
+  function visibleRows() {
+    const group = statusSelect.value;
+    return rows.filter(row => {
+      if (group === 'other') {if (labelSegment(row.status) && Object.hasOwn(STATUS_GROUP, row.status)) return false;}
+      else if (group && !apiStatus(group) && groupOf(row.status) !== group) return false;
+      if (ageValue && ageBucket(row) !== ageValue) return false;
+      if (weekValue && weekOf(row) !== weekValue) return false;
+      return true;
+    });
+  }
   function publishMeta() {
     if (!active || unavailable || failed || !loaded) {onMeta(null); return;}
-    if (typeValue && coverage?.complete === true) {
-      const count = totals && finite(totals[typeValue]) ? totals[typeValue] : rows.length;
-      onMeta(t('reg_matching', {n: count}));
+    const count = visibleRows().length;
+    if (!count) {onMeta(t('reg_none_shown')); return;}
+    if (clientFiltered()) {
+      onMeta(catalogueComplete() ? t('reg_matching', {n: count}) : t('reg_shown', {n: count}));
+      return;
+    }
+    if (typeValue && coverage?.complete === true && totals && finite(totals[typeValue])) {
+      onMeta(t('reg_matching', {n: totals[typeValue]}));
       return;
     }
     if (coverage?.complete === true && totals && typeof totals === 'object') {
-      const line = joinLabel(TYPES.map(type => finite(totals[type]) ? `${t('reg_type_' + type)} ${totals[type]}` : ''));
-      onMeta(line || (rows.length ? t('reg_shown', {n: rows.length}) : t('reg_none_shown')));
+      const line = joinLabel(TYPES.map(type => finite(totals[type]) && totals[type] > 0 ? `${t('reg_type_' + type)} ${totals[type]}` : ''));
+      onMeta(line ? joinLabel([line, nextCursor ? t('reg_shown', {n: rows.length}) : '']) : (rows.length ? t('reg_shown', {n: rows.length}) : t('reg_none_shown')));
       return;
     }
     onMeta(rows.length ? t('reg_shown', {n: rows.length}) : t('reg_none_shown'));
   }
-  function shownLine() {
-    const complete = coverage?.complete === true;
-    const sum = complete && totals ? TYPES.reduce((total, type) => total + (finite(totals[type]) ? totals[type] : 0), 0) : null;
-    const show = Boolean(nextCursor) || !complete || (sum != null && sum !== rows.length);
-    return show ? (rows.length ? t('reg_shown', {n: rows.length}) : t('reg_none_shown')) : '';
-  }
-  function bar(label, value, max, attrs) {
+  function bar(label, value, max, attrs, pressed, onClick) {
     const track = h('div', {class: 'reg-bar-track', 'aria-hidden': 'true'}, h('span', {class: 'reg-bar-fill'}));
     const fill = track.firstChild;
     fill.style.width = max > 0 && finite(value) ? `${Math.max(0, Math.min(100, Math.round(value / max * 100)))}%` : '0%';
-    return h('div', {class: 'reg-bar', role: 'img', 'aria-label': t('reg_bar_value', {label, value}), ...attrs},
-      h('span', {class: 'reg-bar-label'}, label), track, h('span', {class: 'reg-bar-value'}, String(value)));
+    const node = button({variant: 'ghost', label: '', class: 'ui-button ghost reg-bar', 'aria-pressed': String(pressed),
+      'aria-label': t('reg_bar_value', {label, value}), onClick, ...attrs});
+    node.append(h('span', {class: 'reg-bar-label'}, label), track, h('span', {class: 'reg-bar-value'}, String(value)));
+    return node;
   }
   function paintSummary() {
     summaryHost.replaceChildren();
-    trends.hidden = summary == null;
-    if (summary == null) return;
+    const emptyMatch = loaded && !failed && !unavailable && filtersActive() && catalogueComplete() && !visibleRows().length;
+    trends.hidden = summary == null || emptyMatch;
+    if (trends.hidden) return;
     const ages = Array.isArray(summary.open_by_age) ? summary.open_by_age : [];
     const maxAge = Math.max(0, ...ages.map(row => finite(row?.count) ? row.count : 0));
     const ageSection = h('section', {}, h('h3', {}, t('reg_open_age')), h('div', {class: 'reg-age-bars'},
-      ...ages.filter(row => AGE_KEYS[row?.bucket] && finite(row.count)).map(row => bar(t(AGE_KEYS[row.bucket]), row.count, maxAge, {'data-reg-age': row.bucket}))));
+      ...ages.filter(row => AGE_KEYS[row?.bucket] && finite(row.count)).map(row => bar(t(AGE_KEYS[row.bucket]), row.count, maxAge, {'data-reg-age': row.bucket}, ageValue === row.bucket, () => setAge(row.bucket)))));
     const unknownAge = finite(summary.open_without_known_age) ? summary.open_without_known_age : coverage?.open_without_known_age;
     if (finite(unknownAge)) ageSection.append(h('p', {class: 'reg-note', 'data-reg-unknown-age': ''}, t('reg_without_age', {n: unknownAge})));
-    const weeks = (Array.isArray(summary.weekly) ? summary.weekly : []).filter(week => labelSegment(week?.week_start) && finite(week.opened) && finite(week.resolved));
+    const weeks = (Array.isArray(summary.weekly) ? summary.weekly : []).filter(week => /^\d{4}-\d{2}-\d{2}$/.test(week?.week_start || '') && timeText(week.week_start, {dateOnly: true}) && finite(week.opened) && finite(week.resolved));
     const maxWeek = Math.max(0, ...weeks.flatMap(row => [row.opened, row.resolved]));
     const chart = h('div', {class: 'reg-chart'});
     for (const week of weeks) {
@@ -147,14 +251,15 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       const resolved = h('span', {class: 'reg-week-resolved'});
       opened.style.height = maxWeek > 0 ? `${Math.round(week.opened / maxWeek * 32)}px` : '0px';
       resolved.style.height = maxWeek > 0 ? `${Math.round(week.resolved / maxWeek * 32)}px` : '0px';
-      chart.append(h('div', {class: 'reg-week', role: 'img', 'aria-label': t('reg_week_value', {week: week.week_start, opened: week.opened, resolved: week.resolved})},
+      chart.append(h('button', {type: 'button', class: 'reg-week', 'data-reg-week': week.week_start, 'aria-pressed': weekValue === week.week_start ? 'true' : 'false',
+        'aria-label': t('reg_week_filter', {week: timeText(week.week_start, {dateOnly: true}), opened: week.opened, resolved: week.resolved}), onclick: () => setWeek(week.week_start)},
         h('div', {class: 'reg-week-bars', 'aria-hidden': 'true'}, opened, resolved)));
     }
     const weekSection = h('section', {}, h('h3', {}, t('reg_weekly')),
       h('div', {class: 'reg-legend'}, h('span', {}, h('span', {class: 'reg-swatch', 'aria-hidden': 'true'}), t('reg_opened')),
         h('span', {}, h('span', {class: 'reg-swatch resolved', 'aria-hidden': 'true'}), t('reg_resolved'))),
       chart);
-    if (weeks.length) weekSection.append(h('div', {class: 'reg-scale'}, h('span', {}, day(weeks[0].week_start)), h('span', {}, day(weeks[weeks.length - 1].week_start))));
+    if (weeks.length) weekSection.append(h('div', {class: 'reg-scale'}, day(weeks[0].week_start), day(weeks[weeks.length - 1].week_start)));
     const reasons = Array.isArray(summary.blocking_reasons) ? summary.blocking_reasons : null;
     const reasonSection = h('section', {'data-reg-reasons': ''}, h('h3', {}, t('reg_blocking')));
     if (reasons && !reasons.length) reasonSection.append(h('p', {class: 'reg-note', 'data-reg-no-reasons': ''}, t('reg_no_reasons')));
@@ -173,15 +278,28 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (blocked > 0) reasonSection.append(h('p', {class: 'reg-note', 'data-reg-blocked': ''}, t('reg_no_reason_recorded', {n: blocked})));
     summaryHost.append(ageSection, weekSection, reasonSection);
   }
+  function sourceNumber(row) {
+    for (const value of [row?.finding?.number, row?.source?.number, row?.number]) if (Number.isSafeInteger(value) && value > 0) return value;
+    return null;
+  }
   function displayTitle(row) {
     const title = labelSegment(row?.title) || labelSegment(row?.statement);
     if (title) return title;
     const finding = row?.source?.kind === 'finding' || String(row?.row_id || '').startsWith('finding.');
-    if (!finding) return [t('reg_type_' + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || t('ui_reason_not_recorded')].filter(Boolean).join(' · ');
-    const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
-    const kind = t('reg_kind_finding');
-    const fallback = qualifier ? `${kind} · ${qualifier}` : kind;
-    return findingName(row?.finding, locale, fallback);
+    if (finding) {
+      const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
+      const kind = t('reg_kind_finding');
+      const fallback = qualifier ? `${kind} · ${qualifier}` : kind;
+      return findingName(row?.finding, locale, fallback);
+    }
+    const named = labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label);
+    if (named) return named;
+    const kind = labelSegment(row?.source?.kind) ? kindLabel(row.source.kind) : '';
+    const number = sourceNumber(row);
+    if (kind && kind !== t('ui_reason_generic') && number) return t('reg_source_name', {kind, n: number});
+    if (kind && kind !== t('ui_reason_generic')) return kind;
+    if (TYPES.includes(row?.type)) return t('reg_type_' + row.type);
+    return t('ui_status_unknown');
   }
   function findingFactPairs(identity) {
     if (!identity) return [];
@@ -249,14 +367,15 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (who) parts.push(h('span', {class: 'reg-list-who'}, who));
     return h('div', {class: 'reg-list-meta'}, ...parts);
   }
-  function paintList(focusKey) {
+  function paintList(focusKey, shown) {
     const controls = [];
     const list = h('div', {class: 'reg-list', role: 'list', tabindex: '-1'});
-    rows.forEach((row, index) => {
+    shown.forEach((row, index) => {
       const current = row.row_id === selected;
+      const hasSelection = shown.some(item => item.row_id === selected);
       const button = h('button', {type: 'button', class: 'reg-list-row', 'data-row-key': row.row_id,
         'aria-current': current ? 'true' : null, 'aria-selected': current ? 'true' : null,
-        tabindex: current || selected == null && index === 0 ? 0 : -1, onclick: () => openRow(row)},
+        tabindex: current || !hasSelection && index === 0 ? 0 : -1, onclick: () => openRow(row)},
         h('span', {class: 'reg-list-title'}, dash(displayTitle(row))), listMeta(row),
         labelSegment(row.next_step) ? h('span', {class: 'reg-list-next'}, row.next_step) : null);
       button.addEventListener('keydown', event => {
@@ -280,8 +399,16 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (failed) {tableHost.replaceChildren(); return;}
     if (unavailable) {tableHost.replaceChildren(emptyState({icon: 'circle-alert', title: t('reg_unavailable')})); return;}
     if (!loaded) {tableHost.replaceChildren(skeleton(4)); return;}
-    if (!rows.length) {tableHost.replaceChildren(emptyState({icon: 'search', title: t('reg_empty')})); return;}
-    if (!wideQuery.matches) {paintList(focusKey); return;}
+    const shown = visibleRows();
+    if (!shown.length) {
+      const filtered = filtersActive(), complete = catalogueComplete();
+      tableHost.replaceChildren(emptyState({icon: filtered ? 'search' : 'inbox',
+        title: t(!complete ? 'reg_empty_partial' : filtered ? 'reg_empty' : 'reg_empty_all'),
+        text: !complete && filtered ? t('reg_no_loaded_matches') : null,
+        action: filtered ? button({size: 'sm', label: t('reg_clear_filters'), onClick: clearFilters}) : null,
+      })); return;
+    }
+    if (!wideQuery.matches) {paintList(focusKey, shown); return;}
     const columns = [
       {key: 'type', label: t('reg_col_type'), render: row => h('span', {class: 'reg-type'}, icon(TYPE_ICON[row.type] || 'circle-alert'), h('span', {}, t('reg_type_' + row.type)))},
       {key: 'title', label: t('reg_col_title'), render: row => h('span', {class: 'reg-clamp'}, dash(displayTitle(row)))},
@@ -290,23 +417,50 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       {key: 'impact', secondary:true, label: t('reg_col_impact'), render: row => dash(row.impact)},
       {key: 'owner', secondary:true, label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell'}, dash(row.owner))},
       {key: 'due', secondary:true, label: t('reg_col_due'), render: row => day(row.due) || '—'},
-      {key: 'next', secondary:true, label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
+      {key: 'next', label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
       {key: 'related', secondary:true, label: t('reg_col_related'), render: row => relatedChips(row, 2)},
     ];
-    tableHost.replaceChildren(dataTable({columns, rows, rowKey: 'row_id', selected, onSelect: (_key, row) => openRow(row)}));
+    tableHost.replaceChildren(dataTable({columns, rows: shown, rowKey: 'row_id', selected, onSelect: (_key, row) => openRow(row)}));
     if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll: true});
     const scroller = tableHost.querySelector('.ui-data-table');
     if (scroller) scroller.scrollTop = scroll;
   }
   function paintFooter() {
     footer.replaceChildren();
-    const text = !failed && !unavailable && loaded ? shownLine() : '';
-    footer.hidden = !text && !nextCursor;
-    if (text) footer.append(h('p', {'data-reg-count': ''}, text));
-    if (nextCursor && !failed && !unavailable) footer.append(h('button', {type: 'button', class: 'ui-button secondary ui-sm', 'data-reg-more': '', disabled: busy || null,
-      onclick: () => void loadList(true)}, t('reg_load_more')));
+    const count = loaded && !failed && !unavailable && nextCursor ? t('reg_shown', {n: visibleRows().length}) : '';
+    footer.hidden = !count;
+    footer.toggleAttribute('data-reg-count', Boolean(count));
+    if (count) {
+      footer.setAttribute('role', 'group'); footer.setAttribute('aria-label', count);
+      footer.append(button({size: 'sm', 'data-reg-more': '', disabled: busy || null,
+        label: t('reg_load_more'), onClick: () => void loadList(true)}));
+    } else {footer.removeAttribute('role'); footer.removeAttribute('aria-label');}
   }
-  function render() {paintSummary(); paintOwners(); paintTable(); paintFooter(); publishMeta();}
+  function filterChip(kind, text, onRemove) {
+    const node = contextChip({text, onRemove});
+    node.setAttribute('data-reg-filter', kind);
+    return node;
+  }
+  function paintChips() {
+    if (unavailable || failed || !loaded) {chipHost.replaceChildren(); chipHost.hidden = true; return;}
+    const chips = [];
+    if (ageValue && AGE_KEYS[ageValue]) chips.push(filterChip('age', t(AGE_KEYS[ageValue]), () => setAge(ageValue)));
+    if (weekValue) chips.push(filterChip('week', t('reg_week_chip', {week: timeText(weekValue, {dateOnly: true})}), () => setWeek(weekValue)));
+    chipHost.replaceChildren(...chips);
+    chipHost.hidden = !chips.length;
+  }
+  function render() {
+    const focus = document.activeElement;
+    const age = focus?.getAttribute('data-reg-age'), week = focus?.getAttribute('data-reg-week');
+    const chip = focus?.closest('[data-reg-filter]')?.getAttribute('data-reg-filter');
+    paintSummary(); paintChips(); paintOwners(); paintTable(); paintFooter(); publishMeta();
+    if (age != null) summaryHost.querySelector(`[data-reg-age="${CSS.escape(age)}"]`)?.focus({preventScroll: true});
+    else if (week != null) summaryHost.querySelector(`[data-reg-week="${CSS.escape(week)}"]`)?.focus({preventScroll: true});
+    else if (chip) {
+      const replacement = chipHost.querySelector(`[data-reg-filter="${CSS.escape(chip)}"] button`);
+      (replacement || (chip === 'age' ? ageSelect : summaryHost.querySelector('[data-reg-week][aria-pressed=true]') || ageSelect)).focus({preventScroll: true});
+    }
+  }
   function closeSheet(retain) {
     retainSheet = retain;
     sheet?.close();
@@ -374,13 +528,23 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       h('a', {class: 'ui-button secondary ui-sm', 'data-reg-propose': '', href: discussHref({workspaceId, refs, title: t('reg_change_title', {title}), from: 'issues'})}, t('reg_propose')));
     const fieldKey = {title: 'reg_col_title', status: 'reg_col_status', owner: 'reg_col_owner', due: 'reg_col_due', impact: 'reg_col_impact', priority: 'reg_col_priority', next_step: 'reg_col_next', created_at: 'reg_created', updated_at: 'reg_updated', pull_requests: 'reg_pull_requests'};
     const detailBits = [];
+    const precise = preciseStatus(row.status);
+    if (precise) detailBits.push(h('p', {'data-reg-status-detail': ''}, precise));
+    const seenStatuses = new Set([row.status]);
+    for (const step of record.timeline || []) {
+      const wording = preciseStatus(step?.status);
+      if (wording && !seenStatuses.has(step.status)) {
+        seenStatuses.add(step.status);
+        detailBits.push(h('p', {}, t('reg_pair', {label: stepLabel(step.step), value: wording})));
+      }
+    }
     if (row.type_basis === 'neutral') detailBits.push(h('p', {}, t('reg_neutral')));
     if (row.status === 'format_valid' || (Array.isArray(record.timeline) && record.timeline.some(step => step?.status === 'format_valid'))) detailBits.push(h('p', {}, t('reg_format_checked_help')));
     if (partial && labelSegment(record.timeline_coverage.partial_reason)) {
       const code = String(record.timeline_coverage.partial_reason);
       const recognised = Boolean(known(t, 'ui_reason_' + code));
       detailBits.push(h('p', {}, recognised ? reasonLabel(t, code) : t('ui_reason_generic')));
-      if (!recognised) detailBits.push(h('p', {class: 'reg-note'}, code));
+      if (!recognised) detailBits.push(h('p', {class: 'mono'}, code));
     }
     const namedFromFinding = Boolean(findingName(row.finding, locale, ''));
     for (const [name, code] of Object.entries(row.unknowns || {})) {
@@ -389,11 +553,11 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       const recognised = Boolean(known(t, 'ui_reason_' + code));
       const label = fieldKey[name] ? t(fieldKey[name]) : t('ui_reason_generic');
       detailBits.push(h('p', {}, t('reg_pair', {label, value: reasonLabel(t, code)})));
-      if (!recognised) detailBits.push(h('p', {class: 'reg-note'}, String(code)));
+      if (!recognised) detailBits.push(h('p', {class: 'mono'}, String(code)));
     }
     if (identity?.ghsa_id) detailBits.push(h('p', {'data-finding-ghsa': ''}, t('fn_ghsa'), locale === 'zh-TW' ? '：' : ': ', h('code', {}, identity.ghsa_id)));
     const seenCodes = new Set();
-    for (const code of unknownCodes) if (labelSegment(code) && !seenCodes.has(String(code))) {seenCodes.add(String(code)); detailBits.push(h('p', {class: 'reg-note'}, String(code)));}
+    for (const code of unknownCodes) if (labelSegment(code) && !seenCodes.has(String(code))) {seenCodes.add(String(code)); detailBits.push(h('p', {class: 'mono'}, String(code)));}
     const extra = detailBits.length ? disclosure({label: t('reg_details'), key: `reg-details:${workspaceId}:${row.row_id}`,
       body: h('div', {class: 'reg-detail-body'}, ...detailBits)}) : null;
     return [h('div', {class: 'reg-sheet-main'}, facts, head, timeline, extra), links];
@@ -455,7 +619,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   function pageQuery(cursor) {
     const params = new URLSearchParams();
     if (typeValue) params.set('type', typeValue);
-    if (statusSelect.value) params.set('status', statusSelect.value);
+    const status = apiStatus(statusSelect.value);
+    if (status) params.set('status', status);
     if (ownerInput.value.trim()) params.set('owner', ownerInput.value.trim());
     if (searchInput.value.trim()) params.set('q', searchInput.value.trim());
     if (cursor) params.set('after', cursor);
@@ -472,6 +637,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (!active || (append && !nextCursor)) return;
     const ticket = ++serial;
     busy = true;
+    appliedQuery = String(pageQuery());
     paintFooter();
     const prior = rows.slice();
     const depth = prior.length;
@@ -502,6 +668,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       rows = merged;
       nextCursor = lastCursor;
       coverage = meta.coverage || {};
+      asOf = typeof meta.as_of === 'string' ? meta.as_of : null;
       totals = coverage.complete === true ? meta.total_by_type : null;
       summary = coverage.complete === true ? meta.summary : null;
       unavailable = false; failed = null; loaded = true;
@@ -514,6 +681,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     } catch (error) {
       try {alive();} catch {return;}
       if (!active || ticket !== serial) return;
+      errorBox?.(error);
       if ([403, 404].includes(error.status)) withdraw();
       else fail(error);
     } finally {if (ticket === serial) {busy = false; paintFooter();}}
@@ -532,30 +700,36 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     } catch (error) {
       try {alive();} catch {return;}
       if (!active || ticket !== detailSerial || listTicket !== serial) return;
+      errorBox?.(error);
       if ([403, 404].includes(error.status)) {
         rows = rows.filter(row => row.row_id !== rowId);
-        totals = null; summary = null;
+        coverage = null; totals = null; summary = null;
         if (selected === rowId) {selected = null; preference.selected = null; preference.inspector = false; closeSheet(false);}
         render();
         void refresh();
         return;
       }
-      statusLine.replaceChildren(inlineError({error, retry: () => void loadDetail(rowId)}));
+      statusLine.replaceChildren(readError(t('reg_detail_error'), () => void loadDetail(rowId)));
     }
+  }
+  function readError(message, retry) {
+    const notice = inlineError({error: {message}});
+    notice.append(button({size: 'sm', label: t('ui_retry'), onClick: retry}));
+    return notice;
   }
   function fail(error) {
     serial++;
     busy = false;
-    rows = []; nextCursor = null; coverage = null; totals = null; summary = null;
+    rows = []; nextCursor = null; coverage = null; totals = null; summary = null; asOf = null;
     loaded = true; unavailable = false; failed = error; selected = null; preference.inspector = false;
     closeSheet(false);
     onMeta(null);
-    statusLine.replaceChildren(inlineError({error, retry: () => void refresh()}));
+    statusLine.replaceChildren(readError(t('reg_read_error'), () => void refresh()));
     render();
   }
   function withdraw() {
     serial++; detailSerial++; busy = false;
-    rows = []; nextCursor = null; coverage = null; totals = null; summary = null;
+    rows = []; nextCursor = null; coverage = null; totals = null; summary = null; asOf = null;
     loaded = true; unavailable = true; failed = null; selected = null; preference.inspector = false;
     closeSheet(false);
     statusLine.replaceChildren();
