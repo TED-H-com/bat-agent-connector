@@ -82,3 +82,22 @@ test('events defer hidden views and closed panels until one opening read', async
   await expect.poll(() => f.reads.filter(path => path === f.root + '/governance').length).toBe(1);
   await settled(f); expect(f.reads.filter(path => path === f.root + '/governance')).toHaveLength(1); expect(f.writes).toEqual([]);
 });
+
+test('an event makes previously loaded hidden sections stale until one reopening read', async ({page}) => {
+  const f = fixture(); await mounted(page, f, 'schedule'); await settled(f);
+  const count = (path: string) => f.reads.filter(read => read === f.root + path).length;
+  expect(count('/schedule')).toBe(1);
+  await openPmSection(page, 'issues', 'ui_governance');
+  await expect.poll(() => count('/governance')).toBe(1);
+  await page.locator('[data-pm-section="ui_governance"] > details > summary').click();
+  await settled(f); f.publish();
+  await expect.poll(() => count('/register')).toBe(2); await settled(f);
+  expect(count('/schedule')).toBe(1); expect(count('/governance')).toBe(1);
+  await openPmSection(page, 'schedule');
+  await expect.poll(() => count('/schedule')).toBe(2); await settled(f);
+  expect(count('/schedule')).toBe(2); expect(count('/governance')).toBe(1);
+  await openPmSection(page, 'issues', 'ui_governance');
+  await expect.poll(() => count('/governance')).toBe(2); await settled(f);
+  expect(count('/schedule')).toBe(2); expect(count('/governance')).toBe(2);
+  expect(f.writes).toEqual([]);
+});
