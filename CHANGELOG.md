@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Keep Schedule bar and delta labels above Today, and extend short timelines across the full grid without stretching dates.
+
 - Restore short Month axis labels, localize Schedule attempt actions, and format bar intervals with shared calendar dates.
 
 - Keep Requirements acceptance labels within their columns with the CI font, and verify background preservation after the initial detail read settles.

@@ -447,6 +447,9 @@ shared time module without becoming event timestamps. Bar tooltips use the same
 calendar-date formatter as visible dates. Operation attempts use the shared action
 labels in the tree, inspector and tooltips; their raw action id appears only as code
 in Details.
+The grid fills the available chart width while retaining its date scale. Bar and
+milestone-delta text has an opaque row-colored background above the Today line in
+both themes; selected rows keep their selection color beneath the labels.
 
 Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
 range uses all loaded rows; any partial/truncated page keeps a Partial pill and a

@@ -463,8 +463,10 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
     expect(vpStyle.maxHeight).toBe('none');
 
     const zooms = locale === 'en' ? ['Day', 'Week', 'Month'] : ['日', '週', '月'];
-    for (const label of zooms) {
+    for (const colorScheme of ['light', 'dark'] as const) for (const label of zooms) {
+      await page.emulateMedia({colorScheme});
       await page.getByRole('radio', {name: label, exact: true}).click();
+      await page.getByRole('button', {name: locale === 'en' ? 'Today' : '今天', exact: true}).click();
       const check = await page.evaluate(() => {
         const axis = document.querySelector('.schedule-axis') as HTMLElement;
         const axisRect = axis.getBoundingClientRect();
@@ -483,6 +485,25 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
         for (const tk of ticks) {
           if (todayRect.left >= tk.textLeft - 1 && todayRect.left <= tk.textRightAbs + 1 && todayRect.top < tk.textBottom) todayCutsText = true;
         }
+        const scrollY = window.scrollY;
+        for (const label of document.querySelectorAll('.schedule-bar-label, .schedule-delta')) {
+          const line = label.closest('.schedule-track')!.querySelector('.schedule-today') as HTMLElement;
+          const range = document.createRange(); range.selectNodeContents(label);
+          const textRect = range.getBoundingClientRect(), lineRect = line.getBoundingClientRect();
+          const style = getComputedStyle(label), color = style.backgroundColor;
+          const opaque = color.startsWith('rgb(') || (color.startsWith('rgba(') && Number(color.match(/[\d.]+/g)?.[3]) === 1);
+          // Both label types must cover the line, even if this fixture's delta is later than Today.
+          if (!opaque || Number(style.zIndex) <= Number(getComputedStyle(line).zIndex)) todayCutsText = true;
+          if (lineRect.left < textRect.left || lineRect.left > textRect.right) continue;
+          // Hit-test the actual paint order at the intersection, including bar ancestors.
+          window.scrollBy(0, textRect.top - innerHeight / 2);
+          const visibleText = range.getBoundingClientRect(), visibleLine = line.getBoundingClientRect();
+          const previous = line.style.pointerEvents; line.style.pointerEvents = 'auto';
+          const layers = document.elementsFromPoint(visibleLine.left + .25, (visibleText.top + visibleText.bottom) / 2);
+          line.style.pointerEvents = previous;
+          if (layers.indexOf(label) < 0 || layers.indexOf(line) < 0 || layers.indexOf(label) > layers.indexOf(line)) todayCutsText = true;
+        }
+        window.scrollTo(0, scrollY);
         return {overlaps, todayCutsText};
       });
       expect(check).toEqual({overlaps: 0, todayCutsText: false});
@@ -505,6 +526,36 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
     expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
     await context.close();
   }
+});
+
+for (const colorScheme of ['light', 'dark'] as const) test(`Month grid fills every lane without stretching its date scale ${colorScheme}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, colorScheme, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+  const f = await start(page);
+  await page.getByRole('radio', {name: 'Month', exact: true}).click();
+  const geometry = () => page.evaluate(() => ({
+    axis: document.querySelector('.schedule-axis')!.getBoundingClientRect().right,
+    chart: document.querySelector('.schedule-chart')!.getBoundingClientRect().right,
+    lanes: [...document.querySelectorAll('.schedule-lane')].map(lane => ({
+      lane: lane.getBoundingClientRect().right, track: lane.querySelector('.schedule-track')!.getBoundingClientRect().right,
+    })),
+    positions: [...document.querySelectorAll('.schedule-bar, .schedule-delta, .schedule-today')].map(node => (node as HTMLElement).style.left),
+    scaleWidth: (document.querySelector('.schedule-chart') as HTMLElement).style.getPropertyValue('--schedule-width'),
+  }));
+  const desktop = await geometry();
+  expect(Math.abs(desktop.axis - desktop.chart)).toBeLessThan(1);
+  expect(desktop.lanes.length).toBeGreaterThan(10);
+  for (const lane of desktop.lanes) {
+    expect(Math.abs(lane.track - desktop.chart)).toBeLessThan(1);
+    expect(Math.abs(lane.track - lane.lane)).toBeLessThan(1);
+  }
+  await page.setViewportSize({width: 390, height: 844});
+  const mobile = await geometry();
+  for (const lane of mobile.lanes.slice(1)) expect(lane.track).toBeGreaterThanOrEqual(lane.lane);
+  expect(mobile.positions).toEqual(desktop.positions);
+  expect(mobile.scaleWidth).toBe(desktop.scaleWidth);
+  await noOverflow(page);
+  expect(f.writes).toEqual([]);
+  await context.close();
 });
 
 test('Propose change uses Change: {firstLine} and omits milestone ref when milestone has no baseline in baseline revision', async ({page}) => {
