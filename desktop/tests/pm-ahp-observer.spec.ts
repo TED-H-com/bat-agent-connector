@@ -81,11 +81,11 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
   });
   test('source withdrawal on event removes original titles and details without a write',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeVisible();f.state.denied=true;f.pm.state.cursor++;
-    await expect(page.locator('[data-pm-ahp]')).toContainText('Previous source content has been hidden');await expect(page.locator('[data-pm-ahp]')).not.toContainText('NOT_FOUND');await expect(page.locator('[data-ahp-detail]')).toHaveCount(0);await expect(page.locator('[data-pm-ahp]')).not.toContainText('editor session 1');expect(f.state.writes).toHaveLength(0);
+    await expect(page.locator('[data-pm-ahp]')).toContainText('Previous source content has been hidden');await expect(page.locator('[data-pm-ahp]')).not.toContainText('NOT_FOUND', {useInnerText: true});await expect(page.locator('[data-ahp-detail]')).toHaveCount(0);await expect(page.locator('[data-pm-ahp]')).not.toContainText('editor session 1');expect(f.state.writes).toHaveLength(0);
   });
   test('catalog source 404 preserves ability to capture a replacement without preserving its titles',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();f.state.rows=[];await page.getByRole('button',{name:'Reload saved observations'}).click();
-    await expect(page.locator('[data-ahp-catalog]')).toContainText('original catalog selection is unavailable');await expect(page.getByRole('button',{name:'Capture selected snapshots'})).toBeDisabled();
+    await expect(page.locator('[data-pm-ahp] [data-error-summary]')).toContainText('original catalog selection is unavailable');await expect(page.getByRole('button',{name:'Capture selected snapshots'})).toBeDisabled();
     await expect(page.getByRole('button',{name:'Capture host catalog',exact:true})).toBeEnabled();expect(f.state.writes).toHaveLength(0);
   });
   test('late catalog response cannot render under another adapter',async({page})=>{

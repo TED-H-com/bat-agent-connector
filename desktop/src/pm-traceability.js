@@ -235,7 +235,8 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
       workIncomplete = work.filtered || work.next != null;
       milestones = roadmap?.baseline?.document?.milestones || [];
       for (const [kind, data] of Object.entries({work, issues: mappings, reviews: quality})) cursors[kind] = data?.next ?? null;
-      const next = JSON.stringify([plan, cards.map(card => [card.work_item_id, card.binding, card.work.title, card.column, card.execution?.attempts?.length, blockedWork(card)]), issues, reviews, qualityComplete, workIncomplete, cursors, milestones, [...sources].map(([id, source]) => [id, source.deliveries, source.available, source.filtered, source.next, source.errors, workAgents(source)])]);
+      // Concurrent reads fill the source Map in completion order, not content order.
+      const next = JSON.stringify([plan, cards.map(card => [card.work_item_id, card.binding, card.work.title, card.column, card.execution?.attempts?.length, blockedWork(card)]), issues, reviews, qualityComplete, workIncomplete, cursors, milestones, [...sources].sort(([left], [right]) => left.localeCompare(right)).map(([id, source]) => [id, source.deliveries, source.available, source.filtered, source.next, source.errors, workAgents(source)])]);
       if (next !== signature) {signature = next; renderTable();}
       const requirements = plan?.document?.requirements || [], partial = !qualityComplete || catalogueErrors.length > 0 || [work, mappings, quality].some(row => row?.filtered || row?.next != null) || [...sources.values()].some(row => deliveryCoverage(row) !== 'complete');
       meta.textContent = !plan ? t('ui_status_unknown') : partial ? t('wv_loaded', {n: requirements.length}) : joinLabel([

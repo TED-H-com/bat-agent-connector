@@ -4,6 +4,7 @@ import {mountConversation} from './conversation-fixture.ts';
 import {openThreadTab} from './pm-navigation.ts';
 import {pmFixture,pmRoute} from './pm-fixture.ts';
 import {meetingFixture,mount as mountMeetings} from './pm-meetings-fixture.ts';
+import {mkdir} from 'node:fs/promises';
 
 for(const locale of ['en','zh-TW']){
   const zh=locale==='zh-TW';
@@ -39,22 +40,38 @@ for(const locale of ['en','zh-TW']){
     await expect(composer).toHaveValue(draft);await expect(composer).toBeFocused();expect(f.discussion.writes).toEqual([]);await context.close();
   });
 
-  for(const width of [1440,1000,390])test(`an empty Meeting tab has one empty state and one prerequisite ${locale} ${width}`,async({browser,baseURL})=>{
-    const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=demoFixture({locale,discussions:true}),reads:string[]=[];
+  for(const role of ['owner','reader'])for(const width of [1440,1000,390])test(`an empty Meeting tab for ${role} has one sentence and first-row refresh ${locale} ${width}`,async({browser,baseURL})=>{
+    const context=await browser.newContext({baseURL,locale,viewport:{width,height:width===390?844:900}}),page=await context.newPage(),f=demoFixture({locale,discussions:true}),reads:string[]=[];
     await mountConversation(page,false,async input=>{
       if(input.method==='GET')reads.push(input.path);
       if(input.path.includes('/meetings'))return {status:200,data:{workspace_id:f.ids.workspaceId,meetings:[],next_cursor:null}};
       if(input.path.includes('/sprints'))return {status:200,data:{workspace_id:f.ids.workspaceId,sprints:[],next_cursor:null}};
       const result=await f.dispatch(input),caps=input.path==='/bootstrap'?result.data.capabilities:input.path==='/capabilities'?result.data:null;
-      if(caps)caps.features.pm_workspaces.meetings=true;if(result.data?.thread)result.data.thread.mode='sprint_review';return result;
+      if(caps){caps.features.pm_workspaces.meetings=true;if(role==='reader')caps.scopes=['observe'];}
+      if(result.data?.workspace)result.data.workspace.membership.role=role;
+      if(result.data?.workspaces)for(const workspace of result.data.workspaces)workspace.membership.role=role;
+      if(result.data?.thread){result.data.thread.mode='sprint_review';if(role==='reader')Object.assign(result.data.capabilities,{write:false,decide:false});}return result;
     });
     await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);await openThreadTab(page,'context');
     expect(reads.filter(path=>path.includes('/meetings'))).toEqual([]);await page.getByRole('tab',{name:zh?'會議':'Meeting',exact:true}).click();
-    const card=page.locator('[data-pm-meetings]');await expect(card.locator('.ui-empty')).toHaveCount(1);
-    await expect(card.getByRole('heading',{name:zh?'尚無會議':'No meetings yet',exact:true})).toBeVisible();await expect(card.locator('.ui-empty > p')).toHaveText(zh?'會議紀錄會顯示在這裡。':'Meeting records will appear here.');
-    await expect(card.getByText(zh?'請先規劃衝刺，再建立會議。':'Plan a Sprint before creating a meeting.',{exact:true})).toBeVisible();
+    const card=page.locator('[data-pm-meetings]');await expect(card.locator('.ui-empty, .ui-section-card')).toHaveCount(0);
+    await expect(card.getByRole('heading',{name:zh?'衝刺討論':'Sprint discussions',exact:true})).toBeVisible();
+    const empty=role==='owner'?(zh?'請先規劃衝刺，再建立會議。':'Plan a Sprint before creating a meeting.'):(zh?'尚未建立會議紀錄。':'No meeting has been recorded.');
+    await expect(card.locator('.pm-note-text:visible')).toHaveText(empty);await expect(card.getByText(empty,{exact:true})).toHaveCount(1);
+    if(role==='reader')await expect(card.locator('[data-pm-panel-readonly]')).toBeVisible();else await expect(card.locator('[data-pm-panel-readonly]')).toBeHidden();
+    await expect(card.locator('p:visible')).toHaveCount(role==='reader'?2:1);
+    const geometry=await card.locator('.pm-heading').evaluate(node=>{
+      const title=node.querySelector('h3')!.getBoundingClientRect(),refresh=node.querySelector('.ui-icon-button')!.getBoundingClientRect();
+      const reason=node.querySelector('[data-pm-panel-readonly]')!,reasonLines=reason.getBoundingClientRect().height/parseFloat(getComputedStyle(reason).lineHeight);
+      return {delta:Math.abs(title.top+title.height/2-refresh.top-refresh.height/2),reasonLines};
+    });
+    expect(geometry.delta).toBeLessThanOrEqual(4);expect(geometry.reasonLines).toBeLessThanOrEqual(2);
+    await expect(card.locator('.pm-heading .ui-icon-button')).toBeVisible();
     await expect(card.getByRole('combobox')).toHaveCount(0);await expect(card.locator('[data-pm-meeting-create]')).toBeHidden();
-    expect(await card.innerText()).not.toContain(zh?'尚未建立會議紀錄。':'No meeting has been recorded.');expect(reads.filter(path=>path.includes('/meetings')).length).toBe(1);expect(f.discussion.writes).toEqual([]);await context.close();
+    expect(reads.filter(path=>path.includes('/meetings')).length).toBe(1);expect(f.discussion.writes).toEqual([]);
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+    if(process.env.BATC_C4_SHOTS){await mkdir(process.env.BATC_C4_SHOTS,{recursive:true});await page.screenshot({path:`${process.env.BATC_C4_SHOTS}/c4-r2-meetings-thread-empty-${role}-${locale}-${width}.png`});}
+    await context.close();
   });
 
   for(const width of [1440,1000,390])test(`the disconnected composer and info title use plain copy ${locale} ${width}`,async({browser,baseURL})=>{
@@ -67,7 +84,7 @@ for(const locale of ['en','zh-TW']){
 
   test(`meeting choices return when sources exist ${locale}`,async({page})=>{
     const f=meetingFixture(),sprints=structuredClone(f.state.sprints),meetings=structuredClone(f.state.meetings);f.state.sprints=[];f.state.meetings=[];await mountMeetings(page,f,locale);
-    const card=page.locator('[data-pm-meetings]');await expect(card.getByRole('combobox')).toHaveCount(0);await expect(card.getByRole('heading')).toHaveText(zh?'尚無會議':'No meetings yet');
+    const card=page.locator('[data-pm-meetings]');await expect(card.getByRole('combobox')).toHaveCount(0);await expect(card.getByRole('heading')).toHaveText(zh?'衝刺討論':'Sprint discussions');
     f.state.sprints=sprints;f.state.meetings=meetings;await page.evaluate(()=>(window as any).refreshMeetings());
     await expect(card.getByRole('combobox',{name:zh?'會議':'Meeting',exact:true})).toBeEnabled();await expect(card.locator('.ui-empty')).toHaveCount(0);await expect(card.locator('[data-pm-meeting-create]')).toBeVisible();expect(f.state.writes).toEqual([]);
   });

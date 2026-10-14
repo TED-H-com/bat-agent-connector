@@ -1,4 +1,6 @@
 // Coordinator controls bind the observed task version. A retry never substitutes a newer one.
+import {observedText} from './observed-resource-strings.js';
+import {button, sectionCard} from './ui/components.js';
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 const opId = value => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 const version = value => Number.isSafeInteger(value) && value >= 0;
@@ -42,7 +44,7 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
           preconditions: candidate.preconditions}, intent.request)) throw new Error(t("task_control_invalid"));
     operation = candidate; intent.operation_id = candidate.operation_id; persist(); readFailed = false; message.replaceChildren(); update();
   };
-  const apply = h("button", {class: "secondary", onclick: async () => {
+  const apply = button({variant: "secondary", label: t("task_pause"), onClick: async () => {
     if (!live() || busy || refreshing || readFailed || !writable() || saved.intent?.operation_id ||
         saved.intent && (!saved.intent.request || saved.intent.refused)) return;
     const previous = saved;
@@ -60,31 +62,36 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
     })();
     try {await submission;} finally {submission = null;}
     if (live()) try {await onSettled?.();} catch (e) {showError(e);}
-  }}, t("task_pause"));
-  const check = h("button", {class: "secondary", onclick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)}, t("permissions_check"));
-  const another = h("button", {class: "secondary", onclick: () => {
+  }});
+  const check = button({variant: "secondary", label: t("permissions_check"), onClick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)});
+  const another = button({variant: "secondary", label: t("task_control_new"), onClick: () => {
     if (!live() || busy || refreshing || readFailed || !writable() || !(terminal(operation) || saved.intent?.refused)) return;
     const previous = saved; saved = {abort: false};
     try {persist();} catch (e) {saved = previous; showError(e); return;}
     operation = null; abort.checked = false; message.replaceChildren(); update();
-  }}, t("task_control_new"));
-  const abortLabel = h("label", {class: "muted"}, abort, " ", t("task_abort"));
+  }});
+  const abortLabel = h("label", {class: "capture-choice muted"}, abort, " ", t("task_abort"));
   abort.onchange = () => {
     if (!live() || saved.intent || busy) {abort.checked = saved.abort; return;}
     saved.abort = abort.checked; try {persist();} catch (e) {showError(e);} update();
   };
-  const box = h("section", {class: "panel", "data-task-controls": ""}, h("h2", {}, t("task_controls")),
-    h("p", {class: "muted"}, t("task_control_help")), abortLabel,
-    h("div", {class: "actions"}, apply, check, another), restriction, result, message);
+  const help = h("p", {class: "muted"}, t("task_control_help"));
+  const box = sectionCard({title: t("task_controls"), body: h("div", {}, help, abortLabel,
+    h("div", {class: "actions"}, apply, check, another), restriction, result, message)});
+  box.dataset.taskControls = "";
   function update() {
     const fixed = Boolean(saved.intent);
-    abortLabel.hidden = action() !== "task.pause"; abort.disabled = fixed || busy;
-    apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
+    const canOperate = permitted();
+    box.hidden = !(caps()?.scopes || []).includes("operate");
+    help.hidden = !canOperate;
+    abortLabel.hidden = !canOperate || action() !== "task.pause"; abort.disabled = fixed || busy;
+    apply.hidden = !canOperate || Boolean(saved.intent?.operation_id || saved.intent?.refused);
     apply.disabled = busy || Boolean(refreshing) || readFailed || !writable() || Boolean(fixed && !saved.intent.request);
     apply.textContent = t(fixed ? "permissions_retry" : action() === "task.pause" ? "task_pause" : "task_resume");
     check.hidden = !saved.intent?.operation_id; check.disabled = busy || Boolean(refreshing);
-    another.hidden = !(terminal(operation) || saved.intent?.refused); another.disabled = busy || Boolean(refreshing) || readFailed || !writable();
-    restriction.textContent = writable() ? "" : t("task_control_unavailable");
+    another.hidden = !canOperate || !(terminal(operation) || saved.intent?.refused); another.disabled = busy || Boolean(refreshing) || readFailed || !writable();
+    restriction.textContent = writable() ? "" : observedText(t, !canOperate ? "or_readonly_task"
+      : ["done", "failed"].includes(task()?.state) ? "or_work_ended" : "or_controls_unavailable");
     result.replaceChildren();
     if (fixed) {
       result.append(h("p", {}, operation ? opStatus(operation) : t(saved.intent.refused ? "task_control_refused" : "permissions_unknown"), " ",

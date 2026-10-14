@@ -399,6 +399,62 @@ Session 詳情加分頁 timeline 與 relations；工作項目、execution、oper
 
 兩種語言在 `i18n.js` 同步，390 px 可讀。CSP 禁止 inline style attributes；需要動態樣式用既有 class 或 `el.style.setProperty`。本包不增加 managed 控制動作；既有控制按鈕仍依 backend capability 及資源政策。
 
+### Resource detail presentation
+
+The shared Web/Tauri resource summary reads the existing worktree/task response only.
+Worktree titles use the first returned work title, then the branch; executions use
+the returned title or first request line, then the branch. Ownership labels follow
+recorded creation kinds, labeled Ownership rather than an unnamed person. Execution
+summaries name the lead agent when the existing task read provides it. Manual,
+missing and unfamiliar ownership stays read-only.
+No requirement association is inferred or fetched for these summaries.
+
+The latest worktree result uses returned work and delivery receipt times. A recorded
+PR receipt is distinct from result verification; dispatch acceptance cannot establish
+completion. Task delivery pills use the journal's recorded delivery stage, independently
+of dispatch state. Missing evidence is Unknown. Related sessions use their observed
+title or the shared untitled label, with host metadata on its own line and
+activity pills only for fresh running/waiting observations. The dispatch row
+appears only while paused; a reason is shown only when the returned pause event
+contains one. Accounts without the operate scope do not see the execution control
+card; paused state and its recorded reason remain in the summary, with the concise
+Paused label beside Dispatch. Control cards use the same shared card padding;
+readback and frozen requests retain their existing rules and original keys.
+
+One collapsed Details holds identity, path, source/receipt commits, navigation links
+and cleanup limits; Raw record is separately collapsed within it. Summary actions
+are existing session, artifact-review and gated cleanup-preview routes. Work rows
+keep Review result visible and place other destinations in the shared menu or Details.
+Details preferences are scoped to the connection namespace and resource identity.
+A withdrawn read clears summary rows and Details together; view/request guards
+reject late responses. Existing task controls, durable requests and recovery keys
+remain owned by their original controller module.
+Resource history and execution/session links are collapsed disclosures in one
+plain section beneath the summary, divided by hairlines rather than separate cards.
+
+The project detail page removes work rows, counts and editors when its source
+read fails, including during editing. Request/view guards reject older responses;
+private project, child-item and creation drafts survive source recovery. Project
+IDs do not repeat above the creation form. Read-only accounts do not see creation,
+dispatch or edit entry points. Counts require complete, numeric source evidence;
+an absent or partial total has no completion chip. The archive checkbox sits on
+one line with its label inside the work-item card, which also owns its empty state.
+The sidebar requires a successful project list to claim an empty catalog. A
+missing list remains unknown without treating unrelated task reads as failed;
+API failures retain their existing refresh/checkpoint error handling.
+Unavailable project lists and project pages use the shared empty state, a short
+localized response reason, and Back to Projects for an open project. Only network
+and service-unavailable reads offer Retry. List withdrawal clears rows, counts and
+editors; an older successful response cannot restore them. Project and work-item
+overflow controls and reorder grips use shared ghost icon buttons, retain their
+names and keyboard alternatives, and have 44px touch targets.
+Unreadable lists and withdrawn projects hide their view-only notice; a successful
+read restores it. Any response code stays in a small collapsed Details inside the
+unavailable state. Forbidden lists offer Connection settings, selecting Connection
+even when Settings last showed another section. Move and pin controls also use
+shared ghost icons; disabled moves explain the boundary or pinned-group limit in
+their tooltip without changing the registered ordering operation.
+
 ## 必要前置條件、實際副作用與唯讀邊界
 
 Daemon 必須持有既有 owner lock，journal migration 完成；API observe 主體及 host 的 BAT credential 由既有配置提供。沒有 SSH alias 的 host 仍可讀 inventory/history，Git dirty 等欄位標未取得，不能為觀測要求開 write/orchestrate tier。
