@@ -25,7 +25,7 @@ for (const [, names, path] of i18nSource.matchAll(/^import\s+\{([^}]+)\}\s+from\
   }
 }
 const i18n = i18nSource
-  .replace(/^import .*;\n/gm, "").replace(/^export (?=const locale\b)/gm, "")
+  .replace(/^import .*;\n/gm, "").replace(/^export (?=const (?:locale|STRINGS)\b)/gm, "")
   .replace("export function t", "function t");
 
 class FixtureNode {
