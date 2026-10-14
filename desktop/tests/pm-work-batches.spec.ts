@@ -90,6 +90,13 @@ test('re-reviewed handoff becomes explicitly selectable without replacing previo
   await handoff(page).getByRole('button',{name:'Use this version',exact:true}).click();await expect(panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true})).toBeEnabled();await fill(page);await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.entries[0].handoff.preconditions.expected_project_version).toBe(3);
 });
 
+test('refresh stays level with the batch selector at inspector width',async({page})=>{
+  const f=batchFixture();f.evidence();await page.setViewportSize({width:1440,height:900});await mountBatch(page,f,'zh-TW');
+  await page.locator('main').evaluate(node=>node.classList.add('pm-shell'));
+  await panel(page).evaluate(node=>{node.style.width='368px';node.style.maxWidth='368px';});
+  expect(await page.evaluate(()=>{const head=document.querySelector('[data-pm-work-batches] .pm-tool-head');const select=head.querySelector('select').getBoundingClientRect();const refresh=head.querySelector('.ui-icon-button').getBoundingClientRect();return Math.abs(select.top-refresh.top);})).toBeLessThanOrEqual(4);
+});
+
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`batch view ${locale} ${width}`,async({page},info)=>{
   const f=batchFixture();f.evidence();await page.setViewportSize({width,height:900});await mountBatch(page,f,locale);expect(await page.evaluate(()=>[...document.querySelectorAll('main *')].filter(node=>node.getBoundingClientRect().right>innerWidth+1).map(node=>({tag:node.tagName,class:node.className,text:node.textContent?.slice(0,80)})))).toEqual([]);expect(await panel(page).innerText()).not.toMatch(/pmb_[a-z_]+/);const output=process.env.BATC_PM_BATCH_SCREENSHOTS||info.outputPath('screenshots');await mkdir(output,{recursive:true});await page.screenshot({path:`${output}/batch-${locale}-${width}.png`,fullPage:true});
 });

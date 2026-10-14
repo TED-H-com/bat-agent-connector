@@ -1,4 +1,4 @@
-.pm-work-batches { min-width: 0; max-width: 100%; container-type: inline-size; container-name: pm-batches; }
+.pm-work-batches { min-width: 0; max-width: 100%; container-type: inline-size; container-name: pm-batches pm-c3; }
 .pm-work-batches .pm-fields { min-width: 0; max-width: 100%; grid-template-columns: minmax(0, 1fr); }
 .pm-work-batches :is(select, input, textarea) { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
 .pm-work-batches .pm-fields > label, .pm-batch-limits label, .pm-time-field label { display: grid; gap: 4px; min-width: 0; max-width: 100%; }

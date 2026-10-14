@@ -24,9 +24,11 @@
   identifiers in Details. zh-TW uses 衝刺, 工作階段, 完成定義, 推送, 合併 and
   工作流程執行. A saved merge, a deployment and an acceptance stay separate facts.
 
-- Those work tools keep the status or the selector on the same row as Refresh.
-  A new batch, result evidence and every sprint form except the one next action
-  stay closed until asked. A failed read shows the error without an empty
+- Those work tools keep Refresh on the first line, at the top right of the
+  selector or status. In a narrow row, including the inspector, a secondary
+  action such as New batch wraps under the selector. A new batch, result
+  evidence and every sprint form except the one next action stay closed until
+  asked. A failed read shows the error without an empty
   catalog or an empty Sprint selector. Sprint dates are both absolute. A
   delivery state is a pill, `PR #12` stays with its repository, and handoff
   names the permission in words.
