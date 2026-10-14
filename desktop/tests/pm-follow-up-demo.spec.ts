@@ -8,6 +8,7 @@ for(const locale of ['en','zh-TW'])test(`demo assessment accepts its fixed plan 
     const panel=page.locator('[data-pm-follow-up]');await expect(panel).not.toContainText(locale==='en'?'does not match its fixed source':'評估與固定來源不符');
     await panel.getByRole('button',{name:new RegExp(locale==='en'?'^Assessment 1':'^評估 1')}).click();
     await expect(panel.locator('[data-pm-assessment-record]')).toBeVisible();await expect(panel.locator('.ui-inline-error')).toHaveCount(0);
+    await expect(panel.locator('[data-pm-assessment-record] > p.muted').first()).toContainText(locale==='en'?'Reader':'讀者');
     await expect(panel).toContainText(locale==='en'?'It does not adopt scope changes or dispatch work.':'不會採用範圍變更或派工');
     await expect(panel).not.toContainText(locale==='en'?'No AI Follow-up':'尚未執行自動後續追蹤');
     expect(await panel.innerText()).not.toMatch(/\b(?:null|undefined|ui_details|pm_fu_)\b/);

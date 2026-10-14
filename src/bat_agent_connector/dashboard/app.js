@@ -26033,7 +26033,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 				return h("div", {}, code(key), code(ref.pointer), h("pre", { class: "pm-note-text" }, typeof value === "string" ? value : JSON.stringify(value, null, 2)), code(ref.digest));
 			}));
 		};
-		const content = h("div", { "data-pm-assessment-record": row.assessment_id }, h("h4", {}, t("pm_fa_record", { sequence: row.sequence })), h("p", { class: "muted" }, date(row.created_at), " · ", row.created_by), h("p", { "data-pm-assessment-validation": "" }, t("pm_fa_" + row.validation.status)), statusPill("not_assessed"));
+		const content = h("div", { "data-pm-assessment-record": row.assessment_id }, h("h4", {}, t("pm_fa_record", { sequence: row.sequence })), h("p", { class: "muted" }, date(row.created_at), " · ", panelActorLabel(t, row.created_by)), h("p", { "data-pm-assessment-validation": "" }, t("pm_fa_" + row.validation.status)), statusPill("not_assessed"));
 		if (row.validation.status === "format_valid") {
 			const doc = row.document;
 			if (doc?.version !== 1 || typeof doc.summary?.text !== "string" || ![
