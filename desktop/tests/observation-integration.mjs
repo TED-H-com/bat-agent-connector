@@ -45,6 +45,7 @@ try {
   await page.locator('[data-observation="relations"] > summary').click();
   await expect(page.getByRole("link", {name: "h1/sess-claude-0001", exact: true})).toBeVisible();
   await page.getByRole("link", {name: "h1/sess-claude-0001", exact: true}).click();
+  await page.locator("[data-session-details] > summary").click();
   await page.getByRole("link", {name: "h1", exact: true}).click();
   await expect(page.getByRole("heading", {name: "h1 · Discovery coverage"})).toBeVisible();
   await expect(page.getByText("Outside this scan", {exact: true})).toBeVisible();
