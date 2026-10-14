@@ -77,6 +77,11 @@ export function discussionDemo(project: DemoProject, fallback: (input: DemoReque
     if (path === root + '/conversation-proposals') return ok({workspace_id: project.ids.workspaceId, proposals: state.proposals.filter((p: any) => p.thread_id === url.searchParams.get('thread_id')).map((p: any) => ({sequence: p.sequence, proposal_id: p.proposal_id, thread_id: p.thread_id, operation_id: p.operation_id, run_id: p.run_id, document_digest: p.document_digest, created_by: p.created_by, created_at: p.created_at, validation: p.validation, title: p.document?.title ?? null, adopted_revision_id: p.adopted_revision_id ?? null, adoptable: p.adoptable, adoptable_reason: p.adoptable_reason})), next_cursor: null});
     if (path.startsWith(root + '/conversation-proposals/')) return ok({workspace_id: project.ids.workspaceId, proposal: state.proposals.find((p: any) => path.endsWith(p.proposal_id))});
     const result = await fallback(input);
+    const governanceId = path.startsWith(root + '/governance/') ? path.slice((root + '/governance/').length) : '';
+    if (governanceId && result.status === 404 && !state.withdrawn) {
+      const ref = [...state.details.values()].flatMap((data: any) => data.thread.context || []).find((ref: any) => ref.kind === 'governance' && ref.id === governanceId && ref.available !== false);
+      if (ref) return ok({workspace_id: project.ids.workspaceId, record: {record_id: governanceId, kind: ref.record_type || 'decision'}, revision: {document: {title: ref.label}}});
+    }
     if (path === '/bootstrap') result.data.capabilities = caps(result.data.capabilities);
     if (path === '/capabilities') result.data = caps(result.data);
     const own = (row: any) => ({...row, membership: {...row.membership, role: 'owner'}});

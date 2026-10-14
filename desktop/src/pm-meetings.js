@@ -1,3 +1,5 @@
+import {iconButton} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
 // Meeting records share the existing durable command forms. A draft is not a completed discussion.
 export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -14,7 +16,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const rebase = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
   const element = h('section', {class: 'panel pm-evidence', 'data-pm-meetings': ''},
     h('header', {class: 'pm-heading'}, h('div', {}, h('h2', {}, t('pm_meeting_title')), h('p', {class: 'muted'}, t('pm_meeting_intro'))),
-      h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, t('pm_meeting_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), ...{type: 'button', class: 'secondary', onclick: () => void refresh()}})),
     labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors);
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
   const fold = (key, contents, open = false) => h('details', {open, 'data-pm-fold': key}, h('summary', {}, t(key)), contents);
@@ -165,7 +167,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
       h('p', {}, t('pm_meeting_' + detail.meeting.kind)), h('h4', {}, t('pm_meeting_goal')),
       h('p', {class: 'pm-note-text'}, context.sprint_goal.text),
       fold('pm_meeting_fixed_context', h('div', {}, h('p', {}, context.sprint_definition.title),
-        h('p', {}, t('pm_meeting_snapshot'), ' · ', context.snapshot_ref.as_of), source(context.snapshot_ref.snapshot_id),
+        h('p', {}, t('pm_meeting_snapshot'), ' · ', timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id),
         h('p', {}, source(detail.context.context_revision_id)), h('p', {}, source(context.sprint_goal.revision_id)),
         workView(context.selected_items), h('h4', {}, t('pm_meeting_dod')),
         h('ul', {}, ...context.artifacts.dod.document.criteria.map(item => h('li', {}, item.text))), note('pm_meeting_quality'))),

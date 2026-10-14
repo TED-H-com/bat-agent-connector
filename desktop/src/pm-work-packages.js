@@ -1,3 +1,5 @@
+import {iconButton, skeleton, emptyState} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
 import {joinLabel} from './label-text.js';
 // The central service owns preparation and source policy. This view only reads.
 export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSize=20,onSelection=()=>{}}) {
@@ -5,7 +7,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
   const idPattern=/^pmwp_[0-9a-f]{32}$/, digestPattern=/^[0-9a-f]{64}$/;
   let sequence=0,rows=[],cursor=null,pages=1,selected=null,busy=false;
   const status=h('div',{role:'status'}),list=h('div'),facts=h('div',{'data-pm-wp-detail':''});
-  const refreshButton=h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('wp_refresh'));
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('wp_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{pages++;void refresh();}},t('wp_more'));
   const element=h('section',{class:'pm-packages','data-pm-work-packages':''},
     h('div',{class:'actions'},h('h3',{},t('wp_title')),refreshButton),h('p',{class:'muted'},t('wp_intro')),status,list,more,facts);
@@ -32,7 +34,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       ...rows.map(row=>h('div',{class:'pm-workspace-row','data-pm-wp-row':row.package_id},
         h('button',{type:'button',class:'secondary',disabled:busy,'aria-pressed':selected===row.package_id,
           onclick:()=>void select(row.package_id)},joinLabel([row.document.title, joinLabel([t('wp_preparation'), row.sequence], ' ')])))));
-    if(!rows.length)list.append(h('p',{class:'muted'},t('wp_empty')));
+    if(!rows.length)list.append(emptyState({title:t('wp_empty')}));
   }
   function render(row,readiness){
     const doc=row.document,context=doc.context;
@@ -56,7 +58,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       +(delivery.pull_number?' · #'+delivery.pull_number:'')),...['migration','rollout','rollback','observation'].map(key=>
       detail(t('wp_'+key)+' · '+t(delivery[key].status==='unresolved'?'wp_unresolved_status':'wp_'+delivery[key].status),paragraph(delivery[key].text))));
     const sources=detail(t('wp_sources'),fact('wp_package_id',row.package_id),fact('wp_digest',row.document_digest),
-      fact('wp_created',Number.isFinite(row.created_at)?new Date(row.created_at*1000).toISOString():null),fact('wp_author',row.actor),
+      fact('wp_created',timeStamp(row.created_at, {empty:null})),fact('wp_author',row.actor),
       fact('wp_plan',context.plan_ref.revision_id),
       fact('wp_scope',context.plan_ref.scope_revision),fact('wp_code',doc.code_source.repository+'@'+doc.code_source.source_sha),
       fact('wp_work',row.work_item_id),fact('wp_binding',context.work_ref?.binding_id),fact('wp_work_version',context.work_ref?.work_version),
@@ -95,13 +97,13 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
   }
   async function select(id){
     if(busy||!idPattern.test(id))return;
-    selected=id;const ticket=++sequence;busy=true;facts.replaceChildren();onSelection(null);renderList();controls();status.replaceChildren(paragraph(t('wp_loading')));
+    selected=id;const ticket=++sequence;busy=true;facts.replaceChildren();onSelection(null);renderList();controls();status.replaceChildren(skeleton(2));
     try{await readSelected(ticket);if(valid(ticket))status.replaceChildren();}catch(error){failed(error,ticket);}
     finally{try{if(valid(ticket)){busy=false;renderList();controls();}}catch{}}
   }
   async function refresh(){
     const ticket=++sequence;busy=true;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);controls();
-    status.replaceChildren(paragraph(t('wp_loading')));
+    status.replaceChildren(skeleton(2));
     try{
       let after=0,next=null;const loaded=[];
       for(let page=0;page<pages;page++){

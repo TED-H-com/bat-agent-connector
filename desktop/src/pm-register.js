@@ -1,5 +1,6 @@
+import {timeStamp} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {searchField, discussLink, dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {statusVocabulary, reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
@@ -26,12 +27,11 @@ const AGE_KEYS = {'0-7d': 'reg_age_0_7', '8-30d': 'reg_age_8_30', '31-90d': 'reg
 const TONES = {open: 'info', monitoring: 'info', observed_open: 'info', tracking: 'info', failed: 'bad', proposed: 'review', needs_review: 'review', succeeded: 'ok', running: 'info', uncertain: 'review', needs_attention: 'review', waiting_checks: 'info', waiting_external: 'info', accepted: 'info', format_valid: 'review', recorded_discussion_decision: 'info', continue_maintenance: 'info', bounded_repair_proposal: 'review', adopted_direction: 'ok'};
 const REPO = /^[\w.-]+\/[\w.-]+$/;
 const DEPTH_PAGES = 20;
-const shortTime = new Intl.DateTimeFormat(undefined, {dateStyle: 'short', timeStyle: 'short'});
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const known = (t, key) => {const text = t(key); return text === key ? '' : text;};
-const when = value => {const text = labelSegment(value); if (!text) return ''; const date = new Date(text); return Number.isNaN(date.valueOf()) ? '' : shortTime.format(date);};
-const day = value => {const text = labelSegment(value); if (!text) return ''; const date = new Date(text); return Number.isNaN(date.valueOf()) ? text : date.toLocaleDateString();};
+const when = value => timeStamp(value, {empty:''});
+const day = value => timeStamp(value, {dateOnly:true, empty:''});
 
 export function workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta = () => {}, onOpenWork = () => {}, onOpenRequirement = () => {}, onAction = () => {}, nameFor = () => ''}) {
   const preference = viewState(namespace, workspaceId, 'issues');
@@ -62,7 +62,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   [...typeControl.querySelectorAll('button')].forEach((node, index) => node.setAttribute('data-reg-type', index ? TYPES[index - 1] : ''));
   const filters = h('div', {class: 'reg-toolbar'}, typeControl,
     h('div', {class: 'reg-toolbar-filters'}, statusSelect, ownerInput, ownerList,
-      h('div', {class: 'reg-search'}, icon('search', {size: 16}), searchInput)));
+      searchField(searchInput, {class:'reg-search'})));
   const mainCol = h('div', {class: 'reg-main'}, filters, trends, statusLine, tableHost, footer);
   const layout = h('div', {class: 'reg-layout'}, mainCol);
   const element = h('section', {'data-pm-register': ''}, layout);
@@ -152,7 +152,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       h('div', {class: 'reg-legend'}, h('span', {}, h('span', {class: 'reg-swatch', 'aria-hidden': 'true'}), t('reg_opened')),
         h('span', {}, h('span', {class: 'reg-swatch resolved', 'aria-hidden': 'true'}), t('reg_resolved'))),
       chart);
-    if (weeks.length) weekSection.append(h('div', {class: 'reg-scale'}, h('span', {}, String(weeks[0].week_start).slice(5)), h('span', {}, String(weeks[weeks.length - 1].week_start).slice(5))));
+    if (weeks.length) weekSection.append(h('div', {class: 'reg-scale'}, h('span', {}, day(weeks[0].week_start)), h('span', {}, day(weeks[weeks.length - 1].week_start))));
     const reasons = Array.isArray(summary.blocking_reasons) ? summary.blocking_reasons : null;
     const reasonSection = h('section', {'data-reg-reasons': ''}, h('h3', {}, t('reg_blocking')));
     if (reasons && !reasons.length) reasonSection.append(h('p', {class: 'reg-note', 'data-reg-no-reasons': ''}, t('reg_no_reasons')));
@@ -172,10 +172,10 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     summaryHost.append(ageSection, weekSection, reasonSection);
   }
   function displayTitle(row) {
-    const title = labelSegment(row?.title);
+    const title = labelSegment(row?.title) || labelSegment(row?.statement);
     if (title) return title;
     const finding = row?.source?.kind === 'finding' || String(row?.row_id || '').startsWith('finding.');
-    if (!finding) return '';
+    if (!finding) return [t('reg_type_' + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || t('ui_reason_not_recorded')].filter(Boolean).join(' · ');
     const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
     const kind = t('reg_kind_finding');
     return qualifier ? `${kind} · ${qualifier}` : kind;
@@ -233,7 +233,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (labelSegment(row.priority)) parts.push(h('span', {class: 'reg-list-priority'}, row.priority));
     const who = labelSegment(row.owner) ? row.owner : day(row.due);
     if (who) parts.push(h('span', {class: 'reg-list-who'}, who));
-    return h('div', {class: 'reg-list-meta'}, ...parts.flatMap((part, index) => index ? [h('span', {class: 'reg-sep', 'aria-hidden': 'true'}, '·'), part] : [part]));
+    return h('div', {class: 'reg-list-meta'}, ...parts);
   }
   function paintList(focusKey) {
     const controls = [];
@@ -273,11 +273,11 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       {key: 'title', label: t('reg_col_title'), render: row => h('span', {class: 'reg-clamp'}, dash(displayTitle(row)))},
       {key: 'status', label: t('reg_col_status'), render: row => statusNode(row.status)},
       {key: 'priority', label: t('reg_col_priority'), render: row => dash(row.priority)},
-      {key: 'impact', label: t('reg_col_impact'), render: row => dash(row.impact)},
-      {key: 'owner', label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell'}, dash(row.owner))},
-      {key: 'due', label: t('reg_col_due'), render: row => day(row.due) || '—'},
-      {key: 'next', label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
-      {key: 'related', label: t('reg_col_related'), render: row => relatedChips(row, 2)},
+      {key: 'impact', secondary:true, label: t('reg_col_impact'), render: row => dash(row.impact)},
+      {key: 'owner', secondary:true, label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell'}, dash(row.owner))},
+      {key: 'due', secondary:true, label: t('reg_col_due'), render: row => day(row.due) || '—'},
+      {key: 'next', secondary:true, label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
+      {key: 'related', secondary:true, label: t('reg_col_related'), render: row => relatedChips(row, 2)},
     ];
     tableHost.replaceChildren(dataTable({columns, rows, rowKey: 'row_id', selected, onSelect: (_key, row) => openRow(row)}));
     if (focusKey) tableHost.querySelector(`[data-row-key="${CSS.escape(focusKey)}"]`)?.focus({preventScroll: true});
@@ -331,7 +331,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const timeline = h('ol', {class: 'reg-timeline', 'data-reg-timeline': ''}, ...(Array.isArray(record.timeline) ? record.timeline : []).map(step => {
       if (labelSegment(step?.step) && !known(t, 'reg_step_' + step.step)) unknownCodes.push(step.step);
       if (labelSegment(step?.status) && !statusKnown(step.status)) unknownCodes.push(step.status);
-      const meta = joinLabel([step?.actor, when(step?.at)]);
+      const meta = h('span', {}, step?.actor || '', step?.actor && step?.at ? ' · ' : '', when(step?.at));
       const title = labelSegment(step?.title);
       const link = refLink(step?.ref, title, row.row_id);
       return h('li', {class: 'reg-step', 'data-reg-step': step?.step || 'unknown'},
@@ -348,7 +348,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const stepText = labelSegment(row.next_step);
     const primary = stepText && labels.filter(label => label === stepText).length === 1 ? stepText : '';
     const links = h('div', {class: 'reg-actions'},
-      h('a', {class: 'ui-button secondary ui-sm', 'data-reg-discuss': '', href: discussHref({workspaceId, refs, title, from: 'issues'})}, t('reg_discuss')),
+      discussLink({workspaceId, refs, title, from:'issues'}, {'data-reg-discuss':''}),
       ...offered.map((action, index) => {
         const key = ACTION_KEYS[action.action];
         if (!key) unknownCodes.push(action.action);
@@ -570,7 +570,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (active === next) {if (active) publishMeta(); else onMeta(null); return;}
     active = next;
     if (!active) {serial++; detailSerial++; busy = false; onMeta(null); closeSheet(true); return;}
-    void refresh().then(() => {
+    return refresh().then(() => {
       if (!active || sheet || matchMedia('(min-width: 1200px)').matches) return;
       const current = document.activeElement;
       // A related-item inspector or its destination heading may own focus while

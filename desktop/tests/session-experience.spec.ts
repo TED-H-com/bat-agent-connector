@@ -64,7 +64,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const allow = zh ? '允許' : 'Allow';
     const newest = zh ? '新訊息' : 'New messages';
     const more = zh ? '更多操作' : 'More actions';
-    const discuss = zh ? '與 PM 討論' : 'Discuss with PM';
+    const discuss = zh ? '討論' : 'Discuss';
     const results = zh ? '成果' : 'Results';
     const back = zh ? '返回需求' : 'Back to Requirements';
     await page.setViewportSize({width: 1440, height: 900});
@@ -120,7 +120,8 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const sent = writes.find(item => item.body?.action === 'session.send');
     expect(sent?.body?.params).toMatchObject({text: 'Ship the sign-in handler.'});
     await expect(page.locator('.conversation-scroll')).toContainText('Ship the sign-in handler.');
-    await expect(page.locator('.session-send-line')).toHaveText(zh ? '已送出 · 剛剛' : 'Sent · just now');
+    // Missing central completion time stays unstamped; dated receipts are covered below.
+    await expect(page.locator('.session-send-line')).toHaveText(zh ? '已送出' : 'Sent');
     await expect(page.locator('.session-send-line')).not.toContainText(/op_/);
     await expect(page.locator('.session-send-record')).not.toHaveAttribute('open');
     await shot(page, `session-${locale}-1440`);
@@ -130,6 +131,9 @@ for (const locale of ['en', 'zh-TW'] as const) {
     expect(await page.evaluate(noOverflow)).toBe(true);
     await shot(page, `session-${locale}-768`);
     await page.setViewportSize({width: 390, height: 844});
+    const caption = await page.locator('.workspace-session-heading .ui-title-row').boundingBox();
+    expect(caption!.width).toBeGreaterThan(330);
+    expect(await page.locator('h1').evaluate(node => node.getBoundingClientRect().height <= 2 * parseFloat(getComputedStyle(node).lineHeight))).toBe(true);
     await scroller.evaluate(el => {el.scrollTop = el.scrollHeight;});
     expect(await page.evaluate(noOverflow)).toBe(true);
     const leadingDot = await meta.evaluate(el => {
@@ -205,6 +209,26 @@ test('session workspace dark at 1440', async ({page}) => {
   await go(page, `#/session/${fixture.ids.host}/${fixture.ids.sessions.implement}`);
   await expect(page.locator('h1')).toContainText(fixture.copy.sessionImplement);
   await shot(page, 'session-en-1440-dark');
+});
+
+for (const locale of ['en','zh-TW'] as const) test(`successful send ages through the shared ticker ${locale}`, async ({browser,baseURL}) => {
+  const context=await browser.newContext({baseURL,locale}), page=await context.newPage(), f=demoFixture({locale});
+  const now=new Date('2026-10-14T09:00:00Z'); await page.clock.install({time:now});
+  await mountConversation(page,false, async input => {
+    const result=await f.dispatch(input);
+    if (input.method==='POST' && input.body?.action==='session.send' && result.status===200)
+      (result.data as any).operation.updated_at=now.valueOf()/1000;
+    return result;
+  });
+  await page.goto(`/dashboard/#/session/${f.ids.host}/${f.ids.sessions.implement}`);
+  const box=page.locator('#workspace-message-input textarea'); await box.fill('Please continue.');
+  await page.getByRole('button',{name:locale==='en'?'Send':'送出',exact:true}).click();
+  const stamp=page.locator('.session-send-line time'); await expect(stamp).toHaveText(locale==='en'?'just now':'剛剛');
+  await expect(stamp).toHaveAttribute('datetime',now.toISOString()); await expect(stamp).toHaveAttribute('title',/.+/);
+  await stamp.evaluate(node=>{(window as any).sentStamp=node;}); await box.fill('Preserved next draft'); await box.focus();
+  await page.clock.fastForward(120_000); await expect(stamp).toHaveText(locale==='en'?'2m ago':'2 分鐘前');
+  expect(await stamp.evaluate(node=>node===(window as any).sentStamp)).toBe(true);
+  await expect(box).toHaveValue('Preserved next draft'); await expect(box).toBeFocused(); await context.close();
 });
 
 const askUser = {kind: 'ask_user', toolUseId: 'toolu_layout_q', questions: [
@@ -436,10 +460,11 @@ test('Requirements links keep their return query; Discuss returns to the exact S
   await session.click();
   await expect(page.locator('.workspace-session-heading h1')).toContainText(s.copy.sessionImplement);
   await page.getByRole('button', {name: 'More actions', exact: true}).click();
-  await page.getByRole('menuitem', {name: 'Discuss with PM', exact: true}).click();
+  await page.getByRole('menuitem', {name: 'Discuss', exact: true}).click();
   const back = page.locator('[data-discussion-back]');
   await expect(back).toHaveAttribute('href', href);
   await expect(back).toHaveText('Back to Session');
+  await expect(page.locator('[data-discussion-context=work_item]')).toHaveText('Work · Email sign-in');
   await page.reload();
   await expect(back).toHaveAttribute('href', href);
   await back.click();

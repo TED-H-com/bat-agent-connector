@@ -1,3 +1,5 @@
+import {iconButton} from './ui/components.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 import {maintenanceReviewView} from './pm-maintenance-review-view.js';
 import {reviewCandidateToIdea} from './pm-review-candidate.js';
 
@@ -16,13 +18,13 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
   const can=()=>Boolean(readable()&&permitted(false)&&caps()?.scopes?.includes('manage'));
   const role=actor=>workspace()?.members?.find(member=>member.actor===actor)?.role;
   const owner=()=>can()&&role(caps()?.actor)==='owner';
-  const date=value=>Number.isFinite(value)?new Date(value*1000).toLocaleString():t('pmrv_unknown');
+  const date=value=>timeStamp(value, {empty:t('pmrv_unknown')});
   const remember=()=>{try{localStorage.setItem(navigationKey,JSON.stringify({review_id:selected}));}catch{}};
   const choose=h('select',{'aria-label':t('pmrv_choose'),onchange:()=>{selected=choose.value;remember();void refresh(true);}});
   const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(ready)renderEditors(true);}},t('pmrv_use_versions'));
   const element=h('section',{class:'panel pm-evidence','data-pm-maintenance-review':''},
     h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmrv_title')),text('pmrv_intro')),
-      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmrv_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pmrv_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),
     labelled('pmrv_choose',choose),status,warning,rebase,scheduleView,view,editors);
   const hidden=value=>{const field=h('input',{type:'hidden',value:JSON.stringify(value)});field.dataset.pmDefault=field.value;return field;};
   const lines=value=>value.split('\n').map(value=>value.trim()).filter(Boolean);
@@ -163,7 +165,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     const allowedAssignments=()=>model?.detail?.completion?.document.follow_ups?.filter(item=>owner()||item.owner_actor===caps()?.actor)||[];
     const assigned=sourceSelect('pmrv_select_followup',()=>allowedAssignments().map(item=>[item.id,`${item.text} · ${item.owner_actor}`]),allowedAssignments()[0]?.id||''),
       reported=select('pmrv_followup_status',['open','blocked','reported_done'].map(value=>[value,t('pmrv_followup_'+value)]),'open'),result=input('pmrv_result',{multiline:true,max:8000}),followReason=reason(),
-      snapshot=sourceSelect('pmrv_result_snapshot',()=>[['',t('pmrv_same_snapshot')],...(model?.snapshots||[]).map(row=>[row.snapshot_id,`${row.title} · ${date(row.as_of)}`])]);
+      snapshot=sourceSelect('pmrv_result_snapshot',()=>[['',t('pmrv_same_snapshot')],...(model?.snapshots||[]).map(row=>[row.snapshot_id,`${row.title} · ${timeText(row.as_of)}`])]);
     const followEditor=localForm({action:prefix+'follow_up.record',target:target(),fields:{follow_up_id:assigned,status:reported,result,rationale:followReason,snapshot_id:snapshot},preconditions:pre,
       context:()=>model?.detail?.review.completion_id??null,permitted:()=>can()&&model?.detail?.review.status==='completed'&&allowedAssignments().some(item=>item.id===assigned.value)
         ,valid:()=>!snapshot.value||model.snapshots.some(row=>row.snapshot_id===snapshot.value),label:'pmrv_save_followup',
@@ -177,7 +179,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
   function prepareEditor(){
     const title=input('pmrv_report_title',{max:200}),start=input('pmrv_start',{value:localTime(Date.now()-7*86400000)}),end=input('pmrv_end',{value:localTime(Date.now())});
     start.type=end.type='datetime-local';start.dataset.pmDefault=start.value;end.dataset.pmDefault=end.value;
-    const previous=sourceSelect('pmrv_previous',()=>[['',t('pmrv_no_previous')],...(model?.reviews||[]).map(row=>[row.review_id,`${row.title} · ${date(row.created_at)}`])]);
+    const previous=sourceSelect('pmrv_previous',()=>[['',t('pmrv_no_previous')],...(model?.reviews||[]).map(row=>[row.review_id,`${row.title} · ${timeText(row.created_at)}`])]);
     const p=()=>({expected_plan_version:model.plan.head.version,expected_review_revision:model.current.revision,
       expected_policy_id:model.policy?.policy_id??null,expected_policy_version:model.policy?.revision??null,
       expected_baseline_id:model.baseline?.baseline_id??null,expected_lifecycle_revision:model.lifecycle.revision});
@@ -272,7 +274,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
       const changed=signature&&next!==signature;
       model={reviews:reviews.records,snapshots:snapshots.records,current,detail,policy:policy.visibility_filtered?null:policy.policy,
         baseline:baseline.visibility_filtered?null:baseline.baseline,lifecycle:lifecycle.lifecycle,plan};ready=true;editors.hidden=false;
-      choose.replaceChildren(h('option',{value:''},t('pmrv_current')),...model.reviews.map(row=>h('option',{value:row.review_id},`${row.title} · ${date(row.created_at)}`)));
+      choose.replaceChildren(h('option',{value:''},t('pmrv_current')),...model.reviews.map(row=>h('option',{value:row.review_id},`${row.title} · ${timeText(row.created_at)}`)));
       if(selected&&!model.reviews.some(row=>row.review_id===selected))choose.append(h('option',{value:selected},detail.review.title));choose.value=selected;
       renderView();renderSchedule(schedule);
       if(force||!signature||editorId!==(detail?.review.review_id??null)||changed&&!dirty&&!forms.some(entry=>entry.editor.locked()))renderEditors();

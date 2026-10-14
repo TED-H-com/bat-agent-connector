@@ -163,7 +163,7 @@ for (const view of ['requirements', 'board']) test(`S5 M7 ${view} changes opener
   const open = async (id: string) => {
     if (view === 'requirements') {
       const req = id === f.ids.work.email ? f.ids.requirements.email : f.ids.requirements.audit;
-      const toggle = page.locator(`[data-rtm-toggle="${req}"]`); if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+      const row = page.locator(`[data-rtm-requirement="${req}"]`); await row.focus(); await row.press('ArrowRight');
       await page.locator(`[data-rtm-select="${id}"]`).click();
     } else await page.locator(`[data-board-open="${id}"]`).click();
   };

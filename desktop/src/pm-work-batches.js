@@ -1,3 +1,5 @@
+import {iconButton} from './ui/components.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 import {acceptanceProfile,requirementCondition,readRequirementReviews,matchesRequirementReview,referenceKey,checkRequirementMap} from './pm-requirement-quality.js';
 import {checkSpecMaterialization,fixedSpecSelection} from './pm-spec-materialization.js';
 
@@ -13,7 +15,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
   let qualityReviews=[],receipts=[],observations=[],proofReady=false,proofBaseline=null,proofChoices=null,evidenceFiltered=false,proofRebase=null;
   const labels=new Map(),packages=new Map();
   const facts=h('div'),status=h('div',{role:'status'}),entriesView=h('div'),startView=h('div'),proofView=h('div'),history=h('select',{'aria-label':t('pmb_history')});
-  const text=key=>h('p',{class:'muted'},t(key)),line=(key,value)=>h('p',{class:'pm-source'},h('strong',{},t(key)+': '),String(value));
+  const text=key=>h('p',{class:'muted'},t(key)),line=(key,value)=>h('p',{class:'pm-source'},h('strong',{},t(key)+': '),value);
   const hidden=value=>{const field=h('input',{type:'hidden',value:JSON.stringify(value)});field.dataset.pmDefault=field.value;return field;};
   const evidenceNotice=text('pmb_filtered');evidenceNotice.hidden=true;
   const entries=hidden([]),baseline=hidden(null),reason=input('pmb_rationale',{multiline:true,max:4000});
@@ -24,7 +26,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
   const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(ready&&!start.locked()){start.set('_baseline',JSON.stringify(currentPre()));update();}}},t('pmb_use_versions'));
   const element=h('section',{class:'panel pm-work-batches','data-pm-work-batches':''},
     h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmb_title')),text('pmb_intro')),
-      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmb_refresh'))),status,
+      iconButton({icon:'refresh-cw', label:t('pmb_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,
     h('details',{'data-batch-draft':'',open:true},h('summary',{},t('pmb_draft')),text('pmb_selection_help'),add,stale,rebase,startView),
     labelled('pmb_history',history),facts,proofView);
   const cap=()=>caps()?.features?.pm_workspaces?.work_batches;
@@ -172,7 +174,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
       ...entry.verification_evidence.map(proofFacts)));
     facts.replaceChildren(h('h3',{},t('pmb_saved')),line('pmb_operation_status',batch.operation_status),
       h('p',{},`${t('pmb_starts')}: ${limits.max_starts} · ${t('pmb_parallel')}: ${limits.max_parallel} · ${t('pmb_retries')}: ${limits.max_retries}`),
-      line('pmb_deadline',new Date(limits.deadline_at*1000).toLocaleString()),text('pmb_budget_help'),text('pmb_boundary'),
+      line('pmb_deadline',timeStamp(limits.deadline_at)),text('pmb_budget_help'),text('pmb_boundary'),
       h('a',{href:`#/op/${batch.operation_id}`},t('pmb_parent_operation')),...children);
   }
   const receiptKey=row=>`${row.operation_id}:${row.seq}`;
@@ -188,7 +190,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
     const choices={entry:batch.entries.filter(entry=>entry.operation_id&&[profile.profile,acceptanceProfile].includes(condition(entry).profile)).map(entry=>[entry.key,labels.get(entry.key)||entry.key]),
       receipt:receipts.filter(row=>row.entry_key===(proofChoices?.entry??proof.fields.entry.value)).map(row=>[receiptKey(row),`${row.repository} · ${row.candidate_commit.slice(0,12)} · ${row.operation_id}`]),
       assessment:reviewChoices(batch.entries.find(entry=>entry.key===(proofChoices?.entry??proof.fields.entry.value))).map(row=>[row.key,`${row.package.document.title} · ${row.review.context.native_result.candidate_commit.slice(0,12)} · ${t('pmb_assessment_version')} ${row.review.assessment.version} · ${row.review.context.reviewer_actor}`]),
-      observation:observations.map(row=>[row.observation_id,`${new Date(row.created_at*1000).toLocaleString()} · ${row.document?.scope?.repository||row.observation_id} · ${t(row.document?.evidence?.status==='complete'?'pmb_observation_complete':'pmb_observation_incomplete')}`])};
+      observation:observations.map(row=>[row.observation_id,`${timeText(row.created_at)} · ${row.document?.scope?.repository||row.observation_id} · ${t(row.document?.evidence?.status==='complete'?'pmb_observation_complete':'pmb_observation_incomplete')}`])};
     for(const [key,rows]of Object.entries(choices)){const node=proof.fields[key],value=proofChoices?.[key]??node.value;node.replaceChildren(h('option',{value:''},t('pmb_choose')),...rows.map(([id,label])=>h('option',{value:id},label)));
       if(value&&!rows.some(([id])=>id===value))node.append(h('option',{value},t('pmb_original_missing')));node.value=value;}proofChoices=null;
     const semantic=condition(batch.entries.find(entry=>entry.key===proof.fields.entry.value)||{}).profile===acceptanceProfile;

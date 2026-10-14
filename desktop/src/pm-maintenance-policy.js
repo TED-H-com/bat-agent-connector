@@ -1,3 +1,5 @@
+import {emptyState, iconButton} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
 import {maintenanceRepairPolicyControls,maintenanceRepairPolicyView} from './pm-maintenance-repair-policy.js';
 import {findingPolicyControls,findingPolicyView} from './pm-maintenance-findings.js';
 import {maintenanceChecks} from './pm-maintenance-checks.js';
@@ -16,7 +18,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   const profileAvailable=()=>caps()?.features?.pm_github_observation?.profiles?.includes(githubProfile)===true;
   const allowed=()=>owner()&&caps()?.features?.pm_workspaces?.maintenance_policy?.policy_adoption===true;
   const stopped=()=>!lifecycle||['paused','closed'].includes(lifecycle.stage)||['pausing','closing','paused','closed'].includes(lifecycle.status);
-  const stamp=value=>new Date(value*1000).toLocaleString();
+  const stamp=value=>timeStamp(value);
   const hidden=()=>h('input',{type:'hidden'});
   const select=(label,options)=>h('select',{'aria-label':t(label)},...options.map(([value,key])=>h('option',{value},t(key))));
   const bool=label=>select(label,[['true','pmp_yes'],['false','pmp_no']]);
@@ -111,7 +113,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   const observations=caps()?.features?.pm_workspaces?.workload?.version===1
     ?maintenanceObservations({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}):null;
   const element=h('section',{class:'pm-brief pm-maintenance-policy','data-pm-maintenance-policy':''},h('header',{class:'pm-heading'},
-    h('div',{},h('h2',{},t('pmp_title')),h('p',{class:'muted'},t('pmp_intro'))),h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmp_refresh'))),
+    h('div',{},h('h2',{},t('pmp_title')),h('p',{class:'muted'},t('pmp_intro'))),iconButton({icon:'refresh-cw', label:t('pmp_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),
     status,view,h('p',{class:'muted'},t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version===1?'pmr_policy_runtime':maintenanceRuns?'pmc_runtime_available':'pmp_runtime')),historyDetails,permission,editorDetails,...(maintenanceRuns?[maintenanceRuns.element]:[]),...(observations?[observations.element]:[]));
   function controls(){editorDetails.hidden=!owner()&&!(editor.locked()&&recover());permission.hidden=owner();editor.update();}
   function initialize(){
@@ -157,7 +159,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     if(row?.workspace_id!==workspaceId||row.document?.workspace_id!==workspaceId||row.document.policy_id!==row.policy_id||row.document.revision!==row.revision||!/^pmmp_[0-9a-f]{32}$/.test(row.policy_id)||!Number.isSafeInteger(row.revision)||row.document.automatic_execution_started!==false)throw Error(t('pmp_invalid'));
     return row;
   }
-  const line=(label,value)=>h('p',{},h('strong',{},`${t(label)}: `),String(value??t('pmp_none')));
+  const line=(label,value)=>h('p',{},h('strong',{},`${t(label)}: `),value??t('pmp_none'));
   function record(row,isCurrent=false){
     fixed(row);const doc=row.document,p=doc.policy,s=doc.scope,details=h('details',{},h('summary',{},t('pmp_details')));
     const names=values=>values.length?values.map(value=>t(`pmp_${value}`)).join(' · '):t('pmp_none');
@@ -207,7 +209,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
         ||!b.baseline&&!b.visibility_filtered&&(b.head.baseline_id!==null||b.head.version!==0)
         ||b.baseline&&(b.baseline.document?.workspace_id!==workspaceId||b.baseline.document.baseline_id!==b.baseline.baseline_id||b.baseline.document.version!==b.baseline.version||b.baseline.workspace_id!==workspaceId||b.baseline.baseline_id!==b.head.baseline_id||b.baseline.version!==b.head.version))throw Error(t('pmp_invalid'));
       if(p.policy)fixed(p.policy);current=p;baseline=b;lifecycle=l.lifecycle;ready=true;
-      view.replaceChildren(p.policy?record(p.policy,true):h('p',{class:'muted'},t(p.visibility_filtered||p.head.revision?'pmp_hidden':'pmp_empty')));
+      view.replaceChildren(p.policy?record(p.policy,true):emptyState({title:t(p.visibility_filtered||p.head.revision?'pmp_hidden':'pmp_empty')}));
       if(b.baseline){const row=b.baseline,doc=row.document;
         source.append(h('h3',{},t('pmp_baseline')),h('p',{},doc.release_version.value,' · ',doc.repository,' · ',doc.channel),
           h('p',{class:'muted'},doc.proof.maintenance_branch.status==='verified_at_observation'?`${t('pmp_branch')}: ${doc.proof.maintenance_branch.ref}`:t('pmp_no_branch')),

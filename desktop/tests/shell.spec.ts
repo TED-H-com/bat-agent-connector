@@ -29,6 +29,19 @@ function fixture() {
   };
   return {pm, work, state, dispatch, publish};
 }
+for (const width of [390,1440]) test(`workspace switcher keeps its chevron after the label at ${width}`, async ({page}) => {
+  await page.setViewportSize({width,height:900});
+  const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
+  await expect(page.locator('.shell-workspace-block')).toHaveAttribute('data-workspace-id',workspaceId);
+  if(width<1000)await page.locator('#workspace-menu').click();
+  const trigger=page.locator('.shell-workspace-switch');
+  await expect(trigger).toBeVisible();
+  const label=await trigger.locator('.shell-workspace-name').boundingBox(),chevron=await trigger.locator('.ui-icon').boundingBox();
+  expect(label).not.toBeNull();expect(chevron).not.toBeNull();
+  expect(chevron!.x).toBeGreaterThanOrEqual(label!.x+label!.width);
+  expect(chevron!.x+chevron!.width).toBeLessThanOrEqual(width);
+  expect(f.pm.base.state.writes).toHaveLength(0);
+});
 test('workspace remains selected through views and bound work; history and legacy thread routes', async ({page}) => {
   const f = fixture(); await mountConversation(page, false, f.dispatch); await page.goto(route);
   const context = page.locator('.shell-workspace-block'); await expect(context).toHaveAttribute('data-workspace-id', workspaceId);
@@ -255,7 +268,7 @@ test('successful poll stays Connected while a PM child read is held', async ({pa
     if(hold && input.path.split('?')[0]===`/pm/workspaces/${workspaceId}/threads`) {held=true;await gate;}
     return f.dispatch(input);
   });
-  await page.goto(route); await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
+  await page.goto(route + '/discussions'); await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
   hold=true;f.publish('pm_workspace');await expect.poll(()=>held).toBe(true);
   await expect(page.locator('#live')).toHaveText('Connected');
   await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);

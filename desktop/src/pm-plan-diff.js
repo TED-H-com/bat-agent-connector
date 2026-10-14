@@ -1,3 +1,4 @@
+import {skeleton} from './ui/components.js';
 import {planDiffText} from './pm-plan-diff-strings.js';
 
 // Pure reads of fixed plan/binding IDs. This component never changes work or plans.
@@ -147,7 +148,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
   async function read() {
     if (busy || !from.value || !to.value) return;
     busy = true; const ticket = ++request, left = from.value, right = to.value, ids = [...selected].sort(), fixedCursor = cursor;
-    controls(); result.replaceChildren(); status.replaceChildren(h('p', {class: 'muted'}, text('pm_diff_loading')));
+    controls(); result.replaceChildren(); status.replaceChildren(skeleton(2, {label:text('pm_diff_loading')}));
     const query = new URLSearchParams({from_revision_id: left, to_revision_id: right});
     if (ids.length) query.set('binding_ids', ids.join(','));
     if (fixedCursor !== null) query.set('journal_cursor', String(fixedCursor));

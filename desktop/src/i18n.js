@@ -19,7 +19,7 @@ import {pmReleaseBaselineStrings} from './pm-release-baseline-strings.js';
 import {dependencyStrings} from './pm-dependencies-strings.js';
 import {pmPackageHandoffStrings} from './pm-package-handoff-strings.js';
 import {pmStrings} from "./pm-strings.js";
-import {instructionReceiptStrings} from './instruction-receipts.js';
+import {instructionReceiptStrings} from './instruction-receipts-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 const STRINGS = {
   "zh-TW": {
@@ -328,13 +328,13 @@ const STRINGS = {
     start_without_prompt: "未要求傳送初始指示。", start_prompt_accepted: "已確認初始指示被接受。", start_prompt_unknown: "已啟動，但初始指示是否被接受尚未確認。請檢視逐步回執；不要另開工作階段重送。",
     sessions_label: "標題", sessions_workspace: "工作區", sessions_workspace_id: "工作區 ID", sessions_id: "工作階段 ID", sessions_title: "工作階段", sessions_intro: "依主機與工作區整理工作階段，保留人工工作與過往紀錄。",
     sessions_search: "搜尋已載入的工作階段", sessions_workspaces: "已載入的工作區",
-    sessions_scope_note: "數量只計算已載入的頁面。", sessions_all_loaded: "全部已載入",
-    sessions_loaded_count: "{count} 筆", sessions_projects: "前往專案與工作項目",
+    sessions_scope_exact: "數量包含此範圍的所有紀錄。", sessions_all: "全部工作階段", sessions_scope_note: "數量只計算已載入的頁面。", sessions_all_loaded: "全部已載入",
+    sessions_loaded_count: "已載入 {count} 筆", sessions_exact_count: "{count} 筆", sessions_exact_count_one: "{count} 筆", sessions_projects: "前往專案與工作項目",
     sessions_workspace_unknown: "工作區未記錄", sessions_workspace_unverified: "未記錄工作區 ID",
     sessions_scope_missing: "所選工作區目前沒有資料", sessions_no_matches: "目前範圍沒有符合的工作階段。",
     sessions_more_hint: "還有頁面尚未載入。可載入更多，或調整搜尋與篩選。",
     sessions_empty_hint: "可調整搜尋、主機或存取方式；未出現在這裡不代表工作已結束。",
-    sessions_showing: "顯示 {shown} 筆 · 已載入 {loaded} 筆",
+    sessions_showing_exact: "共 {loaded} 個，顯示 {shown} 個", sessions_showing: "顯示 {shown} 筆 · 已載入 {loaded} 筆",
     sessions_page_note: "搜尋與工作區選擇只套用到已載入頁面。",
     sessions_manual: "人工建立", sessions_connector: "Connector 建立", sessions_origin_unknown: "來源未確認",
     sessions_access_unknown: "存取方式未確認", sessions_details: "狀態與紀錄",
@@ -785,7 +785,7 @@ const STRINGS = {
     attention_hosts: "主機", attention_hosts_note: "連不上或觀測過期的主機；不據此判定工作已結束。",
     attention_active: "執行中操作", attention_active_note: "已受理、執行中或等待外部條件的操作；這不是工作完成確認。",
     attention_unread: "未讀工作更新", attention_unread_note: "尚未標記已讀的工作項目版本，包含先前已有的項目；不代表未讀訊息數。",
-    attention_loaded: "已載入 {count} 筆（非總數）", attention_empty: "這一類目前沒有項目。",
+    attention_exact: "{count} 個工作階段", attention_loaded: "已載入 {count} 筆（非總數）", attention_empty: "這一類目前沒有項目。",
     attention_not_updated: "本次未能更新；若下方有資料，仍是上次讀取的內容。", attention_invalid: "清單回應不完整，請重新讀取。",
     conversation_mark: "標記畫面中的訊息已讀", conversation_remember: "記住閱讀位置", conversation_older: "更早的訊息",
     conversation_unread: "上次觀察：{count} 則未讀", conversation_partial: "部分紀錄：{count} 則未讀",
@@ -874,7 +874,7 @@ const STRINGS = {
     session_results: "成果", session_changes: "變更", session_delivery: "交付", session_sources: "成果來源",
     session_sources_empty: "尚無成果來源", session_details: "詳細資料", session_discuss: "與 PM 討論",
     session_checkpoint_unavailable: "此主機無法建立檢查點",
-    session_sent_now: "已送出 · 剛剛", session_send_queued: "已排隊", session_send_failed: "失敗", session_send_retry: "重試",
+    session_sent: "已送出", session_sent_now: "已送出 · 剛剛", session_send_queued: "已排隊", session_send_failed: "失敗", session_send_retry: "重試",
     session_back: "返回{view}", session_send_waiting: "正在讀取最新內容。", session_send_scope: "這個登入不能送出訊息。",
     session_send_host: "這台主機不接受寫入。", session_send_denied: "目前不允許送出。",
     messages: "對話", send: "送出", send_placeholder: "給這個受管理工作階段的訊息…", interrupt: "中斷這一輪",
@@ -1271,13 +1271,13 @@ const STRINGS = {
 
     sessions_label: "Title", sessions_workspace: "Workspace", sessions_workspace_id: "Workspace ID", sessions_id: "Session ID", sessions_title: "Sessions", sessions_intro: "Browse sessions by host and workspace, with manual work and earlier records kept in view.",
     sessions_search: "Search loaded sessions", sessions_workspaces: "Loaded workspaces",
-    sessions_scope_note: "Counts cover loaded pages only.", sessions_all_loaded: "All loaded sessions",
-    sessions_loaded_count: "{count} loaded", sessions_projects: "Projects and work items",
+    sessions_scope_exact: "Counts include all records in this scope.", sessions_all: "All sessions", sessions_scope_note: "Counts cover loaded pages only.", sessions_all_loaded: "All loaded sessions",
+    sessions_loaded_count: "{count} loaded", sessions_exact_count: "{count} sessions", sessions_exact_count_one: "{count} session", sessions_projects: "Projects and work items",
     sessions_workspace_unknown: "Workspace not recorded", sessions_workspace_unverified: "No recorded workspace ID",
     sessions_scope_missing: "Selected workspace is not in this view", sessions_no_matches: "No matching sessions in this view.",
     sessions_more_hint: "More pages are available. Load more, or adjust your search and filters.",
     sessions_empty_hint: "Adjust your search, host or access filter. Absence from this view does not mean work has ended.",
-    sessions_showing: "Showing {shown} · {loaded} loaded",
+    sessions_showing_exact: "Showing {shown} of {loaded} sessions", sessions_showing: "Showing {shown} · {loaded} loaded",
     sessions_page_note: "Search and workspace selection cover loaded pages only.",
     sessions_manual: "Manual", sessions_connector: "Connector created", sessions_origin_unknown: "Origin unknown",
     sessions_access_unknown: "Access unknown", sessions_details: "Status and records",
@@ -1715,7 +1715,7 @@ const STRINGS = {
     attention_hosts: "Hosts", attention_hosts_note: "Unreachable or stale hosts. This does not mean their work has ended.",
     attention_active: "Active operations", attention_active_note: "Accepted, running or waiting for external conditions. These are not work completion reviews.",
     attention_unread: "Unread work updates", attention_unread_note: "Work-item versions you have not marked read, including existing items. This is not an unread message count.",
-    attention_loaded: "{count} loaded (not a total)", attention_empty: "No items in this category.",
+    attention_exact: "{count} sessions", attention_loaded: "{count} loaded (not a total)", attention_empty: "No items in this category.",
     attention_not_updated: "Could not refresh. Any items below are from the previous read.", attention_invalid: "Incomplete list response; reload to try again.",
     conversation_mark: "Mark visible messages read", conversation_remember: "Remember reading position", conversation_older: "Earlier messages",
     conversation_unread: "Last observed: {count} unread", conversation_partial: "Partial history: {count} unread",
@@ -1806,7 +1806,7 @@ const STRINGS = {
     session_results: "Results", session_changes: "Changes", session_delivery: "Delivery", session_sources: "Result sources",
     session_sources_empty: "No result sources", session_details: "Details", session_discuss: "Discuss with PM",
     session_checkpoint_unavailable: "Not available on this host",
-    session_sent_now: "Sent · just now", session_send_queued: "Queued", session_send_failed: "Failed", session_send_retry: "Retry",
+    session_sent: "Sent", session_sent_now: "Sent · just now", session_send_queued: "Queued", session_send_failed: "Failed", session_send_retry: "Retry",
     session_back: "Back to {view}", session_send_waiting: "Waiting for a fresh read.", session_send_scope: "This sign-in cannot send.",
     session_send_host: "This host does not accept writes.", session_send_denied: "Sending is not allowed.",
     messages: "Messages", send: "Send", send_placeholder: "Message for this managed session…",
@@ -1916,9 +1916,9 @@ const STRINGS = {
   },
 };
 
-const lang = (navigator.language || "zh-TW").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+export const locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
 
 export function t(key, vars = {}) {
-  const text = STRINGS[lang][key] ?? STRINGS["zh-TW"][key] ?? key;
+  const text = STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key;
   return text.replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 }

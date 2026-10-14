@@ -14,7 +14,7 @@ for (const native of [false,true]) {
     await expect(draft).toHaveValue('Keep this draft'); await expect(draft).toBeFocused();
     await expect(tree.getByRole('link',{name:/Improve empty search results/})).toHaveAttribute('aria-current','page');
     await expect(page.locator('.workspace-session-heading')).not.toContainText('Completed');
-    await tree.getByRole('link',{name:/^Documentation search ·/}).click();await page.goBack(); await expect(draft).toHaveValue('Keep this draft');
+    await tree.getByRole('link',{name:/^Documentation search$/}).click();await page.goBack(); await expect(draft).toHaveValue('Keep this draft');
     await draft.fill('Continue with the tests'); await page.getByRole('button',{name:'Send',exact:true}).click();
     await expect.poll(()=>f.data.posts.length).toBe(1);
     expect(f.data.posts[0].body).toMatchObject({action:'session.send',target:{host:'demo',session_id:'search-results'},params:{text:'Continue with the tests'}});

@@ -2,6 +2,44 @@
 
 ## Next release (unreleased)
 
+- Keep Requirements acceptance labels within their columns with the CI font, and verify background preservation after the initial detail read settles.
+
+- Preserve shared search and chip sizes against legacy view styles, with invisible mobile chip touch targets.
+
+- Keep the workspace switcher's disclosure chevron after its label on desktop and mobile.
+
+- Use the same bilingual action and operation-status labels in lifecycle summaries and project delivery work.
+
+- Preserve Agents’ paused source snapshot during coalesced event refreshes.
+
+- Preserve parent authorization withdrawal and draft recovery while coalescing visible PM sources; hidden Requirements and Board reopen behind a skeleton until their own reads settle.
+
+- Coalesce central reads for visible views and open tools; defer hidden sections without flashing withdrawn data, and stop sidebar catalog refreshes on ordinary work events.
+- Keep legacy Board chips within one line and translate action labels in work and capture links.
+
+- Resolve discussion source names centrally in every context kind, retain identity-only request params, and use 決策 consistently for decision records.
+- Keep headers and Requirements titles readable in narrow columns; retain inspector search focus and row expansion keys.
+- Age Session send receipts from central completion times and preserve the shared inspector width and heading hierarchy.
+
+- Preserve the full-width session caption above its action row on narrow screens.
+
+- Normalize empty/loading states and refresh icons, localize operation step status, distinguish complete schedule, session and navigation counts, and polish zoom, missing record titles and token totals.
+
+- Coalesce navigation reads for mixed event bursts and verify bounded requests across every authenticated view.
+
+- Fit shared search and filters to their columns, with measured select fallback for segmented controls.
+- Hide secondary table columns beside inspectors, keep identifiers intact, use mobile operation list rows, and extend the selected navigation rail through long pages.
+
+- Align Discuss actions, link focus states and header metadata across project views.
+
+- Keep context chips on one line with complete labels and larger invisible touch targets.
+
+- Unify retained and new disclosure labels and chevrons.
+
+- Share compact, bilingual timestamps across the Web/Tauri views, with timezone
+  tooltips, calendar-safe dates and one visibility-aware minute ticker that retains
+  selected text. Missing message timestamps stay empty after refreshes.
+
 - Add a repeatable real-central PM decision walkthrough in English and zh-TW,
   with scripted native analysis, temporary Git, original-key adoption recovery
   and step screenshots. It currently exposes two Overview contract gaps;

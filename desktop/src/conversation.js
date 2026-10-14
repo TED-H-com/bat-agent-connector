@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 import {renderMessage} from "./message-format.js";
 import {agentMark, disclosure, emptyState, statusPill} from "./ui/components.js";
 import {icon} from "./ui/icons.js";
@@ -170,8 +171,12 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
         else if (message.role === "user") row.mark.textContent = Array.from(whoName)[0]?.toUpperCase() || "";
         else row.mark.textContent = agentMark(agent).textContent;
         row.name.textContent = whoName;
+        const stampNode = timeStamp(message.ts, {empty:''});
         row.time.textContent = stamp;
-        row.time.dateTime = typeof message.ts === "string" ? message.ts : "";
+        if (stampNode instanceof Node) {row.time.dateTime = stampNode.dateTime; row.time.title = stampNode.title; row.time.dataset.uiTime = stampNode.dataset.uiTime;}
+        else {
+          for (const attr of ['datetime', 'title', 'data-ui-time']) row.time.removeAttribute(attr);
+        }
         const chipText = chip.join(" · ");
         row.chipText.textContent = chipText;
         row.chip.hidden = !chipText;

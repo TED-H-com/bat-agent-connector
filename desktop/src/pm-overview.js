@@ -1,7 +1,8 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {workspaceCharter, charterSections} from './pm-charter.js';
 import {planDocument} from './pm-plans.js';
 import {discussHref} from './pm-discuss-link.js';
-import {button, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
+import {discussLink, button, sectionCard, metric, statusPill, disclosure, emptyState, skeleton, inspector} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
@@ -20,7 +21,7 @@ export function workspaceOverview(options) {
   const parts = new Map(), attentionNodes = new Map();
   let attentionCard = null, attentionList = null, readerDocument = null, relatedSelection = null;
   let mode = preference.mode === 'saved' ? 'saved' : 'live', signature = '', loading = false, reportLoading = false;
-  const primary = h('a', {class: 'ui-button primary', 'data-overview-discuss': ''}, t('wb_discuss'));
+  const primary = discussLink({workspaceId}, {'data-overview-discuss':''});
   const meta = h('span', {'data-overview-meta': ''});
   const content = h('div'), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
   const box = h('section', {class: 'pm-overview', 'data-pm-overview': ''}, savedBar, status, content);
@@ -44,11 +45,7 @@ export function workspaceOverview(options) {
   savedBar.append(reportLabel, reportPartial, historyHint, h('span', {class: 'pm-overview-report-arrows'}, reports.previous, reports.next),
     button({variant: 'ghost', label: t('ui_compare'), 'data-overview-report-control': 'compare', onClick: () => options.onCompare?.()}), back);
   reportControls(reports.controls());
-  const date = value => {
-    const parsed = typeof value === 'number' && Number.isFinite(value) ? new Date(value * 1000)
-      : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(value + 'T12:00:00Z') : null;
-    return parsed && Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString((navigator.language || 'zh-TW').toLowerCase().startsWith('zh') ? 'zh-TW' : 'en', {month: 'short', day: 'numeric', ...(typeof value === 'string' ? {timeZone: 'UTC'} : {})}) : '—';
-  };
+  const date = value => timeStamp(value, {dateOnly: typeof value === 'string' && !value.includes('T')});
   const refs = () => {
     const revision = mode === 'saved' ? saved?.baseline?.document_revision : projection?.plan?.revision_id;
     return [...(revision ? [{kind: 'plan_revision', id: revision}] : []), ...(mode === 'saved' && saved ? [{kind: 'snapshot', id: saved.snapshot_id}] : [])];
@@ -56,8 +53,8 @@ export function workspaceOverview(options) {
   function header() {
     const current = mode === 'saved' ? saved : projection;
     primary.href = discussHref({workspaceId, refs: refs(), title: mode === 'saved' ? saved?.title : projection?.plan?.title, from: 'overview', report: mode === 'saved' ? saved?.snapshot_id : undefined});
-    meta.textContent = mode === 'saved' ? saved ? `${t('ov_report', {n: saved.sequence})} · ${date(saved.as_of)}` : t(reportLoading ? 'ov_loading_report' : 'ov_not_saved')
-      : [projection?.plan?.title, projection?.plan?.adopted_at != null ? t('ov_adopted', {date: date(projection.plan.adopted_at)}) : null, t('ov_live')].filter(Boolean).join(' · ');
+    meta.replaceChildren(...(mode === 'saved' ? saved ? [t('ov_report', {n: saved.sequence}), ' · ', date(saved.as_of)] : [t(reportLoading ? 'ov_loading_report' : 'ov_not_saved')]
+      : [projection?.plan?.title, projection?.plan?.adopted_at != null ? timeLabel(t, 'ov_adopted', {date: date(projection.plan.adopted_at)}) : null, t('ov_live')].filter(Boolean).flatMap((part, i) => i ? [' · ', part] : [part])));
     const phase = mode === 'live' && current?.lifecycle?.stage;
     onHeader({meta, phase: phaseNames.includes(phase) ? t('ui_phase_' + phase) : null, active});
   }
@@ -72,19 +69,18 @@ export function workspaceOverview(options) {
     if (mode === 'saved') render();
   }
   function discuss(row, part = 'attention') {
-    return h('a', {class: 'ui-button ghost ui-sm', 'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`,
-      href: discussHref({workspaceId, refs: row.ref ? [row.ref] : [], title: row.title, from: 'overview'})}, t('ov_discuss'));
+    return discussLink({workspaceId, refs: row.ref ? [row.ref] : [], title: row.title, from:'overview'}, {'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`});
   }
   function open(row) {onOpen(row.ref, row);}
   function itemLink(row, part) {return row ? h('button', {type: 'button', class: 'pm-overview-link', 'data-overview-link': `${part}:${row.key || row.milestone_id || row.work_item_id}`, onclick: () => open(row)}, row.title) : null;}
-  function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? ` → ${date(row.forecast_date)}` : '',
+  function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? h('span', {}, ' → ', date(row.forecast_date)) : '',
     row.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null);}
   function statusStrip(data, fixed = false) {
     const p = data?.progress, complete = p && classes.every(key => Number.isSafeInteger(p[key]));
     const goalReason = (data?.unknown || []).find(row => row.field === 'plan.goal')?.reason;
     const goal = metric({label: t('ov_goal'), value: data?.plan?.goal ?? '—', context: h('div', {},
       !data?.plan?.goal ? goalReason === 'goal_unconfirmed' ? statusPill('unconfirmed') : !goalReason || goalReason === 'unknown' ? statusPill('unknown') : h('span', {class: 'ui-meta'}, reasonLabel(t, goalReason)) : null,
-      h('div', {}, data?.plan?.title || '—'), data?.plan?.adopted_at != null ? h('div', {}, t('ov_adopted', {date: date(data.plan.adopted_at)})) : null)});
+      h('div', {}, data?.plan?.title || '—'), data?.plan?.adopted_at != null ? h('div', {}, timeLabel(t, 'ov_adopted', {date: date(data.plan.adopted_at)})) : null)});
     goal.dataset.overviewMetric = 'goal';
     if (fixed && savedPartial()) goal.append(statusPill('partial'));
     const next = data?.next_milestone;
@@ -140,7 +136,7 @@ export function workspaceOverview(options) {
       const node = h('div', {class: 'pm-overview-attention-row', 'data-overview-row': row.key}, link,
         h('div', {class: 'pm-overview-attention-meta'}, h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · ')),
           h('span', {class: 'pm-overview-attention-actions'}, elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed),
-            elapsed === null ? null : h('span', {'aria-hidden': 'true'}, '·'), discuss(row))));
+            discuss(row))));
       cached?.node.remove(); attentionNodes.set(row.key, {signature: rowSignature, node});
       rows.insertBefore(node, rows.children[position] || null); position++;
     }
@@ -258,8 +254,8 @@ export function workspaceOverview(options) {
     header(); savedBar.hidden = mode !== 'saved'; box.dataset.overviewMode = mode;
     if (mode === 'saved') {
       reportPartial.hidden = !savedPartial();
-      reportLabel.textContent = saved ? `${t('ov_viewing', {n: saved.sequence})} · ${date(saved.as_of)} · ${saved.title || ''}` : t(reportLoading ? 'ov_loading_report' : 'ov_not_saved');
-      if (!saved) {resetContent(reportLoading ? h('div', {}, h('p', {role: 'status'}, t('ov_loading_report')), skeleton(3)) : h('p', {}, t('ov_not_saved'))); return;}
+      reportLabel.replaceChildren(...(saved ? [t('ov_viewing', {n: saved.sequence}), ' · ', date(saved.as_of), saved.title ? ' · ' + saved.title : ''] : [t(reportLoading ? 'ov_loading_report' : 'ov_not_saved')]));
+      if (!saved) {resetContent(reportLoading ? skeleton(3, {label:t('ov_loading_report')}) : emptyState({title:t('ov_not_saved')})); return;}
       const next = JSON.stringify(saved);
       if (signature === `saved:${next}`) return;
       signature = `saved:${next}`; closeReader();

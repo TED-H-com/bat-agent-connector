@@ -18,7 +18,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap':'web Road
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');await page.getByText('Update a forecast',{exact:true}).click();
     const form=page.locator('[data-pm-action="pm.roadmap.forecast.set"]');await form.getByLabel('Milestone',{exact:true}).selectOption('first_release');await form.getByLabel('Forecast date',{exact:true}).fill('2026-11-08');
     await form.getByLabel('Reason for this change',{exact:true}).fill('Known dependency needs more time');await form.getByRole('button',{name:'Save forecast',exact:true}).click();
-    const row=page.locator('[data-pm-milestone]');await expect(row).toContainText('2026-11-01');await expect(row).toContainText('2026-11-08');await page.getByText('Review saved results',{exact:true}).click();
+    const row=page.locator('[data-pm-milestone]');await expect(row.locator('td').nth(0).locator('time')).toHaveAttribute('datetime','2026-11-01');await expect(row.locator('td').nth(1).locator('time')).toHaveAttribute('datetime','2026-11-08');await page.getByText('Review saved results',{exact:true}).click();
     const observe=page.locator('[data-pm-action="pm.roadmap.observe"]');await observe.getByRole('button',{name:'Use the current baseline',exact:true}).click();await observe.getByLabel('Saved project snapshot',{exact:true}).selectOption(sid);
     await observe.getByRole('button',{name:'Attach snapshot results',exact:true}).click();await expect(row).toContainText('Completion has not been assessed');
     expect(f.state.baseline.document.milestones[0].baseline_date).toBe('2026-11-01');expect(f.state.writes[1].body.params).toEqual({baseline_revision_id:bid,snapshot_id:sid});
@@ -37,7 +37,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap':'web Road
     await form.getByLabel('Reason for this change',{exact:true}).fill('First explicit update');await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();
     await expect(form.getByRole('button',{name:'Adopt scheduling baseline',exact:true})).toBeEnabled();
     await form.getByLabel('Baseline date',{exact:true}).fill('2026-11-03');await form.getByLabel('Reason for this change',{exact:true}).fill('Second explicit update');
-    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(page.locator('[data-pm-milestone]')).toContainText('2026-11-03');
+    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(page.locator('[data-pm-milestone] td').first().locator('time')).toHaveAttribute('datetime','2026-11-03');
     expect(f.state.writes.map(row=>row.body.preconditions.expected_roadmap_version)).toEqual([1,2]);
     expect(f.state.writes[1].body.params.milestones[0].milestone_id).toBe('first_release');
   });

@@ -1,21 +1,9 @@
+import {iconButton, emptyState} from './ui/components.js';
 // Instruction receipts describe central sends, never a provider queue position.
 const oid = v => typeof v === 'string' && /^op_[0-9a-f]{32}$/.test(v);
 const phases = new Set(['accepted', 'not_accepted', 'unconfirmed', 'operation_cancelled', 'operation_failed', 'pending']);
 
-export const instructionReceiptStrings = {
-  'en-US': {instruction_receipts: 'Sent instructions', instruction_receipts_note: 'These are central send receipts. “Was queued” records submission history; it does not show a current queue position. Interrupt affects the session.',
-    instruction_accepted: 'Accepted by BAT', instruction_not_accepted: 'Not accepted', instruction_unconfirmed: 'Acceptance unconfirmed',
-    instruction_operation_cancelled: 'Central operation cancelled', instruction_operation_failed: 'Central operation failed', instruction_pending: 'Send pending',
-    instruction_was_queued: 'Was queued at submission', instruction_requested_queue: 'Queueing requested', instruction_operation: 'View original operation',
-    instruction_empty: 'No central send receipts for this session.', instruction_more: 'Older instructions', instruction_refresh: 'Refresh receipts',
-    instruction_stale: 'Receipts could not be refreshed. Previously loaded records remain visible.', instruction_excerpt: 'Preview only; open the operation for the full instruction.'},
-  'zh-TW': {instruction_receipts: '已送出指示', instruction_receipts_note: '這裡顯示中央送出紀錄。「曾排隊」是提交當時的紀錄，不代表目前排隊位置。中斷會作用於整個工作階段。',
-    instruction_accepted: 'BAT 已接受', instruction_not_accepted: '未被接受', instruction_unconfirmed: '尚未確認接受',
-    instruction_operation_cancelled: '中央操作已取消', instruction_operation_failed: '中央操作失敗', instruction_pending: '等待送出結果',
-    instruction_was_queued: '提交時曾排隊', instruction_requested_queue: '已要求排隊', instruction_operation: '查看原操作',
-    instruction_empty: '這個工作階段尚無中央送出紀錄。', instruction_more: '較早的指示', instruction_refresh: '重新讀取紀錄',
-    instruction_stale: '無法更新紀錄，保留上次讀取的內容。', instruction_excerpt: '這裡是內容預覽；完整指示請查看原操作。'}
-};
+export {instructionReceiptStrings} from './instruction-receipts-strings.js';
 
 export function instructionReceiptReader({api, guard, host, sessionId}) {
   let pages = 1, saved = null, pending = null;
@@ -54,7 +42,7 @@ export function instructionReceiptPanel({h, t, when, api, guard, host, sessionId
   const reader = instructionReceiptReader({api, guard, host, sessionId});
   const list = h('div'), status = h('div', {role: 'status'});
   const more = h('button', {type: 'button', class: 'mini', hidden: true, onclick: () => refresh(true)}, t('instruction_more'));
-  const reload = h('button', {type: 'button', class: 'mini', onclick: () => refresh()}, t('instruction_refresh'));
+  const reload = iconButton({icon:'refresh-cw', label:t('instruction_refresh'), ...{type: 'button', class: 'mini', onclick: () => refresh()}});
   const box = h('details', {class: 'workspace-evidence', 'data-instruction-receipts': ''}, h('summary', {}, t('instruction_receipts')),
     h('p', {class: 'muted'}, t('instruction_receipts_note')), list, status, h('div', {class: 'actions'}, reload, more));
   const nodes = new Map();
@@ -91,7 +79,7 @@ export function instructionReceiptPanel({h, t, when, api, guard, host, sessionId
       let position = list.firstChild;
       for (const row of value.instructions) {const node = nodes.get(row.operation_id).node;
         if (node === position) position = position.nextSibling; else list.insertBefore(node, position);}
-      if (!value.instructions.length) list.replaceChildren(h('p', {class: 'muted'}, t('instruction_empty')));
+      if (!value.instructions.length) list.replaceChildren(emptyState({title:t('instruction_empty')}));
       for (const [id, entry] of nodes) if (!retained.has(entry.node)) nodes.delete(id);
       status.replaceChildren(); more.hidden = !value.can_load_more;
     } catch (error) {if (alive()) status.replaceChildren(h('p', {class: 'muted'}, t('instruction_stale')), errorBox(error));}

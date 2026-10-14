@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // Narrow adapter for the shared work inspector: render(row, context) returns content only.
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
@@ -12,13 +13,13 @@ export function rowStatus(row, data) {
 }
 export function dateRange(span) {
   if (!span) return t('sched_no_dates');
-  const format = value => value?.includes('T') ? new Intl.DateTimeFormat(navigator.language, {dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC'}).format(new Date(value)) + ' UTC' : value;
+  const format = value => value ? timeStamp(value, {dateOnly: !value.includes('T')}) : '—';
   const endBeforeStart = Boolean(span.start && span.end && span.end < span.start);
   const validEnd = span.end && !endBeforeStart ? span.end : null;
   if (validEnd && validEnd === span.start) return format(span.start) || '—';
-  if (validEnd) return [format(span.start) || '—', format(validEnd)].join(' → ');
-  if (span.open === true || (span.open == null && endBeforeStart)) return [format(span.start) || '—', t('sched_open')].join(' → ');
-  if (span.open === false) return [format(span.start) || '—', reasonLabel(t, 'terminal_time_unrecorded')].join(' → ');
+  if (validEnd) return h('span', {}, format(span.start), ' → ', format(validEnd));
+  if (span.open === true || (span.open == null && endBeforeStart)) return h('span', {}, format(span.start), ' → ', t('sched_open'));
+  if (span.open === false) return h('span', {}, format(span.start), ' → ', reasonLabel(t, 'terminal_time_unrecorded'));
   return format(span.start) || '—';
 }
 const unknown = () => h('span', {class: 'ui-meta'}, t('sched_unavailable'));
@@ -64,7 +65,7 @@ export function render(row, {workspaceId, data}) {
     ...notes.map(note => h('p', {}, reasonLabel(t, note.reason), h('code', {}, note.reason))),
     h('code', {}, row.id), refs.issue ? h('code', {}, `${refs.issue.repository}#${refs.issue.number}`) : null,
     ...Object.values(refs).flatMap(value => typeof value === 'string' ? [h('code', {}, value)] : []),
-    ...[data.baseline?.revision_id, data.forecast?.revision_id, data.as_of].filter(Boolean).map(value => h('code', {}, value))) });
+    ...[data.baseline?.revision_id, data.forecast?.revision_id].filter(Boolean).map(value => h('code', {}, value)), timeStamp(data.as_of)) });
   details.dataset.scheduleSection = 'details';
   return h('div', {class: 'schedule-inspector-content'},
     section('requirement', ...(requirements.length ? requirements.map(value => h('p', {class: 'schedule-full-title'}, value.title)) : [unknown()])),

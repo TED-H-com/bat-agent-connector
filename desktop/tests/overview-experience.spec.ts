@@ -356,7 +356,7 @@ for (const locale of ['en', 'zh-TW']) test(`selected report has a loading state 
   try {
     await page.locator('[data-pm-report-tools] select').selectOption(f.ids.snap1); await page.keyboard.press('Escape');
     await expect(root(page).locator('.ui-skeleton')).toBeVisible();
-    await expect(root(page).getByRole('status').filter({hasText: locale === 'en' ? 'Loading report…' : '正在載入報告…'})).toBeVisible();
+    await expect(root(page).getByRole('status', {name: locale === 'en' ? 'Loading report…' : '正在載入報告…'})).toBeVisible();
     await expect(root(page)).not.toContainText(locale === 'en' ? 'Select a report in Versions.' : '請從版本選取報告。');
   } finally {release();}
   await expect(metric(page, 'goal')).toContainText(f.copy.goalV2); await context.close();
@@ -368,7 +368,7 @@ test('epoch dates are local while milestone calendar dates stay fixed', async ({
   f.state.reportPatch = saved => {saved.as_of = Date.parse('2026-10-12T20:00:00Z') / 1000;};
   await boot(page, f); await expect(page.locator('[data-overview-meta]')).toContainText('adopted Oct 12');
   await expect(root(page).locator('[data-overview-milestone]').first()).toContainText('Sep 28');
-  await report(page, f.ids.snap2); await expect(page.locator('[data-overview-meta]')).toContainText('Oct 13'); await context.close();
+  await report(page, f.ids.snap2); await expect(page.locator('[data-overview-meta] time')).toHaveAttribute('title', /October 13, 2026/); await context.close();
 });
 
 test('saved goal reasons match confirmed and unconfirmed plan inputs', async ({page}) => {

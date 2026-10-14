@@ -1,12 +1,13 @@
+import {timeStamp} from './ui/stamps.js';
 // Refresh the loaded window through central cursors. A shown count is only the loaded page.
 import {dataTable, disclosure, emptyState, inlineError, inspector, skeleton, statusPill} from './ui/components.js';
 import {joinLabel} from './label-text.js';
-import {actionLabel, formatTime, operationDuration, operationStatusKey, operationTargetText, reasonText} from './global-labels.js';
+import {actionLabel, formatTime, operationDuration, operationStatusKey, operationStatusLabel, operationTargetText, reasonText} from './global-labels.js';
 import {viewState} from './ui/view-state.js';
 
 export function operationList({h, t, api, guard, statuses, namespace}) {
   const memory = viewState(namespace || '', '', 'operations:' + (statuses || 'all'));
-  let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, query = memory.query || '';
+  let rows = [], before = null, pages = 1, queue = Promise.resolve(), pending = 0, failed = false, sourceWithdrawn = false, query = memory.query || '';
   let sheet = null, request = 0, busyListener = () => {};
   const list = h('div', {'data-operation-list': ''});
   const count = h('p', {class: 'muted', 'data-operation-count': ''});
@@ -25,10 +26,10 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
   };
   const columns = [
     {key: 'action', label: t('global_col_action'), render: op => actionLabel(op.action)},
-    {key: 'target', label: t('global_col_target'), render: op => operationTargetText(op) || '—'},
+    {key: 'target', secondary:true, label: t('global_col_target'), render: op => operationTargetText(op) || '—'},
     {key: 'status', label: t('global_col_status'), render: op => statusPill(operationStatusKey(op.status))},
-    {key: 'actor', label: t('actor'), render: op => op.actor || '—'},
-    {key: 'started', label: t('created'), render: op => formatTime(op.created_at) || '—'},
+    {key: 'actor', secondary:true, label: t('actor'), render: op => op.actor || '—'},
+    {key: 'started', secondary:true, label: t('created'), render: op => timeStamp(op.created_at)},
     {key: 'duration', label: t('global_col_duration'), render: op => operationDuration(op, Date.now() / 1000) || '—'},
   ];
   const focusRow = id => {
@@ -44,7 +45,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     const attempts = typeof op.attempts === 'number' && Number.isFinite(op.attempts) ? String(op.attempts) : '—';
     return h('dl', {class: 'kv global-op-facts'},
       h('dt', {}, t('actor')), h('dd', {}, op.actor || '—'),
-      h('dt', {}, t('created')), h('dd', {}, formatTime(op.created_at) || '—'),
+      h('dt', {}, t('created')), h('dd', {}, timeStamp(op.created_at)),
       h('dt', {}, t('global_col_duration')), h('dd', {}, operationDuration(op, Date.now() / 1000) || '—'),
       h('dt', {}, t('global_attempts')), h('dd', {}, attempts));
   }
@@ -66,7 +67,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
           op.status_reason ? [h('dt', {}, t('reason')), h('dd', {}, op.status_reason)] : null,
           op.error_code ? [h('dt', {}, t('global_code')), h('dd', {}, reasonText(op.error_code), ' ', h('code', {}, String(op.error_code)))] : null),
         steps.length ? h('h3', {}, t('steps')) : null,
-        ...steps.map(step => h('p', {}, joinLabel([step.name, step.status, step.error?.code]))))}),
+        ...steps.map(step => h('p', {}, joinLabel([step.name, operationStatusLabel(step.status), step.error?.code]))))}),
     ];
   }
   async function fill(op) {
@@ -105,17 +106,21 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     sheet.body.replaceChildren(...body(record).filter(Boolean));
   }
   function paint() {
+    if (sourceWithdrawn) {list.replaceChildren(emptyState({title:t('global_operations_unavailable')})); count.replaceChildren(); count.hidden = true; return;}
     const focus = list.contains(document.activeElement) ? document.activeElement.closest('[data-row-key]')?.dataset.rowKey : null;
     const shown = visible();
     if (!rows.length) list.replaceChildren(emptyState({title: t('operations_empty')}));
     else if (!shown.length) list.replaceChildren(emptyState({title: t('global_no_match')}));
     else list.replaceChildren(dataTable({
       columns, rows: shown, rowKey: 'operation_id', selected: memory.selected,
+      compactRow: op => h('div', {class:'global-op-compact'},
+        h('div', {class:'global-op-compact-title'}, h('strong', {}, actionLabel(op.action)), statusPill(operationStatusKey(op.status))),
+        h('div', {class:'ui-meta'}, operationTargetText(op), op.actor ? ' · ' + op.actor : null, op.created_at ? [' · ', timeStamp(op.created_at)] : null)),
       onSelect: (key, row) => {memory.selected = key; fill(row).catch(() => {});},
     }));
     if (focus) list.querySelector(`[data-row-key="${CSS.escape(focus)}"]`)?.focus({preventScroll: true});
-    count.hidden = before === null;
-    count.textContent = before === null ? '' : t('global_shown', {count: rows.length});
+    count.hidden = false;
+    count.textContent = t(before === null ? 'global_operation_count' : 'global_shown', {count: rows.length});
     if (sheet?.isConnected && memory.selected) {
       const row = rows.find(op => op.operation_id === memory.selected);
       if (!row) sheet.dispose();
@@ -143,7 +148,7 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
         if (next === null) break;
       }
       guard(); rows = [...new Map(candidate.map(op => [op.operation_id, op])).values()];
-      pages = append ? pages + read : read; before = next; failed = false;
+      pages = append ? pages + read : read; before = next; failed = false; sourceWithdrawn = false;
       paint(); status.replaceChildren();
       const restored = anchorId ? list.querySelector(`[data-row-key="${CSS.escape(anchorId)}"]`) : null;
       if (restored && top !== undefined) window.scrollBy(0, restored.getBoundingClientRect().top - top);
@@ -152,7 +157,9 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
         if (selected && sheet?.isConnected) fill(selected).catch(() => {});
       }
     }).catch(error => {
-      if (current()) {failed = true; status.replaceChildren(h('p', {class: 'error'}, error.message));}
+      if (current()) {
+        if ([403,404].includes(error.status)) {sourceWithdrawn = true; rows = []; before = null; pages = 1; request++; memory.selected = ''; sheet?.dispose(); sheet = null; layout.classList.remove('has-inspector'); paint();}
+        failed = true; status.replaceChildren(h('p', {class: 'error'}, error.message));}
       throw error;
     }).finally(() => {pending--; if (current()) update();});
     queue = job; return job;

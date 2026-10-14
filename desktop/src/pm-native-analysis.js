@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 import {discussionFeedback} from './pm-discussions.js';
 import {agentMark} from './ui/components.js';
 import {pmContextBundle} from './pm-context-bundle.js';
@@ -131,7 +132,7 @@ export function pmDiscussionMessage({h, t, message, time, timestamp}) {
   const article = h('article', {class: 'pm-note', 'data-note-id': message.message_id, 'data-pm-role': assistant ? 'assistant' : 'user'},
     h('div', {class: 'pm-note-stamp'}, assistant ? agentMark('pm') : h('span', {class: 'ui-agent-mark', 'aria-hidden': true}, (message.actor || '?').slice(0, 2).toUpperCase()), h('strong', {}, assistant ? t('pm_native_assistant') : message.actor),
       assistant ? h('span', {}, provenance?.model || t('pm_native_unknown_model')) : '',
-      h('time', {datetime: new Date(timestamp(message.created_at)).toISOString()}, time(message.created_at))),
+      timeStamp(message.created_at)),
     h('div', {class: 'pm-note-text'}, message.content));
   if (assistant) article.append(h('p', {class: 'muted'}, t(complete ? 'pm_native_reply_recorded' : 'pm_native_reply_unproven')),
     h('details', {class: 'pm-source'}, h('summary', {}, t('pm_native_evidence')),

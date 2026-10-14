@@ -7,7 +7,7 @@
 .pm-requirements-tables { min-width: 0; }
 .pm-requirements .ui-data-table { margin-bottom: var(--space-3); }
 .pm-requirements .ui-data-table th { white-space: nowrap; }
-.pm-requirements .ui-data-table td { vertical-align: top; overflow-wrap: anywhere; }
+.pm-requirements .ui-data-table td { vertical-align: top; overflow-wrap: normal; }
 .pm-requirements .ui-data-table td[data-column=title] { font-weight: 500; }
 .pm-requirements .ui-data-table [data-row-key] > td:first-child { padding: var(--space-1); }
 .pm-requirement-milestone { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -24,7 +24,7 @@
 .pm-requirement-open { display: none; }
 @media (min-width: 800px) {
   /* Explicit tracks let hidden columns relinquish their space, including expanded rows. */
-  .pm-requirements .ui-data-table { --requirement-columns: 40px minmax(0, 1fr) minmax(0, 14%) 64px 148px 116px 100px minmax(0, 14%); }
+  .pm-requirements .ui-data-table { --requirement-columns: 40px minmax(14rem, 1fr) minmax(100px, 14%) 64px 148px 136px 100px minmax(100px, 14%); }
   .pm-requirements .ui-data-table table { display: block; }
   .pm-requirements .ui-data-table :is(thead, tbody) { display: contents; }
   .pm-requirements .ui-data-table tr:not([hidden]) { display: grid; grid-template-columns: var(--requirement-columns); }
@@ -33,9 +33,9 @@
   .pm-requirements .ui-data-table .ui-data-table-detail:not([hidden]) { display: block; }
   .pm-requirements .ui-data-table .ui-data-table-detail > td { display: block; width: 100%; }
 }
-@media (min-width: 1200px) {
-  .pm-requirements .pm-work-layout:has(> .pm-work-inspector) .ui-data-table { --requirement-columns: 40px minmax(0, 1fr) 64px 148px 116px 100px; }
-  .pm-requirements .pm-work-layout:has(> .pm-work-inspector) .ui-data-table :is([data-column=milestone], [data-column=blocker]) { display: none; }
+@container ui-table (max-width: 1099px) {
+  .pm-requirements [data-secondary] { display: none; }
+  .pm-requirements .ui-data-table tr:not([hidden], .ui-data-table-detail) { grid-template-columns: 40px minmax(14rem, 1fr) 64px 148px 136px 100px; }
 }
 @media (max-width: 799px) {
   .pm-requirements-toolbar .pm-work-search { flex-basis: 100%; }
@@ -44,6 +44,7 @@
   .pm-requirement-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; }
   .pm-requirement-facts { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); row-gap: var(--space-1); margin-top: var(--space-2); color: var(--text-2); font-size: var(--fs-caption); }
   .pm-requirement-facts > * { white-space: nowrap; max-width: 100%; }
+  .pm-requirement-facts > * { margin-right: var(--space-1); }
   .pm-requirement-blocker { display: flex; align-items: start; gap: var(--space-1); color: var(--bad); margin-top: var(--space-2); font-size: var(--fs-small); }
   .pm-requirement-blocker > .ui-icon { flex: none; margin-top: var(--space-1); }
 }
@@ -57,3 +58,16 @@
 .pm-requirements [data-rtm-requirement][aria-current="true"] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 
 .pm-requirements [data-rtm-select][aria-pressed=true] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+
+@container ui-table (max-width: 719px) {
+  .pm-requirements table, .pm-requirements tbody { display: block; }
+  .pm-requirements thead, .pm-requirements [data-row-key] > td { display: none; }
+  .pm-requirements .ui-data-table tr:not([hidden]) { display: block; }
+  .pm-requirements .ui-data-table [data-row-key] > .ui-data-table-compact { display: flex; align-items: start; gap: var(--space-2); min-height: 44px; height: auto; padding: var(--space-3); cursor: pointer; }
+  .pm-requirements .ui-data-table-detail > td { display: block; height: auto; padding: 0; }
+  .pm-requirements .pm-requirement-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-weight: 500; overflow-wrap: break-word; text-wrap: pretty; }
+  .pm-requirements .pm-requirement-facts { display: flex; flex-wrap: wrap; align-items: center; column-gap: var(--space-2); row-gap: var(--space-1); margin-top: var(--space-2); color: var(--text-2); font-size: var(--fs-caption); }
+  .pm-requirements .pm-requirement-facts > * { white-space: nowrap; max-width: 100%; }
+  .pm-requirements .pm-requirement-blocker { display: flex; align-items: start; gap: var(--space-1); color: var(--bad); margin-top: var(--space-1); font-size: var(--fs-small); }
+  .pm-requirements .pm-requirement-open { display: inline-flex; margin-bottom: var(--space-3); }
+}

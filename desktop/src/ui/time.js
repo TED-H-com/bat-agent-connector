@@ -1,35 +1,47 @@
-// Compact stamps for one view. Other views keep their own formatters.
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAY = 24 * 60 * 60 * 1000;
-
-function clock(date, zh) {
-  let hour = date.getHours();
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  const period = hour < 12 ? (zh ? "上午" : "AM") : (zh ? "下午" : "PM");
-  let h12 = hour % 12;
-  if (h12 === 0) h12 = 12;
-  return zh ? `${period}${h12}:${minute}` : `${h12}:${minute} ${period}`;
+// One formatter family. Date-only strings are calendar dates, never UTC instants.
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAY = 86400000;
+const zh = locale => String(locale || 'en').toLowerCase().startsWith('zh');
+export function calendarDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
 }
-
-function language(locale) {
-  if (typeof locale === "string" && locale) return locale;
-  if (typeof navigator !== "undefined" && navigator.language) return navigator.language;
-  return "en";
+function parse(value) {
+  if (value == null || value === '' || !(typeof value === 'string' || typeof value === 'number' || value instanceof Date)) return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !calendarDate(value)) return null;
+  const date = calendarDate(value) || (value instanceof Date ? value : new Date(value));
+  return Number.isFinite(date.getTime()) ? date : null;
 }
-
-export function compactTime(value, {locale, now = Date.now()} = {}) {
-  if (value == null || value === "") return "";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  const zh = language(locale).toLowerCase().startsWith("zh");
-  const delta = now - date.getTime();
-  if (delta >= 0 && delta < DAY) {
-    const minutes = Math.floor(delta / 60000);
-    if (minutes < 1) return zh ? "剛剛" : "just now";
-    if (minutes < 60) return zh ? `${minutes} 分鐘前` : `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    return zh ? `${hours} 小時前` : `${hours}h ago`;
+function clock(date, chinese) {
+  const hour = date.getHours(), minute = String(date.getMinutes()).padStart(2, '0');
+  const period = hour < 12 ? (chinese ? '上午' : 'AM') : (chinese ? '下午' : 'PM');
+  return chinese ? `${period}${hour % 12 || 12}:${minute}` : `${hour % 12 || 12}:${minute} ${period}`;
+}
+export function compactDate(value, {locale = 'en', now = Date.now()} = {}) {
+  const date = parse(value);
+  if (!date) return '';
+  const year = date.getFullYear() !== new Date(now).getFullYear() ? date.getFullYear() : null;
+  return zh(locale) ? `${year == null ? '' : `${year}年`}${date.getMonth() + 1}月${date.getDate()}日`
+    : `${MONTHS[date.getMonth()]} ${date.getDate()}${year == null ? '' : `, ${year}`}`;
+}
+export function compactTime(value, {locale = 'en', now = Date.now()} = {}) {
+  const date = parse(value);
+  if (!date) return '';
+  const chinese = zh(locale), delta = Number(now) - date.getTime(), distance = Math.abs(delta);
+  if (distance < DAY) {
+    if (distance < 60000) return chinese ? '剛剛' : 'just now';
+    const minutes = Math.floor(distance / 60000), n = minutes < 60 ? minutes : Math.floor(minutes / 60);
+    const unit = minutes < 60 ? (chinese ? '分鐘' : 'm') : (chinese ? '小時' : 'h');
+    return chinese ? `${n} ${unit}${delta < 0 ? '後' : '前'}` : delta < 0 ? `in ${n}${unit}` : `${n}${unit} ago`;
   }
-  if (zh) return `${date.getMonth() + 1}月${date.getDate()}日 ${clock(date, true)}`;
-  return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${clock(date, false)}`;
+  return `${compactDate(date, {locale, now})}${chinese ? ' ' : ', '}${clock(date, chinese)}`;
+}
+export function fullTime(value, {locale = 'en'} = {}) {
+  const date = parse(value);
+  if (!date) return '';
+  return new Intl.DateTimeFormat(zh(locale) ? 'zh-TW' : 'en-US', {
+    year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'long',
+  }).format(date);
 }

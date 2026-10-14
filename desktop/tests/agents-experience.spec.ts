@@ -51,8 +51,8 @@ test('agents period, trend and unavailable source stay sourced', async ({browser
   await expect(page.locator('[data-resource-meta] [data-tz]')).toHaveText('Asia/Taipei');
   await expect(page.locator('[data-resource-meta]')).toContainText('updated');
   await expect(chart.locator('svg text')).toHaveCount(0);
-  await expect(chart.locator('.pm-agents-xlabels')).toContainText('10/7');
-  await expect(chart.locator('.pm-agents-xlabels')).not.toContainText('10/6');
+  await expect(chart.locator('.pm-agents-xlabels')).toContainText('Oct 7');
+  await expect(chart.locator('.pm-agents-xlabels')).not.toContainText('Oct 6');
   await expect(chart.locator('.pm-agents-yscale')).toContainText('0');
   await expect(chart.locator('.pm-agents-yscale')).toContainText('1K');
   await expect(chart.locator('.pm-agents-plot-main > svg')).toHaveAttribute('preserveAspectRatio', 'xMinYMin meet');
@@ -174,13 +174,14 @@ test('pause freezes the screen and a live refresh reuses the trend', async ({bro
   await openAgents(page, 1280);
   await page.getByRole('button', {name: 'Pause updates', exact: true}).click();
   const pausedMeta = page.locator('[data-resource-meta]');
-  await expect(pausedMeta).toHaveText('Paused · data from 5:00 PM');
+  await expect(pausedMeta).toHaveText('Paused · data from just now');
   await expect(page.getByRole('button', {name: 'Resume updates', exact: true})).not.toHaveAttribute('aria-pressed');
   const paused = fixture.reads.length;
-  const frozen = await pausedMeta.innerText();
+  const frozen = await pausedMeta.locator('time').getAttribute('datetime');
   await page.clock.fastForward(120000);
   expect(fixture.reads).toHaveLength(paused);
-  await expect(pausedMeta).toHaveText(frozen);
+  await expect(pausedMeta.locator('time')).toHaveAttribute('datetime', frozen!);
+  await expect(pausedMeta).toContainText('2m ago');
   await page.getByRole('button', {name: 'Resume updates', exact: true}).click();
   await expect.poll(() => fixture.reads.length).toBe(paused + 1);
   expect(fixture.reads.at(-1)).not.toContain('buckets=');
@@ -229,7 +230,7 @@ test('agents copy is Traditional Chinese', async ({browser, baseURL}) => {
   await page.getByRole('button', {name: '暫停更新', exact: true}).click();
   await expect(page.getByRole('button', {name: '繼續更新', exact: true})).toBeVisible();
   await expect(page.locator('[data-resource-meta]')).toContainText('已暫停');
-  await expect(page.locator('[data-resource-meta]')).toContainText('下午5:00');
+  await expect(page.locator('[data-resource-meta]')).toContainText('剛剛');
   await expect(agents).toContainText('用量');
   await expect(agents).toContainText('進行中');
   await expect(agents).toContainText('待穩定');

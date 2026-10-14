@@ -76,8 +76,10 @@ for(const native of [false,true])test.describe(native?'native management workspa
     f.kanban.state.cards[0].work.title='Login after review';f.publish('work_item');
     await expect(card).toContainText('Login after review',{timeout:10000});
     f.sprint.state.sprints[0].goal.text='A revised direction from another client';f.sprint.state.sprints[0].version++;f.publish('pm_sprint');
+    await openPmSection(page,'schedule','ui_sprints');
     await expect(page.locator('[data-pm-sprints]')).toContainText('A revised direction from another client',{timeout:10000});
     f.meetings.state.meetings[0].meeting.title='Discussion updated in another client';f.meetings.state.meetings[0].meeting.version++;f.publish('pm_meeting');
+    await openPmSection(page,'discussions','ui_meetings');
     await expect(page.locator('[data-pm-meetings]')).toContainText('Discussion updated in another client',{timeout:10000});
   });
   test('failed workspace authorization hides previous facts and recovers the local draft',async({page})=>{
@@ -159,7 +161,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`manag
   await context.close();
 });
 
-test('thread meetings and follow-up reads wait for their disclosure or their own event', async ({page}) => {
+test('thread meetings and follow-up reads wait for their visible disclosure', async ({page}) => {
   const f = fixture(), reads: string[] = [], prefix = `/pm/workspaces/${workspaceId}`;
   await mountConversation(page, false, async (input: any) => {
     const url = new URL(input.path, 'http://fixture'), path = url.pathname;
@@ -183,9 +185,14 @@ test('thread meetings and follow-up reads wait for their disclosure or their own
   await follow.locator(':scope > summary').click(); reads.length = 0;
   f.base.state.thread.title = 'Thread event read'; f.publish('pm_thread'); await expect(page.locator('[data-discussion-title]')).toHaveText('Thread event read', {timeout: 10000});
   await expect(refresh).toBeEnabled(); expect(related()).toHaveLength(0);
-  f.publish('pm_meeting'); await expect.poll(() => related().filter(path => path.includes('/meetings')).length, {timeout: 10000}).toBe(2);
+  f.publish('pm_meeting'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
+  expect(related()).toHaveLength(0); await meetings.locator(':scope > summary').click();
+  await expect.poll(() => related().filter(path => path.includes('/meetings')).length, {timeout: 10000}).toBe(2);
+  await meetings.locator(':scope > summary').click();
   expect(related().filter(path => path.includes('/follow-ups'))).toHaveLength(0); reads.length = 0;
-  f.publish('pm_follow_up'); await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length, {timeout: 10000}).toBe(2);
+  f.publish('pm_follow_up'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
+  expect(related()).toHaveLength(0); await follow.locator(':scope > summary').click();
+  await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length, {timeout: 10000}).toBe(2);
   expect(related().filter(path => path.includes('/meetings'))).toHaveLength(0);
   expect(f.base.state.writes).toHaveLength(0); expect(f.meetings.state.writes).toHaveLength(0);
 });

@@ -15,11 +15,11 @@
 .pm-agents-metrics .ui-metric { min-width: 0; }
 .pm-agents-metrics .ui-metric-value { flex-wrap: wrap; }
 .pm-agents-source { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.pm-agents-source-id { min-width: 0; overflow-wrap: break-word; }
+.pm-agents-source-id { min-width: 0; overflow-wrap: normal; }
 .pm-agents-requested { color: var(--text-2); font-size: var(--fs-caption); }
 .pm-agents .ui-data-table { min-width: 0; }
 .pm-agents .ui-data-table table { width: 100%; table-layout: fixed; }
-.pm-agents .ui-data-table th, .pm-agents .ui-data-table td { overflow-wrap: break-word; }
+.pm-agents .ui-data-table th, .pm-agents .ui-data-table td { overflow-wrap: normal; }
 .pm-agents .ui-data-table td { height: auto; min-height: 44px; vertical-align: middle; }
 .pm-agents .ui-data-table th:nth-child(1) { width: 18%; }
 .pm-agents .ui-data-table th:nth-child(2) { width: 16%; }
@@ -122,3 +122,11 @@
 @media (min-width: 1200px) {
   .pm-agents-layout:has(> .ui-inspector) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; gap: var(--space-4); }
 }
+
+@container ui-table (max-width: 900px) {
+  .pm-agents .ui-data-table th[data-column=source] { width: 32%; }
+  .pm-agents .ui-data-table th[data-column=tokens] { width: 23%; }
+  .pm-agents .ui-data-table th[data-column=seen] { width: 23%; }
+  .pm-agents .ui-data-table th[data-column=status] { width: 22%; }
+}
+.pm-agents-source-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,6 +1,6 @@
 import {viewState} from './ui/view-state.js';
 import {h} from './ui/dom.js';
-import {dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
+import {skeleton, searchField, dataTable, statusPill, agentMark, disclosure, emptyState} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatus, blockedWork, blockerText, workAgents, prPills, prGroups, readWorkSources, aggregateDelivery, deliveryCoverage, deployStatus, readEarlierPlans} from './pm-work-inspector.js';
@@ -32,7 +32,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
   const moreButtons = Object.fromEntries(['work', 'issues', 'reviews'].map(kind => [kind, h('button', {type: 'button', class: 'ui-button secondary', hidden: true, 'aria-label': t(kind === 'work' ? 'wb_more' : kind === 'issues' ? 'wb_more_issues' : 'wb_more_reviews'),
     onclick: () => {pages[kind]++; void refresh();}}, t('wv_load_more'))]));
   const element = h('section', {'data-pm-rtm': '', class: 'pm-requirements'},
-    h('div', {class: 'pm-requirements-toolbar'}, h('label', {class: 'pm-work-search'}, icon('search'), filter), h('label', {}, t('wv_group'), group)),
+    h('div', {class: 'pm-requirements-toolbar'}, searchField(filter, {class:'pm-work-search'}), h('label', {}, t('wv_group'), group)),
     status, layout, h('div', {class: 'actions'}, ...Object.values(moreButtons)),
     disclosure({label: t('wb_sources'), body: h('div', {}, h('p', {}, t('wb_no_phase')))}));
   const detail = workInspector({t, workspaceId, from: 'requirements', mount: layout, tools: () => tools(), returnFocus: () => selectionTarget(selected) || viewHeading(), onClose: () => {
@@ -143,8 +143,8 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
           h('ul', {}, ...(req.acceptance || []).map(row => h('li', {}, labelSegment(row.text)))),
           h('button', {type: 'button', class: 'ui-button ghost pm-requirement-open', 'data-rtm-select': req.id,
             onclick: () => void select(req.id)}, t('wv_open_requirement')),
-          ...linked(req).map(workRow), !linked(req).length ? h('p', {class: 'ui-meta'}, t('wb_no_work')) : null),
-        compactRow: req => {
+          ...linked(req).map(workRow), !linked(req).length ? emptyState({title:t('wb_no_work')}) : null),
+        compactBelow: 720, compactRow: req => {
           const work = linked(req), blocked = work.find(blockedWork), source = deliverySource(req);
           const coverage = deliveryCoverage(source), prs = prGroups(source.deliveries).length;
           const workLabel = work.length === 1 ? 'wv_compact_work_one' : 'wv_compact_work';
@@ -158,12 +158,12 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
         },
         columns: [
           {key: 'title', label: t('wv_requirement')},
-          {key: 'milestone', label: t('wv_milestone'), render: milestoneLabel},
+          {key: 'milestone', secondary:true, label: t('wv_milestone'), render: milestoneLabel},
           {key: 'work', label: t('wv_work'), numeric: true, render: req => workIncomplete ? t('wv_loaded', {n: linked(req).length}) : String(linked(req).length)},
           {key: 'pr', label: t('wv_pr'), render: req => h('div', {class: 'pm-work-inline'}, ...prPills(deliverySource(req)))},
           {key: 'acceptance', label: t('wv_acceptance'), render: acceptancePill},
           {key: 'deploy', label: t('wv_deploy'), render: deployPill},
-          {key: 'blocker', label: t('wv_next_blocker'), render: req => {const card = linked(req).find(blockedWork); return card ? blockerText(t, card) : h('span', {class: 'ui-meta'}, t('ui_status_unknown'));}},
+          {key: 'blocker', secondary:true, label: t('wv_next_blocker'), render: req => {const card = linked(req).find(blockedWork); return card ? blockerText(t, card) : h('span', {class: 'ui-meta'}, t('ui_status_unknown'));}},
         ]});
       for (const row of table.querySelectorAll('[data-row-key]')) {row.dataset.rtmRequirement = row.dataset.rowKey; row.querySelector('button').dataset.rtmToggle = row.dataset.rowKey;}
       return table;
@@ -281,7 +281,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     if (scroll) {opener?.scrollIntoView({block: 'center'}); opener?.focus({preventScroll: true});}
     markSelection();
     const ticket = ++detailSerial, generation = serial;
-    if (!retain) {detail.show({title: firstLabel(card?.work.title, requirement?.text)}); detail.element.body.replaceChildren(h('p', {role: 'status'}, t('wb_detail_loading')));}
+    if (!retain) {detail.show({title: firstLabel(card?.work.title, requirement?.text)}); detail.element.body.replaceChildren(skeleton(2, {label:t('wb_detail_loading')}));}
     if (requirement) {
       let register = null;
       if (caps()?.features?.pm_register?.version === 1) {
@@ -315,7 +315,7 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     if (visible === value) {if (value && signature) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (!id) currentMilestone = null; if (id && id !== currentMilestone && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
     if (!value) {active = false; stale = true; serial++; detailSerial++; preference.scroll = window.scrollY; closeRetaining();}
-    else {const generation = ++scrollGeneration; void activate(); if (!stale && selected && cards.length) void select(selected, false, true); requestAnimationFrame(() => {if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);});}
+    else {const generation = ++scrollGeneration; const read = activate(); if (!stale && selected && cards.length) void select(selected, false, true); requestAnimationFrame(() => {if (generation === scrollGeneration) window.scrollTo(0, preference.scroll || 0);}); return read;}
   }
   async function activate() {if (!active) {active = true; await refresh();}}
   async function openRef(ref) {

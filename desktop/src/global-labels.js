@@ -1,3 +1,4 @@
+import {timeText} from './ui/stamps.js';
 // Presentation maps for global screens. Raw ids and reason codes stay out of row text.
 import {joinLabel, labelSegment} from './label-text.js';
 import {t} from './i18n.js';
@@ -183,6 +184,10 @@ export function actionLabel(action) {
   return humanizeAction(action) || t('action_unknown');
 }
 
+export function operationStatusLabel(status) {
+  const label = t('op_' + status);
+  return label === 'op_' + status ? t('ui_status_unknown') : label;
+}
 export function operationStatusKey(status) {
   return OPERATION_STATUS[status] || 'unknown';
 }
@@ -218,12 +223,7 @@ export function operationMeta(op, whenText = '') {
   return joinLabel([operationTargetText(op), op?.actor, whenText]);
 }
 
-export function formatTime(seconds) {
-  const value = Number(seconds);
-  if (!Number.isFinite(value) || value <= 0) return '';
-  const date = new Date(value * 1000);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
-}
+export function formatTime(value) { return value ? timeText(value) : ''; }
 
 const TERMINAL_OPERATION = new Set(['succeeded', 'failed', 'cancelled', 'needs_attention', 'uncertain']);
 const ACTIVE_OPERATION = new Set(['accepted', 'running', 'waiting_checks', 'waiting_external']);

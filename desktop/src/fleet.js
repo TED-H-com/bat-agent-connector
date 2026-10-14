@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {fleetAvailability, fleetRequest} from "./transport/index.ts";
 
 // Local Fleet state never shares the central event cursor, principal or operation journal.
@@ -44,7 +45,7 @@ export async function mountFleet(main, {h, t}) {
         h("button", {class: "primary", disabled: !editable() || !draft || !!changed(), onclick: () => mutate({action: "set_connections",
           connections: [...draft.connections], expected_selection_revision: draft.revision, expected_monitor_epoch: draft.epoch,
           expected_configuration_binding: binding})}, t("fleet_apply")),
-        h("button", {class: "secondary", disabled: busy, onclick: () => read(true)}, t("fleet_refresh")),
+        iconButton({icon:'refresh-cw', label:t('fleet_refresh'), ...{class: "secondary", disabled: busy, onclick: () => read(true)}}),
         h("button", {class: "secondary", disabled: !readable || busy || !draft, onclick: () => {draft = null; save(); message.textContent = ""; render();}}, t("fleet_use_current"))),
       h("div", {class: "actions"},
         h("button", {class: "secondary", disabled: !editable() || !!draft || snapshot.monitor.state !== "stopped",

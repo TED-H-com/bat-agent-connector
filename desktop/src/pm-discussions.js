@@ -9,8 +9,8 @@ export function discussionLabel(t, prefix, value) {
 }
 export function discussionContext(t, refs = [], {limit = refs.length, onMore} = {}) {
   const chips = refs.slice(0, limit).map(ref => {
-    const kind = discussionLabel(t, 'pd_kind_', ref.kind);
-    const text = ref.available === false ? `${kind} · ${t('pd_unavailable')}` : [kind, ref.label].filter(Boolean).join(' · ');
+    const kind = ['risk','issue','action','change','decision'].includes(ref.record_type) ? t('reg_type_' + ref.record_type) : discussionLabel(t, 'pd_kind_', ref.kind);
+    const text = `${kind} · ${ref.available === false ? t('pd_unavailable') : ref.label || t('pd_unavailable')}`;
     const chip = contextChip({text});
     chip.dataset.discussionContext = ref.kind;
     chip.title = text; chip.setAttribute('aria-label', text);

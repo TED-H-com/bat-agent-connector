@@ -1,4 +1,5 @@
 import {h} from './dom.js';
+import {discussHref} from '../pm-discuss-link.js';
 import {t} from '../i18n.js';
 import {icon as drawIcon} from './icons.js';
 import {statusVocabulary} from './ui-strings.js';
@@ -13,14 +14,51 @@ let choiceSerial = 0;
 export function button({variant = 'secondary', size = 'md', icon, iconPosition = 'start', label, onClick, ...attrs} = {}) {
   return h('button', {type: 'button', class: `ui-button ${variant} ui-${size}`, onclick: onClick, ...attrs}, iconPosition === 'end' ? null : nodeIcon(icon), label, iconPosition === 'end' ? nodeIcon(icon) : null);
 }
+export function discussLink(context, attrs = {}) {
+  return h('a', {class:'ui-button secondary ui-sm', href:discussHref(context), ...attrs}, drawIcon('message-square'), t('ui_discuss'));
+}
 export function iconButton({icon, label, ...attrs}) {
   return button({variant: 'ghost', icon, 'aria-label': label, title: label, ...attrs, class: 'ui-button ghost ui-icon-button'});
+}
+export function searchField(input, attrs = {}) {
+  input.type = 'search'; input.placeholder = t('ui_search');
+  return h('div', {...attrs, class: `ui-search ${attrs.class || ''}`}, drawIcon('search'), input);
+}
+// One observer manages connected controls. View replacements release their parents,
+// so switching pages does not accumulate per-view resize subscriptions.
+let choiceObserver, choiceMounts;
+const choiceFits = new WeakMap(), choiceParents = new Map();
+function watchChoice(root, measure) {
+  choiceFits.set(root, measure); root.dataset.choiceAdaptive = '';
+  if (!choiceObserver) {
+    choiceObserver = new ResizeObserver(entries => {
+      for (const {target} of entries) for (const control of choiceParents.get(target) || []) choiceFits.get(control)?.();
+    });
+    const reconcile = () => {
+      for (const [parent, controls] of choiceParents) {
+        for (const control of controls) if (!control.isConnected || control.parentElement !== parent) controls.delete(control);
+        if (!controls.size) {choiceObserver.unobserve(parent); choiceParents.delete(parent);}
+      }
+      for (const control of document.querySelectorAll('[data-choice-adaptive]')) {
+        const parent = control.parentElement;
+        if (!choiceFits.has(control) || choiceParents.get(parent)?.has(control)) continue;
+        if (!choiceParents.has(parent)) {choiceParents.set(parent, new Set()); choiceObserver.observe(parent);}
+        choiceParents.get(parent).add(control); choiceFits.get(control)();
+      }
+    };
+    choiceMounts = new MutationObserver(reconcile);
+    choiceMounts.observe(document.documentElement, {childList: true, subtree: true});
+    document.fonts?.ready.then(reconcile);
+  }
 }
 function choices({options, value, onChange = () => {}, label}, isTabs) {
   const root = h('div', {class: isTabs ? 'ui-tabs' : 'ui-segmented', role: isTabs ? 'tablist' : 'radiogroup', 'aria-label': label});
   const buttons = options.map(option => h('button', {type: 'button', role: isTabs ? 'tab' : 'radio',
     id: option.id || uid(), 'aria-controls': isTabs && typeof option.panel === 'string' ? option.panel : null, disabled: option.disabled,
     onclick: () => select(option.value)}, option.label));
+  const fallback = isTabs ? null : h('select', {'aria-label':label, 'data-choice-select':'', hidden:true,
+    onchange: () => select(options[fallback.selectedIndex].value)},
+    ...options.map((option, index) => h('option', {value:String(index), disabled:option.disabled}, option.label)));
   if (isTabs) options.forEach((option, index) => {
     if (!option.panel || typeof option.panel === 'string') return;
     const panel = option.panel;
@@ -30,11 +68,13 @@ function choices({options, value, onChange = () => {}, label}, isTabs) {
   });
   function select(next, notify = true) {
     value = next;
+    if (fallback) fallback.value = String(options.findIndex(option => option.value === value));
     buttons.forEach((node, i) => {const active = options[i].value === value;
       node.tabIndex = active ? 0 : -1; node.setAttribute(isTabs ? 'aria-selected' : 'aria-checked', String(active));});
     if (notify) onChange(value);
   }
   root.addEventListener('keydown', event => {
+    if (event.target === fallback) return;
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
     const enabled = buttons.filter(node => !node.disabled), current = enabled.indexOf(document.activeElement);
@@ -46,7 +86,18 @@ function choices({options, value, onChange = () => {}, label}, isTabs) {
     next.focus(); next.click();
     setTimeout(() => { if (choiceFocus === ticket) choiceFocus = null; }, 80);
   });
-  root.append(...buttons); select(options.some(o => o.value === value && !o.disabled) ? value : options.find(o => !o.disabled)?.value, false);
+  root.append(...buttons, ...(fallback ? [fallback] : [])); select(options.some(o => o.value === value && !o.disabled) ? value : options.find(o => !o.disabled)?.value, false);
+  if (fallback) watchChoice(root, () => {
+    if (!root.isConnected) return;
+    const focused = document.activeElement, parent = root.parentElement, css = getComputedStyle(parent);
+    fallback.hidden = true; buttons.forEach(node => node.hidden = false); root.removeAttribute('data-choice-overflow');
+    const needed = root.scrollWidth, available = parent.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight);
+    const overflow = needed > available + 1;
+    fallback.hidden = !overflow; buttons.forEach(node => node.hidden = overflow);
+    root.toggleAttribute('data-choice-overflow', overflow); root.setAttribute('role', overflow ? 'group' : 'radiogroup');
+    if (overflow && (buttons.includes(focused) || focused === fallback)) fallback.focus({preventScroll:true});
+    else if (!overflow && focused === fallback) buttons.find(node => node.getAttribute('aria-checked') === 'true')?.focus({preventScroll:true});
+  });
   if (choiceFocus?.label === label) {
     choiceFocus = null;
     const focusChecked = () => {
@@ -67,10 +118,22 @@ export function statusPill(status) {
   return h('span', {class: `ui-pill tone-${statusVocabulary[key].tone}`, 'data-status': key}, t('ui_status_' + key));
 }
 export function pageHeader({title, mark, pill, meta, actions = [], overflow} = {}) {
+  const actionRow = h('div', {class:'ui-header-actions'}, ...actions, overflow);
+  actionRow.addEventListener('focusin', event => {
+    const target = event.target.closest('button, a, select');
+    if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;
+    const box = target.getBoundingClientRect(), row = actionRow.getBoundingClientRect();
+    if (box.right > row.right) actionRow.scrollLeft += box.right - row.right;
+    if (box.left < row.left) actionRow.scrollLeft -= row.left - box.left;
+  });
+  const heading = h('h1', {}, title);
+  const nameHeading = () => {heading.title = heading.textContent; heading.setAttribute('aria-label', heading.textContent);};
+  nameHeading();
+  new MutationObserver(nameHeading).observe(heading, {childList: true, characterData: true, subtree: true});
   return h('header', {class: 'ui-page-header'}, h('div', {class: 'ui-page-heading'},
-    h('div', {class: 'ui-title-row'}, mark, h('h1', {}, title), pill),
+    h('div', {class: 'ui-title-row'}, mark, heading, pill),
     meta ? (meta instanceof Node ? meta : h('p', {class: 'ui-meta'}, meta)) : null),
-  h('div', {class: 'ui-header-actions'}, ...actions, overflow));
+  actionRow);
 }
 export function sectionCard({title, actions = [], body} = {}) {
   return h('section', {class: 'ui-section-card'}, title ? h('header', {}, h('h2', {}, title), h('div', {class: 'ui-header-actions'}, ...actions)) : null, body);
@@ -84,11 +147,11 @@ export function metric({label, value, context, bar, pill} = {}) {
   return h('div', {class: 'ui-metric'}, h('div', {class: 'ui-meta'}, label),
     h('div', {class: 'ui-metric-value'}, unknown ? '—' : value, unknown ? statusPill('unknown') : pill || null), context ? h('div', {class: 'ui-metric-context'}, context) : null, track);
 }
-export function emptyState({icon, title, text, action}) {
-  return h('div', {class: 'ui-empty'}, nodeIcon(icon), h('h2', {}, title), text ? h('p', {}, text) : null, action);
+export function emptyState({icon = 'inbox', title, text, action, heading = 'h2'}) {
+  return h('div', {class: 'ui-empty'}, nodeIcon(icon), h(heading === 'h3' ? 'h3' : 'h2', {}, title), text ? h('p', {}, text) : null, action);
 }
-export function skeleton(rows = 3) {
-  return h('div', {class: 'ui-skeleton', role: 'status', 'aria-label': t('ui_loading')},
+export function skeleton(rows = 3, {label = t('ui_loading')} = {}) {
+  return h('div', {class: 'ui-skeleton', role: 'status', 'aria-label': label},
     ...Array.from({length: Math.min(100, Math.max(0, rows))}, () => h('div', {'aria-hidden': 'true'})));
 }
 const disclosures = new Map();
@@ -109,7 +172,7 @@ export function inlineError({error, retry}) {
     retry ? button({size: 'sm', variant: 'ghost', label: t('ui_retry'), onClick: retry}) : null);
 }
 export function contextChip({icon, text, onRemove}) {
-  return h('span', {class: 'ui-context-chip'}, nodeIcon(icon), text,
+  return h('span', {class: 'ui-context-chip', role:'group', title:text, 'aria-label':text}, nodeIcon(icon), h('span', {class:'ui-chip-label'}, text),
     onRemove ? iconButton({icon: 'x', label: t('ui_remove', {text}), onClick: onRemove}) : null);
 }
 export function agentMark(cli) {
@@ -189,7 +252,10 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false}
   }
   function keys(event) {
     if (dock && (root.hidden || media.matches)) return;
-    if (event.key === 'Escape') {event.preventDefault(); close();}
+    if (event.key === 'Escape') {
+      if (!root.contains(event.target) && event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable=false])')) return;
+      event.preventDefault(); close();
+    }
     else if (!media.matches) trapFocus(root, event);
   }
   let closed = false;
@@ -233,12 +299,12 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false}
   });
   return Object.assign(root, {body, close, open, dispose: dock ? destroy : close});
 }
-export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, rowAttrs} = {}) {
-  const compact = () => compactRow && matchMedia('(max-width: 799px)').matches;
+export function dataTable({columns, rows, rowKey, selected, onSelect = () => {}, expandable, expanded = new Set(), onToggle = () => {}, compactRow, compactBelow = 0, rowAttrs} = {}) {
+  const compact = () => compactRow && (matchMedia('(max-width: 799px)').matches || root.clientWidth < compactBelow);
   const keyFor = row => typeof rowKey === 'function' ? rowKey(row) : row[rowKey];
   const hasSelection = rows.some(row => keyFor(row) === selected);
-  const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-label': t('ui_more')}) : null,
-    ...columns.map(column => h('th', {scope: 'col', 'data-column': column.key, class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
+  const tbody = h('tbody'), table = h('table', {}, h('thead', {}, h('tr', {}, expandable ? h('th', {'aria-hidden': 'true'}) : null,
+    ...columns.map(column => h('th', {scope: 'col', 'data-column': column.key, 'data-secondary': column.secondary || null, class: column.numeric ? 'numeric' : ''}, column.label)))), tbody);
   const root = h('div', {class: 'ui-data-table' + (compactRow ? ' ui-data-table-responsive' : ''), tabindex: compactRow ? null : 0}, table), controls = [];
   rows.forEach((row, i) => {
     const key = keyFor(row), active = key === selected;
@@ -258,17 +324,17 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
         if (compactRow) tr.setAttribute('aria-expanded', String(open));
         toggle.setAttribute('aria-label', t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key})); onToggle(key, open);
       };
-      const toggle = iconButton({icon: 'chevron-right', label: t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key}), 'aria-expanded': String(open), onClick: () => toggleExpansion()});
+      const toggle = iconButton({icon: 'chevron-right', label: t(open ? 'ui_collapse' : 'ui_expand', {title: row.title || key}), 'aria-expanded': String(open), tabindex: -1, onClick: () => toggleExpansion()});
       if (compactRow) tr.setAttribute('aria-expanded', String(open));
       tr.append(h('td', {}, toggle)); tbody.append(tr, detail);
     } else tbody.append(tr);
-    tr.append(...columns.map(column => h('td', {'data-column': column.key, class: column.numeric ? 'numeric' : ''}, column.render ? column.render(row) : row[column.key] ?? '—')));
+    tr.append(...columns.map(column => h('td', {'data-column': column.key, 'data-secondary': column.secondary || null, class: column.numeric ? 'numeric' : ''}, column.render ? column.render(row) : row[column.key] ?? '—')));
     if (compactRow) tr.append(h('td', {class: 'ui-data-table-compact', colspan: columns.length + (expandable ? 1 : 0)},
       expandable ? drawIcon('chevron-right') : null, compactRow(row)));
     tr.addEventListener('keydown', event => {
       if (event.target !== tr) return;
       if (['Enter', ' '].includes(event.key)) {event.preventDefault(); if (compact() && toggleExpansion) toggleExpansion(); else select();}
-      if (compact() && toggleExpansion && ['ArrowRight', 'ArrowLeft'].includes(event.key)) {event.preventDefault(); toggleExpansion(event.key === 'ArrowRight');}
+      if (toggleExpansion && ['ArrowRight', 'ArrowLeft'].includes(event.key)) {event.preventDefault(); toggleExpansion(event.key === 'ArrowRight');}
       if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
         event.preventDefault(); const next = event.key === 'Home' ? 0 : event.key === 'End' ? controls.length - 1
           : Math.max(0, Math.min(controls.length - 1, i + (event.key === 'ArrowUp' ? -1 : 1)));
@@ -278,6 +344,7 @@ export function dataTable({columns, rows, rowKey, selected, onSelect = () => {},
     tr.addEventListener('focus', () => controls.forEach(node => {node.tabIndex = node === tr ? 0 : -1;}));
     controls.push(tr);
   });
+  for (const cell of table.querySelectorAll('th, td:not(.ui-data-table-compact)')) if (!cell.title) cell.title = cell.textContent;
   root.addEventListener('keydown', event => {
     if (event.target !== root || !controls.length) return;
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;

@@ -1,5 +1,6 @@
+import {timeStamp} from './ui/stamps.js';
 import {h} from './ui/dom.js';
-import {inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button} from './ui/components.js';
+import {discussLink, inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {discussHref} from './pm-discuss-link.js';
@@ -113,10 +114,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
   let panel = null, actions = null, signature = '', selection = null, returnTarget = null;
   const unknown = () => statusPill('unknown');
   const paragraph = (...nodes) => h('p', {}, ...nodes);
-  const stamp = value => {
-    const date = typeof value === 'number' && Number.isFinite(value) ? new Date(value * 1000) : null;
-    return date && Number.isFinite(date.valueOf()) ? h('time', {datetime: date.toISOString()}, date.toISOString().replace('T', ' ').replace('.000Z', ' UTC')) : '—';
-  };
+  const stamp = value => timeStamp(value);
   const captureFacts = capture => (capture.evidence || []).map(row => paragraph(t('pm_kanban_fact'), ' · ',
     ...Object.entries(row.assessment || {}).map(([key, value]) => {
       const label = t('pm_kanban_field_' + key), state = t('pm_kanban_state_' + labelSegment(value));
@@ -140,7 +138,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     const href = discussHref({workspaceId, refs, title: data.title, from});
     let actionRow = panel.querySelector('[data-work-actions]');
     if (!actionRow) {
-      actionRow = h('div', {class: 'pm-work-inspector-actions', 'data-work-actions': ''}, h('a', {href, class: 'ui-button primary', 'data-work-discuss': ''}, t('wv_discuss')));
+      actionRow = h('div', {class: 'pm-work-inspector-actions', 'data-work-actions': ''}, discussLink({workspaceId, refs, title:data.title, from}, {'data-work-discuss':''}));
       panel.querySelector(':scope > header').append(actionRow);
     }
     if (!actions && tools().length) {

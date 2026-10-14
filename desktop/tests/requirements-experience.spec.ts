@@ -9,7 +9,7 @@ async function tableFits(page: any) {
   expect(await page.locator('.pm-requirements-tables, .pm-requirements .ui-data-table').evaluateAll(nodes =>
     nodes.every(node => node.scrollWidth <= node.clientWidth))).toBe(true);
   expect(await page.locator('.pm-requirements .ui-data-table :is(th, td):visible').evaluateAll(nodes =>
-    nodes.every(node => node.scrollWidth <= node.clientWidth))).toBe(true);
+    nodes.filter(node => node.scrollWidth > node.clientWidth).map(node => ({column:node.getAttribute('data-column'),text:node.textContent,scroll:node.scrollWidth,width:node.clientWidth})))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`requirements delivery experience ${locale} ${width}`, async ({browser, baseURL}) => {

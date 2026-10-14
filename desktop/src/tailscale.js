@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 import {nativeDesktop, tailscaleControl} from './transport/index.ts';
 
 // Local login-scoped evidence; never mixed with central actor, operations or event cursors.
@@ -44,7 +45,7 @@ export function mountTailscale(main, {h, t, presentation} = {}) {
         receipt && receipt.phase !== 'uncertain' ? h('button',{class:'secondary',disabled:busy,onclick:()=>run(async()=>{
           const previous=intent;intent=null;try{save();}catch(error){intent=previous;throw error;}receipt=null;
         })},t('tailscale_new')):null,
-        h('button',{class:'secondary',disabled:busy,onclick:refresh},t('tailscale_refresh'))) : null,
+        iconButton({icon:'refresh-cw', label:t('tailscale_refresh'), ...{class:'secondary',disabled:busy,onclick:refresh}})) : null,
     ].filter(Boolean));
   };
   const read = async () => {

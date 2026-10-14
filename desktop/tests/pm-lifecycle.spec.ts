@@ -94,7 +94,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     const editor=await edit(page,'pause');await editor.getByLabel('Reason and retained context').fill('Pause new investment.');
     await editor.getByRole('button',{name:'Pause new work',exact:true}).click();
     await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Paused for new work · existing work needs reconciliation');
-    const row=activity(page).locator('[data-pm-lifecycle-operation]');await row.locator('summary').click();await expect(row).toContainText('unknown');
+    const row=activity(page).locator('[data-pm-lifecycle-operation]');await row.locator('summary').click();await expect(row).toContainText('Unknown');
     await activity(page).locator('[data-pm-lifecycle-retain]>summary').click();
     await activity(page).getByRole('checkbox',{name:'Retain this operation '+operationId,exact:true}).check();
     await action(page,'retain_inflight').getByLabel('Reason and retained context').fill('Leave the unknown result for its original controller to reconcile.');
@@ -203,4 +203,19 @@ test('a newer Maintain observation requires explicit review before a fresh decis
   await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeDisabled({timeout:10000});
   await editor.getByRole('button',{name:'Review current activity state',exact:true}).click();await editor.getByRole('button',{name:'Record stage',exact:true}).click();
   expect(f.state.writes[0].body.params.maintenance_ref).toEqual(f.state.maintenance);
+});
+
+
+for(const locale of ['en','zh-TW']) test(`lifecycle uses shared action and operation labels ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),f=fixture();f.stop();
+  Object.assign(f.state.inflight[0],{action:'session.start',operation_status:'uncertain',steps:[{name:'continue',status:'uncertain'}]});
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
+  const row=activity(page).locator('[data-pm-lifecycle-operation]');
+  await expect(row.locator('summary')).toContainText(locale==='en'?'Start session':'開始工作階段');
+  await expect(row.locator('summary')).not.toContainText('session.start');
+  await row.locator('summary').click();
+  await expect(row).toContainText(locale==='en'?'continue · outcome unknown, reading back':'continue · 結果不明，回查中');
+  await expect(row).not.toContainText('uncertain');
+  await expect(row).not.toContainText('writer: unknown');expect(f.state.writes).toHaveLength(0);
+  await context.close();
 });

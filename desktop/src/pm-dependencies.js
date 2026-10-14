@@ -1,5 +1,6 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {searchField, discussLink, button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {discussHref} from './pm-discuss-link.js';
 import {boundGraph, layoutGraph, limitColumns} from './pm-dependencies-layout.js';
@@ -28,7 +29,7 @@ const capturedDate = epoch => {
   if (typeof epoch !== 'number' || !Number.isFinite(epoch)) return '';
   const date = new Date(epoch * 1000);
   if (Number.isNaN(date.valueOf())) return '';
-  return date.toLocaleDateString(undefined, {month: 'short', day: 'numeric', timeZone: 'UTC'});
+  return timeStamp(epoch);
 };
 const abbreviate = value => {const text = String(value || ''); return text.length > 16 ? text.slice(0, 15) + '…' : text;};
 const svg = (tag, attrs = {}, ...children) => {
@@ -114,7 +115,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const search = h('input', {type: 'search', 'aria-label': t('dep_search'), placeholder: t('dep_search')});
   search.value = typeof preference.query === 'string' ? preference.query : '';
   search.addEventListener('input', () => {remember(); render();});
-  const searchWrap = h('div', {class: 'dep-search'}, icon('search', {size: 16}), search);
+  const searchWrap = searchField(search, {class:'dep-search'});
   const relationChips = RELATIONS.map(value => makeChip('relation', value));
   const evidenceChips = EVIDENCE.map(value => makeChip('evidence', value));
   function makeChip(kind, value) {
@@ -147,7 +148,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   const graphScroll = h('div', {class: 'dep-graph-scroll', 'data-dep-graph': ''});
   const zoomOut = button({size: 'sm', label: '−', 'aria-label': t('dep_zoom_out'), title: t('dep_zoom_out'), onClick: () => setZoom(zoom - 0.2)});
   const zoomIn = button({size: 'sm', label: '+', 'aria-label': t('dep_zoom_in'), title: t('dep_zoom_in'), onClick: () => setZoom(zoom + 0.2)});
-  const loaded = h('span', {class: 'dep-loaded', 'data-dep-loaded': ''}, t('dep_loaded'));
+  const loaded = h('span', {class: 'dep-loaded', 'data-dep-loaded': ''}, `${Math.round(zoom * 100)}%`);
   const graphBar = h('div', {class: 'dep-graph-bar'}, h('div', {class: 'dep-graph-controls'}, loaded, zoomOut, zoomIn));
   const graphHost = h('div', {'data-dep-graph-host': ''}, graphBar, graphScroll);
   const detailBody = h('div');
@@ -326,7 +327,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     for (const item of graphScroll.querySelectorAll('[data-dep-node]')) item.tabIndex = item === node ? 0 : -1;
     node.focus();
   }
-  function setZoom(next) {zoom = Math.min(1.8, Math.max(0.6, Math.round(next * 10) / 10)); remember(); drawGraph(filteredEdges());}
+  function setZoom(next) {zoom = Math.min(1.8, Math.max(0.6, Math.round(next * 10) / 10)); loaded.textContent = `${Math.round(zoom * 100)}%`; remember(); drawGraph(filteredEdges());}
   function choose(next, open) {
     selection = next;
     if (next?.componentId) focusId = next.componentId;
@@ -366,8 +367,8 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     if (!active || !data) return;
     const commit = shortSha(data.capture?.commit_sha);
     const date = capturedDate(data.capture?.captured_at);
-    const line = commit && date ? t('dep_meta', {commit, date}) : commit ? t('dep_meta_commit', {commit}) : '';
-    if (header?.meta) {header.meta.hidden = !line; header.meta.textContent = line;}
+    const line = commit && date ? timeLabel(t, 'dep_meta', {commit, date}) : commit ? t('dep_meta_commit', {commit}) : '';
+    if (header?.meta) {header.meta.hidden = !line; header.meta.replaceChildren(line);}
     const marks = [];
     if (data.stale === true) marks.push(statusPill('stale'));
     if (data.capture?.revision_id && data.partial === true) marks.push(statusPill('partial'));
@@ -504,7 +505,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     const releaseBlock = Array.isArray(releases) ? h('div', {'data-dep-releases': ''}, h('h3', {}, t('dep_releases')), ...(releases.length ? releases.map(row => h('p', {}, typeof row === 'string' ? row : joinLabel([row?.name, row?.version, row?.revision_id, row?.id]) || t('dep_dash'))) : [h('p', {}, t('dep_dash'))])) : '';
     const subject = selectedKey() ? dependencyName(selectedKey()) : componentName(selection.componentId);
     const discussionTitle = joinLabel([subject, shortSha(data.capture?.commit_sha) ? t('dep_meta_commit', {commit: shortSha(data.capture.commit_sha)}) : '']);
-    const discuss = selection ? h('a', {class: 'ui-button secondary ui-md', 'data-dep-discuss': '', href: discussHref({workspaceId, refs: [], title: discussionTitle, from: 'dependencies'})}, t('dep_discuss')) : '';
+    const discuss = selection ? discussLink({workspaceId, refs: [], title: discussionTitle, from: 'dependencies'}, {'data-dep-discuss': ''}) : '';
     panel.body.replaceChildren(facts, tests, affected, releaseBlock, h('div', {class: 'dep-actions'}, discuss));
     if (activeEl?.matches('[data-dep-discuss]')) panel.querySelector('[data-dep-discuss]')?.focus({preventScroll: true});
   }
@@ -716,7 +717,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       if (files.childNodes.length) detailBody.append(files);
       if ((revisions?.revisions || []).length || revisions?.next_cursor) {
         detailBody.append(h('h2', {}, t('dep_revisions')));
-        for (const row of revisions?.revisions || []) detailBody.append(h('p', {}, joinLabel([shortSha(row.commit_sha), capturedDate(row.captured_at), row.status === 'partial' ? t('ui_status_partial') : row.status === 'complete' ? '' : reasonText(t, row.reason, true)])));
+        for (const row of revisions?.revisions || []) detailBody.append(h('p', {}, shortSha(row.commit_sha), ' · ', capturedDate(row.captured_at), row.status === 'partial' ? ' · ' + t('ui_status_partial') : row.status === 'complete' ? '' : ' · ' + reasonText(t, row.reason, true)));
         if (revisions?.next_cursor) detailBody.append(h('p', {}, t('dep_revisions_more')));
       }
     }

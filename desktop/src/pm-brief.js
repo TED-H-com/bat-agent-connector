@@ -1,3 +1,5 @@
+import {emptyState} from './ui/components.js';
+import {timeStamp, timeLabel} from './ui/stamps.js';
 // All five Brief sections render one immutable snapshot, filtered for current source access.
 import {briefExport} from './pm-brief-export.js';
 import {labelSegment} from './label-text.js';
@@ -21,7 +23,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   if(exports)box.insertBefore(exports.element,box.lastChild);
   function withdraw(){++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();}
   function unavailable(error){withdraw();status.replaceChildren(errorBox(error));}
-  const stamp = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : t('pm_evidence_time_unknown');
+  const stamp = value => timeStamp(value, {empty: t('pm_evidence_time_unknown')});
   const check = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const readable = (prefix, value) => {
     const present = labelSegment(value);
@@ -32,11 +34,11 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   function render(data) {
     snapshot = check(data).snapshot;
     view.replaceChildren();status.replaceChildren();
-    if (!snapshot) {view.append(h('p', {class: 'muted'}, t('pm_brief_empty'))); exports?.update();return;}
+    if (!snapshot) {view.append(emptyState({title:t('pm_brief_empty')})); exports?.update();return;}
     if (snapshot.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     selectedSnapshotId=snapshot.snapshot_id;
     view.append(h('p', {class: 'pm-brief-date'}, h('strong', {}, snapshot.title || workspace().name), ' · ',
-      t('pm_brief_as_of', {time: stamp(snapshot.as_of)})), h('p', {class: 'muted'}, t('pm_brief_fixed')));
+      timeLabel(t, 'pm_brief_as_of', {time: stamp(snapshot.as_of)})), h('p', {class: 'muted'}, t('pm_brief_fixed')));
     const sections = h('div', {class: 'pm-brief-sections'});
     for (const name of ['goals','delivery','blockers','deviations','decisions']) {
       const section = snapshot.brief?.[name] || {status:'unavailable', items:[]};
@@ -84,7 +86,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       selectedSnapshotId=entry.snapshot_id;const ticket=++serial;snapshot=null;signature='';view.replaceChildren();exports?.update();
       try {const data=await api('GET',`${endpoint}/snapshots/${entry.snapshot_id}`);alive();if(ticket===serial)render(data);}
       catch(error){if(ticket===serial)unavailable(error);}
-    }}, `${entry.title || t('pm_brief_title')} · ${stamp(entry.as_of)}`));
+    }}, entry.title || t('pm_brief_title'), ' · ', stamp(entry.as_of)));
     if (page.next_cursor !== null && page.next_cursor !== undefined) {
       const more=h('button',{type:'button',class:'secondary',onclick:async()=>{
         more.disabled=true;

@@ -1,3 +1,4 @@
+import {emptyState} from './ui/components.js';
 // A fixed, reviewed selection. Runtime events refresh receipts, never select new prompts.
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 const opId = value => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
@@ -122,7 +123,7 @@ export function approvalsPanel({h, t, api, caps, guard, ready, errorBox, opStatu
     controls.length = 0; rows.replaceChildren();
     if (!saved.preview) return;
     if (saved.preview.truncated) rows.append(h("p", {class: "note"}, t("bulk_truncated")));
-    if (!saved.preview.items.length) rows.append(h("p", {class: "panel"}, t("bulk_empty")));
+    if (!saved.preview.items.length) rows.append(emptyState({title:t('bulk_empty')}));
     for (const item of saved.preview.items) {
       const choice = h("input", {type: "checkbox", "aria-label": t("bulk_select", {id: item.session_id})});
       const requestMode = saved.intent?.request?.params.selection.find(s => s.item_id === item.item_id);

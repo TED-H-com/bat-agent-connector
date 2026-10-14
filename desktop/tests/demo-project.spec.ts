@@ -179,7 +179,9 @@ for (const {locale, width} of cases) {
     const governance = page.locator('[data-pm-section=ui_governance] > details');
     await expect(governance).toHaveAttribute('open', '');
     await governance.locator(':scope > summary').click();
-    await page.locator('[data-reg-type=decision]').click();
+    const typeSelect = page.locator('[data-pm-register] [data-choice-select]');
+    if (await typeSelect.isVisible()) await typeSelect.selectOption({label:locale === 'zh-TW' ? '決定' : 'Decision'});
+    else await page.locator('[data-reg-type=decision]').click();
     await page.locator('[data-row-key]').filter({hasText: fixture.copy.decisions.budget}).click();
     const issueDiscuss = page.locator('[data-reg-discuss]');
     const issueLaunch = parseDiscussRefs((await issueDiscuss.getAttribute('href'))!.split('?')[1]);
@@ -295,11 +297,11 @@ for (const {locale, width} of cases) {
     await page.getByRole('menuitem', {name: locale === 'zh-TW' ? '路線圖' : 'Roadmap', exact: true}).click();
     const recovery = page.locator('[data-pm-milestone="recovery_review"]');
     await expect(recovery).toContainText(locale === 'zh-TW' ? '復原審查' : 'Recovery review');
-    await expect(recovery).toContainText(dates.recoveryBaseline);
-    await expect(recovery).toContainText(dates.recoveryForecast);
+    await expect(recovery.locator('td').nth(0).locator('time')).toHaveAttribute('datetime', dates.recoveryBaseline);
+    await expect(recovery.locator('td').nth(1).locator('time')).toHaveAttribute('datetime', dates.recoveryForecast);
     await expect(page.locator('[data-pm-milestone="design_review"]')).toContainText(locale === 'zh-TW' ? '設計審查' : 'Design review');
     await expect(page.locator('[data-pm-milestone="launch"]')).toContainText(locale === 'zh-TW' ? '上線' : 'Launch');
-    await expect(page.locator('[data-pm-milestone="launch"]')).toContainText(dates.launchDate);
+    await expect(page.locator('[data-pm-milestone="launch"] td').first().locator('time')).toHaveAttribute('datetime', dates.launchDate);
     await expectNoJunk(page);
     await shot(page, `roadmap-${locale}-${width}`);
     await page.keyboard.press('Escape');

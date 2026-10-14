@@ -1,8 +1,9 @@
+import {iconButton, emptyState, skeleton} from './ui/components.js';
 // Read only saved central receipts for the selected, explicitly associated work.
 export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
   let workId=null, sequence=0, busy=false, cursor=null, rows=[], packages=[];
   const status=h('div',{role:'status'}), facts=h('div',{});
-  const refreshButton=h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('wd_refresh'));
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('wd_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void read(true)},t('wd_more'));
   const element=h('details',{'data-pm-work-deliveries':'',class:'pm-spec-card',hidden:true},h('summary',{},t('wd_title')),
     h('p',{class:'muted'},t('wd_boundary')),h('div',{class:'actions'},refreshButton,more),status,facts);
@@ -24,7 +25,7 @@ export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
         row.deployment?h('div',{},fact('wd_environment',row.deployment.environment),fact('wd_deploy_state',row.deployment.state),
           fact('wd_deploy_verified',boolean(row.deployment.verified)),fact('wd_current',boolean(row.deployment.is_current)),
           code(row.deployment.source_sha),fact('wd_run',row.deployment.run_id)):null)),
-      !rows.length?h('p',{class:'muted'},t('wd_empty')):null);
+      !rows.length?emptyState({title:t('wd_empty')}):null);
   }
   function check(data,id) {
     if(data?.workspace_id!==workspaceId||data.work_item_id!==id||data.contract!=='pm-engineering-delivery/v1'
@@ -41,7 +42,7 @@ export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
     const id=workId,after=append?cursor:0,ticket=++sequence;
     if(append&&after===null)return;
     busy=true;if(!append){rows=[];packages=[];cursor=null;facts.replaceChildren();}
-    controls();status.replaceChildren(h('p',{class:'muted'},t('wd_loading')));
+    controls();status.replaceChildren(skeleton(2));
     try {
       const data=check(await api('GET',`/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(id)}/deliveries?after=${after}&limit=20`),id);
       if(!valid(ticket)||workId!==id)return;

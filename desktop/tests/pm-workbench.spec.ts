@@ -23,7 +23,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   test('partial and empty Charter remain usable without fabricated quota or adopted direction',async({page})=>{
     const f=workbenchFixture();f.state.snapshots=[];await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toContainText('Incomplete information is welcome');
-    await page.getByRole('button',{name:'Discuss with PM',exact:true}).click();
+    await page.locator('[data-charter-discuss]').click();
     await expect(page.locator('[data-pm-action="pm.thread.create"]')).toBeVisible();
     expect(f.base.state.writes).toHaveLength(0);
   });
@@ -99,7 +99,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     let release:()=>void=()=>{};f.state.heldDetail=new Promise<void>(resolve=>release=resolve);
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
-    await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('Reading the selected work');
+    await expect(rtm(page).locator('[data-rtm-detail]').getByRole('status',{name:'Reading the selected work and its delivery records…',exact:true})).toBeVisible();
     f.state.denyWork=true;
     try{await page.locator('[data-pm-refresh]').click();await expect(rtm(page)).toContainText('Your token lacks this scope');}
     finally{release();}
@@ -121,6 +121,8 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     const heading=rtm(page).locator('[data-rtm-detail] > header > .ui-icon-button');await expect(heading).toBeFocused();
+    await expect(rtm(page).locator('[data-rtm-detail] pre')).toContainText('"number": 41');
+    await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
     await heading.evaluate(element=>element.setAttribute('data-reading-marker','detail'));
     await rtm(page).locator('[data-rtm-requirement="membership.login"]').evaluate(element=>element.setAttribute('data-reading-marker','row'));
     const reads=f.state.reads.filter(path=>path.includes('/deliveries?')).length;

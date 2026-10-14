@@ -1,3 +1,4 @@
+import {timeStamp, timeLabel} from './ui/stamps.js';
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, segmented, statusPill, inspector, disclosure, emptyState, skeleton, inlineError} from './ui/components.js';
@@ -15,7 +16,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
   const viewport = h('div', {class: 'schedule-viewport', tabindex: 0, role: 'region', 'aria-label': t('sched_timeline')});
   const chart = h('div', {class: 'schedule-chart'}), meta = h('div', {class: 'schedule-meta', 'aria-live': 'polite'});
   const unscheduled = h('div', {class: 'schedule-unscheduled'}), error = h('div');
-  const main = h('div', {class: 'schedule-main'}, meta, error, viewport, unscheduled);
+  const main = h('div', {class: 'schedule-main'}, error, viewport, unscheduled);
   viewport.append(chart);
   const legend = h('div', {class: 'schedule-legend', 'aria-label': t('sched_legend')},
     ...['baseline', 'forecast', 'actual', 'milestone'].map(kind => h('span', {},
@@ -141,7 +142,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const step = zoom === 'day' ? Math.max(2, Math.ceil(72 / scale), Math.ceil(length / 300)) : zoom === 'week' ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9000));
       for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
         const instant = new Date(date * DAY);
-        const text = new Intl.DateTimeFormat(navigator.language, {month: 'short', day: zoom === 'month' ? undefined : 'numeric', timeZone: 'UTC'}).format(instant);
+        const text = timeStamp(instant.toISOString().slice(0, 10), {dateOnly:true});
         const tick = h('span', {class: 'schedule-tick'}, text); tick.style.left = `${(date - domain.start) * scale}px`; node.append(tick);
         if (zoom === 'month') {instant.setUTCMonth(instant.getUTCMonth() + step, 1); date = instant.getTime() / DAY;}
         else if (zoom === 'week' && count === 0) date += ((8 - instant.getUTCDay()) % 7 || 7);
@@ -194,8 +195,8 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const dates = spans(row).map(span => {
         const s = row[span.kind].start?.slice(0, 10) || '—';
         const e = span.end !== null ? row[span.kind].end?.slice(0, 10) : null;
-        const suffix = span.open ? ' → ' + t('sched_open') : span.unknownEnd ? ' → ' + reasonLabel(t, 'terminal_time_unrecorded') : e && e !== s ? ' → ' + e : '';
-        return `${t('sched_' + span.kind)} ${s}${suffix}`;
+        const suffix = span.open ? [' → ', t('sched_open')] : span.unknownEnd ? [' → ', reasonLabel(t, 'terminal_time_unrecorded')] : e && e !== s ? [' → ', timeStamp(e, {dateOnly:true})] : [];
+        return h('span', {}, t('sched_' + span.kind), ' ', timeStamp(s, {dateOnly:true}), ...suffix);
       });
       const pill = row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null;
       const descId = `sched-desc-${index}`, statusId = pill ? `sched-status-${index}` : null;
@@ -203,7 +204,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const cell = h('div', {class: 'schedule-tree-cell', role: 'treeitem', 'aria-level': depth, 'aria-expanded': expandable ? String(!collapsed.has(row.id)) : null,
         'aria-label': label(row), 'aria-describedby': [statusId, descId].filter(Boolean).join(' '), tabindex: tabId === row.id ? 0 : -1,
         'data-schedule-select': row.id, onclick: event => row.kind === 'group' ? toggle(row.id) : select(row.id, event.currentTarget), onkeydown: event => keydown(event, item, index)},
-        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: row.title}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, dates.join(' · ') || t('sched_no_dates'))),
+        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: row.title}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, ...(dates.length ? dates.flatMap((date, index) => index ? [' · ', date] : [date]) : [t('sched_no_dates')]))),
         pill);
       cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
       const lane = h('div', {class: 'schedule-lane'}, track(row));
@@ -231,13 +232,13 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const focusUnscheduledSummary = unscheduled.contains(activeEl) && activeEl?.tagName === 'SUMMARY';
       const focusUnscheduledId = unscheduled.contains(activeEl) ? activeEl?.closest('[data-schedule-select]')?.dataset.scheduleSelect : null;
       const details = disclosure({label: t('sched_details'), key: `${namespace}:${workspaceId}:schedule:details`, body: h('div', {},
-        h('p', {}, t('sched_as_of', {date: data.as_of})),
+        h('p', {}, timeLabel(t, 'sched_as_of', {date: timeStamp(data.as_of)})),
         ...[...data.reasons.map(reason => ({reason})), ...data.unknown].map(note => h('p', {}, reasonLabel(t, note.reason), h('code', {}, note.reason))))});
       const upcoming = data.rows.filter(row => row.kind === 'milestone' && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString()))
         .sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
       const delta = upcoming ? milestoneDelta(upcoming) : null;
       meta.replaceChildren(...(upcoming ? [h('span', {class: 'schedule-answer'}, firstLine(upcoming), delta ? ' · ' + t('sched_delta', {n: delta > 0 ? '+' + delta : delta}) : '')] : []),
-        h('span', {}, t('sched_loaded', {n: data.rows.length})), ...(data.partial ? [statusPill('partial')] : []), details);
+        h('span', {}, t(data.partial ? 'sched_loaded' : 'sched_count', {n: data.rows.length})), ...(data.partial ? [statusPill('partial')] : []), details);
       const list = h('ul', {}, ...data.unscheduled.map(row => h('li', {},
         button({variant: 'ghost', label: firstLine(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}),
         row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null)));
@@ -294,7 +295,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     const opener = element.querySelector(`[data-schedule-select="${CSS.escape(row.id)}"]`);
     opener?.scrollIntoView({block: 'nearest'}); select(row.id, opener);
   }
-  return {element, refresh, withdraw, openRef, setActive(value) {
+  return {element, meta, refresh, withdraw, openRef, setActive(value) {
     active = value;
     if (!value) {saveScroll(); closePanel(false);}
     else {

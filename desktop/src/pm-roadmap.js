@@ -1,3 +1,5 @@
+import {emptyState} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
 // One scheduling baseline, explicit forecasts and fixed source observations.
 export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -9,7 +11,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
   const pick=row=>Object.fromEntries(['milestone_id','title','plan_revision_id','requirement_ids','work_binding_ids','baseline_date','depends_on'].map(key=>[key,row[key]]));
   const drafts=()=>JSON.parse(milestones.value || '[]');
   const persist=list=>{milestones.value=JSON.stringify(list);milestones.dispatchEvent(new Event('input'));};
-  const textDate=value=>value || t('pm_roadmap_unknown_date');
+  const textDate=value=>value ? timeStamp(value, {dateOnly:true}) : t('pm_roadmap_unknown_date');
   const can=()=>Boolean(current&&planHead)&&permitted(true);
   const lock=()=>{for(const field of rows.querySelectorAll('input,select,button'))field.disabled=milestones.disabled||field.dataset.pmIncompatible==='true';add.disabled=milestones.disabled;};
   const add=h('button',{type:'button',class:'secondary',onclick:()=>{
@@ -135,7 +137,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
       if(!history.isConnected)return false;
       if(!after)historyBody.replaceChildren();historyLoaded=true;historyVersion=expectedVersion;
       for(const entry of page.revisions||[]){
-        const content=h('div'),detail=h('details',{},h('summary',{},t('pm_roadmap_kind_'+entry.kind),' · ',new Date(entry.created_at*1000).toLocaleString()),content);
+        const content=h('div'),detail=h('details',{},h('summary',{},t('pm_roadmap_kind_'+entry.kind),' · ',timeStamp(entry.created_at)),content);
         let fetched=false;detail.addEventListener('toggle',async()=>{
           if(!detail.open||fetched)return;fetched=true;
           try{const value=await api('GET',`${endpoint}/roadmap/revisions/${entry.revision_id}`);alive();if(!detail.isConnected)return;
@@ -159,7 +161,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
   }
   function render(){
     const base=current.baseline?.document;
-    if(!base){view.replaceChildren(h('p',{class:'muted'},t('pm_roadmap_empty')));return;}
+    if(!base){view.replaceChildren(emptyState({title:t('pm_roadmap_empty')}));return;}
     const table=h('table',{class:'pm-roadmap-table'},h('thead',{},h('tr',{},...['milestone','baseline_date','forecast_date','actual'].map(name=>h('th',{scope:'col'},t('pm_roadmap_'+name))))));
     const body=h('tbody');table.append(body);
     for(const milestone of base.milestones){

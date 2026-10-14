@@ -1,4 +1,6 @@
-import {disclosure, iconButton} from './ui/components.js';
+import {discussHref} from './pm-discuss-link.js';
+import {timeStamp, timeText, timeLabel} from './ui/stamps.js';
+import {emptyState, discussLink, disclosure, iconButton} from './ui/components.js';
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
 import {viewState} from './ui/view-state.js';
@@ -36,15 +38,16 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   const compare = h('button', {'data-report-compare': '', type: 'button', class: 'secondary', onclick: () => void comparePrevious()}, t('wb_compare'));
   const more = h('button', {type: 'button', class: 'secondary', onclick: () => void loadMore()}, t('wb_history_more'));
   const print = h('button', {'data-report-print': '', type: 'button', class: 'secondary', onclick: () => window.print()}, t('wb_print'));
+  const primary = discussLink({workspaceId, from:'overview'}, {'data-charter-discuss':''});
   const box = h('section', {class: 'pm-charter', 'data-pm-charter': ''},
     h('header', {class: 'pm-heading'}, h('h2', {}, t('wb_charter')),
-      h('button', {type: 'button', class: 'primary', onclick: () => onDiscuss(snapshot)}, t('wb_discuss'))),
+      primary),
     h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print), status, report, comparison,
     h('div', {class: 'pm-charter-save'}, create.box, more));
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
     snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}, errorBox}) : null;
   if (exports) box.append(exports.element);
-  const stamp = value => Number.isFinite(value) ? new Date(value * 1000).toLocaleString() : t('wb_unknown');
+  const stamp = value => timeStamp(value, {empty:t('wb_unknown')});
   const check = data => {if (data?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   function checkedSnapshot(data, id) {
     const value = check(data).snapshot;
@@ -61,12 +64,14 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     onControls({previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null});
   }
   function historyOptions() {
-    picker.replaceChildren(...history.map(row => h('option', {value: row.snapshot_id}, `${t('wb_snapshot', {number: row.sequence})} · ${stamp(row.as_of)}`)));
+    picker.replaceChildren(...history.map(row => h('option', {value: row.snapshot_id}, `${t('wb_snapshot', {number: row.sequence})} · ${timeText(row.as_of)}`)));
     if (snapshot && !history.some(row => row.snapshot_id === selectedId)) picker.append(h('option', {value: selectedId}, t('wb_snapshot', {number: snapshot.sequence})));
     picker.value = selectedId || ''; controls();
+    const discuss = primary;
+    if (discuss) discuss.href = discussHref({workspaceId, from:'overview', report:snapshot?.snapshot_id, refs:snapshot ? [{kind:'snapshot', id:snapshot.snapshot_id}] : []});
   }
   function renderItems(rows, empty = 'wb_unknown') {
-    if (!rows.length) return h('p', {class: 'muted'}, t(empty));
+    if (!rows.length) return emptyState({title:t(empty)});
     const sources = disclosure({label: t('wb_sources'), body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))}); sources.classList.add('pm-charter-source');
     return h('div', {}, h('ul', {class: 'pm-charter-items'}, ...rows.map(row => h('li', {}, h('span', {}, labelSegment(row.text)),
       ['agent_assumption', 'unresolved', 'conflicting', 'repo_evidence'].includes(row.status)
@@ -81,7 +86,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     report.append(h('div', {class: 'pm-charter-meta'}, h('strong', {}, snapshot.title),
       h('span', {}, t('wb_snapshot', {number: snapshot.sequence})),
       h('span', {class: 'chip'}, t(snapshot.snapshot_id === latestId ? 'wb_saved' : 'wb_historical')),
-      h('span', {}, t('pm_brief_as_of', {time: stamp(snapshot.as_of)}))),
+      h('span', {}, timeLabel(t, 'pm_brief_as_of', {time: stamp(snapshot.as_of)}))),
     h('p', {class: 'pm-charter-plan-ref'}, t('wb_plan'), ': ', document?.title || t('wb_no_plan')));
     const grid = h('div', {class: 'pm-charter-grid'});
     for (const key of sections) grid.append(h('section', {'data-charter-section': key}, h('h3', {}, t('wb_' + key)),
@@ -181,7 +186,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
             h('div', {}, h('strong', {}, t('wb_after')), renderItems(right[key])))))) : h('p', {}, t('wb_unchanged')));
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
-  controls(); return {box, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
+  controls(); return {box, primary, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
     current: () => snapshot, controls: () => ({busy, previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null}),
     comparePrevious, history: () => history};
 }

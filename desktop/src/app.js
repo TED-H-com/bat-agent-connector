@@ -1,8 +1,8 @@
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
+import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
 import {icon} from './ui/icons.js';
-import {actionLabel, formatTime, operationMeta, operationStatusKey, reasonText, workStatusKey} from './global-labels.js';
+import {actionLabel, formatTime, operationMeta, operationStatusKey, operationStatusLabel, reasonText, workStatusKey} from './global-labels.js';
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
 import {joinLabel} from './label-text.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
@@ -34,7 +34,7 @@ import {createRecordForm} from "./create-record.js";
 // BAT Dashboard: a client of /api/v1 only. Every change is an operation with an Idempotency-Key; text from
 // sessions is always set with textContent (never parsed as HTML).
 import { t } from "./i18n.js";
-import {compactTime} from "./ui/time.js";
+import {timeStamp, timeText, timeLabel, startTimeTicker} from "./ui/stamps.js";
 import { connectorRequest, connectorUploadArtifact, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
 import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
@@ -127,15 +127,9 @@ function h(tag, attrs = {}, ...children) {
   return el;
 }
 const chip = (text, cls = "") => h("span", { class: `chip ${cls}` }, text);
-function when(iso) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return isNaN(d) ? iso : d.toLocaleString();
-}
-function sessionWhen(value) {
-  if (value == null || value === "") return "";
-  return compactTime(typeof value === "number" ? new Date(value * 1000).toISOString() : value);
-}
+const when = value => timeStamp(value, {milliseconds: true, empty: ''});
+const sessionWhen = value => timeText(value);
+startTimeTicker();
 function metaTail(text, sep) {
   const words = String(text).trim().split(/\s+/);
   const last = words.pop() || "";
@@ -846,7 +840,8 @@ function opRow(op, open) {
   const title = actionLabel(op.action);
   const href = `#/op/${encodeURIComponent(op.operation_id)}`;
   const key = op.operation_id;
-  const meta = operationMeta(op, formatTime(op.created_at));
+  const words = operationMeta(op);
+  const meta = h('span', {}, words, op.created_at ? [words ? ' · ' : '', timeStamp(op.created_at)] : null);
   const needs = ["needs_attention", "uncertain", "failed"].includes(op.status);
   const precise = t("op_" + op.status);
   return inboxRow({
@@ -889,15 +884,16 @@ async function viewSessions(main) {
   const list = h("div", {class: "session-inventory"}), status = h("div", {}), count = h("p", {class: "muted", "aria-live": "polite"});
   const more = h("button", {class: "secondary", hidden: true}, t("load_more"));
   const navigation = h("nav", {"aria-label": t("sessions_workspaces"), class: "session-workspaces"});
+  const scopeNote = h("p", {class: "muted"}, t("sessions_scope_note"));
   const scope = h("details", {class: "panel session-scope", open: matchMedia("(min-width: 901px)").matches},
-    h("summary", {}, t("sessions_workspaces")), h("p", {class: "muted"}, t("sessions_scope_note")), navigation,
+    h("summary", {}, t("sessions_workspaces")), scopeNote, navigation,
     h("a", {class: "session-project-link", href: "#/projects"}, t("sessions_projects")));
   main.append(h("div", {class: "session-heading"}, pageHeader({title: t("sessions_title")}),
     state.caps?.actions?.some(a => a.action === "session.start") ? h("a", {href: "#/start"}, t("start_title_page")) : null,
     state.caps?.features?.repository_sync?.length ? h("a", {href: "#/published"}, t("pub_title")) : null,
     state.caps?.actions?.some(a => Object.values(orchestrationActions).includes(a.action)) ? h("a", {href: "#/orchestrate/relay"}, t("orch_title")) : null),
     disclosure({label: t("global_details"), body: h("p", {}, t("sessions_intro"))}),
-    h("div", {class: "filters session-filters"}, search, hostSel, accessSel,
+    h("div", {class: "filters session-filters"}, searchField(search), hostSel, accessSel,
       state.caps?.actions?.some(a => a.action === "session.approve_pending") ? h("a", {href: "#/approvals"}, t("bulk_title")) : null), status,
     h("div", {class: "session-layout"}, scope, h("section", {"aria-label": t("sessions_title"), class: "session-results"}, count, list,
       h("div", {class: "session-pagination"}, more, h("span", {class: "muted"}, t("sessions_page_note"))))));
@@ -952,8 +948,8 @@ async function viewSessions(main) {
     const choose = key => {selected = key; save(); render();};
     const workspaceName = group => group.name || group.id || t("sessions_workspace_unknown");
     const navButton = (label, key, n) => h("button", {class: "session-scope-button", "aria-pressed": String(selected === key),
-      "data-workspace-key": key, title: label, onclick: () => choose(key)}, h("span", {}, label), h("span", {class: "muted"}, t("sessions_loaded_count", {count: n})));
-    const links = [navButton(t("sessions_all_loaded"), "", rows.size)];
+      "data-workspace-key": key, title: label, onclick: () => choose(key)}, h("span", {}, label), h("span", {class: "muted"}, t(cursor ? "sessions_loaded_count" : n === 1 ? "sessions_exact_count_one" : "sessions_exact_count", {count: n})));
+    const links = [navButton(t(cursor ? "sessions_all_loaded" : "sessions_all"), "", rows.size)];
     const labels = new Map();
     const labelKey = group => JSON.stringify([group.host, workspaceName(group)]);
     for (const group of groups) labels.set(labelKey(group), (labels.get(labelKey(group)) || 0) + 1);
@@ -982,9 +978,9 @@ async function viewSessions(main) {
           group.name && group.id && labels.get(labelKey(group)) > 1 ? h("code", {class: "muted"}, group.id) : null,
           group.name && !group.id ? h("span", {class: "muted"}, t("sessions_workspace_unverified")) : null), ...sessions.map(row))];
     });
-    list.replaceChildren(...(sections.length ? sections : [h("div", {class: "panel"}, h("p", {}, t("sessions_no_matches")),
-      h("p", {class: "muted"}, cursor ? t("sessions_more_hint") : t("sessions_empty_hint")))]));
-    count.textContent = t("sessions_showing", {shown: visible, loaded: rows.size});
+    list.replaceChildren(...(sections.length ? sections : [emptyState({title:t("sessions_no_matches"), text:t(cursor ? "sessions_more_hint" : "sessions_empty_hint")})]));
+    scopeNote.textContent = t(cursor ? "sessions_scope_note" : "sessions_scope_exact");
+    count.textContent = t(cursor ? "sessions_showing" : "sessions_showing_exact", {shown: visible, loaded: rows.size});
   };
   const read = async (mode, expectedRevision) => {
     if (expectedRevision !== revision) return;
@@ -1147,7 +1143,7 @@ function observationPanels(type, id, path) {
           const key = relations ? item.relation_id : item.seq;
           if (!seen.has(key)) {seen.add(key); list.append(relations ? relationRow(item) : eventRow(item));}
         }
-        if (!seen.size) list.replaceChildren(h("p", {class: "muted"}, t("obs_empty")));
+        if (!seen.size) list.replaceChildren(emptyState({title:t('obs_empty')}));
         cursor = result.next_cursor; more.hidden = !cursor; loaded = true; notice.hidden = latestSeen <= asOf;
         evidence.replaceChildren(...[t("obs_snapshot", {seq: asOf}), " ", t("obs_historical_limits"),
           !relations ? [" ", t("obs_first_recorded"), ": ", observationTime(result.coverage?.first_recorded_at)] : ""].flat());
@@ -1404,7 +1400,11 @@ async function viewSession(main, host, sid, context = null) {
     const queued = ["queued", "accepted", "pending", "running"].includes(op.status);
     const failed = op.status === "failed" || op.status === "cancelled";
     const line = h("p", {class: "muted session-send-line", title: id || null});
-    if (op.status === "succeeded") line.textContent = t("session_sent_now");
+    if (op.status === "succeeded") {
+      line.append(t("session_sent"));
+      const stamp = timeStamp(op.updated_at);
+      if (stamp instanceof Node) line.append(" · ", stamp);
+    }
     else if (queued) line.textContent = t("session_send_queued");
     else if (failed) line.append(t("session_send_failed"), " · ", h("button", {type: "button", class: "session-retry", onclick: () => send.click()}, t("session_send_retry")));
     else line.textContent = t("op_" + op.status);
@@ -1431,7 +1431,7 @@ async function viewSession(main, host, sid, context = null) {
     guard: () => assertView(connection), host, sessionId: sid, errorBox}) : null;
   instructions?.box.addEventListener("toggle", () => {if (instructions.box.open) instructions.refresh();});
   const deliveryPills = h("div", {class: "session-delivery-pills"});
-  const sourcesEmpty = () => h("p", {class: "muted session-quiet"}, t("session_sources_empty"));
+  const sourcesEmpty = () => emptyState({title:t('session_sources_empty'), heading:'h3'});
   const sourcesBody = h("div", {"data-session-sources": ""}, sourcesEmpty());
   const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
@@ -1449,7 +1449,7 @@ async function viewSession(main, host, sid, context = null) {
   syncChanges();
   const overflow = menu({button: iconButton({icon: "more-horizontal", label: t("ui_more")}),
     items: [
-      {key: "discuss", label: t("session_discuss"), href: "#", icon: "message-square"},
+      {key: "discuss", label: t("ui_discuss"), href: "#", icon: "message-square"},
       {key: "copy-title", label: t("bat_menu_title"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyTitle()},
       {key: "copy-id", label: t("bat_menu_id"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyId()},
       {key: "open-bat", label: t("bat_open"), icon: "external-link", title: t("bat_browser"), disabled: !nativeDesktop, onSelect: () => batHandoff?.open()},
@@ -1479,7 +1479,7 @@ async function viewSession(main, host, sid, context = null) {
     backSlot.replaceChildren();
     if (!origin) {backSlot.hidden = true; return;}
     backSlot.hidden = false;
-    backSlot.append(h("a", {href: origin.href, "data-session-back": origin.view}, t("session_back", {view: t("ui_" + origin.view)})));
+    backSlot.append(h("a", {href: origin.href, "data-session-back": origin.view}, icon("chevron-left"), t("session_back", {view: t("ui_" + origin.view)})));
   };
   const paintDiscuss = items => {
     const link = overflow.querySelector("[data-menu-key=discuss]");
@@ -1667,7 +1667,7 @@ async function viewSession(main, host, sid, context = null) {
     meta.replaceChildren(...metaBits.flatMap((bit, index) => {
       const sep = index < metaBits.length - 1;
       const [head, tail] = metaTail(bit.text, sep);
-      const node = bit.kind === "time" ? h("time", {class: "session-meta-time", dateTime: bit.dateTime || ""}, bit.text)
+      const node = bit.kind === "time" ? timeStamp(bit.dateTime, {attrs:{class:"session-meta-time"}})
         : bit.kind === "text" ? h("span", {}, head, sep ? h("span", {class: "session-meta-tail"}, tail) : tail)
         : metaAnchor(bit.href, bit.text, sep, bit.quiet);
       return index ? [" ", node] : [node];
@@ -1680,7 +1680,7 @@ async function viewSession(main, host, sid, context = null) {
         h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
         h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ") || t("obs_unknown")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
-        h("dt", {}, t("observed")), h("dd", {}, sessionWhen(row.observed_at) || t("obs_unknown"),
+        h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, {empty:t("obs_unknown")}),
           row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
     if (!batHandoff) batHandoff = sessionBatPanel({h, t, guard: () => assertView(connection), session: () => row,
       storageKey: `batc.session-bat.${connection.namespace}.${JSON.stringify([host, sid])}`});
@@ -1763,7 +1763,7 @@ async function viewSession(main, host, sid, context = null) {
     if (!current()) return;
     result.querySelector("[data-session-result-empty]")?.remove();
     if (!work.length && !deliveryPills.childElementCount && !data.work_items?.length)
-      result.append(h("p", {class: "muted", "data-session-result-empty": ""}, t("workspace_result_empty")));
+      result.append(h('div', {'data-session-result-empty': ''}, emptyState({title:t('workspace_result_empty')})));
   };
   const loadMessages = async (offset = messageOffset, latest = false) => {
     if (offset == null) return;
@@ -1940,8 +1940,7 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
       h("div", { class: "session-checkpoint-head" },
         h("div", { class: "grow" },
           h("div", { class: "title" }, h("code", {}, cp.commit_sha.slice(0, 12)), " ", cp.branch || ""),
-          h("div", { class: "muted" }, [sessionWhen(cp.captured_at), cp.actor,
-            t("excerpt_count", { n: cp.excerpt_messages })].filter(Boolean).join(" · ")),
+          h("div", { class: "muted" }, timeStamp(cp.captured_at), " · ", [cp.actor, t("excerpt_count", { n: cp.excerpt_messages })].filter(Boolean).join(" · ")),
           cp.dirty ? h("div", { class: "error" }, t("dirty_warning", { n: cp.dirty }))
             : cp.dirty === null ? h("div", { class: "muted" }, t("dirty_unknown")) : null,
           preview && preview.head !== cp.commit_sha ? h("div", { class: "muted" }, t("source_advanced")) : null),
@@ -2157,7 +2156,7 @@ function deliveryWork(item, repositories = [], compact = false) {
   if (item.eligible && state.caps?.features?.execution_delivery?.version === 1) links.push(h("a", {
     href: `#/delivery/${[item.host, item.kind, item.id, repo].map(encodeURIComponent).join("/")}`}, t("delivery_review_result")));
   return h("div", {class: "row", "data-project-work": item.id}, h("div", {class: "grow"},
-    compact ? null : h("strong", {}, item.title || item.branch || item.action || item.id), compact ? null : [" ", chip(t(activity.key), activity.tone)],
+    compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)],
     h("p", {class: "muted"}, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)),
     h("p", {class: "muted"}, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded"
       ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status),
@@ -2169,7 +2168,7 @@ function deliveryWork(item, repositories = [], compact = false) {
 }
 
 function deploymentIdentity(identity, empty = "dep_no_version") {
-  if (!identity?.source_sha && !identity?.artifact_id) return h("p", { class: "muted" }, t(empty));
+  if (!identity?.source_sha && !identity?.artifact_id) return emptyState({title:t(empty)});
   return h("div", { class: "deployment-identity" },
     identity.source_sha ? h("code", {}, identity.source_sha) : null,
     identity.artifact_id ? h("p", {}, t("dep_artifact", { id: identity.artifact_id }),
@@ -2211,7 +2210,7 @@ function deploymentReceipt(dep) {
       fill(body, h("dl", { class: "kv" }, ...values.filter(([, v]) => v !== null && v !== undefined && v !== "")
         .flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])),
         op.status_reason ? h("p", {}, op.status_reason) : null,
-        ...(op.steps || []).map(s => h("div", { class: "row" }, h("code", {}, s.name), h("code", {}, s.status))));
+        ...(op.steps || []).map(s => h("div", { class: "row" }, h("code", {}, s.name), h("span", {}, operationStatusLabel(s.status)))));
     } catch (e) { fill(body, errorBox(e)); read = false; }
   });
   return details;
@@ -2324,7 +2323,7 @@ function deploymentRecord(dep, env, reload, compact = false) {
     h("div", { class: "deployment-record-heading" }, deploymentState(dep.state), h("span", { class: "muted" }, dep.recipe)),
     deploymentIdentity(dep.identity),
     compact ? h("p", {}, h("a", { href: `#/op/${dep.operation_id}` }, t("dep_open_operation")))
-      : h("p", { class: "muted" }, `${dep.environment} · ${deploymentTime(dep.created_at)}`),
+      : h("p", { class: "muted" }, dep.environment, ' · ', deploymentTime(dep.created_at)),
     dep.state === "superseded" ? h("p", {}, t("dep_superseded"), " ",
       env.desired ? h("a", { href: `#/op/${env.desired.operation_id}` }, t("dep_new_desired")) : null, " · ",
       providerUrl ? h("a", { href: providerUrl, target: "_blank", rel: "noopener" }, t("dep_provider_run")) : null) : null,
@@ -2374,10 +2373,10 @@ function environmentCard(group) {
         h("div", { class: "deployment-versions" },
           h("div", {}, h("h3", {}, t("dep_desired")), deploymentRecord(env.desired, env, load, true)),
           h("div", {}, h("h3", {}, t("dep_observed")), deploymentIdentity(observed),
-            h("p", { class: "muted" }, t("dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })),
+            h("p", { class: "muted" }, timeLabel(t, "dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })),
             env.current?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(env.current.evidence.runtime)) : null)),
         h("div", { class: "deployment-last-verified" }, h("h3", {}, t("dep_last_verified")), deploymentIdentity(verified?.identity),
-          h("p", { class: "muted" }, t("dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })),
+          h("p", { class: "muted" }, timeLabel(t, "dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })),
           verified?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(verified.evidence.runtime)) : null,
           verified ? deploymentReceipt(verified) : null),
         h("h3", {}, t("dep_history")), h("div", { "data-testid": "deployment-history" },
@@ -2524,7 +2523,7 @@ function integrationPanel(pr, reloadCard, source = null) {
         doc.overlaps.map(o => `${o.path} (${o.seqs.join(", ")}${o.also_changed_on_pr ? ", PR" : ""})`).join("; ")) : null,
       doc.blocking.length ? h("ul", { class: "error" }, ...doc.blocking.map(plain)) : null,
       doc.warnings.length ? h("ul", { class: "muted" }, ...doc.warnings.map(plain)) : null,
-      h("p", { class: "muted" }, expired ? t("preview_expired") : t("previewed_at", { time: when(epoch(doc.observed_at)) }),
+      h("p", { class: "muted" }, expired ? t("preview_expired") : timeLabel(t, "previewed_at", { time: when(epoch(doc.observed_at)) }),
         " ", h("a", { href: "#", onclick: ev => { ev.preventDefault(); runPreview(); } }, t("preview_again"))),
       h("div", { class: "actions" }, go)].filter(Boolean)); // replaceChildren would print a null as "null"
   };
@@ -2563,7 +2562,7 @@ function integrationPanel(pr, reloadCard, source = null) {
           session.pending && runtimeStale(session) ? chip(t("sessions_stale"), "stale") : null,
           h("p", {class: "muted"}, t("delivery_result_unverified")),
           h("p", {class: "muted"}, session.observed_at
-            ? t("delivery_observed_at", {time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at)}) : t("delivery_unobserved")),
+            ? timeLabel(t, "delivery_observed_at", {time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at)}) : t("delivery_unobserved")),
           r.unavailable ? h("p", {class: "note"}, t("delivery_source_unavailable"), " ", h("code", {}, r.unavailable.code)) : null,
           ...delivered(r)];
       };
@@ -2643,7 +2642,7 @@ async function viewOperations(main, filter = "all") {
   const memory = viewState(state.namespace || "", "", "operations:" + (statuses || "all"));
   const search = h("input", {type: "search", "aria-label": t("global_search_operations"), placeholder: t("global_search_operations"), value: memory.query || ""});
   search.addEventListener("input", () => list.filter(search.value));
-  const searchField = h("div", {class: "workspace-search global-ops-search"}, icon("search", {size: 16}), search);
+  const searchWrap = searchField(search, {class:"workspace-search global-ops-search"});
   const filters = segmented({
     label: t("global_ops_filter"), value: selected,
     options: [["all", "operations_all"], ["attention", "tab_needs_you"], ["active", "tab_to_confirm"]].map(([value, label]) => ({value, label: t(label)})),
@@ -2652,7 +2651,7 @@ async function viewOperations(main, filter = "all") {
   const refresh = iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => list.load().catch(() => {})});
   list.onBusy(busy => { refresh.disabled = busy; });
   main.append(pageHeader({title: t("nav_operations"), actions: [refresh]}),
-    h("div", {class: "global-ops-tools"}, filters, searchField), list.box);
+    h("div", {class: "global-ops-tools"}, filters, searchWrap), list.box);
   if (memory.query) list.filter(memory.query);
   await list.load().catch(() => {});
   const reload = debounceRefresh(() => list.load(), 500);
@@ -2750,7 +2749,7 @@ async function viewOperation(main, id) {
         refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null,
         h("h2", {}, t("steps")),
         ...op.steps.map(s => h("div", { class: "row" }, h("div", { class: "grow" }, s.name),
-          h("span", { class: `status-${s.status}` }, s.status), s.error ? chip(s.error.code || t("error"), "bad") : null)),
+          h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)),
         h("div", { class: "actions" }, opened,
           ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" &&
           /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0
@@ -2802,7 +2801,7 @@ function connectionFacts() {
     const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
     const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
     stateCell.replaceChildren(h("span", {class: `ui-pill tone-${tone}`}, t(key)));
-    eventCell.textContent = state.lastEventAt ? when(state.lastEventAt) : t("global_no_event");
+    eventCell.replaceChildren(state.lastEventAt ? when(state.lastEventAt) : t("global_no_event"));
   };
   render();
   const paint = () => {
@@ -3440,7 +3439,7 @@ function linkTarget(l) {
       x.gone ? chip(t("stale_reason_gone"), "stale") : null);
   }
   if (l.kind === "operation") {
-    return h("span", {}, h("a", { href: `#/op/${l.ref}` }, x.action), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)),
+    return h("span", {}, h("a", { href: `#/op/${l.ref}` }, actionLabel(x.action)), " ", h("span", { class: `status-${x.status}` }, t("op_" + x.status)),
       x.session ? [" · ", h("a", { href: `#/session/${encodeURIComponent(x.session.host)}/${encodeURIComponent(x.session.session_id)}` }, t("open_new_session"))] : null);
   }
   if (l.kind === "checkpoint") {
@@ -3551,7 +3550,7 @@ async function viewWorkItem(main, wid) {
     const keepGoing = h("button", { class: "secondary", disabled: !live || !may("manage"),
       onclick: () => decide("work_item.continue", `wi.continue.${wid}.${c.fingerprint}`) }, t("keep_working"));
     let banner = null;
-    if (c.approved) banner = h("p", { class: "note ok" }, t("approved_by", { who: c.approved_by, time: when(epoch(c.approved_at)) }));
+    if (c.approved) banner = h("p", { class: "note ok" }, timeLabel(t, "approved_by", { who: c.approved_by, time: when(epoch(c.approved_at)) }));
     else if (c.pending && w.state === "done") banner = h("div", { class: "note warn" }, h("p", {}, t("claimed_done", { who: c.claimed_by || "?" })),
       h("div", { class: "actions" }, approve, keepGoing), may("approve") ? null : h("p", { class: "muted" }, t("needs_approve_scope")));
     else if (c.pending) banner = h("div", { class: "note warn" }, h("p", {}, t("steps_all_checked")), h("div", { class: "actions" }, approve, keepGoing));
@@ -3606,7 +3605,7 @@ async function viewWorkItem(main, wid) {
     };
     const linkRows = data.links.map(l => h("div", { class: "row" }, chip(t("link_" + l.kind)),
       h("div", { class: "grow" }, linkTarget(l), l.note ? h("div", { class: "muted" }, l.note) : null,
-        h("div", { class: "muted" }, `${l.linked_by} · ${when(epoch(l.linked_at))}`)),
+        h("div", { class: "muted" }, l.linked_by, " · ", when(epoch(l.linked_at)))),
       l.kind === "checkpoint" && l.target?.found && live ? continueFrom(w, l.ref, notice, data.children) : null,
       live && may("manage") ? h("button", { class: "mini", title: t("remove"), "aria-label": t("remove"),
         onclick: () => link({ kind: l.kind, ref: l.ref, remove: true }, `wi.unlink.${wid}.${l.kind}.${l.ref}`) }, "×") : null));
@@ -3636,7 +3635,7 @@ async function viewWorkItem(main, wid) {
       data.derived.length ? [h("h2", {}, t("derived")), h("div", { class: "panel" }, ...data.derived.map(brief))] : null,
       h("h2", {}, t("history")), h("div", { class: "panel" }, ...data.events.map(ev => h("div", { class: "row" },
         h("div", { class: "grow" }, t("ev_" + ev.kind.replace(".", "_")), h("div", { class: "muted" }, eventDetail(ev.body))),
-        h("span", { class: "muted" }, `${ev.actor || ""} · ${when(epoch(ev.created_at))}`)))));
+        h("span", { class: "muted" }, ev.actor || "", " · ", when(epoch(ev.created_at)))))));
     if (draft) { draft = null; d.open(); }
   };
   await render();
@@ -3903,7 +3902,7 @@ async function viewCleanup(main, section, ident) {
   } }, t("cleanup_apply"));
   function renderPreview() {
     fill(previewOut, h("h2", {}, t("cleanup_preview")), h("p", {}, t("cleanup_counts", { reclaim: doc.impact.reclaim, retain: doc.impact.retain })),
-      h("p", { class: "muted" }, t("cleanup_expires", { time: when(doc.expires_at * 1000) })),
+      h("p", { class: "muted" }, timeLabel(t, "cleanup_expires", { time: when(doc.expires_at * 1000) })),
       ...(doc.items || []).map(resourceRow), !doc.ready ? h("p", { class: "note" }, t("cleanup_blocked")) : null);
   }
   const previewButton = h("button", { class: "secondary", onclick: async () => {

@@ -250,3 +250,43 @@ test('menu grouped selects retain arrow keys and Escape restores the trigger', a
   })).toBe(false);
   await page.keyboard.press('Escape'); await expect(select).toBeHidden(); await expect(trigger).toBeFocused();
 });
+
+test('segmented controls use measured container fit and preserve the selected option', async ({page}) => {
+  await mount(page);
+  await page.evaluate(async () => {
+    const {segmented} = await import('/src/ui/components.js');
+    const box = document.createElement('section'); box.id = 'fit-container'; box.style.width = '600px';
+    box.append(segmented({label:'Register type', value:'decision', options:[{value:'all', label:'All sources'}, {value:'decision', label:'Decisions'}, {value:'finding', label:'Findings'}],
+      onChange: value => box.dataset.value = value})); document.getElementById('fixture')!.append(box);
+  });
+  const box = page.locator('#fit-container'), select = box.getByRole('combobox');
+  await expect(box.getByRole('radio', {name:'Decisions'})).toHaveAttribute('aria-checked', 'true');
+  await box.evaluate(node => (node as HTMLElement).style.width = '180px');
+  await expect(select).toBeVisible(); await expect(select).toHaveValue('1');
+  await select.selectOption({label:'Findings'}); await expect(box).toHaveAttribute('data-value', 'finding');
+  await select.focus(); await box.evaluate(node => (node as HTMLElement).style.width = '160px'); await expect(select).toBeFocused();
+  await box.evaluate(node => (node as HTMLElement).style.width = '600px');
+  await expect(select).toBeHidden(); await expect(box.getByRole('radio', {name:'Findings'})).toHaveAttribute('aria-checked', 'true');
+  await expect(box.getByRole('radio', {name:'Findings'})).toBeFocused();
+});
+
+for (const locale of ['en', 'zh-TW']) test(`search chrome and chip names ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale, viewport:{width:390,height:844}}), page = await context.newPage(); await mount(page);
+  await page.evaluate(async () => {
+    const {searchField, contextChip} = await import('/src/ui/components.js'), {h} = await import('/src/ui/dom.js');
+    document.getElementById('fixture')!.append(searchField(h('input', {'aria-label':'Search records', value:'retained draft'})),
+      contextChip({text:'Decision · Recovery support budget', onRemove:() => {}}));
+  });
+  await expect(page.getByRole('searchbox')).toHaveAttribute('placeholder', locale === 'en' ? 'Search' : '搜尋');
+  await expect(page.getByRole('searchbox')).toHaveValue('retained draft');
+  expect((await page.getByRole('searchbox').boundingBox())!.height).toBe(32);
+  await expect(page.getByRole('group', {name:'Decision · Recovery support budget'})).toHaveAttribute('title','Decision · Recovery support budget');
+  expect((await page.locator('.ui-context-chip').boundingBox())!.height).toBe(24);
+  const hit = await page.locator('.ui-context-chip button').evaluate(node => {
+    const css = getComputedStyle(node, '::before'); return parseFloat(css.height);
+  });
+  expect(hit).toBeGreaterThanOrEqual(44);
+  // The visual chip stays compact; the pseudo-element expands the touch area.
+  expect(await page.locator('.ui-context-chip button').evaluate(node => getComputedStyle(node,'::before').content)).not.toBe('none');
+  await context.close();
+});

@@ -27,13 +27,13 @@ export function calcSidebarBounds(windowWidth = window.innerWidth) {
 export function setupSidebarResizer({ aside, workspace, t }) {
   if (!aside || !workspace) return { dispose() {} };
 
-  let savedWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH;
+  let savedWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH, customWidth = false;
   try {
     const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
     if (raw !== null) {
       const parsed = parseInt(raw, 10);
       if (!Number.isNaN(parsed) && parsed >= MIN_SIDEBAR_WIDTH) {
-        savedWidth = parsed;
+        savedWidth = parsed; customWidth = true;
       }
     }
   } catch {
@@ -60,6 +60,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
     resizer.setAttribute("aria-valuemin", String(minAllowed));
     resizer.setAttribute("aria-valuemax", String(maxAllowed));
     if (persist) {
+      customWidth = true;
       try {
         localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
       } catch {
@@ -191,6 +192,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
   };
 
   const onWindowResize = () => {
+    if (!customWidth) currentWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH;
     if (isMobileLayout()) cancelDrag();
     if (!isMobileLayout()) {
       currentWidth = applyWidth(currentWidth, false);
@@ -262,7 +264,7 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
     infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
     const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
     infoToggle.setAttribute("aria-label", label);
-    infoToggle.replaceChildren(icon(isInfoCollapsed ? "chevron-down" : "chevron-up"));
+    infoToggle.replaceChildren(icon("info"));
   };
 
   infoToggle.addEventListener("click", () => {
@@ -306,7 +308,7 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard, i
 
     const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
     const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-    composerToggle.replaceChildren(icon(isComposerCollapsed ? "chevron-down" : "chevron-up"));
+    composerToggle.replaceChildren(icon("pencil"));
     composerToggle.setAttribute("aria-label", baseText + draftSuffix);
     composerToggle.classList.toggle("has-draft", hasDraft);
   };
