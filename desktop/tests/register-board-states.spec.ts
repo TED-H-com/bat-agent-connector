@@ -91,7 +91,8 @@ for (const locale of locales) for (const view of ['board', 'issues']) for (const
   const alert = panel.getByRole('alert'), retry = alert.getByRole('button', {name: locale === 'en' ? 'Retry' : '重試', exact: true});
   await expect(alert).toHaveCount(1);
   await expect(alert).toContainText(view === 'board' ? (locale === 'en' ? 'Work records unavailable' : '無法取得工作紀錄') : (locale === 'en' ? 'Could not read records' : '無法讀取紀錄'));
-  await expect(alert).not.toContainText('Private provider'); await expect(alert).not.toContainText('UNAVAILABLE');
+  await expect(alert).not.toContainText('Private provider');
+  await expect(alert.locator(':scope > span')).not.toContainText('UNAVAILABLE');
   await expect(retry).toHaveClass(/secondary/);
   expect(await alert.evaluate(node => {
     const sentence = node.querySelector('span')!.getBoundingClientRect(), action = node.querySelector('button')!.getBoundingClientRect();
@@ -106,6 +107,95 @@ for (const locale of locales) for (const view of ['board', 'issues']) for (const
   failed = false; await retry.click();
   await expect(panel.locator(view === 'board' ? '[data-pm-kanban-work]' : '[data-row-key]')).toHaveCount(view === 'board' ? 12 : 3);
   await expect(alert).toHaveCount(0); expect(f.writes).toEqual([]);
+});
+
+for (const locale of locales) for (const width of [1440, 1000, 390]) test(`Board error Details stays inside the full-width banner ${locale} ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  const f = reviewFixture(locale);
+  f.overrides.push((url, result) => url.pathname.endsWith('/kanban')
+    ? {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Private provider failure'}}} : result);
+  await f.mount(page, 'board');
+  const board = page.locator('[data-pm-kanban]'), status = board.locator(':scope > [role=status]');
+  const alert = status.getByRole('alert'), details = alert.locator('details');
+  const retry = alert.getByRole('button', {name: locale === 'en' ? 'Retry' : '重試', exact: true});
+  await expect(alert.locator(':scope > span')).toHaveText(locale === 'en' ? 'Work records unavailable' : '無法取得工作紀錄');
+  await expect(alert).not.toContainText('Private provider');
+  await expect(details.locator('summary')).toHaveText(locale === 'en' ? 'Details' : '詳細資料');
+  const code = details.locator('p'); await expect(code).toBeHidden();
+  const fullWidth = async () => {
+    const banner = (await alert.boundingBox())!, container = (await status.boundingBox())!;
+    expect(Math.abs(banner.x - container.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(banner.width - container.width)).toBeLessThanOrEqual(1);
+    const action = (await retry.boundingBox())!, summary = (await details.locator('summary').boundingBox())!;
+    expect(summary.y >= action.y + action.height - 1 || summary.x >= action.x + action.width).toBe(true);
+    expect(summary.x + summary.width).toBeLessThanOrEqual(banner.x + banner.width);
+  };
+  await fullWidth(); await details.locator('summary').click();
+  await expect(code).toBeVisible(); await expect(code).toHaveText('UNAVAILABLE'); await fullWidth();
+  const geometry = await alert.evaluate(node => {
+    const banner = node.getBoundingClientRect(), css = getComputedStyle(node);
+    const code = node.querySelector('details > p')!.getBoundingClientRect();
+    const action = node.querySelector('button')!.getBoundingClientRect(), sentence = node.querySelector('span')!.getBoundingClientRect();
+    return {width: code.width, available: banner.width - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight),
+      codeTop: code.top, rowBottom: Math.max(action.bottom, sentence.bottom), codeBottom: code.bottom, bannerBottom: banner.bottom};
+  });
+  expect(Math.abs(geometry.width - geometry.available)).toBeLessThanOrEqual(1);
+  expect(geometry.codeTop).toBeGreaterThanOrEqual(geometry.rowBottom);
+  expect(geometry.codeBottom).toBeLessThan(geometry.bannerBottom);
+  await details.locator('summary').click(); await expect(code).toBeHidden(); await fullWidth();
+  expect(f.writes).toEqual([]);
+});
+
+for (const locale of locales) for (const width of [1440, 390]) for (const filter of ['search', 'age']) test(`Issues empty ${filter} filter hides trends until cleared ${locale} ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  const f = reviewFixture(locale);
+  if (filter === 'age') f.overrides.push((url, result) => {
+    if (url.pathname.endsWith('/register')) result.data.next_cursor = null;
+    return result;
+  });
+  await f.mount(page, 'issues'); const panel = page.locator('[data-pm-register]'), trends = panel.locator('[data-reg-trends]');
+  await expect(panel.locator('[data-row-key]')).toHaveCount(3); await expect(trends).toBeVisible();
+  if (width === 390) await trends.locator('summary').click();
+  await expect(panel.locator('[data-reg-age="0-7d"]')).toBeVisible();
+  if (filter === 'search') await panel.getByRole('searchbox').fill('zzzz-no-such-record');
+  else await panel.locator('[data-reg-age-filter]').selectOption('31-90d');
+  await expect(panel.getByRole('heading', {name: locale === 'en' ? 'No matching records' : '沒有符合的紀錄', exact: true})).toBeVisible();
+  await expect(page.locator('[data-pm-header-meta]')).toHaveText(locale === 'en' ? 'None shown' : '沒有顯示項目');
+  await expect(trends).toBeHidden(); await expect(panel.locator('[data-reg-age]:visible')).toHaveCount(0);
+  await expect(panel.locator('[data-row-key]')).toHaveCount(0); await expect(panel.locator('.ui-empty')).toHaveCount(1);
+  await panel.getByRole('button', {name: clearName(locale), exact: true}).click();
+  await expect(panel.locator('[data-row-key]')).toHaveCount(3); await expect(trends).toBeVisible();
+  await expect(panel.locator('[data-reg-age="0-7d"]')).toBeVisible(); await expect(panel.locator('.ui-empty')).toHaveCount(0);
+  expect(f.writes).toEqual([]);
+});
+
+for (const locale of locales) test(`Issues meta omits zero type counts ${locale}`, async ({page}) => {
+  const f = reviewFixture(locale);
+  f.overrides.push((url, result) => {
+    if (url.pathname.endsWith('/register')) {
+      result.data.rows = result.data.rows.filter((row: {type: string}) => row.type === 'issue');
+      result.data.next_cursor = null; result.data.summary = null;
+      result.data.total_by_type = {risk: 0, issue: result.data.rows.length, action: 0, change: 0, decision: 0};
+    } return result;
+  });
+  await f.mount(page, 'issues'); await expect(page.locator('[data-row-key]')).toHaveCount(1);
+  await expect(page.locator('[data-pm-header-meta]')).toHaveText(locale === 'en' ? 'Issue 1' : '問題 1');
+  expect(f.writes).toEqual([]);
+});
+
+for (const locale of locales) for (const width of [1440, 390]) test(`Issues zero loaded age matches retain paged trends ${locale} ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900});
+  const f = reviewFixture(locale); await f.mount(page, 'issues');
+  const panel = page.locator('[data-pm-register]'), trends = panel.locator('[data-reg-trends]');
+  await expect(panel.locator('[data-row-key]')).toHaveCount(3);
+  await panel.locator('[data-reg-age-filter]').selectOption('31-90d');
+  await expect(panel.getByRole('heading', {name: locale === 'en' ? 'Records incomplete' : '紀錄不完整', exact: true})).toBeVisible();
+  await expect(panel.locator('.ui-empty')).toContainText(locale === 'en' ? 'No loaded records match' : '已載入紀錄沒有符合項目');
+  await expect(trends).toBeVisible();
+  if (width === 390) await trends.locator('summary').click();
+  await expect(panel.locator('[data-reg-age="31-90d"]')).toBeVisible();
+  await expect(panel.getByRole('heading', {name: locale === 'en' ? 'No matching records' : '沒有符合的紀錄', exact: true})).toHaveCount(0);
+  expect(f.writes).toEqual([]);
 });
 
 for (const locale of locales) for (const width of [1440, 1000, 768, 390]) test(`Board lanes fit their content ${locale} ${width}`, async ({page}) => {

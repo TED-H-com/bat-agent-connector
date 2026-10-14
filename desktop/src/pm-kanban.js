@@ -76,10 +76,11 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (signature === failureSignature) return;
     failureSignature = signature;
     const notice = inlineError({error: {message}});
+    notice.classList.add('pm-board-error');
     notice.append(button({size: 'sm', label: t('ui_retry'), onClick: () => {if (reading) return; pages = 1; void refresh();}}));
     const code = labelSegment(error.code);
-    status.replaceChildren(h('div', {class: 'pm-board-error'}, notice,
-      code && !message.includes(code) ? disclosure({label: t('wv_details'), body: h('p', {class: 'mono'}, code)}) : null));}
+    if (code && !message.includes(code)) notice.append(disclosure({label: t('wv_details'), body: h('p', {class: 'mono'}, code)}));
+    status.replaceChildren(notice);}
   function requirements(card) {const bound = card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id);
     return (bound?.document?.requirements || []).filter(row => card.binding.requirement_ids?.includes(row.id));}
   function fillFilters() {

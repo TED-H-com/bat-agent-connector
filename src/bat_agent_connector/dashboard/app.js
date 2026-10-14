@@ -4822,7 +4822,7 @@ var pmRegisterStrings = {
 		reg_trends: "趨勢",
 		reg_more: "+{n} 項",
 		reg_shown: "顯示 {n} 筆",
-		reg_none_shown: "目前沒有顯示",
+		reg_none_shown: "沒有顯示項目",
 		reg_matching: "{n} 筆符合",
 		reg_load_more: "載入更多",
 		reg_empty: "沒有符合的紀錄",
@@ -23512,9 +23512,13 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			onMeta(null);
 			return;
 		}
+		const count = visibleRows().length;
+		if (!count) {
+			onMeta(t("reg_none_shown"));
+			return;
+		}
 		if (clientFiltered()) {
-			const count = visibleRows().length;
-			onMeta(catalogueComplete() && count ? t("reg_matching", { n: count }) : count ? t("reg_shown", { n: count }) : t("reg_none_shown"));
+			onMeta(catalogueComplete() ? t("reg_matching", { n: count }) : t("reg_shown", { n: count }));
 			return;
 		}
 		if (typeValue && coverage?.complete === true && totals && finite(totals[typeValue])) {
@@ -23522,7 +23526,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			return;
 		}
 		if (coverage?.complete === true && totals && typeof totals === "object") {
-			const line = joinLabel(TYPES.map((type) => finite(totals[type]) ? `${t("reg_type_" + type)} ${totals[type]}` : ""));
+			const line = joinLabel(TYPES.map((type) => finite(totals[type]) && totals[type] > 0 ? `${t("reg_type_" + type)} ${totals[type]}` : ""));
 			onMeta(line ? joinLabel([line, nextCursor ? t("reg_shown", { n: rows.length }) : ""]) : rows.length ? t("reg_shown", { n: rows.length }) : t("reg_none_shown"));
 			return;
 		}
@@ -23552,8 +23556,9 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	}
 	function paintSummary() {
 		summaryHost.replaceChildren();
-		trends.hidden = summary == null;
-		if (summary == null) return;
+		const emptyMatch = loaded && !failed && !unavailable && filtersActive() && catalogueComplete() && !visibleRows().length;
+		trends.hidden = summary == null || emptyMatch;
+		if (trends.hidden) return;
 		const ages = Array.isArray(summary.open_by_age) ? summary.open_by_age : [];
 		const maxAge = Math.max(0, ...ages.map((row) => finite(row?.count) ? row.count : 0));
 		const ageSection = h("section", {}, h("h3", {}, t("reg_open_age")), h("div", { class: "reg-age-bars" }, ...ages.filter((row) => AGE_KEYS[row?.bucket] && finite(row.count)).map((row) => bar(t(AGE_KEYS[row.bucket]), row.count, maxAge, { "data-reg-age": row.bucket }, ageValue === row.bucket, () => setAge(row.bucket)))));
@@ -29230,6 +29235,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (signature === failureSignature) return;
 		failureSignature = signature;
 		const notice = inlineError({ error: { message } });
+		notice.classList.add("pm-board-error");
 		notice.append(button({
 			size: "sm",
 			label: t("ui_retry"),
@@ -29240,10 +29246,11 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			}
 		}));
 		const code = labelSegment(error.code);
-		status.replaceChildren(h$1("div", { class: "pm-board-error" }, notice, code && !message.includes(code) ? disclosure({
+		if (code && !message.includes(code)) notice.append(disclosure({
 			label: t("wv_details"),
 			body: h$1("p", { class: "mono" }, code)
-		}) : null));
+		}));
+		status.replaceChildren(notice);
 	}
 	function requirements(card) {
 		return ((card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id))?.document?.requirements || []).filter((row) => card.binding.requirement_ids?.includes(row.id));

@@ -203,9 +203,10 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   }
   function publishMeta() {
     if (!active || unavailable || failed || !loaded) {onMeta(null); return;}
+    const count = visibleRows().length;
+    if (!count) {onMeta(t('reg_none_shown')); return;}
     if (clientFiltered()) {
-      const count = visibleRows().length;
-      onMeta(catalogueComplete() && count ? t('reg_matching', {n: count}) : (count ? t('reg_shown', {n: count}) : t('reg_none_shown')));
+      onMeta(catalogueComplete() ? t('reg_matching', {n: count}) : t('reg_shown', {n: count}));
       return;
     }
     if (typeValue && coverage?.complete === true && totals && finite(totals[typeValue])) {
@@ -213,7 +214,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       return;
     }
     if (coverage?.complete === true && totals && typeof totals === 'object') {
-      const line = joinLabel(TYPES.map(type => finite(totals[type]) ? `${t('reg_type_' + type)} ${totals[type]}` : ''));
+      const line = joinLabel(TYPES.map(type => finite(totals[type]) && totals[type] > 0 ? `${t('reg_type_' + type)} ${totals[type]}` : ''));
       onMeta(line ? joinLabel([line, nextCursor ? t('reg_shown', {n: rows.length}) : '']) : (rows.length ? t('reg_shown', {n: rows.length}) : t('reg_none_shown')));
       return;
     }
@@ -230,8 +231,9 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   }
   function paintSummary() {
     summaryHost.replaceChildren();
-    trends.hidden = summary == null;
-    if (summary == null) return;
+    const emptyMatch = loaded && !failed && !unavailable && filtersActive() && catalogueComplete() && !visibleRows().length;
+    trends.hidden = summary == null || emptyMatch;
+    if (trends.hidden) return;
     const ages = Array.isArray(summary.open_by_age) ? summary.open_by_age : [];
     const maxAge = Math.max(0, ...ages.map(row => finite(row?.count) ? row.count : 0));
     const ageSection = h('section', {}, h('h3', {}, t('reg_open_age')), h('div', {class: 'reg-age-bars'},

@@ -698,8 +698,11 @@ that text visibly in the footer. The selected row uses a
 row ids and cursors are passed through unchanged.
 
 A filtered empty register offers a small secondary Clear filters action that resets
-type, status, owner, age, opening week and search. A complete, unfiltered empty
-register says there are no issues or changes yet and has no reset action. An
+type, status, owner, age, opening week and search. A complete filtered result with
+no matches hides trends until filters are cleared. Incomplete reads keep their own
+state and any available summary. Header type counts omit zeros; a successful read
+with no visible rows says None shown. A complete, unfiltered empty register says
+there are no issues or changes yet and has no reset action. An
 incomplete read says Records incomplete instead of implying there are no matches.
 Read errors use one shared inline error with an adjacent small secondary Retry.
 
@@ -812,8 +815,9 @@ agent, retaining grouping. A complete Board with no associated work and no filte
 keeps its own empty state without that action. A partial read with no loaded
 matches says Work list incomplete. While filters are active the header appends
 N shown or None shown once; grouping alone does not add it. Board read errors use
-one shared inline error with an adjacent small secondary Retry. Details stays
-beside it only when an error code adds information beyond the sentence.
+one shared inline error with an adjacent small secondary Retry. Details follows
+Retry inside the full-width banner only when an error code adds information beyond
+the sentence. Its open body occupies a separate full-width line inside the banner.
 Opening the inspector reveals the selected card after docking. Closing restores
 focus to the latest selection, falling back to the view heading after withdrawal.
 An unchanged read failure keeps its status, Details and Retry nodes, including

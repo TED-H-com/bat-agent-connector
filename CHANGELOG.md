@@ -80,7 +80,9 @@
   the lane name. The board toolbar wraps whole controls. Filtered empty results
   offer Clear filters; genuinely empty and incomplete reads have distinct states.
   Board counts append the number shown while filtered, and horizontal lanes share
-  the tallest content height. Both panels keep Retry beside the read error.
+  the tallest content height. Both panels keep Retry beside the read error, with
+  Board error Details inside the full-width banner. Empty filtered register results
+  hide trends until cleared, omit zero type counts and say None shown.
 
 - Add a read-only issues, actions and changes register via `pm_register_list` and
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.

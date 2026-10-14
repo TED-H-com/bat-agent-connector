@@ -45,7 +45,7 @@ export const pmRegisterStrings = {
     reg_week_chip: '新增 · {week}', reg_source_name: '{kind} #{n}',
     reg_read_error: '無法讀取紀錄', reg_detail_error: '無法讀取這筆紀錄',
     reg_trends: '趨勢', reg_more: '+{n} 項',
-    reg_shown: '顯示 {n} 筆', reg_none_shown: '目前沒有顯示', reg_matching: '{n} 筆符合', reg_load_more: '載入更多', reg_empty: '沒有符合的紀錄', reg_unavailable: '來源無法取得',
+    reg_shown: '顯示 {n} 筆', reg_none_shown: '沒有顯示項目', reg_matching: '{n} 筆符合', reg_load_more: '載入更多', reg_empty: '沒有符合的紀錄', reg_unavailable: '來源無法取得',
     reg_empty_all: '還沒有問題或變更', reg_clear_filters: '清除篩選', reg_empty_partial: '紀錄不完整', reg_no_loaded_matches: '已載入紀錄沒有符合項目',
     reg_pair: '{label}：{value}', reg_pull_requests: 'PR',
     reg_open_age: '未決天數', reg_age_0_7: '0–7 天', reg_age_8_30: '8–30 天', reg_age_31_90: '31–90 天', reg_age_90: '超過 90 天',

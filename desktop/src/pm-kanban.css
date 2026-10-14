@@ -11,9 +11,13 @@
 .pm-board-toolbar select { max-width: 210px; }
 .pm-kanban-list { display: grid; grid-auto-flow: column; grid-auto-columns: var(--board-lane, minmax(210px, 1fr)); gap: var(--space-3); overflow-x: auto; align-items: stretch; max-width: 100%; padding-bottom: var(--space-3); }
 .pm-kanban-column { background: var(--surface-2); border-radius: var(--r-md); padding: var(--space-2); min-width: 0; min-height: 0; }
-.pm-board-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.pm-board-error .ui-inline-error { flex: 1 1 auto; min-width: 0; }
-.pm-board-error .ui-disclosure { flex: none; }
+/* Inline disclosure chrome follows Retry; its block body fills the banner. */
+.pm-board-error.ui-inline-error { display: block; min-width: 0; }
+.pm-board-error > .ui-icon { margin-right: var(--space-2); }
+.pm-board-error > .ui-button { margin-left: var(--space-2); vertical-align: middle; }
+.pm-board-error > .ui-disclosure { display: inline; }
+:root body .pm-board-error > .ui-disclosure > summary { display: inline-flex; margin-left: var(--space-2); vertical-align: middle; }
+.pm-board-error > .ui-disclosure > p { margin: var(--space-2) 0 0; }
 [data-board-empty][hidden] { display: none; }
 .pm-kanban-column > header { margin-bottom: var(--space-2); }
 .pm-board-lane-toggle { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text-2); text-align: left; font-size: var(--fs-small); font-weight: 600; }

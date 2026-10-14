@@ -44,9 +44,9 @@ function textFor(locale: Locale) {
     matching: (n: number) => zh ? `${n} 筆符合` : `${n} matching`,
     title: zh ? '問題與變更' : 'Issues & changes',
     totals: (counts: number[]) => (zh ? ['風險', '問題', '行動', '變更', '決策'] : ['Risk', 'Issue', 'Action', 'Change', 'Decision'])
-      .map((label, index) => `${label} ${counts[index]}`).join(' · '),
+      .flatMap((label, index) => counts[index] > 0 ? [`${label} ${counts[index]}`] : []).join(' · '),
     shown: (n: number) => zh ? `顯示 ${n} 筆` : `${n} shown`,
-    none: zh ? '目前沒有顯示' : 'None shown',
+    none: zh ? '沒有顯示項目' : 'None shown',
     empty: zh ? '沒有符合的紀錄' : 'No matching records',
     incomplete: zh ? '紀錄不完整' : 'Records incomplete',
     unavailable: zh ? '來源無法取得' : 'Source unavailable',
