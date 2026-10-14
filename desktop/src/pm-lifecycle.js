@@ -115,7 +115,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function renderWork(){
     work.replaceChildren(h('h3',{},t('pm_lifecycle_inflight')));
-    if(!rows.length)work.append(emptyState({title:t('pm_lifecycle_inflight_empty')}));
+    if(!rows.length)work.append(emptyState({title:t('pm_lifecycle_inflight_empty'),text:h('span',{class:'muted'},t('pm_lifecycle_inflight_empty_help'))}));
     if(workFiltered)work.append(h('p',{class:'muted'},t('pm_lifecycle_filtered')));
     for(const row of rows){
       const details=h('details',{'data-pm-lifecycle-operation':row.operation_id},h('summary',{},actionLabel(row.action),' · ',t('pm_lifecycle_'+row.disposition)),
@@ -145,8 +145,11 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function render(){
     const state=current.lifecycle,stopped=['paused','closed'].includes(state.stage);
-    summary.replaceChildren(h('p',{class:'pm-lifecycle-stage'},h('strong',{},stageName(['pausing','closing'].includes(state.status)?state.status:state.stage))),
-      h('p',{class:'muted'},t(state.stage===null?'pm_lifecycle_legacy_help':stopped?'pm_lifecycle_stopped_help':'pm_lifecycle_active_help')));
+    if(state.stage===null){
+      const empty=emptyState({title:stageName(null),text:h('span',{class:'muted'},t('pm_lifecycle_legacy_help'))});
+      empty.querySelector('h2').classList.add('pm-lifecycle-stage');summary.replaceChildren(empty);
+    }else summary.replaceChildren(h('p',{class:'pm-lifecycle-stage'},h('strong',{},stageName(['pausing','closing'].includes(state.status)?state.status:state.stage))),
+      h('p',{class:'muted'},t(stopped?'pm_lifecycle_stopped_help':'pm_lifecycle_active_help')));
     maintenanceNote.textContent=t(state.stage==='maintain'?'pm_lifecycle_maintenance_active':current.maintenance?.available?'pm_lifecycle_maintenance_ready':'pm_lifecycle_maintenance_unavailable');
     if(current.transition?.reason)summary.append(h('p',{},current.transition.reason));
     if(!permitted(true))summary.append(h('p',{class:'muted'},t('pm_lifecycle_reader')));
@@ -155,7 +158,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function withdraw(){++serial;ready=false;current=null;rows=[];cursor=null;historyCursor=null;historyLoaded=false;historyRequest=null;workFiltered=false;
     maintenanceNote.textContent='';summary.replaceChildren();work.replaceChildren();retentionChoices.replaceChildren();historyBody.replaceChildren();status.replaceChildren();notify();}
-  function unavailable(error){withdraw();status.replaceChildren(errorBox(error),h('p',{class:'muted'},t('pm_lifecycle_unknown')));}
+  function unavailable(error){withdraw();status.replaceChildren(emptyState({title:t('pm_lifecycle_unavailable'),text:h('span',{class:'muted'},t('pm_lifecycle_unknown'))}),errorBox(error));}
   async function refresh(){
     withdraw();const ticket=serial;status.replaceChildren(skeleton(2));
     try{

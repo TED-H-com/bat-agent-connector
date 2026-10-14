@@ -3,6 +3,7 @@ import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId,pmRoute} from './pm-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
+import {expectShellEmpty, shellShot} from './shell-empty-state.ts';
 const endpoint=`/pm/workspaces/${workspaceId}/lifecycle`,transitionId='pmlt_'+'a'.repeat(32),operationId='op_'+'b'.repeat(32);
 const gated=['pm.run.prepare','pm.thread.plan','pm.input.confirm','pm.plan.draft','pm.plan.adopt'];
 function fixture(){
@@ -67,6 +68,28 @@ async function edit(page:any,kind:string){
   await activity(page).locator(`[data-pm-lifecycle-intent="${kind}"]>summary`).click();
   return action(page,kind);
 }
+for(const locale of ['en','zh-TW'])for(const width of [1440,390])test(`phase empty and unavailable states explain their short titles ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
+  const f=fixture();f.state.stage=null;f.state.status='unclassified';
+  const copy=locale==='en'?{phase:'Stage not yet selected',legacy:'Its previous work has not been reclassified.',
+    pending:'No pending work',scope:'Only readable records are shown.',
+    unavailable:'Activity unavailable',reason:'Workspace state could not be read.'}
+    :{phase:'尚未指定管理階段',legacy:'既有工作保留原分類。',pending:'尚無待核對工作',scope:'僅顯示可讀取的管理紀錄。',
+      unavailable:'無法取得狀態',reason:'無法讀取工作區狀態，暫時無法調整。'};
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
+  const empty=(title:string)=>activity(page).locator('.ui-empty').filter({has:page.getByRole('heading',{name:title,exact:true})});
+  await expectShellEmpty(empty(copy.phase),copy.phase,copy.legacy);
+  await shellShot(page,'phase-unselected',locale,width);
+  await expectShellEmpty(empty(copy.pending),copy.pending,copy.scope);
+  await empty(copy.pending).scrollIntoViewIfNeeded();await shellShot(page,'phase-no-pending',locale,width);
+  f.state.failed=true;f.base.state.cursor++;
+  await expectShellEmpty(empty(copy.unavailable),copy.unavailable,copy.reason);
+  await expect(activity(page).getByRole('heading',{name:copy.pending,exact:true})).toHaveCount(0);
+  await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveCount(0);
+  await shellShot(page,'phase-unavailable',locale,width);
+  expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
+  await context.close();
+});
 for(const native of [false,true])test.describe(native?'native lifecycle':'web lifecycle',()=>{
   test('initial thread mount retains lifecycle forms until the complete read can enable them',async({page})=>{
     const f=fixture();let release:()=>void=()=>{};f.state.readGate=new Promise<void>(resolve=>release=resolve);
@@ -168,7 +191,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   test('source read failure clears prior facts and blocks new investment',async({page})=>{
     const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Keep the released version');f.state.failed=true;f.base.state.cursor++;
-    await expect(activity(page)).toContainText('Activity controls are unavailable',{timeout:10000});
+    await expect(activity(page).getByRole('heading',{name:'Activity unavailable',exact:true})).toBeVisible({timeout:10000});
     await expect(activity(page)).not.toContainText('Keep the released version');await expect(activity(page).locator('[data-pm-lifecycle-operation]')).toHaveCount(0);
     const editor=await edit(page,'reopen');await expect(editor.getByRole('button',{name:'Reopen workspace',exact:true})).toBeDisabled();
   });

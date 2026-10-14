@@ -5,6 +5,8 @@ import {workbenchFixture, route as workbenchRoute} from './pm-workbench-fixture.
 import {policyFixture} from './pm-maintenance-policy-fixture.ts';
 import {fixture as sprintFixture, actions, pid} from './pm-sprint-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
+import {expectShellEmpty, shellShot} from './shell-empty-state.ts';
+import {openPmSection} from './pm-navigation.ts';
 
 function scheduleOnly() {
   const base = pmFixture(), sprint = sprintFixture(), prefix = `/pm/workspaces/${workspaceId}`;
@@ -39,19 +41,19 @@ function agentsOnly() {
   return dispatch;
 }
 
-async function openView(browser: Browser, locale: string, baseURL: string, dispatch: (input: any) => any, view: string) {
-  const context = await browser.newContext({locale, baseURL, viewport: {width: 1280, height: 900}});
+async function openView(browser: Browser, locale: string, baseURL: string, dispatch: (input: any) => any, view: string, width = 1280) {
+  const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}});
   const page = await context.newPage();
   await mountConversation(page, false, dispatch);
   await page.goto(pmRoute);
-  await page.locator(`[data-pm-view=${view}]`).click();
+  await openPmSection(page, view);
   return {context, page, region: page.locator(`[data-pm-region=${view}]`)};
 }
 
-async function follows(region: ReturnType<Page['locator']>, heading: string, section: string) {
-  const empty = region.locator('.ui-empty');
+async function follows(region: ReturnType<Page['locator']>, heading: string, explanation: string, section: string) {
+  const empty = region.locator(':scope > .ui-empty');
   const fold = region.locator(`[data-pm-section=${section}] > details`);
-  await expect(empty.getByRole('heading', {name: heading, exact: true})).toBeVisible();
+  await expectShellEmpty(empty, heading, explanation);
   await expect(fold).toHaveJSProperty('open', false);
   expect(await region.evaluate((node, [title, key]) => {
     const first = node.querySelector('.ui-empty');
@@ -115,30 +117,61 @@ for (const task of ['versions', 'save']) test(`live Overview opens only the ${ta
   expect(writes).toHaveLength(0);
 });
 
-for (const [locale, copy] of [['en', {schedule: 'Schedule unavailable', agents: 'Usage unavailable', dependencies: 'Dependencies unavailable', sprints: 'Sprints', observations: 'Observations', policy: 'Policy'}],
-  ['zh-TW', {schedule: '無法取得時程', agents: '無法取得用量', dependencies: '無法取得相依', sprints: '衝刺', observations: '觀察', policy: '政策'}]] as const) {
-  test(`schedule keeps its empty state above collapsed sprints ${locale}`, async ({browser, baseURL}) => {
-    const session = await openView(browser, locale, baseURL!, scheduleOnly(), 'schedule');
-    await follows(session.region, copy.schedule, 'ui_sprints');
+for (const [locale, copy] of [['en', {schedule: 'Schedule unavailable', scheduleReason: 'Schedule data is not provided here.',
+  agents: 'Usage unavailable', agentsReason: 'Usage data is not provided here.', dependencies: 'Dependencies unavailable',
+  dependenciesReason: 'Dependency data is not provided here.', sprints: 'Sprints', observations: 'Observations', policy: 'Policy'}],
+  ['zh-TW', {schedule: '無法取得時程', scheduleReason: '目前連線未提供時程資料。', agents: '無法取得用量', agentsReason: '目前連線未提供用量資料。',
+    dependencies: '無法取得相依', dependenciesReason: '目前連線未提供相依資料。', sprints: '衝刺', observations: '觀察', policy: '政策'}]] as const) for (const width of [1440, 390]) {
+  test(`schedule keeps its empty state above collapsed sprints ${locale} ${width}`, async ({browser, baseURL}) => {
+    const session = await openView(browser, locale, baseURL!, scheduleOnly(), 'schedule', width);
+    await follows(session.region, copy.schedule, copy.scheduleReason, 'ui_sprints');
     await expect(session.region.locator('[data-pm-sprints]')).toBeHidden();
     await expect(session.region.locator('[data-pm-section=ui_sprints] > details > summary')).toHaveText(copy.sprints);
+    await shellShot(session.page, 'schedule-unavailable', locale, width);
     await session.context.close();
   });
-  test(`agents keeps its empty state above collapsed observations ${locale}`, async ({browser, baseURL}) => {
-    const session = await openView(browser, locale, baseURL!, agentsOnly(), 'agents');
-    await follows(session.region, copy.agents, 'ui_observations');
+  test(`agents keeps its empty state above collapsed observations ${locale} ${width}`, async ({browser, baseURL}) => {
+    const session = await openView(browser, locale, baseURL!, agentsOnly(), 'agents', width);
+    await follows(session.region, copy.agents, copy.agentsReason, 'ui_observations');
     await expect(session.region.locator('[data-pm-ahp]')).toBeHidden();
+    await shellShot(session.page, 'agents-unavailable', locale, width);
     await session.context.close();
   });
-  test(`dependencies keeps its empty state above collapsed policy and baselines ${locale}`, async ({browser, baseURL}) => {
-    const session = await openView(browser, locale, baseURL!, policyFixture().dispatch, 'dependencies');
-    await follows(session.region, copy.dependencies, 'ui_policy');
+  test(`dependencies keeps its empty state above collapsed policy and baselines ${locale} ${width}`, async ({browser, baseURL}) => {
+    const session = await openView(browser, locale, baseURL!, policyFixture().dispatch, 'dependencies', width);
+    await follows(session.region, copy.dependencies, copy.dependenciesReason, 'ui_policy');
     await expect(session.region.locator('[data-pm-section=ui_baselines] > details')).toHaveJSProperty('open', false);
     await expect(session.region.locator('[data-pm-maintenance-policy]')).toBeHidden();
     await expect(session.region.locator('[data-pm-release-baselines]')).toBeHidden();
+    await shellShot(session.page, 'dependencies-unavailable', locale, width);
     await session.context.close();
   });
 }
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`empty reports explain missing versions and still permit a first save ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage();
+  const base = workbenchFixture(); base.state.snapshots = [];
+  const dispatch = async (input: any) => {
+    const path = new URL(input.path, 'http://fixture').pathname, result = await base.dispatch(input);
+    if (path === '/bootstrap' || path === '/capabilities') {
+      const caps = path === '/bootstrap' ? result.data.capabilities : result.data;
+      caps.features.pm_workspaces.brief_export = {formats: ['markdown', 'html', 'svg'], locales: ['en', 'zh-TW'], renderer_version: 1};
+    }
+    return result;
+  };
+  await mountConversation(page, false, dispatch); await page.goto(workbenchRoute);
+  for (const task of ['versions', 'export', 'save']) {
+    await page.locator('[data-pm-report-menu]').click(); await page.locator(`[data-menu-key=${task}]`).click();
+    const empty = page.locator('[data-pm-report-state]');
+    if (task === 'save') {
+      await expect(empty).toBeHidden();
+      await expect(page.locator('[data-pm-action="pm.snapshot.create"] button[type=submit]')).toBeEnabled();
+    } else await expectShellEmpty(empty, locale === 'en' ? 'Report unavailable' : '無法取得報告',
+      locale === 'en' ? 'No readable saved report is selected.' : '目前未選取可讀取的已存報告。');
+    await shellShot(page, 'report-'+task+'-empty', locale, width); await page.keyboard.press('Escape');
+  }
+  expect(base.state.writes).toHaveLength(0); await context.close();
+});
 
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`report tasks open their own focused control ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage();

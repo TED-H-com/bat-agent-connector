@@ -663,7 +663,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     node.dataset.pmReportSlot = reportKind(node); return node;
   });
-  const reportState = emptyState({title: t('pm_report_unavailable'), text: t('pm_report_unselected')});
+  const reportState = emptyState({title: t('pm_report_unavailable'), text: h('span', {class: 'muted'}, t('pm_report_unselected'))});
   reportState.hidden = true; reportState.dataset.pmReportState = ''; reportTools.append(reportState);
   function focusReportControl(node, panel, read) {
     if (!node) return;
@@ -797,10 +797,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       ['overview', brief?.box || (lifecycle ? h('div') : null), []],
       ['discussions', content, [['ui_meetings', meetings?.element]]],
       ['requirements', traceability?.element || (viewTools.requirements.some(([, node]) => node) ? emptyState({title: t('wv_requirements_unavailable')}) : null), []],
-      ['schedule', schedule?.element || roadmap?.box || (sprints ? emptyState({title: t('wv_no_schedule'), text: t('wv_no_schedule_reason')}) : null), schedule ? [] : [['ui_sprints', sprints?.box]]],
-      ['dependencies', dependencies?.element || (maintenancePolicy || releaseBaselines ? emptyState({title: t('wv_no_dependencies'), text: t('wv_no_dependencies_reason')}) : null), [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
+      ['schedule', schedule?.element || roadmap?.box || (sprints ? emptyState({title: t('wv_no_schedule'), text: h('span', {class: 'muted'}, t('wv_no_schedule_reason'))}) : null), schedule ? [] : [['ui_sprints', sprints?.box]]],
+      ['dependencies', dependencies?.element || (maintenancePolicy || releaseBaselines ? emptyState({title: t('wv_no_dependencies'), text: h('span', {class: 'muted'}, t('wv_no_dependencies_reason'))}) : null), [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
       ['issues', register?.element || governance?.element, [...(register && governance ? [['ui_governance', governance.element]] : []), ['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
-      ['agents', resources?.element || (ahp ? emptyState({title: t('wv_no_agents'), text: t('wv_no_agents_reason')}) : null), [['ui_observations', ahp?.element]]],
+      ['agents', resources?.element || (ahp ? emptyState({title: t('wv_no_agents'), text: h('span', {class: 'muted'}, t('wv_no_agents_reason'))}) : null), [['ui_observations', ahp?.element]]],
       ['board', kanban?.element || (workBatches ? emptyState({title: t('wv_board_unavailable')}) : null), []],
     ];
     for (const [id, primarySection, secondaries] of definitions) {

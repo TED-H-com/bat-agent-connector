@@ -1,8 +1,9 @@
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, openPmPanel} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture, pmRoute, workspaceId} from './pm-fixture.ts';
+import {expectShellEmpty, shellShot} from './shell-empty-state.ts';
 const pid='prj_'+'1'.repeat(20), wid='wi_'+'2'.repeat(20), rid='pmrev_'+'3'.repeat(32), eid='pme_'+'4'.repeat(32);
 function fixture() {
   const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, catalogReads:0, catalogWait:null as Promise<void>|null, associated:false, tracked:false, lost:false, planDenied:false, acceptedPlan:rid, planReads:[] as string[], boundPlan:null as string|null, boundRequirements:[] as string[], sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any};
@@ -57,6 +58,58 @@ function fixture() {
 const action=(page:any,name:string)=>page.locator(`[data-pm-action="${name}"]`);
 const selectProject=async(page:any)=>{await page.getByLabel('Connector project',{exact:true}).selectOption(pid);};
 const openWork=async(page:any)=>{await page.locator('[data-pm-work] > summary').click();};
+for(const locale of ['en','zh-TW'])for(const width of [1440,390])for(const state of ['no-projects','no-work','no-evidence','unavailable'])
+test(`Settings ${state} has a short title and muted explanation ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
+  const f=fixture();f.state.associated=true;f.state.tracked=true;let withdrawn=false;
+  const dispatch=async(input:any)=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    if(path==='/projects'&&withdrawn)return {status:403,data:{error:{code:'FORBIDDEN',message:'Project catalog withdrawn'}}};
+    const result=await f.dispatch(input);
+    if(path==='/projects'&&state==='no-projects')result.data.projects=[];
+    if(path==='/projects/'+pid&&state==='no-work')result.data.work_items=[];
+    return result;
+  };
+  const copy=locale==='en'?{project:'Connector project',
+    'no-projects':['No projects yet','No Connector projects are available.'],
+    'no-work':['No work yet','This project has no active work items.'],
+    'no-evidence':['No evidence yet','No evidence snapshot collected yet.'],
+    unavailable:['Projects unavailable','Could not read Connector data.']}
+    :{project:'Connector 專案','no-projects':['尚無專案','目前沒有可用的 Connector 專案。'],
+      'no-work':['尚無工作','此專案目前沒有工作項目。'],'no-evidence':['尚無證據','尚未整理證據快照。'],
+      unavailable:['無法取得專案','無法讀取 Connector 專案紀錄。']};
+  await mountConversation(page,false,dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_workspace_settings');
+  if(state!=='no-projects')await page.getByLabel(copy.project,{exact:true}).selectOption(pid);
+  if(state==='no-evidence'||state==='unavailable')await openWork(page);
+  if(state==='unavailable'){
+    await expect(page.locator('[data-pm-work]')).toContainText('Clear first action');
+    withdrawn=true;f.base.state.cursor++;
+    await expect(page.locator('[data-pm-work]')).toHaveCount(0);
+    await expect(page.getByLabel(copy.project,{exact:true})).toHaveValue('');
+    await expect(page.getByLabel(copy.project,{exact:true}).locator('option')).toHaveCount(1);
+  }
+  const [title,reason]=copy[state as keyof typeof copy] as string[];
+  const empty=page.locator('[data-pm-evidence] .ui-empty').filter({has:page.getByRole('heading',{name:title,exact:true})});
+  await expectShellEmpty(empty,title,reason);await empty.scrollIntoViewIfNeeded();
+  await shellShot(page,'settings-'+state,locale,width);
+  expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);await context.close();
+});
+for(const locale of ['en','zh-TW'])for(const source of ['catalog','work'])test(`Settings missing ${source} data stays unavailable rather than empty ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale,baseURL}),page=await context.newPage(),f=fixture();f.state.associated=true;
+  const dispatch=async(input:any)=>{
+    const path=new URL(input.path,'http://fixture').pathname,result=await f.dispatch(input);
+    if(source==='catalog'&&path==='/projects')delete result.data.projects;
+    if(source==='work'&&path==='/projects/'+pid)delete result.data.work_items;
+    return result;
+  };
+  await mountConversation(page,false,dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_workspace_settings');
+  if(source==='work')await page.getByLabel(locale==='en'?'Connector project':'Connector 專案',{exact:true}).selectOption(pid);
+  const panel=page.locator('[data-pm-evidence]'),title=locale==='en'?'Projects unavailable':'無法取得專案';
+  await expectShellEmpty(panel.locator('.ui-empty'),title,locale==='en'?'Could not read Connector data.':'無法讀取 Connector 專案紀錄。');
+  await expect(panel.getByRole('heading',{name:locale==='en'?'No projects yet':'尚無專案',exact:true})).toHaveCount(0);
+  await expect(panel.getByRole('heading',{name:locale==='en'?'No work yet':'尚無工作',exact:true})).toHaveCount(0);
+  expect(f.state.writes).toHaveLength(0);await context.close();
+});
 for(const native of [false,true])test.describe(native?'native evidence':'web evidence',()=>{
   test('refresh visibly disables association until its fixed source reads finish, without losing the draft',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);

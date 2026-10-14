@@ -59,7 +59,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     const last = await api('GET', `${endpoint}/work/${workId}/capture`);
     alive(); verify(last); if (!holder.isConnected) return;
     holder.replaceChildren();
-    if (!last.capture) {holder.append(emptyState({title:t('pm_evidence_empty')})); return;}
+    if (!last.capture) {holder.append(emptyState({title:t('pm_evidence_empty'),text:h('span',{class:'muted'},t('pm_evidence_empty_help'))})); return;}
     if (last.capture.work_item_id !== workId) throw Error(t('pm_scope_mismatch'));
     const capture = last.capture, coverage = capture.coverage;
     holder.append(h('p', {}, timeLabel(t, 'pm_evidence_saved_at', {time: sourceTime(capture.captured_at)})),
@@ -208,10 +208,13 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
   }
   async function loadProject() {
     const ticket = ++generation; loaded = false; updateForms(); status.replaceChildren(); updateBoundPlans();
-    if (!selected) {rows.replaceChildren(); active = null; return;}
+    if (!selected) {
+      rows.replaceChildren(...(!projects.length ? [emptyState({title:t('pm_evidence_no_projects'),text:h('span',{class:'muted'},t('pm_evidence_no_projects_help'))})] : []));
+      active = null; return;
+    }
     try {
       const data = await api('GET', `/projects/${encodeURIComponent(selected)}`); alive(); if (ticket !== generation) return;
-      if (data.project?.project_id !== selected) throw Error(t('pm_scope_mismatch'));
+      if (data.project?.project_id !== selected || !Array.isArray(data.work_items)) throw Error(t('pm_scope_mismatch'));
       const signature = JSON.stringify([data, bindings, workBindings]);
       loaded = true; if (active?.signature === signature) {updateForms(); updateBoundPlans(true); return;}
       active = {signature}; rows.replaceChildren();
@@ -222,9 +225,12 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
         rows.append(h('p', {class: 'muted'}, t('pm_evidence_bind_help')));
       } else {
         rows.append(...flatten(data.work_items).map(workRow));
-        if (!data.work_items?.length) rows.append(h('p', {class: 'muted'}, t('pm_evidence_no_work')));
+        if (!data.work_items?.length) rows.append(emptyState({title:t('pm_evidence_no_work_title'),text:h('span',{class:'muted'},t('pm_evidence_no_work'))}));
       }
-    } catch (error) {if (ticket === generation) status.replaceChildren(errorBox(error));}
+    } catch (error) {if (ticket === generation) {
+      rows.replaceChildren(); active = null;
+      status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},t('pm_evidence_unavailable_help'))}),errorBox(error));
+    }}
   }
   async function allBindings(suffix) {
     let cursor = 0, records = [];
@@ -240,13 +246,18 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     try {
       const [catalog, associated, work] = await Promise.all([api('GET', '/projects'), allBindings('projects'), allBindings('work')]); alive();
       if (ticket !== generation) return;
+      if (!Array.isArray(catalog.projects)) throw Error(t('pm_scope_mismatch'));
       projects = flatten(catalog.projects); bindings = associated; workBindings = work;
       choose.replaceChildren(h('option', {value: ''}, t('pm_evidence_choose')),
         ...projects.map(project => h('option', {value: project.project_id}, project.name)));
       choose.value = projects.some(project => project.project_id === selected) ? selected : '';
       selected = choose.value;
       await loadProject();
-    } catch (error) {if (ticket === generation) status.replaceChildren(errorBox(error));}
+    } catch (error) {if (ticket === generation) {
+      rows.replaceChildren(); active = null; projects = []; bindings = []; workBindings = [];
+      choose.replaceChildren(h('option', {value: ''}, t('pm_evidence_choose')));
+      status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},t('pm_evidence_unavailable_help'))}),errorBox(error));
+    }}
   }
   return {box, refresh};
 }

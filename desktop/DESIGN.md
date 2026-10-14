@@ -183,6 +183,10 @@ phase and does not submit a stage until one is chosen. Workspace settings show t
 bound plan's title and requirement text, including older revisions. Display labels are
 revalidated on refresh; revision and requirement ids stay in Details, with Unknown when
 those labels cannot be read.
+Empty and unavailable shell tasks use the shared empty state: a short title without
+terminal punctuation and one muted explanatory line. A readable empty snapshot list
+does not block saving the first report. Settings withdraws project rows and inspector
+details when their source cannot be read; retained selection IDs alone are not facts.
 
 Durable PM forms register only while connected. A hidden autonomous child tracks
 connection without changing the ordinary form's layout, selectors or hidden state.

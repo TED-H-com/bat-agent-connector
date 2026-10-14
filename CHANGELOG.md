@@ -51,7 +51,9 @@
   plan and requirement labels from the bound revision, revalidate them on refresh,
   and keep their exact IDs in Details. Schedule, Agents and Dependencies show an
   unavailable state when their projection is unsupported, with secondary tools
-  collapsed below it.
+  collapsed below it. Empty and unavailable shell tasks use short titles with muted
+  explanations; Settings distinguishes missing evidence from unreadable projects
+  and clears withdrawn project details. Native save receipts use localized punctuation.
 
 - Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
   decisions, deviations and recent deliveries, retaining confirmed goals and recent

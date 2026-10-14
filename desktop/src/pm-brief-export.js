@@ -25,7 +25,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
       if(pendingReceipt.error){status.replaceChildren(errorBox(pendingReceipt.error));return;}
       const value=pendingReceipt.receipt;
       status.replaceChildren(h('p',{class:'muted'},value===null?t('pm_export_cancelled'):
-        allowed()&&identity()===pendingReceipt.expected?`${t('pm_export_saved')}: ${value.display_name}`:t('pm_export_prior_saved')));
+        allowed()&&identity()===pendingReceipt.expected?t('pm_export_saved_file',{name:value.display_name}):t('pm_export_prior_saved')));
     }
   }
   function live(expected){alive();if(caps()?.actor!==actor||!allowed()||identity()!==expected)throw Object.assign(Error(t('pm_export_changed')),{code:'PM_EXPORT_VIEW_CHANGED'});}

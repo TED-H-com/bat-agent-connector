@@ -323,11 +323,11 @@ var workViewStrings = {
 		wv_board_unavailable: "Work records unavailable",
 		wv_blocked_one: "1 recorded blocker",
 		wv_no_schedule: "Schedule unavailable",
-		wv_no_schedule_reason: "This connection does not provide schedule data.",
+		wv_no_schedule_reason: "Schedule data is not provided here.",
 		wv_no_agents: "Usage unavailable",
-		wv_no_agents_reason: "This connection does not provide usage data.",
+		wv_no_agents_reason: "Usage data is not provided here.",
 		wv_no_dependencies: "Dependencies unavailable",
-		wv_no_dependencies_reason: "This connection does not provide dependency data.",
+		wv_no_dependencies_reason: "Dependency data is not provided here.",
 		wv_issue: "Issue #{number}",
 		wv_search: "Search requirements or issues",
 		wv_group: "Group by",
@@ -4529,8 +4529,9 @@ var pmLifecycleStrings = {
 		pm_lifecycle_closing: "Closed to new work · existing work needs reconciliation",
 		pm_lifecycle_active_help: "This stage describes the workspace. Discussions, Sprint commitments and execution permissions keep their own records.",
 		pm_lifecycle_stopped_help: "New managed work is stopped. Existing results remain readable; other controllers’ sessions are preserved.",
-		pm_lifecycle_legacy_help: "No management stage was recorded for this workspace. Its previous work has not been reclassified.",
-		pm_lifecycle_unknown: "Activity controls are unavailable until the workspace state can be read again.",
+		pm_lifecycle_legacy_help: "Its previous work has not been reclassified.",
+		pm_lifecycle_unavailable: "Activity unavailable",
+		pm_lifecycle_unknown: "Workspace state could not be read.",
 		pm_lifecycle_manage: "Manage project activity",
 		pm_lifecycle_action: "Change",
 		pm_lifecycle_stage: "Management stage",
@@ -4548,7 +4549,8 @@ var pmLifecycleStrings = {
 		pm_lifecycle_maintenance_ready: "Current original evidence permits Maintain. This decision keeps that exact observation and is checked again before it takes effect.",
 		pm_lifecycle_maintenance_active: "Maintenance uses the adopted policy. Its own repairs keep this stage; new development and unknown work remain visible.",
 		pm_lifecycle_inflight: "Previously admitted work",
-		pm_lifecycle_inflight_empty: "No unresolved work is visible in this recorded management scope.",
+		pm_lifecycle_inflight_empty: "No pending work",
+		pm_lifecycle_inflight_empty_help: "Only readable records are shown.",
 		pm_lifecycle_filtered: "Some records are outside your current source access. Visible rows are not a complete project total.",
 		pm_lifecycle_unresolved: "Needs reconciliation",
 		pm_lifecycle_retained: "Explicitly retained",
@@ -4579,8 +4581,9 @@ var pmLifecycleStrings = {
 		pm_lifecycle_closing: "已停止新投入，結案工作待核對",
 		pm_lifecycle_active_help: "這是整個工作區的管理階段；各討論、衝刺承諾與執行授權仍各自保留。",
 		pm_lifecycle_stopped_help: "已停止受理新的受管理工作。既有結果仍可查回，其他控制者的工作階段保持原狀。",
-		pm_lifecycle_legacy_help: "這個工作區尚未記錄管理階段，系統未重新歸類原有工作。",
-		pm_lifecycle_unknown: "目前無法讀取工作區狀態，重新取得資料後才能調整投入。",
+		pm_lifecycle_legacy_help: "既有工作保留原分類。",
+		pm_lifecycle_unavailable: "無法取得狀態",
+		pm_lifecycle_unknown: "無法讀取工作區狀態，暫時無法調整。",
 		pm_lifecycle_manage: "調整專案投入",
 		pm_lifecycle_action: "調整方式",
 		pm_lifecycle_stage: "管理階段",
@@ -4598,7 +4601,8 @@ var pmLifecycleStrings = {
 		pm_lifecycle_maintenance_ready: "目前原始證據允許進入維護；這項決定會保存選定觀察，生效前再次核對。",
 		pm_lifecycle_maintenance_active: "維護沿用已採用政策；自身修復不反覆切換階段，新的開發與未知工作仍持續顯示。",
 		pm_lifecycle_inflight: "先前已受理的工作",
-		pm_lifecycle_inflight_empty: "這次管理範圍的可讀紀錄中，沒有尚待核對的工作。",
+		pm_lifecycle_inflight_empty: "尚無待核對工作",
+		pm_lifecycle_inflight_empty_help: "僅顯示可讀取的管理紀錄。",
 		pm_lifecycle_filtered: "部分紀錄不在你目前的來源權限內；可見列數不是整個專案的總數。",
 		pm_lifecycle_unresolved: "待核對",
 		pm_lifecycle_retained: "已明確保留",
@@ -5421,7 +5425,7 @@ var briefExportStrings = {
 		pm_export_reading: "Checking report sources…",
 		pm_export_native_unavailable: "This desktop version does not support saving Brief reports. Use the browser dashboard or an updated client.",
 		pm_export_cancelled: "Save cancelled.",
-		pm_export_saved: "Saved",
+		pm_export_saved_file: "Saved: {name}",
 		pm_export_requested: "Download requested for the selected report.",
 		pm_export_prior_saved: "The earlier report save finished. Check the destination selected for that report.",
 		pm_export_unavailable: "The report is no longer available to this connection. Refresh the Brief.",
@@ -5446,7 +5450,7 @@ var briefExportStrings = {
 		pm_export_reading: "正在核對報告來源…",
 		pm_export_native_unavailable: "這個桌面版本尚不能儲存專案摘要。請改用瀏覽器，或更新應用程式。",
 		pm_export_cancelled: "已取消儲存。",
-		pm_export_saved: "已儲存",
+		pm_export_saved_file: "已儲存：{name}",
 		pm_export_requested: "已要求下載選定報告。",
 		pm_export_prior_saved: "先前報告的儲存已完成，請查看當時選定的目的地。",
 		pm_export_unavailable: "目前連線已無法取得這份報告，請重新整理專案總覽。",
@@ -6435,13 +6439,19 @@ var pmStrings = {
 		pm_evidence_associated: "Tracked here",
 		pm_evidence_unassociated: "Not associated",
 		pm_evidence_no_work: "This project has no active work items.",
+		pm_evidence_no_work_title: "No work yet",
+		pm_evidence_no_projects: "No projects yet",
+		pm_evidence_no_projects_help: "No Connector projects are available.",
+		pm_evidence_unavailable: "Projects unavailable",
+		pm_evidence_unavailable_help: "Could not read Connector data.",
 		pm_evidence_open_work: "Open work and operations",
 		pm_evidence_no_plan: "No plan revision is associated with this work yet.",
 		pm_evidence_fixed_plan: "This work references a fixed adopted plan revision.",
 		pm_evidence_details: "Details",
 		pm_evidence_plan_unread: "Could not read this plan.",
 		pm_evidence_labels_unread: "Some plan labels are unavailable.",
-		pm_evidence_empty: "No evidence snapshot collected yet.",
+		pm_evidence_empty: "No evidence yet",
+		pm_evidence_empty_help: "No evidence snapshot collected yet.",
 		pm_evidence_saved_at: "Captured {time}",
 		pm_evidence_coverage: "Examined {count} saved links · {missing} unavailable or unsupported sources. No live provider check.",
 		pm_evidence_quality_unknown: "Definition of Done has not been assessed. A completion claim, test, merge and deployment are separate facts.",
@@ -6787,13 +6797,19 @@ var pmStrings = {
 		pm_evidence_associated: "已納入追蹤",
 		pm_evidence_unassociated: "尚未連結",
 		pm_evidence_no_work: "此專案目前沒有工作項目。",
+		pm_evidence_no_work_title: "尚無工作",
+		pm_evidence_no_projects: "尚無專案",
+		pm_evidence_no_projects_help: "目前沒有可用的 Connector 專案。",
+		pm_evidence_unavailable: "無法取得專案",
+		pm_evidence_unavailable_help: "無法讀取 Connector 專案紀錄。",
 		pm_evidence_open_work: "開啟工作與操作紀錄",
 		pm_evidence_no_plan: "這項工作尚未連結計畫版本。",
 		pm_evidence_fixed_plan: "這項工作引用固定的已採用計畫版本。",
 		pm_evidence_details: "詳細資訊",
 		pm_evidence_plan_unread: "無法讀取這份計畫。",
 		pm_evidence_labels_unread: "部分計畫名稱與需求文字無法取得。",
-		pm_evidence_empty: "尚未整理證據快照。",
+		pm_evidence_empty: "尚無證據",
+		pm_evidence_empty_help: "尚未整理證據快照。",
 		pm_evidence_saved_at: "整理時間：{time}",
 		pm_evidence_coverage: "已查閱 {count} 個既有關聯 · {missing} 個來源無法取得或尚不支援；未查詢即時外部服務。",
 		pm_evidence_quality_unknown: "尚未評估完成定義。完成回報、測試、合併與部署各有獨立證據。",
@@ -15817,7 +15833,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 				return;
 			}
 			const value = pendingReceipt.receipt;
-			status.replaceChildren(h("p", { class: "muted" }, value === null ? t("pm_export_cancelled") : allowed() && identity() === pendingReceipt.expected ? `${t("pm_export_saved")}: ${value.display_name}` : t("pm_export_prior_saved")));
+			status.replaceChildren(h("p", { class: "muted" }, value === null ? t("pm_export_cancelled") : allowed() && identity() === pendingReceipt.expected ? t("pm_export_saved_file", { name: value.display_name }) : t("pm_export_prior_saved")));
 		}
 	}
 	function live(expected) {
@@ -25248,7 +25264,10 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function renderWork() {
 		work.replaceChildren(h("h3", {}, t("pm_lifecycle_inflight")));
-		if (!rows.length) work.append(emptyState({ title: t("pm_lifecycle_inflight_empty") }));
+		if (!rows.length) work.append(emptyState({
+			title: t("pm_lifecycle_inflight_empty"),
+			text: h("span", { class: "muted" }, t("pm_lifecycle_inflight_empty_help"))
+		}));
 		if (workFiltered) work.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		for (const row of rows) {
 			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, actionLabel(row.action), " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", operationStatusLabel(row.operation_status)), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
@@ -25293,7 +25312,14 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function render() {
 		const state = current.lifecycle, stopped = ["paused", "closed"].includes(state.stage);
-		summary.replaceChildren(h("p", { class: "pm-lifecycle-stage" }, h("strong", {}, stageName(["pausing", "closing"].includes(state.status) ? state.status : state.stage))), h("p", { class: "muted" }, t(state.stage === null ? "pm_lifecycle_legacy_help" : stopped ? "pm_lifecycle_stopped_help" : "pm_lifecycle_active_help")));
+		if (state.stage === null) {
+			const empty = emptyState({
+				title: stageName(null),
+				text: h("span", { class: "muted" }, t("pm_lifecycle_legacy_help"))
+			});
+			empty.querySelector("h2").classList.add("pm-lifecycle-stage");
+			summary.replaceChildren(empty);
+		} else summary.replaceChildren(h("p", { class: "pm-lifecycle-stage" }, h("strong", {}, stageName(["pausing", "closing"].includes(state.status) ? state.status : state.stage))), h("p", { class: "muted" }, t(stopped ? "pm_lifecycle_stopped_help" : "pm_lifecycle_active_help")));
 		maintenanceNote.textContent = t(state.stage === "maintain" ? "pm_lifecycle_maintenance_active" : current.maintenance?.available ? "pm_lifecycle_maintenance_ready" : "pm_lifecycle_maintenance_unavailable");
 		if (current.transition?.reason) summary.append(h("p", {}, current.transition.reason));
 		if (!permitted(true)) summary.append(h("p", { class: "muted" }, t("pm_lifecycle_reader")));
@@ -25322,7 +25348,10 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_lifecycle_unknown")));
+		status.replaceChildren(emptyState({
+			title: t("pm_lifecycle_unavailable"),
+			text: h("span", { class: "muted" }, t("pm_lifecycle_unknown"))
+		}), errorBox(error));
 	}
 	async function refresh() {
 		withdraw();
@@ -35944,7 +35973,10 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		if (!holder.isConnected) return;
 		holder.replaceChildren();
 		if (!last.capture) {
-			holder.append(emptyState({ title: t("pm_evidence_empty") }));
+			holder.append(emptyState({
+				title: t("pm_evidence_empty"),
+				text: h("span", { class: "muted" }, t("pm_evidence_empty_help"))
+			}));
 			return;
 		}
 		if (last.capture.work_item_id !== workId) throw Error(t("pm_scope_mismatch"));
@@ -36184,7 +36216,10 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		status.replaceChildren();
 		updateBoundPlans();
 		if (!selected) {
-			rows.replaceChildren();
+			rows.replaceChildren(...!projects.length ? [emptyState({
+				title: t("pm_evidence_no_projects"),
+				text: h("span", { class: "muted" }, t("pm_evidence_no_projects_help"))
+			})] : []);
 			active = null;
 			return;
 		}
@@ -36192,7 +36227,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			const data = await api("GET", `/projects/${encodeURIComponent(selected)}`);
 			alive();
 			if (ticket !== generation) return;
-			if (data.project?.project_id !== selected) throw Error(t("pm_scope_mismatch"));
+			if (data.project?.project_id !== selected || !Array.isArray(data.work_items)) throw Error(t("pm_scope_mismatch"));
 			const signature = JSON.stringify([
 				data,
 				bindings,
@@ -36214,10 +36249,20 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			if (!bound) rows.append(h("p", { class: "muted" }, t("pm_evidence_bind_help")));
 			else {
 				rows.append(...flatten(data.work_items).map(workRow));
-				if (!data.work_items?.length) rows.append(h("p", { class: "muted" }, t("pm_evidence_no_work")));
+				if (!data.work_items?.length) rows.append(emptyState({
+					title: t("pm_evidence_no_work_title"),
+					text: h("span", { class: "muted" }, t("pm_evidence_no_work"))
+				}));
 			}
 		} catch (error) {
-			if (ticket === generation) status.replaceChildren(errorBox(error));
+			if (ticket === generation) {
+				rows.replaceChildren();
+				active = null;
+				status.replaceChildren(emptyState({
+					title: t("pm_evidence_unavailable"),
+					text: h("span", { class: "muted" }, t("pm_evidence_unavailable_help"))
+				}), errorBox(error));
+			}
 		}
 	}
 	async function allBindings(suffix) {
@@ -36245,6 +36290,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			]);
 			alive();
 			if (ticket !== generation) return;
+			if (!Array.isArray(catalog.projects)) throw Error(t("pm_scope_mismatch"));
 			projects = flatten(catalog.projects);
 			bindings = associated;
 			workBindings = work;
@@ -36253,7 +36299,18 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			selected = choose.value;
 			await loadProject();
 		} catch (error) {
-			if (ticket === generation) status.replaceChildren(errorBox(error));
+			if (ticket === generation) {
+				rows.replaceChildren();
+				active = null;
+				projects = [];
+				bindings = [];
+				workBindings = [];
+				choose.replaceChildren(h("option", { value: "" }, t("pm_evidence_choose")));
+				status.replaceChildren(emptyState({
+					title: t("pm_evidence_unavailable"),
+					text: h("span", { class: "muted" }, t("pm_evidence_unavailable_help"))
+				}), errorBox(error));
+			}
 		}
 	}
 	return {
@@ -37673,7 +37730,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	});
 	const reportState = emptyState({
 		title: t("pm_report_unavailable"),
-		text: t("pm_report_unselected")
+		text: h("span", { class: "muted" }, t("pm_report_unselected"))
 	});
 	reportState.hidden = true;
 	reportState.dataset.pmReportState = "";
@@ -37958,7 +38015,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"schedule",
 				schedule?.element || roadmap?.box || (sprints ? emptyState({
 					title: t("wv_no_schedule"),
-					text: t("wv_no_schedule_reason")
+					text: h("span", { class: "muted" }, t("wv_no_schedule_reason"))
 				}) : null),
 				schedule ? [] : [["ui_sprints", sprints?.box]]
 			],
@@ -37966,7 +38023,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"dependencies",
 				dependencies?.element || (maintenancePolicy || releaseBaselines ? emptyState({
 					title: t("wv_no_dependencies"),
-					text: t("wv_no_dependencies_reason")
+					text: h("span", { class: "muted" }, t("wv_no_dependencies_reason"))
 				}) : null),
 				[["ui_policy", maintenancePolicy?.element], ["ui_baselines", releaseBaselines?.element]]
 			],
@@ -37984,7 +38041,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				"agents",
 				resources?.element || (ahp ? emptyState({
 					title: t("wv_no_agents"),
-					text: t("wv_no_agents_reason")
+					text: h("span", { class: "muted" }, t("wv_no_agents_reason"))
 				}) : null),
 				[["ui_observations", ahp?.element]]
 			],
