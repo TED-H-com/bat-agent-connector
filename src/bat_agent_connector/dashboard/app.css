@@ -229,7 +229,7 @@ a { color: var(--accent); }
 /* Search chrome preserves each input node and its draft/listeners. */
 :root body .ui-search { display: flex; align-items: center; position: relative; height: 32px; min-width: 8rem; max-width: 100%; }
 :root body .ui-search > .ui-icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-3); }
-:root body .ui-search > input { width: 100%; min-width: 0; height: 32px; min-height: 32px; padding: 4px 8px 4px 30px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
+:root body .ui-search > input[type=search] { width: 100%; min-width: 0; height: 32px; min-height: 32px; padding: 4px 8px 4px 30px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
 :root body :is(.filters, [class$=toolbar], [class*=toolbar-], .global-ops-tools, .dep-toolbar, .pm-agents-list-tools, .ui-segmented) select { min-height: 32px; height: 32px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); padding-block: 4px; }
 @media (max-width: 800px) { :root body .ui-search > input { font-size: 16px; } }
 
@@ -243,7 +243,7 @@ a { color: var(--accent); }
 .global-op-compact-title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .global-op-compact > .ui-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-:root body .dep-chip { height: 24px; min-height: 24px; max-width: 100%; white-space: nowrap; overflow: visible; }
+:root body .ui-button.dep-chip { height: 24px; min-height: 24px; max-width: 100%; white-space: nowrap; overflow: visible; }
 
 :root body .ui-context-chip:not(:has(.ui-chip-label)) { display: block; overflow: hidden; }
 

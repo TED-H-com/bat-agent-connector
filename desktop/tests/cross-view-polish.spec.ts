@@ -2,6 +2,19 @@ import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {demoFixture} from './demo/index.ts';
 
+for (const width of [390,768,1440]) test(`shared search and filter chip sizes survive legacy view styles at ${width}`,async({page})=>{
+  await page.setViewportSize({width,height:900});const f=demoFixture(),writes:string[]=[];
+  await mountConversation(page,false,async input=>{if(input.method!=='GET')writes.push(input.path);return f.dispatch(input);});
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/dependencies`);
+  const search=page.locator('.dep-search input[type=search]'),chip=page.locator('[data-dep-relation]').first();
+  await expect(search).toHaveAttribute('placeholder','Search');await expect(chip).toBeVisible();
+  expect(await search.evaluate(node=>node.getBoundingClientRect().height)).toBe(32);
+  expect(await chip.evaluate(node=>node.getBoundingClientRect().height)).toBe(24);
+  if(width<=800)expect(await chip.evaluate(node=>parseFloat(getComputedStyle(node,'::before').minHeight))).toBeGreaterThanOrEqual(44);
+  await search.fill('pytest');await expect(page.locator(width<=800?'[data-dep-list]':'[data-dep-matrix]')).toContainText('pytest');
+  expect(writes).toEqual([]);
+});
+
 for (const locale of ['en', 'zh-TW'] as const) for (const view of ['session', 'overview', 'issues', 'dependencies']) {
   test(`full-width mobile header ${locale} ${view}`, async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, locale, viewport: {width:390, height:844}}), page = await context.newPage();

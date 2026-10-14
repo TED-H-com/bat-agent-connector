@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Preserve shared search and chip sizes against legacy view styles, with invisible mobile chip touch targets.
+
 - Keep the workspace switcher's disclosure chevron after its label on desktop and mobile.
 
 - Use the same bilingual action and operation-status labels in lifecycle summaries and project delivery work.
