@@ -697,9 +697,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       else if (task === 'versions' && versionBar) reportState.hidden = Boolean(versionBar.querySelector('select')?.options.length);
     });
     if (task === 'export') {
-      const fold = reportTools.querySelector('[data-pm-brief-export]');
-      if (fold) fold.open = true;
-      focusReportControl(fold?.querySelector('select, button'), panel, read);
+      const exported = reportTools.querySelector('[data-pm-brief-export]');
+      focusReportControl(exported?.querySelector('select, button'), panel, read);
     } else if (task === 'save') focusReportControl(reportTools.querySelector('[data-pm-action="pm.snapshot.create"] button[type="submit"]'), panel, read);
     else if (task === 'compare') focusReportControl(reportTools.querySelector('[data-report-compare], select'), panel, read);
     else {

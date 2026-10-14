@@ -104,7 +104,8 @@ Icons come from `ui/icons.js`: locally vendored Lucide SVG geometry, 24×24 view
 The inspector occupies 400px at ≥1200px, overlays from the right at 800–1199px,
 and becomes a full-screen sheet with Back below 800px. Tool drawers over Discussions
 always overlay, so its thread and detail columns keep their width. List views keep
-docking at ≥1200px. A docked surface extends from the 48px topbar to the viewport
+docking at ≥1200px. Every section in the main column shares one right edge beside
+a docked inspector, including the header and collapsed secondary tools. A docked surface extends from the 48px topbar to the viewport
 bottom; its body scrolls independently of the fixed header. Overlay mode traps focus
 and makes background content inert. `returnFocus` accepts an element or a callback
 resolved at close. It focuses a connected, rendered target outside hidden/inert
@@ -142,7 +143,9 @@ of transport health, with the pause explained in the tooltip.
 One persistent sidebar is 248px (232px at 1000–1199px), with its own scroll and an
 optional saved resize preference. Below 1000px it is a drawer with scrim, focus trap
 and Escape/focus return. The sidebar contains workspace name/central phase, Project
-views, explicitly bound Work, and Pending/Tools/Settings. Capability-absent views
+views, explicitly bound Work, and Pending/Tools/Settings. Project phase names share
+`phaseVocabulary` in `ui/ui-strings.js`: Idea / 構想, Planning / 規劃, Development / 開發,
+Maintain / 維護, Paused / 已暫停, Closed / 已結案. Delivery / 交付 names the Tools page. Capability-absent views
 are omitted. With no selected PM workspace, the existing global tree remains.
 
 Work uses central workspace/project bindings, never matching names, paths or repos.
@@ -181,7 +184,9 @@ When Schedule, Agents or Dependencies has no primary projection, that view shows
 unavailable state first. Missing capability does not prove that no records exist.
 Sprints, observations, policy and baselines stay collapsed under their
 labels and do not replace the view. Each Report menu task opens on its own: Versions, Save
-report and Export brief focus that task's first control. A phase change starts on Choose
+report and Export report focus that task's first control. Export report presents its
+description, format, language and primary download/save action directly, without an
+inner disclosure. A phase change starts on Choose
 phase and does not submit a stage until one is chosen. Workspace settings show the
 bound plan's title and requirement text, including older revisions. Display labels are
 revalidated on refresh; revision and requirement ids stay in Details, with Unknown when

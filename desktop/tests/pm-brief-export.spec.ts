@@ -74,7 +74,7 @@ async function mount(page:Page,native:boolean,f:ReturnType<typeof fixture>){
   await page.goto(pmRoute);await openThreadBrief(page);await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
 }
 const brief=(page:Page)=>page.locator('[data-pm-brief]'),exports=(page:Page)=>page.locator('[data-pm-brief-export]');
-async function open(page:Page){await exports(page).locator(':scope > summary').click();}
+async function open(page:Page){await expect(exports(page).getByRole('combobox').first()).toBeVisible();}
 
 for(const locale of ['en','zh-TW'])for(const width of [1440,390])test(`saved receipt uses localized punctuation ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
@@ -147,7 +147,7 @@ test('native cancellation and existing destinations do not imply a saved file',a
 
 test('old desktop versions preserve Brief reading and disclose unavailable report saving',async({page})=>{
   const f=fixture();f.state.nativeSupport=false;await mount(page,true,f);await open(page);
-  await expect(exports(page)).toContainText('does not support saving Brief reports');await expect(page.getByRole('button',{name:'Save report…',exact:true})).toBeDisabled();
+  await expect(exports(page)).toContainText('cannot save reports');await expect(page.getByRole('button',{name:'Save report…',exact:true})).toBeDisabled();
   await expect(brief(page)).toContainText('Current selected goal');expect(f.state.nativeSaves).toHaveLength(0);
 });
 

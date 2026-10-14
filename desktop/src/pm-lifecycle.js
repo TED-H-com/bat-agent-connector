@@ -1,6 +1,7 @@
 import {nativeRunState} from './pm-native-analysis.js';
 import {actionLabel, operationStatusLabel} from './global-labels.js';
 import {emptyState, skeleton} from './ui/components.js';
+import {phaseVocabulary} from './ui/ui-strings.js';
 // Management intent and execution admissions stay on the central journal.
 export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,form,input,labelled,errorBox,onChange}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/lifecycle`,actor=caps()?.actor;
@@ -185,6 +186,8 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
       for(const row of page.transitions){
         if(!/^pmlt_[0-9a-f]{32}$/.test(row.transition_id))throw Error(t('pm_scope_mismatch'));
         const detail=h('details',{},h('summary',{},row.reason||t('pm_lifecycle_trace')),h('p',{class:'muted'},row.actor||''));
+        if(Object.hasOwn(phaseVocabulary,row.to_stage))detail.append(h('p',{'data-pm-lifecycle-history-phase':''},
+          Object.hasOwn(phaseVocabulary,row.from_stage)?stageName(row.from_stage)+' → ':'',stageName(row.to_stage)));
         let done=false;detail.addEventListener('toggle',async()=>{
           if(!detail.open||done)return;done=true;
           try{const original=checkScope(await api('GET',`${endpoint}/transitions/${row.transition_id}`));alive();if(ticket!==serial||!detail.isConnected)return;

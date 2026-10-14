@@ -1,6 +1,6 @@
 import {test, expect} from '@playwright/test';
 import {reviewFixture} from './requirements-review-fixture.ts';
-import {openPmPanel, openPmSection} from './pm-navigation.ts';
+import {openPmPanel, openPmSection, openReportTask} from './pm-navigation.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
 
 for (const locale of ['en', 'zh-TW']) {
@@ -33,20 +33,22 @@ for (const locale of ['en', 'zh-TW']) {
     });
     await f.mount(page, 'overview'); await openPmPanel(page, 'ui_report');
     await expect(page.locator('[data-report-compare]')).toBeEnabled();
-    await page.locator('[data-pm-brief-export] > summary').click();
     const tools = page.locator('[data-pm-report-tools]');
     expect(await tools.evaluate(node => Boolean(node.closest('.pm-main')))).toBe(false);
-    const measurements = await tools.locator('select:visible, button:visible').evaluateAll(nodes => nodes.map(node => {
+    const measure = () => tools.locator('select:visible, button:visible').evaluateAll(nodes => nodes.map(node => {
       const css = getComputedStyle(node), r = node.getBoundingClientRect();
       const range = document.createRange(); range.selectNodeContents(node);
       return {text: node.textContent, height: r.height, input: node.tagName === 'SELECT', font: parseFloat(css.fontSize),
         wraps: node.tagName === 'BUTTON' && range.getBoundingClientRect().height > parseFloat(css.lineHeight) + 1};
     }));
-    expect(measurements).toHaveLength(7);
-    for (const m of measurements) {expect(m.height, m.text || '').toBeGreaterThanOrEqual(44); if (m.input) expect(m.font).toBe(16); else expect(m.wraps, m.text || '').toBe(false);}
+    const measurements = await measure();
     await expect(page.locator('[data-report-compare]')).toHaveText(locale === 'en' ? 'Compare' : '比較');
     await expect(page.locator('[data-report-compare]')).toHaveAttribute('aria-description', /#1/);
     await expect(page.locator('[data-report-print]')).toHaveText(locale === 'en' ? 'Print' : '列印');
+    await openReportTask(page, 'save'); measurements.push(...await measure());
+    await openReportTask(page, 'export'); measurements.push(...await measure());
+    expect(measurements).toHaveLength(7);
+    for (const m of measurements) {expect(m.height, m.text || '').toBeGreaterThanOrEqual(44); if (m.input) expect(m.font).toBe(16); else expect(m.wraps, m.text || '').toBe(false);}
     expect(f.writes).toEqual([]);
   });
 
@@ -77,7 +79,7 @@ for (const locale of ['en', 'zh-TW']) {
   test(`Report comparison foregrounds changed statements ${locale}`, async ({page}) => {
     const f = reviewFixture(locale);
     await f.mount(page, 'overview'); await openPmPanel(page, 'ui_report');
-    await expect(page.locator('[data-report-compare]')).toBeEnabled(); await page.locator('[data-report-compare]').click();
+    await expect(page.locator('[data-report-compare]')).toBeEnabled(); await openReportTask(page, 'compare');
     const purpose = page.locator('[data-report-section=definition]');
     await expect(purpose.locator('[data-report-pair]')).toHaveCount(1);
     await expect(purpose.locator('[data-report-side=before]')).toContainText(f.copy.goalV2);
@@ -120,7 +122,7 @@ for (const locale of ['en', 'zh-TW']) {
       return r;
     });
     await f.mount(page, 'overview'); await openPmPanel(page, 'ui_report');
-    await expect(page.locator('[data-report-compare]')).toBeEnabled(); await page.locator('[data-report-compare]').click();
+    await expect(page.locator('[data-report-compare]')).toBeEnabled(); await openReportTask(page, 'compare');
     const removed = page.locator('[data-report-section=definition] [data-report-pair]').filter({has: page.locator('[data-report-change=removed]')});
     await expect(removed.locator('[data-report-change=removed]')).toHaveText(locale === 'en' ? 'Removed' : '移除');
     await expect(removed).toContainText(f.copy.quality);

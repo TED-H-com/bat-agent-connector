@@ -1,4 +1,4 @@
-import {button as actionButton, disclosure} from './ui/components.js';
+import {button as actionButton} from './ui/components.js';
 import {nativeDesktop,nativeBriefExportSupport,nativeBriefSave} from './transport/index.ts';
 
 // Read a selected report again for each download. Report text is never live markup.
@@ -10,9 +10,9 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
   locale.value=navigator.language.toLowerCase().startsWith('zh')?'zh-TW':'en';
   const status=h('div',{role:'status'}),note=h('p',{class:'muted'},t('pm_export_help'));
   const button=actionButton({variant:'primary',label:t(nativeDesktop?'pm_export_save':'pm_export_download'),onClick:()=>void save()});
-  const element=disclosure({label:t('pm_export_title'),body:h('div',{},note,
+  const element=h('div',{},note,
     h('div',{class:'pm-export-fields'},h('label',{},t('pm_export_format'),format),h('label',{},t('pm_export_language'),locale)),
-    h('div',{class:'actions'},button),status)}); element.dataset.pmBriefExport='';
+    h('div',{class:'actions'},button),status); element.dataset.pmBriefExport='';
   const allowed=()=>readable()&&caps()?.actor===actor&&caps()?.scopes?.includes('observe')&&snapshot()?.snapshot_id
     &&caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value)
     &&caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value)&&(!nativeDesktop||nativeBriefExportSupport);

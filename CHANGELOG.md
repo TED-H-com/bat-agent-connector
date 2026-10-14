@@ -83,7 +83,9 @@
   and clears withdrawn project details. Native save receipts use localized punctuation.
   Discussion tools overlay without
   narrowing the thread; docked inspectors fill the viewport with independent scrolling.
-  View headers and Issues lists reserve space beside docked inspectors.
+  View headers, lists and secondary sections share one edge beside docked inspectors.
+  Shell and lifecycle views share bilingual project phase names; Export report opens
+  directly to its choices and download action. Phase empty states fit fallback fonts.
   Lifecycle copy consistently says phase, Settings shows one access reason, report
   controls fit their selected text, and breadcrumbs separate only existing crumbs.
 

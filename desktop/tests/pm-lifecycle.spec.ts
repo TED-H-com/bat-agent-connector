@@ -68,25 +68,36 @@ async function edit(page:any,kind:string){
   await activity(page).locator(`[data-pm-lifecycle-intent="${kind}"]>summary`).click();
   return action(page,kind);
 }
-for(const locale of ['en','zh-TW'])for(const width of [1440,390])test(`phase empty and unavailable states explain their short titles ${locale} ${width}`,async({browser,baseURL})=>{
+for(const locale of ['en','zh-TW'])for(const width of [1440,390])for(const font of ['', 'DejaVu Sans', 'Liberation Sans'])test(`phase empty and unavailable states explain their short titles ${locale} ${width} ${font || 'system'}`,async({browser,baseURL})=>{
   const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
+  if(font)await page.route('**/app.css',async route=>{const response=await route.fetch();await route.fulfill({response,body:(await response.text())+`\n*{font-family:"${font}"!important}`});});
   const f=fixture();f.state.stage=null;f.state.status='unclassified';
   const copy=locale==='en'?{phase:'Phase not yet selected',legacy:'Existing work keeps its classification.',
     pending:'No admitted work',scope:'Only readable records are shown.',
-    unavailable:'Activity unavailable',reason:'Workspace state could not be read.'}
+    unavailable:'Activity unavailable',reason:'Workspace state is unreadable.'}
     :{phase:'尚未指定管理階段',legacy:'既有工作保留原分類。',pending:'尚無已受理工作',scope:'僅顯示可讀取的管理紀錄。',
-      unavailable:'無法取得狀態',reason:'無法讀取工作區狀態，暫時無法調整。'};
+      unavailable:'無法取得狀態',reason:'無法讀取工作區狀態。'};
   await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
   const empty=(title:string)=>activity(page).locator('.ui-empty').filter({has:page.getByRole('heading',{name:title,exact:true})});
+  const checkMargin=async(title:string)=>expect(await empty(title).evaluate(node=>{
+    const css=getComputedStyle(node),range=document.createRange();range.selectNodeContents(node.querySelector(':scope > p')!);
+    return node.clientWidth-parseFloat(css.paddingLeft)-parseFloat(css.paddingRight)-range.getBoundingClientRect().width;
+  })).toBeGreaterThanOrEqual(16);
+  const capture=async(state:string)=>{
+    await shellShot(page,state,locale,width);
+    if(!process.env.BATC_FIX3_SHOTS)return;
+    await mkdir(process.env.BATC_FIX3_SHOTS,{recursive:true});
+    await page.screenshot({path:`${process.env.BATC_FIX3_SHOTS}/fix3-${state}-${font.replaceAll(' ','-')||'system'}-${locale}-${width}.png`,animations:'disabled'});
+  };
   await expectShellEmpty(empty(copy.phase),copy.phase,copy.legacy);
-  await shellShot(page,'phase-unselected',locale,width);
+  await checkMargin(copy.phase);await capture('phase-unselected');
   await expectShellEmpty(empty(copy.pending),copy.pending,copy.scope);
-  await empty(copy.pending).scrollIntoViewIfNeeded();await shellShot(page,'phase-no-pending',locale,width);
+  await empty(copy.pending).scrollIntoViewIfNeeded();await checkMargin(copy.pending);await capture('phase-no-pending');
   f.state.failed=true;f.base.state.cursor++;
   await expectShellEmpty(empty(copy.unavailable),copy.unavailable,copy.reason);
   await expect(activity(page).getByRole('heading',{name:copy.pending,exact:true})).toHaveCount(0);
   await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveCount(0);
-  await shellShot(page,'phase-unavailable',locale,width);
+  await checkMargin(copy.unavailable);await capture('phase-unavailable');
   expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
   await context.close();
 });

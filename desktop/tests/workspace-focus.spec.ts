@@ -175,8 +175,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`emp
 
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`report tasks open their own focused control ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage();
-  const copy = locale === 'en' ? {export: 'Export brief', format: 'File format', versions: 'Versions', version: 'Report version', save: 'Save report'}
-    : {export: '匯出摘要', format: '檔案格式', versions: '版本', version: '報告版本', save: '儲存報告'};
+  const copy = locale === 'en' ? {export: 'Export report', format: 'File format', versions: 'Versions', version: 'Report version', save: 'Save report'}
+    : {export: '匯出報告', format: '檔案格式', versions: '版本', version: '報告版本', save: '儲存報告'};
   const base = workbenchFixture();
   const dispatch = async (input: any) => {
     const path = new URL(input.path, 'http://fixture').pathname;
@@ -193,7 +193,10 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`rep
   await page.locator('[data-menu-key=export]').click();
   await expect(page.getByRole('heading', {name: copy.export, exact: true})).toBeVisible();
   const exported = page.locator('[data-pm-brief-export]');
-  await expect(exported).toHaveJSProperty('open', true);
+  await expect(exported).toBeVisible();
+  await expect(exported.locator('details, summary')).toHaveCount(0);
+  await expect(exported.locator(':scope > p')).toContainText(locale === 'en' ? 'selected report' : '選定報告');
+  await expect(exported.getByRole('button', {name: locale === 'en' ? 'Download report' : '下載報告', exact: true})).toBeVisible();
   await expect(page.getByRole('combobox', {name: copy.format, exact: true})).toBeFocused();
   await expect(page.locator('[data-pm-action="pm.snapshot.create"]')).toBeHidden();
   await page.keyboard.press('Escape');

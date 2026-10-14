@@ -26,13 +26,18 @@ export async function openPmPanel(page: Page, item: 'ui_change_phase' | 'ui_repo
   if (await page.locator('.ui-inspector:visible').count()) await page.keyboard.press('Escape');
   await expect(page.locator('.pm-main > .ui-page-header')).toBeVisible();
   if (item === 'ui_report') {
-    await page.locator('[data-pm-report-menu]').click();
-    await page.locator('[data-menu-key=versions]').click();
+    await openReportTask(page, 'versions');
   } else {
     await page.locator('[data-pm-overflow]').click();
     await page.locator(`[data-menu-key=${item === 'ui_change_phase' ? 'phase' : 'settings'}]`).click();
   }
 }
+export async function openReportTask(page: Page, task: 'versions' | 'save' | 'export' | 'compare') {
+  if (await page.locator('.ui-inspector:visible').count()) await page.keyboard.press('Escape');
+  await page.locator('[data-pm-report-menu]').click();
+  await page.locator(`[data-menu-key=${task}]`).click();
+}
+
 // A withdrawn workspace removes the sidebar context. Exercise its bookmarked view
 // route anyway, so a hidden ancestor cannot make a source-withdrawal assertion pass.
 export async function expectPmWithdrawn(page: Page, view: string, selector: string, section?: string, facts: string[] = []) {

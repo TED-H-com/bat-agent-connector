@@ -271,7 +271,7 @@ try {
   assert.equal(brief.snapshot.work[0].capture.capture_id,captured.capture.capture_id);
   assert.equal(brief.snapshot.brief.deviations.status,'unassessed');
   const exports = page.locator('[data-pm-brief-export]');
-  await exports.locator('summary').click();
+  await expect(exports.getByRole('combobox').first()).toBeVisible();
   await exports.getByLabel('Report language',{exact:true}).selectOption('en');
   for (const format of ['markdown','html','svg']) {
     await exports.getByLabel('File format',{exact:true}).selectOption(format);

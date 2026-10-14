@@ -611,6 +611,33 @@ var statusVocabulary = Object.freeze({
 		tone: "neutral"
 	}
 });
+var phaseVocabulary = Object.freeze({
+	idea: {
+		en: "Idea",
+		"zh-TW": "構想"
+	},
+	planning: {
+		en: "Planning",
+		"zh-TW": "規劃"
+	},
+	development: {
+		en: "Development",
+		"zh-TW": "開發"
+	},
+	maintain: {
+		en: "Maintain",
+		"zh-TW": "維護"
+	},
+	paused: {
+		en: "Paused",
+		"zh-TW": "已暫停"
+	},
+	closed: {
+		en: "Closed",
+		"zh-TW": "已結案"
+	}
+});
+var phaseStrings = (prefix, lang) => Object.fromEntries(Object.entries(phaseVocabulary).map(([key, labels]) => [prefix + key, labels[lang]]));
 var uiStrings = {
 	en: {
 		ui_discuss: "Discuss",
@@ -621,7 +648,7 @@ var uiStrings = {
 		ui_save_snapshot: "Save report",
 		ui_compare: "Compare",
 		ui_print: "Print",
-		ui_export_brief: "Export brief",
+		ui_export_brief: "Export report",
 		ui_close: "Close",
 		ui_back: "Back",
 		ui_retry: "Retry",
@@ -659,12 +686,7 @@ var uiStrings = {
 		ui_threads_loaded: "{n} loaded{more}",
 		ui_threads_count: "{n} discussions",
 		ui_thread_count: "{n} discussion",
-		ui_phase_idea: "Idea",
-		ui_phase_planning: "Planning",
-		ui_phase_development: "Delivery",
-		ui_phase_maintain: "Maintain",
-		ui_phase_paused: "Paused",
-		ui_phase_closed: "Closed",
+		...phaseStrings("ui_phase_", "en"),
 		ui_tools: "Tools",
 		ui_menu: "Open navigation",
 		ui_pending_loaded: "{n} pending loaded{more}",
@@ -700,7 +722,7 @@ var uiStrings = {
 		ui_save_snapshot: "儲存報告",
 		ui_compare: "比較",
 		ui_print: "列印",
-		ui_export_brief: "匯出摘要",
+		ui_export_brief: "匯出報告",
 		ui_close: "關閉",
 		ui_back: "返回",
 		ui_retry: "重試",
@@ -738,12 +760,7 @@ var uiStrings = {
 		ui_threads_loaded: "已載入 {n} 筆{more}",
 		ui_threads_count: "{n} 則討論",
 		ui_thread_count: "{n} 則討論",
-		ui_phase_idea: "構想",
-		ui_phase_planning: "規劃",
-		ui_phase_development: "交付",
-		ui_phase_maintain: "維護",
-		ui_phase_paused: "暫停",
-		ui_phase_closed: "結案",
+		...phaseStrings("ui_phase_", "zh-TW"),
 		ui_tools: "工具",
 		ui_menu: "開啟導覽",
 		ui_pending_loaded: "已載入 {n} 筆待處理{more}",
@@ -4665,12 +4682,7 @@ var pmLifecycleStrings = {
 	en: {
 		pm_lifecycle_title: "Project activity",
 		pm_lifecycle_loading: "Checking the current management phase…",
-		pm_lifecycle_idea: "Idea",
-		pm_lifecycle_planning: "Planning",
-		pm_lifecycle_development: "Development",
-		pm_lifecycle_maintain: "Maintain",
-		pm_lifecycle_paused: "Paused",
-		pm_lifecycle_closed: "Closed",
+		...phaseStrings("pm_lifecycle_", "en"),
 		pm_lifecycle_unclassified: "Phase not yet selected",
 		pm_lifecycle_pausing: "Paused for new work · existing work needs reconciliation",
 		pm_lifecycle_closing: "Closed to new work · existing work needs reconciliation",
@@ -4678,7 +4690,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stopped_help: "New managed work is stopped. Existing results remain readable; other controllers’ sessions are preserved.",
 		pm_lifecycle_legacy_help: "Existing work keeps its classification.",
 		pm_lifecycle_unavailable: "Activity unavailable",
-		pm_lifecycle_unknown: "Workspace state could not be read.",
+		pm_lifecycle_unknown: "Workspace state is unreadable.",
 		pm_lifecycle_manage: "Manage project activity",
 		pm_lifecycle_action: "Change",
 		pm_lifecycle_stage: "Management phase",
@@ -4717,12 +4729,7 @@ var pmLifecycleStrings = {
 	"zh-TW": {
 		pm_lifecycle_title: "專案投入狀態",
 		pm_lifecycle_loading: "讀取目前的管理階段…",
-		pm_lifecycle_idea: "想法",
-		pm_lifecycle_planning: "規劃",
-		pm_lifecycle_development: "開發",
-		pm_lifecycle_maintain: "維護",
-		pm_lifecycle_paused: "已暫停",
-		pm_lifecycle_closed: "已結案",
+		...phaseStrings("pm_lifecycle_", "zh-TW"),
 		pm_lifecycle_unclassified: "尚未指定管理階段",
 		pm_lifecycle_pausing: "已停止新投入，既有工作待核對",
 		pm_lifecycle_closing: "已停止新投入，結案工作待核對",
@@ -4730,7 +4737,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stopped_help: "已停止受理新的受管理工作。既有結果仍可查回，其他控制者的工作階段保持原狀。",
 		pm_lifecycle_legacy_help: "既有工作保留原分類。",
 		pm_lifecycle_unavailable: "無法取得狀態",
-		pm_lifecycle_unknown: "無法讀取工作區狀態，暫時無法調整。",
+		pm_lifecycle_unknown: "無法讀取工作區狀態。",
 		pm_lifecycle_manage: "調整專案投入",
 		pm_lifecycle_action: "調整方式",
 		pm_lifecycle_stage: "管理階段",
@@ -5570,8 +5577,7 @@ var briefExportStrings = {
 	en: {
 		pm_report_unavailable: "Report unavailable",
 		pm_report_unselected: "No readable saved report is selected.",
-		pm_export_title: "Download brief",
-		pm_export_help: "Export the selected report as a document or visual. Its source time and unassessed areas remain visible.",
+		pm_export_help: "Export the selected report as a document or visual. Source time and unassessed areas stay visible.",
 		pm_export_format: "File format",
 		pm_export_language: "Report language",
 		pm_export_save: "Save report…",
@@ -5580,14 +5586,14 @@ var briefExportStrings = {
 		pm_export_html: "HTML",
 		pm_export_svg: "SVG",
 		pm_export_english: "English",
-		pm_export_changed: "The report or its readable sources changed. Refresh the Brief before downloading.",
+		pm_export_changed: "The report or its readable sources changed. Refresh the report before downloading.",
 		pm_export_reading: "Checking report sources…",
-		pm_export_native_unavailable: "This desktop version does not support saving Brief reports. Use the browser dashboard or an updated client.",
+		pm_export_native_unavailable: "This desktop version cannot save reports. Use the browser dashboard or an updated client.",
 		pm_export_cancelled: "Save cancelled.",
 		pm_export_saved_file: "Saved: {name}",
 		pm_export_requested: "Download requested for the selected report.",
 		pm_export_prior_saved: "The earlier report save finished. Check the destination selected for that report.",
-		pm_export_unavailable: "The report is no longer available to this connection. Refresh the Brief.",
+		pm_export_unavailable: "The report is no longer available to this connection. Refresh the report.",
 		pm_export_interrupted: "The save could not be confirmed. Check the selected destination before trying again.",
 		pm_export_exists: "The selected file already exists. Choose a new filename.",
 		pm_export_destination: "The selected destination is unavailable. Choose another location."
@@ -5595,7 +5601,6 @@ var briefExportStrings = {
 	"zh-TW": {
 		pm_report_unavailable: "無法取得報告",
 		pm_report_unselected: "目前未選取可讀取的已存報告。",
-		pm_export_title: "下載摘要",
 		pm_export_help: "將選定報告匯出為文件或圖表，保留來源時間與尚未評估的部分。",
 		pm_export_format: "檔案格式",
 		pm_export_language: "報告語言",
@@ -5607,7 +5612,7 @@ var briefExportStrings = {
 		pm_export_english: "英文",
 		pm_export_changed: "報告或可讀來源已變更，請重新整理專案總覽再下載。",
 		pm_export_reading: "正在核對報告來源…",
-		pm_export_native_unavailable: "這個桌面版本尚不能儲存專案摘要。請改用瀏覽器，或更新應用程式。",
+		pm_export_native_unavailable: "這個桌面版本尚不能儲存報告。請改用瀏覽器，或更新應用程式。",
 		pm_export_cancelled: "已取消儲存。",
 		pm_export_saved_file: "已儲存：{name}",
 		pm_export_requested: "已要求下載選定報告。",
@@ -16015,10 +16020,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		label: t(nativeDesktop ? "pm_export_save" : "pm_export_download"),
 		onClick: () => void save()
 	});
-	const element = disclosure({
-		label: t("pm_export_title"),
-		body: h("div", {}, note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button$1), status)
-	});
+	const element = h("div", {}, note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button$1), status);
 	element.dataset.pmBriefExport = "";
 	const allowed = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.snapshot_id && caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value) && caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value) && (!nativeDesktop || nativeBriefExportSupport);
 	const identity = () => JSON.stringify([
@@ -26042,6 +26044,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 			for (const row of page.transitions) {
 				if (!/^pmlt_[0-9a-f]{32}$/.test(row.transition_id)) throw Error(t("pm_scope_mismatch"));
 				const detail = h("details", {}, h("summary", {}, row.reason || t("pm_lifecycle_trace")), h("p", { class: "muted" }, row.actor || ""));
+				if (Object.hasOwn(phaseVocabulary, row.to_stage)) detail.append(h("p", { "data-pm-lifecycle-history-phase": "" }, Object.hasOwn(phaseVocabulary, row.from_stage) ? stageName(row.from_stage) + " → " : "", stageName(row.to_stage)));
 				let done = false;
 				detail.addEventListener("toggle", async () => {
 					if (!detail.open || done) return;
@@ -39015,11 +39018,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (task === "export") reportState.hidden = Boolean(reportTools.querySelector("[data-pm-brief-export]:not([hidden])"));
 			else if (task === "versions" && versionBar) reportState.hidden = Boolean(versionBar.querySelector("select")?.options.length);
 		});
-		if (task === "export") {
-			const fold = reportTools.querySelector("[data-pm-brief-export]");
-			if (fold) fold.open = true;
-			focusReportControl(fold?.querySelector("select, button"), panel, read);
-		} else if (task === "save") focusReportControl(reportTools.querySelector("[data-pm-action=\"pm.snapshot.create\"] button[type=\"submit\"]"), panel, read);
+		if (task === "export") focusReportControl(reportTools.querySelector("[data-pm-brief-export]")?.querySelector("select, button"), panel, read);
+		else if (task === "save") focusReportControl(reportTools.querySelector("[data-pm-action=\"pm.snapshot.create\"] button[type=\"submit\"]"), panel, read);
 		else if (task === "compare") focusReportControl(reportTools.querySelector("[data-report-compare], select"), panel, read);
 		else {
 			const history = reportTools.querySelector("details[data-pm-report-slot=\"versions\"]");
