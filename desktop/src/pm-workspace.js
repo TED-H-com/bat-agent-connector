@@ -136,7 +136,11 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     onStateChange();
   }
   async function run(automatic = false) {
-    if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+    if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+    if (!allowed()) {
+      if (!automatic) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); update();}
+      return;
+    }
     stopTimer();
     if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
     let firstAttempt = stagedHere; stagedHere = false;
@@ -172,7 +176,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         : await api('POST', '/operations?wait=3', intent.request, intent.key, collectReceipt);
       collectReceipt(data);
       guard();
-      if (disposed || !allowed()) return;
+      if (disposed) return;
+      if (!allowed()) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); return;}
       const op = data.operation;
       saved.intent.operation_id = op.operation_id; persist(); operation = op;
       receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', statusText(op.status));
@@ -203,7 +208,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
   update();
-  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
     stage: () => {
       if (disposed || busy || saved.intent || damaged) return false;
       guard(); saved.values = capture();
@@ -218,6 +223,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     },
     dispose: () => {
       disposed = true; receiptPolling = false; stopTimer(); subscribers.delete(receiveReceipt);
+      for (const input of Object.values(fields)) input.disabled = true;
+      button.disabled = reset.disabled = true;
       if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
     },
     set: (name, value) => {if (!busy && !saved.intent && !damaged) {fields[name].value = value; changed();}},
@@ -279,7 +286,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }}, icon('chevron-left'), t('pd_back', {view: t(session ? 'ui_session' : 'ui_' + origin)}));
   };
   if (threadId) h = discussionDom(h, JSON.stringify([namespace, workspaceId, threadId]));
-  const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
+  const forms = new Set(), alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
   const permitted = decide => loaded && Boolean(workspace) && (caps()?.scopes?.includes('admin')
     || (decide ? workspace.membership?.role === 'owner' : ['owner', 'contributor'].includes(workspace.membership?.role)));
   const input = (label, {multiline = false, max = 2000, required = true, value = ''} = {}) => {
@@ -290,7 +297,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const form = options => {
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
-      recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)()}); forms.push(value); return value;
+      recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)()});
+    const dispose = value.dispose;
+    value.dispose = () => {forms.delete(value); dispose();};
+    forms.add(value); return value;
   };
   const status = h('div', {role: 'status', class: 'pm-status'}), workspaceList = h('div', {class: 'pm-workspace-list'});
   const name = input('pm_workspace_name', {max: 120}), repositories = input('pm_repositories', {required: false});
@@ -675,8 +685,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const checkbox of facts?.querySelectorAll('input[type=checkbox]') || [])
       checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
   };
-  // Initial section constructors can register forms before the thread attaches them.
-  const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (forms[i].box.isConnected) forms[i].update(); else if (initialReadComplete) forms.splice(i, 1);}};
+  // Refreshes and inspectors temporarily detach forms. Keep their gates current
+  // until explicit disposal, including while they await reattachment.
+  const updateForms = () => {for (const value of forms) value.update();};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};
   const sourceText = item => {

@@ -147,6 +147,12 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 Secondary tools use collapsed disclosures or the view's tool drawer. They keep their
 original forms and refresh/withdrawal behavior. Do not rebuild contents to move sections.
 
+Durable PM forms remain registered until explicit disposal, including temporary
+detachment during source refreshes or inspector moves. Their controls follow the
+current workspace, lifecycle, scope and action gates while detached. A gate that
+closes during submission or receipt checking shows an inline unavailable status;
+the draft, original request and recovery key remain intact.
+
 Routes are `#/pm/<workspace>/<view>` and
 `#/pm/<workspace>/discussions/<thread>`. A workspace-only route restores its last
 view (Overview where available). Old direct thread routes are replaced in history.

@@ -6356,6 +6356,7 @@ var pmStrings = {
 		pm_operation: "View operation",
 		pm_receipt_mismatch: "The receipt does not match the original request. Its key and draft have been preserved.",
 		pm_damaged: "The saved request cannot be validated. It has been preserved; no replacement will be sent.",
+		pm_action_unavailable: "This action is currently unavailable. Your draft and original request are preserved.",
 		pm_stale: "Could not confirm the current version. Your draft is preserved. Refresh and review before another change.",
 		pm_scope_mismatch: "The response does not belong to the selected workspace and discussion.",
 		pm_partial: "This is a bounded view; older records or additional candidates may not be included.",
@@ -6704,6 +6705,7 @@ var pmStrings = {
 		pm_operation: "查看操作",
 		pm_receipt_mismatch: "回執與原請求不一致。已保留原 key 與草稿。",
 		pm_damaged: "無法驗證已存請求。原資料仍保留，不會另送一筆。",
+		pm_action_unavailable: "目前無法執行這項操作。草稿與原請求仍保留。",
 		pm_stale: "目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。",
 		pm_scope_mismatch: "回應不屬於選定的工作區與討論。",
 		pm_partial: "目前只顯示部分紀錄；較早的內容或其他候選想法可能未列入。",
@@ -35669,7 +35671,14 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		onStateChange();
 	}
 	async function run(automatic = false) {
-		if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+		if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+		if (!allowed()) {
+			if (!automatic) {
+				status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
+				update();
+			}
+			return;
+		}
 		stopTimer();
 		if (!automatic) {
 			receiptAttempt = 0;
@@ -35723,7 +35732,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			const data = intent.operation_id ? await api("GET", `/operations/${intent.operation_id}`, void 0, void 0, collectReceipt) : await api("POST", "/operations?wait=3", intent.request, intent.key, collectReceipt);
 			collectReceipt(data);
 			guard();
-			if (disposed || !allowed()) return;
+			if (disposed) return;
+			if (!allowed()) {
+				status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
+				return;
+			}
 			const op = data.operation;
 			saved.intent.operation_id = op.operation_id;
 			persist();
@@ -35779,7 +35792,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		submit: run,
 		edit: () => reset.click(),
 		replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused),
-		canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused,
+		canSubmit: () => !disposed && !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused,
 		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
 		stage: () => {
@@ -35817,6 +35830,8 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			receiptPolling = false;
 			stopTimer();
 			subscribers.delete(receiveReceipt);
+			for (const input of Object.values(fields)) input.disabled = true;
+			button.disabled = reset.disabled = true;
 			if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
 		},
 		set: (name, value) => {
@@ -35911,7 +35926,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		workspaceId,
 		threadId
 	]));
-	const forms = [], alive = () => {
+	const forms = new Set(), alive = () => {
 		guard();
 		if (disposed) throw Object.assign(Error(), { code: "PM_DISPOSED" });
 	};
@@ -35940,7 +35955,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)()
 		});
-		forms.push(value);
+		const dispose = value.dispose;
+		value.dispose = () => {
+			forms.delete(value);
+			dispose();
+		};
+		forms.add(value);
 		return value;
 	};
 	const status = h("div", {
@@ -36987,8 +37007,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		for (const checkbox of facts?.querySelectorAll("input[type=checkbox]") || []) checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
 	};
 	const updateForms = () => {
-		for (let i = forms.length - 1; i >= 0; i--) if (forms[i].box.isConnected) forms[i].update();
-		else if (initialReadComplete) forms.splice(i, 1);
+		for (const value of forms) value.update();
 	};
 	const timestamp = (value) => typeof value === "number" ? value * 1e3 : value;
 	const time = (value) => {

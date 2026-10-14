@@ -222,19 +222,9 @@ async function walkthrough(locale, width) {
     await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).scrollIntoViewIfNeeded();
     await screenshot(9, 'resolution-review');
     await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).click();
-    const resolutionRetry = resolutionForm.getByRole('button', {name: l.retry, exact: true});
-    await resolutionRetry.click();
-    const resolved = proposal.locator('[data-issue-resolved]');
-    await expect.poll(async () => {
-      if (await resolved.isVisible()) return true;
-      // A lost acknowledgement briefly closes the central write gate. Keep
-      // checking through the original-request UI as it recovers, never start
-      // another resolution. An acknowledged operation is checked by its ID.
-      if (await resolutionRetry.count() && await resolutionRetry.isVisible() && await resolutionRetry.isEnabled()) await resolutionRetry.click();
-      return false;
-    }, {intervals: [1000, 1500, 2000]}).toBe(true);
-    await expect(resolved).toContainText(l.resolved);
-    await expect(resolved).toContainText(l.unassessed);
+    await resolutionForm.getByRole('button', {name: l.retry, exact: true}).click();
+    await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.resolved);
+    await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.unassessed);
     await expect(proposal.locator('[data-issue-resolve-open]')).toHaveCount(0);
     const resolutionRequests = requests.filter(row => row.body.action === 'pm.governance.revise');
     assert.equal(resolutionRequests.length, 2);
