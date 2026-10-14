@@ -101,6 +101,8 @@
   Discussion tools overlay without
   narrowing the thread; docked inspectors fill the viewport with independent scrolling.
   View headers, lists and secondary sections share one edge beside docked inspectors.
+  Fixed dock reservations leave Discussions' own panel column intact, with one scroller.
+  Unreadable Evidence plans keep one message and their diagnostics in the row's Details.
   Shell and lifecycle views share bilingual project phase names; Export report opens
   directly to its choices and download action. Phase empty states fit fallback fonts.
   Lifecycle copy consistently says phase, Settings shows one access reason, report

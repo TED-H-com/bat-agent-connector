@@ -38045,6 +38045,12 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 	function workRow(item) {
 		const binding = workBindings.find((row) => row.work_item_id === item.work_item_id);
 		const detail = h("div"), row = h("details", { "data-pm-work": item.work_item_id }, h("summary", {}, item.title, h("small", { class: "muted" }, " · " + t(binding ? "pm_evidence_associated" : "pm_evidence_unassociated"))), detail);
+		const planReadError = (error) => {
+			const failure = errorBox(error, { summary: t("pm_evidence_plan_unread") });
+			const diagnostics = failure.querySelector("[data-error-details]");
+			if (diagnostics) diagnostics.closest(".ui-disclosure")?.replaceWith(diagnostics);
+			return failure;
+		};
 		let opened = false;
 		row.addEventListener("toggle", async () => {
 			if (!row.open || opened) return;
@@ -38067,10 +38073,11 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				if (!row.isConnected) return;
 				planError = error;
 			}
-			if (can(true)) {
+			const planFailure = planError ? planReadError(planError) : null;
+			if (can(true) && (!planError || !binding?.plan_revision_id)) {
 				const editor = h("details", {}, h("summary", {}, t(binding ? "pm_evidence_reassociate" : "pm_evidence_associate_work")));
 				detail.append(editor);
-				if (planError) editor.append(errorBox(planError));
+				if (planError) editor.append(planFailure);
 				else {
 					const rationale = input("pm_evidence_rationale", { max: 4e3 });
 					const planId = h("select", { "aria-label": t("pm_evidence_plan_choice") }, h("option", { value: "" }, t("pm_evidence_no_plan_choice")));
@@ -38151,8 +38158,8 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				const renderPlan = (document) => {
 					const texts = (binding.requirement_ids || []).map((id) => document?.requirements?.find((row) => row.id === id)?.text);
 					labels.replaceChildren(...document?.title ? [h("p", {}, document.title)] : [], ...texts.filter(Boolean).map((text) => h("p", {}, text)), ...!document?.title || texts.some((text) => !text) ? [statusPill("unknown")] : []);
-					reason.hidden = Boolean(document?.title) && texts.every(Boolean);
-					reason.textContent = t(document ? "pm_evidence_labels_unread" : "pm_evidence_plan_unread");
+					reason.hidden = Boolean(document?.title) && texts.every(Boolean) && !planFailure;
+					reason.replaceChildren(planFailure || t(document ? "pm_evidence_labels_unread" : "pm_evidence_plan_unread"));
 				};
 				const display = {
 					withdraw: () => {
@@ -38175,7 +38182,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 							}
 							if (ticket !== request || sourceGeneration !== generation || !row.isConnected) return;
 							renderPlan(null);
-							reason.replaceChildren(t("pm_evidence_plan_unread"), errorBox(error));
+							reason.replaceChildren(planReadError(error));
 						}
 					}
 				};

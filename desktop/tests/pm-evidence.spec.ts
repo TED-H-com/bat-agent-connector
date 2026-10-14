@@ -58,6 +58,39 @@ function fixture() {
 const action=(page:any,name:string)=>page.locator(`[data-pm-action="${name}"]`);
 const selectProject=async(page:any)=>{await page.getByLabel('Connector project',{exact:true}).selectOption(pid);};
 const openWork=async(page:any)=>{await page.locator('[data-pm-work] > summary').click();};
+for(const native of [false,true])for(const locale of ['en','zh-TW'])for(const width of [1440,390])
+test(`an unreadable bound plan has one message and one Details ${native?'native':'web'} ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();
+  const f=fixture();f.state.associated=true;f.state.tracked=true;f.state.boundPlan=rid;
+  f.state.boundRequirements=['membership.email_sign_in'];f.state.planDenied=true;
+  await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+  await openPmSection(page,'requirements','ui_evidence');
+  await page.getByLabel(locale==='en'?'Connector project':'Connector 專案',{exact:true}).selectOption(pid);await openWork(page);
+  const work=page.locator('[data-pm-work]'),facts=work.locator('.ui-disclosure');
+  const summary=locale==='en'?'Could not read this plan.':'無法讀取這份計畫。';
+  await expect(work).toContainText('Clear first action');
+  await expect(work.locator('[data-pm-bound-plan] .ui-pill')).toHaveText(locale==='en'?'Unknown':'未知');
+  await expect(facts).toHaveCount(1);
+  await expect(facts).toHaveJSProperty('open',false);
+  await expect(work.locator('[data-error-summary]')).toHaveCount(1);
+  await expect(work.locator('[data-error-summary]')).toHaveText(summary);
+  await expect(facts.locator('details')).toHaveCount(0);
+  await expect.poll(()=>work.innerText()).not.toContain(rid);
+  await expect.poll(()=>work.innerText()).not.toContain('membership.email_sign_in');
+  const capture=async(state:string)=>{
+    if(!process.env.BATC_FIX4_SHOTS)return;
+    await mkdir(process.env.BATC_FIX4_SHOTS,{recursive:true});
+    await page.screenshot({path:`${process.env.BATC_FIX4_SHOTS}/fix4-evidence-${state}-${native?'native':'web'}-${locale}-${width}.png`,animations:'disabled'});
+  };
+  await capture('collapsed');await facts.locator(':scope > summary').click();
+  await expect(facts.locator('[data-error-summary]')).toBeVisible();
+  await expect(facts.locator('[data-error-details] code')).toHaveText('FORBIDDEN');
+  await expect(facts.locator('[data-error-details] p')).toHaveText('Plan withdrawn');
+  await expect(facts).toContainText(rid);await expect(facts).toContainText('membership.email_sign_in');
+  await capture('expanded');
+  expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
+  await context.close();
+});
 for(const locale of ['en','zh-TW'])for(const width of [1440,390])for(const state of ['no-projects','no-work','no-evidence','unavailable'])
 test(`Settings ${state} has a short title and muted explanation ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
@@ -167,8 +200,12 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     await expect.poll(async()=>work.innerText()).not.toContain(rid);
     await expect.poll(async()=>work.innerText()).not.toContain('membership.email_sign_in');
     const facts=work.locator('.ui-disclosure');
+    await expect(facts).toHaveCount(1);
     await expect(facts).toContainText('Could not read this plan.');
     await expect(facts).toContainText(rid);await expect(facts).toContainText('membership.email_sign_in');
+    await expect(facts.locator('[data-error-summary]')).toHaveText('Could not read this plan.');
+    await expect(facts.locator('[data-error-details]')).toContainText('FORBIDDEN');
+    await expect(facts.locator('[data-error-details]')).toContainText('Plan withdrawn');
     expect(f.state.writes).toHaveLength(0);
   });
   test('an older bound plan supplies its own readable labels without borrowing the current plan',async({page})=>{
@@ -201,7 +238,11 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     await mountConversation(page,native,dispatch);await page.goto(pmRoute);await openPmSection(page,'requirements','ui_evidence');await selectProject(page);await openWork(page);
     const labels=page.locator('[data-pm-bound-plan]');await expect.poll(()=>waiting).toBe(true);
     f.state.planDenied=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
-    await expect(page.locator('[data-pm-work] .ui-disclosure')).toContainText('Your token lacks this scope.');
+    const facts=page.locator('[data-pm-work] .ui-disclosure');
+    await expect(facts).toHaveCount(1);
+    await expect(facts).toContainText('Could not read this plan.');
+    await expect(facts.locator('[data-error-details]')).toContainText('FORBIDDEN');
+    await expect(facts.locator('[data-error-details]')).toContainText('Plan withdrawn');
     release();await expect.poll(()=>replied).toBe(true);
     await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
     await expect(labels.getByText('Unknown',{exact:true})).toBeVisible();

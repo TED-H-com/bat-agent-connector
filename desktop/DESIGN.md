@@ -105,9 +105,12 @@ The inspector occupies 400px at ≥1200px, overlays from the right at 800–1199
 and becomes a full-screen sheet with Back below 800px. Tool drawers over Discussions
 always overlay, so its thread and detail columns keep their width. List views keep
 docking at ≥1200px. Every section in the main column shares one right edge beside
-a docked inspector, including the header and collapsed secondary tools. A docked surface extends from the 48px topbar to the viewport
-bottom; its body scrolls independently of the fixed header. Overlay mode traps focus
-and makes background content inert. `returnFocus` accepts an element or a callback
+a docked inspector, including the header and collapsed secondary tools. A docked
+surface extends from the 48px topbar to the viewport bottom; its body scrolls
+independently of the fixed header. Only fixed docks in the register, Agents, Schedule
+and Work layouts reserve main-column space. Discussions' static 300px panel owns its
+grid column and scrolls through that column, without a second inspector-body scroller.
+Overlay mode traps focus and makes background content inert. `returnFocus` accepts an element or a callback
 resolved at close. It focuses a connected, rendered target outside hidden/inert
 ancestors, falling back to the creation-time opener under the same checks.
 
@@ -1075,6 +1078,8 @@ NETWORK_ERROR or TIMEOUT code. Details appears only for additional technical fac
 without an empty code or repeated summary. Refresh-cycle read-error gates remain
 unchanged.
 `errorBox(error, {summary})` lets a caller supply its own sentence without duplicating
-it. Rendering an error still records the same refresh-cycle failure, so failed reads
+it. An Evidence work row reuses the rendered diagnostics inside its existing Details,
+alongside the unreadable-plan sentence and fixed revision/requirement IDs; it adds no
+nested error disclosure. Rendering an error still records the same refresh-cycle failure, so failed reads
 cannot acknowledge event checkpoints or enable mutations. IME Escape leaves menus,
 inspectors and the mobile drawer open; ordinary Escape retains focus restoration.

@@ -2054,17 +2054,17 @@ body.pm-mode #main { padding: 0; }
 .workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
 .workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }
 
-/* Reserve one main column for every section beside a nested dock. */
+/* Fixed nested docks reserve space; panels in their own grid column do not. */
 @media (min-width: 1200px) {
-  main:not(:has(> .ui-inspector)) .pm-main:has(.ui-inspector[role=complementary]) {
+  main:not(:has(> .ui-inspector)) .pm-main:has(:is(.reg-layout, .pm-agents-layout, .schedule-layout, .pm-work-layout) > .ui-inspector[role=complementary]) {
     padding-right: calc(var(--space-6) + 400px + var(--space-4));
   }
   .pm-main .reg-layout:has(> .ui-inspector),
   .pm-main .pm-agents-layout:has(> .ui-inspector),
   .pm-main .schedule-layout:has(> .ui-inspector),
   .pm-main .pm-work-layout:has(> .pm-work-inspector) { grid-template-columns: minmax(0, 1fr); }
-  main:has(.ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .ui-page-header,
-  main:has(.ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .workspace-session-heading {
+  main:has(:is(.reg-layout, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .ui-page-header,
+  main:has(:is(.reg-layout, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .workspace-session-heading {
     max-width: calc(100% - 400px - var(--space-4));
   }
 }
@@ -2298,9 +2298,10 @@ body.pm-mode #main { padding: 0; }
 /* The conversation gets the room until a reader or a new proposal needs the panel. */
 @media (min-width: 1200px) {
   [data-discussions] .pm-thread-layout:has(.pd-panel-home:not([hidden])) { grid-template-columns: minmax(0, 1fr) 300px; }
-  .pd-panel-home > .pd-panel-overlay { position: static; width: 100%; height: 100%; max-height: none; border: 0; box-shadow: none; }
+  /* The static panel scrolls through its grid column, not a second body scroller. */
+  .pd-panel-home > .pd-panel-overlay { position: static; display: block; overflow: visible; width: 100%; height: 100%; max-height: none; border: 0; box-shadow: none; }
   .pd-panel-home > .pd-panel-overlay > header { padding: var(--space-2) var(--space-3); }
-  .pd-panel-home > .pd-panel-overlay > .ui-inspector-body { padding: var(--space-3); }
+  .pd-panel-home > .pd-panel-overlay > .ui-inspector-body { padding: var(--space-3); overflow: visible; }
 }
 @media (min-width: 800px) { [data-discussion-back] { display: none; } }
 .pd-context-trigger { cursor: pointer; font: inherit; padding-inline: var(--space-2); border: 0; color: var(--text-2); }
