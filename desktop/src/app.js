@@ -3384,9 +3384,20 @@ async function viewProject(main, pid) {
   const showArchived = h("input", { type: "checkbox" });
   const create = createRecordForm({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     namespace: connection.namespace, kind: "work_item", projectId: pid, showScope: false, errorBox, opStatus,
-    onCreated: async () => render()});
+    onCreated: async () => {createOpen = false; await render();}});
+  let createOpen = create.pending();
+  const createToggle = button({variant: 'primary', label: t('new_item_title'), 'data-project-work-create': '',
+    onClick: () => {
+      createOpen = true; create.box.hidden = false; createToggle.hidden = true;
+      create.box.querySelector('input')?.focus();
+    }});
+  const createClose = button({variant: 'secondary', label: t('cancel'), onClick: () => {
+    if (create.pending()) return;
+    createOpen = false; create.box.hidden = true; createToggle.hidden = false; createToggle.focus();
+  }});
+  create.box.querySelector('.actions').append(createClose);
   const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
-  const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.box, items, archived)});
+  const itemCard = sectionCard({title: t("work_items"), actions: [filter, createToggle], body: h("div", {class: "or-item-list"}, create.box, items, archived)});
   itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
   const note = manageNote(); if (note) note.hidden = true;
   main.append(note || "", out, head, work, itemCard);
@@ -3435,7 +3446,11 @@ async function viewProject(main, pid) {
     const p = data.project;
     if (note) note.hidden = false;
     itemCard.hidden = false;
-    create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed === false;
+    const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed !== false;
+    createOpen ||= create.pending();
+    create.box.hidden = !mayCreate || !createOpen;
+    createToggle.hidden = !mayCreate || createOpen;
+    createClose.hidden = create.pending();
     create.setContext({rows: data.work_items, name: p.name, active: !p.archived});
     work.hidden = !Array.isArray(data.work);
     fill(work, h("h2", {}, t("delivery_project_work")),

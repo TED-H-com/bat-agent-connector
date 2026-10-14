@@ -130,7 +130,7 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
   }
   if (damaged) status.replaceChildren(h('p', {class: 'error'}, t('create_invalid_draft')));
   update();
-  return {box: form, setContext({rows, name = '', active = true}) {
+  return {box: form, pending: () => Boolean(saved.intent), setContext({rows, name = '', active = true}) {
     guard(); allowed = active; scope.textContent = t('create_project_scope', {name, id: projectId});
     const flattened = [];
     const walk = list => {for (const row of list || []) {if (!row.archived) flattened.push(row); walk(row.children);}};

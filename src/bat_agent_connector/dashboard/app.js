@@ -4464,7 +4464,7 @@ var pmContextBundleStrings = {
 		pm_cb_recheck: "Preview again to check this saved selection before starting a new analysis.",
 		pm_cb_stale: "The discussion changed. Preview the accepted plan again.",
 		pm_cb_invalid: "The accepted context preview is invalid or does not match this discussion.",
-		pm_cb_unavailable: "The accepted plan or its original sources are unavailable."
+		pm_cb_unavailable: "Accepted plan unavailable"
 	},
 	"zh-TW": {
 		pm_cb_title: "分析使用的已採用計畫（選填）",
@@ -4487,7 +4487,7 @@ var pmContextBundleStrings = {
 		pm_cb_recheck: "開始新分析前，請重新預覽並核對保存的選擇。",
 		pm_cb_stale: "討論已變更，請重新預覽已採用計畫。",
 		pm_cb_invalid: "採用文件預覽無效，或不屬於目前討論。",
-		pm_cb_unavailable: "無法讀取已採用計畫或其原始來源。"
+		pm_cb_unavailable: "無法取得已採用計畫"
 	}
 };
 //#endregion
@@ -4756,7 +4756,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stopped_help: "New managed work is stopped. Existing results remain readable; other controllers’ sessions are preserved.",
 		pm_lifecycle_legacy_help: "Existing work keeps its classification.",
 		pm_lifecycle_unavailable: "Activity unavailable",
-		pm_lifecycle_unknown: "Workspace state is unreadable.",
+		pm_lifecycle_unknown: "Workspace state unavailable",
 		pm_lifecycle_manage: "Manage project activity",
 		pm_lifecycle_action: "Change",
 		pm_lifecycle_stage: "Management phase",
@@ -4803,7 +4803,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stopped_help: "已停止受理新的受管理工作。既有結果仍可查回，其他控制者的工作階段保持原狀。",
 		pm_lifecycle_legacy_help: "既有工作保留原分類。",
 		pm_lifecycle_unavailable: "無法取得狀態",
-		pm_lifecycle_unknown: "無法讀取工作區狀態。",
+		pm_lifecycle_unknown: "無法取得工作區狀態",
 		pm_lifecycle_manage: "調整專案投入",
 		pm_lifecycle_action: "調整方式",
 		pm_lifecycle_stage: "管理階段",
@@ -4914,6 +4914,8 @@ var pmIssueStrings = {
 //#region src/pm-register-strings.js
 var pmRegisterStrings = {
 	en: {
+		reg_untitled_issue: "Untitled issue",
+		reg_source_id: "Source ID",
 		reg_all: "All",
 		reg_type_risk: "Risk",
 		reg_type_issue: "Issue",
@@ -5038,6 +5040,8 @@ var pmRegisterStrings = {
 		reg_requirement: "Requirement"
 	},
 	"zh-TW": {
+		reg_untitled_issue: "未命名議題",
+		reg_source_id: "來源識別碼",
 		reg_all: "全部",
 		reg_type_risk: "風險",
 		reg_type_issue: "問題",
@@ -6940,7 +6944,7 @@ var pmStrings = {
 		pm_receipt_mismatch: "The receipt does not match the original request. Its key and draft have been preserved.",
 		pm_damaged: "The saved request cannot be validated. It has been preserved; no replacement will be sent.",
 		pm_action_unavailable: "This action is currently unavailable. Your draft and original request are preserved.",
-		pm_stale: "Could not confirm the current version. Your draft is preserved. Refresh and review before another change.",
+		pm_stale: "Could not confirm the current version",
 		pm_scope_mismatch: "The response does not belong to the selected workspace and discussion.",
 		pm_partial: "This is a bounded view; older records or additional candidates may not be included.",
 		pm_open_planning: "Still to clarify",
@@ -7302,7 +7306,7 @@ var pmStrings = {
 		pm_receipt_mismatch: "回執與原請求不一致。已保留原 key 與草稿。",
 		pm_damaged: "無法驗證已存請求。原資料仍保留，不會另送一筆。",
 		pm_action_unavailable: "目前無法執行這項操作。草稿與原請求仍保留。",
-		pm_stale: "目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。",
+		pm_stale: "無法確認最新版本",
 		pm_scope_mismatch: "回應不屬於選定的工作區與討論。",
 		pm_partial: "目前只顯示部分紀錄；較早的內容或其他候選想法可能未列入。",
 		pm_open_planning: "規劃中仍待釐清",
@@ -15684,8 +15688,8 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 				return;
 			}
 			if (identity() !== expected) return;
+			status.replaceChildren();
 			onUnavailable(rendered);
-			status.replaceChildren(errorBox(rendered));
 		} finally {
 			busy = false;
 			update();
@@ -25059,6 +25063,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			kind,
 			n: number
 		});
+		if (row?.source?.kind === "issue_mapping") return t("reg_untitled_issue");
 		if (kind && kind !== t("ui_reason_generic")) return kind;
 		if (TYPES.includes(row?.type)) return t("reg_type_" + row.type);
 		return t("ui_status_unknown");
@@ -25465,7 +25470,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			updated_at: "reg_updated",
 			pull_requests: "reg_pull_requests"
 		};
-		const detailBits = [];
+		const detailBits = row.source?.kind === "issue_mapping" && labelSegment(row.source.id) ? [h("p", {}, t("reg_source_id"), locale === "zh-TW" ? "：" : ": ", h("code", {}, row.source.id))] : [];
 		const precise = preciseStatus(row.status);
 		if (precise) detailBits.push(h("p", { "data-reg-status-detail": "" }, precise));
 		const seenStatuses = new Set([row.status]);
@@ -26305,12 +26310,9 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 }
 //#endregion
 //#region src/pm-context-bundle.js
-function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
+function pmContextBundle({ h, t, api, guard, caps, target, thread, errorBox }) {
 	const value = h("input", { type: "hidden" }), summary = h("div", { "data-pm-context-selection": "" });
-	const status = h("p", {
-		class: "muted",
-		role: "status"
-	}), details = h("div", { "data-pm-context-preview": "" });
+	const status = h("div", { role: "status" }), details = h("div", { "data-pm-context-preview": "" });
 	let request = null, preview = null, verified = null, loading = false, generation = 0;
 	const supported = () => caps()?.features?.pm_workspaces?.accepted_context_bundle?.schema === "pm_context_bundle_v1";
 	const currentVersion = () => thread()?.thread?.version;
@@ -26332,11 +26334,13 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 		type: "button",
 		class: "secondary",
 		onclick: async () => {
+			let ticket, actor;
 			try {
 				guard?.();
 				if (loading || request?.locked() || !supported()) return;
 				loading = true;
-				const ticket = ++generation, actor = caps()?.actor;
+				ticket = ++generation;
+				actor = caps()?.actor;
 				preview = null;
 				verified = null;
 				status.replaceChildren(skeleton(2));
@@ -26353,10 +26357,16 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 				status.textContent = "";
 				renderDetails(preview);
 			} catch (error) {
+				try {
+					guard?.();
+				} catch {
+					return;
+				}
+				if (ticket !== generation || caps()?.actor !== actor || request?.locked()) return;
 				preview = null;
 				verified = null;
 				details.replaceChildren();
-				status.textContent = error.message || t("pm_cb_unavailable");
+				status.replaceChildren(errorBox(error, { summary: t("pm_cb_unavailable") }));
 			} finally {
 				loading = false;
 				update();
@@ -26427,7 +26437,7 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 }
 //#endregion
 //#region src/pm-native-analysis.js
-function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard }) {
+function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard, errorBox }) {
 	const specs = [{
 		key: "native_analysis",
 		adapter: "codex-native-linux",
@@ -26489,7 +26499,8 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 			guard,
 			caps,
 			target,
-			thread
+			thread,
+			errorBox
 		});
 		const request = form({
 			action: spec.action,
@@ -26965,10 +26976,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(emptyState({
-			title: t("pm_lifecycle_unavailable"),
-			text: h("span", { class: "muted" }, t("pm_lifecycle_unknown"))
-		}), errorBox(error));
+		status.replaceChildren(errorBox(error, { summary: t("pm_lifecycle_unknown") }));
 	}
 	async function refresh({ event = false } = {}) {
 		if (!event || !ready || !current) {
@@ -40493,6 +40501,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				labelled,
 				caps,
 				namespace,
+				errorBox,
 				guard: alive,
 				capability: () => pmCapabilities,
 				thread: () => threadData,
@@ -41074,7 +41083,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				proposalReview?.withdraw();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, { summary: t("pm_stale") }));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -41435,7 +41444,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, { summary: t("pm_stale") }));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -46385,6 +46394,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	update();
 	return {
 		box: form,
+		pending: () => Boolean(saved.intent),
 		setContext({ rows, name = "", active = true }) {
 			guard();
 			allowed = active;
@@ -57515,12 +57525,39 @@ async function viewProject(main, pid) {
 		showScope: false,
 		errorBox,
 		opStatus,
-		onCreated: async () => render()
+		onCreated: async () => {
+			createOpen = false;
+			await render();
+		}
 	});
+	let createOpen = create.pending();
+	const createToggle = button({
+		variant: "primary",
+		label: t("new_item_title"),
+		"data-project-work-create": "",
+		onClick: () => {
+			createOpen = true;
+			create.box.hidden = false;
+			createToggle.hidden = true;
+			create.box.querySelector("input")?.focus();
+		}
+	});
+	const createClose = button({
+		variant: "secondary",
+		label: t("cancel"),
+		onClick: () => {
+			if (create.pending()) return;
+			createOpen = false;
+			create.box.hidden = true;
+			createToggle.hidden = false;
+			createToggle.focus();
+		}
+	});
+	create.box.querySelector(".actions").append(createClose);
 	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
 	const itemCard = sectionCard({
 		title: t("work_items"),
-		actions: [filter],
+		actions: [filter, createToggle],
 		body: h("div", { class: "or-item-list" }, create.box, items, archived)
 	});
 	itemCard.dataset.projectItemCard = "";
@@ -57602,7 +57639,11 @@ async function viewProject(main, pid) {
 		const p = data.project;
 		if (note) note.hidden = false;
 		itemCard.hidden = false;
-		create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed === false;
+		const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed !== false;
+		createOpen ||= create.pending();
+		create.box.hidden = !mayCreate || !createOpen;
+		createToggle.hidden = !mayCreate || createOpen;
+		createClose.hidden = create.pending();
 		create.setContext({
 			rows: data.work_items,
 			name: p.name,

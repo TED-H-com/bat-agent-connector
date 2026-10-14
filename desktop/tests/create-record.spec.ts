@@ -37,6 +37,28 @@ function fixture() {
   return {state,dispatch};
 }
 
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`work item form opens on request and retains its draft ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}});
+  try {
+    const page = await context.newPage(), f = fixture(); await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    const form = page.locator('[data-create-record="work_item"]');
+    const folder = process.env.BATC_POLISH_SHOTS;
+    if (folder) {mkdirSync(folder, {recursive: true}); await page.screenshot({path: `${folder}/work-items-closed-${locale}-${width}.png`});}
+    await expect(form).toBeHidden();
+    const open = page.locator('[data-project-work-create]'); await open.click();
+    const title = form.getByLabel(locale === 'en' ? 'New work item' : '新工作項目', {exact: true});
+    await expect(title).toBeFocused(); await title.fill('Retained draft');
+    if (folder) await page.screenshot({path: `${folder}/work-items-open-${locale}-${width}.png`});
+    await form.getByRole('button', {name: locale === 'en' ? 'Cancel' : '取消', exact: true}).click();
+    await expect(form).toBeHidden(); await expect(open).toBeFocused();
+    await open.click(); await expect(title).toHaveValue('Retained draft');
+    await page.reload(); await expect(form).toBeHidden(); await open.click(); await expect(title).toHaveValue('Retained draft');
+    expect(f.state.writes).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {await context.close();}
+});
+
 test('creation layout', async ({browser, baseURL}, testInfo) => {
   const folder = process.env.CREATE_SCREENSHOTS || testInfo.outputPath('screenshots');
   mkdirSync(folder,{recursive:true});
@@ -48,6 +70,7 @@ test('creation layout', async ({browser, baseURL}, testInfo) => {
       await page.setViewportSize({width,height:900});
       for (const [name, route] of [['project','projects'],['item','project/'+pid],['locations','settings']]) {
         await page.goto('/dashboard/#/'+route);
+        if (name === 'item') await page.locator('[data-project-work-create]').click();
         const details = page.locator(name === 'locations' ? '[data-connection-card] > details' : '[data-create-advanced]');
         await details.locator('summary').click();
         await expect(details).toHaveAttribute('open','');
@@ -89,6 +112,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     const f=fixture(); await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/project/'+pid);
     const form=page.locator('[data-create-record="work_item"]');
     await expect(page.getByRole('heading',{name:'Documentation',exact:true})).toBeVisible();
+    await page.locator('[data-project-work-create]').click();
     await expect(form).not.toContainText(pid);
     await form.getByLabel('New work item',{exact:true}).fill('Review changed files');
     await form.locator('summary').click();
@@ -99,7 +123,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await form.getByLabel('State',{exact:true}).selectOption('waiting');
     await form.getByLabel('Parent',{exact:true}).selectOption(wid);
     await form.getByLabel('Branched from',{exact:true}).selectOption(wid);
-    await page.reload(); await form.locator('summary').click();
+    await page.reload(); await page.locator('[data-project-work-create]').click(); await form.locator('summary').click();
     await expect(form.getByLabel('Request (verbatim)',{exact:true})).toHaveValue('Preserve this exact request.');
     await form.getByRole('button',{name:'Add',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(1);
@@ -107,7 +131,8 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
       goal:'Keep the requested behavior',request:'Preserve this exact request.',acceptance:'Focused checks pass.',
       steps:[{text:'Read source',done:false},{text:'Run checks',done:false}],state:'waiting',parent_id:wid,derived_from:wid},preconditions:{}});
     await expect(form.getByLabel('New work item',{exact:true})).toHaveValue('');
-    await expect(form.getByRole('button',{name:'Add',exact:true})).toBeEnabled();
+    await expect(form.getByRole('button',{name:'Add',exact:true,includeHidden:true})).toBeEnabled();
+    await expect(form).toBeHidden();
   });
 
   test('unavailable draft storage prevents a creation request',async({page})=>{

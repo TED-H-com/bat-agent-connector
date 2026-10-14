@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- PM refresh, Lifecycle, accepted-plan preview and report export failures show one
+  localized message with diagnostics in Details. Untitled issue mappings get a
+  calm name, and Resources opens work-item creation on request while preserving
+  drafts and original-request recovery.
+
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.

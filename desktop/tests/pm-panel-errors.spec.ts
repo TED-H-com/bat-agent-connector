@@ -4,6 +4,10 @@ import {handoffFixture} from './pm-package-handoff-fixture.ts';
 import {specFixture} from './pm-spec-materialization-fixture.ts';
 import {meetingFixture, mount as mountMeetings} from './pm-meetings-fixture.ts';
 import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
+import {workbenchFixture} from './pm-workbench-fixture.ts';
+import {reviewFixture as maintenanceFixture} from './pm-maintenance-review-fixture.ts';
+import {pmFixture, pmPath, pmRoute} from './pm-fixture.ts';
+import {mountConversation} from './conversation-fixture.ts';
 
 const panels = [
   ['maintenance-review', 'workspaceMaintenanceReview', 'pmrv_unavailable'],
@@ -25,6 +29,11 @@ const panels = [
   ['overview', 'workspaceOverview', 'error_generic'],
   ['overview-saved', 'workspaceOverview', 'error_generic'],
   ['meetings', 'workspaceMeetings', 'error_generic'],
+  ['lifecycle', 'workspaceLifecycle', 'pm_lifecycle_unknown'],
+  ['context-bundle', 'pmContextBundle', 'pm_cb_unavailable'],
+  ['export-brief', 'projectBrief', 'error_generic'],
+  ['export-charter', 'workspaceCharter', 'error_generic'],
+  ['export-maintenance', 'workspaceMaintenanceReview', 'pmrv_unavailable'],
 ];
 const code = 'PM_PANEL_READ_FAILED', serverMessage = 'Original English source diagnostics <b>stay text</b>';
 const failures = panels.map(([name, factory, key]) => ({name, factory, key, cause: 'unavailable', code, message: serverMessage, detached: false}));
@@ -43,11 +52,20 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
   const caps = bootstrap.data.capabilities, row = handoffFixture().row;
   const workspace = (await f.dispatch({method: 'GET', path: `/pm/workspaces/${row.workspace_id}`})).data.workspace;
   Object.assign(caps.features.pm_workspaces, {quality_reviews: {version: 1}, maintenance_checks: {version: 1}, maintenance_review: {version: 1},
+    lifecycle: {version: 1, gated_actions: []}, accepted_context_bundle: {schema: 'pm_context_bundle_v1'},
     work_batches: {version: 1, actions: ['pm.work_batch.start'], profiles: ['github_reported_checks_v1']}});
   caps.features.pm_ahp_observer = {version: 1};
+  caps.features.pm_workspaces.brief_export = {formats: ['markdown', 'html', 'svg'], locales: ['en', 'zh-TW']};
+  const maintenance = maintenanceFixture(), snapshot = workbenchFixture().snapshot(1);
   let reads = 0, writes = 0;
-  await page.exposeFunction('c4Request', (method: string) => {
+  await page.exposeFunction('c4Request', async (method: string, path: string) => {
     if (method === 'GET') reads++; else writes++;
+    if (name.startsWith('export-') && !path.includes('/brief-export')) {
+      if (name === 'export-maintenance') return maintenance.dispatch({method, path});
+      if (path.endsWith('/plans/head')) return {status: 200, data: {head: {workspace_id: row.workspace_id, version: 1}}};
+      if (new URL(path, 'http://fixture').pathname.endsWith('/snapshots')) return {status: 200, data: {workspace_id: row.workspace_id, snapshots: [snapshot], next_cursor: null}};
+      return {status: 200, data: {workspace_id: row.workspace_id, snapshot}};
+    }
     return {status, data: {error: {code: failure.code, message: failure.message}}};
   });
   await page.route('**/__c4-error.js', async route => {
@@ -71,11 +89,13 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
   await page.evaluate(async ({name, factory, caps, workspace, row, detached}) => {
     const {h} = await import('/src/ui/dom.js'), {t} = await import('/src/i18n.js');
     const {errorBox, state} = await import('/__c4-error.js'), {durableForm} = await import('/__c4-form.js');
-    const module = await import(`/src/pm-${name === 'overview-saved' ? 'overview' : name}.js`), win = window as any;
+    const source = {'overview-saved': 'overview', 'export-brief': 'brief', 'export-charter': 'charter', 'export-maintenance': 'maintenance-review'}[name] || name;
+    const module = await import(`/src/pm-${source}.js`), win = window as any;
     const {planDiffText} = await import('/src/pm-plan-diff-strings.js');
-    const api = async (method: string) => {
-      const result = await win.c4Request(method);
-      throw Object.assign(Error(result.data.error.message), {code: result.data.error.code, status: result.status});
+    const api = async (method: string, path: string) => {
+      const result = await win.c4Request(method, path);
+      if (result.status >= 400) throw Object.assign(Error(result.data.error.message), {code: result.data.error.code, status: result.status});
+      return result.data;
     };
     const input = (key: string, {multiline = false, max = 4000, required = true, value = ''}: any = {}) =>
       h(multiline ? 'textarea' : 'input', {'aria-label': t(key), maxlength: max, required, value});
@@ -88,11 +108,13 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
       viewState('c4', row.workspace_id, 'overview').mode = 'saved';
     }
     const ui = module[factory]({h, t, api, alive, namespace: 'c4', workspaceId: row.workspace_id, workspace: () => workspace,
-      caps: getCaps, permitted: () => true, canRead: () => true, form, input, labelled, errorBox, main, onDiscuss: () => {}});
+      caps: getCaps, permitted: () => true, canRead: () => true, form, input, labelled, errorBox, main, onDiscuss: () => {}, onChange: () => {},
+      guard: alive, target: {workspace_id: row.workspace_id, thread_id: 'pmt_' + '1'.repeat(32)}, thread: () => ({thread: {version: 1}})});
     const root = ui.element || ui.box; main.append(root); root.hidden = false;
     if (root instanceof HTMLDetailsElement) root.open = true;
     win.c4Ui = ui; win.c4State = state; win.c4Text = (key: string) => planDiffText(t, key);
-    if (name === 'plan-diff') {
+    if (name === 'context-bundle') root.querySelector('button').click();
+    else if (name === 'plan-diff') {
       const first = 'pmrev_' + '1'.repeat(32), second = 'pmrev_' + '2'.repeat(32);
       ui.update({workspace_id: row.workspace_id, revisions: [{revision_id: first, sequence: 1}, {revision_id: second, sequence: 2}], next_cursor: null});
       ui.select(first, second); root.querySelector('.actions button').click();
@@ -108,12 +130,51 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
       await ui.prepareReports();
     }
     else await ui.refresh();
+    if (name.startsWith('export-')) root.querySelector('[data-pm-brief-export] button').click();
   }, {name, factory, caps, workspace, row, detached: failure.detached});
   return {reads: () => reads, writes: () => writes};
 }
 
 for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
   test.use({locale: locale === 'en' ? 'en-US' : 'zh-TW', colorScheme: 'light', reducedMotion: 'reduce'});
+  for (const width of [1440, 390]) for (const mode of ['refresh', 'earlier']) test(`workspace ${mode} one localized error ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    const f = pmFixture(); let denied = false, failedReads = 0;
+    const calls: {method: string, path: string, body: any}[] = [];
+    await mountConversation(page, false, async input => {
+      calls.push(input);
+      const url = new URL(input.path, 'http://fixture');
+      if (url.pathname === pmPath) {
+        if (denied) {failedReads++; return {status: 503, data: {error: {code, message: serverMessage}}};}
+        return {status: 200, data: {...f.detail(), next_message_cursor: 50}};
+      }
+      return f.dispatch(input);
+    });
+    await page.goto(pmRoute);
+    const composer = page.locator('[data-pm-action="pm.message.append"] textarea'); await composer.fill('Preserved local draft');
+    denied = true;
+    if (mode === 'earlier') await page.getByRole('button', {name: locale === 'en' ? 'Load earlier notes' : '載入較早筆記', exact: true}).click();
+    else await page.locator('.pm-main > header').getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true}).click();
+    const root = page.locator('#main'), summary = root.locator('[data-error-summary]');
+    await expect(summary).toHaveCount(1);
+    await expect(summary).toHaveText(locale === 'en' ? 'Could not confirm the current version' : '無法確認最新版本');
+    await expect(root.locator('[data-api-error]')).toHaveCount(1);
+    await expect(root.locator('[data-error-details]')).toBeHidden(); await expect(root).not.toContainText(serverMessage, {useInnerText: true});
+    const shots = process.env.BATC_C4_SHOTS;
+    if (shots) {await mkdir(shots, {recursive: true}); await page.screenshot({path: `${shots}/workspace-${mode}-${locale}-${width}-closed.png`});}
+    await root.locator('[data-api-error] summary').click();
+    await expect(root.locator('[data-error-details]')).toContainText(serverMessage);
+    await expect(root.locator('[data-error-details] code')).toHaveText(code);
+    await expect(root.locator('[data-error-details] b')).toHaveCount(0);
+    if (shots) await page.screenshot({path: `${shots}/workspace-${mode}-${locale}-${width}-open.png`});
+    await expect(composer).toHaveValue('Preserved local draft');
+    const before = failedReads; f.state.cursor++;
+    await expect.poll(() => failedReads).toBeGreaterThan(before);
+    expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.'))
+      .every(([, value]) => JSON.parse(value).cursor === 0))).toBe(true);
+    expect(calls.filter(input => input.method !== 'GET')).toEqual([]);
+    expect(f.state.writes).toEqual([]);
+  });
   for (const width of [1440, 390]) for (const failure of failures) {
     const {name, factory, key, cause, code, message} = failure;
     test(`${name} ${cause} one failure message ${width}`, async ({page}) => {
@@ -127,6 +188,8 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
       await expect(summary).toHaveText(sentence);
       await expect(root.getByText(sentence, {exact: true})).toHaveCount(1);
       await expect(root.locator('.error:visible, .ui-inline-error:visible')).toHaveCount(1);
+      await expect(root.locator('[data-api-error]')).toHaveCount(1);
+      if (name.startsWith('export-')) await expect(root.locator('[data-pm-brief-export]')).toBeHidden();
       if (name.startsWith('overview')) {
         await expect(root.locator('[data-pm-overview] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 1 : 0);
         await expect(root.locator('[data-pm-report-tools] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 0 : 1);

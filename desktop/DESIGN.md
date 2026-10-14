@@ -1126,3 +1126,14 @@ Meetings uses one plain empty sentence inside its own card: writers without a
 Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
 Its title and Refresh stay on the first row; the read-only reason wraps beneath
 the title when the inspector is narrow instead of being squeezed between them.
+
+Workspace refresh and earlier-note failures, Lifecycle and accepted-plan preview
+use one localized error summary with original diagnostics in Details. Export
+source failures belong to the report's parent; withdrawal removes or hides the
+export control without adding a second error. Failed reads retain the event gate.
+
+An issue mapping without a source title or number says Untitled issue / 未命名議題;
+its original mapping identity stays in Details. The Resources Work items form
+starts closed behind New work item. Cancel closes it and returns focus without
+discarding the draft. A pending original request stays open for receipt recovery;
+a verified successful creation closes the form.

@@ -71,8 +71,8 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
         pendingReceipt={expected,error:rendered};update();return;
       }
       if(identity()!==expected)return;
+      status.replaceChildren();
       onUnavailable(rendered);
-      status.replaceChildren(errorBox(rendered));
     }finally{busy=false;update();}
   }
   format.addEventListener('change',update);locale.addEventListener('change',update);update();

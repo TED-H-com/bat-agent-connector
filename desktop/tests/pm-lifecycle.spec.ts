@@ -74,9 +74,9 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,390])for(const font 
   const f=fixture();f.state.stage=null;f.state.status='unclassified';
   const copy=locale==='en'?{phase:'Phase not yet selected',legacy:'Existing work keeps its classification.',
     pending:'No admitted work',scope:'Only readable records are shown.',
-    unavailable:'Activity unavailable',reason:'Workspace state is unreadable.'}
+    reason:'Workspace state unavailable'}
     :{phase:'尚未指定管理階段',legacy:'既有工作保留原分類。',pending:'尚無已受理工作',scope:'僅顯示可讀取的管理紀錄。',
-      unavailable:'無法取得狀態',reason:'無法讀取工作區狀態。'};
+      reason:'無法取得工作區狀態'};
   await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
   const empty=(title:string)=>activity(page).locator('.ui-empty').filter({has:page.getByRole('heading',{name:title,exact:true})});
   const checkMargin=async(title:string)=>expect(await empty(title).evaluate(node=>{
@@ -94,10 +94,12 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,390])for(const font 
   await expectShellEmpty(empty(copy.pending),copy.pending,copy.scope);
   await empty(copy.pending).scrollIntoViewIfNeeded();await checkMargin(copy.pending);await capture('phase-no-pending');
   f.state.failed=true;f.base.state.cursor++;
-  await expectShellEmpty(empty(copy.unavailable),copy.unavailable,copy.reason);
+  await expect(activity(page).locator('[data-error-summary]')).toHaveText(copy.reason);
+  await expect(activity(page).locator('[data-api-error]')).toHaveCount(1);
+  await expect(activity(page).locator('[data-error-details]')).toBeHidden();
   await expect(activity(page).getByRole('heading',{name:copy.pending,exact:true})).toHaveCount(0);
   await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveCount(0);
-  await checkMargin(copy.unavailable);await capture('phase-unavailable');
+  await capture('phase-unavailable');
   expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
   await context.close();
 });
