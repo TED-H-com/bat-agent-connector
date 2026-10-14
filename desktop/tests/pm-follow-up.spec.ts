@@ -20,6 +20,7 @@ test('recorded domains and a bounded agenda stay on one page, preparation is not
   expect(await edit(page).getAttribute('open')).toBeNull();await expect(page.getByRole('tab')).toHaveCount(0);
   await openRead(page.getByText('Changes',{exact:true}));
   await expect(section(page)).toContainText('Omitted sources');
+  await expect(section(page)).toContainText('A source no longer selected in this preparation has not been declared resolved.');
   expect(f.state.writes).toHaveLength(0);
 });
 

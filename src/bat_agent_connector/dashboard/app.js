@@ -5144,10 +5144,10 @@ var pmFollowUpStrings = {
 		pm_fu_details: "詳細資訊",
 		pm_fu_title: "後續追蹤準備",
 		pm_fu_intro: "先整理固定證據與已記錄的回答，再進行下一次討論。",
-		pm_fu_refresh: "重新整理 後續追蹤",
-		pm_fu_retry: "重試 後續追蹤",
+		pm_fu_refresh: "重新整理後續追蹤",
+		pm_fu_retry: "重試後續追蹤",
 		pm_fu_loading: "正在讀取固定來源…",
-		pm_fu_empty: "尚未保存 後續追蹤準備。",
+		pm_fu_empty: "尚無後續追蹤準備",
 		pm_fu_version: "第 {version} 份討論準備",
 		pm_fu_latest_unavailable: "最新討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
 		pm_fu_selected_unavailable: "這份討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
@@ -5156,7 +5156,7 @@ var pmFollowUpStrings = {
 		pm_fu_snapshot_at: "證據快照時間",
 		pm_fu_unknown: "未知",
 		pm_fu_none: "未選取",
-		pm_fu_preparation_only: "這是已保存的討論準備；尚未執行 自動後續追蹤、變更範圍或派工。",
+		pm_fu_preparation_only: "這是已保存的討論準備；尚未執行自動後續追蹤、變更範圍或派工。",
 		pm_fu_agenda: "討論議程",
 		pm_fu_no_agenda: "所選紀錄未產生議程項目。缺少欄位不會自動變成追問。",
 		pm_fu_missing_areas: "{count} 個面向尚無基準輸入",
@@ -22434,7 +22434,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		return editor;
 	}
 	function sourceLabel(kind, source) {
-		const words = source.value || source.text || source.title || source.description || source.summary || source.source_kind || source.work_item_id;
+		const words = source.value || source.text || source.title || source.description || source.summary || source.source_kind || (kind === "work_binding" ? nameFor("work_item", source.work_item_id) || t("pm_gov_unknown") : "");
 		const state = source.status || source.verification_status;
 		const stateKey = "pm_gov_info_" + state, label = state ? t(stateKey) : "";
 		return [
@@ -22465,7 +22465,10 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			...snapshot.work.map((row) => ({
 				kind: "work_binding",
 				id: row.binding.binding_id,
-				source: row.binding
+				source: {
+					...row.binding,
+					title: row.title
+				}
 			}))
 		];
 	}

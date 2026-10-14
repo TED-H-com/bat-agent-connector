@@ -84,7 +84,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     forms.push(editor); return editor;
   }
   function sourceLabel(kind, source) {
-    const words = source.value || source.text || source.title || source.description || source.summary || source.source_kind || source.work_item_id;
+    const words = source.value || source.text || source.title || source.description || source.summary || source.source_kind || (kind === 'work_binding' ? nameFor('work_item', source.work_item_id) || t('pm_gov_unknown') : '');
     const state = source.status || source.verification_status;
     const stateKey = 'pm_gov_info_' + state, label = state ? t(stateKey) : '';
     return [t('pm_gov_source_' + kind), typeof words === 'string' ? words : '', label === stateKey ? state : label].filter(Boolean).join(' · ');
@@ -95,7 +95,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     return [...baseline.selected_inputs.map(row => ({kind: 'plan_input', id: row.input_id, source: row})),
       ...baseline.requirements.map(row => ({kind: 'requirement', id: row.id, source: row})),
       ...snapshot.evidence.map(row => ({kind: 'evidence', id: row.evidence_id, source: row})),
-      ...snapshot.work.map(row => ({kind: 'work_binding', id: row.binding.binding_id, source: row.binding}))];
+      ...snapshot.work.map(row => ({kind: 'work_binding', id: row.binding.binding_id, source: {...row.binding, title: row.title}}))];
   }
   const key = ref => `${ref.kind}:${ref.id}`;
   function refsWidget(field, holder, snapshot, getEditor, original = []) {

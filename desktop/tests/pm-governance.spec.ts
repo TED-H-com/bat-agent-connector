@@ -215,3 +215,13 @@ for (const locale of ['en', 'zh-TW']) test(`expanded governance form at mobile w
   expect(f.state.writes[0].body.params.affected_requirement_ids).toEqual(['account.recovery']);
   expect(f.state.writes[0].body.params.review_at).toMatch(/^2026-11-01T.*Z$/);
  });
+
+test('fixed work source choices use titles while retaining their binding IDs',async({page})=>{
+  const f=governanceFixture(),snapshot=f.state.snapshots[0];
+  snapshot.work=[{work_item_id:'wi_'+'1'.repeat(20),title:'Verify account recovery',binding:{binding_id:'pmwb_'+'1'.repeat(32),work_item_id:'wi_'+'1'.repeat(20)}}];
+  await mount(page,f);await openAction(page,'record');
+  const editor=action(page,'record'),choice=editor.getByRole('checkbox',{name:/Verify account recovery/});
+  await expect(choice).toBeVisible();await choice.check();
+  expect(await page.evaluate(id=>Object.values(localStorage).some(text=>{try{return JSON.parse(text).values?.source_refs===JSON.stringify([{kind:'work_binding',id}]);}catch{return false;}}),'pmwb_'+'1'.repeat(32))).toBe(true);
+  expect(f.state.writes).toEqual([]);
+});
