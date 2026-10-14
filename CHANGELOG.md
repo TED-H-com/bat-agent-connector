@@ -36,9 +36,9 @@
 
 - Refresh the English and Traditional Chinese README, PM first-use navigation and public
   website around the project-to-decision journey. Replace the gallery with eight bilingual
-  scenes from one synthetic project, pinned to a labelled candidate with capture hashes.
+  scenes from one synthetic project, pinned to merged main `aba02180` with capture hashes.
   Record which PRs are merged, and separate branch, installation and live evidence, in the
-  [October 14 progress draft](docs/product/progress-2026-10-14.md).
+  [October 14 progress report](docs/product/progress-2026-10-14.md).
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and

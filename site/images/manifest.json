@@ -1,9 +1,9 @@
 {
   "schema": "public_ui_screenshots_v1",
-  "frontend_source_commit": "944a854fc381f61c6281edb7fcbcf887321a0c68",
-  "source_pin_kind": "candidate",
-  "frontend_source_tree": "6325869974337890e1b5e1b6875d9458f1a8e516",
-  "captured_at": "2026-10-13T23:46:57.631Z",
+  "frontend_source_commit": "aba02180e872f798ea54aa003b267b14eb7f5018",
+  "source_pin_kind": "merged",
+  "frontend_source_tree": "994fdcc7081386d819c1670884df2f083fb67f5b",
+  "captured_at": "2026-10-14T09:49:32.530Z",
   "fixture_clock": "2026-10-13T09:00:00.000Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
@@ -17,6 +17,10 @@
       "sha256": "8cda4fab28d4477d7c2e1504f737ed37a493a72378ee49e68c0b3c61735083b5"
     },
     {
+      "file": "desktop/src/pm-agents-trend.js",
+      "sha256": "b8f91cbd22ae728902ba424e12fae8c011b75473d5aeda6b605885c573b46894"
+    },
+    {
       "file": "desktop/tests/conversation-fixture.ts",
       "sha256": "560abaf94e41eb4d0352e851aa0a938b4d1f1ed1c2500380954f5048c7cea78e"
     },
@@ -26,7 +30,7 @@
     },
     {
       "file": "desktop/tests/demo/discussions.ts",
-      "sha256": "1b4ffab88cff91ea16a31c7808faf82f4e4388f6552a0e912bbcb697a64c346f"
+      "sha256": "3a38b72b0f9246bccbd6f70081d1d0dace6dd07992c0df7f1afedb77584dc952"
     },
     {
       "file": "desktop/tests/demo/global.ts",
@@ -42,7 +46,7 @@
     },
     {
       "file": "desktop/tests/demo/overview.ts",
-      "sha256": "5012958bede74a4d310d3d74c1e57f10089cdcf56ed26ec6f84daf01ba31b5ed"
+      "sha256": "8cc6cd8cdcdf21f1e12ceacb53a32fc7111a14c1899d7f28443d10c4987a723f"
     },
     {
       "file": "desktop/tests/demo/plans.ts",
@@ -58,7 +62,7 @@
     },
     {
       "file": "desktop/tests/demo/register.ts",
-      "sha256": "c5c4b9166c4c1fc59f82e83f6577e368f6fa7209d77c1d9433b04a8b9967dafd"
+      "sha256": "900f7391e4a98409f4e31f464414ab3ce4b7334656bc82d4b0645d6775293a22"
     },
     {
       "file": "desktop/tests/demo/requirements.ts",
@@ -66,7 +70,7 @@
     },
     {
       "file": "desktop/tests/demo/resources.ts",
-      "sha256": "203d474c80002dda22d73e1dd300a0dbfff7438ebcce8fd14777f141038c012e"
+      "sha256": "064cb6f6bd37df45b4f5132c1042d13046faddbf688bd30097d68d1c65460676"
     },
     {
       "file": "desktop/tests/demo/roadmap.ts",
@@ -94,19 +98,19 @@
     },
     {
       "file": "desktop/tests/demo/threads.ts",
-      "sha256": "a10bc827806bbd4d0845dbbc32d722345843c07bb865228738ba64bcd137deb2"
+      "sha256": "67466c9b143d0cdfdcc016fca108a723547cf06a943977c2eef754f1c848ff69"
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "b3e9e61b7a3c9c4b444bb56c04f99797917cc523ac86635533beffcb7faa9343"
+      "sha256": "430b618d59f3f3ef97143157d1b32f41f6e9760fa442815f243743c81942de11"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
-      "sha256": "0eb6106a8b16f49b9cdff70057bbc2a01ec16ecf3e3f37f6d7a3fcabbbfef293"
+      "sha256": "ff9a1b1f2105fbec3fef08cf938ea34c08be7309e35c3863da6ead6cd8c27a68"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.js",
-      "sha256": "f975b8562f3ea4263432748620f5159b31c6ae33634647c4b9029b29ad33baa1"
+      "sha256": "280f8c216dcda3a5f3d6f6ecd5f33d6cc0cd17a2f6872d40f3bba1b7f315a548"
     },
     {
       "file": "src/bat_agent_connector/dashboard/i18n.js",
@@ -120,7 +124,7 @@
   "images": [
     {
       "file": "overview-en.png",
-      "sha256": "aa76cc41fd49d985adc3772594444cad12dce60b920c4326e03eb6bf7bcba5fa",
+      "sha256": "f97c01c518f84bfcf22154c1897282526290b4e4e059c77c8a83dea41beaaed5",
       "scenario": "overview",
       "locale": "en-US",
       "viewport": {
@@ -133,7 +137,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Live adopted-plan progress, one blocker, two pending decisions and recorded milestone dates; not a saved report.",
+      "composition": "Live adopted-plan progress, one blocker, two pending decisions, named maintenance finding and recorded milestone dates; Recently decided derives from the demo plan adoption receipts, not the pending count. Not a saved report.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -154,7 +158,7 @@
     },
     {
       "file": "discussions-en.png",
-      "sha256": "76a0f0556c99c5330f1f31f58d8f945c03b65d646eb54e572048ca60ad0f90df",
+      "sha256": "fcea3d162f1308593b9b7d0a031634069a58d4cbf3dc43092deb17dd817a6a70",
       "scenario": "discussions",
       "locale": "en-US",
       "viewport": {
@@ -188,7 +192,7 @@
     },
     {
       "file": "requirements-en.png",
-      "sha256": "21c37e58de50f4ebf1fe0080a5c1ca1f99b15cb78b40abf4545cde5fe4f5fda9",
+      "sha256": "5b096d2f27c5c40a6e8ef7ba74d3023bce06bf7e5994ac639db57c16af2bbc60",
       "scenario": "requirements",
       "locale": "en-US",
       "viewport": {
@@ -222,7 +226,7 @@
     },
     {
       "file": "issues-en.png",
-      "sha256": "40c28f18fef54cd808b558ff422abfb470782a3461e9ba62d70fa8b74096ea45",
+      "sha256": "fa79bf4bac725b6c0075f8443e911bac36babf66c6b99ac21a681986293cca79",
       "scenario": "issues",
       "locale": "en-US",
       "viewport": {
@@ -235,7 +239,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "All two demo register pages loaded: risks, issues, action, proposed change and decision; open items remain open.",
+      "composition": "Both demo register pages loaded: nine risks, issues, action, proposed change and decision records, including structured finding names; open items remain open.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -256,7 +260,7 @@
     },
     {
       "file": "schedule-en.png",
-      "sha256": "7a8a27f707b9490e014787304e8fa7edfe07e89eb03539ca0600d8d20cda4ffc",
+      "sha256": "e3316524cf027b7f12b26aa0318d7cd2f4dc048fb98cb4c4e000f59237a7b52f",
       "scenario": "schedule",
       "locale": "en-US",
       "viewport": {
@@ -269,7 +273,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Recorded baseline, forecast and actual timeline; Design review collapsed through its normal control to show Recovery review forecast three days late. Undated session attempts remain unscheduled.",
+      "composition": "Recorded baseline, forecast and actual timeline with readable date axis; Design review collapsed through its normal control to show Recovery review forecast three days late. Phone tracks share a fitted range. Undated session attempts remain unscheduled.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -290,7 +294,7 @@
     },
     {
       "file": "dependencies-en.png",
-      "sha256": "6862b4882ba42fa2e415b8de793b1cfc8540c5f9ababb6528313fe9469512e6f",
+      "sha256": "b0f2b217d8929bba3a0083f22eed0101af659dee01876bd9989e0631fca291aa",
       "scenario": "dependencies",
       "locale": "en-US",
       "viewport": {
@@ -324,7 +328,7 @@
     },
     {
       "file": "board-en.png",
-      "sha256": "a121fc4839ec278e5983fb3b58afe921eb162b1ef7f4fcecca23023379812ae4",
+      "sha256": "9f1cfd8df85461151abdb99c8560f82b9eecc1cc7f2fb6fb4e313c60088adefd",
       "scenario": "board",
       "locale": "en-US",
       "viewport": {
@@ -358,7 +362,7 @@
     },
     {
       "file": "session-en.png",
-      "sha256": "5d69fa2e1805fe675e4b8ab9e15060a8b7af8c938fa1e3710bc541378fd93cbd",
+      "sha256": "f0ba9b8532f2525e792b47c34a40af998f76073b15660fd1876da08add3c1cb5",
       "scenario": "session",
       "locale": "en-US",
       "viewport": {
@@ -392,7 +396,7 @@
     },
     {
       "file": "overview-zh.png",
-      "sha256": "fd18e019dc3061add4c05cc9f0da7f0aae88916666a0e7678ab3e25f840a742b",
+      "sha256": "399b717e7ecd13e980bde450224ade12ef9ffe0cbce845ed79c43afee63e6dac",
       "scenario": "overview",
       "locale": "zh-TW",
       "viewport": {
@@ -405,7 +409,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Live adopted-plan progress, one blocker, two pending decisions and recorded milestone dates; not a saved report.",
+      "composition": "Live adopted-plan progress, one blocker, two pending decisions, named maintenance finding and recorded milestone dates; Recently decided derives from the demo plan adoption receipts, not the pending count. Not a saved report.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -426,7 +430,7 @@
     },
     {
       "file": "discussions-zh.png",
-      "sha256": "ca0f17c470d2df31f0b798d2fe0873ed64f79b5d9d488376c9c4aa01f4d4c5d5",
+      "sha256": "e956d4dde8eb900b0c85aa47b694976177b44bd22a0e342b14650295474fefd8",
       "scenario": "discussions",
       "locale": "zh-TW",
       "viewport": {
@@ -460,7 +464,7 @@
     },
     {
       "file": "requirements-zh.png",
-      "sha256": "859b51791a118141b591bd52ff29da2e76572af9eb3f5c2219fa03aeaa699a43",
+      "sha256": "772a0fa994e49b3ab6330e40f939e03c09eb071ecfdb90856129d8044dcacaa9",
       "scenario": "requirements",
       "locale": "zh-TW",
       "viewport": {
@@ -494,7 +498,7 @@
     },
     {
       "file": "issues-zh.png",
-      "sha256": "c2900d65ccd1d14651a711124097b848b97b35543dda6697413634e934b57bee",
+      "sha256": "dd19eabf3f20b7879b20635a9c38331d70645b2ada70637c80ad6044455e29fe",
       "scenario": "issues",
       "locale": "zh-TW",
       "viewport": {
@@ -507,7 +511,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "All two demo register pages loaded: risks, issues, action, proposed change and decision; open items remain open.",
+      "composition": "Both demo register pages loaded: nine risks, issues, action, proposed change and decision records, including structured finding names; open items remain open.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -528,7 +532,7 @@
     },
     {
       "file": "schedule-zh.png",
-      "sha256": "83981ec4c82b823441de44d60b65e0aae4ae7e26b26f57f973b8b3fb2721d237",
+      "sha256": "d5b255ef771ff1fd72f950cea364a036853ba5a0b1343dec9fa00efdd4c2935b",
       "scenario": "schedule",
       "locale": "zh-TW",
       "viewport": {
@@ -541,7 +545,7 @@
         "desktop/tests/demo/index.ts",
         "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Recorded baseline, forecast and actual timeline; Design review collapsed through its normal control to show Recovery review forecast three days late. Undated session attempts remain unscheduled.",
+      "composition": "Recorded baseline, forecast and actual timeline with readable date axis; Design review collapsed through its normal control to show Recovery review forecast three days late. Phone tracks share a fitted range. Undated session attempts remain unscheduled.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -562,7 +566,7 @@
     },
     {
       "file": "dependencies-zh.png",
-      "sha256": "b864b028b4ad1045aa884263c3801349cb8f9b2ab9bbe41b9d6b83affd4ccb6a",
+      "sha256": "a1a856e9e0fbdef7bed012c23daa7fb6f2ce23247029e6b85de4213a9c67d879",
       "scenario": "dependencies",
       "locale": "zh-TW",
       "viewport": {
@@ -596,7 +600,7 @@
     },
     {
       "file": "board-zh.png",
-      "sha256": "eabe29b995ac0fa03b90362eb9a7017652c8e0ca7fe99867a75e9314baf8b85c",
+      "sha256": "cf64d3cc5be58f3a81c8665bc0cfef20b7f51ab8b81ace7231d3d6b96c9c3293",
       "scenario": "board",
       "locale": "zh-TW",
       "viewport": {
@@ -630,7 +634,7 @@
     },
     {
       "file": "session-zh.png",
-      "sha256": "35222c61510c27a9009c3a2f2f84d5dce1ae589b21f8c0f9a50266e531b6367a",
+      "sha256": "03979641bacd9d905166124463dde4d190ea0947e0591f882cc67b67411fdba0",
       "scenario": "session",
       "locale": "zh-TW",
       "viewport": {
