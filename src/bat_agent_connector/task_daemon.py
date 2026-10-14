@@ -245,7 +245,7 @@ class TaskDaemon:
         self.ops.context.update(fleet=self.fleet, coordinator=self.coordinator, daemon=self,
                                 inventory=self.inventory, github=github,
                                 github_config=config.github,
-                                git_runner=checkpoints.SshGitRunner(self.adapter.verifier.settings.ssh_hosts))
+                                git_runner=self._git_runner(config, self.adapter.verifier.settings.ssh_hosts))
         artifact_settings = artifacts.ArtifactSettings.from_dict(self.adapter.verifier.settings.artifacts)
         self.artifact_store = artifacts.ArtifactStore(self.ops, artifact_settings)
         self.ops.context.update(artifact_store=self.artifact_store,
@@ -263,6 +263,14 @@ class TaskDaemon:
         from . import task_cleanup
         task_cleanup.backfill(self.ops)
         self._initialized = True
+
+    def _git_runner(self, config, aliases):
+        from . import dashboard_sync
+        from .host_git import HostGitRunner
+        installation = getattr(self, "managed_installation", None) or {}
+        return HostGitRunner(config, aliases, installation_id=installation.get("installation_id"),
+                             server_id=dashboard_sync._metadata(self.journal)["server_id"],
+                             current_config=lambda: self.fleet.config)
 
     @staticmethod
     def _event_webhook(settings) -> EventWebhook | None:

@@ -52,6 +52,8 @@ def available(ops, host):
 
 def _reader_binding(ops, host):
     runner = ops.context.get('git_runner')
+    if hasattr(runner, 'reader_binding'):
+        return runner.reader_binding(host)
     return _digest({'implementation': type(runner).__module__ + '.' + type(runner).__qualname__,
                     'alias': getattr(runner, 'aliases', {}).get(host)})
 

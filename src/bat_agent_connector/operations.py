@@ -223,6 +223,8 @@ class OpContext:
                                      bookkeeping=receipt_only or lifecycle_bookkeeping)
         with self.service.journal.tx():
             if not receipt_only:
+                from .host_git import require_execution
+                require_execution()
                 from .pm_source_lineage import require_new_effect
                 require_new_effect(self.service, self.operation_id)
             from .pm_lifecycle_gates import require_local
@@ -439,12 +441,17 @@ class OperationService:
     def _step_start(self, operation_id: str, name: str, request: dict, *, local=False, bookkeeping=False) -> None:
         with self.journal.tx():
             if not bookkeeping:
+                from .host_git import require_execution
+                require_execution()
                 from .pm_source_lineage import require_new_effect
                 require_new_effect(self, operation_id)
             from .pm_lifecycle_gates import admit_step
             admit_step(self.db, operation_id, name, local=local, bookkeeping=bookkeeping)
             seq = self.db.execute("SELECT COALESCE(MAX(seq),0)+1 FROM operation_steps WHERE operation_id=?",
                                   (operation_id,)).fetchone()[0]
+            locations = ((self._row(operation_id).get("external_refs") or {}).get("admission_binding") or {}).get("git_execution")
+            if locations is not None:
+                request = {**request, "git_execution": locations}
             self.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,started_at)
                 VALUES(?,?,?,?,?,?)""", (operation_id, seq, name, "started", _canonical(request), time.time()))
             self._observation_event(operation_id, "operation.step.started", {"step": name, "step_seq": seq, "request": request})
@@ -452,6 +459,8 @@ class OperationService:
     def _step_restart(self, operation_id: str, name: str, request: dict, *, bookkeeping=False) -> None:
         with self.journal.tx():
             if not bookkeeping:
+                from .host_git import require_execution
+                require_execution()
                 from .pm_source_lineage import require_new_effect
                 from .pm_work_batches import admit_restart
                 require_new_effect(self, operation_id)
@@ -460,6 +469,9 @@ class OperationService:
                 admit_repair_restart(self, operation_id, name, request)
             from .pm_lifecycle_gates import admit_step
             admit_step(self.db, operation_id, name, bookkeeping=bookkeeping, restart=True)
+            locations = ((self._row(operation_id).get("external_refs") or {}).get("admission_binding") or {}).get("git_execution")
+            if locations is not None:
+                request = {**request, "git_execution": locations}
             self.db.execute("""UPDATE operation_steps SET status='started',request=?,response=NULL,error=NULL,
                 started_at=?,finished_at=NULL WHERE operation_id=? AND name=?""",
                             (_canonical(request), time.time(), operation_id, name))
@@ -581,6 +593,8 @@ class OperationService:
                                 admission_params, preconditions) if adef.admit else None
         from .pm_source_lineage import inherit
         binding = inherit(self, principal, action, _resolved_target or target, admission_params, binding)
+        from .host_git import admission_bindings
+        binding = admission_bindings(self, action, _resolved_target or target, admission_params, binding)
         # Admission is trusted service code. A task capability may delegate the
         # original task controller after validating that exact capability; an
         # HTTP/RPC caller cannot supply or replace this binding.
@@ -812,11 +826,13 @@ class OperationService:
         ctx = OpContext(self, op)
         try:
             from . import controller_authority
+            from .host_git import execution as git_execution
             from .pm_source_lineage import execution
 
             # Missing legacy authority is intentional: receipt recovery can
             # still read, while every new external effect fails closed.
-            with controller_authority.use(controller_authority.operation_binding(op), self.journal), execution(self, operation_id):
+            with (controller_authority.use(controller_authority.operation_binding(op), self.journal),
+                  execution(self, operation_id), git_execution(self, operation_id)):
                 result = await adef.run(ctx)
         except Cancelled:
             self._transition(operation_id, "cancelled", reason="cancelled between steps")

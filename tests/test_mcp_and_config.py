@@ -112,3 +112,19 @@ def test_damaged_bat_profile_tokens_report_unavailable(tmp_path, document):
     assert host.token_available() is False
     with pytest.raises(TokenUnavailable):
         host.resolve_token()
+
+
+@pytest.mark.parametrize("value", [None, True, False, 0, 1, [], {}, "", "SSH", "Local", "auto"])
+def test_git_transport_is_a_strict_enum_with_fixed_config_code(value):
+    base = {"url": "wss://127.0.0.1:9876/", "fingerprint": "aa" * 32, "token_ref": "env:FIXTURE_TOKEN"}
+    with pytest.raises(ConfigError) as error:
+        parse_config({"hosts": {"fixture": {**base, "git": value}}})
+    assert error.value.code == "HOST_GIT_INVALID"
+
+
+@pytest.mark.parametrize("url", ["wss://127.0.0.1:9876/", "wss://localhost:19876/", "wss://[::1]:9876/", "wss://fixture.example.invalid:9876/"])
+def test_loopback_and_tunnel_never_select_local_git(url):
+    base = {"url": url, "fingerprint": "aa" * 32, "token_ref": "env:FIXTURE_TOKEN"}
+    for fields in ({}, {"git": "ssh"}):
+        assert parse_config({"hosts": {"fixture": {**base, **fields}}}).host("fixture").git == "ssh"
+    assert parse_config({"hosts": {"fixture": {**base, "git": "local"}}}).host("fixture").git == "local"

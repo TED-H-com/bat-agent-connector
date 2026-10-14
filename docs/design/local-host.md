@@ -1,12 +1,55 @@
 # Local BAT without SSH
 
-Status: **proposal, no product changes**. Issue #141; source baseline
+Status: **staged implementation; local Git dispatch disabled**. Issue #141; source baseline
 `f5dfa7ad4e52c7d578a48ea45a9f94a7e06c6eae` (2026-10-14 investigation).
 Unprefixed file/line references describe that Connector baseline. Upstream evidence
 is pinned to `tony1223/better-agent-terminal` **v3.2.15**, commit
 `b7419892fbc9946799b64cca24c2ec8c7fa15c42` (2026-10-05), and explicitly prefixed
 `BAT v3.2.15`. Source inspection is not installed or live acceptance evidence.
 Python Connector / Task Service remains the only central authority.
+
+## Implementation status
+
+Staged PR 2 has landed on this branch: strict `HostConfig.git`, one composite
+per active configuration shared by operations and both fleets, cached readiness,
+legacy SSH reader identity, frozen operation/step execution bindings, and
+`setup.host` transport/confirmation admission and original-key recovery.
+Local dispatch still refuses before any subprocess: POSIX reports
+`local_git_not_enabled`; Windows reports `local_git_platform_unsupported`.
+No helper or shell-script hardening, Linux enablement, frontend change, package
+or live acceptance is included. PR 3 remains required before local Git executes.
+
+The binding records the logical host's name, endpoint, pin and profile, transport,
+managed-root/SSH-alias configuration digest, central server ID, and installation
+ID when available. The central server ID is not a BAT incarnation ID; the upstream
+identity limitation below still applies. A changed binding needs attention and
+cannot redirect an old SSH intent to local execution. Completed step receipts
+remain replayable. Indirect workspace/repository operations that do not yet name
+a host conservatively freeze the configured host inventory at admission; changing
+one of those locations blocks new effects until the original binding is restored.
+No operation key, existing payload or journal schema version is rewritten.
+
+Backend code owns no frontend string table. fr1 can use this stable projection
+contract (`git_status` in managed setup state, and `HostGitRunner.status(host)`):
+`{available: boolean, reason: string | null, details: object}`. Unknown hosts are
+unavailable with `host_unknown`; missing SSH aliases use `ssh_alias_missing`.
+The following local reasons use error code `GIT_RUNNER_UNAVAILABLE`:
+
+| Fixed reason | English | zh-TW | Details |
+| --- | --- | --- | --- |
+| `local_git_not_enabled` | Local Git is not enabled yet | 尚未開放本機 Git 執行 | Empty in PR 2 |
+| `local_git_platform_unsupported` | Local Git unavailable on Windows | Windows 尚不支援本機 Git 執行 | Empty |
+| `local_git_tools_missing` | Local Git tools missing | 缺少本機 Git 工具 | Reserved for PR 3: `missing_helpers` lists exact missing helper names, never an invented count |
+
+Config/setup reject invalid transport with `HOST_GIT_INVALID` (**Choose SSH or
+local Git / 請選擇 SSH 或本機 Git**). Missing or nonboolean local confirmation uses
+`LOCAL_GIT_CONFIRMATION_REQUIRED` (**Confirm BAT and central share this computer
+and filesystem / 請確認 BAT 與中央服務在同一台電腦執行，且使用相同的檔案系統**).
+A mode switch under an existing host ID uses existing `HOST_IDENTITY_CHANGED`.
+Execution drift uses `GIT_EXECUTION_LOCATION_CHANGED`, or readiness reason
+`git_execution_location_changed` (**Original Git execution location changed /
+原本的 Git 執行位置已變更**). All are fixed codes; no raw input or command appears
+in these errors. Setup adds no new action, scope or chat approval.
 
 ## Problem and recommendation
 
@@ -938,6 +981,7 @@ claimed. Full suites were not run for this design-only task.
    cross-host workspace transport.
 
 One integrator owns shared config/daemon/operation wiring. Each PR reports branch,
-merged, installed/native and live-tested status separately. This document is the
-only deliverable of the present task; implementation, platform acceptance and
-any new upstream discovery/export contract remain future work.
+merged, installed/native and live-tested status separately. The original
+design-only task delivered this document; staged implementation status is
+recorded above. Platform acceptance and any new upstream discovery/export
+contract remain future work.

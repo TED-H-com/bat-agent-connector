@@ -404,3 +404,132 @@ async def test_profile_token_state_requires_private_token_store(installed, mock,
     assert mock.token not in json.dumps(state)
     store.chmod(0o600)
     assert setup.state(daemon, principal)["profiles"][0]["token_available"] is True
+
+
+@pytest.mark.parametrize("git", [None, True, False, 1, [], {}, "auto", "SSH"])
+async def test_setup_git_requires_strict_enum_before_journal_or_probe(installed, mock, git):
+    daemon, principal, root = installed
+    before = (root / "config" / "hosts.toml").read_bytes()
+    with pytest.raises(OperationError) as error:
+        create(installed, "setup.host", {"host": "fixture"}, host_params(daemon, principal, mock, git=git))
+    assert error.value.code == "HOST_GIT_INVALID"
+    assert daemon.ops.list()["operations"] == []
+    assert not mock.auth_frames
+    assert (root / "config" / "hosts.toml").read_bytes() == before
+
+
+@pytest.mark.parametrize("confirmation", [None, False, 0, 1, "true", [], {}])
+async def test_setup_local_requires_exact_confirmation(installed, mock, confirmation):
+    daemon, principal, root = installed
+    before = (root / "config" / "hosts.toml").read_bytes()
+    params = host_params(daemon, principal, mock, git="local")
+    if confirmation is not None:
+        params["local_confirmation"] = confirmation
+    with pytest.raises(OperationError) as error:
+        create(installed, "setup.host", {"host": "fixture"}, params)
+    assert error.value.code == "LOCAL_GIT_CONFIRMATION_REQUIRED"
+    assert daemon.ops.list()["operations"] == []
+    assert not mock.auth_frames
+    assert (root / "config" / "hosts.toml").read_bytes() == before
+
+
+async def test_local_setup_preserves_aliases_uses_one_composite_and_replays_original_key(installed, mock, monkeypatch):
+    from bat_agent_connector.host_git import HostGitRunner
+    daemon, principal, root = installed
+    probes = []
+    async def ssh(alias):
+        probes.append(alias)
+        raise AssertionError("local Git must not probe SSH")
+    monkeypatch.setattr(setup, "_probe_ssh", ssh)
+    startup = daemon.ops.context["git_runner"]
+    assert isinstance(startup, HostGitRunner)
+    assert startup is daemon.fleet.confinement_runner is daemon.inventory.fleet.confinement_runner
+    params = host_params(daemon, principal, mock, git="local", local_confirmation=True, ssh_alias="fixture-bat")
+    before = setup.state(daemon, principal)["revision"]
+    operation = create(installed, "setup.host", {"host": "fixture"}, params, revision=before)
+    binding = operation["external_refs"]["admission_binding"]
+    assert binding["git_execution"]["fixture"]["transport"] == "local"
+    assert binding["git_execution"]["fixture"]["server_id"] == daemon.managed_installation["server_id"]
+    assert binding["local_confirmation"] is True
+    result = await settle(installed, operation)
+    assert result["status"] == "succeeded", result
+    runner = daemon.ops.context["git_runner"]
+    assert isinstance(runner, HostGitRunner)
+    assert runner is daemon.fleet.confinement_runner is daemon.inventory.fleet.confinement_runner
+    assert not runner.available("fixture")
+    assert probes == []
+    assert daemon.adapter.verifier.settings.ssh_hosts == {"fixture": "fixture-bat"}
+    assert daemon.ops.context["artifact_host"].available("fixture")
+    assert tomllib.loads((root / "config" / "hosts.toml").read_text())["managed_setup"]["ssh_hosts"] == {"fixture": "fixture-bat"}
+    state = setup.state(daemon, principal)
+    assert state["hosts"][0]["git"] == "local"
+    assert state["hosts"][0]["git_status"]["reason"] == "local_git_not_enabled"
+    assert state["hosts"][0]["connected"] is False  # probe closed; transport readiness is separate
+    calls = len(mock.auth_frames)
+    assert create(installed, "setup.host", {"host": "fixture"}, params, revision=before)["operation_id"] == operation["operation_id"]
+    with pytest.raises(OperationError) as error:
+        create(installed, "setup.host", {"host": "fixture"}, {**params, "git": "ssh"}, revision=before)
+    assert error.value.code == "IDEMPOTENCY_CONFLICT"
+    assert len(mock.auth_frames) == calls
+    assert not [frame for frame in mock.invokes if frame["channel"] in WRITE_CHANNELS | ORCHESTRATE_CHANNELS | GUARDED_CHANNELS]
+
+
+async def test_setup_local_omission_preserves_mode_and_switch_requires_new_id(installed, mock):
+    daemon, principal, _ = installed
+    params = host_params(daemon, principal, mock, git="local", local_confirmation=True)
+    first = await settle(installed, create(installed, "setup.host", {"host": "fixture"}, params))
+    assert first["status"] == "succeeded"
+    omitted = {key: value for key, value in params.items() if key not in {"git", "local_confirmation"}}
+    second = await settle(installed, create(installed, "setup.host", {"host": "fixture"}, omitted, key="same-local"))
+    assert second["status"] == "succeeded" and second["result"]["revision"] == first["result"]["revision"]
+    assert daemon.fleet.config.host("fixture").git == "local"
+    with pytest.raises(OperationError) as error:
+        create(installed, "setup.host", {"host": "fixture"}, {**omitted, "git": "ssh"}, key="switch")
+    assert error.value.code == "HOST_IDENTITY_CHANGED"
+    third = await settle(installed, create(installed, "setup.host", {"host": "new-ssh"}, omitted, key="new-host"))
+    assert third["status"] == "succeeded" and daemon.fleet.config.host("new-ssh").git == "ssh"
+    with pytest.raises(OperationError) as error:
+        create(installed, "setup.host", {"host": "new-ssh"}, params, key="reverse-switch")
+    assert error.value.code == "HOST_IDENTITY_CHANGED"
+
+
+async def test_local_post_publish_receipt_loss_recovers_after_restart_with_original_key(installed, mock, monkeypatch):
+    from bat_agent_connector.host_git import HostGitRunner
+    daemon, principal, root = installed
+    params = host_params(daemon, principal, mock, git="local", local_confirmation=True, ssh_alias="fixture-bat")
+    before = setup.state(daemon, principal)["revision"]
+    operation = create(installed, "setup.host", {"host": "fixture"}, params, revision=before)
+    original = daemon.ops._step_done
+    def lose_receipt(ident, name, response, **kwargs):
+        if name == "managed_configuration":
+            raise OSError("fixture lost publication receipt")
+        return original(ident, name, response, **kwargs)
+    monkeypatch.setattr(daemon.ops, "_step_done", lose_receipt)
+    await daemon.ops._execute(operation["operation_id"])
+    assert daemon.ops.get(operation["operation_id"])["status"] == "uncertain"
+    assert tomllib.loads((root / "config" / "hosts.toml").read_text())["hosts"]["fixture"]["git"] == "local"
+    calls = len(mock.auth_frames)
+    await daemon.ops.drain()
+    await daemon.fleet.close()
+    await daemon.inventory.close()
+    daemon.journal.close()
+    path = root / "config" / "hosts.toml"
+    restarted = TaskDaemon(parse_config(tomllib.loads(path.read_text()), path), root / "state" / "tasks.sqlite3")
+    restarted.managed_installation = dict(daemon.managed_installation)
+    setup.install(restarted)
+    try:
+        replay = create((restarted, principal, root), "setup.host", {"host": "fixture"}, params, revision=before)
+        assert replay["operation_id"] == operation["operation_id"]
+        await restarted.ops._execute(replay["operation_id"])
+        result = restarted.ops.get(replay["operation_id"])
+        assert result["status"] == "succeeded" and result["idempotency_key"] == "fixture-setup"
+        assert len(mock.auth_frames) == calls
+        runner = restarted.ops.context["git_runner"]
+        assert isinstance(runner, HostGitRunner)
+        assert runner is restarted.fleet.confinement_runner is restarted.inventory.fleet.confinement_runner
+        assert not runner.available("fixture")
+    finally:
+        await restarted.ops.drain()
+        await restarted.fleet.close()
+        await restarted.inventory.close()
+        restarted.journal.close()

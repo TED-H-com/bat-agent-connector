@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Add the #141 backend Git transport contract: strict explicit host mode,
+  frozen execution bindings, unchanged SSH reader identity and original-key
+  setup recovery. Local Git remains disabled, with fixed readiness reasons;
+  existing SSH hosts and adjacent SSH services retain their mappings.
+
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 
