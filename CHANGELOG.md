@@ -150,6 +150,9 @@
 - Keep Requirements rows and Board agent options stable when identical delivery
   reads finish in a different order.
 
+- Let Escape cancel a restored Discussion rename draft while initial reads are
+  pending, preserving IME composition, Save gates and original-request recovery.
+
 - Keep release registration focus and keyboard input when source previews arrive
   during rationale entry, so Web and Tauri submit the reviewed request once.
 

@@ -399,7 +399,11 @@ opens inline Save / Cancel controls (Enter saves, Escape cancels) using the cent
 rename action. Cancel discards unsubmitted title edits; a successful Save restores
 focus to the pencil after recovery controls unlock. Recovery remains attached to the
 original rename intent. Tabs associate their panels for assistive technology.
-Rename Escape ignores IME composition. Header Back appears only below 800px.
+Rename Escape ignores IME composition. A restored, unsubmitted title draft stays
+focusable and read-only while initial reads gate Save, so plain Escape can discard
+it immediately. Focus returns to Rename when its permission gate opens; late reads
+do not reopen the discarded draft. Admitted intents remain locked for original-key
+recovery. Header Back appears only below 800px.
 Mode pills disappear when they repeat the title. Search matches titles and context
 chip text, with a clear-search empty state. Empty thread, search and tool states
 have a short title and one muted line. Answer actions use intrinsic-width buttons

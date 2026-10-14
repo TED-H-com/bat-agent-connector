@@ -65,7 +65,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
@@ -146,8 +146,13 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }
   function update() {
     if (disposed || !form.isConnected) return;
-    const locked = busy || damaged || Boolean(saved.intent) || !allowed();
-    for (const input of Object.values(fields)) input.disabled = locked;
+    const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
+    for (const input of Object.values(fields)) {
+      // A restored title draft must receive Escape while initial reads gate Save.
+      // An admitted intent or damaged storage still disables the field entirely.
+      input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
+      if (readOnlyWhenUnavailable) input.readOnly = locked;
+    }
     button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
     button.textContent = t(saved.intent ? 'pm_check_original' : label);
     reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
@@ -916,7 +921,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         }
         localStorage.removeItem(handoffKey);
       }
-      renameForm = form({action: 'pm.thread.rename', target, fields: {title: threadTitle}, params: values => ({title: values.title.trim()}),
+      renameForm = form({action: 'pm.thread.rename', target, fields: {title: threadTitle}, params: values => ({title: values.title.trim()}), readOnlyWhenUnavailable: true,
         preconditions, permitted: write, label: 'pd_save', onBeforeSaved: (_result, values) => {threadTitle.dataset.pmDefault = values.title;},
         onSaved: () => {titleView.finish({focus: true}); return load();}, onStateChange: () => {if (threadData) titleView?.update(threadData.thread.title);}, extra: threadTitle});
       renameForm.box.querySelector('.pm-receipt').dataset.discussionReceipt = 'rename';
