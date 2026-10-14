@@ -403,9 +403,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const fallback = tableHost.querySelector('.ui-data-table') || tableHost.querySelector('.reg-list') || tableHost;
     (row || fallback)?.focus();
   }
-  function paintInspector(record) {
-    if (!active) return;
-    const row = record.row;
+  function prepareInspector(row) {
     const title = displayTitle(row) || t('reg_type_' + row.type);
     if (!sheet || sheet.getAttribute('data-reg-row') !== row.row_id) {
       closeSheet(true);
@@ -419,8 +417,15 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       opening = false;
       sheet.setAttribute('data-reg-inspector', '');
       sheet.setAttribute('data-reg-row', row.row_id);
+      sheet.setAttribute('data-reg-loading', '');
+      sheet.body.append(skeleton(3));
       layout.append(sheet);
     } else sheet.querySelector('h2').textContent = title;
+  }
+  function paintInspector(record) {
+    if (!active) return;
+    prepareInspector(record.row);
+    sheet.removeAttribute('data-reg-loading');
     sheet.body.replaceChildren(...detailNodes(record).filter(Boolean));
   }
   function openRow(row) {
@@ -505,7 +510,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       // Below 1200 the inspector is a modal sheet. A refresh or a return keeps the selection
       // and leaves that sheet closed. The side panel (1200 and above) still restores.
       const showSheet = Boolean(sheet) || matchMedia('(min-width: 1200px)').matches;
-      if (preference.inspector && selected && (changed || stale || (showSheet && !sheet))) void loadDetail(selected, showSheet);
+      if (preference.inspector && selected && (changed || stale || (showSheet && (!sheet || sheet.hasAttribute('data-reg-loading'))))) void loadDetail(selected, showSheet);
     } catch (error) {
       try {alive();} catch {return;}
       if (!active || ticket !== serial) return;
@@ -590,6 +595,10 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (active === next) {if (active) publishMeta(); else onMeta(null); return;}
     active = next;
     if (!active) {serial++; detailSerial++; busy = false; onMeta(null); closeSheet(true); return;}
+    // Reserve the returning side panel before exposing the table. Opening it only
+    // after the read hides secondary chips that may already be under the pointer.
+    const selectedRow = rows.find(row => row.row_id === selected);
+    if (preference.inspector && selectedRow && matchMedia('(min-width: 1200px)').matches) prepareInspector(selectedRow);
     return refresh().then(() => {
       if (!active || sheet || matchMedia('(min-width: 1200px)').matches) return;
       const current = document.activeElement;

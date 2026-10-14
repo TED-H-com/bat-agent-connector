@@ -436,24 +436,34 @@ class Projection:
             return
         if all(source['status'] in {'disabled', 'stopped'} for source in page['sources'].values()):
             self.coverage['findings']['status'] = 'not_applicable'
-        for source in page['sources'].values():
+        for name, source in page['sources'].items():
             if source['status'] in {'disabled', 'stopped'}:
                 continue
             if source['status'] not in {'complete', 'incomplete'}:
                 self.missing('findings', source['status'])
                 self.coverage['findings']['complete'] = False
                 continue
+            # A filtered page can still list findings. That is not a complete zero.
+            if page.get('visibility_filtered'):
+                self.coverage['findings']['complete'] = False
+                self.missing('findings', 'source_unavailable')
             if source['status'] == 'incomplete' or len(source['findings']) > SOURCE_LIMIT:
                 self.coverage['findings']['complete'] = False
                 self.missing('findings', 'partial_page')
             for finding in source['findings'][:SOURCE_LIMIT]:
-                if finding['resolved'] or not page['observation_ref']:
+                # A withdrawn observation keeps no attention row, even if a late payload still lists findings.
+                if page.get('visibility_filtered') or finding['resolved'] or not page['observation_ref']:
                     continue
                 ref = {'kind': 'finding', 'id': finding['finding_id'], **page['observation_ref']}
                 if self.visible(finding, 'findings'):
+                    identity, gaps = pm_maintenance_findings.display_identity(finding, source_kind=name)
                     severity = finding['facts'].get('severity', 'low')
-                    self.add('risk', str(finding['native']['number']), ref, None,
-                        severity=severity if severity in SEVERITY else 'low')
+                    title = str(identity['number']) if 'number' in identity else None
+                    extra = {'finding': identity}
+                    if gaps:
+                        extra['unknowns'] = gaps
+                    self.add('risk', title, ref, None,
+                        severity=severity if severity in SEVERITY else 'low', **extra)
 
     def deliveries(self, work, accepted):
         from . import pm_delivery_lineage

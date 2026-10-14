@@ -90,6 +90,7 @@ def resolve(ops, principal, wid, ref):
     kind, identity = ref['kind'], ref['id']
     sources = []
     primary = None
+    finding_source = None
     if kind in {'plan_revision', 'requirement'}:
         _table(ops, 'pm_plan_revisions')
         rid = identity if kind == 'plan_revision' else ref['revision_id']
@@ -147,10 +148,11 @@ def resolve(ops, principal, wid, ref):
         record = pm_maintenance_findings.get_finding(ops, principal, wid,
             ref['observation_id'], ref['document_digest'], identity)
         summary = record['finding']
-        # Findings have opaque native identities, not an invented human title.
+        # The chip label stays the stored provider number. The client localizes `finding`.
         label = str(summary['native']['number'])
         row = ops.db.execute('SELECT operation_id FROM pm_github_observations WHERE observation_id=?', (ref['observation_id'],)).fetchone()
         sources = [row[0]]
+        finding_source = record['source']
     elif kind == 'repair':
         _table(ops, 'pm_maintenance_repairs')
         record = pm_maintenance_repairs._row(ops, wid, identity)
@@ -204,7 +206,13 @@ def resolve(ops, principal, wid, ref):
         summary = {'title': label, 'kind': meeting['kind'], 'draft': record['draft'], 'completion': record['completion']}
     pm_access.require_operation_sources(ops.db, principal, sources)
     pm_source_lineage.require_document(ops.db, principal, summary)
-    return {'label': label, 'summary': summary, 'source_operation_ids': sources, 'operation_id': primary or sources[0]}
+    resolved = {'label': label, 'summary': summary, 'source_operation_ids': sources, 'operation_id': primary or sources[0]}
+    if kind == 'finding':
+        shown, gaps = pm_maintenance_findings.display_identity(summary, source_kind=finding_source)
+        resolved['finding'] = shown
+        if gaps:
+            resolved['finding_unknowns'] = gaps
+    return resolved
 
 
 def admission(ops, principal, wid, refs):
@@ -243,6 +251,10 @@ def read(ops, principal, wid, thread_id, *, summaries=False):
                 raise
         else:
             item.update(**ref, available=True, label=value['label'], bound_label=row['label_at_bind'])
+            if 'finding' in value:
+                item['finding'] = value['finding']
+            if value.get('finding_unknowns'):
+                item['unknowns'] = value['finding_unknowns']
             if summaries:
                 item.update(summary=value['summary'], source_operation_ids=value['source_operation_ids'], operation_id=value['operation_id'])
         result.append(item)

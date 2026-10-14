@@ -3762,9 +3762,16 @@ var resourceStrings = {
 		res_no_data: "No data",
 		res_source: "Source / CLI",
 		res_role: "Role",
+		res_source_id: "Source ID",
+		res_unnamed: "Unnamed source",
+		res_role_implementer: "Implementer",
+		res_role_reviewer: "Reviewer",
+		res_role_investigator: "Investigator",
+		res_role_planner: "Planner",
+		res_role_maintainer: "Maintainer",
 		res_empty: "No usage sources are connected to this workspace.",
 		res_no_match: "No sources match this filter.",
-		res_unknown: "Not provided",
+		res_unknown: "Unknown",
 		res_local: "Central host · local files",
 		res_observations: "Usage observations",
 		res_calls: "Messages",
@@ -3856,16 +3863,23 @@ var resourceStrings = {
 	},
 	"zh-TW": {
 		wb_agents: "Agent 資源",
-		res_filter: "篩選 CLI、模型或角色",
+		res_filter: "篩選工具、模型或角色",
 		res_window: "觀測期間",
 		res_pause: "暫停更新",
 		res_resume: "繼續更新",
 		res_no_data: "無資料",
-		res_source: "來源／CLI",
+		res_source: "來源",
 		res_role: "角色",
+		res_source_id: "來源識別碼",
+		res_unnamed: "未命名來源",
+		res_role_implementer: "實作",
+		res_role_reviewer: "審閱",
+		res_role_investigator: "調查",
+		res_role_planner: "規劃",
+		res_role_maintainer: "維護",
 		res_empty: "此工作區尚未連接用量來源。",
 		res_no_match: "沒有符合篩選條件的來源。",
-		res_unknown: "來源未提供",
+		res_unknown: "未知",
 		res_local: "中央主機・本機檔案",
 		res_observations: "用量觀測筆數",
 		res_calls: "訊息數",
@@ -3877,7 +3891,7 @@ var resourceStrings = {
 		res_actual: "回報模型",
 		res_requested: "要求的模型",
 		res_effort: "推理強度",
-		res_version: "CLI 版本",
+		res_version: "工具版本",
 		res_input: "輸入",
 		res_cache_read: "快取讀取",
 		res_cache_write: "快取寫入",
@@ -3911,7 +3925,7 @@ var resourceStrings = {
 		res_in_min: "{n} 分鐘後",
 		res_in_hr: "{n} 小時後",
 		res_in_day: "{n} 天後",
-		res_tokens: "已觀測 Tokens",
+		res_tokens: "已觀測用量",
 		res_sources: "來源",
 		res_sources_value: "{current} / {total}",
 		res_next_reset: "下次配額重設",
@@ -3922,15 +3936,15 @@ var resourceStrings = {
 		res_seen: "最後出現",
 		res_status: "狀態",
 		res_model_col: "模型",
-		res_tokens_col: "Tokens",
+		res_tokens_col: "用量",
 		res_total: "總計",
 		res_requested_short: "要求：{model}",
 		res_more_models: "另外 {count} 個",
 		res_filter_all: "全部來源",
-		res_filter_cli: "CLI · {name}",
+		res_filter_cli: "工具 · {name}",
 		res_filter_role: "角色 · {name}",
 		res_filter_model: "模型 · {name}",
-		res_filter_group_cli: "CLI",
+		res_filter_group_cli: "工具",
 		res_filter_group_role: "角色",
 		res_filter_group_model: "模型",
 		res_discuss: "討論",
@@ -13854,8 +13868,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	let filter = savedFilter(preference.filter);
 	let serial = 0, active = false, busy = false, paused = Boolean(preference.paused), timer = null;
 	let data = null, selected = preference.selected || null, signature = "";
-	let trendBuckets = null, trendReadAt = 0, trendSourceKey = "", trendUntilDay = "";
-	let bucketsStopped = false, requestZone = browserTimeZone();
+	let trendBuckets = null, trendReadAt = 0, trendRowKey = "", trendWindowKey = "";
+	let bucketsStopped = false, requestZone = browserTimeZone(), shownZone = requestZone;
 	let inspectorPanel = null, closing = false, chartNode = null, chartTrendKey = "";
 	const meta = h("p", {
 		class: "ui-meta",
@@ -13879,11 +13893,13 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			busy = false;
 			trendBuckets = null;
 			trendReadAt = 0;
-			trendSourceKey = "";
-			trendUntilDay = "";
+			trendRowKey = "";
+			trendWindowKey = "";
 			data = null;
 			signature = "";
 			dropChart();
+			inspectorPanel?.body.replaceChildren(skeleton(4));
+			updateMeta();
 			main.replaceChildren(skeleton(4));
 			refresh({
 				user: true,
@@ -13940,7 +13956,18 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		return isReadable(row) ? clock(row.last_at) : EM;
 	}
 	function roleLabel(role) {
-		return role === "unassigned" ? t("wb_unassigned") : role || EM;
+		if (role === "unassigned") return t("wb_unassigned");
+		if ([
+			"implementer",
+			"reviewer",
+			"investigator",
+			"planner",
+			"maintainer"
+		].includes(role)) return t("res_role_" + role);
+		return t("ui_status_unknown");
+	}
+	function sourceName(row) {
+		return [isReadable(row) ? cliName(cliOf(row)) : "", row.role ? roleLabel(row.role) : ""].filter(Boolean).join(" · ") || t("res_unnamed");
 	}
 	function effortLabel(value) {
 		if (value === "low" || value === "medium" || value === "high") return t("res_effort_" + value);
@@ -14041,29 +14068,34 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (!isReadable(row)) return EM;
 		const items = row.configurations || [];
 		const first = items[0];
-		if (!first) return t("res_unknown");
+		if (!first) return statusPill("unknown");
 		const requested = first.requested_model && first.requested_model !== first.actual_model ? h("div", { class: "pm-agents-requested" }, t("res_requested_short", { model: first.requested_model })) : null;
-		return h("div", { class: "pm-agents-model" }, first.actual_model || (!requested ? t("res_unknown") : null), requested, items.length > 1 ? h("div", { class: "pm-agents-requested" }, t("res_more_models", { count: items.length - 1 })) : null);
+		return h("div", { class: "pm-agents-model" }, first.actual_model || statusPill("unknown"), requested, items.length > 1 ? h("div", { class: "pm-agents-requested" }, t("res_more_models", { count: items.length - 1 })) : null);
 	}
 	function partText(metricValue) {
 		if (finite(metricValue?.value) != null) return finite(metricValue.value).toLocaleString();
 		if (finite(metricValue?.observed) != null) return t("res_partial", { count: finite(metricValue.observed).toLocaleString() });
-		return t("res_not_reported");
+		return t("ui_status_unknown");
+	}
+	function partNode(metricValue) {
+		if (finite(metricValue?.value) != null) return finite(metricValue.value).toLocaleString();
+		if (finite(metricValue?.observed) != null) return h("span", {}, finite(metricValue.observed).toLocaleString(), " ", statusPill("partial"));
+		return statusPill("unknown");
 	}
 	function tokenHeadline(row) {
 		const total = row.metrics?.total;
 		if (finite(total?.value) != null) return finite(total.value).toLocaleString();
-		if (finite(total?.observed) != null) return t("res_partial", { count: finite(total.observed).toLocaleString() });
+		if (finite(total?.observed) != null) return h("span", {}, finite(total.observed).toLocaleString(), " ", statusPill("partial"));
 		return EM;
 	}
-	function tokenBreakdown(row) {
+	function tokenBreakdown(row, format = partText) {
 		const metrics = row.metrics || {};
 		return [
-			[t("res_input"), partText(metrics.input)],
-			[t("res_cache_read"), partText(metrics.cache_read)],
-			[t("res_cache_write"), partText(metrics.cache_write)],
-			[t("res_output"), partText(metrics.output)],
-			[t("res_reasoning"), partText(metrics.reasoning)]
+			[t("res_input"), format(metrics.input)],
+			[t("res_cache_read"), format(metrics.cache_read)],
+			[t("res_cache_write"), format(metrics.cache_write)],
+			[t("res_output"), format(metrics.output)],
+			[t("res_reasoning"), format(metrics.reasoning)]
 		];
 	}
 	function tokenTitle(row) {
@@ -14083,10 +14115,10 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function sourceCell(row) {
 		const cli = cliOf(row);
-		return h("div", { class: "pm-agents-source" }, isReadable(row) && cli ? agentMark(cli) : null, h("div", { class: "pm-agents-source-id" }, row.source_id, isReadable(row) && cli ? h("div", { class: "ui-meta" }, cliName(cli)) : null));
+		return h("div", { class: "pm-agents-source" }, isReadable(row) && cli ? agentMark(cli) : null, h("div", { class: "pm-agents-source-id" }, sourceName(row)));
 	}
 	function metaZone() {
-		return isBucketPayload(data?.buckets) && data.buckets.tz || requestZone || "UTC";
+		return shownZone;
 	}
 	function updateMeta() {
 		if (!data) {
@@ -14143,7 +14175,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	function tokenMetric() {
 		const rows = data?.rows || [];
 		const readable = rows.filter(isReadable);
-		const known = readable.map((row) => finite(row.metrics?.total?.value)).filter((value) => value != null);
+		const known = readable.map((row) => finite(row.metrics?.total?.value) ?? finite(row.metrics?.total?.observed)).filter((value) => value != null);
 		const partial = rows.some(needsPartial);
 		if (!known.length) return metric({
 			label: t("res_tokens"),
@@ -14227,9 +14259,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const rows = (pool?.sources || []).map((id) => (data?.rows || []).find((row) => row.source_id === id)).filter(Boolean);
 		const names = [...new Set(rows.filter(isReadable).map((row) => cliClass(cliOf(row)) === cliOf(row) ? cliName(cliOf(row)) : "").filter(Boolean))];
 		if (names.length === 1) return names[0];
-		if (rows.length === 1) return rows[0].source_id;
-		const only = (pool?.sources || []).filter(Boolean);
-		return only.length === 1 ? only[0] : EM;
+		if (rows.length === 1) return sourceName(rows[0]);
+		return (pool?.sources || []).filter(Boolean).length === 1 ? t("res_unnamed") : EM;
 	}
 	function quotaBlock(pool, item) {
 		const used = item ? finite(item.used_percent) : null;
@@ -14274,10 +14305,10 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			"data-resource-row": row.source_id,
 			"data-resource-select": row.source_id,
 			onclick: () => choose(row.source_id)
-		}, h("div", { class: "pm-agents-list-mark" }, readable && cli ? agentMark(cli) : null), h("div", { class: "pm-agents-list-id" }, h("span", { class: "pm-agents-list-name" }, row.source_id), readable && cli ? h("span", { class: "pm-agents-list-cli" }, cliName(cli)) : null), h("div", {
+		}, h("div", { class: "pm-agents-list-mark" }, readable && cli ? agentMark(cli) : null), h("div", { class: "pm-agents-list-id" }, h("span", { class: "pm-agents-list-name" }, sourceName(row))), h("div", {
 			class: "pm-agents-list-tokens tabular",
 			title: readable ? tokenTitle(row) : null
-		}, readable ? tokenHeadline(row) : EM), h("div", { class: "pm-agents-list-meta" }, readable ? `${modelName(row)} · ${roleLabel(row.role)}` : roleLabel(row.role)), h("div", { class: "pm-agents-list-status" }, statusNode(row)));
+		}, readable ? tokenHeadline(row) : EM), h("div", { class: "pm-agents-list-meta" }, readable ? modelName(row) : null), h("div", { class: "pm-agents-list-status" }, statusNode(row)));
 	}
 	function tableFor(visible) {
 		if (!data?.rows?.length) return emptyState({ title: t("res_empty") });
@@ -14344,8 +14375,18 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			]
 		});
 	}
-	function readableKey(rows) {
-		return (rows || []).filter(isReadable).map((row) => `${row.source_id}\u0000${row.status}`).sort().join("\n");
+	function readableFingerprint(rows) {
+		return (rows || []).filter(isReadable).map((row) => JSON.stringify({
+			source_id: row.source_id,
+			status: row.status,
+			observations: row.observations,
+			total: {
+				value: row.metrics.total?.value,
+				observed: row.metrics.total?.observed,
+				covered: row.metrics.total?.covered
+			},
+			last_at: row.last_at
+		})).sort().join("\n");
 	}
 	function filteredBuckets() {
 		if (!isBucketPayload(trendBuckets)) return null;
@@ -14393,14 +14434,50 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		chartTrendKey = key;
 		return chartNode;
 	}
+	function windowKey(window, zone) {
+		const until = Date.parse(window?.until);
+		return JSON.stringify([
+			Date.parse(window?.since),
+			Number.isFinite(until) ? dayKey(new Date(until), zone) : "",
+			zone,
+			period
+		]);
+	}
+	function canReuseTrend(result, zone) {
+		if (!isBucketPayload(trendBuckets) || trendBuckets.tz !== zone || windowKey(result.window, zone) !== trendWindowKey) return false;
+		return readableFingerprint(result.rows) === trendRowKey;
+	}
 	function wantsTrend(now = new Date()) {
 		if (!bucketsSupported || bucketsStopped) return false;
 		if (!trendBuckets) return true;
-		if (readableKey(data?.rows) !== trendSourceKey) return true;
-		const today = dayKey(now, trendBuckets.tz || requestZone);
-		if (trendUntilDay && today > trendUntilDay) return true;
-		if (now.getTime() - trendReadAt >= TREND_TTL) return true;
-		return false;
+		if (readableFingerprint(data?.rows) !== trendRowKey) return true;
+		if (windowKey(periodWindow(now, Number(period), requestZone), requestZone) !== trendWindowKey) return true;
+		return now.getTime() - trendReadAt >= TREND_TTL;
+	}
+	function withdrawSources(result) {
+		if (!data) return;
+		const latest = new Map(result.rows.map((row) => [row.source_id, row]));
+		const withdrawn = new Set(data.rows.filter((row) => isReadable(row) && !isReadable(latest.get(row.source_id))).map((row) => row.source_id));
+		data = {
+			...data,
+			rows: data.rows.flatMap((row) => {
+				const current = latest.get(row.source_id);
+				if (!current) return [];
+				return [withdrawn.has(row.source_id) ? {
+					...current,
+					metrics: null,
+					configurations: [],
+					calls: null,
+					observations: null
+				} : row];
+			}),
+			quota_pools: data.quota_pools.filter((pool) => !pool.sources?.some((id) => withdrawn.has(id)))
+		};
+		if (trendBuckets) trendBuckets = {
+			...trendBuckets,
+			series: trendBuckets.series.filter((item) => !withdrawn.has(item.source_id) && latest.has(item.source_id))
+		};
+		render();
 	}
 	function paint(visible) {
 		const activeEl = document.activeElement;
@@ -14432,7 +14509,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (row && inspectorPanel?.isConnected) {
 			inspectorPanel.dataset.source = row.source_id;
 			const title = inspectorPanel.querySelector("h2");
-			if (title) title.textContent = row.source_id;
+			if (title) title.textContent = sourceName(row);
 			fillInspector(row);
 		} else if (row) renderInspector();
 		else if (inspectorPanel) clearInspector();
@@ -14465,23 +14542,23 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const nodes = [h("div", {}, statusNode(row)), h("p", {}, discussLink({
 			workspaceId,
 			refs: [],
-			title: row.source_id,
+			title: sourceName(row),
 			from: "agents"
 		}, { "data-resource-discuss": "" }))];
 		if (isReadable(row)) {
 			const models = row.configurations || [];
 			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_model_col")));
 			nodes.push(...(models.length ? models : [{}]).map((item) => facts([
-				[t("res_actual"), item.actual_model || t("res_unknown")],
-				[t("res_requested"), item.requested_model || t("res_unknown")],
-				[t("res_effort"), effortLabel(item.effort)],
-				[t("res_version"), item.cli_version || t("res_unknown")]
+				[t("res_actual"), item.actual_model || statusPill("unknown")],
+				[t("res_requested"), item.requested_model || statusPill("unknown")],
+				[t("res_effort"), item.effort ? effortLabel(item.effort) : statusPill("unknown")],
+				[t("res_version"), item.cli_version || statusPill("unknown")]
 			])));
 			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_tokens_col")), facts([
 				[t("res_total"), tokenHeadline(row)],
-				...tokenBreakdown(row),
-				[t("res_calls"), finite(row.calls) == null ? t("res_unknown") : finite(row.calls).toLocaleString()],
-				[t("res_observations"), finite(row.observations) == null ? t("res_unknown") : finite(row.observations).toLocaleString()]
+				...tokenBreakdown(row, partNode),
+				[t("res_calls"), finite(row.calls) == null ? statusPill("unknown") : finite(row.calls).toLocaleString()],
+				[t("res_observations"), finite(row.observations) == null ? statusPill("unknown") : finite(row.observations).toLocaleString()]
 			]));
 		}
 		const reason = reasonBits(row.status);
@@ -14494,7 +14571,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const details = disclosure({
 			label: t("res_details"),
 			key: `agents-coverage:${workspaceId}:${row.source_id}`,
-			body: h("div", { class: "pm-agents-scope" }, isReadable(row) ? h("p", {}, t(row.adapter === "codex-rollout-v1" ? "res_codex_units" : "res_claude_units")) : null, h("p", {}, t("res_adapter"), " ", h("code", { class: "mono" }, row.adapter || t("res_unknown"))), isReadable(row) ? facts([
+			body: h("div", { class: "pm-agents-scope" }, facts([[t("res_source_id"), h("code", { class: "mono" }, row.source_id)], [t("res_role"), roleLabel(row.role)]]), isReadable(row) ? h("p", {}, t(row.adapter === "codex-rollout-v1" ? "res_codex_units" : "res_claude_units")) : null, h("p", {}, t("res_adapter"), " ", h("code", { class: "mono" }, row.adapter || t("res_unknown"))), isReadable(row) ? facts([
 				[t("res_first"), clock(row.first_at) === EM ? t("res_unknown") : clock(row.first_at)],
 				[t("res_last"), clock(row.last_at) === EM ? t("res_unknown") : clock(row.last_at)],
 				[t("res_collected"), clock(row.successful_at) === EM ? t("res_unknown") : clock(row.successful_at)]
@@ -14513,12 +14590,12 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (inspectorPanel?.isConnected) {
 			inspectorPanel.dataset.source = row.source_id;
 			const title = inspectorPanel.querySelector("h2");
-			if (title) title.textContent = row.source_id;
+			if (title) title.textContent = sourceName(row);
 			fillInspector(row);
 			return;
 		}
 		const panel = inspector({
-			title: row.source_id,
+			title: sourceName(row),
 			onClose() {
 				if (closing) return;
 				const id = selected;
@@ -14590,19 +14667,18 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			});
 		}, Math.max(1e4, Number(data?.interval_s || 60) * 1e3));
 	}
-	function rememberTrend(result, until, zoneUsed) {
+	function rememberTrend(result, zoneUsed) {
 		if (!isBucketPayload(result?.buckets)) {
 			trendBuckets = null;
 			trendReadAt = 0;
-			trendSourceKey = "";
-			trendUntilDay = "";
+			trendRowKey = "";
+			trendWindowKey = "";
 			return;
 		}
 		trendBuckets = result.buckets;
 		trendReadAt = Date.now();
-		trendSourceKey = readableKey(result.rows);
-		const untilMs = Date.parse(result.window?.until || until);
-		trendUntilDay = dayKey(new Date(Number.isFinite(untilMs) ? untilMs : Date.now()), result.buckets.tz || zoneUsed);
+		trendRowKey = readableFingerprint(result.rows);
+		trendWindowKey = windowKey(result.window, result.buckets.tz || zoneUsed);
 	}
 	function withdraw({ preserveSelection = false, keepSerial = false } = {}) {
 		if (!keepSerial) serial++;
@@ -14611,8 +14687,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		signature = "";
 		trendBuckets = null;
 		trendReadAt = 0;
-		trendSourceKey = "";
-		trendUntilDay = "";
+		trendRowKey = "";
+		trendWindowKey = "";
 		clearTimeout(timer);
 		dropChart();
 		if (!preserveSelection) selected = null;
@@ -14677,15 +14753,14 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			alive();
 			if (ticket !== serial) return;
 			if (result?.workspace_id !== workspaceId || !Array.isArray(result.rows) || !Array.isArray(result.quota_pools)) throw Error(t("pm_scope_mismatch"));
-			const previousKey = trendSourceKey;
-			if (asked) rememberTrend(result, win.until, zoneUsed);
-			else if (trendBuckets) result = {
-				...result,
-				buckets: trendBuckets
-			};
-			data = result;
-			follow = !asked && bucketsSupported && !bucketsStopped && readableKey(result.rows) !== previousKey;
-			render();
+			follow = !asked && bucketsSupported && !bucketsStopped && !canReuseTrend(result, zoneUsed);
+			if (follow) withdrawSources(result);
+			else {
+				if (asked || bucketsStopped) rememberTrend(result, zoneUsed);
+				data = result;
+				shownZone = zoneUsed;
+				render();
+			}
 		} catch (error) {
 			try {
 				alive();
@@ -16505,11 +16580,15 @@ function workspaceOverview(options) {
 			})) : null
 		});
 		progress.dataset.overviewMetric = "progress";
-		if (complete) progress.append(disclosure({
-			label: t("ov_details"),
-			key: `${namespace}:${workspaceId}:progress`,
-			body: h("ul", {}, ...classes.map((key) => h("li", {}, statusPill(key), ` ${p[key]}`)))
-		}));
+		if (complete) {
+			const counts = disclosure({
+				label: t("ov_details"),
+				key: `${namespace}:${workspaceId}:progress`,
+				body: h("ul", {}, ...classes.map((key) => h("li", {}, statusPill(key), ` ${p[key]}`)))
+			});
+			counts.querySelector("summary").dataset.overviewLink = "status:progress:details";
+			progress.append(counts);
+		}
 		const metrics = ["blocker", "decision"].map((kind) => {
 			const first = data?.attention?.find((row) => row.kind === kind);
 			const node = metric({
@@ -16549,7 +16628,7 @@ function workspaceOverview(options) {
 		const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
 		return ids.map((id) => plan?.document?.requirements?.find((req) => req.id === id)?.text).filter(Boolean).join(" · ") || (ids.length ? t("ov_context_requirement", { n: ids.length }) : c.work_item_id ? t("ov_context_work") : c.milestone_id ? t("ov_context_milestone") : "");
 	}
-	function attention(data) {
+	function attention(data, resetOrder) {
 		if (!attentionList) {
 			attentionList = h("div", {
 				class: "pm-overview-attention",
@@ -16560,7 +16639,8 @@ function workspaceOverview(options) {
 				body: attentionList
 			});
 		}
-		const rows = attentionList, reading = rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover"));
+		const rows = attentionList;
+		const reading = !resetOrder && (rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover")) || attentionSelection());
 		const keys = new Set(data.attention.map((row) => row.key));
 		for (const [key, entry] of attentionNodes) if (!keys.has(key)) {
 			entry.node.remove();
@@ -16622,16 +16702,23 @@ function workspaceOverview(options) {
 		if (data.attention_truncated) rows.append(h("div", { class: "pm-overview-footer" }, t("ov_showing", { n: data.attention.length }), " · ", h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/issues` }, t("ov_view_all"))));
 		return attentionCard;
 	}
+	function emptyField(data, field, complete, sources = []) {
+		if (complete) return h("span", { class: "ui-meta" }, t("ov_no_items"));
+		const unknown = data?.unknown || [];
+		const reason = unknown.find((row) => row.field === field)?.reason || unknown.find((row) => sources.some((key) => row.field === key || row.field.startsWith(key + ".")))?.reason || (data?.visibility?.restricted ? "restricted" : data?.visibility?.filtered ? "filtered" : null) || sources.map((key) => data?.coverage?.sources?.[key]?.status).find(Boolean) || "incomplete_sources";
+		return h("span", { class: "ui-meta" }, statusPill("unknown"), " ", reasonLabel(t, reason));
+	}
 	function sidebar(data) {
 		const milestones = sectionCard({
 			title: t("ov_milestones"),
 			body: h("div", {}, ...data.milestones.map((row) => h("div", {
 				class: "pm-overview-milestone",
 				"data-overview-milestone": row.milestone_id
-			}, h("div", {}, itemLink(row, "milestones"), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
+			}, h("div", {}, itemLink(row, "milestones"), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? emptyField(data, "milestones", data.coverage?.sources?.roadmap?.complete === true, ["roadmap"]) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
 		});
+		const deliveriesComplete = data.recent_deliveries_complete === true && data.coverage?.sources?.attention_references?.complete !== false;
 		const deliveries = sectionCard({
-			title: t(data.recent_deliveries_complete ? "ov_deliveries" : "ov_deliveries_loaded"),
+			title: t(deliveriesComplete ? "ov_deliveries" : "ov_deliveries_loaded"),
 			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
 				class: "pm-overview-delivery",
 				"data-overview-delivery": row.work_item_id
@@ -16641,7 +16728,12 @@ function workspaceOverview(options) {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? h("span", { class: "ui-meta" }, t("ov_no_items")) : null)
+			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
+				"work",
+				"quality",
+				"deliveries",
+				"attention_references"
+			]) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
 	}
@@ -16711,9 +16803,15 @@ function workspaceOverview(options) {
 			sources.querySelector("summary").dataset.overviewLink = `charter:${key}:sources`;
 			const decisions = key === "decisions" && Object.hasOwn(source, "decision_count");
 			const count = source?.decision_count;
+			const complete = decisions ? count === 0 && !source.attention_truncated : Boolean(document) && (Object.hasOwn(source, "plan_complete") ? source.plan_complete : !savedPartial());
 			const card = sectionCard({
 				title: t("wb_" + key),
-				body: h("div", {}, rows.length ? list : decisions && count !== 0 ? null : h("span", { class: "ui-meta" }, t("ov_no_items")), decisions && count === null ? statusPill("unknown") : null, decisions && source.attention_truncated ? statusPill("partial") : null, decisions && count > rows.length ? h("a", {
+				body: h("div", {}, rows.length ? list : decisions && count > 0 ? null : emptyField(source, decisions ? "attention_counts.decision" : "plan", complete, decisions ? [
+					"governance",
+					"plan_candidate",
+					"proposals",
+					"lifecycle_inflight"
+				] : ["plan"]), decisions && rows.length && count === null ? statusPill("unknown") : null, decisions && source.attention_truncated ? statusPill("partial") : null, decisions && count > rows.length ? h("a", {
 					class: "ui-button ghost ui-sm",
 					href: `#/pm/${encodeURIComponent(workspaceId)}/issues`
 				}, t("ov_more", { n: count - rows.length })) : null, sources)
@@ -16886,7 +16984,48 @@ function workspaceOverview(options) {
 		parts.clear();
 		content.replaceChildren(...nodes);
 	}
-	function render() {
+	function attentionSelection() {
+		const selection = document.getSelection();
+		return Boolean(selection && !selection.isCollapsed && attentionList?.contains(selection.anchorNode) && attentionList.contains(selection.focusNode));
+	}
+	function readingAnchor() {
+		if (!active || !attentionList?.isConnected) return null;
+		const rows = [...attentionList.querySelectorAll("[data-overview-row]")];
+		let scroller = attentionList.parentElement;
+		while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll|overlay/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+		scroller ||= document.scrollingElement;
+		if (!scroller) return null;
+		const bounds = scroller === document.scrollingElement ? {
+			top: 0,
+			bottom: innerHeight
+		} : scroller.getBoundingClientRect();
+		const hovered = rows.find((node) => node.matches(":hover"));
+		const selection = attentionSelection() ? document.getSelection() : null;
+		const selected = selection && (rows.find((node) => node.contains(selection.focusNode)) || rows.find((node) => node.contains(selection.anchorNode)));
+		if (!attentionList.contains(document.activeElement) && !hovered && !selection && attentionList.getBoundingClientRect().top >= Math.max(0, bounds.top)) return null;
+		const row = rows.find((node) => node.contains(document.activeElement)) || hovered || selected || rows.find((node) => {
+			const rect = node.getBoundingClientRect();
+			return rect.bottom > Math.max(0, bounds.top) && rect.top < Math.min(innerHeight, bounds.bottom);
+		});
+		return row ? {
+			key: row.dataset.overviewRow,
+			top: row.getBoundingClientRect().top,
+			scroller
+		} : null;
+	}
+	function restoreAnchor(anchor) {
+		const row = anchor && attentionNodes.get(anchor.key)?.node;
+		if (!row?.isConnected || !box.contains(row) || !anchor.scroller.isConnected) return;
+		anchor.scroller.scrollTop += row.getBoundingClientRect().top - anchor.top;
+	}
+	function render(anchor = mode === "live" ? readingAnchor() : null, resetOrder = false) {
+		try {
+			renderContent(resetOrder);
+		} finally {
+			restoreAnchor(anchor);
+		}
+	}
+	function renderContent(resetOrder) {
 		header();
 		savedBar.hidden = mode !== "saved";
 		box.dataset.overviewMode = mode;
@@ -16941,11 +17080,14 @@ function workspaceOverview(options) {
 			...projection,
 			as_of: null
 		}, plan]);
-		if (signature === `live:${next}`) return;
+		if (signature === `live:${next}` && !resetOrder) return;
 		signature = `live:${next}`;
 		const source = {
 			baseline: { document: plan?.document },
 			brief: {},
+			plan_complete: projection.coverage?.sources?.plan?.complete === true,
+			coverage: projection.coverage,
+			unknown: projection.unknown,
 			decision_count: projection.attention_counts.decision,
 			attention_truncated: projection.attention_truncated
 		};
@@ -16956,7 +17098,7 @@ function workspaceOverview(options) {
 		const focused = content.contains(document.activeElement) ? document.activeElement : null;
 		const focusId = focused?.getAttribute("data-overview-link"), focusPart = focused?.closest("[data-overview-part]")?.dataset.overviewPart;
 		if (reader && (relatedSelection ? !projection.attention.some((row) => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
-		const main = attention(projection);
+		const main = attention(projection, resetOrder);
 		commitParts([
 			{
 				key: "status",
@@ -16980,7 +17122,9 @@ function workspaceOverview(options) {
 					projection.milestones,
 					projection.recent_deliveries,
 					projection.milestones_truncated,
-					projection.recent_deliveries_complete
+					projection.recent_deliveries_complete,
+					projection.coverage,
+					projection.unknown
 				],
 				render: () => {
 					const columns = parts.get("columns")?.node;
@@ -17021,11 +17165,12 @@ function workspaceOverview(options) {
 				if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== data.plan.revision_id) throw Error(t("pm_scope_mismatch"));
 				adopted = value.plan;
 			}
+			const anchor = mode === "live" ? readingAnchor() : null;
 			projection = data;
 			plan = adopted;
 			loading = false;
 			status.replaceChildren();
-			render();
+			render(anchor);
 		} catch (error) {
 			try {
 				alive();
@@ -17109,9 +17254,12 @@ function workspaceOverview(options) {
 			if (!value) {
 				preference.scroll = window.scrollY;
 				closeReader();
-			} else if (preference.scroll) requestAnimationFrame(() => {
-				if (active) window.scrollTo(0, preference.scroll);
-			});
+			} else {
+				render(null, true);
+				if (preference.scroll) requestAnimationFrame(() => {
+					if (active) window.scrollTo(0, preference.scroll);
+				});
+			}
 			header();
 		},
 		dispose() {
@@ -23967,9 +24115,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const fallback = tableHost.querySelector(".ui-data-table") || tableHost.querySelector(".reg-list") || tableHost;
 		(row || fallback)?.focus();
 	}
-	function paintInspector(record) {
-		if (!active) return;
-		const row = record.row;
+	function prepareInspector(row) {
 		const title = displayTitle(row) || t("reg_type_" + row.type);
 		if (!sheet || sheet.getAttribute("data-reg-row") !== row.row_id) {
 			closeSheet(true);
@@ -23987,8 +24133,15 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			opening = false;
 			sheet.setAttribute("data-reg-inspector", "");
 			sheet.setAttribute("data-reg-row", row.row_id);
+			sheet.setAttribute("data-reg-loading", "");
+			sheet.body.append(skeleton(3));
 			layout.append(sheet);
 		} else sheet.querySelector("h2").textContent = title;
+	}
+	function paintInspector(record) {
+		if (!active) return;
+		prepareInspector(record.row);
+		sheet.removeAttribute("data-reg-loading");
 		sheet.body.replaceChildren(...detailNodes(record).filter(Boolean));
 	}
 	function openRow(row) {
@@ -24083,7 +24236,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			statusLine.replaceChildren();
 			render();
 			const showSheet = Boolean(sheet) || matchMedia("(min-width: 1200px)").matches;
-			if (preference.inspector && selected && (changed || stale || showSheet && !sheet)) loadDetail(selected, showSheet);
+			if (preference.inspector && selected && (changed || stale || showSheet && (!sheet || sheet.hasAttribute("data-reg-loading")))) loadDetail(selected, showSheet);
 		} catch (error) {
 			try {
 				alive();
@@ -24231,6 +24384,8 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			closeSheet(true);
 			return;
 		}
+		const selectedRow = rows.find((row) => row.row_id === selected);
+		if (preference.inspector && selectedRow && matchMedia("(min-width: 1200px)").matches) prepareInspector(selectedRow);
 		return refresh().then(() => {
 			if (!active || sheet || matchMedia("(min-width: 1200px)").matches) return;
 			const current = document.activeElement;
@@ -29080,6 +29235,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
 	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
 	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+	let failureSignature = "";
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -29201,7 +29357,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		detail.close();
 		preserveSelection = false;
 	}
-	function withdraw({ forgetRoute = true } = {}) {
+	function withdraw({ forgetRoute = true, keepStatus = false } = {}) {
 		++serial;
 		++detailSerial;
 		reading = false;
@@ -29212,6 +29368,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		plan = null;
 		earlierPlans.clear();
 		milestones = [];
+		if (!keepStatus) {
+			failureSignature = "";
+			status.replaceChildren();
+		}
 		if (forgetRoute) writeSelection(null);
 		closeRetaining();
 		list.replaceChildren();
@@ -29219,6 +29379,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		boardInfo.replaceChildren();
 		more.hidden = true;
 		more.disabled = false;
+		refreshButton.disabled = false;
 		element.removeAttribute("aria-busy");
 		list.hidden = true;
 		content.querySelector(".ui-empty")?.remove();
@@ -29230,14 +29391,19 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	}
 	function unavailable(error) {
 		errorBox?.(error);
-		withdraw();
-		status.replaceChildren(h$1("p", { class: "error" }, error.message === t("pm_kanban_scope_error") ? error.message : t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_board_unavailable")), ...error.code ? [disclosure({
+		withdraw({ keepStatus: true });
+		const message = error.message === t("pm_kanban_scope_error") ? error.message : t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_board_unavailable");
+		const signature = JSON.stringify([message, labelSegment(error.code)]);
+		if (signature === failureSignature) return;
+		failureSignature = signature;
+		status.replaceChildren(h$1("p", { class: "error" }, message), ...error.code ? [disclosure({
 			label: t("wv_details"),
 			body: h$1("p", {}, labelSegment(error.code))
 		})] : [], h$1("button", {
 			type: "button",
 			class: "ui-button secondary",
 			onclick: () => {
+				if (reading) return;
 				pages = 1;
 				refresh();
 			}
@@ -29468,6 +29634,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		renderColumns();
 		renderMetrics();
 		list.hidden = !rows.size;
+		failureSignature = "";
 		status.replaceChildren(...!rows.size ? [emptyState({ title: t("pm_kanban_empty") })] : []);
 		if (selected && !rows.has(selected)) {
 			selected = null;
@@ -29592,7 +29759,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		reading = true;
 		refreshButton.disabled = true;
 		more.disabled = true;
-		if (!rows.size) status.replaceChildren(note("pm_kanban_loading"));
+		if (!rows.size && !failureSignature) status.replaceChildren(note("pm_kanban_loading"));
 		element.setAttribute("aria-busy", "true");
 		try {
 			const combined = new Map();
@@ -39159,7 +39326,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			]) {
 				const lazy = lazyThreadSections.get(section);
 				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden)) {
-					await section.refresh();
+					const activation = !initialReadComplete && activationReads.get(section);
+					activationReads.delete(section);
+					await (activation || section.refresh());
 					if (sectionRequired(section)) revealSource(section);
 				}
 				alive();

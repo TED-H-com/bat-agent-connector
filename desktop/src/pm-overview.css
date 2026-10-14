@@ -1,4 +1,5 @@
-.pm-overview { display: grid; gap: var(--space-4); min-width: 0; }
+/* Overview compensates its reading anchor explicitly, including in WebKit. */
+.pm-overview { display: grid; gap: var(--space-4); min-width: 0; overflow-anchor: none; }
 .pm-overview > div:empty { display: none; }
 .pm-overview [hidden] { display: none !important; }
 .pm-overview-status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
