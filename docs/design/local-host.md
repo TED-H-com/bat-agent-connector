@@ -18,18 +18,25 @@ require an SSH alias even when the central and BAT share a filesystem.
 Add an explicit per-host Git transport, initially for a verified POSIX execution
 environment, and a separate local connection quick start. Never select local Git
 because an endpoint is loopback: a tunnel, container or VM can present the same
-address. The user must assert that BAT runs on the central's computer and uses
-the same filesystem namespace. The shared quick start can combine that assertion
-with its single certificate trust decision.
+address. Before selecting `git = "local"`, the user must explicitly assert that
+BAT runs on the central's computer and uses the same filesystem namespace. The
+Connection URL's host proves neither: it can be loopback through a tunnel or a
+LAN address with `bind=all`. A connection alone makes no local Git declaration.
 
-The first increment is connection-only: one screen, one certificate decision,
-and the existing guided-setup token paste field on browser and desktop, including
-Linux and Windows. The token stays in page memory until `stage_secret`, then the
-field is cleared; this deliberately retains today's remote-setup exposure.
+The first increment is connection-only: one screen and one dedicated masked
+field for **BAT's Connection URL**, copied from its trusted settings or headless
+output. This supplies endpoint, token and an out-of-band certificate pin for
+local and remote BAT alike; **this path is not TOFU** and needs no decision to
+trust a discovered certificate. Parse the URL immediately, fill only the bare
+`wss://host:port` endpoint and fingerprint, move the token into the existing
+token field, and clear the Connection URL field at once. The token stays in page
+memory until `stage_secret`, then its field is cleared; this deliberately retains
+today's remote-setup exposure on browser and desktop, including Linux and Windows.
 Native enrollment is later hardening for all setup flows, not a local prerequisite.
 An optional version-pinned plaintext server-token reader is described below; it
 is not the default. Do not remove the local-profile filter
 and assume remote fields or remote-client credentials describe a local server.
+TLS discovery and its TOFU decision are optional later aids, not staged PR 1.
 Windows local Git remains explicitly unavailable until there is a separate
 reviewed implementation. Connecting and observing BAT need no Git runner.
 
@@ -229,10 +236,11 @@ macOS encryption-key entry
 
 #### 4. Supported reading/export and its protection
 
-The established user exports are the UI's Copy button and the headless startup
-banner. BAT-internal `tunnel_get_connection` returns the token to its renderer;
+The established user exports are the UI's token/Connection URL Copy buttons and
+the headless startup banner. The Connection URL carries endpoint, token and pin
+in one paste; BAT-internal `tunnel_get_connection` returns the token to its renderer;
 an unauthenticated external token-export API is **not established at v3.2.15**
-(`BAT v3.2.15 renderer/src/components/SettingsPanel.tsx:1333–1339`;
+(`BAT v3.2.15 renderer/src/components/SettingsPanel.tsx:1321–1339`;
 `BAT v3.2.15 src-tauri/src/commands/tunnel.rs:17–33`;
 `BAT v3.2.15 src-tauri/src/lib.rs:602–613`). A documented operator-selected
 `--token-file` / `BAT_TOKEN_FILE` is plain UTF-8, trimmed and required nonempty.
@@ -280,9 +288,35 @@ and TOFU hint use English fallback strings in this panel; their keys are absent
 from both locale files at this tag. New Connector instructions must supply both
 languages rather than imply BAT already localizes these two labels.
 
-#### 6. Exact token-copy procedure
+#### 6. Connection URL grammar and exact copy procedures
 
-After enabling the listener, copy the **token field**, not the Connection URL:
+The primary copy route supplies all three connection values:
+
+- English: **Settings → Remote → Remote Access → Connection URL → Copy**.
+- zh-TW: **設定 → 遠端 → 遠端存取 → 連線網址 → 複製**.
+
+The locale key is `settings.connectionUrl`; `connectionUrlHint` describes
+auto-filling host, port, token and fingerprint
+(`BAT v3.2.15 renderer/src/locales/en.json:10,49,52,187,193–194`;
+`BAT v3.2.15 renderer/src/locales/zh-TW.json:10,49,52,187,193–194`). The panel
+shows/copies that URL (`BAT v3.2.15 renderer/src/components/SettingsPanel.tsx:1321–1330`).
+Headless prints the equivalent URL on its startup **`connect:`** line
+(`BAT v3.2.15 src-tauri/src/lib.rs:609–613,687–700`).
+
+BAT's builder produces `wss://host:port?token=<hex>&fp=<sha256>` with query
+values encoded by `URLSearchParams`. Its parser trims the input, accepts
+`wss://`, `ws://` and scheme-less input, defaults a missing port to 9876,
+decodes `token` and `fp`, and requires host, token, fingerprint and a finite
+port (`BAT v3.2.15 renderer/src/utils/connection-url.ts:16–49`). Those parser
+checks are not full Connector validation of token, port or SHA-256 shape.
+BAT's own remote profile create/edit forms parse a paste, fill these fields and
+immediately clear the pasted URL
+(`BAT v3.2.15 renderer/src/components/ProfilePanel.tsx:455–465,689–699`). A pin
+copied from BAT's trusted screen/output is supplied **out of band**, rather than
+trusting a certificate observed on the network. “One-shot” describes one-paste
+auto-fill here; the builder establishes no expiring or single-use bearer.
+
+For the existing manual-token fallback, copy the token field separately:
 
 - English: **Settings → Remote → Remote Access → Connection Token → Copy**.
 - zh-TW: **設定 → 遠端 → 遠端存取 → 連線 Token → 複製**. `連線 Token` is BAT's
@@ -353,7 +387,7 @@ never retry guessed tokens or keep unauthenticated probes parked.
 
 #### Remaining unknowns
 
-- A stable external discovery/export contract, dedicated actual-endpoint file
+- A stable cross-process discovery/token-read API, dedicated actual-endpoint file
   and distinct authenticated installation/incarnation ID are **not established
   at v3.2.15**. Source-supported formats are not a promise across releases.
 - Exact installed Tauri path expansion, packaged/headless availability and
@@ -364,118 +398,147 @@ never retry guessed tokens or keep unauthenticated probes parked.
   regeneration interface are **not established at v3.2.15**. This investigation
   establishes no behavior for newer pre-releases.
 
-## Discovery and one-screen quick start
+## Connection quick start and optional discovery
 
-### Authority and bounds
+### Authority and primary path
+
+Python central remains the setup/authentication/publication authority. The shared
+page uses the existing guided setup owned by **fr1** (`managed-setup.js`) and
+fixed `stage_secret` request to the verified owned central. The Connection URL
+path works for local and remote BAT; it performs no loopback discovery and makes
+no same-computer assumption. Native code performs no Git, scheduling or
+reconciliation; any later OS credential access belongs there. No general
+filesystem, URL-fetch or shell IPC is introduced.
 
 “This computer” means **the Python central's computer**, not the browser's.
-Enable this quick start only for a verified owned managed-local installation.
+Selecting `git = "local"` later requires the explicit **BAT and this service run
+on this computer / BAT 與中央服務都在這台電腦執行** assertion and the same filesystem
+namespace. A pasted LAN address, loopback endpoint or certificate cannot supply
+that assertion. The connection-only flow does not select local Git, enable
+writes/orchestration or require an SSH alias.
+
+### Screen and fallback
+
+Use one shared connection screen on browser and desktop, including Linux and
+Windows, with one dedicated password-type **BAT connection URL / BAT 連線網址**
+field and **Connect / 連線** action. The main path is one paste from BAT's trusted
+screen/output; it applies to local and remote servers alike. No separate native
+enrollment wizard or discovered-certificate trust dialog is required. Technical
+evidence belongs in Details; the parsed endpoint and fingerprint are nonsecret.
+The stable logical host ID is allocated once by central with collision checking;
+a localized display name does not become its identifier.
+
+1. Copy **Settings → Remote → Remote Access → Connection URL → Copy** /
+   **設定 → 遠端 → 遠端存取 → 連線網址 → 複製** in BAT. If stopped, use
+   **Start Server / 啟動伺服器** there. For headless, copy the value after
+   **`connect:`** in the running server's startup banner. BAT facts 1 and 6
+   above establish the labels, grammar and output.
+2. Paste only into the dedicated masked field. Parse locally with BAT's grammar:
+   trim/normalize the input, decode its `token` and `fp`, and extract host/port.
+   Produce only a **bare `wss://host:port`** endpoint, including correct literal
+   IPv6 bracketing, and fill the fingerprint. Move the token into the existing
+   token password field and **clear the Connection URL field at once**. Keep no
+   raw URL/query in component state beyond this immediate parse. BAT's grammar
+   accepts `ws://` spelling, but Connector still constructs/validates a `wss://`
+   endpoint; no plaintext BAT authentication is introduced. Invalid input is
+   cleared too and gets a localized error without echoing the input. Parsed
+   values still require existing central port, fingerprint, token and URL
+   validation; never send the original URL/query to central as the endpoint.
+3. Submit **Connect / 連線**. The fingerprint copied from BAT's trusted surface
+   is an **out-of-band pin, not TOFU**; no additional trust decision is needed.
+   Call existing `stage_secret`, then clear the token field after staging and
+   keep only its `secret_ref`. Central compares the peer certificate to the
+   supplied pin **before** sending BAT auth; changed pins fail without auth
+   or silent replacement.
+4. Central uses the existing observation probe to verify the exact server
+   profile/workspaces, atomically publishes setup and returns its durable result.
+   Show **Connected / 已連線** only with that central evidence. This does not
+   create a workspace or prove managed Git ready. If the server/profile choice
+   remains ambiguous, use existing advanced setup, preserving the same pin and
+   staged reference rather than silently selecting unrelated resources.
+
+The secret-bearing Connection URL may be pasted **only into this dedicated
+masked field, which splits it immediately**. Never paste it into a visible
+field, endpoint field, chat, issue or browser URL/address bar. Never put the URL
+or its query in drafts, storage, logs, errors, diagnostics, events, operation
+bodies or links. A Connection URL from an untrusted message is not an
+out-of-band trust source; instructions direct the person to BAT's own screen
+or operator-controlled output. Do not read the clipboard automatically.
+
+The existing manual-token route remains an honest fallback: use the separately
+copied fingerprint/endpoint and **Connection Token / 連線 Token** value from
+BAT, or the operator's already configured private `--token-file` /
+`BAT_TOKEN_FILE`. Connector's own token label remains **BAT connection token /
+BAT 連線權杖**. Never decrypt an unknown file, extract a private key or create a
+replacement token as a setup workaround. Missing/stopped server instructions
+point to BAT's **Start Server / 啟動伺服器**; source inspection alone does not
+establish that a particular installed server is stopped.
+
+This deliberately keeps today's staged-token exposure
+(`desktop/src/managed-setup.js:202–206`). The raw paste is briefly in page memory
+while split, then only the token field remains until staging.
+`managed_setup.py:200–252` registers redaction, privately stores the secret and
+returns an opaque reference. Clear both secret fields on cancellation/teardown;
+never save secret bytes in drafts, localStorage, URLs, command arguments,
+diagnostics, events or operation bodies. Password masking is not protection from
+scripts or extensions. Preserve only nonsecret drafts and accepted references
+after a failure; recovery retains the original operation key/reference.
+
+### Optional later TLS discovery and TOFU
+
+TLS discovery is **not a prerequisite or part of staged PR 1**. A later aid may
+help when the person cannot open BAT's settings for a copy, or distinguish a
+**known stopped BAT server** from **Nothing found / 未找到服務** when independent
+trusted BAT status establishes the former. A failed TLS probe alone establishes
+only that no candidate responded; it must not claim BAT is absent or stopped.
+For a known stopped server, show **BAT server not started / BAT 伺服器尚未啟動**
+and the **Start Server / 啟動伺服器** instruction. A no-copy route still needs a
+reviewed credential source and independently verified server/profile; it must
+not guess a token or make the existing file reader the default.
+
+Enable local discovery only for a verified owned managed-local installation.
 An external-central client must not probe its own loopback and then configure
 the remote central to execute Git against that address. A standalone operator
 may explicitly configure local transport on the central machine.
 
-Central performs discovery and validates candidates. The shared page reuses
-guided setup's password field and fixed `stage_secret` request to the verified
-owned central. Native code performs no Git, scheduling or reconciliation; any
-later OS credential access belongs there. No general filesystem, URL-fetch or
-shell IPC is introduced.
-
 At v3.2.15 the **actual running endpoint is not established by a supported
 external file/API**. Desktop `settings.json` supplies only requested settings;
-local profiles supply neither. Start with the verified default as a bounded
-candidate: a TLS-only probe of literal **127.0.0.1:9876**, no DNS, proxy,
-redirects, port-range scan, LAN discovery or bearer. BAT v3.2.15's `localhost`
-bind is IPv4, so do not imply `[::1]:9876` is its default. A future reviewed
-version may add literal IPv6 candidates. Proposed budgets: one active socket,
-three seconds per probe, ten seconds for the complete discovery attempt, bounded
-certificate/response sizes and cancellation cleanup. Do not call an arbitrary
-TLS listener “BAT found”; say a local encrypted service was found until pinned
-authentication and read-only BAT verification succeed.
+local profiles supply neither. The optional aid starts with a TLS-only probe
+of literal **127.0.0.1:9876**, no DNS, proxy, redirects, port-range scan, LAN
+discovery or bearer. BAT v3.2.15's `localhost` bind is IPv4, so do not imply
+`[::1]:9876` is its default. A future reviewed version may add literal IPv6
+candidates. Keep the proposed budgets: one active socket, three seconds per
+probe, ten seconds for the whole attempt, bounded certificate/response sizes
+and cancellation cleanup. Call an arbitrary TLS listener a local encrypted
+service until pinned authentication and BAT observation succeed.
 
 A later version-pinned settings adapter may supply a nondefault requested
 desktop port; it still must probe for liveness. Validate a bounded, no-follow
 file from an explicitly supported data directory, with a reviewed version and
-schema, and resolve only literal loopback addresses for this quick start.
-Settings are a hint, not execution ownership or automatic trust. Do not scrape
-logs, connect URLs or opaque server state, or reuse remote-profile fields for
-`type: local`. The first increment uses advanced setup for nondefault ports.
+schema, and resolve only literal loopback addresses for this aid. Settings are
+a hint, not execution ownership or automatic trust. Do not scrape logs, connect
+URLs or opaque server state, or reuse remote-profile fields for `type: local`.
+The primary Connection URL path already supplies nondefault ports; it does not
+need metadata discovery or restrict the supplied endpoint to loopback.
 
 A TLS handshake exposes the peer certificate in DER; central computes its
 SHA-256 without sending a token, using the same digest as `client.py:72`.
-First acceptance is **trust on first use (TOFU)**: the observed certificate is
-not authenticated by that observation. A hostile local listener/tunnel can
-win discovery. Show the fingerprint and one brief trust statement, with how to
-compare it beside the token in BAT's Remote Access panel, or with headless
-`fingerprint:` output. Persist the exact accepted pin; reconnect performs the
-existing strict comparison. No silent repinning.
+**If the pin comes only from that probe, first acceptance is trust on first
+use (TOFU)**. Observation does not authenticate it; a hostile local listener
+or tunnel can win discovery. Show the fingerprint and **Trust this certificate?
+/ 信任這張憑證？**, with at most one **Trust and connect / 信任並連線** decision.
+Offer comparison with BAT's own fingerprint/output when available. A previously
+supplied out-of-band pin must be compared, never replaced by the probe result.
+Persist the exact accepted pin and retain strict reconnect comparison; no silent
+repinning. This optional TOFU risk does **not** apply to the primary URL copied
+from BAT's trusted surface.
 
-Candidate metadata is short-lived and bound to the installation, principal,
-configuration revision, literal endpoint and fingerprint. Changing identity,
-endpoint, discovery generation or trust invalidates an unsubmitted candidate.
-After acceptance, freeze these values in the operation envelope. If the
-certificate changes before authentication, fail before sending the token.
-
-### Screen and fallback
-
-Use one shared **Local BAT / 本機 BAT** screen built on the guided setup owned
-by **fr1** (`managed-setup.js`). Connection/trust details and the existing token
-password field share that screen and one primary action; no separate enrollment
-wizard or native prerequisite. This works for Linux browser and desktop as well
-as macOS/Windows clients of an eligible owned local central. The normal path has
-no host-ID, URL, fingerprint-edit, profile-ID or SSH form.
-The displayed fingerprint is observed data, not user input. Technical evidence
-and capabilities belong in Details, with the trust notice visible beside the
-action. The stable logical host ID is allocated once by central with collision
-checking; a localized display name does not become its identifier.
-
-1. Open **Local BAT / 本機 BAT**. The screen states **BAT and this service run
-   on this computer / BAT 與中央服務都在這台電腦執行**. It discovers a candidate
-   without sending any credential. Opening the screen does not save local mode.
-2. With one unambiguous candidate, show the endpoint and fingerprint plus
-   **Trust this certificate? / 信任這張憑證？**. **Trust and connect / 信任並連線**
-   will confirm the exact pin and the visible same-computer assertion in one
-   submission after token entry. For an already explicitly configured matching
-   pin, use **Connect / 連線**, with no repeat trust decision.
-3. On that screen, paste into the existing **BAT connection token /
-   BAT 連線權杖** password field. Data entry adds no decision or confirmation
-   dialog. On the single Trust and connect submission, record the exact trust
-   decision, call existing `stage_secret`, then clear the field after staging.
-   Keep only the returned `secret_ref` for setup/recovery. Discovery sends no
-   token; central's BAT connection still verifies the accepted pin before auth.
-4. Central runs the existing read-only host probe, verifies the exact server
-   profile/workspaces, atomically publishes setup and returns its durable result.
-   Show **Connected / 已連線** only with that central evidence. This does not
-   enable writes/orchestration, create a workspace or prove managed Git ready.
-
-The default token instruction gives the verified v3.2.15 navigation:
-**Settings → Remote → Remote Access → Connection Token → Copy** /
-**設定 → 遠端 → 遠端存取 → 連線 Token → 複製**. If stopped, use
-**Start Server / 啟動伺服器** there; auto-start is optional and is not another
-Connector decision. For headless, copy the running server's startup `token:`
-value or read the operator's already configured private `--token-file` /
-`BAT_TOKEN_FILE`, and compare `fingerprint:`. These procedures and labels are
-source-cited in BAT facts 1, 5 and 6 above; installed behavior still needs
-acceptance. Never paste the secret-bearing Connection URL, decrypt an unknown
-file, extract a private key or create a replacement token.
-
-If discovering one endpoint, identifying its server profile or obtaining a token
-would require another ambiguous choice, stop the quick start honestly:
-**Local BAT needs setup / 本機 BAT 需要設定**, with a link to the existing advanced
-connection flow. No running listener gets **BAT not found / 未找到 BAT** plus the
-verified enable-listener instructions. Nondefault ports without metadata use
-advanced setup in the first increment. This keeps the simple path to at most
-one trust decision rather than auto-selecting among unrelated servers.
-
-The first increment **does expose the pasted token to page memory**, as existing
-remote guided setup does (`desktop/src/managed-setup.js:202–206`). It uses only
-the established authenticated POST to staging; `managed_setup.py:200–252`
-registers redaction, privately stores the secret and returns an opaque reference.
-Clear the field after staging and on cancellation/teardown, never save token
-bytes in drafts, localStorage, URLs, command arguments, diagnostics, events or
-operation bodies. Do not claim password masking protects against script access
-or extensions. Preserve only nonsecret drafts and accepted references after a
-failure; retry/recovery retains the original key/reference. This is the explicit
-first-increment tradeoff, not a claim that secrets never reach the page.
+Candidate metadata remains short-lived and bound to installation, principal,
+configuration revision, literal endpoint and fingerprint. Identity/endpoint/
+generation/trust changes invalidate an unsubmitted candidate. Freeze accepted
+values in the operation envelope. Certificate change before authentication
+fails before token transmission. Ambiguous candidates or unsupported ports use
+advanced setup; absence of a probe result is not proof of a stopped BAT server.
 
 An **optional later version-pinned reader** can read only a verified BAT
 v3.2.15 `server-token.enc.json` with `enc: false`, bounded JSON-string `data`
@@ -493,7 +556,7 @@ Automatic OS-protected access and native paste/enrollment are **later hardening
 for remote and local setup alike**. Native owns any such credential access and
 its fixed staging handoff; Python remains the configuration/auth/recovery
 authority. Honor Keychain/DPAPI denial and keep OS prompts out of the minimal
-one-decision path. No new Linux vault persistence, generic native file reader
+primary connection path. No new Linux vault persistence, generic native file reader
 or automatic token import is assumed. Native enrollment is not required to ship
 the first local connection screen.
 
@@ -694,12 +757,13 @@ Proposed fields for the local route:
   existing clients/hosts. The connection-only increment does not change Git
   configuration or enable a runner.
 - `params.local_confirmation`: exactly `true` for a new local declaration,
-  representing the visible BAT/central/same-filesystem assertion, including the
-  connection-only route. It is not
-  inferred from discovery. Bind it to the original installation in admission;
-  persist the transport and confirmation provenance with the setup receipt.
-- `params.discovery_id`: optional opaque candidate ID, validated against the
-  installation/principal/config revision and exact supplied `url`, `fingerprint`
+  representing the visible BAT/central/same-filesystem assertion for
+  `git = "local"`. Connection-only URL paste does not require or set local Git
+  confirmation; the URL host, imported pin and discovery never supply it.
+  Bind it to the original installation in admission; persist the transport and
+  confirmation provenance with the setup receipt.
+- `params.discovery_id`: opaque candidate ID for the optional later aid,
+  validated against installation/principal/config revision and supplied `url`, `fingerprint`
   and verified `profile_id`. An expired candidate blocks a new admission, not
   readback/replay of an already accepted operation.
 - Existing `secret_ref` carries the existing staged credential reference; the
@@ -708,8 +772,8 @@ Proposed fields for the local route:
   Manual advanced setup can still provide the reviewed nonsecret fields without
   discovery. Do not offer `import_profile_id` for unsupported local metadata.
 
-Reject unknown params, the local discovery route or local Git mode without
-confirmation, discovery against an unverified/external central, malformed
+Reject unknown params, local Git mode without confirmation, optional local
+discovery against an unverified/external central, malformed
 pins/URLs, nonboolean flags and invalid reference bindings.
 For local mode, do not require or probe a Git SSH alias. Enforce real managed
 roots and existing writes/orchestrate tiers only when explicitly configuring
@@ -763,15 +827,16 @@ local, and old operation payloads/keys are not rewritten.
 
 | Risk introduced or exposed by local support | Mitigation / honest limit |
 | --- | --- |
-| A tunnel/container/VM looks local | Explicit same-computer/same-filesystem assertion, verified owned central, frozen transport binding and BAT root/SHA checks; mismatch refuses start. These checks do not prove OS namespace identity from a path string alone. |
+| A tunnel/container/VM or URL host looks local | Explicit same-computer/same-filesystem assertion before local Git, verified owned central, frozen transport binding and BAT root/SHA checks; mismatch refuses start. A Connection URL can carry a LAN address with bind=all and grants no local-mode/ownership evidence. These checks do not prove OS namespace identity from a path string alone. |
 | Same-user local scripts have access to personal files | All existing policy/gates remain; harden source and destination helpers and reject unproven paths/config programs. Local subprocess transport is not an OS sandbox. Preserve prompt-gated/options-confirmed limitations and do not advertise full agent isolation without independent acceptance. |
 | Self-attested protected-root/account proof | `run_account_check` remains on the trusted auditor SSH channel. Unsupported local auditor means unknown; never synthesize verified evidence. |
-| Malicious local listener wins TOFU | No BAT auth before explicit trust; identify the notice as TOFU, offer BAT-side comparison, verify authenticated protocol/profile, retain the exact pin and refuse certificate change. First-use impersonation cannot be eliminated by loopback alone. |
-| Multiple/nondefault listeners or stale metadata | Bounded candidate set, no arbitrary probing and no auto-selection when ambiguous. Advanced setup is the honest fallback; discovery has generation/revision checks. |
-| Unsupported/encrypted server-token format | Default to the one existing paste field with verified UI/headless instructions. Optional plaintext reader is version-pinned, explicit and strict; `.enc.json` does not prove encryption. Honor OS denial, never decrypt guessed envelopes or weaken ACLs. Native enrollment hardens all setup later. |
+| Malicious local listener wins optional TOFU | The primary URL copied from BAT's trusted screen/output supplies an out-of-band pin and removes this TOFU risk. Only later discovery with no supplied pin needs explicit TOFU trust, BAT-side comparison and authentication/profile checks; no BAT auth before that trust, no silent repin. Loopback alone cannot eliminate first-use impersonation. |
+| Secret-bearing paste leaks or comes from an untrusted source | Copy only from BAT's trusted screen/operator output; accept only in the dedicated password-type field. Split immediately into bare endpoint, pin and existing token field, clear the URL at once even on errors, and never echo/store/log the raw URL/query or use it as an endpoint/link. Masking does not authenticate a substituted clipboard value; never auto-read the clipboard or treat a chat/issue URL as a trusted source. |
+| Multiple/nondefault listeners or stale metadata | Primary URL supplies an explicit endpoint/port and pin, avoiding ambiguous listener discovery. Later aids have bounded candidates and generation/revision checks, no arbitrary probing or auto-selection. Advanced setup remains the honest fallback for ambiguous profiles/resources. |
+| Unsupported/encrypted server-token format | Default to Connection URL paste with verified UI/headless instructions and existing staged token field. Optional plaintext reader is version-pinned, explicit and strict; `.enc.json` does not prove encryption. Honor OS denial, never decrypt guessed envelopes or weaken ACLs. Native enrollment hardens all setup later. |
 | Token visible to page scripts/extensions during paste | Explicitly accept today's guided remote-setup exposure for the first increment. Use the existing password field only until staging; clear after staging/cancel/teardown, preserve no secret drafts or localStorage, and redact diagnostics. Password masking is not isolation. Later native enrollment removes page exposure for remote and local together. |
-| Wrong server, shared/copied certificate or stale token | Explicit trust before BAT auth, exact accepted endpoint/pin/profile and reference/principal bindings. BAT's fingerprint is not an incarnation ID and plaintext storage is not evidence of the running token. Verify authenticated version/profile; a failed token is not retried against another candidate. |
-| Credential fallback/persistence failure silently changes identity | BAT may use plaintext and ignores token/cert persistence errors. Optional readers enforce owner/private-file protections themselves. Reconnect pin checks remain strict; changed pin requires a fresh visible trust decision, failed auth directs the user to current BAT output. Never rotate/delete BAT state or clear Connector locks as repair. |
+| Wrong server, shared/copied certificate or stale token | Primary URL uses its out-of-band pin before BAT auth; optional TOFU requires explicit trust. Preserve exact accepted endpoint/pin/profile and reference/principal bindings. BAT's fingerprint is not an incarnation ID and plaintext storage is not evidence of the running token. Verify authenticated version/profile; a failed token is not retried against another candidate. |
+| Credential fallback/persistence failure silently changes identity | BAT may use plaintext and ignores token/cert persistence errors. Optional readers enforce owner/private-file protections themselves. Reconnect pin checks remain strict; changed pin requires a fresh pin copied from trusted BAT output or an explicit optional TOFU decision, failed auth directs the user to current BAT output. Never rotate/delete BAT state or clear Connector locks as repair. |
 | Discovery consumes server connection slots | One short-lived TLS probe, bounded time/certificate size, prompt socket cleanup and no polling/guessed-token retries; BAT's 64-slot limit includes unauthenticated connections. Do not rely on an unestablished rate/lockout policy. |
 | Symlink/hard-link/temp replacement or inherited Git programs | No-follow/inode/creation checks, fixed operation paths, reject unrelated existing temp resources, isolate read config/environment, disable hooks/filters/fsmonitor/lazy fetch as applicable. Treat incomplete hardening as a release blocker for local mutation. |
 | Login startup files/PATH resolve uncontrolled executables | Non-login shell, validated helper closure and controlled environment; no page-provided PATH/argv. Preserve reviewed Git credential handling only for explicitly authorized network operations. |
@@ -793,7 +858,8 @@ remain intact; add assertions rather than replacing safety checks.
 | Area | Required regression/acceptance cases |
 | --- | --- |
 | Config/dispatch | Default SSH on old/missing settings; strict enum/boolean validation; loopback/tunnel without opt-in remains unavailable; unknown host; local never falls back to SSH; aliases preserved for other services; one composite across startup/reactivation/both fleets. Use `tests/test_mcp_and_config.py`, `tests/test_managed_setup.py` and new runner tests. |
-| Discovery/trust | Loopback-only bounded probe of the v3.2.15 IPv4 default, disabled/no listener/busy/nondefault port, no assumed IPv6 listener, malformed/non-BAT TLS, ambiguous candidates, timeout/size/cancellation and slot release, stale candidate/config/principal, no secret-file read or BAT auth before acceptance, certificate change before auth and no silent repin. Pasted data may be in the field before submission. Extend `tests/test_client.py` and managed setup; add synthetic TLS discovery fixtures. |
+| Connection URL/pin | BAT grammar, percent-encoded query values, default/nondefault ports, bare wss endpoint construction, LAN/loopback/IPv6 host handling, invalid/missing fields and existing central validation. Immediate URL-field clearing, no raw URL/query in endpoint/drafts/storage/logs/errors/diagnostics/operation bodies, token moved only to existing field and later staged/cleared; parser failure never echoes the paste. Imported pin mismatch causes zero BAT auth and no TOFU prompt/repin. URL host never sets local Git or confirmation. Extend managed-setup Playwright/Node and `tests/test_managed_setup.py`/`tests/test_client.py` mocks. |
+| Optional later discovery/trust | Loopback-only bounded probe of the v3.2.15 IPv4 default, disabled/no listener/busy/nondefault port, no assumed IPv6 listener, malformed/non-BAT TLS, ambiguous candidates, timeout/size/cancellation and slot release, stale candidate/config/principal, no secret-file read or BAT auth before TOFU acceptance, certificate change before auth and no silent repin. Never claim stopped BAT from probe failure alone; independent stopped-status evidence gets Start Server instructions. Keep separately supplied pins intact. Extend `tests/test_client.py` and managed setup; add synthetic TLS discovery fixtures in that later PR. |
 | Credentials | Reuse existing stage request, bounded password input, field clear after staging/cancel/teardown, no token draft/localStorage/log/journal/URLs/argv/operation state; distinguish transient page/staging-request exposure from forbidden persistence. Supported plaintext profile fixture stays reference-only. Later optional reader: exact v3.2.15 server envelope versus client map, encrypted/missing/damaged/oversized/linked files, broad modes/owner mismatch, stale persisted token and missing platform root. Later native adapter: injected vault/OS denial and no secret-bearing page IPC. No real OS credential reads. |
 | Setup/recovery | Manage/installation owner, config revision CAS and busy gate, new params, tier defaults, new host identity for mode changes; lost publication receipt/restart with original key/reference; after digest causes zero repeat probe/enrollment; accepted secret/candidate expiry does not rewrite intent; different payload with same key refuses. Keep `tests/test_managed_setup.py:193,216,240`. |
 | Manual source | Snapshot files/index bytes+mtime/config/HEAD/refs/worktree registrations before/after dirty source reads and continuation. No BAT write frame on capture. Unsafe filters/fsmonitor/hooks/submodules/lazy-fetch/program environment refuse without execution; source remains unchanged. Keep `tests/test_checkpoints.py:67–73,186,307,317,538,587`. |
@@ -803,7 +869,7 @@ remain intact; add assertions rather than replacing safety checks.
 | Cleanup/locks | Production local locked/proceed exchange; denial/EOF/cancel before proceed produces zero mutations; timeout after proceed retains partial/uncertain receipt; surviving child/restart/concurrent helpers cannot bypass lock; manual/unknown/writer/live-consumer/sole-content/retention gates and exact deletion targets. Keep cleanup uncertainty/effects/protocol/host tests and original write-count assertions. |
 | Account proof/output | Local Git still calls only the explicit auditor SSH channel, missing channel stays unknown. Verify exact bytes for internal structured evidence, redacted outward errors/success projections, 1 MiB concurrent capture, spawn refusal versus post-launch ambiguity and helper-group cleanup. Retain existing confinement channel/closure/integrity tests. |
 | Platform and packaging | Linux real temporary-repo helper/lock tests; macOS helper closure, utility differences, absent flock and locks; Windows refuses before subprocess while BAT observation works. Python-version CI is not OS or installed acceptance. Packaged runtime with a minimal/empty PATH must accurately expose helper readiness. |
-| Shared UX | EN/zh-TW one screen, at most one trust decision with explicit same-computer assertion, existing staged token field and exact upstream copy navigation, Linux browser/desktop and Windows connection-only success without Git/native enrollment, accessible focus/error/unsupported states, secret field clearing, stable nonsecret drafts/keys and withdrawal/late response rejection. Use stable `data-*` hooks in new/extended managed-setup Playwright/Node tests. Screenshots at 1440×900, 390×844 and 768 for layout, inspected by the implementer. |
+| Shared UX | EN/zh-TW one screen and one masked Connection URL paste with exact upstream navigation/headless connect instructions; no TOFU decision for the supplied pin. Existing staged token exposure and field clearing, local/remote and Linux browser/desktop/Windows connection-only success without Git/native enrollment, accessible focus/error/unsupported states, stable nonsecret drafts/keys and withdrawal/late response rejection. Later local Git requires explicit same-computer assertion; optional TOFU aid has at most one trust decision. Use stable `data-*` hooks in new/extended managed-setup Playwright/Node tests. Screenshots at 1440×900, 390×844 and 768 for layout, inspected by the implementer. |
 
 For future UI PRs run `npm test`, the affected Playwright specs using the inherited
 `BATC_UI_TEST_PORT`, `npm run build:browser` and `npm run build` in `desktop`;
@@ -829,21 +895,26 @@ claimed. Full suites were not run for this design-only task.
 
 1. **Connection quick start, no Git changes.** Depends on **fr1's setup PR**,
    which owns `desktop/src/managed-setup.js`; integrate through that owner rather
-   than a competing shared-file rewrite. Add bounded central TLS discovery,
-   candidate/trust/local-confirmation validation and the shared EN/zh-TW screen.
-   Reuse the existing staged token field/reference, with exact BAT v3.2.15 copy
-   instructions and field clearing. Ship browser/desktop connection and
+   than a competing shared-file rewrite. fr1 is already briefed to implement
+   one dedicated password-type Connection URL field, BAT-grammar parsing, bare
+   endpoint/fingerprint fill, token transfer to the existing field and immediate
+   URL clearing. Use BAT v3.2.15's exact URL-copy/headless connect instructions;
+   no raw URL/query in drafts, storage, logs, errors, diagnostics or endpoint.
+   Reuse the staged token reference/exposure and imported out-of-band pin with
+   no TOFU decision. Ship browser/desktop local and remote connection and
    observation on every supported OS, including Linux and Windows; leave Git,
-   write/orchestration tiers and SSH behavior untouched. Test one decision,
-   TOFU/pin change, withdrawal and original-key recovery; regenerate browser
-   assets and inspect screenshots. Update shared design, Unreleased changelog
+   write/orchestration tiers and SSH behavior untouched. TLS discovery is not
+   included. Test masked paste/clear, pin mismatch with zero auth, withdrawal
+   and original-key recovery; regenerate browser assets and inspect screenshots.
+   Update shared design, Unreleased changelog
    and both getting-started/setup guides. Native enrollment is not a gate.
 2. **Transport/config contract and regression protection.** Add strict host mode,
    composite wiring, explicit per-host/legacy reader bindings and local
    prerequisite/error projection, plus `setup.host` transport admission/digest
-   recovery. Builds on the first PR's confirmation contract; any UI changes
-   coordinate with fr1. Keep local mutations disabled until the next gates
-   pass. Test default SSH and unchanged old-host/old-operation behavior.
+   recovery. Add the explicit same-computer/same-filesystem assertion for local
+   Git; a Connection URL host cannot provide it. Any UI changes coordinate with
+   fr1. Keep local mutations disabled until the next gates pass. Test default
+   SSH and unchanged old-host/old-operation behavior.
 3. **POSIX helpers and local Git.** Harden checkpoint source/temp/lock handling,
    add bounded owned-process execution and the locked exchange, then enable only
    verified Linux local dispatch. Exercise all inventory consumers with real
@@ -852,7 +923,11 @@ claimed. Full suites were not run for this design-only task.
 4. **Follow-ups, each a separate small PR.** Harden **all remote/local setup**
    with narrow native paste/enrollment and no secret-bearing page IPC, keeping
    the existing opaque staging/recovery contract and explicit OS limitations.
-   Optional version-pinned plaintext server-token/settings readers need their
+   TLS discovery/TOFU is an optional later aid for independently known stopped
+   servers (Start Server instructions) or a reviewed no-copy path when settings
+   cannot be opened. Preserve its bounds, TOFU notice and existing supplied pins;
+   probe failure alone does not prove stopped BAT. Optional version-pinned
+   plaintext server-token/settings readers need their
    own strict-format/private-file tests and supported-root/platform acceptance;
    OS-protected credential access needs a reviewed contract and prompt behavior.
    Separately add local artifact transport and Task verifier bindings with
