@@ -19,29 +19,27 @@ jobs:
     timeout-minutes: 5
     outputs:
       pythons: ${{ steps.select.outputs.pythons }}
-      native: ${{ steps.select.outputs.native }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The PR checkout is refs/pull/N/merge; its first parent is the target branch tip.
+          fetch-depth: 2
           persist-credentials: false
-      - name: Select coverage from the PR diff (main always gets full coverage)
+      - name: Select pytest versions from the PR merge diff
         id: select
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           paths="$RUNNER_TEMP/ci-scope-paths.txt"
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            if git fetch --no-tags --depth=1 origin "$BASE_SHA" "$HEAD_SHA" &&
-               git -c core.quotepath=false diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA" > "$paths"; then
-              python3 scripts/ci_scope.py --event-name "$EVENT_NAME" < "$paths" >> "$GITHUB_OUTPUT"
+            if git -c core.quotepath=false diff --no-renames --name-only HEAD^1 HEAD > "$paths"; then
+              python3 scripts/ci_scope.py --workflow ci --event-name "$EVENT_NAME" < "$paths" >> "$GITHUB_OUTPUT"
             else
-              python3 scripts/ci_scope.py --event-name "$EVENT_NAME" --diff-failed < /dev/null >> "$GITHUB_OUTPUT"
+              python3 scripts/ci_scope.py --workflow ci --event-name "$EVENT_NAME" --diff-failed < /dev/null >> "$GITHUB_OUTPUT"
             fi
           else
-            python3 scripts/ci_scope.py --event-name "$EVENT_NAME" < /dev/null >> "$GITHUB_OUTPUT"
+            python3 scripts/ci_scope.py --workflow ci --event-name "$EVENT_NAME" < /dev/null >> "$GITHUB_OUTPUT"
           fi
 
   lint:
