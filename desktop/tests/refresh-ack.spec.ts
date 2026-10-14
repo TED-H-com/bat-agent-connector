@@ -3,7 +3,8 @@ import {test, expect} from "@playwright/test";
 for (const native of [false, true]) for (const refresh of ["messages", "preview"]) {
   test(`checkpoint waits for successful ${refresh} refresh (${native ? "native" : "browser"})`, async ({page}) => {
     const caps = {actor: "refresh-fixture", scopes: ["observe", "operate"], api_version: 1,
-      contract_version: "2026-10-08", hosts: [], features: {checkpoints: refresh === "preview" ? ["demo"] : []}, actions: []};
+      contract_version: "2026-10-08", hosts: [], features: {checkpoints: refresh === "preview" ? ["demo"] : []},
+      actions: refresh === "preview" ? [{action: "checkpoint.create", allowed: true}] : []};
     let changed = false, failing = true, messageReads = 0, listReads = 0;
     const writes: any[] = [], errors: string[] = [];
     let release!: () => void;
