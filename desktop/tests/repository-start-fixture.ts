@@ -8,7 +8,7 @@ export async function publishedFixture(page: Page, native: boolean, options: any
     allowed: true, writes: true, orchestrate: true, status: 'succeeded', posts: [] as any[], previews: [] as any[], reads: [] as string[],
     errors: [] as string[], events: [] as any[], after: 0, operation: null as any, bytes: [] as number[], uploaded: false,
     project: {project_id: dispatchProject, name: 'Dashboard project', description: 'Shared browser and desktop work',
-      repositories: ['example/project'], version: 1, archived: false, counts: {total: 0, approved: 0}}, ...options};
+      repositories: ['example/project'], children: [], version: 1, archived: false, counts: {total: 0, approved: 0}}, ...options};
   const baseCaps = () => ({actor: state.actor, scopes: state.scopes, api_version: 1, contract_version: '2026-10-08',
     hosts: ['demo', 'other'].map(host => ({host, writes: state.writes, orchestrate: state.orchestrate})),
     actions: state.absent ? [] : [{action: 'repository.continue', allowed: state.allowed}, {action: 'session.start', allowed: state.allowed}, {action: 'artifact.upload', allowed: true}],
