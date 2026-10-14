@@ -1,3 +1,4 @@
+import {disclosure} from './ui/components.js';
 // The central service checks the explicitly selected runtime against a fixed intake.
 import {structuredAnalysis} from './pm-structured-analysis.js';
 export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespace,form,input,labelled,permitted,errorBox,onSaved,onAccessFailure=()=>{}}) {
@@ -5,7 +6,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
   let serial=0,intake=null,capability=null,thread=null,request=null,retired=false,next=null,rows=[],targetLocked=false;
   const choices=new Map(),status=h('div',{role:'status'}),body=h('div'),chooser=h('select',{'aria-label':t('pm_fa_thread')});
   const note=key=>h('p',{class:'muted'},t(key));
-  const element=h('details',{'data-pm-follow-up-analyze':''},h('summary',{},t('pm_fa_analyze_prepare')),note('pm_fa_analyze_help'),status,body);
+  const element=disclosure({label:t('pm_fa_analyze_prepare'),body:h('div',{},status,body)}); element.dataset.pmFollowUpAnalyze='';
   const current=ticket=>{alive();if(caps()?.actor!==actor){retired=true;throw Error(t('pm_fa_actor_changed'));}return ticket===serial&&!retired;};
   const check=data=>{if(data?.workspace_id!==workspaceId)throw Error(t('pm_fa_mismatch'));return data;};
   const authorized=()=>Boolean(intake)&&!retired&&actor===caps()?.actor&&permitted(false)&&caps()?.scopes?.includes('start')
@@ -52,7 +53,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
   }
   async function readThread() {
     const ticket=++serial;request?.dispose();request=null;thread=null;body.replaceChildren(labelled('pm_fa_thread',chooser));navigation();
-    if(next!=null)body.append(h('button',{type:'button',class:'secondary',onclick:()=>void readThreads(next)},t('pm_fa_more_threads')));
+    if(next!=null)body.append(h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>void readThreads(next)},t('pm_fa_more_threads')));
     if(!chooser.value)return;status.replaceChildren(note('pm_fa_loading_thread'));
     try{
       const data=check(await api('GET',`${endpoint}/threads/${encodeURIComponent(chooser.value)}`));if(!current(ticket))return;
@@ -67,7 +68,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       const runtime=structuredAnalysis({h,t,labelled,action:'pm.follow_up.analyze',capability:()=>capability,authorized,
         legacyEligible:()=>capability?.follow_up_analysis?.authorized===true&&capability?.follow_up_analysis?.eligible_for_preflight===true});
       const stale=()=>version.value!==String(thread?.thread.version);
-      const rebase=h('button',{type:'button',class:'secondary',onclick:()=>{if(request&&!request.locked()&&authorized()){request.set('_version',String(thread.thread.version));request.update();}}},t('pm_fa_use_thread_version'));
+      const rebase=h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>{if(request&&!request.locked()&&authorized()){request.set('_version',String(thread.thread.version));request.update();}}},t('pm_fa_use_thread_version'));
       const sync=()=>{if(request)targetLocked=request.locked();warning.hidden=!stale();rebase.hidden=!stale();rebase.disabled=Boolean(request?.locked())||!authorized();navigation();runtime.update(request);};
       const eligible=()=>authorized()&&runtime.eligible()&&!stale();
       request=form({api:guardedApi,namespace:`${namespace}.follow-up.${intake.intake_id}`,action:'pm.follow_up.analyze',target:{workspace_id:workspaceId,thread_id:thread.thread.thread_id},
