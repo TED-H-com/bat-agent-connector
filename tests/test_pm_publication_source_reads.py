@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from bat_agent_connector import pm_access, pm_source_reads, pr_publication
+from bat_agent_connector import pm_access, pm_read_cache, pm_source_reads, pr_publication
 from bat_agent_connector import pm_execution_verification as verifier
 from bat_agent_connector import pm_maintenance_repair_publication as publication
 from bat_agent_connector import pm_maintenance_repairs as repairs
@@ -49,13 +49,26 @@ def measured(db, read):
     return result, count
 
 
+def legacy_read_memo(prior):
+    """Legacy predicates must not inherit the subsequently added read memo.
+
+    Keep their source checks and existing local traversal bounds, but bypass
+    the request memo and operation-visibility reuse added after this reference.
+    """
+    prior.setattr(pm_read_cache, 'remember', lambda kind, key, load, **options: load())
+    prior.setattr(pm_read_cache, 'recall', lambda kind, key: (False, None))
+    prior.setattr(pm_access, 'visible', pm_access._visible)
+
+
 async def check_publication(w, parent, published, monkeypatch, record_property):
     ops = w['d'].ops
+    changes = ops.db.total_changes
     child = repairs._child(ops, parent)
     intent = pr_publication._intent(published)
     def read():
         return pr_publication.get_publication(ops, OWNER, published['operation_id'])
     with monkeypatch.context() as prior:
+        legacy_read_memo(prior)
         prior.setattr(verifier, 'operation_visible', prior_verifier_visible)
         prior.setattr(quality, '_access', prior_quality_access)
         prior.setattr(workload, '_access', workload._source_access)
@@ -66,6 +79,7 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
     new, new_queries = measured(ops.db, read)
     _, new_repair_queries = measured(ops.db, lambda: repairs._full_access(ops, OWNER, parent))
     with monkeypatch.context() as prior_quality:
+        legacy_read_memo(prior_quality)
         prior_quality.setattr(quality, '_access', prior_quality_access)
         _, prior_quality_queries = measured(ops.db, lambda: repairs._full_access(ops, OWNER, parent))
     assert new_repair_queries * 3 < prior_quality_queries * 2
@@ -79,6 +93,14 @@ async def check_publication(w, parent, published, monkeypatch, record_property):
             ('repair_prior_queries', old_repair_queries), ('repair_verifier_scoped_queries', new_repair_queries)):
         record_property(key, value)
     record_property('repair_before_quality_source_queries', prior_quality_queries)
+    assert ops.db.total_changes == changes
+    with pm_source_reads.scope(ops.db, OWNER):
+        _, first_queries = measured(ops.db, lambda: repairs._full_access(ops, OWNER, parent))
+        _, repeated_queries = measured(ops.db, lambda: repairs._full_access(ops, OWNER, parent))
+        assert repeated_queries * 3 < first_queries
+    assert ops.db.total_changes == changes
+    record_property('repair_same_read_first_queries', first_queries)
+    record_property('repair_same_read_repeated_queries', repeated_queries)
 
     originals = [parent, child, published, ops.get(intent['quality_ref']['operation_id'])]
     verifying = ops.get(ops.db.execute("SELECT operation_id FROM operations WHERE action=? "
