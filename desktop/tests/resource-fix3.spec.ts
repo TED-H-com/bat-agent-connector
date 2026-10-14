@@ -18,7 +18,7 @@ for (const locale of ['en-US', 'zh-TW']) {
         await expect(page.locator('#main > .note')).toBeHidden();
         await expect(page.locator('#main > details')).toHaveCount(0);
         expect(await page.locator('#main').innerText()).not.toContain(zh ? '這個帳號可檢視專案' : 'This account can view projects');
-        const code = failure === '403' ? 'FORBIDDEN' : failure === '404' ? 'NOT_FOUND' : failure === '503' ? 'UNAVAILABLE' : '';
+        const code = failure === '403' ? 'FORBIDDEN' : failure === '404' ? 'NOT_FOUND' : failure === '503' ? 'UNAVAILABLE' : failure === 'network' ? 'NETWORK_ERROR' : '';
         const details = unavailable.locator('details');
         if (code) {
           await expect(details.locator('summary')).toHaveText(zh ? '詳細資訊' : 'Details');
