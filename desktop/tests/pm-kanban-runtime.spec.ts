@@ -111,12 +111,15 @@ test('an observe-scoped contributor can read a manual source without manage or o
 });
 
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`runtime detail layout ${locale} ${width}`,async({browser,baseURL},info)=>{
-  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();try{
-    const f=runtimeFixture();await mountRuntime(page,false,f);await openDetail(page);await editor(page).locator('select').selectOption({label:'fixture-host / manual-session-1'});
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:width===390?844:900}}),page=await context.newPage();try{
+    const f=runtimeFixture();await mountRuntime(page,false,f);
+    const folder=process.env.PM_SCREENSHOTS||info.outputPath('screenshots');await mkdir(folder,{recursive:true});
+    await page.screenshot({path:`${folder}/board-${locale}-${width}.png`});
+    await openDetail(page);await editor(page).locator('select').selectOption({label:'fixture-host / manual-session-1'});
     await expect(page.locator('.pm-main > .ui-page-header h1')).toHaveText(labels(locale).heading);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-    const folder=process.env.PM_SCREENSHOTS||info.outputPath('screenshots');await mkdir(folder,{recursive:true});
     await expect(panel(page)).not.toContainText(/\bundefined\b|\bnull\b|pm_kanban_/);
-    await panel(page).screenshot({path:`${folder}/runtime-${locale}-${width}.png`});
+    await editor(page).scrollIntoViewIfNeeded();await page.screenshot({path:`${folder}/runtime-${locale}-${width}.png`});
+    if(locale==='en'&&width===1440){await page.emulateMedia({colorScheme:'dark'});await page.screenshot({path:`${folder}/runtime-dark-${width}.png`});}
   }finally{await context.close();}
 });

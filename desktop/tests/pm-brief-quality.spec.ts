@@ -97,7 +97,7 @@ for(const verdict of ['accepted','unassessed'])for(const locale of ['en','zh-TW'
   await expect(view.locator('[data-pm-brief-fact]')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);await context.close();
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`quality deviation layout ${locale} ${width}`,async({browser,baseURL},info)=>{
-  const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();f.state.snapshot=f.saved();
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:width===390?844:900}}),page=await context.newPage(),f=fixture();f.state.snapshot=f.saved();
   await mountConversation(page,false,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);
   await openPmSection(page, 'overview');
   const brief=page.locator('[data-pm-brief]'),deviations=brief.locator('[data-pm-brief-section="deviations"]');

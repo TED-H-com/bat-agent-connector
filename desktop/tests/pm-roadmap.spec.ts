@@ -103,7 +103,7 @@ test('historical selected quality keeps the fixed-assessment boundary instead of
   await expect(history).not.toContainText('Completion has not been assessed');expect(f.state.writes).toEqual([]);
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Roadmap ${locale} ${width}`,async({browser,baseURL})=>{
-  const context=await browser.newContext({locale,baseURL,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();f.state.observation=qualityObservation();await mountConversation(page,false,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');
+  const context=await browser.newContext({locale,baseURL,viewport:{width,height:width===390?844:900}}),page=await context.newPage(),f=fixture();f.state.observation=qualityObservation();await mountConversation(page,false,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');
   await expect(page.locator('[data-pm-milestone]')).toHaveCount(1);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(await page.locator('[data-pm-roadmap]').innerText()).not.toMatch(/\bundefined\b/);
   await expect(page.locator('[data-pm-roadmap-quality]')).toContainText(locale==='en'?'Qualified by the selected assessments':'所選評估判定合格');await page.locator('[data-pm-roadmap-quality] summary').click();
   const out=process.env.BATC_PM_ROADMAP_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/roadmap-${locale}-${width}.png`,fullPage:true});}await context.close();
