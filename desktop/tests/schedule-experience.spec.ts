@@ -528,6 +528,33 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
   }
 });
 
+test('sticky titles cover horizontally scrolled bar labels in both locales and themes', async ({browser, baseURL}) => {
+  for (const locale of ['en', 'zh-TW']) {
+    const context = await browser.newContext({locale, baseURL, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+    const f = await start(page, locale);
+    for (const colorScheme of ['light', 'dark'] as const) for (const zoom of locale === 'en' ? ['Day', 'Week'] : ['日', '週']) {
+      // Week fits most of the desktop chart; use a narrower column so scrolling
+      // can bring an open-bar label underneath the sticky title cell.
+      await page.setViewportSize({width: ['Day', '日'].includes(zoom) ? 1440 : 1000, height: 900});
+      await page.emulateMedia({colorScheme});
+      await page.getByRole('radio', {name: zoom, exact: true}).click();
+      expect(await page.evaluate(() => {
+        const viewport = document.querySelector('.schedule-viewport') as HTMLElement;
+        const label = document.querySelector('.schedule-bar-label')!;
+        const cell = label.closest('.schedule-row')!.querySelector('.schedule-tree-cell')!;
+        const previous = viewport.scrollLeft, title = cell.getBoundingClientRect();
+        viewport.scrollLeft += label.getBoundingClientRect().left - (title.left + title.width / 2);
+        const rect = label.getBoundingClientRect();
+        const coversLabel = cell.contains(document.elementFromPoint(rect.left + 4, (rect.top + rect.bottom) / 2));
+        viewport.scrollLeft = previous;
+        return coversLabel;
+      })).toBe(true);
+    }
+    expect(f.writes).toEqual([]);
+    await context.close();
+  }
+});
+
 for (const colorScheme of ['light', 'dark'] as const) test(`Month grid fills every lane without stretching its date scale ${colorScheme}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, colorScheme, viewport: {width: 1440, height: 900}}), page = await context.newPage();
   const f = await start(page);
