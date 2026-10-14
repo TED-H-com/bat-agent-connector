@@ -128,6 +128,38 @@ test('batch fresh-start preflight rechecks original prerequisite assessment sour
   f.quality.deny=true;await start(page).locator('button[type=submit]').click();await expect(panel(page)).toContainText('Original batch sources are unavailable');expect(f.state.writes).toHaveLength(0);
 });
 
+test('prerequisite selectors stay disabled through original handoff reads and batch preflight preserves the selection',async({page},info)=>{
+  const f=fixture(),row=f.downstream();await mountBatch(page,f);await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);
+  const selection=handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true});
+  const expected={recovery:{condition:f.condition,reference:f.ref(),execution_operation_id:f.review.context.execution_operation_id}};
+  for(const previewCount of [1,2]){
+    let release!:()=>void;f.base.state.previewGate=new Promise<void>(resolve=>release=resolve);
+    await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();
+    try{
+      await expect.poll(()=>f.base.state.reads.filter(read=>read.path==='/repository-previews').length).toBe(previewCount);
+      await expect(selection).toBeDisabled();
+      await expect(handoff(page)).toContainText('Reading the original package, project and published base');
+      await expect(panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true})).toBeDisabled();
+      await expect(selection).toHaveValue(previewCount===1?'':JSON.stringify(expected.recovery));
+    }finally{release();f.base.state.previewGate=null;}
+    await expect(selection).toBeEnabled();
+    if(previewCount===1)await selection.selectOption({index:1});
+  }
+  await reviewed(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();
+  await expect(start(page).locator('.pm-batch-entry')).toHaveCount(1);
+  await start(page).getByLabel('Reason for this request',{exact:true}).fill('Keep the selected original prerequisite');
+  const deadline=new Date(Date.now()+3600000);await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(new Date(deadline.getTime()-deadline.getTimezoneOffset()*60000).toISOString().slice(0,16));
+  const stored=()=>page.evaluate(()=>Object.values(localStorage).map(value=>{try{return JSON.parse(value);}catch{return null;}}).find(value=>value?.values?.entries));
+  const draft=await stored();expect(JSON.parse(draft.values.entries)[0].handoff.params.pm_requirement_quality_refs).toEqual(expected);
+  f.quality.deny=true;await start(page).locator('button[type=submit]').click();await expect(panel(page)).toContainText('Original batch sources are unavailable');
+  const refused=await stored();expect(refused.values).toEqual(draft.values);expect(refused.intent.initialAdmissionRefused).toBe(true);
+  expect(refused.intent.request.params.entries[0].handoff.params.pm_requirement_quality_refs).toEqual(expected);
+  await page.evaluate(()=>(window as any).batchOnlyRefresh());await expect(panel(page)).toContainText('Original batch sources are unavailable');
+  expect((await stored()).intent).toEqual(refused.intent);await expect(start(page)).toBeHidden();await expect(panel(page).locator('.pm-batch-entry')).toHaveCount(0);
+  expect(f.state.writes).toHaveLength(0);expect(f.state.ops.size).toBe(0);expect(f.base.state.writes).toHaveLength(0);
+  await panel(page).screenshot({path:info.outputPath('batch-preflight-unavailable.png')});
+});
+
 test('declared unmet prerequisites can wait in explicit batch but never enable single handoff start',async({page})=>{
   const f=fixture();await mountBatch(page,f);await reviewed(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await start(page).getByLabel('Result condition',{exact:true}).selectOption(PROFILE);
   const row=f.downstream();await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);await reviewed(page);await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();
