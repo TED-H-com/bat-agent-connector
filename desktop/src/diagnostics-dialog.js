@@ -39,7 +39,7 @@ export function diagnosticsDialog({h, t, load, save, onClose}) {
     filename='batc-diagnostics-'+bundle.exported_at.slice(0,10).replaceAll('-','')+'-'+bundle.exported_at.slice(11,16).replace(':','')+'.json';
     summary.append(h('div',{},h('p',{},buildLine(bundle.client,t)),
       bundle.sources.hosts==='not_available' ? h('p',{},t('diag_hosts_unavailable')) : null,
-      ...bundle.hosts.map(host=>h('p',{},`${host.alias} · ${t('diag_'+(host.connection_state==='unknown'?'state_unknown':host.connection_state))}`)),
+      ...bundle.hosts.map(host=>h('p',{},`${host.alias} · ${t('diag_'+(host.connection_state==='unknown'?'state_unknown':host.connection_state))}${host.stale === true && host.connection_state !== 'stale' ? ' · ' + t('diag_stale') : ''}`)),
       h('p',{},t('diag_counts',{errors:t(bundle.recent_errors.length===1?'diag_errors_one':'diag_errors_many',{count:bundle.recent_errors.length}),operations:bundle.operations===null?t('diag_operations_unavailable'):t(bundle.operations.length===1?'diag_operations_one':'diag_operations_many',{count:bundle.operations.length})})),
       h('p',{class:'muted'},t('diag_sample'))));
     pre.textContent=content;

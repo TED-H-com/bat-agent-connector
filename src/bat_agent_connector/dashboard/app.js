@@ -490,7 +490,7 @@ var diagnosticsStrings = {
 		diag_disconnected: "已中斷",
 		diag_reconnecting: "重新連線中",
 		diag_never_connected: "尚未連線",
-		diag_stale: "過期",
+		diag_stale: "資料已過期",
 		diag_reachable: "可連線",
 		diag_unreachable: "無法連線",
 		diag_state_unknown: "未知"
@@ -11753,7 +11753,7 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		if (current !== serial || !dialog.isConnected) return;
 		content = JSON.stringify(bundle, null, 2) + "\n";
 		filename = "batc-diagnostics-" + bundle.exported_at.slice(0, 10).replaceAll("-", "") + "-" + bundle.exported_at.slice(11, 16).replace(":", "") + ".json";
-		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}`)), h("p", {}, t("diag_counts", {
+		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
 			errors: t(bundle.recent_errors.length === 1 ? "diag_errors_one" : "diag_errors_many", { count: bundle.recent_errors.length }),
 			operations: bundle.operations === null ? t("diag_operations_unavailable") : t(bundle.operations.length === 1 ? "diag_operations_one" : "diag_operations_many", { count: bundle.operations.length })
 		})), h("p", { class: "muted" }, t("diag_sample"))));

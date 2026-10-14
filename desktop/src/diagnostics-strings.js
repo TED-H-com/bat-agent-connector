@@ -21,6 +21,6 @@ export const diagnosticsStrings = {
     diag_unavailable:'無法取得', diag_loading:'正在準備預覽…', diag_json:'完整 JSON',
     diag_copied:'已複製', diag_copy_failed:'複製失敗，請選取 JSON 後手動複製。', diag_saved:'已儲存', diag_save_failed:'無法確認是否已儲存，請先檢查目的地再重新儲存。',
     diag_withdrawn:'來源存取權已變更，請關閉後重新開啟診斷資料。', diag_too_large:'此預覽超過 256 KB 的儲存上限。',
-    diag_connected:'已連線', diag_disconnected:'已中斷', diag_reconnecting:'重新連線中', diag_never_connected:'尚未連線', diag_stale:'過期', diag_reachable:'可連線', diag_unreachable:'無法連線', diag_state_unknown:'未知',
+    diag_connected:'已連線', diag_disconnected:'已中斷', diag_reconnecting:'重新連線中', diag_never_connected:'尚未連線', diag_stale:'資料已過期', diag_reachable:'可連線', diag_unreachable:'無法連線', diag_state_unknown:'未知',
   },
 };

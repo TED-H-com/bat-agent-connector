@@ -972,7 +972,7 @@ inspectors and the mobile drawer open; ordinary Escape retains focus restoration
 
 About retains its existing Settings frame and adds one build line and Export
 diagnostics. Error Details reuse the same entry point. The modal uses shared
-surface/type/spacing/overlay tokens, a compact source summary, a wrapping,
+surface/type/spacing/overlay tokens, a compact source summary including stale host data, a wrapping,
 scrollable JSON preview and Save / Copy / Close. Native `<dialog>` makes the
 background inert; Tab wraps, Escape closes, and focus returns to the trigger.
 English and zh-TW share behavior. Only loaded session reads and an operation page

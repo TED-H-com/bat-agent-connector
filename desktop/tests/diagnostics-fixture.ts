@@ -1,7 +1,7 @@
 import type {Page} from '@playwright/test';
 import {attentionFixture, mountAttention} from './attention-fixture.ts';
 export async function diagnosticsFixture(page:Page, native=false, known=true) {
- const base=attentionFixture(),state={hostsStatus:200,operationsStatus:200,eventStatus:200,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false,reading:{incomplete_reasons:['message_ids_incomplete']}},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
+ const base=attentionFixture(),state={hostsStatus:200,hostStale:false,operationsStatus:200,eventStatus:200,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false,reading:{incomplete_reasons:['message_ids_incomplete']}},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
  const caps=()=>({...base.caps(),connector:'0.2.5',build:{version:'0.2.5',commit:known?'a'.repeat(40):null,source:'vcs'},scopes:state.scopes,
   hosts:[{host:'private-box.internal',writes:true}],managed_installation:undefined});
  const dispatch=async(input:any)=>{
@@ -9,7 +9,7 @@ export async function diagnosticsFixture(page:Page, native=false, known=true) {
   if(path==='/capabilities')return {status:200,data:caps()};
   if(path==='/bootstrap'){const response=await base.dispatch(input);response.data.capabilities=caps();return response;}
   if(path==='/hosts'){
-   const response={status:state.hostsStatus,data:state.hostsStatus===200?{hosts:[{host:'private-box.internal',reachable:true,stale:false,server_version:'1.2.3',endpoint:'wss://192.0.2.8',error:'batc_secret /home/example/private'}]}:{error:{code:'FORBIDDEN',message:'private'}}};
+   const response={status:state.hostsStatus,data:state.hostsStatus===200?{hosts:[{host:'private-box.internal',reachable:true,stale:state.hostStale,server_version:'1.2.3',endpoint:'wss://192.0.2.8',error:'batc_secret /home/example/private'}]}:{error:{code:'FORBIDDEN',message:'private'}}};
    if(state.hold)await new Promise(resolve=>{state.release=resolve;});return response;
   }
   if(path==='/operations')return {status:state.operationsStatus,data:state.operationsStatus===200?{operations:[{operation_id:'op_'+'a'.repeat(32),action:'session.send',status:'failed',error_code:'BAT_ERROR',created_at:'2026-10-14T12:34:56Z',params:{prompt:'private prompt'},actor:'secret@example.invalid'}],next_before:123}:{error:{code:'FORBIDDEN'}}};

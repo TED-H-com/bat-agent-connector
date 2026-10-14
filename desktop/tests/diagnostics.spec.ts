@@ -13,8 +13,9 @@ for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
   else await expect(line).not.toContainText('0.1.1');
  });
  test('preview, download, copy, keyboard wrap and restored focus',async({page})=>{
-  const state=await diagnosticsFixture(page);await open(page,locale);const dialog=page.getByRole('dialog');
+  const state=await diagnosticsFixture(page);state.hostStale=true;await open(page,locale);const dialog=page.getByRole('dialog');
   await expect(dialog).toContainText(locale==='en'?'host-1 · Reachable':'host-1 · 可連線');
+  await expect(page.locator('[data-diagnostics-summary]')).toContainText(locale==='en'?'Reachable · Stale':'可連線 · 資料已過期');
   await expect(page.locator('[data-diagnostics-summary]')).toContainText(locale==='en'?'1 failed or uncertain':'1 筆失敗');
   const text=await page.locator('[data-diagnostics-json]').textContent(),bundle=JSON.parse(text!);
   expect(bundle.sessions.loaded).toBeNull();expect(bundle.sources.observation).toBe('not_available');
