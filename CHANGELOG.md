@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Keep the workspace switcher's disclosure chevron after its label on desktop and mobile.
+
 - Use the same bilingual action and operation-status labels in lifecycle summaries and project delivery work.
 
 - Preserve Agents’ paused source snapshot during coalesced event refreshes.
