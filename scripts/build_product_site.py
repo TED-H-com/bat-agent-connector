@@ -71,8 +71,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "These redesigned views are a candidate preview of frontend #133 at 944a854f, which is in review. Backends #132 (0c354861) and #134 (f25e1556) merged into main on October 13, 2026; neither is installed or live-tested. Match a validated package to its source before installing.",
-        "這組改版介面與截圖是前端 #133 的候選 commit 944a854f，仍在審查。後端 #132（0c354861）與 #134（f25e1556）已於 2026 年 10 月 13 日合併至主線；尚未安裝或實機驗收。安裝前請核對套件來源與驗證紀錄。",
+        "These screenshots come from merged main at aba02180. Backend #132 merged on October 13, 2026; #134 merged on October 14. Frontend #133 merged afterward on October 14 as cb7e9f42. Nothing is installed or live-tested. Match a validated package to its source before installing.",
+        "截圖來自已合併主線的 aba02180。後端 #132 於 2026 年 10 月 13 日合併，#134 於 10 月 14 日合併；前端 #133 隨後於 10 月 14 日以 cb7e9f42 合併。這輪尚未安裝或實機驗收。安裝前請核對套件來源與驗證紀錄。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -81,8 +81,8 @@ parts.append('<section class="section product-tour" id="product" aria-label="Pro
 
 shots = [
     ("overview", "Overview", "專案總覽",
-     "Start with live progress, blockers and pending decisions; saved reports stay separate.",
-     "先看即時進度、阻礙與待決事項；已存報告保留原快照。"),
+     "Start with live progress, blockers, open decisions and Recently decided history; saved reports stay separate.",
+     "先看即時進度、阻礙、待決事項與近期決策；已存報告保留原快照。"),
     ("discussions", "Discussions", "討論",
      "Discuss the blocker with its context chip and automatic title; this proposal is ready for review, not adopted.",
      "從阻礙直接開啟討論，帶入來源標籤與標題；這份提案可供審閱，尚未採用。"),
@@ -90,11 +90,11 @@ shots = [
      "Open the RTM inspector to trace a requirement through work, acceptance and delivery evidence.",
      "展開需求追溯表與詳情，對照工作、驗收及交付證據。"),
     ("issues", "Issues &amp; changes", "問題與變更",
-     "Read the register of risks, issues, actions, changes and decisions; open records remain open.",
-     "在登記表追蹤風險、問題、行動、變更與決策；未結案項目保持原狀態。"),
+     "Read named maintenance findings alongside risks, issues, actions, changes and decisions; open records remain open.",
+     "在登記表追蹤具名維護發現、風險、問題、行動、變更與決策；未結案項目保持原狀態。"),
     ("schedule", "Schedule", "時程",
-     "Compare recorded baseline, forecast and actual dates; undated attempts stay unscheduled.",
-     "對照已記錄的基準、預測與實際日期；沒有起訖證據的執行仍列為未排期。"),
+     "Compare recorded baseline, forecast and actual dates on a labelled axis; undated attempts stay unscheduled.",
+     "在標示日期的時間軸對照基準、預測與實際日期；沒有起訖證據的執行仍列為未排期。"),
     ("dependencies", "Dependencies", "技術相依",
      "Read a pinned inventory graph with evidence styles and explicit partial coverage.",
      "查看固定版本的相依圖，分清證據種類與部分涵蓋。"),
@@ -224,20 +224,20 @@ parts.append(
     + '<div class="feature-list">'
 )
 for en, zh, d, dz, path in [
-    ("Overview", "專案總覽", "Live goal, progress, blockers and decisions, with fixed reports on demand.",
-     "看即時目標、進度、阻礙與待決事項，需要時再讀固定報告。", "pm-overview-discussion-context.md"),
-    ("Discussions", "討論", "Source-bound conversations, reviewable proposals and explicit adoption.",
-     "帶著原來源討論，審閱提案後明確採用。", "pm-overview-discussion-context.md"),
+    ("Overview", "專案總覽", "Live goal, progress, blockers and recent decisions. Unknown sources stay distinct from complete empty records; fixed reports remain separate.",
+     "看即時目標、進度、阻礙與近期決策。未知來源與完整空紀錄分開呈現，固定報告另讀。", "pm-overview-discussion-context.md"),
+    ("Discussions", "討論", "Source-bound conversations, reviewed adoption and an explicit Resolve issue step. Reported resolution remains unassessed.",
+     "帶著原來源討論，審閱採用後再明確回報問題已解決；仍保持未評估。", "pm-overview-discussion-context.md"),
     ("Requirements", "需求", "Trace requirements through bound work, acceptance criteria, PRs and deployment.",
      "從需求追到關聯工作、驗收條件、PR 與部署。", "pm-project-control-center.md"),
-    ("Issues &amp; changes", "問題與變更", "A filterable register with original records and processing timelines.",
-     "用篩選登記表追蹤原紀錄與處理時間線。", "pm-register.md"),
-    ("Schedule", "時程", "Compare recorded baseline, forecast and actual dates without inventing missing dates.",
-     "對照基準、預測與實際日期，缺少的日期保持未知。", "pm-schedule.md"),
+    ("Issues &amp; changes", "問題與變更", "A filterable register with named findings, original records and processing timelines.",
+     "用篩選登記表追蹤具名發現、原紀錄與處理時間線。", "pm-register.md"),
+    ("Schedule", "時程", "Compare recorded dates on a labelled axis; phone tracks share one fitted range. Missing dates stay unknown.",
+     "時間軸標示已記錄日期，手機各列共用同一日期範圍；缺少的日期保持未知。", "pm-schedule.md"),
     ("Dependencies", "技術相依", "Pinned inventories, evidence styles and bounded impact reads in a matrix or graph.",
      "用矩陣或相依圖查看固定清冊、證據與有界影響。", "pm-dependencies.md"),
-    ("Agents", "Agent 資源", "Sourced usage, daily trends and reported quota windows; unavailable data stays unknown.",
-     "看有來源的用量、每日趨勢與配額窗，無法取得的資料保持未知。", "agent-resource-observation.md"),
+    ("Agents", "Agent 資源", "Sourced usage, rows and daily trends share one consistent read. Reported quota stays separate; unavailable data stays unknown.",
+     "以同一次讀取呈現用量、來源列與每日趨勢；回報配額另列，無法取得的資料保持未知。", "agent-resource-observation.md"),
     ("Board", "工作看板", "Follow work by stage and open its shared evidence inspector.",
      "按階段追蹤工作，再開啟共用詳情查看證據。", "pm-kanban.md"),
     ("Session", "工作階段", "Read conversations and results; authorized managed controls coexist with read-only manual sessions.",
@@ -582,10 +582,10 @@ for label, lz, en, zh in [
         "桌面與中央底座、PM 計畫、品質／依賴證據、有界派工、政策內修復、BAT 提案／Follow-up 及 AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶；#134 補上採用後目標、近期決策及問題解決回報引導。",
     ),
     (
-        "Candidate work",
-        "候選工作",
-        "The redesign connects live Overview, source-bound Discussions, RTM inspectors, the register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough, is in review and not merged yet. M4/M5 retain their separate historical status.",
-        "改版串起即時總覽、來源討論、需求詳情、登記表、時程、技術相依、Agent 資源、看板與工作階段。前端 #133（含操作旅程腳本與截圖）審查中，尚未合併；M4／M5 的歷史狀態另列。",
+        "Merged workspace",
+        "已合併工作台",
+        "The redesign connects live Overview, source-bound Discussions, RTM inspectors, the register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough and rounds 5b/6, merged on October 14, 2026 as cb7e9f42; it is not installed or live-tested. M4/M5 retain their separate candidate status.",
+        "改版串起即時總覽、來源討論、需求詳情、登記表、時程、技術相依、Agent 資源、看板與工作階段。前端 #133（含操作旅程腳本及第 5b／6 輪修整）於 2026 年 10 月 14 日以 cb7e9f42 合併；尚未安裝或實機驗收。M4／M5 的候選狀態另列。",
     ),
     (
         "Still ahead",
