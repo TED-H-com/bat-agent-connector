@@ -19,6 +19,262 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/diagnostics.js
+var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
+var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
+var version$2 = (value) => typeof value === "string" && /^[0-9][0-9a-z.+-]{0,39}$/i.test(value) ? value : null;
+var commit = (value) => typeof value === "string" && /^[0-9a-f]{7,64}$/i.test(value) ? value : null;
+var bool = (value) => typeof value === "boolean" ? value : null;
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var time = (value) => {
+	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T[\d:.+-]+Z?$/.test(value) ? value : null;
+};
+var select = (value, values) => values.includes(value) ? value : null;
+var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
+var resourceNames = {
+	hosts: "host",
+	projects: "project",
+	"work-items": "work_item",
+	tasks: "task",
+	operations: "operation",
+	workspaces: "workspace",
+	threads: "thread",
+	snapshots: "snapshot",
+	artifacts: "artifact",
+	uploads: "operation",
+	checkpoints: "checkpoint"
+};
+function pathTemplate(path) {
+	const parts = String(path).replace(/^\/api(?=\/v1)/, "").split(/[?#]/)[0].split("/").filter(Boolean);
+	if (parts[0] !== "v1") parts.unshift("v1");
+	return "/" + parts.map((part, i) => {
+		const si = parts.indexOf("sessions");
+		if (si >= 0 && i === si + 1) return parts[si - 2] === "hosts" ? ":session" : ":host";
+		if (si >= 0 && i === si + 2 && parts[si - 2] !== "hosts") return ":session";
+		if (resourceNames[parts[i - 1]]) return ":" + resourceNames[parts[i - 1]];
+		return routeWords.has(part) ? part : ":id";
+	}).join("/");
+}
+function failedCall({ at, method, path, status, code: errorCode, admissionRefused, operation }) {
+	return {
+		at: time(at),
+		method: select(method, [
+			"GET",
+			"POST",
+			"PUT",
+			"PATCH",
+			"DELETE",
+			"HEAD"
+		]) || "GET",
+		path_template: pathTemplate(path),
+		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
+		admission_refused: admissionRefused === true,
+		operation_id: operationId$3(operation?.operation_id)
+	};
+}
+function errorRing(limit = 50) {
+	const entries = [];
+	return {
+		record(input) {
+			entries.push(failedCall(input));
+			entries.splice(0, Math.max(0, entries.length - Math.min(50, limit)));
+		},
+		entries: () => entries.map((entry) => ({ ...entry })),
+		clear() {
+			entries.length = 0;
+		}
+	};
+}
+function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+	return {
+		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
+		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
+		connector_version: version$2(caps?.build?.version ?? caps?.connector),
+		connector_commit: commit(caps?.build?.commit),
+		connector_source: select(caps?.build?.source, [
+			"vcs",
+			"package",
+			"bundled"
+		]),
+		api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
+		contract_version: typeof caps?.contract_version === "string" && /^\d{4}-\d{2}-\d{2}$/.test(caps.contract_version) ? caps.contract_version : null,
+		platform: desktop ? "desktop" : "browser",
+		os_family: select(os, [
+			"windows",
+			"macos",
+			"linux"
+		]) || "unknown",
+		locale: locale === "zh-TW" ? "zh-TW" : "en",
+		viewport_class: width > 0 ? width < 800 ? "small" : width < 1200 ? "medium" : "large" : "unknown"
+	};
+}
+function buildLine(client, t) {
+	const unknown = t("diag_unknown");
+	const connector = t("diag_connector_build", {
+		version: client.connector_version || unknown,
+		commit: client.connector_commit?.slice(0, 7) || unknown
+	});
+	return client.platform === "desktop" ? t("diag_desktop_build", {
+		version: client.app_version || unknown,
+		commit: client.app_commit?.slice(0, 7) || unknown
+	}) + " · " + connector : connector;
+}
+var APP = "io.betteragent.dashboard";
+function logLocations(os, managed) {
+	const root = managed ? {
+		linux: `~/.local/share/${APP}/central`,
+		macos: `~/Library/Application Support/${APP}/central`,
+		windows: `%LOCALAPPDATA%\\${APP}\\central`
+	}[os] : {
+		linux: "~/.local/state/bat-agent-connector",
+		macos: "~/.local/state/bat-agent-connector",
+		windows: "~\\.local\\state\\bat-agent-connector"
+	}[os];
+	return {
+		state_database: root ? root + (os === "windows" ? "\\" : "/") + (managed ? os === "windows" ? "state\\" : "state/" : "") + "tasks.sqlite3" : null,
+		runtime_stderr: managed ? "not_persisted_by_desktop" : "external_service_configuration",
+		location: "default_template_only"
+	};
+}
+function scrubDiagnostics(text) {
+	const safeLogs = new Set([
+		"linux",
+		"macos",
+		"windows"
+	].flatMap((os) => [false, true].map((managed) => logLocations(os, managed).state_database)));
+	return text.replace(/"(?:\\.|[^"\\])*"/g, (encoded) => {
+		let value = JSON.parse(encoded);
+		if (time(value) || ["bat-remote/v2", "bat-remote/legacy-v1"].includes(value)) return encoded;
+		const safeRoute = /^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x));
+		value = value.replace(/(?:bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]");
+		if (!safeRoute && !safeLogs.has(value)) value = value.replace(/(?:[a-z]:[\\/]|\\\\)[^\s"<>]+|\/(?:[^\s"<>/]+\/)*[^\s"<>]+/gi, "[redacted]");
+		return JSON.stringify(value);
+	});
+}
+function sessionFacts(session) {
+	return {
+		loaded: bool(session.loaded),
+		streaming: bool(session.streaming),
+		unknown_activity: ![true, false].includes(session.streaming),
+		stale: bool(session.stale ?? session.fields_stale),
+		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
+		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? session.reading.incomplete_reasons.map(reason).filter(Boolean) : null
+	};
+}
+function buildDiagnostics(input) {
+	const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a, b) => String(a.host).localeCompare(String(b.host), "en")) : [];
+	const flags = (source, keys) => Object.fromEntries(keys.map((key) => [key, bool(source?.[key])]));
+	const sessions = Array.isArray(input.sessions) ? input.sessions.map(sessionFacts) : null;
+	const count = (key) => sessions?.length === 0 ? 0 : sessions?.some((s) => typeof s[key] === "boolean") ? sessions.filter((s) => s[key] === true).length : null;
+	const history = sessions?.some((s) => s.history_reasons !== null) ? Object.create(null) : null;
+	if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
+	const sources = Object.fromEntries([
+		"capabilities",
+		"hosts",
+		"operations",
+		"managed_setup",
+		"observation"
+	].map((key) => [key, select(input.sources?.[key], ["available", "not_available"]) || "not_available"]));
+	const bundle = {
+		schema: "batc.diagnostics.v1",
+		exported_at: time(input.exportedAt),
+		client: clientIdentity(input),
+		sources,
+		hosts: hosts.map((host, i) => {
+			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
+			const policyFlags = flags(host.policy || policy, [
+				"enabled",
+				"writes",
+				"orchestrate",
+				"shared_clone_worktrees",
+				"managed_roots_configured",
+				"ssh_configured",
+				"checkpoint_available"
+			]);
+			if (policyFlags.managed_roots_configured === null && Array.isArray(policy.managed_roots)) policyFlags.managed_roots_configured = policy.managed_roots.length > 0;
+			const setupHost = Array.isArray(input.setup?.hosts) ? input.setup.hosts.find((item) => item.name === host.host) : null;
+			if (policyFlags.ssh_configured === null && setupHost && (typeof setupHost.ssh_alias === "string" || setupHost.ssh_alias === null)) policyFlags.ssh_configured = Boolean(setupHost.ssh_alias);
+			const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find((scan) => scan.profile_id === policy.profile_id) : null;
+			return {
+				alias: `host-${i + 1}`,
+				connection_state: select(host.connection_state, [
+					"connected",
+					"disconnected",
+					"reconnecting",
+					"never_connected",
+					"stale"
+				]) || (host.reachable === true ? "reachable" : host.reachable === false ? "unreachable" : "unknown"),
+				stale: bool(host.stale),
+				stale_reason: reason(host.stale_reason),
+				last_error_code: code(host.last_error?.code ?? discovery?.error_code),
+				bat: {
+					status: select(host.bat?.status, [
+						"ready",
+						"unavailable",
+						"unknown"
+					]),
+					version: version$2(host.bat?.version ?? host.server_version),
+					protocol: select(host.bat?.protocol, ["bat-remote/v2", "bat-remote/legacy-v1"]) || version$2(host.bat?.protocol),
+					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
+						"claude",
+						"codex",
+						"terminal",
+						"git"
+					])
+				},
+				coverage: {
+					basis: "configured_profile_enumeration",
+					complete: bool(discovery?.complete_enumeration),
+					reasons: Array.isArray(discovery?.outside_scan) ? [...new Set(discovery.outside_scan.map((item) => reason(item.reason)).filter(Boolean))] : null
+				},
+				policy: policyFlags
+			};
+		}),
+		sessions: {
+			basis: "client_loaded_reads",
+			sampled: sessions?.length ?? null,
+			loaded: count("loaded"),
+			streaming: count("streaming"),
+			unknown_activity: count("unknown_activity"),
+			stale: count("stale"),
+			pending: count("pending"),
+			history_reasons: history,
+			unreported: Object.fromEntries([
+				"loaded",
+				"streaming",
+				"stale",
+				"pending"
+			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
+		},
+		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
+			id: operationId$3(op.operation_id),
+			action: typeof op.action === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(op.action) ? op.action : null,
+			status: op.status,
+			error_code: code(op.error_code ?? op.error?.code),
+			created_at: time(op.created_at),
+			updated_at: time(op.updated_at)
+		})) : null,
+		coverage: {
+			complete: bool(input.observation?.coverage?.complete),
+			reasons: Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null
+		},
+		operations_basis: "loaded_page",
+		recent_errors: (input.recentErrors || []).slice(-50).map((e) => failedCall({
+			at: e.at,
+			method: e.method,
+			path: e.path_template,
+			status: e.status,
+			code: e.code,
+			admissionRefused: e.admission_refused,
+			operation: { operation_id: e.operation_id }
+		})),
+		log_locations: logLocations(input.os, input.managed === true)
+	};
+	return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
+}
+//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -43,6 +299,203 @@ function h$1(tag, attrs = {}, ...children) {
 	}
 	return el;
 }
+//#endregion
+//#region src/session-navigation.js
+var projectViews$2 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function sessionHref({ host, sessionId, from = "" }) {
+	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$2.has(from)) return "";
+		return sessionHref({
+			host,
+			sessionId,
+			from
+		});
+	} catch {
+		return "";
+	}
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : sessionOrigin(from),
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/diagnostics-strings.js
+var diagnosticsStrings = {
+	en: {
+		diag_export: "Export diagnostics",
+		diag_title: "Diagnostics",
+		diag_save: "Save",
+		diag_copy: "Copy",
+		diag_close: "Close",
+		diag_unknown: "unknown",
+		diag_connector_build: "Connector {version} ({commit})",
+		diag_desktop_build: "Desktop {version} ({commit})",
+		diag_privacy: "Redacted preview. Saving and copying stay on this device.",
+		diag_counts: "{errors} · {operations}",
+		diag_errors_one: "1 recent error",
+		diag_errors_many: "{count} recent errors",
+		diag_operations_one: "1 failed or uncertain operation",
+		diag_operations_many: "{count} failed or uncertain operations",
+		diag_operations_unavailable: "Operations not available",
+		diag_hosts_unavailable: "Hosts not available",
+		diag_sample: "Session counts cover client reads only. Operation counts cover the loaded page.",
+		diag_unavailable: "Not available",
+		diag_loading: "Preparing preview…",
+		diag_json: "Full JSON",
+		diag_copied: "Copied",
+		diag_copy_failed: "Copy failed. Select the JSON to copy it.",
+		diag_saved: "Saved",
+		diag_save_failed: "Save could not be confirmed. Check the destination before saving again.",
+		diag_withdrawn: "Source access changed. Close and reopen diagnostics for a fresh preview.",
+		diag_too_large: "This preview exceeds the 256 KB save limit.",
+		diag_connected: "Connected",
+		diag_disconnected: "Disconnected",
+		diag_reconnecting: "Reconnecting",
+		diag_never_connected: "Never connected",
+		diag_stale: "Stale",
+		diag_reachable: "Reachable",
+		diag_unreachable: "Unreachable",
+		diag_state_unknown: "Unknown"
+	},
+	"zh-TW": {
+		diag_export: "匯出診斷資料",
+		diag_title: "診斷資料",
+		diag_save: "儲存",
+		diag_copy: "複製",
+		diag_close: "關閉",
+		diag_unknown: "未知",
+		diag_connector_build: "Connector {version}（{commit}）",
+		diag_desktop_build: "桌面版 {version}（{commit}）",
+		diag_privacy: "預覽已去識別化。儲存與複製都只在這台裝置上進行。",
+		diag_counts: "{errors} · {operations}",
+		diag_errors_one: "最近 1 筆錯誤",
+		diag_errors_many: "最近 {count} 筆錯誤",
+		diag_operations_one: "1 筆失敗或結果未確認的操作",
+		diag_operations_many: "{count} 筆失敗或結果未確認的操作",
+		diag_operations_unavailable: "無法取得操作資料",
+		diag_hosts_unavailable: "無法取得主機資料",
+		diag_sample: "工作階段僅計算介面已讀取的資料；操作僅計算已載入的頁面。",
+		diag_unavailable: "無法取得",
+		diag_loading: "正在準備預覽…",
+		diag_json: "完整 JSON",
+		diag_copied: "已複製",
+		diag_copy_failed: "複製失敗，請選取 JSON 後手動複製。",
+		diag_saved: "已儲存",
+		diag_save_failed: "無法確認是否已儲存，請先檢查目的地再重新儲存。",
+		diag_withdrawn: "來源存取權已變更，請關閉後重新開啟診斷資料。",
+		diag_too_large: "此預覽超過 256 KB 的儲存上限。",
+		diag_connected: "已連線",
+		diag_disconnected: "已中斷",
+		diag_reconnecting: "重新連線中",
+		diag_never_connected: "尚未連線",
+		diag_stale: "過期",
+		diag_reachable: "可連線",
+		diag_unreachable: "無法連線",
+		diag_state_unknown: "未知"
+	}
+};
 //#endregion
 //#region src/pm-overview-strings.js
 var overviewStrings = {
@@ -7017,6 +7470,7 @@ var instructionReceiptStrings = {
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
+		...diagnosticsStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...uiStrings["zh-TW"],
 		...overviewStrings["zh-TW"],
@@ -8640,6 +9094,7 @@ var STRINGS = {
 		integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 	},
 	en: {
+		...diagnosticsStrings.en,
 		...pmStrings.en,
 		...uiStrings.en,
 		...overviewStrings.en,
@@ -10269,127 +10724,6 @@ function t(key, vars = {}) {
 	return (STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
 }
 //#endregion
-//#region src/session-navigation.js
-var projectViews$2 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function sessionHref({ host, sessionId, from = "" }) {
-	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
-}
-function sessionOrigin(value) {
-	if (typeof value !== "string" || value.length > 4096) return "";
-	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
-	if (!match) return "";
-	try {
-		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
-		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
-		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
-		const from = query.get("from") || "";
-		if (from && !projectViews$2.has(from)) return "";
-		return sessionHref({
-			host,
-			sessionId,
-			from
-		});
-	} catch {
-		return "";
-	}
-}
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews$1 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews$1.has(from) ? from : sessionOrigin(from),
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
-	};
-}
-//#endregion
 //#region src/ui/icons.js
 /*!
 ISC License
@@ -11316,6 +11650,125 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		controls[index].focus();
 	});
 	return root;
+}
+//#endregion
+//#region src/diagnostics-dialog.js
+function diagnosticsDialog({ h, t, load, save, onClose }) {
+	const origin = document.activeElement;
+	const summary = h("div", { "data-diagnostics-summary": "" });
+	const pre = h("pre", {
+		class: "diagnostics-json",
+		tabindex: 0,
+		"aria-label": t("diag_json"),
+		"data-diagnostics-json": ""
+	});
+	const status = h("p", {
+		class: "muted",
+		role: "status"
+	}, t("diag_loading"));
+	let content = "", filename = "", serial = 0;
+	const close = () => {
+		serial++;
+		dialog.close();
+		dialog.remove();
+		onClose();
+		if (origin?.isConnected) origin.focus();
+	};
+	const saved = button({
+		variant: "primary",
+		label: t("diag_save"),
+		disabled: true,
+		onClick: async () => {
+			const current = serial;
+			saved.disabled = true;
+			try {
+				const result = await save(content, filename);
+				if (current === serial && result) status.textContent = t("diag_saved");
+			} catch {
+				if (current === serial) status.textContent = t("diag_save_failed");
+			} finally {
+				if (current === serial) saved.disabled = false;
+			}
+		}
+	});
+	const copy = button({
+		label: t("diag_copy"),
+		disabled: true,
+		onClick: async () => {
+			const current = serial;
+			try {
+				await navigator.clipboard.writeText(content);
+				if (current === serial) status.textContent = t("diag_copied");
+			} catch {
+				if (current === serial) {
+					status.textContent = t("diag_copy_failed");
+					pre.focus();
+				}
+			}
+		}
+	});
+	const closing = button({
+		label: t("diag_close"),
+		onClick: close
+	});
+	const dialog = h("dialog", {
+		class: "diagnostics-dialog",
+		"aria-labelledby": "diagnostics-title",
+		"data-diagnostics-dialog": ""
+	}, h("h2", { id: "diagnostics-title" }, t("diag_title")), h("p", { class: "muted" }, t("diag_privacy")), summary, pre, status, h("div", { class: "actions" }, saved, copy, closing));
+	dialog.addEventListener("cancel", (event) => {
+		event.preventDefault();
+		close();
+	});
+	dialog.addEventListener("keydown", (event) => {
+		if (event.key !== "Tab") return;
+		const nodes = [
+			pre,
+			saved,
+			copy,
+			closing
+		].filter((node) => !node.disabled && !node.hidden), first = nodes[0], last = nodes.at(-1);
+		if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	});
+	document.body.append(dialog);
+	dialog.showModal();
+	closing.focus();
+	const withdraw = (force = false) => {
+		if (!content && !force) return;
+		serial++;
+		content = "";
+		summary.replaceChildren();
+		pre.textContent = "";
+		saved.disabled = copy.disabled = true;
+		status.textContent = t("diag_withdrawn");
+	};
+	const current = serial;
+	load().then((bundle) => {
+		if (current !== serial || !dialog.isConnected) return;
+		content = JSON.stringify(bundle, null, 2) + "\n";
+		filename = "batc-diagnostics-" + bundle.exported_at.slice(0, 10).replaceAll("-", "") + "-" + bundle.exported_at.slice(11, 16).replace(":", "") + ".json";
+		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}`)), h("p", {}, t("diag_counts", {
+			errors: t(bundle.recent_errors.length === 1 ? "diag_errors_one" : "diag_errors_many", { count: bundle.recent_errors.length }),
+			operations: bundle.operations === null ? t("diag_operations_unavailable") : t(bundle.operations.length === 1 ? "diag_operations_one" : "diag_operations_many", { count: bundle.operations.length })
+		})), h("p", { class: "muted" }, t("diag_sample"))));
+		pre.textContent = content;
+		const tooLarge = new TextEncoder().encode(content).length > 262144;
+		saved.disabled = tooLarge;
+		copy.disabled = false;
+		status.textContent = tooLarge ? t("diag_too_large") : "";
+	}).catch(() => {
+		if (current === serial) withdraw(true);
+	});
+	return {
+		close,
+		withdraw
+	};
 }
 //#endregion
 //#region src/pm-workbench.js
@@ -15847,7 +16300,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	nativeDesktop = isTauri();
@@ -15855,6 +16308,7 @@ var init_transport = __esmMin((() => {
 	nativeBriefExportSupport = false;
 	browserSessionToken = "managed-browser-session";
 	browserCsrf = null;
+	nativeDiagnosticsSave = (input) => invoke("native_diagnostics_save", { input });
 	nativeFilesStatus = () => invoke("native_files_status");
 	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
 	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
@@ -49377,7 +49831,102 @@ var state = {
 	connectionNotice: null,
 	refreshCycle: null
 };
+var recentErrors = errorRing();
+var diagnosticSessions = new Map();
+var diagnosticSessionsRead = false;
+var diagnosticRevision = 0;
+var diagnosticsPreview = null;
+var desktopBuild = null;
+function withdrawDiagnostics() {
+	diagnosticRevision++;
+	diagnosticSessions.clear();
+	diagnosticSessionsRead = false;
+	diagnosticsPreview?.withdraw();
+}
+function diagnosticsClient(caps = state.caps) {
+	const platform = navigator.platform || navigator.userAgent;
+	return {
+		caps,
+		appBuild: desktopBuild,
+		desktop: nativeDesktop,
+		os: /win/i.test(platform) ? "windows" : /mac/i.test(platform) ? "macos" : /linux/i.test(platform) ? "linux" : "unknown",
+		locale,
+		width: innerWidth
+	};
+}
+async function openDiagnostics() {
+	if (diagnosticsPreview) return;
+	const epoch = state.epoch;
+	diagnosticsPreview = diagnosticsDialog({
+		h,
+		t,
+		onClose: () => {
+			diagnosticsPreview = null;
+		},
+		load: async () => {
+			let caps = null;
+			try {
+				caps = await api("GET", "/capabilities");
+			} catch {}
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (!caps?.scopes?.includes("observe")) withdrawDiagnostics();
+			const revision = diagnosticRevision;
+			const read = async (path, scope) => {
+				if (!caps?.scopes?.includes(scope)) return null;
+				try {
+					const data = await api("GET", path);
+					return revision === diagnosticRevision ? data : null;
+				} catch {
+					return null;
+				}
+			};
+			let [hosts, operations, setup] = await Promise.all([
+				read("/hosts", "observe"),
+				read("/operations?limit=50", "observe"),
+				caps?.managed_installation ? read("/managed/setup", "manage") : null
+			]);
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (revision !== diagnosticRevision) hosts = operations = setup = null;
+			return buildDiagnostics({
+				...diagnosticsClient(caps),
+				exportedAt: new Date().toISOString(),
+				managed: !!caps?.managed_installation,
+				hosts: hosts?.hosts,
+				operations: operations?.operations,
+				setup,
+				sessions: hosts && caps?.scopes?.includes("observe") && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
+				recentErrors: recentErrors.entries(),
+				sources: {
+					capabilities: caps ? "available" : "not_available",
+					hosts: hosts ? "available" : "not_available",
+					operations: operations ? "available" : "not_available",
+					managed_setup: setup ? "available" : "not_available"
+				}
+			});
+		},
+		save: async (content, filename) => {
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (nativeDesktop) return nativeDiagnosticsSave({
+				content,
+				filename,
+				locale
+			});
+			const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+			const link = h("a", {
+				href: url,
+				download: filename
+			});
+			document.body.append(link);
+			link.click();
+			link.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1e3);
+			return true;
+		}
+	});
+}
 async function activate(caps, endpoint = location.origin, reset = false) {
+	withdrawDiagnostics();
+	recentErrors.clear();
 	state.epoch++;
 	state.observations = new Map();
 	state.connectionError = null;
@@ -49417,6 +49966,8 @@ function saveCursor() {
 }
 function disconnect() {
 	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
+	withdrawDiagnostics();
+	recentErrors.clear();
 	state.epoch++;
 	clearToken();
 	state.token = null;
@@ -49536,6 +50087,47 @@ function dropKey(scope, namespace) {
 	} catch {}
 }
 async function api(method, path, body, key, collectReceipt) {
+	const revision = diagnosticRevision, epoch = state.epoch;
+	try {
+		const data = await apiRequest(method, path, body, key, collectReceipt);
+		if (epoch === state.epoch && revision === diagnosticRevision && method === "GET" && /^\/sessions(?:[/?]|$)/.test(path)) {
+			if (Array.isArray(data.sessions)) {
+				if (!new URLSearchParams(path.split("?")[1] || "").has("cursor")) diagnosticSessions.clear();
+				diagnosticSessionsRead = true;
+			} else if (data.session) diagnosticSessionsRead = true;
+			for (const session of data.sessions || (data.session ? [data.session] : [])) {
+				const facts = sessionFacts(session);
+				diagnosticSessions.set(`${session.host}/${session.session_id}`, {
+					loaded: facts.loaded,
+					streaming: facts.streaming,
+					stale: facts.stale,
+					pending: facts.pending === true ? {} : facts.pending === false ? null : void 0,
+					reading: { incomplete_reasons: facts.history_reasons }
+				});
+			}
+		}
+		return data;
+	} catch (error) {
+		if (epoch === state.epoch) {
+			recentErrors.record({
+				at: new Date().toISOString(),
+				method,
+				path,
+				status: error.status,
+				code: error.code,
+				admissionRefused: error.admissionRefused,
+				operation: error.operation
+			});
+			if ([
+				401,
+				403,
+				404
+			].includes(error.status)) withdrawDiagnostics();
+		}
+		throw error;
+	}
+}
+async function apiRequest(method, path, body, key, collectReceipt) {
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
 	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 	const epoch = state.epoch;
@@ -49552,6 +50144,7 @@ async function api(method, path, body, key, collectReceipt) {
 		const error = new ApiError(status, data.error?.code, data.error?.message);
 		error.admissionRefused = data.error?.admission_refused === true;
 		error.reason = data.error?.reason;
+		error.operation = data.operation ?? data.error?.operation;
 		throw error;
 	}
 	return data;
@@ -49563,10 +50156,15 @@ function errorBox(e, { summary } = {}) {
 	return h("div", { "data-api-error": "" }, h("p", {
 		class: "error",
 		"data-error-summary": ""
-	}, presentation.summary), diagnostics.length ? disclosure({
+	}, presentation.summary), disclosure({
 		label: t("global_details"),
-		body: h("div", { "data-error-details": "" }, ...diagnostics)
-	}) : null);
+		body: h("div", { "data-error-details": "" }, ...diagnostics, button({
+			variant: "ghost",
+			label: t("diag_export"),
+			onClick: openDiagnostics,
+			"data-export-diagnostics": ""
+		}))
+	}));
 }
 async function submit(action, target, params, preconditions, scope) {
 	const connection = {
@@ -51201,10 +51799,15 @@ function sessionErrorDetails(e) {
 		e?.status ? `HTTP ${e.status}` : "",
 		e?.message && e.message !== code ? e.message : ""
 	].filter(Boolean).join(" · ");
-	return detail ? disclosure({
+	return disclosure({
 		label: t("session_error_details"),
-		body: h("p", { class: "muted" }, h("code", {}, detail))
-	}) : null;
+		body: h("div", {}, detail ? h("p", { class: "muted" }, h("code", {}, detail)) : null, button({
+			variant: "ghost",
+			label: t("diag_export"),
+			onClick: openDiagnostics,
+			"data-export-diagnostics": ""
+		}))
+	});
 }
 function sessionErrorBox(e, action = null) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
@@ -53709,7 +54312,15 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 			onClick: () => route()
 		})]
 	}));
-	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("a", { href: setupGuide() }, t("global_setup_guide"))));
+	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("p", { "data-build-line": "" }, buildLine(clientIdentity(diagnosticsClient()), t)), h("div", { class: "actions" }, button({
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
+	if (nativeDesktop) nativeStatus().then((status) => {
+		desktopBuild = status.app_build;
+		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
+	}).catch(() => {});
 	main.append(frame.root);
 	return frame;
 }
@@ -56025,6 +56636,7 @@ function mountWorkspace(name) {
 var teardown = null;
 var generation = 0;
 async function route() {
+	diagnosticsPreview?.close();
 	let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (nextName === "pm") {
 		if (nextView?.startsWith("pmt_")) {

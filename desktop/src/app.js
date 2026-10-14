@@ -1,3 +1,5 @@
+import {buildDiagnostics, clientIdentity, buildLine, errorRing, sessionFacts} from './diagnostics.js';
+import {diagnosticsDialog} from './diagnostics-dialog.js';
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
 import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
@@ -35,9 +37,9 @@ import {instructionReceiptPanel} from "./instruction-receipts.js";
 import {createRecordForm} from "./create-record.js";
 // BAT Dashboard: a client of /api/v1 only. Every change is an operation with an Idempotency-Key; text from
 // sessions is always set with textContent (never parsed as HTML).
-import { t } from "./i18n.js";
+import { t, locale } from "./i18n.js";
 import {timeStamp, timeText, timeLabel, startTimeTicker} from "./ui/stamps.js";
-import { connectorRequest, connectorUploadArtifact, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
+import { connectorRequest, connectorUploadArtifact, nativeDiagnosticsSave, nativeDesktop, nativeFileSupport, nativeStatus, nativeConnect, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal } from "./transport/index.ts";
 import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
 import { mountTailscale } from "./tailscale.js";
@@ -57,7 +59,50 @@ import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.
 
 const TOKEN_KEY = "batc.dashboard.token";
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
+const recentErrors = errorRing();
+const diagnosticSessions = new Map();
+let diagnosticSessionsRead = false;
+let diagnosticRevision = 0, diagnosticsPreview = null, desktopBuild = null;
+function withdrawDiagnostics() {
+  diagnosticRevision++; diagnosticSessions.clear(); diagnosticSessionsRead=false; diagnosticsPreview?.withdraw();
+}
+function diagnosticsClient(caps = state.caps) {
+  const platform = navigator.platform || navigator.userAgent;
+  return {caps, appBuild:desktopBuild, desktop:nativeDesktop,
+    os:/win/i.test(platform)?'windows':/mac/i.test(platform)?'macos':/linux/i.test(platform)?'linux':'unknown', locale, width:innerWidth};
+}
+async function openDiagnostics() {
+  if(diagnosticsPreview)return;
+  const epoch=state.epoch;
+  diagnosticsPreview=diagnosticsDialog({h,t,onClose:()=>{diagnosticsPreview=null;}, load:async()=>{
+    let caps=null;
+    try {caps=await api('GET','/capabilities');} catch { /* Current caller only; no credential fallback. */ }
+    if(epoch!==state.epoch)throw Error('Connection changed');
+    if(!caps?.scopes?.includes('observe'))withdrawDiagnostics();
+    const revision=diagnosticRevision;
+    const read=async(path,scope)=>{
+      if(!caps?.scopes?.includes(scope))return null;
+      try {const data=await api('GET',path);return revision===diagnosticRevision?data:null;} catch{return null;}
+    };
+    let [hosts,operations,setup]=await Promise.all([
+      read('/hosts','observe'),read('/operations?limit=50','observe'),
+      caps?.managed_installation?read('/managed/setup','manage'):null]);
+    if(epoch!==state.epoch)throw Error('Connection changed');
+    if(revision!==diagnosticRevision)hosts=operations=setup=null;
+    return buildDiagnostics({...diagnosticsClient(caps), exportedAt:new Date().toISOString(), managed:!!caps?.managed_installation,
+      hosts:hosts?.hosts, operations:operations?.operations, setup,
+      sessions:hosts && caps?.scopes?.includes('observe') && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
+      recentErrors:recentErrors.entries(), sources:{capabilities:caps?'available':'not_available',hosts:hosts?'available':'not_available',operations:operations?'available':'not_available',managed_setup:setup?'available':'not_available'}});
+  },save:async(content,filename)=>{
+    if(epoch!==state.epoch)throw Error('Connection changed');
+    if(nativeDesktop)return nativeDiagnosticsSave({content,filename,locale});
+    const url=URL.createObjectURL(new Blob([content],{type:'application/json'}));
+    const link=h('a',{href:url,download:filename});document.body.append(link);link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);return true;
+  }});
+}
 async function activate(caps, endpoint = location.origin, reset = false) {
+  withdrawDiagnostics(); recentErrors.clear();
   state.epoch++;
   state.observations = new Map();
   state.connectionError = null;
@@ -97,6 +142,7 @@ function saveCursor() {
 }
 function disconnect() {
   if (state.token === browserSessionToken) forgetBrowserSession()?.catch(() => {});
+  withdrawDiagnostics(); recentErrors.clear();
   state.epoch++; clearToken(); state.token = null; state.caps = null; state.lastEvent = 0; state.lastEventAt = 0;
   state.online = false; state.viewReady = false; state.sync = null;
 }
@@ -184,6 +230,30 @@ function dropKey(scope, namespace) { try { localStorage.removeItem(`batc.key.${n
 
 // ------------------------------------------------------------------ API
 async function api(method, path, body, key, collectReceipt) {
+  const revision=diagnosticRevision, epoch=state.epoch;
+  try {
+    const data=await apiRequest(method,path,body,key,collectReceipt);
+    if(epoch===state.epoch && revision===diagnosticRevision && method==='GET' && /^\/sessions(?:[/?]|$)/.test(path)) {
+      if(Array.isArray(data.sessions)) {
+        if(!new URLSearchParams(path.split('?')[1] || '').has('cursor'))diagnosticSessions.clear();
+        diagnosticSessionsRead=true;
+      } else if(data.session)diagnosticSessionsRead=true;
+      for(const session of data.sessions || (data.session?[data.session]:[])) {
+        const facts=sessionFacts(session);
+        diagnosticSessions.set(`${session.host}/${session.session_id}`, {loaded:facts.loaded,streaming:facts.streaming,stale:facts.stale,
+          pending:facts.pending===true?{}:facts.pending===false?null:undefined,reading:{incomplete_reasons:facts.history_reasons}});
+      }
+    }
+    return data;
+  } catch(error) {
+    if(epoch===state.epoch) {
+      recentErrors.record({at:new Date().toISOString(),method,path,status:error.status,code:error.code,admissionRefused:error.admissionRefused,operation:error.operation});
+      if([401,403,404].includes(error.status))withdrawDiagnostics();
+    }
+    throw error;
+  }
+}
+async function apiRequest(method, path, body, key, collectReceipt) {
   if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), {localized: true});
   if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady))
     throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), {localized: true});
@@ -203,6 +273,7 @@ async function api(method, path, body, key, collectReceipt) {
     const error = new ApiError(status, data.error?.code, data.error?.message);
     error.admissionRefused = data.error?.admission_refused === true;
     error.reason = data.error?.reason;
+    error.operation = data.operation ?? data.error?.operation;
     throw error;
   }
   return data;
@@ -215,7 +286,8 @@ function errorBox(e, {summary} = {}) {
   const diagnostics = [presentation.code ? h('code', {}, presentation.code) : null,
     presentation.message && presentation.message !== presentation.code ? h('p', {}, presentation.message) : null].filter(Boolean);
   return h('div', {'data-api-error': ''}, h("p", { class: "error", 'data-error-summary': '' }, presentation.summary),
-    diagnostics.length ? disclosure({label: t('global_details'), body: h('div', {'data-error-details': ''}, ...diagnostics)}) : null);
+    disclosure({label: t('global_details'), body: h('div', {'data-error-details': ''}, ...diagnostics,
+      button({variant:'ghost',label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}))}));
 }
 async function submit(action, target, params, preconditions, scope) {
   const connection = { epoch: state.epoch, namespace: state.namespace };
@@ -1296,7 +1368,9 @@ function sessionErrorLine(e) {
 function sessionErrorDetails(e) {
   const code = typeof e?.code === "string" ? e.code : "";
   const detail = [code, e?.status ? `HTTP ${e.status}` : "", e?.message && e.message !== code ? e.message : ""].filter(Boolean).join(" · ");
-  return detail ? disclosure({label: t("session_error_details"), body: h("p", {class: "muted"}, h("code", {}, detail))}) : null;
+  return disclosure({label: t("session_error_details"), body: h('div', {},
+    detail ? h("p", {class: "muted"}, h("code", {}, detail)) : null,
+    button({variant:'ghost',label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}))});
 }
 function sessionErrorBox(e, action = null) {
   // Like errorBox: a caught refresh error still keeps its event batch unacknowledged.
@@ -2859,7 +2933,13 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
   frame.panel("about").append(h("section", {class: "panel"},
     h("h2", {}, t("global_nav_about")),
     h("p", {}, t("global_product")),
-    h("a", {href: setupGuide()}, t("global_setup_guide"))));
+    h('p', {'data-build-line':''}, buildLine(clientIdentity(diagnosticsClient()),t)),
+    h('div',{class:'actions'},button({label:t('diag_export'),onClick:openDiagnostics,'data-export-diagnostics':''}),
+      h("a", {href: setupGuide()}, t("global_setup_guide")))));
+  if(nativeDesktop)nativeStatus().then(status=>{
+    desktopBuild=status.app_build;
+    if(frame.root.isConnected)frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient()),t);
+  }).catch(()=>{});
   main.append(frame.root);
   return frame;
 }
@@ -4208,6 +4288,7 @@ function mountWorkspace(name) {
 let teardown = null;
 let generation = 0;
 async function route() {
+  diagnosticsPreview?.close();
   let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split('?')[0].replace(/^#\//, '') || 'home').split('/').map(decodeURIComponent);
   if (nextName === 'pm') {
     if (nextView?.startsWith('pmt_')) {nextThread = nextView; nextView = 'discussions';

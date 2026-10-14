@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Show installed build versions/commits in Settings → About. Preview, save or copy
+  a local redacted diagnostics file from About or error Details, with anonymous
+  hosts, client-read session counts and at most 50 failed API calls. Desktop uses
+  a constrained native JSON save dialog; no upload or telemetry is introduced.
+
 - Confirm parsed BAT connection values without revealing credentials. Keep connected
   setup actions together, move the operation receipt into Details, use singular and
   plural English counts, and reload setup status from one Settings Refresh while

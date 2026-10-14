@@ -1,0 +1,77 @@
+import {test,expect} from '@playwright/test';
+import {readFile,mkdir} from 'node:fs/promises';
+import {diagnosticsFixture} from './diagnostics-fixture.ts';
+const about=(page,locale)=>page.locator('#settings-tab-about');
+const open=async(page,locale)=>{await page.goto('/dashboard/#/settings');await about(page,locale).click();await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');};
+for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
+ test.use({locale});
+ for(const native of [false,true])for(const known of [false,true])test(`${native?'desktop':'browser'} build identity ${known?'known':'unknown'}`,async({page})=>{
+  await diagnosticsFixture(page,native,known);await page.goto('/dashboard/#/settings');await about(page,locale).click();
+  const line=page.locator('[data-build-line]');await expect(line).toContainText('Connector 0.2.5');
+  await expect(line).toContainText(known?'aaaaaaa':locale==='en'?'unknown':'未知');
+  if(native){await expect(line).toContainText(locale==='en'?'Desktop 0.1.1':'桌面版 0.1.1');await expect(line).toContainText(known?'bbbbbbb':locale==='en'?'unknown':'未知');}
+  else await expect(line).not.toContainText('0.1.1');
+ });
+ test('preview, download, copy, keyboard wrap and restored focus',async({page})=>{
+  const state=await diagnosticsFixture(page);await open(page,locale);const dialog=page.getByRole('dialog');
+  await expect(dialog).toContainText(locale==='en'?'host-1 · Reachable':'host-1 · 可連線');
+  await expect(page.locator('[data-diagnostics-summary]')).toContainText(locale==='en'?'1 failed or uncertain':'1 筆失敗');
+  const text=await page.locator('[data-diagnostics-json]').textContent(),bundle=JSON.parse(text!);
+  expect(bundle.sessions.loaded).toBeNull();expect(bundle.sources.observation).toBe('not_available');
+  expect(text).not.toMatch(/private-box|batc_secret|private prompt|secret@example|192\.0\.2\.8/);
+  const downloadPromise=page.waitForEvent('download');await dialog.getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();
+  const download=await downloadPromise;expect(download.suggestedFilename()).toMatch(/^batc-diagnostics-\d{8}-\d{4}\.json$/);
+  expect(JSON.parse(await readFile((await download.path())!,'utf8'))).toEqual(bundle);
+  await dialog.getByRole('button',{name:locale==='en'?'Copy':'複製',exact:true}).click();
+  await expect(dialog.getByRole('status')).toHaveText(locale==='en'?'Copied':'已複製');expect(await page.evaluate(()=>(window as any).diagnosticsClipboard)).toBe(text);
+  await dialog.getByRole('button',{name:locale==='en'?'Close':'關閉',exact:true}).focus();await page.keyboard.press('Tab');await expect(page.locator('[data-diagnostics-json]')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');await expect(dialog.getByRole('button',{name:locale==='en'?'Close':'關閉',exact:true})).toBeFocused();
+  await page.keyboard.press('Escape');await expect(dialog).toHaveCount(0);await expect(page.locator('[data-export-diagnostics]')).toBeFocused();
+  expect(state.reads.some(path=>path.startsWith('/managed/setup'))).toBe(false);
+ });
+ test('native saving passes only text, generated filename and locale',async({page})=>{
+  const state=await diagnosticsFixture(page,true);await open(page,locale);
+  await page.getByRole('dialog').getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();await expect.poll(()=>state.saved.length).toBe(1);
+  expect(Object.keys(state.saved[0]).sort()).toEqual(['content','filename','locale']);expect(JSON.parse(state.saved[0].content).client.app_commit).toBe('b'.repeat(40));
+ });
+ test('failed read exports its template through error Details',async({page})=>{
+  await diagnosticsFixture(page);await page.goto('/dashboard/#/session/private-box.internal/private-session');
+  await expect(page.locator('[data-session-error]').first()).toBeVisible();await page.locator('[data-session-error]').first().locator('summary').click();
+  await page.locator('[data-session-error]').first().locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+  const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+  expect(bundle.recent_errors.some(e=>e.path_template==='/v1/sessions/:host/:session'&&e.status===503&&e.code==='BAT_ERROR')).toBe(true);
+  expect(JSON.stringify(bundle)).not.toMatch(/private-box|private-session/);
+ });
+});
+test('session summary reflects client reads, then removes them after scope loss',async({page})=>{
+ const state=await diagnosticsFixture(page);await page.goto('/dashboard/#/sessions');
+ await expect(page.locator('.session-results')).toContainText('Private title');await open(page,'en');
+ let bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+ expect(bundle.sessions).toMatchObject({basis:'client_loaded_reads',sampled:2,loaded:1,streaming:1,unknown_activity:0,stale:1,pending:1,history_reasons:{message_ids_incomplete:1}});
+ await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();state.scopes=[];
+ const before=state.reads.length;await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+ bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
+ expect(bundle.sessions.sampled).toBeNull();expect(bundle.hosts).toEqual([]);expect(bundle.operations).toBeNull();
+ expect(state.reads.slice(before).filter(path=>path.startsWith('/hosts')||path.startsWith('/operations')||path.startsWith('/managed/setup'))).toEqual([]);
+});
+test('withdrawal clears preview facts and actions',async({page})=>{
+ const state=await diagnosticsFixture(page);await open(page,'en');state.eventStatus=403;
+ await expect(page.getByRole('dialog').getByRole('status')).toContainText('Source access changed',{timeout:15000});
+ await expect(page.locator('[data-diagnostics-json]')).toBeEmpty();await expect(page.locator('[data-diagnostics-summary]')).toBeEmpty();
+ await expect(page.getByRole('dialog').getByRole('button',{name:'Save',exact:true})).toBeDisabled();await expect(page.getByRole('dialog').getByRole('button',{name:'Copy',exact:true})).toBeDisabled();
+});
+test('late read cannot revive a withdrawn source',async({page})=>{
+ const state=await diagnosticsFixture(page);await page.goto('/dashboard/#/settings');await about(page,'en').click();state.hold=true;state.operationsStatus=403;
+ await page.locator('[data-export-diagnostics]').click();await expect.poll(()=>state.release!==null).toBe(true);state.release();
+ await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+ const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);expect(bundle.hosts).toEqual([]);expect(bundle.operations).toBeNull();expect(bundle.sessions.loaded).toBeNull();
+});
+for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`visual ${locale} ${width}`,async({page})=>{
+ await page.setViewportSize({width,height:width===390?844:900});
+ // Locale comes from browser context, so set it using a new context in the visual fixture.
+ const context=await page.context().browser()!.newContext({locale,viewport:{width,height:width===390?844:900}}),shot=await context.newPage();
+ await diagnosticsFixture(shot);await shot.goto((test.info().project.use.baseURL as string)+'/dashboard/#/settings');await about(shot,locale).click();await shot.locator('[data-export-diagnostics]').click();await expect(shot.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+ expect(await shot.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ if(process.env.BATC_DIAGNOSTICS_SHOTS){await mkdir(process.env.BATC_DIAGNOSTICS_SHOTS,{recursive:true});await shot.screenshot({path:process.env.BATC_DIAGNOSTICS_SHOTS+`/diagnostics-${locale}-${width}.png`});}
+ await context.close();
+});

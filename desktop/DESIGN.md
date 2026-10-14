@@ -967,3 +967,14 @@ unchanged.
 it. Rendering an error still records the same refresh-cycle failure, so failed reads
 cannot acknowledge event checkpoints or enable mutations. IME Escape leaves menus,
 inspectors and the mobile drawer open; ordinary Escape retains focus restoration.
+
+## Diagnostics preview
+
+About retains its existing Settings frame and adds one build line and Export
+diagnostics. Error Details reuse the same entry point. The modal uses shared
+surface/type/spacing/overlay tokens, a compact source summary, a wrapping,
+scrollable JSON preview and Save / Copy / Close. Native `<dialog>` makes the
+background inert; Tab wraps, Escape closes, and focus returns to the trigger.
+English and zh-TW share behavior. Only loaded session reads and an operation page
+are counted; unavailable sources remain unknown. Withdrawal clears preview facts
+and disables export actions together. See [the diagnostics contract](../docs/design/diagnostics.md).

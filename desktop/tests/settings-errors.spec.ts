@@ -35,13 +35,15 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     await expect(page.locator('[data-setup-host]').locator('input[style]')).toHaveCount(0);
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   });
-  test('client setup validation keeps its specific localized sentence without redundant Details',async({page})=>{
+  test('client setup validation keeps its specific sentence and offers diagnostics in Details',async({page})=>{
     const state=await managedSetupFixture(page,false,locale);state.verification.timeout_s=0;await page.goto('/dashboard/');
     const error=page.locator('[data-api-error]');
     await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'
       ? 'Enter a valid project, executable, at most 63 nonempty arguments and a 1–3600 second timeout.'
       : '請輸入有效專案、執行程式、最多 63 個非空參數，以及 1–3600 秒逾時。');
-    await expect(error.locator('details, code')).toHaveCount(0);
+    await expect(error.locator('code, [data-error-details] p')).toHaveCount(0);
+    await error.locator('summary').click();
+    await expect(error.locator('[data-export-diagnostics]')).toHaveText(locale==='en'?'Export diagnostics':'匯出診斷資料');
     await expect(page.locator('[data-setup-host] button[type=submit]')).toBeDisabled();
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   });

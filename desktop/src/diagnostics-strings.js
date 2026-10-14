@@ -1,0 +1,26 @@
+export const diagnosticsStrings = {
+  en: {
+    diag_export:'Export diagnostics', diag_title:'Diagnostics', diag_save:'Save', diag_copy:'Copy', diag_close:'Close',
+    diag_unknown:'unknown', diag_connector_build:'Connector {version} ({commit})', diag_desktop_build:'Desktop {version} ({commit})',
+    diag_privacy:'Redacted preview. Saving and copying stay on this device.',
+    diag_counts:'{errors} · {operations}',
+    diag_errors_one:'1 recent error', diag_errors_many:'{count} recent errors', diag_operations_one:'1 failed or uncertain operation', diag_operations_many:'{count} failed or uncertain operations', diag_operations_unavailable:'Operations not available', diag_hosts_unavailable:'Hosts not available',
+    diag_sample:'Session counts cover client reads only. Operation counts cover the loaded page.',
+    diag_unavailable:'Not available', diag_loading:'Preparing preview…', diag_json:'Full JSON',
+    diag_copied:'Copied', diag_copy_failed:'Copy failed. Select the JSON to copy it.', diag_saved:'Saved', diag_save_failed:'Save could not be confirmed. Check the destination before saving again.',
+    diag_withdrawn:'Source access changed. Close and reopen diagnostics for a fresh preview.', diag_too_large:'This preview exceeds the 256 KB save limit.',
+    diag_connected:'Connected', diag_disconnected:'Disconnected', diag_reconnecting:'Reconnecting', diag_never_connected:'Never connected', diag_stale:'Stale', diag_reachable:'Reachable', diag_unreachable:'Unreachable', diag_state_unknown:'Unknown',
+  },
+  'zh-TW': {
+    diag_export:'匯出診斷資料', diag_title:'診斷資料', diag_save:'儲存', diag_copy:'複製', diag_close:'關閉',
+    diag_unknown:'未知', diag_connector_build:'Connector {version}（{commit}）', diag_desktop_build:'桌面版 {version}（{commit}）',
+    diag_privacy:'預覽已去識別化。儲存與複製都只在這台裝置上進行。',
+    diag_counts:'{errors} · {operations}',
+    diag_errors_one:'最近 1 筆錯誤', diag_errors_many:'最近 {count} 筆錯誤', diag_operations_one:'1 筆失敗或結果未確認的操作', diag_operations_many:'{count} 筆失敗或結果未確認的操作', diag_operations_unavailable:'無法取得操作資料', diag_hosts_unavailable:'無法取得主機資料',
+    diag_sample:'工作階段僅計算介面已讀取的資料；操作僅計算已載入的頁面。',
+    diag_unavailable:'無法取得', diag_loading:'正在準備預覽…', diag_json:'完整 JSON',
+    diag_copied:'已複製', diag_copy_failed:'複製失敗，請選取 JSON 後手動複製。', diag_saved:'已儲存', diag_save_failed:'無法確認是否已儲存，請先檢查目的地再重新儲存。',
+    diag_withdrawn:'來源存取權已變更，請關閉後重新開啟診斷資料。', diag_too_large:'此預覽超過 256 KB 的儲存上限。',
+    diag_connected:'已連線', diag_disconnected:'已中斷', diag_reconnecting:'重新連線中', diag_never_connected:'尚未連線', diag_stale:'過期', diag_reachable:'可連線', diag_unreachable:'無法連線', diag_state_unknown:'未知',
+  },
+};

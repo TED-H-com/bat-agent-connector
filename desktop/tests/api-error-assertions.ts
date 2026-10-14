@@ -16,5 +16,6 @@ export async function expectClientError(root: Page | Locator, message: string | 
   const error = root.locator('[data-api-error]').filter({hasText: message}).first();
   await expect(error.locator('[data-error-summary]')).toBeVisible();
   await expect(error.locator('[data-error-summary]')).toContainText(message);
-  await expect(error.locator('details, code')).toHaveCount(0);
+  // The export action has Details; client errors still have no duplicate technical text.
+  await expect(error.locator('code, [data-error-details] p')).toHaveCount(0);
 }
