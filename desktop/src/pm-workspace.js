@@ -1425,6 +1425,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           activationReads.delete(section);
           await (activation || (section === lifecycle ? section.refresh({event}) : section.refresh()));
           if (sectionRequired(section)) revealSource(section);
+        } else if (section) {
+          // Rendering a discussion can move a previously visible source into a
+          // closed tab or drawer after the initial invalidation pass.
+          staleSections.add(section); maskSource(section);
         }
         alive(); if (ticket !== sequence) return;
       }

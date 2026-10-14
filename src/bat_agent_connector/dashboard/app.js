@@ -41375,6 +41375,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					activationReads.delete(section);
 					await (activation || (section === lifecycle ? section.refresh({ event }) : section.refresh()));
 					if (sectionRequired(section)) revealSource(section);
+				} else if (section) {
+					staleSections.add(section);
+					maskSource(section);
 				}
 				alive();
 				if (ticket !== sequence) return;

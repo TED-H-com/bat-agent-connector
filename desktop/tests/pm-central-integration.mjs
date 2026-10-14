@@ -298,6 +298,7 @@ try {
   assert.equal(new URL(repeatedResponse.url()).searchParams.get('journal_cursor'),String(fixedComparison.comparison.context.journal_cursor));
   assert.deepEqual(await repeatedResponse.json(),fixedComparison);
   await page.reload();
+  await openThreadBrief(page);
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   await openPmPanel(page, 'ui_change_phase');
   const activity=page.locator('[data-pm-lifecycle]');
