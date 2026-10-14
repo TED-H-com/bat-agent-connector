@@ -34,6 +34,13 @@ async timeout cannot preempt an SQLite commit. Diagnose storage latency and work
 stacks before changing a handler. Do not increase deadlines or disable durability
 to hide a failed settling assertion.
 
+Maintenance-repair fixtures use the production lineage, new-effect and retry
+hooks installed by TaskDaemon and OperationService. Do not wrap those hooks with
+old integration stand-ins: doing so repeats source validation before each step
+and frame, consuming the settling budget even when provider replies are prompt.
+Keep original-key, withdrawal, write-count and retry-budget assertions against
+the production hooks; mock only the external providers and managed test resources.
+
 Public documentation, screenshots, examples and issue/PR text must work without a
 maintainer's private Fleet inventory or deployment. Use synthetic host names, reserved
 example addresses and generic user paths. Keep private installation evidence, operator

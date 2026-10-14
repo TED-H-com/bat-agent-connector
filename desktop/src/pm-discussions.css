@@ -113,9 +113,10 @@
 /* The conversation gets the room until a reader or a new proposal needs the panel. */
 @media (min-width: 1200px) {
   [data-discussions] .pm-thread-layout:has(.pd-panel-home:not([hidden])) { grid-template-columns: minmax(0, 1fr) 300px; }
-  .pd-panel-home > .pd-panel-overlay { position: static; width: 100%; height: 100%; max-height: none; border: 0; box-shadow: none; }
+  /* The static panel scrolls through its grid column, not a second body scroller. */
+  .pd-panel-home > .pd-panel-overlay { position: static; display: block; overflow: visible; width: 100%; height: 100%; max-height: none; border: 0; box-shadow: none; }
   .pd-panel-home > .pd-panel-overlay > header { padding: var(--space-2) var(--space-3); }
-  .pd-panel-home > .pd-panel-overlay > .ui-inspector-body { padding: var(--space-3); }
+  .pd-panel-home > .pd-panel-overlay > .ui-inspector-body { padding: var(--space-3); overflow: visible; }
 }
 @media (min-width: 800px) { [data-discussion-back] { display: none; } }
 .pd-context-trigger { cursor: pointer; font: inherit; padding-inline: var(--space-2); border: 0; color: var(--text-2); }

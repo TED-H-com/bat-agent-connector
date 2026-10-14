@@ -12,8 +12,8 @@ from inspect import signature
 from .api_auth import Principal
 
 _CURRENT = ContextVar('pm_read_cache', default=None)
-# Depth of active traversal guards. A context copied into another thread or
-# task keeps the depth, which can only prevent storing, never add an entry.
+# Depth of active traversal guards. Inherited contexts still cannot use the
+# owner's memo; guarded answers stay private to their exact traversal depth.
 _GUARDS = ContextVar('pm_read_cache_guards', default=0)
 _GUARD_TOKEN = ContextVar('pm_read_cache_guard_token', default=None)
 _REFUSALS = ContextVar('pm_read_cache_refusals', default=0)
@@ -34,10 +34,11 @@ class _Scope:
     values: dict = field(default_factory=dict)
     active: bool = True
     disabled: bool = False
+    guard_depth: int = 0
 
     def __post_init__(self):
-        self.changes = self.db.total_changes
-        self.disabled = not self.db.in_transaction
+        self.changes = 0 if self.disabled else self.db.total_changes
+        self.disabled = self.disabled or not self.db.in_transaction
 
     def usable(self):
         # ContextVars are inherited by asyncio tasks and copy_context(). Neither
@@ -112,9 +113,10 @@ def guarded():
 
     Answers computed inside a guard can assume that an in-progress back edge is
     visible, or refuse because a traversal budget ran out. Neither is the
-    request-wide answer, so visibility loaded while a guard is active is not
-    stored. Explicitly independent raw metadata is exempt. Entries stored
-    outside every guard may still be served.
+    request-wide answer, so guarded loads cannot populate the request memo
+    except for explicitly independent raw metadata. Entries stored outside
+    every guard may still be served. A private guarded_scope may store answers
+    relative to its own unchanged guard only.
     """
     token = _GUARDS.set(_GUARDS.get() + 1)
     identity = _GUARD_TOKEN.set(object())
@@ -123,6 +125,32 @@ def guarded():
     finally:
         _GUARD_TOKEN.reset(identity)
         _GUARDS.reset(token)
+
+
+@contextmanager
+def guarded_scope(db, principal):
+    """Fresh snapshot memo private to one active traversal guard.
+
+    Back-edge assumptions stay fixed for this guard's lifetime. Never join an
+    outer memo or export these conditional answers to it. Nested guards cannot
+    reuse or store answers in this scope; copied tasks/threads and writes retain
+    the usual owner and snapshot barriers.
+    """
+    depth = _GUARDS.get()
+    if depth == 0:
+        raise RuntimeError('A guarded memo requires an active traversal guard')
+    parent = frame = _CURRENT.get()
+    while frame is not None and frame.scope.db is not db:
+        frame = frame.parent
+    disabled = frame is not None and not frame.scope.usable()
+    current = _Scope(db, guard_depth=depth, disabled=disabled)
+    token = _CURRENT.set(_Frame(current, _key(principal), parent))
+    try:
+        yield
+    finally:
+        current.active = False
+        current.values.clear()
+        _CURRENT.reset(token)
 
 
 def is_guarded():
@@ -158,6 +186,8 @@ def recall(kind, key):
     frame = _CURRENT.get()
     if frame is None or not frame.scope.usable():
         return False, None
+    if frame.scope.guard_depth and _GUARDS.get() != frame.scope.guard_depth:
+        return False, None  # Match remember: no conditional read from another guard.
     try:
         identity = (kind, frame.principal, _key(key))
     except TypeError:
@@ -183,12 +213,17 @@ def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_indepen
     if frame is None or not frame.scope.usable():
         return load()
     current = frame.scope
+    if current.guard_depth and _GUARDS.get() != current.guard_depth:
+        return load()  # Even raw metadata cannot borrow a different private guard.
     try:
         identity = (kind, frame.principal, _key(key))
     except TypeError:
         return load()
     if identity not in current.values:
-        if _GUARDS.get() > 0 and not guard_independent:
+        # Independent metadata keeps M4's ordinary-scope exemption. In a
+        # guarded_scope it stays private at this exact depth: do not export it
+        # to an outer memo or let a deeper guard reuse/populate this scope.
+        if _GUARDS.get() > current.guard_depth and not guard_independent:
             return load()
         from .operations import OperationError
         generation = refusal_generation()
@@ -196,16 +231,16 @@ def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_indepen
             value = load()
         except OperationError as exc:
             if (not cache_errors or not current.usable()
-                    or not guard_independent and generation != refusal_generation()):
+                    or generation != refusal_generation()):
                 raise
             current.values[identity] = (False, (exc.code, exc.message, exc.status))
         else:
             # Loading can itself write. Do not repopulate an invalidated memo.
             if (not current.usable() or cache_if is not None and not cache_if(value)
-                    or not guard_independent and generation != refusal_generation()):
+                    or generation != refusal_generation()):
                 return value
             saved = freeze(value)
-            if not current.usable():
+            if not current.usable() or generation != refusal_generation():
                 return value
             current.values[identity] = (True, _SavedValue(saved, thaw))
     return _entry(current.values[identity])

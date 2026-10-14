@@ -47,34 +47,6 @@ async def execute(ops, envelope, *, who):
     return op
 
 
-def shared_hooks(monkeypatch):
-    """Exact integrator seams; domain test never substitutes admission/transport."""
-    original_bind = pm_source_lineage.bind_operation
-    def bind(db, oid, target, params, binding):
-        if binding.get('pm_maintenance_repair') is not None:
-            binding = {**binding, 'pm_source_roots': sorted({oid, *binding.get('pm_source_roots', [])})}
-        original_bind(db, oid, target, params, binding)
-    monkeypatch.setattr(pm_source_lineage, 'bind_operation', bind)
-    original_visible = pm_source_lineage.visible_roots
-    def visible(db, principal, roots):
-        rest = set()
-        for oid in roots:
-            row = db.execute('SELECT action FROM operations WHERE operation_id=?', (oid,)).fetchone()
-            if row and row[0] == repairs.ACTION:
-                if not repairs.source_visible(db, principal, {'operation_id': oid}):
-                    return False
-            else:
-                rest.add(oid)
-        return original_visible(db, principal, rest)
-    monkeypatch.setattr(pm_source_lineage, 'visible_roots', visible)
-    original_effect = pm_source_lineage.require_new_effect
-    def effect(ops, oid):
-        original_effect(ops, oid)
-        repairs.require_new_effect(ops, ops._row(oid))
-    monkeypatch.setattr(pm_source_lineage, 'require_new_effect', effect)
-    monkeypatch.setattr(pm_lifecycle_gates, 'RECORD_ACTIONS', pm_lifecycle_gates.RECORD_ACTIONS | {repairs.RECORD})
-
-
 def inventory(w):
     ops, now = w['d'].ops, w['clock'][0]
     hc = ops.context['fleet'].config.hosts['h1']
@@ -111,15 +83,7 @@ async def refresh(w):
 @pytest.fixture
 async def repair_ready(fixed, monkeypatch):
     w, ops = fixed, fixed['d'].ops
-    shared_hooks(monkeypatch)
     repairs.install(ops)
-    restart = ops._step_restart
-    def restart_guard(oid, name, selected, *, bookkeeping=False):
-        with ops.journal.tx():
-            if not bookkeeping:
-                repairs.admit_restart(ops, oid, name, selected)
-            return restart(oid, name, selected, bookkeeping=bookkeeping)
-    monkeypatch.setattr(ops, '_step_restart', restart_guard)
     clock = [time.time()]
     w['clock'] = clock
     for module in (api_auth, repairs, evidence, policy, workload, github, checks, github_sources):
@@ -215,3 +179,33 @@ async def test_real_dispatch_is_one_owned_child_and_not_a_verified_release(repai
     with pytest.raises(sqlite3.IntegrityError, match='immutable'):
         ops.db.execute('DELETE FROM pm_maintenance_repair_children')
     assert repairs.current_repair(ops, OWNER, w['workspace_id'])['repair']['repair_id'] == current['repair_id']
+
+
+async def test_production_step_hooks_check_repair_once_and_keep_zero_retry_budget(repair_ready, monkeypatch):
+    w, ops = repair_ready, repair_ready['d'].ops
+    effect, restart = repairs.require_new_effect, repairs.admit_restart
+    effects, restarts = [], []
+
+    def checked(service, operation):
+        effects.append(operation['operation_id'])
+        return effect(service, operation)
+
+    def retried(service, oid, name, selected):
+        restarts.append((oid, name, selected))
+        return restart(service, oid, name, selected)
+
+    monkeypatch.setattr(repairs, 'require_new_effect', checked)
+    monkeypatch.setattr(repairs, 'admit_restart', retried)
+    env = request(w)
+    parent = ops.create(OWNER, **env)[0]
+    oid = parent['operation_id']
+    assert oid in pm_source_lineage.roots(ops.db, 'operation', oid)
+    ops._step_start(oid, 'fixture.unsent', {})
+    assert effects == [oid]
+    with pytest.raises(OperationError) as caught:
+        ops._step_restart(oid, 'fixture.unsent', {})
+    assert caught.value.code == 'PM_REPAIR_RETRIES_EXHAUSTED'
+    assert restarts == [(oid, 'fixture.unsent', {})]
+    assert ops.create(OWNER, **env)[0]['operation_id'] == oid
+    assert ops.get(oid)['steps'][0]['status'] == 'started'
+    assert ops.db.execute('SELECT COUNT(*) FROM pm_maintenance_repair_retries').fetchone()[0] == 0

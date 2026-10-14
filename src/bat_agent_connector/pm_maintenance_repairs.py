@@ -203,8 +203,9 @@ def _full_access_sources(ops, principal, op):
         # current policy/lifecycle and new-effect checks remain in the caller
         # and receive a fresh source scope on each synchronous invocation.
         from .pm_source_reads import scope
-        # Nested answers assume this repair is visible; do not store them request-wide.
-        with scope(ops.db, principal) as state, pm_read_cache.guarded():
+        # Keep conditional reads private to this exact repair guard; retain
+        # the source scope's bounded DAG proofs for completed outer validation.
+        with scope(ops.db, principal) as state, pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, principal):
             if state['repair_generation'] is None:
                 state['repair_generation'] = pm_read_cache.refusal_generation()
             state['repair_walks'].add(key)

@@ -109,8 +109,8 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (c
       denied = true; f.state.cursor++;
       await expect(page.locator('[data-pm-lifecycle]')).toContainText(zh ? '目前帳號沒有這項操作的權限。' : 'Your account does not have the required scope.');
       await expect(page.locator('[data-pm-lifecycle]')).toContainText(zh
-        ? '目前無法讀取工作區狀態，重新取得資料後才能調整投入。'
-        : 'Activity controls are unavailable until the workspace state can be read again.');
+        ? '無法讀取工作區狀態。'
+        : 'Workspace state is unreadable.');
       await expect(page.locator('[data-pm-lifecycle] .pm-lifecycle-stage')).toHaveCount(0);
       await expect(submit).toBeDisabled();
       expect(f.state.writes).toHaveLength(2);

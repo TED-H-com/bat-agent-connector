@@ -1,7 +1,7 @@
 import {test, expect, type Locator} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {reviewFixture} from './requirements-review-fixture.ts';
-import {openPmPanel, openPmSection} from './pm-navigation.ts';
+import {openPmPanel, openPmSection, openReportTask} from './pm-navigation.ts';
 
 // Opt-in evidence capture uses the same mock central records as the experience tests.
 for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]) {
@@ -45,9 +45,9 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
     await shot('open-decisions', page.locator('[data-overview-metric=decision]'));
     await openPmPanel(page, 'ui_report');
     await expect(page.locator('[data-report-compare]')).toBeEnabled();
-    await page.locator('[data-pm-brief-export] > summary').click();
+    await openReportTask(page, 'export');
     await shot('report');
-    await page.locator('[data-report-compare]').click();
+    await openReportTask(page, 'compare');
     await expect(page.locator('.pm-charter-comparison')).toBeVisible();
     await shot('comparison', page.locator('.pm-charter-comparison > section').first());
     await page.keyboard.press('Escape');

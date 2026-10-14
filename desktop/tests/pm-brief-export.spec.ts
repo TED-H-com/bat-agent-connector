@@ -4,6 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFile,mkdir} from 'node:fs/promises';
 import {pmFixture,pmRoute,workspaceId} from './pm-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
+import {shellShot} from './shell-empty-state.ts';
 
 const sid='pmsnap_'+'a'.repeat(32),older='pmsnap_'+'b'.repeat(32),media:any={markdown:'text/markdown; charset=utf-8',html:'text/html; charset=utf-8',svg:'image/svg+xml; charset=utf-8'};
 function fixture(){
@@ -74,7 +75,19 @@ async function mount(page:Page,native:boolean,f:ReturnType<typeof fixture>){
   await page.goto(pmRoute);await openThreadBrief(page);await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
 }
 const brief=(page:Page)=>page.locator('[data-pm-brief]'),exports=(page:Page)=>page.locator('[data-pm-brief-export]');
-async function open(page:Page){await exports(page).locator(':scope > summary').click();}
+async function open(page:Page){await expect(exports(page).getByRole('combobox').first()).toBeVisible();}
+
+for(const locale of ['en','zh-TW'])for(const width of [1440,390])test(`saved receipt uses localized punctuation ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
+  const f=fixture();await mount(page,true,f);await open(page);
+  await page.getByRole('button',{name:locale==='en'?'Save report…':'儲存報告…',exact:true}).click();
+  const receipt=exports(page).locator('[role=status]');
+  await expect(receipt).toHaveText(locale==='en'?'Saved: selected-report.md':'已儲存：selected-report.md');
+  expect(f.state.nativeSaves).toEqual([{workspace_id:workspaceId,snapshot_id:sid,format:'markdown',locale,
+    expected_view_digest:'2'.repeat(64),expected_output_digest:f.report(sid,'markdown',locale).output_digest}]);
+  expect(f.base.state.writes).toHaveLength(0);await receipt.scrollIntoViewIfNeeded();
+  await shellShot(page,'export-saved',locale,width);await context.close();
+});
 
 for(const format of ['markdown','html','svg'])test(`browser downloads exact authorized ${format} bytes without executing content`,async({page})=>{
   const f=fixture();await mount(page,false,f);await open(page);await page.getByLabel('File format',{exact:true}).selectOption(format);
@@ -142,7 +155,7 @@ test('native cancellation and existing destinations do not imply a saved file',a
 
 test('old desktop versions preserve Brief reading and disclose unavailable report saving',async({page})=>{
   const f=fixture();f.state.nativeSupport=false;await mount(page,true,f);await open(page);
-  await expect(exports(page)).toContainText('does not support saving Brief reports');await expect(page.getByRole('button',{name:'Save report…',exact:true})).toBeDisabled();
+  await expect(exports(page)).toContainText('cannot save reports');await expect(page.getByRole('button',{name:'Save report…',exact:true})).toBeDisabled();
   await expect(brief(page)).toContainText('Current selected goal');expect(f.state.nativeSaves).toHaveLength(0);
 });
 
