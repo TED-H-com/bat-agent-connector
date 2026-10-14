@@ -469,3 +469,78 @@ async def test_legacy_ssh_recovery_ignores_unrelated_local_declaration(operation
     assert len(calls) == 2 and all(argv[3] == "fixture-bat" for argv in calls)
     assert "fixed-effect" in calls[0][-1] and "fixed-readback" in calls[1][-1]
     assert result["idempotency_key"] == "original-key"
+
+
+def test_every_registered_daemon_action_is_explicitly_classified(tmp_path, monkeypatch):
+    from bat_agent_connector import dashboard_sync, managed_setup, platform_files
+    from bat_agent_connector.task_daemon import TaskDaemon
+
+    root = tmp_path / "managed"
+    platform_files.ensure_private_directory(root / "config")
+    monkeypatch.setenv("BATC_CONFIG_DIR", str(root / "config"))
+    monkeypatch.setenv("BATC_STATE_DIR", str(root / "state"))
+    path = root / "config" / "hosts.toml"
+    source = {"client": {"label": "Fixture"}, "hosts": {}, "safety": {"write_min_interval_s": 0}}
+    platform_files.atomic_write(path, managed_setup._encode(source))
+    daemon = TaskDaemon(parse_config(source, path), root / "state" / "tasks.sqlite3")
+    try:
+        principal = api_auth.Principal("desktop-fixture", frozenset(api_auth.SCOPES))
+        daemon.managed_installation = {"data_dir": root, "actor": principal.actor,
+                                       **dashboard_sync.identity(daemon.journal, principal)}
+        managed_setup.install(daemon)
+        assert host_git.SETUP_ACTIONS.isdisjoint(host_git.HOST_EFFECT_ACTIONS)
+        assert host_git.SETUP_ACTIONS.isdisjoint(host_git.JOURNAL_ONLY_ACTIONS)
+        assert host_git.HOST_EFFECT_ACTIONS.isdisjoint(host_git.JOURNAL_ONLY_ACTIONS)
+        classified = host_git.SETUP_ACTIONS | host_git.HOST_EFFECT_ACTIONS | host_git.JOURNAL_ONLY_ACTIONS
+        registered = set(daemon.ops.actions)
+        assert registered == classified, {
+            "unclassified": sorted(registered - classified),
+            "unknown_classified": sorted(classified - registered),
+        }
+        for name in registered:
+            assert host_git.action_class(name) in {"setup", "host_effect", "journal_only"}
+        with pytest.raises(ValueError, match="unclassified action"):
+            host_git.action_class("fixture.unclassified")
+    finally:
+        daemon.journal.close()
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_journal_only_action_omits_git_execution_and_never_blocks_on_local_host(operations, monkeypatch, legacy):
+    ops = operations
+    monkeypatch.setattr(host_git, "JOURNAL_ONLY_ACTIONS", host_git.JOURNAL_ONLY_ACTIONS | {"fixture.journal"})
+    ops.register(ActionDef("fixture.journal", "manage", "Fixture journal-only effect",
+                           lambda ctx: asyncio.sleep(0, result=ctx.effect("journal-effect", lambda: {"saved": True}))))
+    op, _ = ops.create(api_auth.Principal("fixture-operator", frozenset({"manage"})), action="fixture.journal",
+                       target={"host": "fixture"}, idempotency_key="journal-key")
+    assert "git_execution" not in (op["external_refs"].get("admission_binding") or {})
+    if legacy:
+        with ops.journal.tx():
+            ops.db.execute("UPDATE operations SET external_refs=NULL WHERE operation_id=?", (op["operation_id"],))
+    ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {"fixture": "fixture-bat"})
+    await ops._execute(op["operation_id"])
+    result = ops.get(op["operation_id"])
+    assert result["status"] == "succeeded" and result["result"] == {"saved": True}
+
+
+async def test_misclassified_journal_only_action_still_refuses_local_host_on_run(operations, monkeypatch):
+    ops = operations
+    monkeypatch.setattr(host_git, "JOURNAL_ONLY_ACTIONS", host_git.JOURNAL_ONLY_ACTIONS | {"fixture.git"})
+    calls = []
+    async def spawn(*args, **kwargs):
+        calls.append(args)
+        raise AssertionError("misclassified local host must not spawn")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+    ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {"fixture": "fixture-bat"}, server_id="fixture-server")
+    async def handler(ctx):
+        async def effect():
+            return {"evidence": await ops.context["git_runner"].run("fixture", "fixed-script")}
+        return await ctx.step("git-effect", effect)
+    op = create(ops, handler)
+    assert "git_execution" not in (op["external_refs"].get("admission_binding") or {})
+    await ops._execute(op["operation_id"])
+    result = ops.get(op["operation_id"])
+    assert result["status"] == "needs_attention" and result["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
+    assert "SSH location" in result["status_reason"]
+    assert calls == []
+

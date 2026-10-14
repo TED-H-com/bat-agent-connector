@@ -157,9 +157,163 @@ def _host_names(*values):
     return hosts
 
 
+SETUP_ACTIONS = frozenset({
+    "setup.host",
+    "setup.repository",
+    "setup.verification",
+})
+
+HOST_EFFECT_ACTIONS = frozenset({
+    "artifact.accept",
+    "artifact.capture",
+    "artifact.capture.managed",
+    "checkpoint.continue",
+    "checkpoint.continue.revalidate",
+    "checkpoint.create",
+    "cleanup.apply",
+    "fanout.plan",
+    "fanout.start",
+    "github.pr.publish",
+    "integration.apply",
+    "integration.handoff",
+    "integration.preview",
+    "pm.conversation.adopt",
+    "pm.conversation.propose",
+    "pm.dependencies.capture",
+    "pm.execution.verify",
+    "pm.follow_up.analyze",
+    "pm.plan.adopt",
+    "pm.run.bat.analyze",
+    "pm.run.prepare",
+    "pm.spec.materialize",
+    "repository.continue",
+    "session.answer",
+    "session.approve_pending",
+    "session.failover",
+    "session.interrupt",
+    "session.permissions",
+    "session.record_verification",
+    "session.relay",
+    "session.send",
+    "session.start",
+    "task.command.reconcile",
+    "task.mark_stage",
+    "task.pause",
+    "task.request_ted",
+    "task.resume",
+    "task.submit",
+    "task.verify",
+    "worktree.merge",
+})
+
+JOURNAL_ONLY_ACTIONS = frozenset({
+    "artifact.upload",
+    "delivery.merge_and_deploy",
+    "deployment.rollback",
+    "deployment.start",
+    "github.pr.merge",
+    "github.pr.update",
+    "pm.ahp.observe",
+    "pm.backlog.revise",
+    "pm.dependencies.declare",
+    "pm.dependencies.retract",
+    "pm.dod.revise",
+    "pm.evidence.capture",
+    "pm.follow_up.prepare",
+    "pm.github.observe",
+    "pm.governance.adoption.link",
+    "pm.governance.decide",
+    "pm.governance.record",
+    "pm.governance.revise",
+    "pm.input.confirm",
+    "pm.input.record",
+    "pm.issue.cancel",
+    "pm.issue.publish",
+    "pm.lifecycle.close",
+    "pm.lifecycle.pause",
+    "pm.lifecycle.reopen",
+    "pm.lifecycle.retain_inflight",
+    "pm.lifecycle.set_stage",
+    "pm.maintenance.check",
+    "pm.maintenance.repair",
+    "pm.maintenance.repair.evidence.record",
+    "pm.maintenance.repair.runtime.observe",
+    "pm.maintenance_policy.adopt",
+    "pm.maintenance_review.candidate.record",
+    "pm.maintenance_review.complete",
+    "pm.maintenance_review.follow_up.record",
+    "pm.maintenance_review.note",
+    "pm.maintenance_review.prepare",
+    "pm.meeting.complete",
+    "pm.meeting.context.revise",
+    "pm.meeting.create",
+    "pm.meeting.draft",
+    "pm.meeting.follow_up.record",
+    "pm.meeting.note",
+    "pm.message.append",
+    "pm.plan.draft",
+    "pm.product_goal.revise",
+    "pm.project.bind",
+    "pm.quality.review.create",
+    "pm.quality.review.record",
+    "pm.quality.review.revoke",
+    "pm.release_baseline.register",
+    "pm.roadmap.baseline.set",
+    "pm.roadmap.forecast.set",
+    "pm.roadmap.observe",
+    "pm.run.analyze",
+    "pm.snapshot.create",
+    "pm.sprint.cancel",
+    "pm.sprint.close",
+    "pm.sprint.create",
+    "pm.sprint.goal.revise",
+    "pm.sprint.select",
+    "pm.sprint.start",
+    "pm.thread.create",
+    "pm.thread.plan",
+    "pm.thread.plan.revise",
+    "pm.thread.rename",
+    "pm.work.bind",
+    "pm.work_batch.evidence.record",
+    "pm.work_batch.start",
+    "pm.work_package.create",
+    "pm.workload.capture",
+    "pm.workspace.create",
+    "pm.workspace.member.set",
+    "preferences.models.update",
+    "project.create",
+    "project.order",
+    "project.pin",
+    "project.skills.update",
+    "project.update",
+    "repair.create",
+    "session.labels.set",
+    "session.position",
+    "session.read",
+    "work_item.approve",
+    "work_item.continue",
+    "work_item.create",
+    "work_item.link",
+    "work_item.order",
+    "work_item.pin",
+    "work_item.read",
+    "work_item.update",
+})
+
+
+def action_class(action):
+    if action in SETUP_ACTIONS:
+        return "setup"
+    if action in HOST_EFFECT_ACTIONS:
+        return "host_effect"
+    if action in JOURNAL_ONLY_ACTIONS:
+        return "journal_only"
+    raise ValueError(f"unclassified action {action!r}")
+
+
 def admission_bindings(ops, action, target, params, binding):
     runner = ops.context.get("git_runner")
-    if action.startswith("setup.") or not isinstance(runner, HostGitRunner):
+    if action in SETUP_ACTIONS or action in JOURNAL_ONLY_ACTIONS or not isinstance(runner, HostGitRunner):
         return binding
     hosts = _host_names(target, params, binding)
     # Indirect workspace/repository actions resolve carriers later. Freeze the
@@ -224,8 +378,10 @@ def require_execution(host=None):
     if not isinstance(runner, HostGitRunner):
         return
     op = ops._row(operation_id)
-    if op["action"].startswith("setup."):
+    if op["action"] in SETUP_ACTIONS:
         return  # Setup separately binds before/after configuration revisions.
+    if host is None and op["action"] in JOURNAL_ONLY_ACTIONS:
+        return
     refs = op.get("external_refs") or {}
     locations = (refs.get("admission_binding") or {}).get("git_execution")
     steps = [json.loads(row[0]) for row in ops.db.execute(
@@ -247,3 +403,4 @@ def require_execution(host=None):
     for name in names:
         if name not in locations or locations[name] is None or locations[name] != runner._require_current(name):
             raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git execution location changed")
+
