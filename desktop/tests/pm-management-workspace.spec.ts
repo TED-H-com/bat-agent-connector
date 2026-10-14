@@ -164,8 +164,9 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`manag
   await context.close();
 });
 
-test('thread meetings and follow-up reads wait for their visible disclosure', async ({page}) => {
+test('Meeting reads wait for its tab and Follow-ups stays in Issues', async ({page}) => {
   const f = fixture(), reads: string[] = [], prefix = `/pm/workspaces/${workspaceId}`;
+  f.base.state.thread.mode = 'sprint_review';
   await mountConversation(page, false, async (input: any) => {
     const url = new URL(input.path, 'http://fixture'), path = url.pathname;
     if (input.method === 'GET' && path !== '/events') reads.push(path);
@@ -181,18 +182,27 @@ test('thread meetings and follow-up reads wait for their visible disclosure', as
   expect(related()).toHaveLength(0);
   const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
   await refresh.click(); await expect(refresh).toBeEnabled(); expect(related()).toHaveLength(0);
-  const meetings = page.locator('[data-pm-section=ui_meetings] > details'), follow = page.locator('[data-pm-section=ui_follow_up] > details');
-  await meetings.locator(':scope > summary').click(); await expect.poll(() => related().filter(path => path.includes('/meetings')).length).toBe(2);
-  await meetings.locator(':scope > summary').click();
-  await follow.locator(':scope > summary').click(); await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length).toBe(2);
-  await follow.locator(':scope > summary').click(); reads.length = 0;
+  await openThreadTab(page, 'context');
+  const meetingTab = page.getByRole('tab', {name: 'Meeting', exact: true});
+  await expect(page.locator('[data-discussion-tab=context] [data-pm-meetings]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-follow-up]')).toHaveCount(0);
+  await meetingTab.click(); await expect.poll(() => related().filter(path => path.includes('/meetings')).length).toBe(2);
+  await openThreadTab(page, 'context'); reads.length = 0;
   f.base.state.thread.title = 'Thread event read'; f.publish('pm_thread'); await expect(page.locator('[data-discussion-title]')).toHaveText('Thread event read', {timeout: 10000});
   await expect(refresh).toBeEnabled(); expect(related()).toHaveLength(0);
   f.publish('pm_meeting'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
-  expect(related()).toHaveLength(0); await meetings.locator(':scope > summary').click();
+  expect(related()).toHaveLength(0); await meetingTab.click();
   await expect.poll(() => related().filter(path => path.includes('/meetings')).length, {timeout: 10000}).toBe(2);
-  await meetings.locator(':scope > summary').click();
+  await openThreadTab(page, 'context');
   expect(related().filter(path => path.includes('/follow-ups'))).toHaveLength(0); reads.length = 0;
+  f.publish('pm_follow_up'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
+  expect(related()).toHaveLength(0);
+  await page.goto(route + '/issues'); await expect(refresh).toBeEnabled();
+  await openPmSection(page, 'issues', 'ui_follow_up');
+  const follow = page.locator('[data-pm-section=ui_follow_up] > details');
+  await expect(follow.locator('[data-pm-follow-up]')).toBeVisible();
+  await expect(follow.locator('[data-pm-action="pm.follow_up.prepare"]')).toHaveCount(1);
+  await follow.locator(':scope > summary').click(); reads.length = 0;
   f.publish('pm_follow_up'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
   expect(related()).toHaveLength(0); await follow.locator(':scope > summary').click();
   await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length, {timeout: 10000}).toBe(2);

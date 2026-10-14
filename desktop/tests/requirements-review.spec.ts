@@ -183,6 +183,7 @@ for (const view of ['requirements', 'board']) test(`S5 M7 ${view} changes opener
   await expect(page.locator(view === 'board' ? `[data-board-open="${f.ids.work.audit}"]` : `[data-rtm-select="${f.ids.work.audit}"]`)).toBeFocused();
   await open(f.ids.work.email);
   await page.locator('[data-work-discuss]').click();
+  await page.setViewportSize({width: 390, height: 844});
   await page.getByRole('link', {name: view === 'board' ? 'Back to Board' : 'Back to Requirements'}).click();
   await expect(page.locator('[data-work-inspector] > header h2')).toHaveText('Email sign-in');
   await page.keyboard.press('Escape');
