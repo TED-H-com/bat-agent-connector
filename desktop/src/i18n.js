@@ -10,6 +10,7 @@ import {qualityProjectionStrings} from './pm-quality-projection-strings.js';
 import {workDeliveryStrings} from './pm-work-deliveries-strings.js';
 import {pmWorkBatchesStrings} from './pm-work-batches-strings.js';
 import {maintenanceFindingStrings} from './pm-maintenance-findings-strings.js';
+import {findingNameStrings} from './ui/finding-name.js';
 import {maintenanceReviewStrings} from './pm-maintenance-review-strings.js';
 import {pmSpecMaterializationStrings} from './pm-spec-materialization-strings.js';
 import {maintenanceCheckStrings} from './pm-maintenance-checks-strings.js';
@@ -44,6 +45,7 @@ const STRINGS = {
     ...maintenanceReviewStrings["zh-TW"],
     ...maintenanceObservationStrings["zh-TW"],
     ...maintenanceFindingStrings["zh-TW"],
+    ...findingNameStrings["zh-TW"],
     managed_recovery_title: "本機背景服務尚未就緒", managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
     ...instructionReceiptStrings['zh-TW'],
     repair_title: "建立修復工作", repair_help: "選擇歸屬專案，讀取這次失敗的固定證據，再建立或查回修復工作。派工前仍會讓你核對目的地與版本。",
@@ -982,6 +984,7 @@ const STRINGS = {
     ...maintenanceReviewStrings.en,
     ...maintenanceObservationStrings.en,
     ...maintenanceFindingStrings.en,
+    ...findingNameStrings.en,
     managed_recovery_title: "Local background service is not ready", managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
     ...instructionReceiptStrings['en-US'],
     repair_title: "Create repair work", repair_help: "Choose a project and read fixed evidence from this failure. Create or recover repair work, then review its destination and version before starting it.",

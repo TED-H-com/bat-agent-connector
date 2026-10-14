@@ -2,6 +2,8 @@ import {timeStamp, timeLabel} from './ui/stamps.js';
 import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer} from './pm-discussions.js';
 import {icon} from './ui/icons.js';
 import {parseDiscussRefs, discussHref} from './pm-discuss-link.js';
+import {locale} from './i18n.js';
+import {findingFromNative, findingName} from './ui/finding-name.js';
 import {sessionOrigin} from './session-navigation.js';
 import {viewState} from './ui/view-state.js';
 import {settleRefreshes} from './state/events.ts';
@@ -288,7 +290,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (ref.available === true && !['governance','plan_revision'].includes(ref.kind) && text(ref.label))
         return {...ref, label:text(ref.label), bound_label:text(ref.bound_label)};
       try {
-        let label = '', recordType = null;
+        let label = '', recordType = null, findingIdentity = null;
         if (ref.kind === 'governance') {
           const value = await read(`/governance/${encodeURIComponent(ref.id)}`);
           scoped(value, workspaceId, 'workspace_id');
@@ -322,8 +324,13 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           if (value.visibility_filtered || value.observation_ref?.observation_id !== ref.observation_id || value.observation_ref?.document_digest !== ref.document_digest) unavailable();
           const finding = Object.values(value.sources || {}).flatMap(source => source.findings || []).find(item => item.finding_id === ref.id);
           if (!finding) unavailable();
-          label = text(finding.title) || text(finding.statement) || text(finding.facts?.statement) || text(finding.native?.title);
-          if (!label && Number.isSafeInteger(finding.native?.number)) label = `#${finding.native.number}`;
+          const identity = findingFromNative(finding);
+          const named = findingName(identity, locale, '');
+          if (named) {label = named; findingIdentity = identity;}
+          else {
+            label = text(finding.title) || text(finding.statement) || text(finding.facts?.statement) || text(finding.native?.title);
+            if (!label && Number.isSafeInteger(finding.native?.number)) label = `#${finding.native.number}`;
+          }
         } else if (ref.kind === 'repair') {
           const value = scoped(await read(`/maintenance-repairs/${encodeURIComponent(ref.id)}`), workspaceId, 'workspace_id');
           const repair = value.repair;
@@ -354,7 +361,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           if (value.transition?.transition_id !== ref.id) unavailable();
           label = text(value.transition.reason);
         } else unavailable();
-        return {...ref, available:true, label: label || t('ui_reason_not_recorded'), record_type: recordType, bound_label: text(ref.bound_label)};
+        const result = {...ref, available:true, label: label || t('ui_reason_not_recorded'), record_type: recordType, bound_label: text(ref.bound_label)};
+        if (ref.kind === 'finding') {if (findingIdentity) result.finding = findingIdentity; else delete result.finding;}
+        return result;
       } catch (error) {
         // Display metadata never authorizes Send, and failed reads never consult a URL or old label.
         return {kind: ref.kind, position, available: false};

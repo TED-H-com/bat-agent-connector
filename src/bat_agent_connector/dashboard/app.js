@@ -2195,6 +2195,155 @@ var maintenanceFindingStrings = {
 	}
 };
 //#endregion
+//#region src/ui/finding-name.js
+var SOURCES = new Set([
+	"issues",
+	"dependabot_pull_requests",
+	"dependabot_alerts"
+]);
+var SEVERITY = {
+	low: {
+		en: "Low",
+		"zh-TW": "低",
+		tone: "neutral"
+	},
+	medium: {
+		en: "Medium",
+		"zh-TW": "中",
+		tone: "warn"
+	},
+	high: {
+		en: "High",
+		"zh-TW": "高",
+		tone: "bad"
+	},
+	critical: {
+		en: "Critical",
+		"zh-TW": "嚴重",
+		tone: "bad"
+	}
+};
+var SENTINEL$1 = /^(?:undefined|null|nan|\[object object\])$/i;
+var COPY = {
+	en: {
+		issue: "GitHub issue",
+		pr: "Dependabot PR",
+		alert: "Security alert",
+		alertPackage: (name) => `Security alert: ${name}`
+	},
+	"zh-TW": {
+		issue: "GitHub Issue",
+		pr: "Dependabot PR",
+		alert: "安全性警示",
+		alertPackage: (name) => `安全性警示：${name}`
+	}
+};
+function plain(value) {
+	return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function acceptedText(value, maximum) {
+	if (typeof value !== "string" || value.length === 0 || Array.from(value).length > maximum) return "";
+	if ([...value].some((char) => char.charCodeAt(0) < 32)) return "";
+	if (SENTINEL$1.test(value.trim())) return "";
+	return value;
+}
+function acceptedNumber(value) {
+	return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+function acceptedPath(value) {
+	const text = acceptedText(value, 512);
+	if (!text || text.includes("\\")) return "";
+	if (text.split("/").some((part) => part === "" || part === "." || part === "..")) return "";
+	return text;
+}
+function acceptedList(value, accept) {
+	if (!Array.isArray(value) || value.length > 100) return null;
+	const items = [];
+	const seen = new Set();
+	for (const item of value) {
+		const text = accept(item);
+		if (!text || seen.has(text)) return null;
+		seen.add(text);
+		items.push(text);
+	}
+	return items;
+}
+function acceptedFinding(value) {
+	if (!plain(value) || !SOURCES.has(value.source)) return null;
+	const finding = { source: value.source };
+	const number = acceptedNumber(value.number);
+	if (number) finding.number = number;
+	if (value.source === "issues") {
+		const labels = acceptedList(value.labels, (item) => acceptedText(item, 100));
+		if (labels) finding.labels = labels;
+	} else if (value.source === "dependabot_pull_requests") {
+		const manifests = acceptedList(value.manifests, acceptedPath);
+		if (manifests) finding.manifests = manifests;
+	} else {
+		const packageName = acceptedText(value.package, 512);
+		const ecosystem = acceptedText(value.ecosystem, 100);
+		const ghsa = acceptedText(value.ghsa_id, 100);
+		if (packageName) finding.package = packageName;
+		if (ecosystem) finding.ecosystem = ecosystem;
+		if (ghsa) finding.ghsa_id = ghsa;
+		if (Object.hasOwn(SEVERITY, value.severity)) finding.severity = value.severity;
+	}
+	return finding;
+}
+function findingFromNative(record) {
+	if (!plain(record) || !plain(record.native)) return null;
+	const facts = plain(record.facts) ? record.facts : {};
+	return acceptedFinding({
+		source: record.native.kind,
+		number: record.native.number,
+		labels: facts.labels,
+		manifests: facts.manifests,
+		package: facts.package,
+		ecosystem: facts.ecosystem,
+		ghsa_id: facts.ghsa_id,
+		severity: facts.severity
+	});
+}
+function findingSeverity(severity, locale) {
+	const row = SEVERITY[severity];
+	if (!row) return null;
+	return {
+		severity,
+		label: locale === "zh-TW" ? row["zh-TW"] : row.en,
+		tone: row.tone
+	};
+}
+function findingName(finding, locale, fallback = "") {
+	const safeFallback = typeof fallback === "string" ? fallback : "";
+	const accepted = acceptedFinding(finding);
+	if (!accepted) return safeFallback;
+	const copy = COPY[locale] || COPY.en;
+	const number = accepted.number;
+	if (accepted.source === "issues") return number ? `${copy.issue} #${number}` : copy.issue;
+	if (accepted.source === "dependabot_pull_requests") return number ? `${copy.pr} #${number}` : copy.pr;
+	if (accepted.package) return copy.alertPackage(accepted.package);
+	if (number) return `${copy.alert} #${number}`;
+	return copy.alert;
+}
+var findingNameStrings = {
+	en: {
+		fn_severity: "Severity",
+		fn_package: "Package",
+		fn_ecosystem: "Ecosystem",
+		fn_labels: "Labels",
+		fn_manifests: "Manifests",
+		fn_ghsa: "GHSA"
+	},
+	"zh-TW": {
+		fn_severity: "嚴重程度",
+		fn_package: "套件",
+		fn_ecosystem: "生態系",
+		fn_labels: "標籤",
+		fn_manifests: "清單路徑",
+		fn_ghsa: "GHSA"
+	}
+};
+//#endregion
 //#region src/pm-maintenance-review-strings.js
 var rows$1 = {
 	add_to_idea: ["Add to Idea discussion", "加入 Idea 討論"],
@@ -6866,6 +7015,7 @@ var STRINGS = {
 		...maintenanceReviewStrings["zh-TW"],
 		...maintenanceObservationStrings["zh-TW"],
 		...maintenanceFindingStrings["zh-TW"],
+		...findingNameStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
 		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
 		...instructionReceiptStrings["zh-TW"],
@@ -8416,6 +8566,7 @@ var STRINGS = {
 		...maintenanceReviewStrings.en,
 		...maintenanceObservationStrings.en,
 		...maintenanceFindingStrings.en,
+		...findingNameStrings.en,
 		managed_recovery_title: "Local background service is not ready",
 		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
 		...instructionReceiptStrings["en-US"],
@@ -12705,13 +12856,14 @@ function discussionLabel(t, prefix, value) {
 }
 function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
 	const chips = refs.slice(0, limit).map((ref) => {
-		const text = `${[
+		const kind = [
 			"risk",
 			"issue",
 			"action",
 			"change",
 			"decision"
-		].includes(ref.record_type) ? t("reg_type_" + ref.record_type) : discussionLabel(t, "pd_kind_", ref.kind)} · ${ref.available === false ? t("pd_unavailable") : ref.label || t("pd_unavailable")}`;
+		].includes(ref.record_type) ? t("reg_type_" + ref.record_type) : discussionLabel(t, "pd_kind_", ref.kind);
+		const text = (ref.available !== false && ref.kind === "finding" ? findingName(ref.finding, locale, "") : "") || `${kind} · ${ref.available === false ? t("pd_unavailable") : ref.label || t("pd_unavailable")}`;
 		const chip = contextChip({ text });
 		chip.dataset.discussionContext = ref.kind;
 		chip.title = text;
@@ -16198,11 +16350,15 @@ function workspaceOverview(options) {
 		if (event === "error") status.replaceChildren(options.errorBox(error));
 		if (mode === "saved") render();
 	}
+	function attentionTitle(row) {
+		const fallback = typeof row?.title === "string" ? row.title : "";
+		return findingName(row?.finding, locale, fallback);
+	}
 	function discuss(row, part = "attention") {
 		return discussLink({
 			workspaceId,
 			refs: row.ref ? [row.ref] : [],
-			title: row.title,
+			title: attentionTitle(row),
 			from: "overview"
 		}, {
 			"data-overview-row-discuss": row.key || row.milestone_id,
@@ -16330,6 +16486,7 @@ function workspaceOverview(options) {
 				"risk"
 			].includes(row.kind) ? t("ov_" + row.kind) : reasonLabel(t, "unknown");
 			const elapsed = age(row.since);
+			const severity = findingSeverity(acceptedFinding(row.finding)?.severity, locale);
 			const link = h("button", {
 				type: "button",
 				class: "pm-overview-attention-main",
@@ -16340,11 +16497,14 @@ function workspaceOverview(options) {
 				class: "pm-overview-kind",
 				title: label,
 				"aria-label": label
-			}, icon(row.kind === "decision" ? "message-square" : "circle-alert")), h("span", {}, h("strong", {}, row.title)));
+			}, icon(row.kind === "decision" ? "message-square" : "circle-alert")), h("span", {}, h("strong", {}, attentionTitle(row))));
 			const node = h("div", {
 				class: "pm-overview-attention-row",
 				"data-overview-row": row.key
-			}, link, h("div", { class: "pm-overview-attention-meta" }, h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · ")), h("span", { class: "pm-overview-attention-actions" }, elapsed === null ? null : h("span", {
+			}, link, h("div", { class: "pm-overview-attention-meta" }, h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · ")), h("span", { class: "pm-overview-attention-actions" }, severity ? h("span", {
+				class: `ui-pill tone-${severity.tone}`,
+				"data-finding-severity": severity.severity
+			}, severity.label) : null, elapsed === null ? null : h("span", {
 				class: "ui-meta",
 				"data-overview-age": ""
 			}, elapsed), discuss(row))));
@@ -16393,7 +16553,7 @@ function workspaceOverview(options) {
 		closeReader();
 		relatedSelection = row;
 		reader = inspector({
-			title: row.title,
+			title: attentionTitle(row),
 			returnFocus,
 			onClose: () => {
 				reader = null;
@@ -23138,7 +23298,28 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		if (!(row?.source?.kind === "finding" || String(row?.row_id || "").startsWith("finding."))) return [t("reg_type_" + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || t("ui_reason_not_recorded")].filter(Boolean).join(" · ");
 		const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
 		const kind = t("reg_kind_finding");
-		return qualifier ? `${kind} · ${qualifier}` : kind;
+		const fallback = qualifier ? `${kind} · ${qualifier}` : kind;
+		return findingName(row?.finding, locale, fallback);
+	}
+	function findingFactPairs(identity) {
+		if (!identity) return [];
+		const pairs = [];
+		const severity = findingSeverity(identity.severity, locale);
+		if (severity) pairs.push([t("fn_severity"), h("span", {
+			class: `ui-pill tone-${severity.tone}`,
+			"data-finding-severity": severity.severity
+		}, severity.label)]);
+		if (identity.package) pairs.push([t("fn_package"), identity.package]);
+		if (identity.ecosystem) pairs.push([t("fn_ecosystem"), identity.ecosystem]);
+		if (identity.labels?.length) pairs.push([t("fn_labels"), h("div", {
+			class: "reg-chips",
+			"data-finding-labels": ""
+		}, ...identity.labels.map((label) => h("span", {
+			class: "reg-chip",
+			"data-finding-label": ""
+		}, label)))]);
+		if (identity.manifests?.length) pairs.push([t("fn_manifests"), h("div", { "data-finding-manifests": "" }, ...identity.manifests.map((path) => h("div", {}, path)))]);
+		return pairs;
 	}
 	function findingContext(action) {
 		const ref = action?.required?.finding_ref;
@@ -23408,7 +23589,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	function detailNodes(record) {
 		const row = record.row;
 		const unknownCodes = [];
-		const facts = h("dl", { class: "reg-facts" }, ...[
+		const pairs = [
 			[t("reg_col_type"), t("reg_type_" + row.type)],
 			[t("reg_col_source"), kindLabel(row.source?.kind)],
 			[t("reg_col_impact"), dash(row.impact)],
@@ -23418,7 +23599,10 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			[t("reg_col_status"), statusNode(row.status)],
 			[t("reg_col_next"), dash(row.next_step)],
 			[t("reg_col_related"), relatedChips(row)]
-		].flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)]));
+		];
+		const identity = acceptedFinding(row.finding);
+		pairs.push(...findingFactPairs(identity));
+		const facts = h("dl", { class: "reg-facts" }, ...pairs.flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)]));
 		if (labelSegment(row.status) && !statusKnown(row.status)) unknownCodes.push(row.status);
 		const timeline = h("ol", {
 			class: "reg-timeline",
@@ -23486,7 +23670,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, code));
 		}
 		for (const [name, code] of Object.entries(row.unknowns || {})) {
-			if (!labelSegment(code)) continue;
+			if (!labelSegment(code) || String(name).startsWith("finding.")) continue;
 			const recognised = Boolean(known(t, "ui_reason_" + code));
 			const label = fieldKey[name] ? t(fieldKey[name]) : t("ui_reason_generic");
 			detailBits.push(h("p", {}, t("reg_pair", {
@@ -23495,6 +23679,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			})));
 			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, String(code)));
 		}
+		if (identity?.ghsa_id) detailBits.push(h("p", { "data-finding-ghsa": "" }, t("fn_ghsa"), locale === "zh-TW" ? "：" : ": ", h("code", {}, identity.ghsa_id)));
 		const seenCodes = new Set();
 		for (const code of unknownCodes) if (labelSegment(code) && !seenCodes.has(String(code))) {
 			seenCodes.add(String(code));
@@ -36136,7 +36321,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				bound_label: text(ref.bound_label)
 			};
 			try {
-				let label = "", recordType = null;
+				let label = "", recordType = null, findingIdentity = null;
 				if (ref.kind === "governance") {
 					const value = await read(`/governance/${encodeURIComponent(ref.id)}`);
 					scoped(value, workspaceId, "workspace_id");
@@ -36175,8 +36360,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (value.visibility_filtered || value.observation_ref?.observation_id !== ref.observation_id || value.observation_ref?.document_digest !== ref.document_digest) unavailable();
 					const finding = Object.values(value.sources || {}).flatMap((source) => source.findings || []).find((item) => item.finding_id === ref.id);
 					if (!finding) unavailable();
-					label = text(finding.title) || text(finding.statement) || text(finding.facts?.statement) || text(finding.native?.title);
-					if (!label && Number.isSafeInteger(finding.native?.number)) label = `#${finding.native.number}`;
+					const identity = findingFromNative(finding);
+					const named = findingName(identity, locale, "");
+					if (named) {
+						label = named;
+						findingIdentity = identity;
+					} else {
+						label = text(finding.title) || text(finding.statement) || text(finding.facts?.statement) || text(finding.native?.title);
+						if (!label && Number.isSafeInteger(finding.native?.number)) label = `#${finding.native.number}`;
+					}
 				} else if (ref.kind === "repair") {
 					const repair = scoped(await read(`/maintenance-repairs/${encodeURIComponent(ref.id)}`), workspaceId, "workspace_id").repair;
 					if (repair?.repair_id !== ref.id) unavailable();
@@ -36212,13 +36404,18 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (value.transition?.transition_id !== ref.id) unavailable();
 					label = text(value.transition.reason);
 				} else unavailable();
-				return {
+				const result = {
 					...ref,
 					available: true,
 					label: label || t("ui_reason_not_recorded"),
 					record_type: recordType,
 					bound_label: text(ref.bound_label)
 				};
+				if (ref.kind === "finding") {
+					if (findingIdentity) result.finding = findingIdentity;
+					else delete result.finding;
+				}
+				return result;
 			} catch (error) {
 				return {
 					kind: ref.kind,

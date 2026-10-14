@@ -5,6 +5,8 @@ import {statusVocabulary, reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
 import {joinLabel, labelSegment} from './label-text.js';
+import {locale} from './i18n.js';
+import {acceptedFinding, findingName, findingSeverity} from './ui/finding-name.js';
 
 // Read-only projection. Row ids and cursors are opaque: pass them through unchanged.
 // Age bars are informational. The register API has no age filter.
@@ -178,7 +180,19 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (!finding) return [t('reg_type_' + row.type), labelSegment(nameFor(row?.source?.kind, row?.source?.id)) || labelSegment(row?.source?.label) || t('ui_reason_not_recorded')].filter(Boolean).join(' · ');
     const qualifier = labelSegment(row.impact) || labelSegment(row.priority);
     const kind = t('reg_kind_finding');
-    return qualifier ? `${kind} · ${qualifier}` : kind;
+    const fallback = qualifier ? `${kind} · ${qualifier}` : kind;
+    return findingName(row?.finding, locale, fallback);
+  }
+  function findingFactPairs(identity) {
+    if (!identity) return [];
+    const pairs = [];
+    const severity = findingSeverity(identity.severity, locale);
+    if (severity) pairs.push([t('fn_severity'), h('span', {class: `ui-pill tone-${severity.tone}`, 'data-finding-severity': severity.severity}, severity.label)]);
+    if (identity.package) pairs.push([t('fn_package'), identity.package]);
+    if (identity.ecosystem) pairs.push([t('fn_ecosystem'), identity.ecosystem]);
+    if (identity.labels?.length) pairs.push([t('fn_labels'), h('div', {class: 'reg-chips', 'data-finding-labels': ''}, ...identity.labels.map(label => h('span', {class: 'reg-chip', 'data-finding-label': ''}, label)))]);
+    if (identity.manifests?.length) pairs.push([t('fn_manifests'), h('div', {'data-finding-manifests': ''}, ...identity.manifests.map(path => h('div', {}, path)))]);
+    return pairs;
   }
   function findingContext(action) {
     const ref = action?.required?.finding_ref;
@@ -326,6 +340,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       [t('reg_col_next'), dash(row.next_step)],
       [t('reg_col_related'), relatedChips(row)],
     ];
+    const identity = acceptedFinding(row.finding);
+    pairs.push(...findingFactPairs(identity));
     const facts = h('dl', {class: 'reg-facts'}, ...pairs.flatMap(([label, value]) => [h('dt', {}, label), h('dd', {}, value)]));
     if (labelSegment(row.status) && !statusKnown(row.status)) unknownCodes.push(row.status);
     const timeline = h('ol', {class: 'reg-timeline', 'data-reg-timeline': ''}, ...(Array.isArray(record.timeline) ? record.timeline : []).map(step => {
@@ -366,12 +382,13 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       if (!recognised) detailBits.push(h('p', {class: 'reg-note'}, code));
     }
     for (const [name, code] of Object.entries(row.unknowns || {})) {
-      if (!labelSegment(code)) continue;
+      if (!labelSegment(code) || String(name).startsWith('finding.')) continue;
       const recognised = Boolean(known(t, 'ui_reason_' + code));
       const label = fieldKey[name] ? t(fieldKey[name]) : t('ui_reason_generic');
       detailBits.push(h('p', {}, t('reg_pair', {label, value: reasonLabel(t, code)})));
       if (!recognised) detailBits.push(h('p', {class: 'reg-note'}, String(code)));
     }
+    if (identity?.ghsa_id) detailBits.push(h('p', {'data-finding-ghsa': ''}, t('fn_ghsa'), locale === 'zh-TW' ? '：' : ': ', h('code', {}, identity.ghsa_id)));
     const seenCodes = new Set();
     for (const code of unknownCodes) if (labelSegment(code) && !seenCodes.has(String(code))) {seenCodes.add(String(code)); detailBits.push(h('p', {class: 'reg-note'}, String(code)));}
     const extra = detailBits.length ? disclosure({label: t('reg_details'), key: `reg-details:${workspaceId}:${row.row_id}`,
