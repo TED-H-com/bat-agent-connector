@@ -1,5 +1,6 @@
 import {iconButton, button, sectionCard, statusPill, disclosure, contextChip, emptyState} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
+import {panelActorLabel} from './pm-governance-strings.js';
 // Meeting records share the existing durable command forms. A draft is not a completed discussion.
 export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -9,15 +10,19 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   catch { /* Navigation is only a preference, never an operation receipt. */ }
   let model = null, selectedId = typeof navigation.meeting_id === 'string' ? navigation.meeting_id : '', signature = '', serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
   let forms = [], editorMeetingId = null;
+  let createOpen = false, createBox = null;
+  const createId = 'pm-meeting-create-' + crypto.randomUUID();
+  const actorLabel = value => panelActorLabel(t, value);
   const status = h('div', {role: 'status'}), view = h('div'), editors = h('div');
   const remember = (key,value) => {navigation[key]=value;try {localStorage.setItem(navigationKey,JSON.stringify(navigation));} catch { /* Request durability remains the shared form's responsibility. */ }};
   const choose = h('select', {'aria-label': t('pm_meeting_choose'), onchange: () => {selectedId = choose.value; remember('meeting_id',selectedId); void refresh(true);}});
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_meeting_stale'));
   const rebase = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
-  const launch = button({variant: 'primary', label: t('pm_meeting_new'), onClick: () => reveal('pm.meeting.create')});
+  const readOnly = h('p', {class: 'ui-meta', hidden: true, 'data-pm-panel-readonly': ''}, t('pm_panel_read_only'));
+  const launch = button({variant: 'primary', label: t('pm_meeting_new'), 'data-pm-meeting-create': '', 'aria-controls': createId, 'aria-expanded': 'false', onClick: () => reveal('pm.meeting.create')});
   const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, launch,
     iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), onClick: () => void refresh()})),
-    labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors)});
+    readOnly, labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors)});
   element.classList.add('pm-evidence', 'pm-meetings'); element.dataset.pmMeetings = '';
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
   const fold = (key, body, open = false) => {const node = disclosure({label: t(key), body, open}); node.dataset.pmFold = key; return node;};
@@ -39,7 +44,9 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const pre = () => ({expected_version: model.detail.meeting.version});
   function update() {
     forms.forEach(editor => editor.update()); warning.hidden = rebase.hidden = !stale;
-    rebase.disabled = !loaded; choose.disabled = !loaded; launch.disabled = !can();
+    rebase.disabled = !loaded; choose.disabled = !loaded; launch.hidden = !can(); readOnly.hidden = !loaded || can();
+    launch.setAttribute('aria-expanded', String(loaded && createOpen));
+    if (createBox) createBox.hidden = !createOpen;
   }
   function unavailable(error) {
     loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
@@ -122,8 +129,8 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     for (const item of document.decisions || []) holder.append(h('article', {class: 'pm-fact'}, h('h4', {}, item.text || item.title || t('pm_meeting_unknown')),
       note('pm_meeting_proposal'), h('p', {class: 'pm-note-text'}, item.rationale), refsView(item.source_refs)));
     for (const item of document.follow_ups || []) holder.append(h('article', {class: 'pm-fact'}, h('h4', {}, item.text || item.title || t('pm_meeting_unknown')),
-      h('p', {}, t('pm_meeting_assigned', {actor: item.owner_actor})), h('p', {class: 'pm-note-text'}, item.expected_effect),
-      h('p', {class: 'pm-note-text'}, t('pm_meeting_verification'), ': ', item.verification), refsView(item.source_refs)));
+      h('p', {}, t('pm_meeting_assigned', {actor: actorLabel(item.owner_actor)})), h('p', {class: 'pm-note-text'}, item.expected_effect),
+      h('p', {class: 'pm-note-text'}, t('pm_meeting_verification'), t('pm_panel_separator'), item.verification), refsView(item.source_refs)));
     list('unresolved_questions', document.unresolved_questions); holder.append(refsView(document.source_refs));
     return holder;
   }
@@ -135,7 +142,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
         for (const record of records) {
           if (record.meeting_id !== detail.meeting.meeting_id) throw Error(t('pm_scope_mismatch'));
           const document = record.document;
-          section.append(h('details', {}, h('summary', {}, `#${record.sequence} · ${record.actor}`),
+          section.append(h('details', {}, h('summary', {}, `#${record.sequence} · ${actorLabel(record.actor)}`),
             kind === 'notes' ? h('div', {}, h('p', {class: 'pm-note-text'}, record.content), refsView(record.source_refs))
               : kind === 'drafts' ? outputView(document) : kind === 'contexts' ? h('div', {}, h('p', {class: 'pm-note-text'}, document.sprint_goal.text),
                 source(document.snapshot_ref.snapshot_id), source(record.context_revision_id))
@@ -182,7 +189,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     if (detail.completion) {
       const record = detail.completion;
       view.append(fold('pm_meeting_completed', h('div', {'data-pm-meeting-completion': ''},
-        h('p', {class: 'pm-note-text'}, record.document.discussion_summary), h('p', {}, t('pm_meeting_recorded_by', {actor: record.actor})),
+        h('p', {class: 'pm-note-text'}, record.document.discussion_summary), h('p', {}, t('pm_meeting_recorded_by', {actor: actorLabel(record.actor)})),
         ...(record.document.decisions || []).map(item => h('p', {class: 'pm-note-text'}, item.text || item.title,
           ' · ', t(item.disposition === 'recorded_discussion_decision' ? 'pm_meeting_recorded_decision' : 'pm_meeting_proposal'))))));
       facts.append(source(record.completion_id));
@@ -236,7 +243,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     }
     fields.decisions = hidden((saved?.decisions || []).map(({id,text,title,rationale,alternatives,source_refs}) => ({id,text:text || title,rationale,alternatives,source_refs})));
     fields.follow_ups = hidden((saved?.follow_ups || []).map(({id,text,owner_actor,expected_effect,verification,source_refs}) => ({id,text,owner_actor,expected_effect,verification,source_refs})));
-    const writers = (workspace()?.members || []).filter(member => ['owner','contributor'].includes(member.role)).map(member => [member.actor, member.actor]);
+    const writers = (workspace()?.members || []).filter(member => ['owner','contributor'].includes(member.role)).map(member => [member.actor, actorLabel(member.actor)]);
     const decision = collection(fields.decisions, () => editor, [{name:'text',label:'pm_meeting_decision_text'}, {name:'rationale',label:'pm_meeting_decision_reason'}], 10, 'decision');
     const follow = collection(fields.follow_ups, () => editor, [{name:'text',label:'pm_meeting_follow_text'}, {name:'owner_actor',label:'pm_meeting_owner',choices:writers},
       {name:'expected_effect',label:'pm_meeting_expected_effect'}, {name:'verification',label:'pm_meeting_verification'}], kind === 'retro' ? 5 : 10, 'followup');
@@ -316,7 +323,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     const reviseBox=fold('pm_meeting_context_change',revise.box,revise.locked());reviseBox.hidden=detail.meeting.status==='completed'&&!revise.locked();holder.append(reviseBox);
     // Always construct this form so a lost completion/follow-up response can be recovered after reload.
     const items=detail.completion?.document.follow_ups||[],allowedItems=items.filter(item=>owner()||item.owner_actor===caps()?.actor),
-      followId=options('pm_meeting_follow_choice',allowedItems.map(item=>[item.id,`${item.text || item.title} · ${item.owner_actor}`]),allowedItems[0]?.id||'');
+      followId=options('pm_meeting_follow_choice',allowedItems.map(item=>[item.id,`${item.text || item.title} · ${actorLabel(item.owner_actor)}`]),allowedItems[0]?.id||'');
     const state=options('pm_meeting_follow_status',['open','blocked','reported_done'].map(key=>[key,t('pm_meeting_'+key)]),'open'),result=input('pm_meeting_follow_result',{multiline:true,max:8000}),followReason=reason();
     const snapshot=options('pm_meeting_result_snapshot',[['',t('pm_meeting_keep_snapshot')],...model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${timeText(row.as_of)}`])]);
     const follow=localForm({action:'pm.meeting.follow_up.record',target:target(),fields:{follow_up_id:followId,status:state,result,rationale:followReason,snapshot_id:snapshot},preconditions:pre,
@@ -340,8 +347,10 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
         extra:h('div',{class:'pm-fields'},labelled('pm_meeting_name',title),labelled('pm_meeting_kind',kind),note('pm_meeting_started_help'),
           labelled('pm_meeting_snapshot',snapshot),!model.snapshots.length?note('pm_meeting_snapshot_required'):'',labelled('pm_meeting_reason',rationale))});
       kind.addEventListener('change',()=>current.update());slot.replaceChildren(current.box);update();
+      current.box.querySelector('.actions').append(button({variant:'secondary',label:t('pm_panel_cancel'),onClick:()=>{createOpen=false;update();if(!launch.hidden)launch.focus();}}));
+      createOpen=createOpen||current.locked()||current.hasDraft();
     };sprint.addEventListener('change',()=>{remember('sprint_id',sprint.value);render();});render();
-    return fold('pm_meeting_new',holder,Boolean(current?.locked()));
+    createBox=h('div',{id:createId,hidden:!createOpen},holder);return createBox;
   }
   function renderEditors(reviewBaselines=false) {
     const meetingId=model.detail?.meeting.meeting_id || null;
@@ -383,7 +392,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
         ||detail.completion&&(detail.completion.meeting_id!==selectedId||detail.completion.completion_id!==detail.meeting.completion_id)))throw Error(t('pm_scope_mismatch'));
       const next=JSON.stringify([selectedId,detail?.meeting.version,sprints.map(row=>[row.sprint_id,row.version]),snapshots.map(row=>row.snapshot_id),workspace()?.version]);
       const changed=signature&&signature!==next;model={meetings,sprints,snapshots,detail};loaded=true;editors.hidden=false;
-      choose.replaceChildren(...(meetings.length?meetings.map(row=>h('option',{value:row.meeting_id},`${row.title} · ${t('pm_meeting_'+row.kind)} · ${t('pm_meeting_'+row.status)}`)):[h('option',{value:''},t('pm_meeting_empty'))]));choose.value=selectedId;
+      choose.replaceChildren(...(meetings.length?meetings.map(row=>h('option',{value:row.meeting_id},row.title)):[h('option',{value:''},t('pm_meeting_empty'))]));choose.value=selectedId;
       renderView();
       if(force||!signature||changed&&!dirty&&!forms.some(editor=>editor.locked()))renderEditors();else if(changed)stale=true;
       signature=next;update();
@@ -393,6 +402,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   function reveal(action, followUpId) {
     const editor = forms.find(row => row.box.dataset.pmAction === action);
     if (!loaded || !editor) return;
+    if (action === 'pm.meeting.create') {createOpen = true; update();}
     if (followUpId && action === 'pm.meeting.follow_up.record') {
       const field = editor.fields.follow_up_id;
       if (![...field.options].some(option => option.value === followUpId)) return;

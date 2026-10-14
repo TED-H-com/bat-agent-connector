@@ -1,5 +1,7 @@
+import {pmPanelStrings} from './pm-governance-strings.js';
 export const followUpAnalysisStrings={
   en:{
+    ...pmPanelStrings.en,
     pm_fa_details:'Details',
     pm_fa_thread:'PM discussion',pm_fa_thread_choose:'Select a discussion',pm_fa_more_threads:'Load more discussions',
     pm_fa_analyze_prepare:'Ask PM',pm_fa_analyze_help:'Choose the purpose of this analysis. The PM reads this complete fixed preparation and saves an assessment without changing scope or dispatching work.',
@@ -23,6 +25,7 @@ export const followUpAnalysisStrings={
     pm_fa_kind_problem:'Problem',pm_fa_kind_deviation:'Deviation',pm_fa_kind_assumption:'Assumption',pm_fa_kind_unknown:'Unknown',pm_fa_kind_decision_effect:'Decision effect',
   },
   'zh-TW':{
+    ...pmPanelStrings['zh-TW'],
     pm_fa_details:'詳細資訊',
     pm_fa_thread:'PM 討論',pm_fa_thread_choose:'選擇討論',pm_fa_more_threads:'載入更多討論',
     pm_fa_analyze_prepare:'請 PM 評估',pm_fa_analyze_help:'指定這次分析的目的。PM 會讀取完整的固定討論準備並保存評估，不改範圍或派工。',

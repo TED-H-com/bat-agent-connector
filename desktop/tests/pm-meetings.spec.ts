@@ -124,7 +124,7 @@ test('follow-up result is an unverified record on the original assignment',async
   expect(f.state.writes[0].body.params).toMatchObject({follow_up_id:'handoff',status:'reported_done'});expect(f.state.writes[0].body.params).not.toHaveProperty('snapshot_id');
   await expect(action(page,'follow_up.record').getByLabel('Result and remaining uncertainty',{exact:true})).toHaveValue('');
   await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();
-  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Follow-up results',{exact:true}));await openRead(page.getByText('#1 · developer',{exact:true}));
+  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Follow-up results',{exact:true}));await openRead(page.getByText('#1 · Developer',{exact:true}));
   await expect(page.locator('[data-pm-meetings]')).toContainText('Reported done — unverified');
   expect(detail.completion.document.follow_ups[0].owner_actor).toBe('developer');
 });
@@ -132,7 +132,7 @@ test('history follows cursors and a revoked history read clears previously visib
   const f=meetingFixture();f.state.moreNotes=true;f.state.pagedSnapshots=true;await mount(page,f);
   expect(f.state.reads).toContain('/pm/workspaces/'+'ws_'+'1'.repeat(32)+'/snapshots?after=10&limit=50');
   await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Load more',exact:true}).click();
-  await openRead(page.getByText('#2 · developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
+  await openRead(page.getByText('#2 · Developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
   f.state.failRead='revoked';await openRead(page.getByText('Context revisions',{exact:true}));await page.getByText('Context revisions',{exact:true}).locator('..').getByRole('button',{name:'Load more',exact:true}).click();
   await expect(page.locator('[data-pm-meetings]')).toContainText('Workspace access removed');
   expect(await page.locator('[data-pm-meetings]').innerText()).not.toContain('Members regain access');expect(f.state.writes).toEqual([]);
@@ -169,7 +169,7 @@ test('zero cursor offers standalone history when detail budget includes no notes
   const f=meetingFixture();f.state.meetings[0].history_next_cursors.notes=0;await mount(page,f);
   await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Load more',exact:true}).click();
   expect(f.state.reads.some((path:string)=>path.endsWith('/history/notes?after=0&limit=20'))).toBe(true);
-  await openRead(page.getByText('#2 · developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
+  await openRead(page.getByText('#2 · Developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
 });
 test('Review creation stays disabled before the Sprint has started',async({page})=>{
   const f=meetingFixture();f.state.sprints[0].started_at=null;f.state.sprints[0].status='planned';await mount(page,f);await openAction(page,'create');

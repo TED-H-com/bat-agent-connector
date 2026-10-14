@@ -83,7 +83,7 @@ function fixture({analysisEnabled=false}={}){
 }
 const route=`/dashboard/#/pm/${workspaceId}`,section=(page:any)=>page.locator('[data-pm-follow-up]'),editor=(page:any)=>page.locator('[data-pm-fu-editor]');
 async function open(page:any){
-  if(!await editor(page).evaluate((node:HTMLDetailsElement)=>node.open))await editor(page).locator(':scope > summary').click();
+  if(!await editor(page).isVisible())await section(page).locator('[data-pm-follow-up-prepare]').click();
   await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();
 }
 async function select(page:any){await open(page);await page.getByLabel('Evidence snapshot',{exact:true}).selectOption(snapshotId);await expect(editor(page)).toContainText('Selections stay fixed.');}
@@ -94,7 +94,7 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
     await expect(page.locator('[data-pm-fu-agenda] ol > li')).toHaveCount(1);
     await expect(page.locator('[data-pm-fu-domain=finance]')).toContainText('The first paid tier price is undecided.');
     await expect(page.locator('[data-pm-fu-domain=finance]')).toContainText('The accepted plan remains unchanged');
-    await expect(section(page)).toContainText('No AI Follow-up, scope change or work execution occurred');
+    await expect(section(page)).toContainText('Preparing saves the selected sources. It does not adopt scope changes or dispatch work.');
     expect(f.followUp.state.writes).toHaveLength(0);await expect(page.getByRole('tab')).toHaveCount(0);
     f.followUp.state.rows.at(-1).document.agenda[0].text='A sourced agenda update from another client';f.base.state.cursor++;
     await expect(section(page)).toContainText('A sourced agenda update from another client',{timeout:10000});
@@ -104,7 +104,7 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');await select(page);f.followUp.state.lost=true;
     await page.getByRole('button',{name:'Save discussion preparation',exact:true}).click();await expect(editor(page)).toContainText('The original reply was lost');
     const original=structuredClone(f.followUp.state.writes[0]);await page.reload();await openPmSection(page, 'issues' , 'ui_follow_up');
-    if(!await editor(page).evaluate((node:HTMLDetailsElement)=>node.open))await editor(page).locator(':scope > summary').click();
+    if(!await editor(page).isVisible())await section(page).locator('[data-pm-follow-up-prepare]').click();
     await page.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect(section(page)).toContainText('Preparation 4');
     expect(f.followUp.state.ops.size).toBe(1);expect(f.followUp.state.writes.at(-1).body).toEqual(original.body);

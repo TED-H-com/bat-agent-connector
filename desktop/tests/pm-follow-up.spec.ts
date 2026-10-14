@@ -6,14 +6,14 @@ import {fixture,mount,intake,intakeId,workspaceId,snapshotId,threadId,governance
 const section=(page:any)=>page.locator('[data-pm-follow-up]');
 const edit=(page:any)=>page.locator('[data-pm-fu-editor]');
 const refresh=(page:any)=>page.evaluate(()=>(window as any).refreshFollowUp());
-async function openEditor(page:any){await edit(page).locator(':scope > summary').click();await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();}
+async function openEditor(page:any){if (!await edit(page).isVisible()) await page.locator('[data-pm-follow-up-prepare]').click();await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();}
 async function pickSnapshot(page:any){await page.getByLabel('Evidence snapshot',{exact:true}).selectOption(snapshotId);await expect(edit(page)).toContainText('Selections stay fixed.');}
 
 test('recorded domains and a bounded agenda stay on one page, preparation is not runtime completion',async({page})=>{
   const f=fixture();await mount(page,f);
   await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);
   await expect(page.locator('[data-pm-fu-agenda] ol > li')).toHaveCount(1);
-  await expect(section(page)).toContainText('No AI Follow-up, scope change or work execution occurred');
+  await expect(section(page)).toContainText('Preparing saves the selected sources. It does not adopt scope changes or dispatch work.');
   await expect(page.locator('[data-pm-fu-domain=finance]')).toContainText('Unresolved');
   await expect(page.locator('[data-pm-fu-domain=finance]')).toContainText('User confirmed');
   await expect(page.locator('[data-pm-fu-domain=finance]')).toContainText('The accepted plan remains unchanged');
@@ -27,7 +27,7 @@ test('recorded domains and a bounded agenda stay on one page, preparation is not
 test('empty agenda does not invent questions for the unknown domains',async({page})=>{
   const f=fixture();f.state.rows.at(-1).document.agenda=[];await mount(page,f);
   await expect(section(page)).toContainText('Unknown fields do not create questions');
-  await expect(page.locator('[data-pm-fu-domain=schedule]')).toHaveCount(0); await expect(page.locator('[data-pm-fu-missing]')).toHaveText('5 areas have no baseline input');
+  await expect(page.locator('[data-pm-fu-domain=schedule]')).toHaveCount(0); await expect(page.locator('[data-pm-fu-missing]')).toHaveText('No baseline input: Governance, Schedule, Stakeholders, Resources, Quality');
 });
 
 test('withdrawn latest retains only newly authorized readable history and permits a new preparation',async({page},info)=>{
@@ -91,9 +91,9 @@ for(const failure of [403,404,503])test(`generic preparation failure ${failure} 
 
 test('source recovery uses the newly checked reader role instead of stale parent write permission',async({page})=>{
   const f=fixture();f.state.hiddenIntakes.add(intakeId(3));f.state.workspaceRole='reader';await mount(page,f);
-  await edit(page).locator(':scope > summary').click();await expect(edit(page)).toContainText('requires current workspace write access');
-  await expect(page.getByRole('button',{name:'Save discussion preparation',exact:true})).toBeDisabled();
-  f.state.workspaceRole='owner';await refresh(page);await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();
+  await expect(section(page).locator('[data-pm-panel-readonly]')).toHaveText('Read only: needs operate permission');
+  await expect(edit(page).locator('button[type=submit]')).toBeDisabled();
+  f.state.workspaceRole='owner';await refresh(page);await openEditor(page);await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();
   expect(f.state.writes).toHaveLength(0);
 });
 
@@ -192,7 +192,8 @@ test('lost reply retains the same original request and key through refresh and r
 test('original ambiguous request survives remount without a replacement key',async({page})=>{
   const f=fixture();await mount(page,f);await openEditor(page);await pickSnapshot(page);f.state.lost=true;
   await page.getByRole('button',{name:'Save discussion preparation',exact:true}).click();await expect(edit(page)).toContainText('The original reply was lost');
-  const original=structuredClone(f.state.writes[0]);await mount(page,f);await edit(page).locator(':scope > summary').click();
+  const original=structuredClone(f.state.writes[0]);await mount(page,f);await expect(edit(page)).toBeVisible();
+  await expect(page.locator('[data-pm-follow-up-prepare]')).toHaveAttribute('aria-expanded','true');
   await page.getByRole('button',{name:'Check original request',exact:true}).click();
   await expect.poll(()=>f.state.writes.length).toBe(2);expect(f.state.writes[1].key).toBe(original.key);expect(f.state.writes[1].body).toEqual(original.body);
   expect(f.state.ops.size).toBe(1);
@@ -230,7 +231,7 @@ test('withdrawn selected source clears the entire saved intake view, not just th
 test('reader role disables writing and actor change removes the former actor’s view and editor',async({page})=>{
   const f=fixture();await mount(page,f);await openEditor(page);await pickSnapshot(page);f.state.role='reader';
   await refresh(page);await expect(page.getByRole('button',{name:'Save discussion preparation',exact:true})).toBeDisabled();
-  await expect(edit(page)).toContainText('requires current workspace write access');
+  await expect(section(page).locator('[data-pm-panel-readonly]')).toHaveText('Read only: needs operate permission');
   f.state.actor='other-person';f.state.role='owner';await refresh(page);
   await expect(section(page)).toContainText('signed-in actor changed');await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(0);
   await expect(page.locator('[data-pm-action="pm.follow_up.prepare"]')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
@@ -278,16 +279,16 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Follo
   const output=process.env.BATC_PM_FOLLOW_UP_SCREENSHOTS||info.outputPath('screenshots');await mkdir(output,{recursive:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:`${output}/follow-up-${locale}-${width}.png`,fullPage:true});
-  await edit(page).locator(':scope > summary').click();
+  if (!await edit(page).isVisible()) await page.locator('[data-pm-follow-up-prepare]').click();
   await expect(page.getByLabel(locale==='en'?'Evidence snapshot':'證據快照',{exact:true})).toBeEnabled();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(await section(page).innerText()).not.toContain('pm_fu_');expect(errors).toEqual([]);
-  if(width===390)expect(await edit(page).locator(':scope > summary').evaluate((node:any)=>node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  if(width===390)expect(await page.locator('[data-pm-follow-up-prepare]').evaluate((node:any)=>node.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
   await page.screenshot({path:`${output}/follow-up-editor-${locale}-${width}.png`,fullPage:true});
 });
 
 test('dark theme retains tokens and keyboard access',async({page},info)=>{
   await page.emulateMedia({colorScheme:'dark'});const f=fixture();await mount(page,f);
-  await edit(page).locator(':scope > summary').focus();await page.keyboard.press('Enter');await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();
+  await page.locator('[data-pm-follow-up-prepare]').focus();await page.keyboard.press('Enter');await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();
   const output=process.env.BATC_PM_FOLLOW_UP_SCREENSHOTS||info.outputPath('screenshots');await mkdir(output,{recursive:true});await page.screenshot({path:`${output}/follow-up-dark.png`,fullPage:true});
 });

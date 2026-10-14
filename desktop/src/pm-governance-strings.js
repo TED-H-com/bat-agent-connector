@@ -1,5 +1,24 @@
+// These secondary panels share copy for permission, punctuation and generic actors.
+export const pmPanelStrings = {
+  en: {
+    pm_panel_separator: ': ', pm_panel_list_separator: ', ', pm_panel_cancel: 'Cancel',
+    pm_panel_read_only: 'Read only: needs operate permission',
+    pm_panel_actor_owner: 'Owner', pm_panel_actor_developer: 'Developer',
+    pm_panel_actor_contributor: 'Contributor', pm_panel_actor_reader: 'Reader',
+  },
+  'zh-TW': {
+    pm_panel_separator: '：', pm_panel_list_separator: '、', pm_panel_cancel: '取消',
+    pm_panel_read_only: '唯讀：需要操作權限',
+    pm_panel_actor_owner: '擁有者', pm_panel_actor_developer: '開發者',
+    pm_panel_actor_contributor: '協作者', pm_panel_actor_reader: '讀者',
+  },
+};
+export function panelActorLabel(t, actor) {
+  return ['owner', 'developer', 'contributor', 'reader'].includes(actor) ? t('pm_panel_actor_' + actor) : actor;
+}
 export const pmGovernanceStrings = {
   en: {
+    ...pmPanelStrings.en,
     pm_gov_resolve:'Resolve',pm_gov_details: 'Details',
     pm_gov_title: 'Risks, changes and decisions', pm_gov_intro: 'What needs attention, why it matters, and which direction was chosen.',
     pm_gov_refresh: 'Refresh findings', pm_gov_unknown: 'Unknown', pm_gov_empty: 'No findings', pm_gov_inspect: 'View finding', pm_gov_selected: 'Selected finding',
@@ -39,6 +58,7 @@ export const pmGovernanceStrings = {
     pm_gov_drift_help: 'Reported drift needs an affected dimension, an observed evidence fact, and a fixed plan input or requirement. The interpretation remains unassessed.',
   },
   'zh-TW': {
+    ...pmPanelStrings['zh-TW'],
     pm_gov_resolve:'回報解決',pm_gov_details: '詳細資訊',
     pm_gov_title: '風險、變更與決策', pm_gov_intro: '哪些事項需要關注、為何重要，以及已選擇的方向。',
     pm_gov_refresh: '重新讀取事項', pm_gov_unknown: '未知', pm_gov_empty: '尚無事項', pm_gov_inspect: '查看事項', pm_gov_selected: '目前選取',

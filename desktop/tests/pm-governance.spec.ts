@@ -59,8 +59,11 @@ test('actual adoption requires reading the matching original operation', async (
   await editor.getByLabel('Adoption operation', {exact: true}).fill(adoptionId);
   await expect(editor.getByRole('button', {name: 'Link verified adoption', exact: true})).toBeDisabled();
   await editor.getByRole('button', {name: 'Read original adoption', exact: true}).click();
+  await expect(editor.locator('[data-pm-governance-adoption-receipt]')).toContainText('Historical adoption verified by the original operation. Whether this is the current accepted plan is not assessed.');
   await editor.getByRole('button', {name: 'Link verified adoption', exact: true}).click();
-  await expect(page.locator('[data-pm-governance-detail]')).toContainText('Historical');
+  const historical = page.locator('[data-pm-governance-detail] [data-status=historical]');
+  await historical.evaluate(node => {for (let p = node.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement) p.open = true;});
+  await expect(historical).toHaveText('Historical'); await expect(historical).toBeVisible();
   expect(f.state.writes[0].body.params.adoption_operation_id).toBe(adoptionId);
   expect(f.state.writes.map((row: any) => row.body.action)).toEqual(['pm.governance.adoption.link']);
 });
@@ -122,7 +125,7 @@ test('history pages preserve old text and stop on source access loss', async ({p
   const f = governanceFixture(), rid = f.state.records[0].record.record_id; f.state.historyPageSize = 1;
   f.state.history[rid].push({...structuredClone(f.state.history[rid][0]), version: 2, sequence: 2, document: {...f.state.history[rid][0].document, rationale: 'Earlier explicit decision'}});
   await mount(page, f); await openRead(page.getByText('History', {exact: true}));
-  await page.getByRole('button', {name: 'More history', exact: true}).click(); await openRead(page.getByText('#2 · owner · Finding recorded', {exact: true}));
+  await page.getByRole('button', {name: 'More history', exact: true}).click(); await openRead(page.getByText('#2 · Owner · Finding recorded', {exact: true}));
   await expect(view(page)).toContainText('Earlier explicit decision'); expect(f.state.writes).toEqual([]);
 });
 test('lazy history authorization failure removes previously shown facts', async ({page}) => {
@@ -199,6 +202,9 @@ for (const locale of ['en', 'zh-TW']) test(`expanded governance form at mobile w
   const f = governanceFixture(); await page.setViewportSize({width: 390, height: 844}); await mount(page, f, locale); await openAction(page, 'record');
   await action(page, 'record').locator('details').evaluateAll(nodes => nodes.forEach(node => (node as HTMLDetailsElement).open = true));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  const check = action(page, 'record').getByRole('checkbox').first();
+  const boxes = await check.evaluate(node => {const text = node.parentElement!.querySelector('span')!;return {check:node.getBoundingClientRect().toJSON(),text:text.getBoundingClientRect().toJSON()};});
+  expect(boxes.text.x).toBeGreaterThanOrEqual(boxes.check.right); expect(boxes.text.y).toBeLessThan(boxes.check.bottom);
   const out = process.env.BATC_PM_GOVERNANCE_SCREENSHOTS || info.outputPath('screenshots'); await mkdir(out, {recursive: true});
   await action(page, 'record').screenshot({path: `${out}/governance-form-${locale}-390.png`});
 });

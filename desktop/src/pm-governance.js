@@ -1,20 +1,25 @@
 import {timeStamp} from './ui/stamps.js';
+import {panelActorLabel} from './pm-governance-strings.js';
 import {iconButton, button, sectionCard, statusPill, disclosure, emptyState} from './ui/components.js';
 // Sourced management findings and explicit direction decisions share one journal.
 export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => ''}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = ['risk', 'assumption', 'issue', 'dependency', 'drift', 'change'];
   let serial = 0, loaded = false, dirty = false, stale = false, signature = '', selectedId = '', model = null, forms = [], widgets = [];
   let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
+  let createOpen = false, createBox = null;
+  const createId = 'pm-governance-create-' + crypto.randomUUID();
+  const actorLabel = value => panelActorLabel(t, value);
   const navigationKey = `batc.pm.governance.selection.${namespace}.${workspaceId}.${caps()?.actor}`;
   try {const saved = sessionStorage.getItem(navigationKey); if (/^pmgov_[0-9a-f]{32}$/.test(saved || '')) selectedId = saved;} catch { /* Navigation is optional. */ }
   const selectRecord = value => {selectedId = value; try {alive(); sessionStorage.setItem(navigationKey, value);} catch { /* Form persistence remains authoritative. */ }};
   const status = h('div', {role: 'status'}), list = h('div', {class: 'pm-evidence-rows'}), detail = h('div'), editors = h('div');
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_gov_stale'));
   const review = button({variant: 'secondary', hidden: true, onClick: () => {if (loaded) void renderEditors(true);}, label: t('pm_gov_review_fresh')});
-  const launch = button({variant: 'primary', label: t('pm_gov_new'), 'data-pm-governance-record': '', onClick: () => void openRef({kind: 'governance'}, {form: 'record'})});
+  const readOnly = h('p', {class: 'ui-meta', hidden: true, 'data-pm-panel-readonly': ''}, t('pm_panel_read_only'));
+  const launch = button({variant: 'primary', label: t('pm_gov_new'), 'data-pm-governance-record': '', 'aria-controls': createId, 'aria-expanded': 'false', onClick: () => showCreate()});
   const element = sectionCard({body: h('div', {},
     h('div', {class: 'pm-heading'}, launch, iconButton({icon:'refresh-cw', label:t('pm_gov_refresh'), onClick: () => void refresh()})),
-    status, list, detail, warning, review, editors)});
+    readOnly, status, list, detail, warning, review, editors)});
   element.classList.add('pm-evidence', 'pm-governance'); element.dataset.pmGovernance = '';
   const actor = () => caps()?.actor;
   const can = () => loaded && permitted(false);
@@ -44,11 +49,14 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   function update() {
     forms.forEach(editor => editor.update()); widgets.forEach(widget => widget());
-    launch.disabled = !can(); warning.hidden = !stale; review.hidden = !stale; review.disabled = !loaded;
+    launch.hidden = !can(); readOnly.hidden = !loaded || can();
+    launch.setAttribute('aria-expanded', String(loaded && createOpen));
+    if (createBox) createBox.hidden = !createOpen;
+    warning.hidden = !stale; review.hidden = !stale; review.disabled = !loaded;
   }
   function unavailable(error) {
     loaded = false; ++sourceTicket; list.replaceChildren(); detail.replaceChildren(); editors.hidden = true;
-    update(); launch.disabled = true; status.replaceChildren(errorBox(error));
+    update(); status.replaceChildren(errorBox(error));
   }
   async function currentWorkspace() {
     const value = await api('GET', endpoint); alive(); check(value.workspace);
@@ -56,6 +64,12 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   function clearEditors() {
     ++sourceTicket; forms = []; widgets = []; createSnapshot = null; createEditor = null; refreshCreateSource = null;
     editors.replaceChildren();
+  }
+  function showCreate() {
+    if (!loaded || !createEditor) return;
+    createOpen = true; update();
+    createEditor.box.querySelector('input:not([type="hidden"]), select, textarea')?.focus();
+    createEditor.box.scrollIntoView({block: 'nearest'});
   }
   function localForm(options, rebase = false) {
     const expected = JSON.stringify({preconditions: options.preconditions(), context: options.context});
@@ -120,17 +134,17 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   function documentView(entry) {
     const d = entry.document;
-    return h('div', {}, text(d.description), line('pm_gov_owner', text(d.owner_actor)),
-      line('pm_gov_response', h('div', {}, text(d.response), d.trigger ? text(t('pm_gov_trigger') + ': ' + d.trigger) : note('pm_gov_trigger_unknown'),
-        h('p', {}, t('pm_gov_review_at'), ': ', d.review_at ? timeStamp(d.review_at) : t('pm_gov_unscheduled')))),
+    return h('div', {}, text(d.description), line('pm_gov_owner', text(actorLabel(d.owner_actor))),
+      line('pm_gov_response', h('div', {}, text(d.response), d.trigger ? text(t('pm_gov_trigger') + t('pm_panel_separator') + d.trigger) : note('pm_gov_trigger_unknown'),
+        h('p', {}, t('pm_gov_review_at'), t('pm_panel_separator'), d.review_at ? timeStamp(d.review_at) : t('pm_gov_unscheduled')))),
       d.dimension ? line('pm_gov_dimension', text(t('pm_gov_' + d.dimension))) : '',
       line('pm_gov_assessment', statusPill('not_assessed')),
       d.affected_requirement_ids.length ? line('pm_gov_affected', text(d.affected_requirement_ids.map(value => nameFor('requirement', value) || value).join(', '))) : '',
       d.alternatives.length ? line('pm_gov_alternatives', h('ul', {}, ...d.alternatives.map(value => h('li', {class: 'pm-note-text'}, value)))) : '',
       d.decision ? line('pm_gov_decision', h('div', {}, text(t('pm_gov_' + d.decision.disposition)), text(d.decision.rationale),
-        text(d.decision.recorded_by))) : '',
+        text(actorLabel(d.decision.recorded_by)))) : '',
       d.adoption ? line('pm_gov_adoption', h('div', {}, statusPill('historical'), id(d.adoption.revision_id),
-        h('p', {}, h('a', {href: `#/op/${d.adoption.operation_id}`}, t('pm_operation'))), text(d.adoption.adopted_by))) : '',
+        h('p', {}, h('a', {href: `#/op/${d.adoption.operation_id}`}, t('pm_operation'))), text(actorLabel(d.adoption.adopted_by)))) : '',
       d.proposed_revision ? fold('pm_gov_proposed', h('div', {}, id(d.proposed_revision.revision_id), id(d.proposed_revision.document_digest))) : '',
       fold('pm_gov_sources', h('div', {}, ...d.sources.map(ref => h('article', {class: 'pm-fact'}, text(sourceLabel(ref.kind, ref.source)), id(ref.id),
         fold('pm_gov_exact_source', h('pre', {class: 'pm-brief-proof'}, JSON.stringify(ref.source, null, 2))))))),
@@ -149,7 +163,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
         let last = cursor;
         for (const row of page.revisions) {
           if (row.record_id !== record.record_id || !Number.isSafeInteger(row.sequence) || row.sequence <= last) invalid(); last = row.sequence;
-          holder.append(h('details', {}, h('summary', {}, `#${row.version} · ${row.actor} · ${t('pm_gov_action_' + row.action.split('.').slice(2).join('_'))}`), documentView(row),
+          holder.append(h('details', {}, h('summary', {}, `#${row.version} · ${actorLabel(row.actor)} · ${t('pm_gov_action_' + row.action.split('.').slice(2).join('_'))}`), documentView(row),
             timeStamp(row.created_at), h('a', {href: `#/op/${row.operation_id}`}, t('pm_operation'))));
         }
         more.remove(); cursor = page.next_cursor;
@@ -166,7 +180,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     });
     list.replaceChildren(...(!withRegister && ordered.length ? ordered.map(({record, revision}) => h('article', {class: 'pm-fact', 'data-pm-governance-row': record.record_id},
       h('div', {class: 'pm-fact-heading'}, h('strong', {class: 'pm-source'}, revision.document.title), h('span', {class: 'muted'}, t('pm_gov_' + record.kind))),
-      h('p', {class: 'muted'}, statusPill(revision.document.status === 'reported_resolved' ? 'not_assessed' : revision.document.status === 'monitoring' ? 'waiting' : 'not_started'), ' · ', revision.document.owner_actor,
+      h('p', {class: 'muted'}, statusPill(revision.document.status === 'reported_resolved' ? 'not_assessed' : revision.document.status === 'monitoring' ? 'waiting' : 'not_started'), ' · ', actorLabel(revision.document.owner_actor),
         revision.document.decision ? ' · ' + t('pm_gov_' + revision.document.decision.disposition) : ''),
       h('button', {type: 'button', class: 'ui-button secondary ui-sm', 'aria-pressed': String(selectedId === record.record_id), onclick: () => {selectRecord(record.record_id); void refresh(true);}},
         t(selectedId === record.record_id ? 'pm_gov_selected' : 'pm_gov_inspect')))) : withRegister ? [] : [emptyState({title: t('pm_gov_empty')})]));
@@ -176,7 +190,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     const {record, revision} = model.detail;
     detail.append(h('section', {'data-pm-governance-detail': record.record_id}, h('h3', {class: 'pm-source'}, revision.document.title),
       statusPill('not_assessed'), fold('pm_gov_details', h('div', {}, documentView(revision), h('p', {class:'muted'}, t('pm_gov_unassessed'), record.kind === 'change' ? ' ' + t('pm_gov_direction_only') : ''), fold('pm_gov_baseline', h('div', {}, id(record.context.plan_revision_id), id(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id),
-        timeStamp(record.context.snapshot_ref.as_of), text(t('pm_gov_root') + ': ' + record.root_cause_key))), historyView(record)))));
+        timeStamp(record.context.snapshot_ref.as_of), text(t('pm_gov_root') + t('pm_panel_separator') + record.root_cause_key))), historyView(record)))));
   }
   function namedChoices(field, entries, label) {
     field.type = 'hidden';
@@ -299,7 +313,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       refreshCreateSource = readSource;
       fields.snapshot_id.addEventListener('change', () => {void readSource();});
       widgets.push(() => {sourceSync();});
-      return {element: fold('pm_gov_new', editor.box, editor.locked()), mount: readSource};
+      createOpen = createOpen || editor.locked() || editor.hasDraft();
+      editor.box.querySelector('.actions').append(button({variant: 'secondary', label: t('pm_panel_cancel'), onClick: () => {createOpen = false; update(); if (!launch.hidden) launch.focus();}}));
+      createBox = h('div', {id: createId, hidden: !createOpen}, editor.box);
+      return {element: createBox, mount: readSource};
     }
     sourceSync = refsWidget(fields.source_refs, sourceHolder, snapshot, () => editor, doc.sources); widgets.push(sourceSync);
     return {element: fold('pm_gov_edit', editor.box, editor.locked()), mount: async () => {}};
@@ -312,7 +329,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       preconditions: () => ({expected_version: record.version}), permitted: owner, label: 'pm_gov_save_decision', params: values => values,
       extra: h('div', {class: 'pm-fields'}, note('pm_gov_direction_only'), labelled('pm_gov_disposition', disposition), labelled('pm_gov_reason', rationale))}, rebase);
     holder.append(fold('pm_gov_decide', decision.box, decision.locked()));
-    const adoption_operation_id = input('pm_gov_operation_id', {max: 35}), adoptionReason = reason(), receipt = h('div', {role: 'status'}); let proof = '', editor, ticket = 0;
+    const adoption_operation_id = input('pm_gov_operation_id', {max: 35}), adoptionReason = reason(), receipt = h('div', {role: 'status', 'data-pm-governance-adoption-receipt': ''}); let proof = '', editor, ticket = 0;
     const inspect = h('button', {type: 'button', class: 'ui-button secondary ui-sm', onclick: async () => {
       const value = adoption_operation_id.value.trim(), request = ++ticket; proof = ''; inspect.disabled = true;
       try {
@@ -410,6 +427,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     const action = requested === 'record' ? 'record' : requested === 'decide' ? 'decide' : requested === 'adoption.link' ? 'adoption.link' : 'revise';
     const editor = forms.find(row => row.box.dataset.pmAction === 'pm.governance.' + action);
     if (!loaded || !editor) return;
+    if (requested === 'record') {showCreate(); return;}
     if (requested === 'resolve' && !editor.locked()) editor.set('status', 'reported_resolved');
     for (let parent = editor.box.parentElement; parent && parent !== element; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
     const field = requested === 'resolve' ? editor.fields.rationale : editor.box.querySelector('input:not([type="hidden"]), select, textarea');

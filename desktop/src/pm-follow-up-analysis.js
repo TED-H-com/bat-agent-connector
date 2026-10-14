@@ -1,3 +1,4 @@
+import {panelActorLabel} from './pm-governance-strings.js';
 import {disclosure, statusPill, inlineError} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // Assessments quote one immutable intake. A valid response format is not verified advice.
@@ -86,21 +87,21 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
       };
       content.append(group('pm_fa_findings',doc.findings,item=>{
         if(!['problem','deviation','assumption','unknown','decision_effect'].includes(item.kind)||typeof item.text!=='string'||typeof item.impact!=='string')throw Error(t('pm_fa_mismatch'));
-        return [h('strong',{},t('pm_fa_kind_'+item.kind)),h('p',{class:'pm-note-text'},item.text),h('p',{class:'pm-note-text'},t('pm_fa_impact'),': ',item.impact)];
+        return [h('strong',{},t('pm_fa_kind_'+item.kind)),h('p',{class:'pm-note-text'},item.text),h('p',{class:'pm-note-text'},t('pm_fa_impact'),t('pm_panel_separator'),item.impact)];
       }),group('pm_fa_tradeoffs',doc.tradeoffs,item=>{
         if(typeof item.decision!=='string')throw Error(t('pm_fa_mismatch'));return [h('strong',{},item.decision),options(item.options)];
       }),group('pm_fa_questions',doc.questions,item=>{
         if(typeof item.question!=='string'||typeof item.why_now!=='string')throw Error(t('pm_fa_mismatch'));
-        return [h('strong',{},item.question),h('p',{class:'pm-note-text'},t('pm_fa_why'),': ',item.why_now),options(item.options)];
+        return [h('strong',{},item.question),h('p',{class:'pm-note-text'},t('pm_fa_why'),t('pm_panel_separator'),item.why_now),options(item.options)];
       }),group('pm_fa_recommendations',doc.recommendations,item=>{
         if(typeof item.text!=='string'||item.proposed_owner!=null&&typeof item.proposed_owner!=='string')throw Error(t('pm_fa_mismatch'));
-        return [h('p',{class:'pm-note-text'},item.text),item.proposed_owner?h('p',{},t('pm_fa_proposed_owner'),': ',item.proposed_owner):''];
+        return [h('p',{class:'pm-note-text'},item.text),item.proposed_owner?h('p',{},t('pm_fa_proposed_owner'),t('pm_panel_separator'),panelActorLabel(t,item.proposed_owner)):''];
       }));
     }else content.append(note('pm_fa_raw_review'),h('ul',{},...row.validation.errors.map(error=>h('li',{},String(error)))));
     content.append(fold('pm_fa_details',note('pm_fa_unverified'),fold('pm_fa_raw',h('pre',{class:'pm-note-text'},row.raw_reply)),
       fold('pm_fa_provenance',h('p',{},t('pm_fa_intake'),code(row.intake_id),code(row.intake_digest)),
         h('p',{},t('pm_native_origin'),' ',row.provenance.adapter||t('pm_native_unknown_source')),
-        h('p',{},t('pm_fa_model'),': ',row.provenance.actual_model||'—'),h('p',{},t('pm_fa_run'),code(row.run_id)),
+        h('p',{},t('pm_fa_model'),t('pm_panel_separator'),row.provenance.actual_model||'—'),h('p',{},t('pm_fa_run'),code(row.run_id)),
         h('p',{},t('pm_fa_context'),code(row.context_digest)),h('p',{},t('pm_fa_reply_digest'),code(row.raw_reply_digest)),
         h('p',{},t('pm_fa_document_digest'),code(row.document_digest)),
         h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('pm_operation')))));

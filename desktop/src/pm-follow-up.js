@@ -1,5 +1,6 @@
 import {iconButton, button, sectionCard, statusPill, disclosure, emptyState, inlineError} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
+import {panelActorLabel} from './pm-governance-strings.js';
 // Saved discussion preparation. Model execution and adopted scope remain separate.
 import {followUpAssessments} from './pm-follow-up-analysis.js';
 import {followUpAnalysisRequest} from './pm-follow-up-request.js';
@@ -10,6 +11,9 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   if(!number(pageSize)||pageSize<1||pageSize>100)throw Error('Invalid Follow-up page size');
   let serial=0, selected='', loaded=false, head=null, plan=null, metadata=[], next=null, sourceLoaded=false;
   let sourcePages={}, snapshot=null, thread=null, editor=null, reading=false, sourceSerial=0, retired=false, verifiedRole=null;
+  let prepareOpen=false, launch=null;
+  const prepareId='pm-follow-up-create-'+crypto.randomUUID();
+  const actorLabel=value=>panelActorLabel(t,value);
   const status=h('div',{role:'status'}),view=h('div'),sourceStatus=h('div',{role:'status'}),choices=h('div'),meetingChoices=h('div');
   const note=key=>h('p',{class:'muted pm-note-text'},t(key));
   const code=value=>h('code',{class:'mono pm-source'},value||t('pm_fu_unknown'));
@@ -32,7 +36,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const json=field=>JSON.parse(field.value||'[]');
   function sourceRefs(refs=[]) {
     return h('ul',{class:'pm-fu-refs'},...refs.map(ref=>h('li',{},...Object.entries(ref).filter(([key,value])=>(key==='id'||key.endsWith('_id')||key.endsWith('_digest'))&&typeof value==='string')
-      .map(([key,value])=>{const label='pm_fu_ref_'+key;return h('span',{},t(label)===label?key.replaceAll('_',' '):t(label),': ',code(value));}))));
+      .map(([key,value])=>{const label='pm_fu_ref_'+key;return h('span',{},t(label)===label?key.replaceAll('_',' '):t(label),t('pm_panel_separator'),code(value));}))));
   }
   function validIntake(row,id=null) {
     if(!row||row.workspace_id!==workspaceId||!/^pmfu_[0-9a-f]{32}$/.test(row.intake_id||'')||id&&row.intake_id!==id
@@ -46,7 +50,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     if(saved&&!entries.some(([id])=>id===saved))node.append(h('option',{value:saved},t('pm_fu_saved_selection')+' · '+saved));node.value=saved;
   }
   function renderNavigation() {
-    const entries=metadata.map(row=>[row.intake_id,`#${row.version} · ${row.created_by}`]);
+    const entries=metadata.map(row=>[row.intake_id,`#${row.version} · ${actorLabel(row.created_by)}`]);
     updateOptions(previousChoice,entries,'pm_fu_no_comparison');
     if(selected&&!entries.some(([id])=>id===selected))entries.push([selected,t('pm_fu_saved_selection')+' · '+selected]);
     updateOptions(choose,entries,'pm_fu_latest');choose.value=selected;
@@ -67,8 +71,8 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   function render(row) {
     view.replaceChildren();if(!row){view.append(emptyState({title:t('pm_fu_empty')}));return;}
     const doc=row.document;
-    const summary=h('div',{class:'pm-fu-meta'},h('strong',{},t('pm_fu_version',{version:row.version})),h('span',{},t('pm_fu_prepared_at'),': ',date(row.created_at)),
-      h('span',{},t('pm_fu_snapshot_at'),': ',date(doc.snapshot_ref.as_of)));
+    const summary=h('div',{class:'pm-fu-meta'},h('strong',{},t('pm_fu_version',{version:row.version})),h('span',{},t('pm_fu_prepared_at'),t('pm_panel_separator'),date(row.created_at)),
+      h('span',{},t('pm_fu_snapshot_at'),t('pm_panel_separator'),date(doc.snapshot_ref.as_of)));
     const gaps=['projects_truncated','work_truncated','evidence_truncated','bytes_truncated']
       .filter(key=>doc.coverage?.snapshot?.[key]===true).map(key=>'pm_fu_'+key);
     if(doc.coverage?.thread?.truncated)gaps.push('pm_fu_truncated');
@@ -79,24 +83,24 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     else agenda.append(h('ol',{},...doc.agenda.map(item=>h('li',{class:'pm-fact'},h('strong',{class:'pm-note-text'},item.text),
       h('p',{class:'muted'},t('pm_fu_basis_'+item.ordering_basis)),''))));
     const knowledge=h('section',{'data-pm-fu-knowledge':''},h('h3',{},t('pm_fu_knowledge')));
-    let missingBaseline = 0;
+    const missingBaseline = [];
     const knowledgeSources = h('div');
     for(const domain of domains){
       const entry=doc.knowledge[domain],inputs=entry.baseline_inputs||[],later=entry.supplemental_inputs||[],links=entry.answer_links||[];
-      if (!inputs.length) missingBaseline++;
+      if (!inputs.length) missingBaseline.push(t('pm_fu_domain_'+domain));
       if (!inputs.length && !later.length && !links.length) continue;
       knowledgeSources.append(h('h4',{},t('pm_fu_domain_'+domain)),...inputs.map(value=>h('p',{},code(value.input_id))), ...later.map(value=>h('p',{},code(value.input_id))),sourceRefs(links));
       const item=h('div',{class:'pm-fu-domain','data-pm-fu-domain':domain},h('h4',{},t('pm_fu_domain_'+domain)),h('div',{},
         ...inputs.map(value=>h('p',{class:'pm-note-text'},value.value,' · ',h('span',{class:'muted'},state(value.status)))),
         !inputs.length?statusPill('unknown'):'',
-        ...later.map(value=>h('p',{class:'pm-note-text'},h('span',{class:'muted'},t('pm_fu_supplement'),': '),value.value,' · ',state(value.status))),
+        ...later.map(value=>h('p',{class:'pm-note-text'},h('span',{class:'muted'},t('pm_fu_supplement'),t('pm_panel_separator')),value.value,' · ',state(value.status))),
         links.length?note('pm_fu_answer_recorded'):'',
         ''));knowledge.append(item);
     }
-    if (missingBaseline) knowledge.append(h('p',{class:'ui-meta','data-pm-fu-missing':''},t('pm_fu_missing_areas',{count:missingBaseline})));
+    if (missingBaseline.length) knowledge.append(h('p',{class:'ui-meta','data-pm-fu-missing':''},t('pm_fu_missing_areas',{areas:missingBaseline.join(t('pm_panel_list_separator'))})));
     const issues=fold('pm_fu_all_issues',...(doc.issues||[]).map(issue=>h('article',{class:'pm-fact'},h('h4',{},issue.text),
       h('p',{},state(issue.status)),issue.details?.answer_link?note(issue.kind==='input'?'pm_fu_answer_recorded':'pm_fu_direction_only'):'',
-      issue.details?.owner_actor?h('p',{},t('pm_fu_owner'),': ',issue.details.owner_actor):'',
+      issue.details?.owner_actor?h('p',{},t('pm_fu_owner'),t('pm_panel_separator'),actorLabel(issue.details.owner_actor)):'',
       issue.details?.adoption?h('p',{},t('pm_fu_prior_adoption'),h('a',{href:`#/op/${encodeURIComponent(issue.details.adoption.operation_id)}`},code(issue.details.adoption.operation_id))):'',
       issue.details?.result?h('p',{class:'pm-note-text'},issue.details.result):'',sourceRefs(issue.source_refs),code(issue.issue_id))));
     const changes=fold('pm_fu_comparison',note('pm_fu_comparison_help'),
@@ -136,12 +140,13 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     choices.querySelectorAll('input,select,button').forEach(node=>{node.disabled=locked;});
     meetingChoices.querySelectorAll('input,select,button').forEach(node=>{node.disabled=locked;});
     rebase.hidden=!baseline.value||!stale();rebase.disabled=editor.locked()||!can();
-    versionWarning.hidden=!stale();writeWarning.hidden=can();editorFold.hidden=!loaded; if(typeof launch !== 'undefined') launch.disabled=!can();
+    versionWarning.hidden=!stale();writeWarning.hidden=!loaded||can();editorFold.hidden=!loaded||!prepareOpen;
+    if(launch){launch.hidden=!can();launch.setAttribute('aria-expanded',String(loaded&&prepareOpen));}
   }
   const rebase=h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>{bindVersions();editor.update();}},t('pm_fu_use_versions'));
-  const versionWarning=note('pm_fu_stale'),writeWarning=note('pm_fu_read_only');
+  const versionWarning=note('pm_fu_stale'),writeWarning=note('pm_panel_read_only');writeWarning.dataset.pmPanelReadonly='';
   const optional=fold('pm_fu_optional',labelled('pm_fu_thread',threadChoice),labelled('pm_fu_compare',previousChoice),choices,meetingChoices);
-  const editorFold=fold('pm_fu_prepare',sourceStatus,writeWarning,versionWarning,rebase); editorFold.dataset.pmFuEditor='';
+  const editorFold=h('div',{id:prepareId,hidden:true},sourceStatus,versionWarning,rebase); editorFold.dataset.pmFuEditor='';
   editor=form({action:'pm.follow_up.prepare',target:{workspace_id:workspaceId},fields,
     params:values=>{if(!ready())throw Error(t('pm_fu_source_wait'));return {snapshot_id:values.snapshot,...(values.thread?{thread_id:values.thread}:{}),
       ...(values.previous?{previous_intake_id:values.previous}:{}),governance_revision_ids:JSON.parse(values.governance||'[]'),meeting_follow_up_refs:JSON.parse(values.meetings||'[]')};},
@@ -150,11 +155,14 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     onSaved:async result=>{selected=result.intake_id;await refresh();},
     extra:h('div',{class:'pm-fields'},note('pm_fu_prepare_help'),labelled('pm_fu_snapshot',snapshotChoice),optional,baseline,governance,meetings)});
   editorFold.append(editor.box);
+  // Automatic baseline binding alone is not an authored draft.
+  prepareOpen=editor.locked()||Boolean(snapshotChoice.value||threadChoice.value||previousChoice.value||json(governance).length||json(meetings).length);
+  editor.box.querySelector('.actions').append(button({variant:'secondary',label:t('pm_panel_cancel'),onClick:()=>{prepareOpen=false;sync();if(!launch.hidden)launch.focus();}}));
   const more=h('button',{type:'button',class:'ui-button secondary ui-sm',hidden:true,onclick:()=>void loadMetadata(next)},t('pm_fu_more'));
-  const launch=button({variant:'primary',label:t('pm_fu_prepare'),onClick:()=>{editorFold.open=true;queueMicrotask(()=>snapshotChoice.focus());}});
+  launch=button({variant:'primary',label:t('pm_fu_prepare'),'data-pm-follow-up-prepare':'','aria-controls':prepareId,'aria-expanded':'false',onClick:()=>void showPrepare()});
   const element=sectionCard({body:h('div',{},h('div',{class:'pm-heading'},launch,
     iconButton({icon:'refresh-cw', label:t('pm_fu_refresh'),onClick:()=>void refresh()})),
-    status,view,fold('pm_fu_history',labelled('pm_fu_history_choose',choose),more),editorFold)});
+    writeWarning,status,view,fold('pm_fu_history',labelled('pm_fu_history_choose',choose),more),editorFold)});
   element.classList.add('pm-follow-up');element.dataset.pmFollowUp='';
   function metadataPage(data,after) {
     check(data);if(!number(data.head_version)||!Array.isArray(data.intakes)||data.next_cursor!=null&&(!number(data.next_cursor)||data.next_cursor<=after))throw Error(t('pm_fu_scope_error'));
@@ -259,7 +267,12 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
       if(!current(ticket)||!complete.every(Boolean))return;sourceLoaded=true;await readSelections();
     }catch{/* Each original source failure clears the complete stale view. */}
   }
-  editorFold.addEventListener('toggle',()=>{if(editorFold.open&&loaded&&!sourceLoaded)void loadSources();});
+  async function showPrepare() {
+    if(!loaded)return;
+    prepareOpen=true;sync();
+    if(!sourceLoaded)await loadSources();
+    if(loaded){snapshotChoice.focus();editor.box.scrollIntoView({block:'nearest'});}
+  }
   async function verifyWorkspace(ticket) {
     const data=await api('GET',endpoint);if(!current(ticket))return false;
     const member=data.workspace?.membership;
@@ -300,13 +313,13 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
       loaded=true;status.replaceChildren();
       if(sourceUnavailable)view.replaceChildren(inlineError({error:t(selected?'pm_fu_selected_unavailable':'pm_fu_latest_unavailable')}),fold('pm_fu_details',note('pm_fu_readable_history')));
       else render(detail?.intake);
-      renderNavigation();editor.update();if(editorFold.open)await loadSources();
+      renderNavigation();editor.update();if(prepareOpen)await loadSources();
     }catch(error){if(ticket===serial)unavailable(error);}
   }
   return {element,box:element,refresh,openRef:async target=>{
     const id=target?.intake_id || target?.follow_up_id;
     if(!/^pmfu_[0-9a-f]{32}$/.test(id||''))return;
     selected=id;await refresh();if(!loaded)return;
-    editorFold.open=true;await loadSources();if(loaded){snapshotChoice.focus();editor.box.scrollIntoView({block:'nearest'});}
+    await showPrepare();
   }};
 }

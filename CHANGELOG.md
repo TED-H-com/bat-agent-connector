@@ -11,6 +11,8 @@
 - Governance, Meetings and Follow-ups use shared cards, compact context, localized
   details and date-time editing. Register handoffs select and focus the requested
   durable form without submitting it; original drafts and recovery keys remain intact.
+  Creation has one entry with focus and Cancel, read-only access explains its permission
+  requirement, and missing follow-up baseline areas are named in both languages.
 
 - Reviewed handoff facts no longer print empty placeholders. The issues register
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited

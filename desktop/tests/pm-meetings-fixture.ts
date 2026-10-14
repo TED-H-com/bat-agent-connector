@@ -124,5 +124,8 @@ export async function boot(page:Page,locale='en') {
   },locale);
   await expect(page.locator('[data-pm-meetings]')).toBeVisible();
 }
-export async function openAction(page:Page,name:string) {await action(page,name).evaluate(el=>{let parent=el.parentElement;while(parent){if(parent.tagName==='DETAILS')(parent as HTMLDetailsElement).open=true;parent=parent.parentElement;}});}
+export async function openAction(page:Page,name:string) {
+  if (name === 'create' && !await action(page, name).isVisible() && await page.locator('[data-pm-meeting-create]').isVisible()) await page.locator('[data-pm-meeting-create]').click();
+  await action(page,name).evaluate(el=>{let parent=el.parentElement;while(parent){if(parent.tagName==='DETAILS')(parent as HTMLDetailsElement).open=true;parent=parent.parentElement;}});
+}
 export async function reason(page:Page,name:string,text='Keep a clear record of the discussion') {await openAction(page,name);await action(page,name).getByLabel('Reason for this record',{exact:true}).fill(text);}

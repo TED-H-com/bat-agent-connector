@@ -1,5 +1,7 @@
+import {pmPanelStrings} from './pm-governance-strings.js';
 export const pmFollowUpStrings={
   en:{
+    ...pmPanelStrings.en,
     pm_fu_details:'Details',
     pm_fu_title:'Follow-up preparation',pm_fu_intro:'Review fixed evidence and recorded answers before the next discussion.',
     pm_fu_refresh:'Refresh preparation',pm_fu_retry:'Retry preparation',pm_fu_loading:'Reading fixed sources…',
@@ -10,7 +12,7 @@ export const pmFollowUpStrings={
     pm_fu_prepared_at:'Prepared at',pm_fu_snapshot_at:'Evidence snapshot at',pm_fu_unknown:'Unknown',pm_fu_none:'None selected',
     pm_fu_preparation_only:'Preparing saves the selected sources. It does not adopt scope changes or dispatch work.',
     pm_fu_agenda:'Discussion agenda',pm_fu_no_agenda:'No agenda items arise from the selected records. Unknown fields do not create questions.',
-    pm_fu_missing_areas:'{count} areas have no baseline input',pm_fu_knowledge:'Project knowledge',pm_fu_domain_governance:'Governance',pm_fu_domain_scope:'Scope',pm_fu_domain_schedule:'Schedule',
+    pm_fu_missing_areas:'No baseline input: {areas}',pm_fu_knowledge:'Project knowledge',pm_fu_domain_governance:'Governance',pm_fu_domain_scope:'Scope',pm_fu_domain_schedule:'Schedule',
     pm_fu_domain_finance:'Finance',pm_fu_domain_stakeholders:'Stakeholders',pm_fu_domain_resources:'Resources',pm_fu_domain_risk:'Risk',pm_fu_domain_quality:'Quality',
     pm_fu_domain_unknown:'No input in the accepted baseline; remains unknown.',pm_fu_supplement:'Later discussion input',
     pm_fu_answer_recorded:'An explicit answer is recorded. The accepted plan remains unchanged.',pm_fu_input_sources:'Input sources',
@@ -58,6 +60,7 @@ export const pmFollowUpStrings={
     pm_fu_state_waiting:'Waiting',pm_fu_state_multiple_captured_states:'Several historical states; current state not checked',
   },
   'zh-TW':{
+    ...pmPanelStrings['zh-TW'],
     pm_fu_details:'詳細資訊',
     pm_fu_title:'後續追蹤準備',pm_fu_intro:'先整理固定證據與已記錄的回答，再進行下一次討論。',
     pm_fu_refresh:'重新整理後續追蹤',pm_fu_retry:'重試後續追蹤',pm_fu_loading:'正在讀取固定來源…',
@@ -68,7 +71,7 @@ export const pmFollowUpStrings={
     pm_fu_prepared_at:'準備時間',pm_fu_snapshot_at:'證據快照時間',pm_fu_unknown:'未知',pm_fu_none:'未選取',
     pm_fu_preparation_only:'準備內容保存選定的來源，不會採用範圍變更或派工。',
     pm_fu_agenda:'討論議程',pm_fu_no_agenda:'所選紀錄未產生議程項目。缺少欄位不會自動變成追問。',
-    pm_fu_missing_areas:'{count} 個面向尚無基準輸入',pm_fu_knowledge:'專案資訊',pm_fu_domain_governance:'治理',pm_fu_domain_scope:'範圍',pm_fu_domain_schedule:'時程',
+    pm_fu_missing_areas:'尚無基準輸入：{areas}',pm_fu_knowledge:'專案資訊',pm_fu_domain_governance:'治理',pm_fu_domain_scope:'範圍',pm_fu_domain_schedule:'時程',
     pm_fu_domain_finance:'財務',pm_fu_domain_stakeholders:'利害關係人',pm_fu_domain_resources:'資源',pm_fu_domain_risk:'風險',pm_fu_domain_quality:'品質',
     pm_fu_domain_unknown:'已採用基準尚無這個領域的資訊，仍為未知。',pm_fu_supplement:'後續討論資訊',
     pm_fu_answer_recorded:'已有明確回答紀錄；已採用的計畫仍未改變。',pm_fu_input_sources:'資訊來源',
@@ -96,7 +99,7 @@ export const pmFollowUpStrings={
     pm_fu_accepted_required:'請選取包含已明確採用計畫的快照。',pm_fu_source_wait:'請選取已採用計畫的快照，並等待所選來源完成核對。',
     pm_fu_read_only:'準備討論需要目前工作區的寫入權限與 管理權限範圍。',pm_fu_stale:'版本已變動；請核對已保存的選取內容，再改用目前版本。',
     pm_fu_use_versions:'保留選取內容，改用目前版本',pm_fu_actor_changed:'登入身分已改變；請重新開啟工作區，使用該身分的草稿。',
-    pm_fu_scope_error:'後續追蹤 回應與這個工作區、來源或分頁不符。',
+    pm_fu_scope_error:'後續追蹤回應與這個工作區、來源或分頁不符。',
     pm_fu_basis_explicit_review_at_reached:'已到明確記錄的檢視時間',pm_fu_basis_observed_central_attention_state:'已保存的中央狀態需要處理',
     pm_fu_basis_explicit_follow_up_blocked_report:'追蹤項目明確回報阻塞',pm_fu_basis_explicit_conflicting_input:'已記錄的衝突資訊',pm_fu_basis_explicit_unresolved_input:'已記錄的未決資訊',
     pm_fu_basis_reported_done_verification_unassessed:'已回報完成，驗證尚未評估',pm_fu_basis_reported_resolution_verification_unassessed:'已回報解決，驗證尚未評估',
