@@ -271,7 +271,7 @@ test('terminal span without end time reads End time not recorded and mobile date
   await expect(bar).not.toHaveClass(/\bopen\b/);
   await expect(bar).not.toHaveAttribute('data-open', 'true');
   await expect(bar).toHaveText('End time not recorded');
-  await expect(bar).toHaveAttribute('title', 'Actual · 2026-10-08T10:00:00Z → End time not recorded');
+  await expect(bar).toHaveAttribute('title', 'Actual · Oct 8 → End time not recorded');
   await item(page, rowId).click();
   const inspector = page.locator('[data-schedule-inspector]');
   await inspector.locator('[data-schedule-section="details"] > summary').click();
@@ -280,7 +280,7 @@ test('terminal span without end time reads End time not recorded and mobile date
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.locator(`[data-schedule-row="${rowId}"] .schedule-date-range`)).toHaveText('Actual Oct 8 → End time not recorded');
   const forecastBar = page.locator('[data-schedule-track="work:forecast_start_only"] .schedule-bar');
-  await expect(forecastBar).toHaveAttribute('title', 'Forecast · 2026-10-21');
+  await expect(forecastBar).toHaveAttribute('title', 'Forecast · Oct 21');
   await expect(forecastBar).not.toContainText('End time not recorded');
   await expect(page.locator(`[data-schedule-row^="attempt:operation:${f.ids.work.resetEmail}:"] .schedule-date-range`)).toHaveText('Actual Oct 6');
   await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual Oct 5 → Open');
