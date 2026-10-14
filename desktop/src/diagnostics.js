@@ -76,9 +76,9 @@ export function scrubDiagnostics(text) {
 }
 export function sessionFacts(session) {
   return {loaded: bool(session.loaded), streaming: bool(session.streaming),
-    unknown_activity: ![true,false].includes(session.streaming), stale: bool(session.stale ?? session.fields_stale),
+    unknown_activity: ![true,false].includes(session.streaming), stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
     pending: session.pending !== undefined ? session.pending != null : bool(session.pending_interaction),
-    history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? session.reading.incomplete_reasons.map(reason).filter(Boolean) : null};
+    history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null};
 }
 export function buildDiagnostics(input) {
   const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a,b) => String(a.host).localeCompare(String(b.host), 'en')) : [];

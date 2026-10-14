@@ -158,9 +158,9 @@ function sessionFacts(session) {
 		loaded: bool(session.loaded),
 		streaming: bool(session.streaming),
 		unknown_activity: ![true, false].includes(session.streaming),
-		stale: bool(session.stale ?? session.fields_stale),
+		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
 		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
-		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? session.reading.incomplete_reasons.map(reason).filter(Boolean) : null
+		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
 	};
 }
 function buildDiagnostics(input) {
