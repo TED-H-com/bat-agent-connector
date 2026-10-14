@@ -134,8 +134,8 @@ for(const locale of ['en','zh-TW']) test(`required fields, endpoint and fingerpr
 
 for(const status of [403,404])test(`setup withdrawal ${status} clears host rows, counts and next action; late success cannot restore them`,async({page})=>{
   const state=await managedSetupFixture(page,false);state.saved=true;await page.goto('/dashboard/#/settings');
-  const panel=page.locator('[data-managed-setup]'),refresh=panel.getByRole('button',{name:'Recheck configuration',exact:true});
-  await expect(panel).toContainText('Configured: 1 hosts');await expect(panel.locator('[data-setup-sessions]')).toBeVisible();
+  const panel=page.locator('[data-managed-setup]'),refresh=page.locator('#main > .ui-page-header').getByRole('button',{name:'Refresh',exact:true});
+  await expect(panel).toContainText('Configured: 1 host');await expect(panel.locator('[data-setup-sessions]')).toBeVisible();
   state.hold=true;await refresh.click();await expect.poll(()=>Boolean(state.release)).toBe(true);
   state.hold=false;state.setupStatus=status;await refresh.click();await expect(panel.locator('[data-error-summary]')).toBeVisible();
   await expect(panel).not.toContainText('Configured:');await expect(panel).not.toContainText('wss://demo.example');await expect(panel.locator('[data-setup-sessions]')).toBeHidden();
@@ -156,12 +156,12 @@ test('an expired or rejected staged credential requires a fresh paste while keep
 test('a malformed setup refresh cannot enable a new submission',async({page})=>{
   const state=await managedSetupFixture(page,false);await page.goto('/dashboard/');await field(page,'connection_url').fill(url);
   state.verification.timeout_s=0;
-  await page.locator('[data-managed-setup]').getByRole('button',{name:'Recheck configuration',exact:true}).click();
+  await page.locator('#main > .ui-page-header').getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(page.locator('[data-error-summary]')).toBeVisible();
   await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
   expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   state.verification.timeout_s=300;
-  await page.locator('[data-managed-setup]').getByRole('button',{name:'Recheck configuration',exact:true}).click();
+  await page.locator('#main > .ui-page-header').getByRole('button',{name:'Refresh',exact:true}).click();
   await expect(formFor(page).locator('button[type=submit]')).toBeEnabled();
   await expect(field(page,'bat_secret')).toHaveValue('synthetic-bat-secret');
   expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);

@@ -2,6 +2,14 @@ import {test, expect, type Page} from '@playwright/test';
 import {managedSetupFixture as fixture} from './managed-setup-fixture.ts';
 
 
+async function expectSetupOperation(page: Page) {
+  const details = page.locator('[data-setup-details]');
+  const link = details.locator('[data-setup-operation]');
+  await expect(link).toHaveText('Setup operation · Done');
+  if (!await details.evaluate(node => node.hasAttribute('open'))) await details.locator('summary').click();
+  await expect(link).toBeVisible();
+}
+
 for (const native of [false,true]) test.describe(native?'Native setup':'Browser setup',()=>{
   test('first run guides setup, preserves non-secret draft, recovers the original key',async({page})=>{
     const state=await fixture(page,native); state.lost=true;
@@ -12,7 +20,7 @@ for (const native of [false,true]) test.describe(native?'Native setup':'Browser 
     await form.getByLabel('BAT connection profile',{exact:true}).selectOption('profile-demo');
     await form.getByLabel('Host ID',{exact:true}).fill('demo');
     await form.getByLabel('BAT connection token', {exact:false}).fill('private-bat-secret');
-    await panel.getByRole('button',{name:'Recheck configuration'}).click();
+    await page.locator('#main > .ui-page-header').getByRole('button', {name: 'Refresh', exact: true}).click();
     await expect(form.getByLabel('Host ID',{exact:true})).toHaveValue('demo');
     await form.getByRole('button',{name:'Verify and save host'}).click();
     await expect(panel).toContainText('The reply was lost.');
@@ -24,7 +32,7 @@ for (const native of [false,true]) test.describe(native?'Native setup':'Browser 
     await expect(form.getByLabel('Host ID',{exact:true})).toHaveValue('demo');
     await expect(form.getByRole('button',{name:'Verify and save host'})).toBeDisabled();
     await panel.getByRole('button',{name:'Check request'}).click();
-    await expect(panel.getByRole('link',{name:'View setup operation'})).toBeVisible();
+    await expectSetupOperation(page);
     expect(state.posts).toHaveLength(2);
     expect(state.posts[1].idempotency_key).toBe(state.posts[0].idempotency_key);
     expect(state.posts[1].body).toEqual(state.posts[0].body);expect(state.staged).toHaveLength(1);
@@ -39,11 +47,11 @@ for (const native of [false,true]) test.describe(native?'Native setup':'Browser 
     await form.getByLabel('Host ID',{exact:true}).fill('demo');
     await form.getByRole('button',{name:'Verify and save host'}).click();
     await expect(panel).toContainText('Read the new configuration.');
-    await expect(panel.getByRole('link',{name:'View setup operation'})).toHaveCount(0);
+    await expect(page.locator('[data-setup-operation]')).toHaveCount(0);
     state.revision='d'.repeat(64);state.refused=false;
-    await panel.getByRole('button',{name:'Recheck configuration'}).click();
+    await page.locator('#main > .ui-page-header').getByRole('button', {name: 'Refresh', exact: true}).click();
     await form.getByRole('button',{name:'Verify and save host'}).click();
-    await expect(panel.getByRole('link',{name:'View setup operation'})).toBeVisible();
+    await expectSetupOperation(page);
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
     expect(state.posts[1].body.preconditions.config_revision).toBe(state.revision);
   });
@@ -77,15 +85,15 @@ for (const native of [false, true]) test.describe(native ? 'Native verification 
     await expect(form.getByLabel('Arguments (one per line)', {exact: true})).toHaveValue('-m\ncheck project\n--output=one two\n');
     await expect(form.getByRole('button', {name: 'Save verification command', exact: true})).toBeDisabled();
     await panel.getByRole('button', {name: 'Check request', exact: true}).click();
-    await expect(panel.getByRole('link', {name: 'View setup operation'})).toBeVisible();
+    await expectSetupOperation(page);
     expect(state.posts[1]).toEqual(original); expect(state.posts.map(post => post.body.action)).toEqual(['setup.verification', 'setup.verification']);
   });
   test('known verification receipts recover by operation ID without another write', async ({page}) => {
     const state = await fixture(page, native); await page.goto('/dashboard/#/settings');
     const form = await verificationForm(page); await fillVerification(form);
     await form.getByRole('button', {name: 'Save verification command', exact: true}).click();
-    await expect(page.getByRole('link', {name: 'View setup operation'})).toBeVisible();
-    await page.reload(); await expect(page.getByRole('link', {name: 'View setup operation'})).toBeVisible();
+    await expectSetupOperation(page);
+    await page.reload(); await expectSetupOperation(page);
     expect(state.posts).toHaveLength(1);
   });
   test('a receipt from another actor is not accepted as verification success', async ({page}) => {
@@ -93,23 +101,23 @@ for (const native of [false, true]) test.describe(native ? 'Native verification 
     const form = await verificationForm(page); await fillVerification(form);
     await form.getByRole('button', {name: 'Save verification command', exact: true}).click();
     await expect(page.locator('[data-managed-setup]')).toContainText('The receipt does not match');
-    await expect(page.getByRole('link', {name: 'View setup operation'})).toHaveCount(0);
+    await expect(page.locator('[data-setup-operation]')).toHaveCount(0);
     await expect(form.getByRole('button', {name: 'Save verification command', exact: true})).toBeDisabled();
   });
   test('refresh preserves the reviewed base until an explicit reload adopts newer configuration', async ({page}) => {
     const state = await fixture(page, native); await page.goto('/dashboard/#/settings');
     const panel = page.locator('[data-managed-setup]'), form = await verificationForm(page); await fillVerification(form);
     state.revision = 'b'.repeat(64); state.verification.commands.other = ['newer-command'];
-    await panel.getByRole('button', {name: 'Recheck configuration', exact: true}).click();
+    await page.locator('#main > .ui-page-header').getByRole('button', {name: 'Refresh', exact: true}).click();
     await expect(form).toContainText('Central configuration changed'); await expect(form.getByLabel('Executable', {exact: true})).toHaveValue('python');
     state.refused = true; await form.getByRole('button', {name: 'Save verification command', exact: true}).click();
     await expect(panel).toContainText('Read the new configuration.');
     expect(state.posts[0].body.params.commands.other).toEqual(['uv', 'run', 'pytest', '-q']);
     expect(state.posts[0].body.preconditions.config_revision).toBe('a'.repeat(64));
-    state.refused = false; await panel.getByRole('button', {name: 'Recheck configuration', exact: true}).click();
+    state.refused = false; await page.locator('#main > .ui-page-header').getByRole('button', {name: 'Refresh', exact: true}).click();
     await form.getByRole('button', {name: 'Reload saved verification settings', exact: true}).click(); await fillVerification(form);
     await form.getByRole('button', {name: 'Save verification command', exact: true}).click();
-    await expect(panel.getByRole('link', {name: 'View setup operation'})).toBeVisible();
+    await expectSetupOperation(page);
     expect(state.posts[1].body.params.commands.other).toEqual(['newer-command']);
     expect(state.posts[1].body.preconditions.config_revision).toBe('b'.repeat(64));
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
@@ -133,7 +141,7 @@ for (const native of [false, true]) test.describe(native ? 'Native verification 
     await form.locator('[data-setup-manual] > summary').click();
     await form.getByLabel('BAT connection profile', {exact: true}).selectOption('profile-demo');
     await form.getByLabel('Host ID', {exact: true}).fill('demo'); await form.getByRole('button', {name: 'Verify and save host', exact: true}).click();
-    await expect(page.getByRole('link', {name: 'View setup operation'})).toBeVisible();
+    await expectSetupOperation(page);
     expect(state.posts[0].body.params).toMatchObject({shared_clone_worktrees: true, writes: false, orchestrate: false});
   });
   test('navigating away during setup initialization quietly retires the old view', async ({page}) => {

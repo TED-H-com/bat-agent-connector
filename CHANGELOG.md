@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Confirm parsed BAT connection values without revealing credentials. Keep connected
+  setup actions together, move the operation receipt into Details, use singular and
+  plural English counts, and reload setup status from one Settings Refresh while
+  retaining the current draft and credentials in page memory.
+
 - First-run BAT setup accepts a masked Connection URL paste, validates fields before
   staging credentials, and releases only proven admission refusals. Uncertain replies
   retain the original request and key. English and zh-TW errors, connection access and

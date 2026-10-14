@@ -2842,7 +2842,7 @@ async function fleetTailscale(root, guard) {
   } catch { /* The Fleet panel owns its availability error. */ }
   return () => {};
 }
-function openSettings(main, {exclusive = false} = {}) {
+function openSettings(main, {exclusive = false, refreshButton} = {}) {
   const memory = viewState(state.namespace || "", "", "settings");
   const frame = settingsFrame({h, t, exclusive, selected: memory.section || "", onSelect: id => { memory.section = id; }, sections: [
     {id: "connection", label: t("global_nav_connection")},
@@ -2854,7 +2854,7 @@ function openSettings(main, {exclusive = false} = {}) {
   ]});
   if (state.token && state.caps) main.append(pageHeader({
     title: t("ui_settings"),
-    actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => route()})],
+    actions: [refreshButton || iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => route()})],
   }));
   frame.panel("about").append(h("section", {class: "panel"},
     h("h2", {}, t("global_nav_about")),
@@ -2915,7 +2915,8 @@ async function viewManagedSettings(main) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const guard = () => assertView(connection);
   const status = h("div", {role: "status"});
-  const frame = openSettings(main, {exclusive: !nativeDesktop});
+  const refreshButton = iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => setup.reload()});
+  const frame = openSettings(main, {exclusive: !nativeDesktop, refreshButton});
   const local = h("section", {class: "panel", 'data-connection-card': ''}, h("h2", {}, t("managed_browser_connected")),
     connectionFacts(),
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(),
@@ -2923,7 +2924,7 @@ async function viewManagedSettings(main) {
       h("div", {"data-managed-locations": ""}, h('h3', {}, t('managed_locations')),
       h("p", {class: "muted"}, t("managed_locations_central")),
       h("p", {class: "muted"}, t("managed_locations_work"))))}), status);
-  const setup = managedSetupPanel({h, t, api, guard, namespace: state.namespace, errorBox, opStatus, caps: () => state.caps,
+  const setup = managedSetupPanel({h, t, api, guard, namespace: state.namespace, errorBox, refreshButton, caps: () => state.caps,
     onConfigured: async () => {const caps = await api("GET", "/capabilities"); guard(); state.caps = caps;}});
   frame.panel("connection").append(...(!state.caps.hosts?.length ? [setup.box, local] : [local, setup.box]));
   await setup.load();

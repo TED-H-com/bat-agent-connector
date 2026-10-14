@@ -7061,6 +7061,13 @@ var STRINGS = {
 		setup_connection_url: "貼上 BAT 連線網址",
 		setup_connection_url_hint: "BAT：設定 → 遠端 → 遠端存取 → 連線網址 → 複製；無介面模式請複製啟動訊息的 connect: 行。",
 		setup_invalid_connection_url: "這不是 BAT 連線網址",
+		setup_connection_url_read: "✓ 已從 BAT 讀取：{host} · 指紋 {fingerprint} · 權杖已備妥",
+		setup_operation_receipt: "設定操作 · {status}",
+		setup_operation_done: "完成",
+		setup_count_host_one: "台主機",
+		setup_count_host_many: "台主機",
+		setup_count_repository_one: "個儲存庫",
+		setup_count_repository_many: "個儲存庫",
 		setup_refused: "設定未儲存，請修正標示的欄位。",
 		setup_enter_manually: "手動輸入",
 		setup_host_hint: "英文字母、數字、-、_ 或 .，例如 local",
@@ -8677,6 +8684,13 @@ var STRINGS = {
 		setup_connection_url: "Paste BAT connection URL",
 		setup_connection_url_hint: "BAT: Settings → Remote → Remote Access → Connection URL → Copy; headless: copy the startup banner’s connect: line.",
 		setup_invalid_connection_url: "This is not a BAT connection URL",
+		setup_connection_url_read: "✓ Read from BAT: {host} · fingerprint {fingerprint} · token ready",
+		setup_operation_receipt: "Setup operation · {status}",
+		setup_operation_done: "Done",
+		setup_count_host_one: "host",
+		setup_count_host_many: "hosts",
+		setup_count_repository_one: "repository",
+		setup_count_repository_many: "repositories",
 		setup_refused: "Setup was not saved. Correct the marked field.",
 		setup_enter_manually: "Enter manually",
 		setup_host_hint: "Letters, numbers, -, _ or .; for example local",
@@ -8792,7 +8806,7 @@ var STRINGS = {
 		setup_operation: "View setup operation",
 		setup_uncertain: "The original configuration request is unconfirmed. Recover that same request before continuing.",
 		setup_receipt_mismatch: "The receipt does not match the original configuration request.",
-		setup_counts: "Configured: {hosts} hosts, {repositories} repositories",
+		setup_counts: "Configured: {hosts} {hostLabel}, {repositories} {repositoryLabel}",
 		setup_connected: "Connected",
 		setup_unverified: "Awaiting connection verification",
 		setup_busy: "Work or operations are still active; configuration changes wait for a safe point.",
@@ -39860,7 +39874,7 @@ function validSetupEndpoint(value) {
 	}
 }
 var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
-function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, onConfigured, caps }) {
+function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButton, onConfigured, caps }) {
 	const key = `batc.managed.setup.${namespace}`;
 	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
 	const stagedSecrets = new Map();
@@ -39911,6 +39925,17 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		class: "chip",
 		hidden: true
 	}, t("setup_unsaved"));
+	const pasteRead = h("span", {
+		id: "setup-connection_url-read",
+		class: "muted",
+		hidden: true,
+		role: "status",
+		"data-setup-paste-read": ""
+	});
+	function clearPasteRead() {
+		pasteRead.textContent = "";
+		pasteRead.hidden = true;
+	}
 	const fields = new Map(), errors = new Map(), hints = new Map(), composing = new Set();
 	function fieldHint(name, text) {
 		const help = hints.get(name);
@@ -39954,12 +39979,17 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			class: "muted",
 			hidden: !hint
 		}, hint ? t(hint) : "");
-		node.setAttribute("aria-describedby", `${id}-hint ${id}-error`);
+		node.setAttribute("aria-describedby", `${id}-hint ${id}-error${name === "connection_url" ? " setup-connection_url-read" : ""}`);
 		errors.set(name, error);
 		hints.set(name, help);
 		if (!secret) node.value = typeof saved[name] === "string" ? saved[name] : "";
 		node.addEventListener("input", () => {
 			if (!alive() || saved.intent || busy) return;
+			if ([
+				"url",
+				"fingerprint",
+				"connection_url"
+			].includes(name)) clearPasteRead();
 			if (name.startsWith("verification_")) seedVerificationBase();
 			if (!secret) {
 				saved[name] = name === "url" && /[?@#]/.test(node.value) ? "" : node.value;
@@ -39999,7 +40029,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		return h("label", {
 			for: id,
 			class: "connection-token setup-field"
-		}, h("span", {}, t(label)), node, help, error);
+		}, h("span", {}, t(label)), node, name === "connection_url" ? pasteRead : null, help, error);
 	};
 	const checkbox = (name, label) => {
 		const node = h("input", { type: "checkbox" });
@@ -40031,6 +40061,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 	profile.addEventListener("change", () => {
 		if (!alive() || saved.intent) return;
 		const selected = snapshot?.profiles?.find((row) => row.id === profile.value);
+		if (selected) clearPasteRead();
 		saved.import_profile_id = selected?.id || "";
 		if (selected) for (const name of [
 			"url",
@@ -40168,12 +40199,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			showError(error);
 		}
 	}
-	const refreshButton = iconButton({
-		icon: "refresh-cw",
-		label: t("setup_refresh"),
-		class: "secondary",
-		onclick: () => refresh().catch(showError)
-	});
 	const retry = h("button", {
 		class: "secondary",
 		hidden: true,
@@ -40212,10 +40237,14 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		open: true,
 		"data-setup-connect": ""
 	}, h("summary", {}, t("setup_host_title")), hostForm);
+	const operationReceipt = h("div", { "data-setup-receipt": "" });
 	const box = h("section", {
 		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved), h("div", { class: "ui-header-actions" }, refreshButton)), summary, sessions, h("div", { class: "actions" }, retry, next), message, receipt, hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", {}, h("summary", {}, t("global_details")), h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary, h("div", {
+		class: "actions",
+		"data-setup-actions": ""
+	}, sessions, retry, next), message, receipt, hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), operationReceipt, h("p", {}, t("setup_resume_help"))));
 	function suggestLocal() {
 		if (!snapshot || snapshot.hosts?.length !== 0 || fields.get("host").value) return;
 		try {
@@ -40235,6 +40264,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			fieldError("connection_url", null);
 			return;
 		}
+		clearPasteRead();
 		const parsed = parseBatConnectionUrl(node.value);
 		if (!parsed) {
 			if (reportError) fieldError("connection_url", "setup_invalid_connection_url");
@@ -40256,6 +40286,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		profile.value = "";
 		manual.open = false;
 		fieldHint("bat_secret", t("setup_token_hint"));
+		pasteRead.textContent = t("setup_connection_url_read", {
+			host: parsed.endpoint.slice(6),
+			fingerprint: `${parsed.fingerprint.slice(0, 4)}…${parsed.fingerprint.slice(-4)}`
+		});
+		pasteRead.hidden = false;
 		try {
 			suggestLocal();
 			persist();
@@ -40271,6 +40306,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		const value = event.clipboardData?.getData("text");
 		if (value === void 0) return;
 		event.preventDefault();
+		clearPasteRead();
 		fields.get("connection_url").value = value;
 		consumeConnectionUrl();
 	});
@@ -40343,7 +40379,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		next.disabled = busy || damaged;
 		if (damaged) retry.disabled = true;
 		receipt.replaceChildren();
-		if (operation && snapshot) receipt.append(opStatus(operation), " ", h("a", { href: `#/op/${operation.operation_id}` }, t("setup_operation")));
+		operationReceipt.replaceChildren();
+		if (operation && snapshot) operationReceipt.append(h("a", {
+			href: `#/op/${operation.operation_id}`,
+			"data-setup-operation": ""
+		}, t("setup_operation_receipt", { status: operation.status === "succeeded" ? t("setup_operation_done") : operationStatusLabel(operation.status) })));
 		else if (saved.intent) receipt.append(h("p", { class: "note" }, t(saved.intent.problemCode ? "setup_retained_request" : "setup_uncertain")));
 		sessions.hidden = !snapshot?.hosts?.length;
 		hostForm.querySelector("button[type=submit]").className = sessions.hidden ? "primary" : "secondary";
@@ -40571,9 +40611,12 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			class: "mini",
 			onclick: () => fillVerification(project)
 		}, t("setup_verification_edit", { project })))));
+		const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
 		summary.replaceChildren(h("p", {}, t("setup_counts", {
-			hosts: result.hosts?.length || 0,
-			repositories: result.repositories?.length || 0
+			hosts,
+			repositories,
+			hostLabel: t(hosts === 1 ? "setup_count_host_one" : "setup_count_host_many"),
+			repositoryLabel: t(repositories === 1 ? "setup_count_repository_one" : "setup_count_repository_many")
 		})), ...(result.hosts || []).map((row) => h("p", {}, h("strong", {}, row.name), " · ", t(row.connected ? "setup_connected" : "setup_unverified"), " · ", row.url)), ...[result.busy ? h("p", { class: "note warn" }, t("setup_busy")) : null].filter(Boolean));
 		profile.replaceChildren(h("option", { value: "" }, t("setup_manual_profile")), ...(result.profiles || []).map((row) => h("option", { value: row.id }, row.name || row.id)));
 		profile.value = saved.import_profile_id || "";
@@ -40586,6 +40629,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 	}
 	return {
 		box,
+		reload: () => refresh().catch(showError),
 		async load() {
 			try {
 				await refresh();
@@ -53616,7 +53660,7 @@ async function fleetTailscale(root, guard) {
 	} catch {}
 	return () => {};
 }
-function openSettings(main, { exclusive = false } = {}) {
+function openSettings(main, { exclusive = false, refreshButton } = {}) {
 	const memory = viewState(state.namespace || "", "", "settings");
 	const frame = settingsFrame({
 		h,
@@ -53659,7 +53703,7 @@ function openSettings(main, { exclusive = false } = {}) {
 	});
 	if (state.token && state.caps) main.append(pageHeader({
 		title: t("ui_settings"),
-		actions: [iconButton({
+		actions: [refreshButton || iconButton({
 			icon: "refresh-cw",
 			label: t("global_refresh"),
 			onClick: () => route()
@@ -53746,7 +53790,15 @@ async function viewManagedSettings(main) {
 	};
 	const guard = () => assertView(connection);
 	const status = h("div", { role: "status" });
-	const frame = openSettings(main, { exclusive: !nativeDesktop });
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("global_refresh"),
+		onClick: () => setup.reload()
+	});
+	const frame = openSettings(main, {
+		exclusive: !nativeDesktop,
+		refreshButton
+	});
 	const local = h("section", {
 		class: "panel",
 		"data-connection-card": ""
@@ -53761,7 +53813,7 @@ async function viewManagedSettings(main) {
 		guard,
 		namespace: state.namespace,
 		errorBox,
-		opStatus,
+		refreshButton,
 		caps: () => state.caps,
 		onConfigured: async () => {
 			const caps = await api("GET", "/capabilities");

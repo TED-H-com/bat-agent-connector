@@ -929,9 +929,13 @@ and “Certificate fingerprint (SHA-256)”.
 First use opens 1. Connect BAT with a masked connection URL and Host ID. Individual
 connection fields and managed-work permissions stay in collapsed disclosures.
 Fields stack label, input, hint and error, with a 4px hint gap and 12px between
-fields. Refresh sits on the setup card's title row. Settings uses the shared page
-header, whose mobile actions remain below the title.
-Pasting parses locally, clears the URL and stores only non-secret drafts; submit
+fields. Settings has one Refresh in the shared page header, whose mobile actions
+remain below the title. It reloads setup status in place, preserving the draft,
+password field and page-only staged references; read failures retain their gates.
+Pasting parses locally, clears the URL and stores only non-secret drafts. A muted
+check-mark line confirms the host/port, abbreviated fingerprint and credential
+readiness without exposing the credential or raw URL. Manual endpoint/fingerprint
+edits or another paste clear it; a valid later paste replaces it. Submit
 validates before credential staging. Typing parses silently; paste, change, blur
 and submit report an invalid URL. Unreadable BAT profiles have a muted note beside
 the profile control; an empty profile list without an error hides the control.
@@ -946,7 +950,10 @@ for one hour; raw credentials never enter drafts or return to the DOM after stag
 A fresh editable draft after reload explains that another credential paste is needed.
 Successful configuration offers View sessions as the primary next action and
 collapses 1. Connect BAT. Change settings or expanding the disclosure opens it
-again; later visits with a configured host start collapsed.
+again; later visits with a configured host start collapsed. The two actions share
+a wrapping row with an 8px gap. Setup steps have 16px between groups, and the
+localized operation link/status lives in Details. English configured counts use
+singular/plural host and repository labels.
 
 Connection access is a row in the facts list and uses human labels, with actor/scopes and storage facts in one
 Details disclosure. Tailscale guidance belongs with an actual Fleet connection.

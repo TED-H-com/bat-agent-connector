@@ -1,4 +1,4 @@
-import {iconButton} from './ui/components.js';
+import {operationStatusLabel} from './global-labels.js';
 // BAT v3.2.15 renderer/src/utils/connection-url.ts grammar. Trust comes from
 // BAT's own copied fingerprint, never a network probe or a loopback assumption.
 export function normalizeSetupFingerprint(value) {
@@ -31,7 +31,7 @@ export function validSetupEndpoint(value) {
 export const validSetupHostId = value => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
 // Guided configuration of the owned central. Secrets stay in input memory until staged.
 // Durable operations retain their exact request/key; reopening never starts a new intent.
-export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStatus, onConfigured, caps}) {
+export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refreshButton, onConfigured, caps}) {
   const key = `batc.managed.setup.${namespace}`;
   let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
   const stagedSecrets = new Map(); // Principal/kind-bound references expire centrally after one hour.
@@ -68,6 +68,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
   const terminal = () => ["succeeded", "failed", "cancelled"].includes(operation?.status);
   const message = h("div", {role: "status"}), summary = h("div"), receipt = h("div");
   const unsaved = h("span", {class: "chip", hidden: true}, t("setup_unsaved"));
+  // Paste feedback is page-only and contains no URL query or credential.
+  const pasteRead = h('span', {id: 'setup-connection_url-read', class: 'muted', hidden: true,
+    role: 'status', 'data-setup-paste-read': ''});
+  function clearPasteRead() {pasteRead.textContent = ''; pasteRead.hidden = true;}
   const fields = new Map(), errors = new Map(), hints = new Map(), composing = new Set();
   function fieldHint(name, text) {
     const help = hints.get(name);
@@ -92,11 +96,12 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     const node = h(multiline ? "textarea" : "input", {id, 'aria-label': t(label), 'data-setup-field': name, autocomplete: "off", maxlength: secret ? 4096 : 1024, ...attributes});
     const error = h('span', {id: `${id}-error`, class: 'error', hidden: true, 'data-setup-error': name});
     const help = h('span', {id: `${id}-hint`, class: 'muted', hidden: !hint}, hint ? t(hint) : '');
-    node.setAttribute('aria-describedby', `${id}-hint ${id}-error`);
+    node.setAttribute('aria-describedby', `${id}-hint ${id}-error${name === 'connection_url' ? ' setup-connection_url-read' : ''}`);
     errors.set(name, error); hints.set(name, help);
     if (!secret) node.value = typeof saved[name] === "string" ? saved[name] : "";
     node.addEventListener("input", () => {
       if (!alive() || saved.intent || busy) return;
+      if (['url', 'fingerprint', 'connection_url'].includes(name)) clearPasteRead();
       if (name.startsWith("verification_")) seedVerificationBase();
       if (!secret) {
         // An accidentally pasted credential URL must never enter a draft.
@@ -117,7 +122,8 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
       else if (['host', 'url', 'fingerprint', 'bat_secret', 'profile_id'].includes(name)) validateHost(name);
     });
     fields.set(name, node);
-    return h("label", {for: id, class: 'connection-token setup-field'}, h('span', {}, t(label)), node, help, error);
+    return h("label", {for: id, class: 'connection-token setup-field'}, h('span', {}, t(label)), node,
+      name === 'connection_url' ? pasteRead : null, help, error);
   };
   const checkbox = (name, label) => {
     const node = h("input", {type: "checkbox"}); node.checked = saved[name] === true;
@@ -136,6 +142,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
   profile.addEventListener("change", () => {
     if (!alive() || saved.intent) return;
     const selected = snapshot?.profiles?.find(row => row.id === profile.value);
+    if (selected) clearPasteRead();
     saved.import_profile_id = selected?.id || "";
     if (selected) for (const name of ["url", "fingerprint", "profile_id"]) {
       fields.get(name).value = selected[name] || ""; saved[name] = fields.get(name).value;
@@ -200,7 +207,6 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     saved.verification_base = null; seedVerificationBase();
     try {persist(); unsaved.hidden = false; update();} catch (error) {showError(error);}
   }
-  const refreshButton = iconButton({icon:'refresh-cw', label:t('setup_refresh'), ...{class: "secondary", onclick: () => refresh().catch(showError)}});
   const retry = h("button", {class: "secondary", hidden: true, onclick: () => recover().catch(showError)}, t("setup_recover"));
   const next = h("button", {class: "secondary", hidden: true, onclick: () => {
     if (!alive() || damaged || !terminal()) return;
@@ -212,13 +218,14 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
   }}, t("setup_next_change"));
   const sessions = h('a', {href: '#/sessions', class: 'ui-button primary', hidden: true, 'data-setup-sessions': ''}, t('setup_view_sessions'));
   const hostDisclosure = h('details', {open: true, 'data-setup-connect': ''}, h('summary', {}, t('setup_host_title')), hostForm);
+  const operationReceipt = h('div', {'data-setup-receipt': ''});
   const box = h("section", {class: "panel ui-section-card managed-setup", "data-managed-setup": ""},
-    h('header', {}, h("h2", {}, t("setup_title"), " ", unsaved), h('div', {class: 'ui-header-actions'}, refreshButton)), summary, sessions,
-    h("div", {class: "actions"}, retry, next), message, receipt,
+    h('header', {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary,
+    h("div", {class: "actions", 'data-setup-actions': ''}, sessions, retry, next), message, receipt,
     hostDisclosure,
     h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm),
     h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm),
-    h('details', {}, h('summary', {}, t('global_details')), h('p', {}, t('setup_resume_help'))));
+    h('details', {'data-setup-details': ''}, h('summary', {}, t('global_details')), operationReceipt, h('p', {}, t('setup_resume_help'))));
   function suggestLocal() {
     if (!snapshot || snapshot.hosts?.length !== 0 || fields.get('host').value) return;
     try {
@@ -230,6 +237,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     if (!alive() || busy || saved.intent || composing.has('connection_url')) return;
     const node = fields.get('connection_url');
     if (!node.value) {fieldError('connection_url', null); return;}
+    clearPasteRead();
     const parsed = parseBatConnectionUrl(node.value);
     if (!parsed) {if (reportError) fieldError('connection_url', 'setup_invalid_connection_url'); return;}
     node.value = ''; fieldError('connection_url', null);
@@ -239,6 +247,9 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     }
     stagedSecrets.delete('host'); saved.import_profile_id = ''; profile.value = ''; manual.open = false;
     fieldHint('bat_secret', t('setup_token_hint'));
+    pasteRead.textContent = t('setup_connection_url_read', {host: parsed.endpoint.slice('wss://'.length),
+      fingerprint: `${parsed.fingerprint.slice(0, 4)}…${parsed.fingerprint.slice(-4)}`});
+    pasteRead.hidden = false;
     try {suggestLocal(); persist(); unsaved.hidden = false;} catch (error) {showError(error);}
   }
   fields.get('connection_url').addEventListener('input', () => consumeConnectionUrl(false));
@@ -247,7 +258,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     if (!alive() || busy || saved.intent || event.isComposing || composing.has('connection_url')) return;
     const value = event.clipboardData?.getData('text');
     if (value === undefined) return;
-    event.preventDefault(); fields.get('connection_url').value = value; consumeConnectionUrl();
+    event.preventDefault(); clearPasteRead(); fields.get('connection_url').value = value; consumeConnectionUrl();
   });
   const usableSecret = kind => {
     const secret = stagedSecrets.get(kind);
@@ -292,7 +303,9 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     next.hidden = !saved.intent || !terminal(); next.disabled = busy || damaged;
     if (damaged) retry.disabled = true;
     receipt.replaceChildren();
-    if (operation && snapshot) receipt.append(opStatus(operation), " ", h("a", {href: `#/op/${operation.operation_id}`}, t("setup_operation")));
+    operationReceipt.replaceChildren();
+    if (operation && snapshot) operationReceipt.append(h("a", {href: `#/op/${operation.operation_id}`, 'data-setup-operation': ''},
+      t('setup_operation_receipt', {status: operation.status === 'succeeded' ? t('setup_operation_done') : operationStatusLabel(operation.status)})));
     else if (saved.intent) receipt.append(h("p", {class: "note"}, t(saved.intent.problemCode ? 'setup_retained_request' : "setup_uncertain")));
     sessions.hidden = !snapshot?.hosts?.length;
     hostForm.querySelector('button[type=submit]').className = sessions.hidden ? 'primary' : 'secondary';
@@ -433,7 +446,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     verificationCommands.replaceChildren(...Object.entries(result.verification.commands).map(([project, argv]) =>
       h("details", {}, h("summary", {}, project), h("pre", {class: "pre"}, argv.join("\n")),
         h("button", {type: "button", class: "mini", onclick: () => fillVerification(project)}, t("setup_verification_edit", {project})))));
-    summary.replaceChildren(h("p", {}, t("setup_counts", {hosts: result.hosts?.length || 0, repositories: result.repositories?.length || 0})),
+    const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
+    summary.replaceChildren(h("p", {}, t("setup_counts", {hosts, repositories,
+      hostLabel: t(hosts === 1 ? 'setup_count_host_one' : 'setup_count_host_many'),
+      repositoryLabel: t(repositories === 1 ? 'setup_count_repository_one' : 'setup_count_repository_many')})),
       ...(result.hosts || []).map(row => h("p", {}, h("strong", {}, row.name), " · ",
         t(row.connected ? "setup_connected" : "setup_unverified"), " · ", row.url)),
       ...[result.busy ? h("p", {class: "note warn"}, t("setup_busy")) : null].filter(Boolean),
@@ -449,6 +465,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
         !result.hosts?.some(host => host.name === saved.host && host.token_available)) fieldHint('bat_secret', t('setup_paste_token_again'));
     update();
   }
-  return {box, async load() {try {await refresh(); if (saved.intent?.operation_id) await recover();} catch (error) {showError(error);}},
+  return {box, reload: () => refresh().catch(showError),
+    async load() {try {await refresh(); if (saved.intent?.operation_id) await recover();} catch (error) {showError(error);}},
     dispose() {disposed = true; stagedSecrets.clear(); for (const name of ['connection_url', "bat_secret", "github_secret"]) fields.get(name).value = "";}};
 }

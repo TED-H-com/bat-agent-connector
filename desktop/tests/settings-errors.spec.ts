@@ -57,16 +57,15 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     } else await expect(page.locator('[data-setup-profile]')).toBeHidden();
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   });
-  for (const width of [1440,390]) test(`setup fields and title refresh align at ${width}`,async({page})=>{
+  for (const width of [1440,1000,390]) test(`setup fields stay aligned with one page Refresh at ${width}`,async({page})=>{
     await page.setViewportSize({width,height:900});await managedSetupFixture(page,false,locale);await page.goto('/dashboard/');
     const geometry=await page.locator('[data-managed-setup]').evaluate(panel=>{
       const rect=(selector:string)=>panel.querySelector(selector)!.getBoundingClientRect();
-      const title=rect('header h2'), refresh=rect('header button');
       const input=rect('#setup-connection_url'), hint=rect('#setup-connection_url-hint'), label=rect('label[for=setup-host]');
-      return {titleTop:title.top,titleBottom:title.bottom,refreshTop:refresh.top,refreshBottom:refresh.bottom,
-        hintGap:hint.top-input.bottom,fieldGap:label.top-hint.bottom};
+      return {hintGap:hint.top-input.bottom,fieldGap:label.top-hint.bottom};
     });
-    expect(geometry.titleTop).toBeLessThan(geometry.refreshBottom);expect(geometry.refreshTop).toBeLessThan(geometry.titleBottom);
+    await expect(page.locator('#main').getByRole('button',{name:locale==='en'?'Refresh':'重新整理',exact:true})).toHaveCount(1);
+    await expect(page.locator('[data-managed-setup] header button')).toHaveCount(0);
     expect(geometry.hintGap).toBe(4);expect(geometry.fieldGap).toBeGreaterThanOrEqual(12);expect(geometry.fieldGap).toBeLessThanOrEqual(16);
     await page.locator('[data-setup-manual]>summary').click();
     const heights=await page.locator('[data-setup-manual] input').evaluateAll(inputs=>inputs.map(node=>node.getBoundingClientRect().height));

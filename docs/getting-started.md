@@ -23,7 +23,7 @@ Install and open the matching package. It contains the Python runtime and prepar
 
 ### 1. Connect BAT
 
-In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; nothing is sent until **Verify and save host**.
+In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; a check-mark line confirms the address and abbreviated fingerprint without showing the token. Nothing is sent until **Verify and save host**. Editing the endpoint or fingerprint by hand clears that confirmation.
 
 Enter a **Host ID** starting with a letter or number, using only letters, numbers, `-`, `_` or `.` (for example `local`). On first use, a loopback address suggests `local`; this is a name suggestion and does not establish where BAT runs or grant local execution permissions.
 
@@ -31,7 +31,7 @@ Enter a **Host ID** starting with a letter or number, using only letters, number
 
 Common input errors appear beside the field before credential staging; the token stays in the password field. A proven admission refusal unlocks the form automatically and keeps non-secret drafts. Staged credentials clear from the page; their opaque reference can be reused in the same page for up to one hour. After reloading an editable draft, paste the credential again. A lost or uncertain reply retains the original request and key: use **Check request**, including after reloading. A configuration error alone does not prove that nothing was admitted.
 
-After connecting, **1. Connect BAT** collapses and **View sessions** is the next action. Expand the connection step or choose **Change settings** to edit it again. Later visits start with it collapsed. GitHub binding and verification remain optional collapsed steps.
+After connecting, **1. Connect BAT** collapses and **View sessions** is the next action. Expand the connection step or choose **Change settings** to edit it again. Later visits start with it collapsed. The setup operation link and status are in **Details**. The page-header **Refresh** reloads setup status while keeping the current draft and credential field. GitHub binding and verification remain optional collapsed steps.
 
 Expand **Allow managed work** when enabling dispatch. Choose the intended conversation / start permissions and dedicated **Remote managed directories**. For Git synchronization, checkpoint and artifact operations, provide the existing trusted **SSH alias configured on this computer**. The SSH account, keys, known host and remote permissions must already be usable; the app does not invent them.
 
@@ -63,7 +63,7 @@ Use **Open Dashboard in browser** or the tray / menu-bar entry. The app hands of
 
 Enable **Start when I sign in** for this installation's login startup. Closing Web or the Dashboard window leaves central running. Explicit desktop Quit retains central work while following the separate Fleet shutdown guards. Reopening recovers the same installation; a newer package upgrades only after the owned service accepts a safe stop. Busy or uncertain work prevents that transition, and older packages do not downgrade the journal.
 
-Configuration changes wait while operations/tasks are active. If a reply is lost, use **Check request** and **View setup operation**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
+Configuration changes wait while operations/tasks are active. If a reply is lost, use **Check request** and the **Setup operation** link in **Details**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
 
 ## Try one PM workflow
 

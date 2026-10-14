@@ -4,7 +4,7 @@ import {attentionFixture} from './attention-fixture.ts';
 export async function managedSetupFixture(page: Page, native: boolean, locale = 'en') {
   const base = attentionFixture();
   const state = {posts: [] as any[], staged: [] as any[], lost: false, refused: false,
-    admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
+    admissionRefused: true, refusalCode: 'CONFIGURATION_CHANGED', refusalMessage: 'Read the new configuration.', refusalStatus: 409, drop: false, setupStatus: 200, configuredHost: 'demo', configuredUrl: 'wss://demo.example:9876/', saved: false, extraHosts: [] as any[], repositories: [] as any[], reads: 0, revision: 'a'.repeat(64), scopes: ['observe', 'manage'], allowed: true, badActor: false, operation: null as any, hold: false, release: null as any, hasProfiles: true, profilesError: null as string | null, verification: {commands: {other: ['uv', 'run', 'pytest', '-q']}, timeout_s: 300}};
   const caps = () => ({...base.caps(), scopes: state.scopes, hosts: state.saved ? [{host:state.configuredHost}] : [],
     managed_installation: {runtime_version:'0.2.4', background:true},
     actions: [{action:'setup.host', allowed:state.allowed}, {action:'setup.repository', allowed:state.allowed}, {action:'setup.verification', allowed:state.allowed}]});
@@ -17,8 +17,8 @@ export async function managedSetupFixture(page: Page, native: boolean, locale = 
       state.reads++;
       const result = state.setupStatus !== 200 ? {status:state.setupStatus,data:{error:{code:state.setupStatus===403?'FORBIDDEN':'NOT_FOUND',message:'Setup source withdrawn'}}}
         : {status:200,data:{revision:state.revision, verification:structuredClone(state.verification),
-          hosts:state.saved ? [{name:state.configuredHost,url:state.configuredUrl,connected:true}] : [],
-          repositories:[], profiles:state.hasProfiles ? [{id:'profile-demo',name:locale==='zh-TW'?'示範連線設定檔':'Demo profile',url:'wss://demo.example:9876/',
+          hosts:[...(state.saved ? [{name:state.configuredHost,url:state.configuredUrl,connected:true}] : []), ...state.extraHosts],
+          repositories:structuredClone(state.repositories), profiles:state.hasProfiles ? [{id:'profile-demo',name:locale==='zh-TW'?'示範連線設定檔':'Demo profile',url:'wss://demo.example:9876/',
             fingerprint:'a'.repeat(64),profile_id:'default',token_available:true}] : [], profiles_error: state.profilesError, busy:false}};
       if (state.hold) await new Promise(resolve => {state.release = resolve;});
       return result;
