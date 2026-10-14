@@ -15,7 +15,8 @@ for(const native of [false,true])test.describe(native?'Native fixed handoff':'We
   test('contributor starts one exact existing-engine request with distinct spec and code versions',async({page})=>{
     const f=handoffFixture();f.fixture.base.state.role='contributor';await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_handoff');await select(page);await open(page);
     expect(f.state.reads.some(read=>read.path==='/repository-previews')).toBe(false);expect(f.state.writes).toHaveLength(0);
-    await review(page);await section(page).getByText('Fixed versions and original sources',{exact:true}).click();await expect(section(page)).toContainText(codeSha);await expect(section(page)).toContainText(specSha);
+    await review(page);expect((await section(page).innerText()).toLowerCase()).not.toContain('null');expect((await section(page).innerText()).toLowerCase()).not.toContain('undefined');
+    await section(page).getByText('Fixed versions and original sources',{exact:true}).click();await expect(section(page)).toContainText(codeSha);await expect(section(page)).toContainText(specSha);
     await fill(page);await form(page).getByLabel('BAT agent',{exact:true}).selectOption('codex');await form(page).getByText('Optional session title and model',{exact:true}).click();
     await form(page).getByLabel('Title (optional)',{exact:true}).fill('Recovery implementation');await form(page).getByLabel('Model (optional)',{exact:true}).fill('model-candidate');
     await form(page).getByRole('button',{name:'Start implementation',exact:true}).click();await expect(section(page)).toContainText('Implementation was started');
@@ -106,6 +107,32 @@ for(const native of [false,true])test.describe(native?'Native fixed handoff':'We
     f.fixture.base.state.role='contributor';f.state.hostEnabled=false;await page.reload();await openPmSection(page,'requirements','ui_handoff');await select(page);await open(page);await expect(section(page).getByRole('button',{name:'Review fixed implementation base',exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(0);
   });
 });
+test('reviewed facts stay free of empty markers when the base is ready and when it is waiting',async({page})=>{
+  const f=handoffFixture();let wait=false;const inner=f.dispatch;
+  f.dispatch=async(input:any)=>{
+    const url=new URL(input.path,'http://fixture'),path=url.pathname;
+    if(wait&&path.endsWith('/quality-reviews'))return {status:200,data:{workspace_id:workspaceId,reviews:[],visibility_filtered:false,next_cursor:null}};
+    const response=await inner(input);
+    if(path==='/capabilities'||path==='/bootstrap'){
+      const caps=path==='/bootstrap'?response.data.capabilities:response.data;
+      caps.features.pm_workspaces.quality_reviews={version:1};
+      caps.features.pm_workspaces.work_batches={version:1,actions:['pm.work_batch.start'],profiles:['accepted_requirements_v1']};
+      caps.features.pm_workspaces.package_handoff.requirement_acceptance_profiles=['accepted_requirements_v1'];
+    }
+    if(wait&&path.endsWith('/readiness'))response.data.checks.push({check:'dependency:member.recovery',status:'blocked',requirement_ids:['mail']});
+    return response;
+  };
+  const factsText=async()=>(await section(page).locator('h4',{hasText:'Reviewed implementation base'}).locator('..').innerText()).toLowerCase();
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_handoff');await select(page);await open(page);
+  await review(page);expect(await factsText()).not.toContain('null');expect(await factsText()).not.toContain('undefined');
+  expect(await factsText()).not.toContain('can be selected for a bounded batch');
+  wait=true;f.row.document.requirements[0].depends_on=['mail'];
+  await section(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();
+  await expect(section(page)).toContainText('can be selected for a bounded batch');
+  expect(await factsText()).not.toContain('null');expect(await factsText()).not.toContain('undefined');
+  await expect(form(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();expect(f.state.writes).toHaveLength(0);
+});
+
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`handoff ${locale} ${width}px`,async({browser,baseURL},testInfo)=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=handoffFixture();
   await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:/Restore member access/}).click();await open(page);
@@ -121,8 +148,13 @@ for(const native of [false,true])test(`${native?'Native':'Web'} Chinese fixed pa
   const context=await browser.newContext({baseURL,locale:'zh-TW'}),page=await context.newPage(),f=handoffFixture();
   await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:/Restore member access/}).click();await open(page);
   await section(page).getByRole('button',{name:'核對固定實作基底',exact:true}).click();
+  await expect(form(page).getByLabel('BAT 代理',{exact:true})).toBeVisible();
+  await expect(section(page)).not.toContainText('BAT agent');
+  await expect(section(page)).not.toContainText('runtime');
   await form(page).getByLabel('為何使用這個實作基底？',{exact:true}).fill('沿用既有登入模組，實作固定規格');
   await form(page).getByLabel('這次實作的指示',{exact:true}).fill('完成固定工作包的驗證與實作');
   await form(page).getByRole('button',{name:'開始實作',exact:true}).click();await expect(section(page)).toContainText('已開始實作');
+  await expect(form(page)).toContainText('查看操作 · 完成');
+  await expect(form(page)).not.toContainText('succeeded');
   expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.params.pm_code_basis.rationale).toBe('沿用既有登入模組，實作固定規格');await context.close();
 });

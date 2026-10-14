@@ -2,6 +2,7 @@ import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
 import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
 import {icon} from './ui/icons.js';
+import {cliName} from './pm-agents-trend.js';
 import {actionLabel, formatTime, operationMeta, operationStatusKey, operationStatusLabel, reasonText, workStatusKey} from './global-labels.js';
 import {firstRunCard, inboxRow, settingsFrame, setupGuide} from './global-screens.js';
 import {joinLabel} from './label-text.js';
@@ -9,7 +10,7 @@ import {discussHref, isContextRef} from './pm-discuss-link.js';
 import {sessionHref} from './session-navigation.js';
 import {checkDelivery, prGroups, prPills} from './pm-work-inspector.js';
 import {viewState} from './ui/view-state.js';
-import {h as dom} from './ui/dom.js';
+import {h as dom, place} from './ui/dom.js';
 import {prSelector} from "./pr-selector.js";
 import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
 import {workspaceNavigation} from "./workspace-nav.js";
@@ -810,7 +811,7 @@ function sessionRow(s, open) {
   const managed = s.api_access === "managed";
   const asking = managed && s.pending?.kind === "ask_user";
   const permission = managed && s.pending?.kind === "permission";
-  const meta = joinLabel([s.host, s.agent_kind, s.worktree_branch,
+  const meta = joinLabel([s.host, cliName(s.agent_kind), s.worktree_branch,
     s.pending?.kind ? t("pending_" + s.pending.kind) : "", s.stale ? reasonText(s.stale_reason) : ""]);
   const pill = !managed ? statusPill("read_only") : statusPill(asking || permission ? "waiting" : s.stale ? "stale" : "unknown");
   const primary = () => h("a", {class: "ui-button secondary ui-sm", href}, t(asking ? "global_answer" : permission ? "global_review" : "global_open"));
@@ -934,7 +935,7 @@ async function viewSessions(main) {
         chip(t(activity.key), activity.tone)),
       h("div", {class: "session-entry-meta"},
         h("span", {class: session.api_access === "managed" ? "" : "session-readonly"}, session.provenance === "connector_managed" && session.api_access === "managed" ? t(access) : `${t(origin)} · ${t(access)}`),
-        h("span", {}, [session.agent_kind, session.worktree_branch].filter(Boolean).join(" · "))),
+        h("span", {}, [cliName(session.agent_kind), session.worktree_branch].filter(Boolean).join(" · "))),
       runtimeStale(session) ? h("p", {class: "session-stale muted"}, t("sessions_stale"), " · ",
         session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale")) : null,
       validLabels(session.connector_metadata?.labels) && session.connector_metadata.labels.length ? h("div", {class: "actions session-entry-meta", "aria-label": t("labels_title")},
@@ -1163,6 +1164,12 @@ function observationPanels(type, id, path) {
   return {box: h("div", {}, history.box, relations.box), changed: event => {history.changed(event); relations.changed(event);}};
 }
 
+function taskStateLabel(state) {
+  const known = ["queued", "dispatching", "accepted", "running", "waiting_permission", "quota_limited", "human_owned", "needs_ted", "verifying", "done", "failed", "uncertain"];
+  if (known.includes(state)) return t("task_state_" + state);
+  const operation = t("op_" + state);
+  return operation === "op_" + state ? (state || "?") : operation;
+}
 async function viewTask(main, id) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const head = h("div", {class: "panel"}), status = h("div", {role: "status"});
@@ -1186,7 +1193,7 @@ async function viewTask(main, id) {
       task = data.task;
       head.replaceChildren(pageHeader({title: t("task_title")}), h("p", {}, task.project || id),
         h("p", {class: "actions"}, chip(t([true, false, 0, 1].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")),
-          chip(["queued", "dispatching", "accepted", "running", "waiting_permission", "quota_limited", "human_owned", "needs_ted", "verifying", "done", "failed", "uncertain"].includes(task.state) ? t("task_state_" + task.state) : task.state || "?")),
+          chip(taskStateLabel(task.state))),
         h("p", {class: "muted"}, task.host || "", " · ", h("code", {}, id)),
         ...(task.host && task.session_id ? [h("p", {}, h("a", {href: `#/session/${encodeURIComponent(task.host)}/${encodeURIComponent(task.session_id)}`}, t("task_open_session")))] : []),
         ...(state.caps?.features?.cleanup_task === true ? [h("p", {}, h("a", {href: `#/cleanup/task/${encodeURIComponent(id)}`}, t("cleanup_task_preview")))] : []),
@@ -1678,7 +1685,7 @@ async function viewSession(main, host, sid, context = null) {
       h("dl", { class: "kv" },
         h("dt", {}, t("host")), h("dd", {}, h("a", {href: `#/host/${encodeURIComponent(host)}`}, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""),
         h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
-        h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ") || t("obs_unknown")),
+        h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
         h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, {empty:t("obs_unknown")}),
           row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
@@ -3132,7 +3139,7 @@ async function viewNativeSettings(main) {
 // The connector's own records. A change names what the page read (version, fingerprint, sibling order or pin), so a
 // stale page is refused and reloads instead of overwriting someone else's edit.
 const may = scope => (state.caps?.scopes || []).includes(scope);
-function fill(el, ...kids) { el.replaceChildren(...kids.flat(2).filter(x => x !== null && x !== undefined && x !== false)); }
+function fill(el, ...kids) { place(el, 'replaceChildren', ...kids); }
 const PROJECT_ERRORS = ["VERSION_CONFLICT", "ORDER_CHANGED", "PIN_CHANGED", "CONTENT_CHANGED", "NAME_TAKEN",
   "HAS_CHILDREN", "PARENT_ARCHIVED", "PINNED_FIRST", "STEPS_OPEN", "CYCLE", "LINK_TARGET_NOT_FOUND", "NOTHING_TO_DECIDE"];
 function problem(code, message) {

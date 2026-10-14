@@ -1,3 +1,4 @@
+import {place} from './ui/dom.js';
 import {iconButton, emptyState, skeleton} from './ui/components.js';
 // Read only saved central receipts for the selected, explicitly associated work.
 export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
@@ -12,15 +13,16 @@ export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
   const fact=(name,value)=>h('p',{},h('strong',{},t(name)+': '),value===null||value===undefined?t('wd_unknown'):String(value));
   const boolean=value=>value===true?t('wd_yes'):value===false?t('wd_no'):t('wd_unknown');
   const code=value=>h('p',{class:'pm-source'},String(value??''));
+  const namedStatus=status=>{const key='wd_status_'+status,label=t(key);return label===key?String(status??''):label;};
   function render() {
-    facts.replaceChildren(h('p',{class:'muted'},t('wd_packages')),
+    place(facts,'replaceChildren',h('p',{class:'muted'},t('wd_packages')),
       ...packages.map(ref=>h('div',{},code(ref.package_id),code(ref.document_digest),h('a',{href:`#/op/${encodeURIComponent(ref.operation_id)}`},t('wd_original')))),
       ...rows.map(row=>h('article',{class:'pm-spec-card'},h('h5',{},t('wd_action_'+row.action)),
         fact('wd_status',t('wd_status_'+row.status)),
         h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('wd_operation')),code(row.target?.repository),
         row.target?.pull_number?fact('wd_pull',row.target.pull_number):null,
         row.integration?h('div',{},fact('wd_pushed',boolean(row.integration.pushed)),code(row.integration.new_head),
-          ...(row.integration.sources||[]).map(source=>h('p',{class:'pm-source'},source.pinned_sha+' · '+source.status))):null,
+          ...(row.integration.sources||[]).map(source=>h('p',{class:'pm-source'},source.pinned_sha+' · '+namedStatus(source.status)))):null,
         row.merge?h('div',{},fact('wd_merged',boolean(row.merge.merged)),fact('wd_merge_verified',boolean(row.merge.verified)),code(row.merge.merged_sha)):null,
         row.deployment?h('div',{},fact('wd_environment',row.deployment.environment),fact('wd_deploy_state',row.deployment.state),
           fact('wd_deploy_verified',boolean(row.deployment.verified)),fact('wd_current',boolean(row.deployment.is_current)),

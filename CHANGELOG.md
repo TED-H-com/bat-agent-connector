@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Reviewed handoff facts no longer print empty placeholders. The issues register
+  names `format_valid` as "Format checked" / "格式已核對" (structure and cited
+  sources only; conclusions stay unaccepted). zh-TW operation, agent and provider
+  words use the existing label tables.
+
 - Add a repeatable real-central PM decision walkthrough in English and zh-TW,
   with scripted native analysis, temporary Git, explicit issue resolution,
   original-key adoption and resolution recovery, and step screenshots. Keep hidden

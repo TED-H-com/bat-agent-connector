@@ -1,3 +1,4 @@
+import {cliName} from './pm-agents-trend.js';
 import {emptyState} from './ui/components.js';
 // A fixed, reviewed selection. Runtime events refresh receipts, never select new prompts.
 const object = value => value && typeof value === "object" && !Array.isArray(value);
@@ -140,7 +141,7 @@ export function approvalsPanel({h, t, api, caps, guard, ready, errorBox, opStatu
       rows.append(h("article", {class: "panel bulk-item", "data-approval-item": item.item_id},
         h("div", {class: "row"}, choice, h("div", {class: "grow"},
           h("a", {class: "title", href: `#/session/${encodeURIComponent(item.host)}/${encodeURIComponent(item.session_id)}`}, item.session_id),
-          h("div", {class: "muted"}, [item.host, item.agent_kind].filter(Boolean).join(" · ")))),
+          h("div", {class: "muted"}, [item.host, cliName(item.agent_kind)].filter(Boolean).join(" · ")))),
         item.eligible ? [h("p", {class: "title"}, item.prompt.toolName || t("bulk_answer")),
           h("pre", {class: "pre bulk-prompt"}, typeof item.prompt.input === "string" ? item.prompt.input
             : Object.keys(item.prompt.input || {}).length === 1 && typeof item.prompt.input?.command === "string"

@@ -359,6 +359,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const fieldKey = {title: 'reg_col_title', status: 'reg_col_status', owner: 'reg_col_owner', due: 'reg_col_due', impact: 'reg_col_impact', priority: 'reg_col_priority', next_step: 'reg_col_next', created_at: 'reg_created', updated_at: 'reg_updated', pull_requests: 'reg_pull_requests'};
     const detailBits = [];
     if (row.type_basis === 'neutral') detailBits.push(h('p', {}, t('reg_neutral')));
+    if (row.status === 'format_valid' || (Array.isArray(record.timeline) && record.timeline.some(step => step?.status === 'format_valid'))) detailBits.push(h('p', {}, t('reg_format_checked_help')));
     if (partial && labelSegment(record.timeline_coverage.partial_reason)) {
       const code = String(record.timeline_coverage.partial_reason);
       const recognised = Boolean(known(t, 'ui_reason_' + code));

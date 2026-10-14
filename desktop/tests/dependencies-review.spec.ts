@@ -99,6 +99,7 @@ test('SF-6: valid selection semantics and heading hierarchy', async ({page}) => 
   await page.locator('[data-dep-details] > summary').click();
   await expect(page.getByRole('heading', {name: 'Captures', exact: true})).toHaveJSProperty('tagName', 'H2');
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  expect(await page.locator('[data-dep-graph]').evaluate(node => node.textContent || '')).not.toMatch(/null|undefined/);
   const node = page.locator('[data-dep-node]').first();
   await node.focus();
   await page.keyboard.press('Enter');

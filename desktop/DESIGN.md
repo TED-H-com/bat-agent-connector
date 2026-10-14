@@ -75,6 +75,10 @@ exports and source documents retain their machine representation.
 
 Import helpers from `src/ui/components.js`; they return DOM nodes. Append them with
 `h()` from `ui/dom.js` or the app's native-link wrapper. Text is always a text node.
+`h()` skips `null`, `undefined` and `false` children. Native `replaceChildren`,
+`append`, `prepend`, `before`, `after` and `replaceWith` do not: each empty marker
+becomes visible text. Pass those calls through `place(node, method, ...children)`
+in `ui/dom.js`, which drops only those three markers and keeps empty strings and numbers.
 Icons come from `ui/icons.js`: locally vendored Lucide SVG geometry, 24×24 viewBox,
 1.75 stroke, current colour. No provider markup, inline stylesheets or HTML strings.
 

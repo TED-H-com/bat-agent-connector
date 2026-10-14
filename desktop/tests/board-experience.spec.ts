@@ -37,6 +37,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   }
   const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
   await page.screenshot({path: `${out}/board-${locale}-${width}.png`, fullPage: true});
+  await expect(board.getByLabel('Agent', {exact: true}).locator('option[value="codex"]')).toHaveText('Codex');
   await board.getByLabel('Agent', {exact: true}).selectOption('codex');
   await expect(board.locator('[data-pm-kanban-work]:visible')).toHaveCount(1);
   await expect(board.locator(`[data-pm-kanban-work="${ids.work.email}"]`)).toBeVisible();

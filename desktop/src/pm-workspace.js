@@ -1,3 +1,4 @@
+import {operationStatusLabel} from './global-labels.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {discussionContext, discussionLabel, discussionPanel, discussionDom, discussionTitle, discussionComposer} from './pm-discussions.js';
 import {icon} from './ui/icons.js';
@@ -62,7 +63,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];

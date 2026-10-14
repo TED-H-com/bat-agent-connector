@@ -914,7 +914,7 @@ const STRINGS = {
     checks: "Checks", checks_summary: "{total} 個，{pending} 個未完成，{failed} 個失敗", mergeable: "可合併狀態",
     merge: "合併 PR", deploy_to: "部署到 {env}", merge_and_deploy_to: "合併並部署到 {env}",
     retry_deploy: "重試部署這個版本", merged_sha: "實際合併版本",
-    op_accepted: "已受理", op_running: "執行中", op_waiting_checks: "等待 checks", op_waiting_external: "等待 GitHub／部署",
+    op_accepted: "已受理", op_running: "執行中", op_waiting_checks: "等待檢查", op_waiting_external: "等待 GitHub／部署",
     op_needs_attention: "需要處理", op_uncertain: "結果不明，回查中", op_succeeded: "完成", op_failed: "失敗",
     op_cancelled: "已取消", cancel: "取消", resume: "重新執行",
     resume_help: "處理完原因後再跑一次：已完成的步驟不重做，未確定的步驟先回查，不會重送。", steps: "步驟", action: "動作", actor: "操作者", created: "建立時間",

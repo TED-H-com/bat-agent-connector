@@ -1,4 +1,14 @@
 // Shared safe DOM builder. Strings are always text, including provider output.
+// Native replaceChildren, append, prepend, before, after and replaceWith turn
+// null, undefined and false into the text "null", "undefined" or "false".
+// h() already skips those. place() is the same filter for those DOM methods.
+// Empty strings and numbers stay; only the three empty markers are dropped.
+export function place(node, method, ...children) {
+  const kept = children.flat(Infinity).filter(child => child !== null && child !== undefined && child !== false);
+  node[method](...kept);
+  return node;
+}
+
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs || {})) {

@@ -20,6 +20,11 @@ var __exportAll = (all, no_symbols) => {
 };
 //#endregion
 //#region src/ui/dom.js
+function place(node, method, ...children) {
+	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
+	node[method](...kept);
+	return node;
+}
 function h$1(tag, attrs = {}, ...children) {
 	const el = document.createElement(tag);
 	for (const [key, value] of Object.entries(attrs || {})) {
@@ -3381,8 +3386,8 @@ var pmPackageHandoffStrings = {
 		ph_boundary: "工作包準備完成不等於已授權執行。這個操作只開始實作，不代表品質驗證、合併或部署完成。",
 		ph_rationale: "為何使用這個實作基底？",
 		ph_prompt: "這次實作的指示",
-		ph_agent: "BAT agent",
-		ph_agent_help: "選擇 Claude 或 Codex；中央服務仍會核對實際啟動條件，選單本身不代表 runtime 已就緒。",
+		ph_agent: "BAT 代理",
+		ph_agent_help: "選擇 Claude 或 Codex；中央服務仍會核對實際啟動條件，選單本身不代表執行環境已就緒。",
 		ph_options: "選填 session 標題與模型",
 		ph_start: "開始實作",
 		ph_sources: "固定版本與原始來源",
@@ -4596,7 +4601,8 @@ var pmRegisterStrings = {
 		reg_status_waiting_checks: "Waiting for checks",
 		reg_status_waiting_external: "Waiting externally",
 		reg_status_accepted: "Accepted for processing",
-		reg_status_format_valid: "Format valid",
+		reg_status_format_valid: "Format checked",
+		reg_format_checked_help: "Structure and cited sources were checked. Conclusions are not accepted.",
 		reg_status_recorded_discussion_decision: "Recorded decision",
 		reg_status_continue_maintenance: "Continue maintenance",
 		reg_status_bounded_repair_proposal: "Bounded repair proposal",
@@ -4705,7 +4711,8 @@ var pmRegisterStrings = {
 		reg_status_waiting_checks: "等待檢查",
 		reg_status_waiting_external: "等待外部",
 		reg_status_accepted: "已受理",
-		reg_status_format_valid: "格式有效",
+		reg_status_format_valid: "格式已核對",
+		reg_format_checked_help: "已核對結構與引用來源，結論尚未驗收。",
 		reg_status_recorded_discussion_decision: "已記錄的決策",
 		reg_status_continue_maintenance: "繼續維護",
 		reg_status_bounded_repair_proposal: "有界限的修復提案",
@@ -8301,7 +8308,7 @@ var STRINGS = {
 		merged_sha: "實際合併版本",
 		op_accepted: "已受理",
 		op_running: "執行中",
-		op_waiting_checks: "等待 checks",
+		op_waiting_checks: "等待檢查",
 		op_waiting_external: "等待 GitHub／部署",
 		op_needs_attention: "需要處理",
 		op_uncertain: "結果不明，回查中",
@@ -11498,6 +11505,190 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	};
 }
 //#endregion
+//#region src/pm-agents-trend.js
+var CLI_ORDER = [
+	"codex",
+	"claude",
+	"grok",
+	"gemini",
+	"bat",
+	"pm"
+];
+var CLI_LABEL = {
+	codex: "Codex",
+	claude: "Claude",
+	grok: "Grok",
+	gemini: "Gemini",
+	bat: "BAT",
+	pm: "PM"
+};
+function cliName(cli) {
+	return Object.hasOwn(CLI_LABEL, cli) ? CLI_LABEL[cli] : typeof cli === "string" ? cli : "";
+}
+function cliClass(cli) {
+	return Object.hasOwn(CLI_LABEL, cli) ? cli : "other";
+}
+function browserTimeZone() {
+	try {
+		const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+		if (typeof zone === "string" && /^[A-Za-z0-9_+/-]+$/.test(zone)) return zone;
+	} catch {}
+	return "UTC";
+}
+function dayKey(instant, timeZone) {
+	const zone = timeZone || "UTC";
+	try {
+		return new Intl.DateTimeFormat("en-CA", {
+			timeZone: zone,
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit"
+		}).format(instant);
+	} catch {
+		return new Intl.DateTimeFormat("en-CA", {
+			timeZone: "UTC",
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit"
+		}).format(instant);
+	}
+}
+function isBucketPayload(buckets) {
+	return Boolean(buckets && buckets.granularity === "day" && typeof buckets.tz === "string" && buckets.tz && Array.isArray(buckets.series));
+}
+function niceCeiling(value) {
+	if (!(value > 0)) return 0;
+	const pow = 10 ** Math.floor(Math.log10(value));
+	const frac = value / pow;
+	for (const step of [
+		1,
+		2,
+		2.5,
+		5,
+		10
+	]) if (frac < step - 1e-9) return step * pow;
+	return 10 * pow;
+}
+function shiftDate(isoDate, delta) {
+	const [y, m, d] = String(isoDate || "").split("-").map(Number);
+	if (!y || !m || !d) return "";
+	return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
+}
+function zoneParts(instant, timeZone) {
+	const fmt = new Intl.DateTimeFormat("en-US", {
+		timeZone,
+		hourCycle: "h23",
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		second: "2-digit"
+	});
+	const map = {};
+	for (const part of fmt.formatToParts(instant)) map[part.type] = part.value;
+	return {
+		year: Number(map.year),
+		month: Number(map.month),
+		day: Number(map.day),
+		hour: Number(map.hour) % 24,
+		minute: Number(map.minute),
+		second: Number(map.second)
+	};
+}
+function alignMidnight(isoDate, timeZone) {
+	const [y, m, d] = isoDate.split("-").map(Number);
+	let utc = Date.UTC(y, m - 1, d);
+	for (let i = 0; i < 4; i++) {
+		const got = zoneParts(new Date(utc), timeZone);
+		utc += Date.UTC(y, m - 1, d) - Date.UTC(got.year, got.month - 1, got.day, got.hour, got.minute, got.second);
+	}
+	return new Date(utc);
+}
+function zonedMidnight(isoDate, timeZone) {
+	const zone = timeZone || "UTC";
+	try {
+		return alignMidnight(isoDate, zone);
+	} catch {
+		return alignMidnight(isoDate, "UTC");
+	}
+}
+function periodWindow(now, days, timeZone) {
+	const zone = timeZone || "UTC";
+	const count = Math.max(1, Number(days) || 1);
+	return {
+		since: zonedMidnight(shiftDate(dayKey(now, zone), 1 - count), zone).toISOString(),
+		until: now.toISOString()
+	};
+}
+function cliRank(cli) {
+	const index = CLI_ORDER.indexOf(cli);
+	return index < 0 ? CLI_ORDER.length : index;
+}
+function numberOrNull(value) {
+	return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+function combine(values) {
+	if (!values.length || values.some((value) => value == null)) return null;
+	return values.reduce((sum, value) => sum + value, 0);
+}
+function clippedDay(date, tz, bounds) {
+	const since = Date.parse(bounds?.since);
+	if (!Number.isFinite(since) || typeof date !== "string") return false;
+	return zonedMidnight(date, tz).getTime() < since;
+}
+function stackDailyBuckets(buckets, now = new Date(), bounds) {
+	if (!isBucketPayload(buckets)) return null;
+	const tz = buckets.tz;
+	const today = dayKey(now, tz);
+	const dates = [];
+	const seen = new Set();
+	const grouped = new Map();
+	for (const series of buckets.series) {
+		const cli = typeof series?.cli === "string" && series.cli ? series.cli : "";
+		if (!cli) continue;
+		if (!grouped.has(cli)) grouped.set(cli, []);
+		grouped.get(cli).push(series);
+		for (const day of series.days || []) {
+			if (typeof day?.date !== "string" || seen.has(day.date)) continue;
+			seen.add(day.date);
+			dates.push(day.date);
+		}
+	}
+	dates.sort();
+	const clis = [...grouped.keys()].sort((a, b) => cliRank(a) - cliRank(b) || a.localeCompare(b));
+	return {
+		tz,
+		clis,
+		days: dates.map((date) => {
+			let open = false;
+			const parts = clis.map((cli) => {
+				return {
+					cli,
+					total: combine(grouped.get(cli).map((series) => {
+						const day = (series.days || []).find((item) => item?.date === date);
+						if (!day) return null;
+						if (day.complete !== true) open = true;
+						return numberOrNull(day.tokens?.total);
+					}))
+				};
+			});
+			let mark = "";
+			if (open) {
+				if (clippedDay(date, tz, bounds)) mark = "partial_day";
+				else if (date === today) mark = "in_progress";
+				else mark = "settling";
+			}
+			return {
+				date,
+				parts,
+				partial: parts.some((part) => part.total == null),
+				mark
+			};
+		})
+	};
+}
+//#endregion
 //#region src/ui/time.js
 var MONTHS = [
 	"Jan",
@@ -13043,190 +13234,6 @@ function storageScope(endpoint, actor, server = "legacy", principal = actor) {
 		principal,
 		actor
 	].map(encodeURIComponent).join(":");
-}
-//#endregion
-//#region src/pm-agents-trend.js
-var CLI_ORDER = [
-	"codex",
-	"claude",
-	"grok",
-	"gemini",
-	"bat",
-	"pm"
-];
-var CLI_LABEL = {
-	codex: "Codex",
-	claude: "Claude",
-	grok: "Grok",
-	gemini: "Gemini",
-	bat: "BAT",
-	pm: "PM"
-};
-function cliName(cli) {
-	return Object.hasOwn(CLI_LABEL, cli) ? CLI_LABEL[cli] : typeof cli === "string" ? cli : "";
-}
-function cliClass(cli) {
-	return Object.hasOwn(CLI_LABEL, cli) ? cli : "other";
-}
-function browserTimeZone() {
-	try {
-		const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-		if (typeof zone === "string" && /^[A-Za-z0-9_+/-]+$/.test(zone)) return zone;
-	} catch {}
-	return "UTC";
-}
-function dayKey(instant, timeZone) {
-	const zone = timeZone || "UTC";
-	try {
-		return new Intl.DateTimeFormat("en-CA", {
-			timeZone: zone,
-			year: "numeric",
-			month: "2-digit",
-			day: "2-digit"
-		}).format(instant);
-	} catch {
-		return new Intl.DateTimeFormat("en-CA", {
-			timeZone: "UTC",
-			year: "numeric",
-			month: "2-digit",
-			day: "2-digit"
-		}).format(instant);
-	}
-}
-function isBucketPayload(buckets) {
-	return Boolean(buckets && buckets.granularity === "day" && typeof buckets.tz === "string" && buckets.tz && Array.isArray(buckets.series));
-}
-function niceCeiling(value) {
-	if (!(value > 0)) return 0;
-	const pow = 10 ** Math.floor(Math.log10(value));
-	const frac = value / pow;
-	for (const step of [
-		1,
-		2,
-		2.5,
-		5,
-		10
-	]) if (frac < step - 1e-9) return step * pow;
-	return 10 * pow;
-}
-function shiftDate(isoDate, delta) {
-	const [y, m, d] = String(isoDate || "").split("-").map(Number);
-	if (!y || !m || !d) return "";
-	return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
-}
-function zoneParts(instant, timeZone) {
-	const fmt = new Intl.DateTimeFormat("en-US", {
-		timeZone,
-		hourCycle: "h23",
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit"
-	});
-	const map = {};
-	for (const part of fmt.formatToParts(instant)) map[part.type] = part.value;
-	return {
-		year: Number(map.year),
-		month: Number(map.month),
-		day: Number(map.day),
-		hour: Number(map.hour) % 24,
-		minute: Number(map.minute),
-		second: Number(map.second)
-	};
-}
-function alignMidnight(isoDate, timeZone) {
-	const [y, m, d] = isoDate.split("-").map(Number);
-	let utc = Date.UTC(y, m - 1, d);
-	for (let i = 0; i < 4; i++) {
-		const got = zoneParts(new Date(utc), timeZone);
-		utc += Date.UTC(y, m - 1, d) - Date.UTC(got.year, got.month - 1, got.day, got.hour, got.minute, got.second);
-	}
-	return new Date(utc);
-}
-function zonedMidnight(isoDate, timeZone) {
-	const zone = timeZone || "UTC";
-	try {
-		return alignMidnight(isoDate, zone);
-	} catch {
-		return alignMidnight(isoDate, "UTC");
-	}
-}
-function periodWindow(now, days, timeZone) {
-	const zone = timeZone || "UTC";
-	const count = Math.max(1, Number(days) || 1);
-	return {
-		since: zonedMidnight(shiftDate(dayKey(now, zone), 1 - count), zone).toISOString(),
-		until: now.toISOString()
-	};
-}
-function cliRank(cli) {
-	const index = CLI_ORDER.indexOf(cli);
-	return index < 0 ? CLI_ORDER.length : index;
-}
-function numberOrNull(value) {
-	return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-function combine(values) {
-	if (!values.length || values.some((value) => value == null)) return null;
-	return values.reduce((sum, value) => sum + value, 0);
-}
-function clippedDay(date, tz, bounds) {
-	const since = Date.parse(bounds?.since);
-	if (!Number.isFinite(since) || typeof date !== "string") return false;
-	return zonedMidnight(date, tz).getTime() < since;
-}
-function stackDailyBuckets(buckets, now = new Date(), bounds) {
-	if (!isBucketPayload(buckets)) return null;
-	const tz = buckets.tz;
-	const today = dayKey(now, tz);
-	const dates = [];
-	const seen = new Set();
-	const grouped = new Map();
-	for (const series of buckets.series) {
-		const cli = typeof series?.cli === "string" && series.cli ? series.cli : "";
-		if (!cli) continue;
-		if (!grouped.has(cli)) grouped.set(cli, []);
-		grouped.get(cli).push(series);
-		for (const day of series.days || []) {
-			if (typeof day?.date !== "string" || seen.has(day.date)) continue;
-			seen.add(day.date);
-			dates.push(day.date);
-		}
-	}
-	dates.sort();
-	const clis = [...grouped.keys()].sort((a, b) => cliRank(a) - cliRank(b) || a.localeCompare(b));
-	return {
-		tz,
-		clis,
-		days: dates.map((date) => {
-			let open = false;
-			const parts = clis.map((cli) => {
-				return {
-					cli,
-					total: combine(grouped.get(cli).map((series) => {
-						const day = (series.days || []).find((item) => item?.date === date);
-						if (!day) return null;
-						if (day.complete !== true) open = true;
-						return numberOrNull(day.tokens?.total);
-					}))
-				};
-			});
-			let mark = "";
-			if (open) {
-				if (clippedDay(date, tz, bounds)) mark = "partial_day";
-				else if (date === today) mark = "in_progress";
-				else mark = "settling";
-			}
-			return {
-				date,
-				parts,
-				partial: parts.some((part) => part.total == null),
-				mark
-			};
-		})
-	};
 }
 //#endregion
 //#region src/pm-agents-chart.js
@@ -18108,7 +18115,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			});
 			const nameY = top + (repo ? Math.round(nodeHeight * .42) : nodeHeight / 2 + 5);
 			const shownRepo = repo && repo.length > 22 ? repo.slice(0, 21) + "…" : repo;
-			group.append(svg("title", {}, accessible), svg("rect", {
+			place(group, "append", svg("title", {}, accessible), svg("rect", {
 				x: left,
 				y: top,
 				width: NODE_W,
@@ -20907,8 +20914,12 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 	const fact = (name, value) => h("p", {}, h("strong", {}, t(name) + ": "), value === null || value === void 0 ? t("wd_unknown") : String(value));
 	const boolean = (value) => value === true ? t("wd_yes") : value === false ? t("wd_no") : t("wd_unknown");
 	const code = (value) => h("p", { class: "pm-source" }, String(value ?? ""));
+	const namedStatus = (status) => {
+		const key = "wd_status_" + status, label = t(key);
+		return label === key ? String(status ?? "") : label;
+	};
 	function render() {
-		facts.replaceChildren(h("p", { class: "muted" }, t("wd_packages")), ...packages.map((ref) => h("div", {}, code(ref.package_id), code(ref.document_digest), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")))), ...rows.map((row) => h("article", { class: "pm-spec-card" }, h("h5", {}, t("wd_action_" + row.action)), fact("wd_status", t("wd_status_" + row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), code(row.target?.repository), row.target?.pull_number ? fact("wd_pull", row.target.pull_number) : null, row.integration ? h("div", {}, fact("wd_pushed", boolean(row.integration.pushed)), code(row.integration.new_head), ...(row.integration.sources || []).map((source) => h("p", { class: "pm-source" }, source.pinned_sha + " · " + source.status))) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified)), code(row.merge.merged_sha)) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_state", row.deployment.state), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current)), code(row.deployment.source_sha), fact("wd_run", row.deployment.run_id)) : null)), !rows.length ? emptyState({ title: t("wd_empty") }) : null);
+		place(facts, "replaceChildren", h("p", { class: "muted" }, t("wd_packages")), ...packages.map((ref) => h("div", {}, code(ref.package_id), code(ref.document_digest), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")))), ...rows.map((row) => h("article", { class: "pm-spec-card" }, h("h5", {}, t("wd_action_" + row.action)), fact("wd_status", t("wd_status_" + row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), code(row.target?.repository), row.target?.pull_number ? fact("wd_pull", row.target.pull_number) : null, row.integration ? h("div", {}, fact("wd_pushed", boolean(row.integration.pushed)), code(row.integration.new_head), ...(row.integration.sources || []).map((source) => h("p", { class: "pm-source" }, source.pinned_sha + " · " + namedStatus(source.status)))) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified)), code(row.merge.merged_sha)) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_state", row.deployment.state), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current)), code(row.deployment.source_sha), fact("wd_run", row.deployment.run_id)) : null)), !rows.length ? emptyState({ title: t("wd_empty") }) : null);
 	}
 	function check(data, id) {
 		if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || data.requirement_acceptance !== "not_evaluated_by_delivery" || !Array.isArray(data.original_packages) || !Array.isArray(data.deliveries) || typeof data.source_visibility_filtered !== "boolean" || data.next_after !== null && (!Number.isSafeInteger(data.next_after) || data.next_after <= 0)) throw Error(t("wd_invalid"));
@@ -21835,7 +21846,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			return;
 		}
 		const limits = batch.limits, children = batch.entries.map((entry) => h("article", { class: "pm-batch-entry" }, h("h4", {}, labels.get(entry.key) || entry.key), line("pmb_state", t("pmb_state_" + entry.state) === "pmb_state_" + entry.state ? entry.state : t("pmb_state_" + entry.state)), entry.reason ? h("p", { class: "muted" }, t("pmb_blocked_reason"), " · ", entry.reason) : null, line("pmb_profile_label", t(condition(entry).profile === "accepted_requirements_v1" ? "pmb_acceptance_profile" : condition(entry).profile === profile.profile ? "pmb_github_profile" : "pmb_observed_profile")), entry.operation_id ? h("a", { href: `#/op/${entry.operation_id}` }, t("pmb_child_operation")) : text("pmb_no_child"), h("details", {}, h("summary", {}, t("pmb_fixed_sources")), line("pmb_entry_key", entry.key), line("pmb_package", entry.package_ref.package_id), line("pmb_base", entry.source_sha), ...entry.depends_on.map((edge) => h("p", {}, t("pmb_wait_for"), " ", edge.entry_key))), ...entry.verification_evidence.map(proofFacts)));
-		facts.replaceChildren(h("h3", {}, t("pmb_saved")), line("pmb_operation_status", batch.operation_status), h("p", {}, `${t("pmb_starts")}: ${limits.max_starts} · ${t("pmb_parallel")}: ${limits.max_parallel} · ${t("pmb_retries")}: ${limits.max_retries}`), line("pmb_deadline", timeStamp(limits.deadline_at)), text("pmb_budget_help"), text("pmb_boundary"), h("a", { href: `#/op/${batch.operation_id}` }, t("pmb_parent_operation")), ...children);
+		facts.replaceChildren(h("h3", {}, t("pmb_saved")), line("pmb_operation_status", operationStatusLabel(batch.operation_status)), h("p", {}, `${t("pmb_starts")}: ${limits.max_starts} · ${t("pmb_parallel")}: ${limits.max_parallel} · ${t("pmb_retries")}: ${limits.max_retries}`), line("pmb_deadline", timeStamp(limits.deadline_at)), text("pmb_budget_help"), text("pmb_boundary"), h("a", { href: `#/op/${batch.operation_id}` }, t("pmb_parent_operation")), ...children);
 	}
 	const receiptKey = (row) => `${row.operation_id}:${row.seq}`;
 	function reviewChoices(entry) {
@@ -22041,7 +22052,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			if (baseline.value === "null" && !start.locked()) start.set("_baseline", JSON.stringify(currentPre()));
 			if (batch) await bindProof(ticket);
 			if (!valid(ticket)) return;
-			history.replaceChildren(h("option", { value: "" }, t("pmb_choose")), ...historyData.rows.map((row) => h("option", { value: row.batch_id }, `${t("pmb_batch")} ${row.sequence} · ${row.operation_status}`)));
+			history.replaceChildren(h("option", { value: "" }, t("pmb_choose")), ...historyData.rows.map((row) => h("option", { value: row.batch_id }, `${t("pmb_batch")} ${row.sequence} · ${operationStatusLabel(row.operation_status)}`)));
 			if (selected && !historyData.rows.some((row) => row.batch_id === selected)) history.append(h("option", { value: selected }, t("pmb_selected_original")));
 			history.value = selected;
 			ready = true;
@@ -23500,6 +23511,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		};
 		const detailBits = [];
 		if (row.type_basis === "neutral") detailBits.push(h("p", {}, t("reg_neutral")));
+		if (row.status === "format_valid" || Array.isArray(record.timeline) && record.timeline.some((step) => step?.status === "format_valid")) detailBits.push(h("p", {}, t("reg_format_checked_help")));
 		if (partial && labelSegment(record.timeline_coverage.partial_reason)) {
 			const code = String(record.timeline_coverage.partial_reason);
 			const recognised = Boolean(known(t, "ui_reason_" + code));
@@ -24254,7 +24266,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 				}
 			};
 			const proof = h("details", {}, h("summary", {}, t("ph_sources")), h("p", { class: "mono" }, `${t("ph_base")}: ${code.source_sha}`), ...(row.document.sources?.documents || []).map((source) => h("p", { class: "mono" }, `${t("ph_spec")}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)), h("p", { class: "mono" }, `${code.host} · ${code.workspace_id}`), h("p", { class: "mono" }, row.package_id), h("p", { class: "mono" }, row.document_digest), h("p", { class: "mono" }, work.work_fingerprint));
-			facts.replaceChildren(h("h4", {}, t("ph_reviewed")), readyForStart ? null : h("p", { class: "muted" }, t("ph_batch_waiting")), h("p", {}, project.name, " · ", code.repository, " · ", code.source_ref.replace(/^refs\/heads\//, "")), h("p", {}, code.host, " · ", response.preview.workspace.name || t("ph_workspace")), h("p", { class: "muted" }, `${t("ph_project_version")} ${project.version}`), h("p", { class: "muted" }, t("ph_separate")), fixedSpec ? h("p", { class: "pm-source" }, t("ph_fixed_attachment"), ": ", fixedSpec.materialization_id, " · ", fixedSpec.artifact_ref.artifact_id, " · ", fixedSpec.document_digest) : null, specs.filtered ? h("p", { class: "muted" }, t("ph_spec_filtered")) : null, proof);
+			place(facts, "replaceChildren", h("h4", {}, t("ph_reviewed")), readyForStart ? null : h("p", { class: "muted" }, t("ph_batch_waiting")), h("p", {}, project.name, " · ", code.repository, " · ", code.source_ref.replace(/^refs\/heads\//, "")), h("p", {}, code.host, " · ", response.preview.workspace.name || t("ph_workspace")), h("p", { class: "muted" }, `${t("ph_project_version")} ${project.version}`), h("p", { class: "muted" }, t("ph_separate")), fixedSpec ? h("p", { class: "pm-source" }, t("ph_fixed_attachment"), ": ", fixedSpec.materialization_id, " · ", fixedSpec.artifact_ref.artifact_id, " · ", fixedSpec.document_digest) : null, specs.filtered ? h("p", { class: "muted" }, t("ph_spec_filtered")) : null, proof);
 			status.replaceChildren();
 		} catch (error) {
 			if (valid(ticket)) fail(error);
@@ -28642,7 +28654,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			select.value = current;
 		};
 		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, t("wv_earlier_plan"))])), preference.requirement);
-		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, agent])), preference.agent);
+		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, cliName(agent)])), preference.agent);
 	}
 	const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
 	function renderMetrics() {
@@ -30193,6 +30205,7 @@ function dateRange(span) {
 	return format(span.start) || "—";
 }
 var unknown = () => h$1("span", { class: "ui-meta" }, t("sched_unavailable"));
+var shownAgent = (agent) => agent?.cli ? cliName(agent.cli) : agent?.model || "";
 var section = (key, ...body) => h$1("section", { "data-schedule-section": key }, h$1("h3", {}, t("sched_" + key)), ...body);
 function render(row, { workspaceId, data }) {
 	const refs = row.refs || {}, work = row.kind === "attempt" || row.kind === "issue" ? data.rows.find((value) => value.id === row.parent_id) : row;
@@ -30211,14 +30224,14 @@ function render(row, { workspaceId, data }) {
 	if (sessionAttempt(row)) status.append(h$1("p", { class: "ui-meta" }, row.status === "in_progress" ? t("sched_open") + " · " + t("sched_no_dates") : t("sched_no_dates")));
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
-		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
+		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, shownAgent(agent)));
 		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref({
 			host: session.host,
 			sessionId: session.session_id,
 			from: "schedule"
 		}) }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
 	}
-	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", { title: scheduleTitle(attempt) }, scheduleTitle(attempt)), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
+	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", { title: scheduleTitle(attempt) }, scheduleTitle(attempt)), h$1("div", {}, shownAgent(attempt.refs?.agent) || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
 	if (attempts.length) status.append(disclosure({
 		label: t("sched_attempts"),
 		body: attemptList,
@@ -35795,7 +35808,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value), pruneEmpty = false }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -45549,7 +45562,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 			}, h("div", { class: "row" }, choice, h("div", { class: "grow" }, h("a", {
 				class: "title",
 				href: `#/session/${encodeURIComponent(item.host)}/${encodeURIComponent(item.session_id)}`
-			}, item.session_id), h("div", { class: "muted" }, [item.host, item.agent_kind].filter(Boolean).join(" · ")))), item.eligible ? [
+			}, item.session_id), h("div", { class: "muted" }, [item.host, cliName(item.agent_kind)].filter(Boolean).join(" · ")))), item.eligible ? [
 				h("p", { class: "title" }, item.prompt.toolName || t("bulk_answer")),
 				h("pre", { class: "pre bulk-prompt" }, typeof item.prompt.input === "string" ? item.prompt.input : Object.keys(item.prompt.input || {}).length === 1 && typeof item.prompt.input?.command === "string" ? item.prompt.input.command : JSON.stringify(item.prompt.input ?? item.prompt, null, 2)),
 				h("details", { class: "bulk-evidence" }, h("summary", {}, t("bulk_full_prompt")), h("pre", { class: "pre bulk-prompt" }, JSON.stringify(item.prompt, null, 2))),
@@ -49409,7 +49422,7 @@ function sessionRow(s, open) {
 	const permission = managed && s.pending?.kind === "permission";
 	const meta = joinLabel([
 		s.host,
-		s.agent_kind,
+		cliName(s.agent_kind),
 		s.worktree_branch,
 		s.pending?.kind ? t("pending_" + s.pending.kind) : "",
 		s.stale ? reasonText$1(s.stale_reason) : ""
@@ -49605,7 +49618,7 @@ async function viewSessions(main) {
 			class: "title",
 			title: session.title || session.session_id,
 			href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`
-		}, session.title || session.session_id), chip(t(activity.key), activity.tone)), h("div", { class: "session-entry-meta" }, h("span", { class: session.api_access === "managed" ? "" : "session-readonly" }, session.provenance === "connector_managed" && session.api_access === "managed" ? t(access) : `${t(origin)} · ${t(access)}`), h("span", {}, [session.agent_kind, session.worktree_branch].filter(Boolean).join(" · "))), runtimeStale(session) ? h("p", { class: "session-stale muted" }, t("sessions_stale"), " · ", session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale")) : null, validLabels(session.connector_metadata?.labels) && session.connector_metadata.labels.length ? h("div", {
+		}, session.title || session.session_id), chip(t(activity.key), activity.tone)), h("div", { class: "session-entry-meta" }, h("span", { class: session.api_access === "managed" ? "" : "session-readonly" }, session.provenance === "connector_managed" && session.api_access === "managed" ? t(access) : `${t(origin)} · ${t(access)}`), h("span", {}, [cliName(session.agent_kind), session.worktree_branch].filter(Boolean).join(" · "))), runtimeStale(session) ? h("p", { class: "session-stale muted" }, t("sessions_stale"), " · ", session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale")) : null, validLabels(session.connector_metadata?.labels) && session.connector_metadata.labels.length ? h("div", {
 			class: "actions session-entry-meta",
 			"aria-label": t("labels_title")
 		}, ...session.connector_metadata.labels.slice(0, 2).map((v) => chip(v)), session.connector_metadata.labels.length > 2 ? h("span", {
@@ -49941,6 +49954,24 @@ function observationPanels(type, id, path) {
 		}
 	};
 }
+function taskStateLabel(state) {
+	if ([
+		"queued",
+		"dispatching",
+		"accepted",
+		"running",
+		"waiting_permission",
+		"quota_limited",
+		"human_owned",
+		"needs_ted",
+		"verifying",
+		"done",
+		"failed",
+		"uncertain"
+	].includes(state)) return t("task_state_" + state);
+	const operation = t("op_" + state);
+	return operation === "op_" + state ? state || "?" : operation;
+}
 async function viewTask(main, id) {
 	const connection = {
 		epoch: state.epoch,
@@ -49985,20 +50016,7 @@ async function viewTask(main, id) {
 				false,
 				0,
 				1
-			].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")), chip([
-				"queued",
-				"dispatching",
-				"accepted",
-				"running",
-				"waiting_permission",
-				"quota_limited",
-				"human_owned",
-				"needs_ted",
-				"verifying",
-				"done",
-				"failed",
-				"uncertain"
-			].includes(task.state) ? t("task_state_" + task.state) : task.state || "?")), h("p", { class: "muted" }, task.host || "", " · ", h("code", {}, id)), ...task.host && task.session_id ? [h("p", {}, h("a", { href: `#/session/${encodeURIComponent(task.host)}/${encodeURIComponent(task.session_id)}` }, t("task_open_session")))] : [], ...state.caps?.features?.cleanup_task === true ? [h("p", {}, h("a", { href: `#/cleanup/task/${encodeURIComponent(id)}` }, t("cleanup_task_preview")))] : [], ...state.caps?.artifacts?.capture?.managed_single_file === true ? [h("p", {}, h("a", { href: `#/artifact-review/task/${encodeURIComponent(id)}` }, t("ar_open")))] : [], h("details", {}, h("summary", {}, t("task_evidence")), h("pre", { class: "pre" }, JSON.stringify(task, null, 2))));
+			].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")), chip(taskStateLabel(task.state))), h("p", { class: "muted" }, task.host || "", " · ", h("code", {}, id)), ...task.host && task.session_id ? [h("p", {}, h("a", { href: `#/session/${encodeURIComponent(task.host)}/${encodeURIComponent(task.session_id)}` }, t("task_open_session")))] : [], ...state.caps?.features?.cleanup_task === true ? [h("p", {}, h("a", { href: `#/cleanup/task/${encodeURIComponent(id)}` }, t("cleanup_task_preview")))] : [], ...state.caps?.artifacts?.capture?.managed_single_file === true ? [h("p", {}, h("a", { href: `#/artifact-review/task/${encodeURIComponent(id)}` }, t("ar_open")))] : [], h("details", {}, h("summary", {}, t("task_evidence")), h("pre", { class: "pre" }, JSON.stringify(task, null, 2))));
 			status.replaceChildren();
 			readReady = true;
 			clearTimeout(retry);
@@ -50926,7 +50944,7 @@ async function viewSession(main, host, sid, context = null) {
 		}));
 		paintOrigin();
 		mobileLayout?.updateInfo();
-		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [row.agent_kind, row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
+		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
 			"manual",
 			"connector_managed",
 			"unknown"
@@ -53131,7 +53149,7 @@ async function viewNativeSettings(main) {
 }
 var may = (scope) => (state.caps?.scopes || []).includes(scope);
 function fill(el, ...kids) {
-	el.replaceChildren(...kids.flat(2).filter((x) => x !== null && x !== void 0 && x !== false));
+	place(el, "replaceChildren", ...kids);
 }
 var PROJECT_ERRORS = [
 	"VERSION_CONFLICT",
