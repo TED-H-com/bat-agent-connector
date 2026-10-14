@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Bind the demo follow-up assessment to its fixed Planning discussion using the backend-supported discussion mode and original version.
+
 - PM workspaces load the selected view and open secondary tools on demand,
   including on first load and manual Refresh. Hidden event updates wait until
   opened, while workspace withdrawal and lifecycle admission checks remain intact.

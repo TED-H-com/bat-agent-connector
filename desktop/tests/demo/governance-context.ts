@@ -28,11 +28,11 @@ export function governanceContext(project: DemoProject, rest: string) {
   }]));
   const intake = {workspace_id, intake_id, sequence: 1, version: 1, created_by: actor, created_at: at, document_digest: digest(70),
     document: {snapshot_ref: context.document.snapshot_ref, plan_ref: {document_revision: plan.revision_id, scope_revision: plan.adoption.scope_revision, document_digest: plan.document_digest},
-      thread_ref: {thread_id: project.ids.threadFollow, version: 1}, knowledge, issues: [], agenda: [], changes: {}, previous_intake_id: null,
+      thread_ref: {thread_id: project.ids.threadPlanning, version: 4}, knowledge, issues: [], agenda: [], changes: {}, previous_intake_id: null,
       selected_governance_refs: [], selected_meeting_follow_up_refs: [{completion_id, follow_up_id, follow_up: completion.document.follow_ups[0], original_snapshot_ref: context.document.snapshot_ref}], coverage: {}}};
   const run_id = hexId('pmr_', 1, 32), context_digest = digest(71);
   const assessment = {workspace_id, assessment_id, intake_id, intake_digest: intake.document_digest, sequence: 1, created_by: actor, created_at: at,
-    thread_id: project.ids.threadFollow, operation_id: hexId('op_', 70, 32), run_id, context_digest, raw_reply_digest: digest(72), document_digest: digest(73),
+    thread_id: project.ids.threadPlanning, operation_id: hexId('op_', 70, 32), run_id, context_digest, raw_reply_digest: digest(72), document_digest: digest(73),
     raw_reply: zh ? '需要核對帳戶復原的驗收證據。' : 'Account recovery needs acceptance evidence.',
     document: {version: 1, summary: {text: followText, source_refs: ['plan', 'thread']}, findings: [], tradeoffs: [], questions: [], recommendations: []},
     provenance: {intake_id, intake_digest: intake.document_digest, run_id, context_digest, adapter: 'fixture', actual_model: 'fixture-model',

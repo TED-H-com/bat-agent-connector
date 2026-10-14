@@ -16,3 +16,20 @@ for(const locale of ['en','zh-TW'])test(`demo assessment accepts its fixed plan 
     const history=await f.dispatch({path:`/pm/workspaces/${f.ids.workspaceId}/governance/${record.record_id}/history`});expect(history.status).toBe(200);expect(history.data.context).toEqual(record.context);expect(history.data.revisions).toHaveLength(1);
   }finally{await context.close();}
 });
+
+for(const locale of ['en','zh-TW'])test(`demo fixed assessment uses an executable discussion source, ${locale}`,async()=>{
+  const f=demoFixture({locale}),root=`/pm/workspaces/${f.ids.workspaceId}`;
+  const intake=await f.dispatch({path:root+'/follow-ups/latest'});
+  const source=await f.dispatch({path:root+`/threads/${f.ids.threadPlanning}`});
+  expect(intake.data.intake.document.thread_ref).toEqual({thread_id:source.data.thread.thread_id,version:source.data.thread.version});
+  expect(source.data.thread.mode).toBe('planning');
+  // Match the actual get_thread contract: identity is inside thread. The request
+  // panel currently requires an extra top-level workspace_id; report that bug
+  // rather than inventing it in the demo or changing the out-of-scope panel.
+  expect(source.data.thread.workspace_id).toBe(f.ids.workspaceId);
+  expect(source.data).not.toHaveProperty('workspace_id');
+  const records=await f.dispatch({path:root+'/follow-up-assessments'});
+  expect(records.data.assessments[0]).toMatchObject({intake_id:intake.data.intake.intake_id,thread_id:source.data.thread.thread_id});
+  const workspace=await f.dispatch({path:root});
+  expect(workspace.data.workspace.membership).toMatchObject({actor:'mei.lin',role:'reader'});
+});
