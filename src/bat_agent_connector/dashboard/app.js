@@ -4705,7 +4705,7 @@ var pmRegisterStrings = {
 		reg_updated: "Updated",
 		reg_timeline: "Processing",
 		reg_details: "Details",
-		reg_neutral: "Type is a neutral classification",
+		reg_neutral: "Listed as an issue: the record has no type",
 		reg_bar_value: "{label}, {value}",
 		reg_week_value: "{week}, {opened} opened, {resolved} resolved",
 		reg_reason_count: "{reason}, {count}",
@@ -4814,7 +4814,7 @@ var pmRegisterStrings = {
 		reg_updated: "更新時間",
 		reg_timeline: "處理過程",
 		reg_details: "詳細資料",
-		reg_neutral: "類型是中性分類",
+		reg_neutral: "紀錄沒有類型，先列為問題",
 		reg_bar_value: "{label}，{value}",
 		reg_week_value: "{week}，新開 {opened}，已解決 {resolved}",
 		reg_reason_count: "{reason}，{count}",
@@ -23669,8 +23669,10 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			detailBits.push(h("p", {}, recognised ? reasonLabel(t, code) : t("ui_reason_generic")));
 			if (!recognised) detailBits.push(h("p", { class: "reg-note" }, code));
 		}
+		const namedFromFinding = Boolean(findingName(row.finding, locale, ""));
 		for (const [name, code] of Object.entries(row.unknowns || {})) {
 			if (!labelSegment(code) || String(name).startsWith("finding.")) continue;
+			if (namedFromFinding && name === "title") continue;
 			const recognised = Boolean(known(t, "ui_reason_" + code));
 			const label = fieldKey[name] ? t(fieldKey[name]) : t("ui_reason_generic");
 			detailBits.push(h("p", {}, t("reg_pair", {

@@ -381,8 +381,10 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       detailBits.push(h('p', {}, recognised ? reasonLabel(t, code) : t('ui_reason_generic')));
       if (!recognised) detailBits.push(h('p', {class: 'reg-note'}, code));
     }
+    const namedFromFinding = Boolean(findingName(row.finding, locale, ''));
     for (const [name, code] of Object.entries(row.unknowns || {})) {
       if (!labelSegment(code) || String(name).startsWith('finding.')) continue;
+      if (namedFromFinding && name === 'title') continue;
       const recognised = Boolean(known(t, 'ui_reason_' + code));
       const label = fieldKey[name] ? t(fieldKey[name]) : t('ui_reason_generic');
       detailBits.push(h('p', {}, t('reg_pair', {label, value: reasonLabel(t, code)})));

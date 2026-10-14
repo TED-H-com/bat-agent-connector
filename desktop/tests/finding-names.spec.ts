@@ -21,6 +21,9 @@ function copyFor(locale: 'en' | 'zh-TW') {
     manifestLabel: zh ? '清單路徑' : 'Manifests',
     labelLabel: zh ? '標籤' : 'Labels',
     details: zh ? '詳細資料' : 'Details',
+    titleMissing: zh ? '標題：尚無紀錄' : 'Title: Not recorded',
+    neutral: zh ? '紀錄沒有類型，先列為問題' : 'Listed as an issue: the record has no type',
+    oldAlert: zh ? '發現' : 'Finding',
     unavailable: zh ? '發現 · 無法取得' : 'Finding · Unavailable',
     oldRegister: zh ? '發現 · 上線' : 'Finding · Launch',
     oldChip: zh ? '發現 · #14' : 'Finding · #14',
@@ -90,8 +93,16 @@ for (const [locale, width] of [['en', 1440], ['zh-TW', 1440], ['zh-TW', 390]] as
     await expect(inspector).toContainText('npm');
     await inspector.locator('summary', {hasText: copy.details}).click();
     await expect(inspector.locator('[data-finding-ghsa] code')).toHaveText(copy.ghsa);
+    await expect(inspector).toContainText(copy.neutral);
+    await expect(inspector).not.toContainText(copy.titleMissing);
     await expect(inspector).not.toContainText('finding.package');
     await expect(inspector).not.toContainText('dependabot_alerts');
+    const marker = inspector.locator('summary .ui-icon');
+    const box = await marker.boundingBox();
+    expect(box).toBeTruthy();
+    expect(box!.width).toBeGreaterThanOrEqual(12);
+    expect(box!.height).toBeGreaterThanOrEqual(12);
+    expect(Math.abs(box!.width - box!.height)).toBeLessThan(0.5);
     await inspector.screenshot({path: `${shots}/register-alert-${locale}-${width}.png`});
     await page.keyboard.press('Escape');
 
@@ -185,6 +196,12 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await expect(inspector.locator('h2')).toHaveText(copy.oldRegister);
     await expect(inspector.locator('[data-finding-severity]')).toHaveCount(0);
     await expect(inspector).not.toContainText(copy.ghsa);
+    await page.locator('[data-reg-more]').click();
+    await register.locator(`[data-row-key="${ids.alert}"]`).click();
+    await expect(inspector.locator('h2')).toHaveText(copy.oldAlert);
+    await inspector.locator('summary', {hasText: copy.details}).click();
+    await expect(inspector).toContainText(copy.titleMissing);
+    await expect(inspector).not.toContainText(copy.alert);
     await openView(page, 'overview');
     const bare = page.locator('[data-overview-row] strong', {hasText: /^14$/});
     await expect(bare).toHaveCount(1);

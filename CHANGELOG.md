@@ -5,7 +5,10 @@
 - Name maintenance findings from the structured `finding` identity in the issues
   register, Overview attention and discussion chips, in English and zh-TW.
   Servers that omit `finding` keep the previous fallback. A withdrawn chip stays
-  unavailable and shows no identity.
+  unavailable and shows no identity. A row named from `finding` does not also
+  list a missing title. A neutral record says it is listed as an issue because
+  it has no type of its own. Disclosure chevrons snap to the open mark instead
+  of turning through a corner.
 
 - Add a repeatable real-central PM decision walkthrough in English and zh-TW,
   with scripted native analysis, temporary Git, explicit issue resolution,

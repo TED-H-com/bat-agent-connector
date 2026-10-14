@@ -626,7 +626,10 @@ omits `finding` keeps the older register name: the finding kind plus its impact
 or priority. The inspector adds only identity facts that are present — severity
 with its word and colour, package, ecosystem, labels and manifests — and puts
 the GHSA ID in Details. Absent identity facts are not filled in as “Not recorded”;
-`finding.*` unknowns stay out of that list. Long owner text
+`finding.*` unknowns stay out of that list. When the row is named from `finding`,
+Details also leaves out the missing-title line; a fallback name still lists it.
+A neutral type basis says the record has no type of its own, so the register
+lists it as an issue. Long owner text
 ellipsizes. Related requirement and work chips use a loaded name when one is known.
 Filters are one toolbar: type, status, exact owner and title search, with accessible
 names and no visible field labels. Pages follow `next_cursor`; row ids and cursors
