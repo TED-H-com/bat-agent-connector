@@ -15,7 +15,7 @@ import {prSelector} from "./pr-selector.js";
 import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
 import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel} from "./managed-setup.js";
-import {managedControl} from "./transport/index.ts";
+import {managedControl, fleetAvailability} from "./transport/index.ts";
 import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
 import {attentionView} from "./attention.js";
@@ -190,7 +190,13 @@ async function api(method, path, body, key, collectReceipt) {
   if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady))
     throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
   const epoch = state.epoch;
-  const { status, data } = await connectorRequest(method, path, body, key, state.token);
+  let response;
+  try {response = await connectorRequest(method, path, body, key, state.token);}
+  catch (cause) {
+    const timeout = ['AbortError', 'TimeoutError'].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause));
+    throw new ApiError(0, timeout ? 'TIMEOUT' : 'NETWORK_ERROR', cause?.message || String(cause));
+  }
+  const { status, data } = response;
   // A retired view may collect its exact original operation ID in its original
   // namespace. It must reread that ID under current authority before using results.
   if (status >= 200 && status < 300) collectReceipt?.(data);
@@ -203,12 +209,19 @@ async function api(method, path, body, key, collectReceipt) {
   }
   return data;
 }
-function errorBox(e) {
+function errorBox(e, {summary} = {}) {
   // Renderers display read errors locally. Also report them to the event batch so a
   // caught refresh error cannot acknowledge its checkpoint or re-enable mutations.
   if (state.refreshCycle) state.refreshCycle.error ||= e;
-  const text = e.status === 403 && e.code === "FORBIDDEN" ? t("forbidden_scope") : `${e.code || ""} ${e.message || e}`;
-  return h("p", { class: "error" }, text);
+  const key = `error_code_${e.code}`;
+  const known = e.code && t(key) !== key;
+  const timeout = ['AbortError', 'TimeoutError'].includes(e.name);
+  const network = e instanceof TypeError;
+  const text = summary ?? (known ? t(key) : timeout ? t('error_code_TIMEOUT') : network ? t('error_code_NETWORK_ERROR')
+    : t('error_generic'));
+  return h('div', {'data-api-error': ''}, h("p", { class: "error", 'data-error-summary': '' }, text),
+    disclosure({label: t('global_details'), body: h('div', {'data-error-details': ''},
+      h('code', {}, e.code || ''), h('p', {}, e.message || String(e)))}));
 }
 async function submit(action, target, params, preconditions, scope) {
   const connection = { epoch: state.epoch, namespace: state.namespace };
@@ -2818,6 +2831,22 @@ function connectionFacts() {
   connectionPainters.add(paint);
   return dl;
 }
+function connectionAccess() {
+  const known = ['observe', 'operate', 'manage', 'start', 'approve', 'cleanup', 'cleanup_discard', 'deploy', 'integrate', 'merge'];
+  const labels = [...new Set((state.caps?.scopes || []).map(scope => t(known.includes(scope) ? `connection_scope_${scope}` : 'connection_other_access')))];
+  return h('p', {'data-connection-access': ''}, t('connection_access'), ': ', joinLabel(labels));
+}
+function connectionIdentity() {
+  return h('dl', {class: 'kv'}, h('dt', {}, t('connection_actor')), h('dd', {}, h('code', {}, state.caps?.actor || '—')),
+    h('dt', {}, t('connection_scopes')), h('dd', {}, h('code', {}, (state.caps?.scopes || []).join(', '))));
+}
+async function fleetTailscale(root, guard) {
+  try {
+    const availability = await fleetAvailability(); guard();
+    if (availability.configured && availability.platform_supported) return mountTailscale(root, {h, t});
+  } catch { /* The Fleet panel owns its availability error. */ }
+  return () => {};
+}
 function openSettings(main, {exclusive = false} = {}) {
   const memory = viewState(state.namespace || "", "", "settings");
   const frame = settingsFrame({h, t, exclusive, selected: memory.section || "", onSelect: id => { memory.section = id; }, sections: [
@@ -2843,18 +2872,16 @@ function viewBrowserSettings(main) {
   const frame = openSettings(main, {exclusive: true});
   const managed = state.token === browserSessionToken;
   const facts = connectionFacts();
-  facts.append(h("dt", {}, t("global_access")), h("dd", {}, joinLabel([state.caps.actor, ...(state.caps.scopes || [])])));
   const footer = h("div", {class: "global-card-footer"});
   frame.panel("connection").append(h("section", {class: "panel"},
-    facts,
+    facts, connectionAccess(),
     managed ? h("h2", {}, t("managed_browser_connected")) : null,
-    managed ? disclosure({label: t("global_details"), body: h("p", {}, t("managed_browser_help"))}) : null,
+    disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
     h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")),
     footer));
-  const note = mountTailscale(footer, {h, t, presentation: "note"});
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
-  return note;
+  return () => {};
 }
 function viewBrowserSignedOut(main) {
   const input = h("input", {type: "password", autocomplete: "off", placeholder: "batc_…"});
@@ -2884,8 +2911,6 @@ function viewBrowserSignedOut(main) {
   const footer = h("div", {class: "global-card-footer"});
   const root = firstRunCard({h, t, body: form, footer});
   main.append(root);
-  // Browser builds have no local Tailscale control. Keep the explanation visible and do not call IPC.
-  mountTailscale(footer, {h, t, presentation: "note"});
 }
 function viewSettings(main) {
   if (state.caps?.managed_installation) return viewManagedSettings(main);
@@ -2899,17 +2924,17 @@ async function viewManagedSettings(main) {
   const guard = () => assertView(connection);
   const status = h("div", {role: "status"});
   const frame = openSettings(main, {exclusive: !nativeDesktop});
-  const local = h("section", {class: "panel"}, h("h2", {}, t("managed_browser_connected")),
+  const local = h("section", {class: "panel", 'data-connection-card': ''}, h("h2", {}, t("managed_browser_connected")),
     connectionFacts(),
-    h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})),
-    disclosure({label: t("global_details"), body: h("p", {}, t("managed_background_help"))}),
-    h("details", {"data-managed-locations": ""}, h("summary", {}, t("managed_locations")),
+    connectionAccess(),
+    disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(),
+      h("p", {}, t("managed_background_help")), !nativeDesktop ? h('p', {}, t('managed_browser_help')) : null,
+      h("div", {"data-managed-locations": ""}, h('h3', {}, t('managed_locations')),
       h("p", {class: "muted"}, t("managed_locations_central")),
-      h("p", {class: "muted"}, t("managed_locations_work"))), status);
-  frame.panel("connection").append(local);
+      h("p", {class: "muted"}, t("managed_locations_work"))))}), status);
   const setup = managedSetupPanel({h, t, api, guard, namespace: state.namespace, errorBox, opStatus, caps: () => state.caps,
     onConfigured: async () => {const caps = await api("GET", "/capabilities"); guard(); state.caps = caps;}});
-  frame.panel("connection").append(setup.box);
+  frame.panel("connection").append(...(!state.caps.hosts?.length ? [setup.box, local] : [local, setup.box]));
   await setup.load();
   try {guard();} catch (error) {
     setup.dispose();
@@ -2957,12 +2982,9 @@ async function viewManagedSettings(main) {
       }
     } catch (error) {if (connection.generation === generation) status.append(errorBox(error));}
     disposeFleet = await mountFleet(fleetRoot, {h, t});
-    disposeTailscale = mountTailscale(fleetRoot, {h, t});
+    disposeTailscale = await fleetTailscale(fleetRoot, guard);
   } else {
-    const footer = h("div", {class: "global-card-footer"});
-    local.append(disclosure({label: t("global_details"), body: h("p", {}, t("managed_browser_help"))}),
-      h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")), footer);
-    disposeTailscale = mountTailscale(footer, {h, t, presentation: "note"});
+    local.append(h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")));
     fleetRoot.append(fleetEmpty());
   }
   return () => {setup.dispose(); disposeFleet?.(); disposeTailscale?.();};
@@ -3058,7 +3080,9 @@ async function viewNativeSettings(main) {
   frame.panel("updates").append(updateRoot);
   const showInfo = () => {
     info.replaceChildren();
-    if (state.caps) info.append(h("p", {}, t("connected_as", {actor: state.caps.actor, scopes: state.caps.scopes.join(", ")})));
+    technicalDetails.replaceChildren();
+    if (state.caps) technicalDetails.append(connectionIdentity());
+    if (state.caps) info.append(connectionAccess());
     if (state.connectionNotice) info.append(h("p", {}, state.connectionNotice));
     if (state.connectionError) info.append(errorBox(state.connectionError));
     if (state.nativeBusy) info.append(h("p", {}, t("desktop_connecting")));
@@ -3100,7 +3124,7 @@ async function viewNativeSettings(main) {
       connectionDetails.append(h("div", {class: "actions"}, reload));
     }
     row("desktop_endpoint", status.endpoint || t("desktop_config_needed"));
-    row("desktop_expected_actor", status.expected_actor);
+    if (status.expected_actor) technicalDetails.append(h("dt", {}, t("desktop_expected_actor")), h("dd", {}, status.expected_actor));
     if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
     if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
     if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error)));
@@ -3130,7 +3154,9 @@ async function viewNativeSettings(main) {
   frame.show("desktop");
   const disposeFleet = await mountFleet(fleetRoot, {h, t});
   if (mine !== generation || !main.isConnected) { disposeFleet?.(); disposeUpdates?.(); return; }
-  const disposeTailscale = mountTailscale(fleetRoot, {h, t});
+  const disposeTailscale = await fleetTailscale(fleetRoot, () => {
+    if (mine !== generation || !main.isConnected) throw new Error('VIEW_CHANGED');
+  });
   frame.show("fleet");
   return () => {disposeFleet?.(); disposeUpdates?.(); disposeTailscale();};
 }

@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- First-run BAT setup accepts a masked Connection URL paste, validates fields before
+  staging credentials, and releases only proven admission refusals. Uncertain replies
+  retain the original request and key. English and zh-TW errors, connection access and
+  setup terms are readable; successful setup leads to sessions. IME Escape preserves
+  open inspectors, menus and the mobile drawer.
+
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 

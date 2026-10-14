@@ -23,7 +23,15 @@ Install and open the matching package. It contains the Python runtime and prepar
 
 ### 1. Connect BAT
 
-In **Connection / Fleet → Get ready to work → Connect BAT**, select a **BAT connection profile** if it is importable. Otherwise choose **Configure a host manually** and enter **Host name**, **BAT endpoint**, the trusted **Host certificate SHA-256 fingerprint**, **Workspace profile ID** and **BAT connection token**. Confirm the fingerprint with the host owner. Encrypted or damaged BAT profile credentials are shown as unavailable; enter a valid token in the form rather than bypassing trust checks.
+In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; nothing is sent until **Verify and save host**.
+
+Enter a **Host ID** starting with a letter or number, using only letters, numbers, `-`, `_` or `.` (for example `local`). On first use, a loopback address suggests `local`; this is a name suggestion and does not establish where BAT runs or grant local execution permissions.
+
+**Enter manually** contains the individual **BAT endpoint**, **Certificate fingerprint (SHA-256)**, **BAT workspace profile ID** and **BAT connection token** fields, plus importable **BAT connection profiles**. Use the host and port from BAT's Connection URL, its **Certificate fingerprint (SHA-256)** and **Connection Token** in Remote Access. The endpoint must be a `wss://` origin with an explicit port, without credentials or query parameters. A copied `ws://` URL becomes `wss://`; the port defaults to 9876. Confirm manually entered fingerprints with the host owner. Encrypted or damaged profile credentials require a fresh credential.
+
+Common input errors appear beside the field before credential staging; the token stays in the password field. A proven admission refusal unlocks the form automatically and keeps non-secret drafts. Staged credentials clear from the page; their opaque reference can be reused in the same page for up to one hour. After reloading an editable draft, paste the credential again. A lost or uncertain reply retains the original request and key: use **Check request**, including after reloading. A configuration error alone does not prove that nothing was admitted.
+
+After connecting, choose **View sessions**. GitHub binding and verification remain optional collapsed steps.
 
 Expand **Allow managed work** when enabling dispatch. Choose the intended conversation / start permissions and dedicated **Remote managed directories**. For Git synchronization, checkpoint and artifact operations, provide the existing trusted **SSH alias configured on this computer**. The SSH account, keys, known host and remote permissions must already be usable; the app does not invent them.
 
@@ -55,7 +63,7 @@ Use **Open Dashboard in browser** or the tray / menu-bar entry. The app hands of
 
 Enable **Start when I sign in** for this installation's login startup. Closing Web or the Dashboard window leaves central running. Explicit desktop Quit retains central work while following the separate Fleet shutdown guards. Reopening recovers the same installation; a newer package upgrades only after the owned service accepts a safe stop. Busy or uncertain work prevents that transition, and older packages do not downgrade the journal.
 
-Configuration changes wait while operations/tasks are active. If a reply is lost, use **Recover original setup request** and **View setup operation**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
+Configuration changes wait while operations/tasks are active. If a reply is lost, use **Check request** and **View setup operation**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
 
 ## Try one PM workflow
 
