@@ -10136,7 +10136,7 @@ var projectViews$2 = new Set([
 	"agents",
 	"board"
 ]);
-function sessionHref({ host, sessionId, from = "" }) {
+function sessionHref$1({ host, sessionId, from = "" }) {
 	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
 	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
 }
@@ -10151,7 +10151,7 @@ function sessionOrigin(value) {
 		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
 		const from = query.get("from") || "";
 		if (from && !projectViews$2.has(from)) return "";
-		return sessionHref({
+		return sessionHref$1({
 			host,
 			sessionId,
 			from
@@ -12787,7 +12787,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
 		if (card) {
 			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
-			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref({
+			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref$1({
 				host: session.host,
 				sessionId: session.session_id,
 				from
@@ -20365,7 +20365,7 @@ var defaults = {
 };
 var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
-var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var text$5 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
 function cyclic(requirements) {
 	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
@@ -20581,10 +20581,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
 			const d = p.document;
-			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$5(d.title, 160) || !text$5(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$5(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -20607,9 +20607,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		if (!active || !record$4(value) || !text$5(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
-		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$5(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
@@ -30606,7 +30606,7 @@ function render(row, { workspaceId, data }) {
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
 		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, shownAgent(agent)));
-		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref({
+		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref$1({
 			host: session.host,
 			sessionId: session.session_id,
 			from: "schedule"
@@ -39223,9 +39223,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 }
 //#endregion
 //#region src/state/sessions.js
-var text$3 = (value) => typeof value === "string" ? value : "";
+var text$4 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
-	const host = text$3(session.host), id = text$3(session.workspace_id), name = text$3(session.workspace);
+	const host = text$4(session.host), id = text$4(session.workspace_id), name = text$4(session.workspace);
 	return {
 		key: JSON.stringify([
 			host,
@@ -39260,7 +39260,7 @@ function matchesSession(session, query) {
 		session.model,
 		session.worktree_branch,
 		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$3).join("\n").toLocaleLowerCase();
+	].map(text$4).join("\n").toLocaleLowerCase();
 	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
 }
 function runtimeStale(session) {
@@ -46161,7 +46161,7 @@ var terminal$3 = (op) => [
 	"cancelled"
 ].includes(op?.status);
 var equal$3 = (a, b) => a === b || object$2(a) && object$2(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => equal$3(a[k], b[k]));
-var text$2 = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
+var text$3 = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
 var fields = [
 	"host",
 	"workspace",
@@ -46172,7 +46172,7 @@ var fields = [
 ];
 var admissionRefusals$1 = new Set(["TIER_DISABLED", "START_WORKTREE_REQUIRED"]);
 function validRequest$2(r) {
-	return r?.action === "session.start" && object$2(r.target) && Object.keys(r.target).length === 2 && text$2(r.target.host, 256) && text$2(r.target.workspace, 256) && object$2(r.params) && Object.keys(r.params).every((k) => [
+	return r?.action === "session.start" && object$2(r.target) && Object.keys(r.target).length === 2 && text$3(r.target.host, 256) && text$3(r.target.workspace, 256) && object$2(r.params) && Object.keys(r.params).every((k) => [
 		"agent",
 		"model",
 		"title",
@@ -46182,7 +46182,7 @@ function validRequest$2(r) {
 		"model",
 		"title",
 		"prompt"
-	].every((k) => !(k in r.params) || text$2(r.params[k], k === "prompt" ? 2e4 : 256)) && object$2(r.preconditions) && Object.keys(r.preconditions).length === 0;
+	].every((k) => !(k in r.params) || text$3(r.params[k], k === "prompt" ? 2e4 : 256)) && object$2(r.preconditions) && Object.keys(r.preconditions).length === 0;
 }
 function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference }) {
 	let raw;
@@ -46192,7 +46192,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	let saved = Object.fromEntries(fields.map((k) => [k, typeof raw?.[k] === "string" ? raw[k] : k === "agent" ? "claude" : ""]));
 	if (!["claude", "codex"].includes(saved.agent)) saved.agent = "claude";
 	if (raw?.intent) {
-		const valid = validRequest$2(raw.intent.request) && text$2(raw.intent.key, 200);
+		const valid = validRequest$2(raw.intent.request) && text$3(raw.intent.key, 200);
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
@@ -46289,7 +46289,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 			const doc = await api("GET", `/workspaces?host=${encodeURIComponent(selectedHost)}&limit=200`);
 			guard();
 			if (expected !== discovery || saved.host !== selectedHost || saved.intent) return;
-			if (!Array.isArray(doc.workspaces) || doc.workspaces.length > 200 || typeof doc.has_more !== "boolean" || !object$2(doc.errors) || Object.keys(doc.errors).length || doc.workspaces.some((w) => !object$2(w) || w.host !== selectedHost || !text$2(w.workspace_id, 256) || typeof w.folder !== "string") || new Set(doc.workspaces.map((w) => w.workspace_id)).size !== doc.workspaces.length) throw new Error(t("start_discovery_failed"));
+			if (!Array.isArray(doc.workspaces) || doc.workspaces.length > 200 || typeof doc.has_more !== "boolean" || !object$2(doc.errors) || Object.keys(doc.errors).length || doc.workspaces.some((w) => !object$2(w) || w.host !== selectedHost || !text$3(w.workspace_id, 256) || typeof w.folder !== "string") || new Set(doc.workspaces.map((w) => w.workspace_id)).size !== doc.workspaces.length) throw new Error(t("start_discovery_failed"));
 			workspaces = doc.workspaces;
 			discoveredHost = selectedHost;
 			renderWorkspaces();
@@ -46319,7 +46319,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 			params: candidate.params,
 			preconditions: candidate.preconditions
 		}, intent.request) || intent.operation_id && intent.operation_id !== candidate.operation_id) throw new Error(t("start_invalid_result"));
-		for (const proof of [candidate.result, candidate.external_refs?.start_result]) if (proof?.started === true && (proof.host !== intent.request.target.host || !text$2(proof.session_id, 256) || proof.session_id !== candidate.external_refs?.session_id)) throw new Error(t("start_invalid_result"));
+		for (const proof of [candidate.result, candidate.external_refs?.start_result]) if (proof?.started === true && (proof.host !== intent.request.target.host || !text$3(proof.session_id, 256) || proof.session_id !== candidate.external_refs?.session_id)) throw new Error(t("start_invalid_result"));
 		operation = candidate;
 		intent.operation_id = candidate.operation_id;
 		readFailed = false;
@@ -46761,7 +46761,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 //#endregion
 //#region src/orchestration.js
 var object$1 = (v) => v && typeof v === "object" && !Array.isArray(v);
-var text$1 = (v, max = 256) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
+var text$2 = (v, max = 256) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
 var opId = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
 var equal$2 = (a, b) => a === b || Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => equal$2(v, b[i])) || object$1(a) && object$1(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => equal$2(a[k], b[k]));
 var terminal$2 = (op) => [
@@ -46790,12 +46790,12 @@ var admissionRefusals = new Set([
 ]);
 var withinBodyLimit = (r) => new TextEncoder().encode(JSON.stringify(r)).length <= 2e5;
 function validRequest$1(r, mode) {
-	if (!object$1(r) || r.action !== orchestrationActions[mode] || !object$1(r.target) || !object$1(r.params) || !object$1(r.preconditions) || Object.keys(r.preconditions).length || Object.keys(r.target).length !== 2 || !text$1(r.target.host) || !text$1(r.target[sessionMode(mode) ? "session_id" : "workspace"]) || !withinBodyLimit(r)) return false;
+	if (!object$1(r) || r.action !== orchestrationActions[mode] || !object$1(r.target) || !object$1(r.params) || !object$1(r.preconditions) || Object.keys(r.preconditions).length || Object.keys(r.target).length !== 2 || !text$2(r.target.host) || !text$2(r.target[sessionMode(mode) ? "session_id" : "workspace"]) || !withinBodyLimit(r)) return false;
 	const p = r.params, keys = Object.keys(p);
-	if (mode === "relay") return keys.length === 3 && text$1(p.message, 12e3) && typeof p.queue === "boolean" && p.start_if_missing === false;
-	if (mode === "planner") return keys.length === 2 && text$1(p.message, 12e3) && Number.isInteger(p.max_items) && p.max_items >= 1 && p.max_items <= 16;
-	if (mode === "failover") return keys.every((k) => ["tail_messages", "instructions"].includes(k)) && p.tail_messages === 12 && (!("instructions" in p) || text$1(p.instructions, 4e3));
-	return keys.length === 2 && ["claude", "codex"].includes(p.agent) && Array.isArray(p.plan) && p.plan.length >= 1 && p.plan.length <= 16 && p.plan.every((v, i) => object$1(v) && Object.keys(v).length === 3 && v.index === i + 1 && text$1(v.title, 200) && text$1(v.prompt, 19e3));
+	if (mode === "relay") return keys.length === 3 && text$2(p.message, 12e3) && typeof p.queue === "boolean" && p.start_if_missing === false;
+	if (mode === "planner") return keys.length === 2 && text$2(p.message, 12e3) && Number.isInteger(p.max_items) && p.max_items >= 1 && p.max_items <= 16;
+	if (mode === "failover") return keys.every((k) => ["tail_messages", "instructions"].includes(k)) && p.tail_messages === 12 && (!("instructions" in p) || text$2(p.instructions, 4e3));
+	return keys.length === 2 && ["claude", "codex"].includes(p.agent) && Array.isArray(p.plan) && p.plan.length >= 1 && p.plan.length <= 16 && p.plan.every((v, i) => object$1(v) && Object.keys(v).length === 3 && v.index === i + 1 && text$2(v.title, 200) && text$2(v.prompt, 19e3));
 }
 function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, mode, context = {} }) {
 	if (!Object.hasOwn(orchestrationActions, mode)) throw new Error("Unknown orchestration form");
@@ -46819,7 +46819,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		}]
 	};
 	if (raw?.intent) {
-		const valid = validRequest$1(raw.intent.request, mode) && text$1(raw.intent.key, 200);
+		const valid = validRequest$1(raw.intent.request, mode) && text$2(raw.intent.key, 200);
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
@@ -46947,7 +46947,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 			guard();
 			if (mine !== discovery || expectedHost !== saved.host || saved.intent) return;
 			const list = doc[sessionMode(mode) ? "sessions" : "workspaces"], id = sessionMode(mode) ? "session_id" : "workspace_id";
-			if (!Array.isArray(list) || list.length > 200 || list.some((row) => row?.host !== expectedHost || !text$1(row?.[id])) || new Set(list.map((row) => row[id])).size !== list.length || !sessionMode(mode) && (!object$1(doc.errors) || Object.keys(doc.errors).length || typeof doc.has_more !== "boolean") || sessionMode(mode) && doc.next_cursor !== null && !text$1(doc.next_cursor, 8192)) throw new Error(t("orch_discovery_failed"));
+			if (!Array.isArray(list) || list.length > 200 || list.some((row) => row?.host !== expectedHost || !text$2(row?.[id])) || new Set(list.map((row) => row[id])).size !== list.length || !sessionMode(mode) && (!object$1(doc.errors) || Object.keys(doc.errors).length || typeof doc.has_more !== "boolean") || sessionMode(mode) && doc.next_cursor !== null && !text$2(doc.next_cursor, 8192)) throw new Error(t("orch_discovery_failed"));
 			rows = sessionMode(mode) ? list.filter((row) => mode === "failover" ? failoverSource(row) : managed(row)) : list;
 			discoveredHost = expectedHost;
 			renderSelection();
@@ -47232,10 +47232,10 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 			total: intent.request?.params.plan.length || 0
 		})));
 		if (mode === "relay" && proof.sent === true) result.append(h("p", {}, t("orch_relay_accepted")));
-		if (mode === "planner" && proof.prompt_sent === true && text$1(proof.session_id)) result.append(h("p", {}, t("orch_planner_started"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(proof.session_id)}` }, proof.session_id)));
+		if (mode === "planner" && proof.prompt_sent === true && text$2(proof.session_id)) result.append(h("p", {}, t("orch_planner_started"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(proof.session_id)}` }, proof.session_id)));
 		if (mode === "failover") {
 			const sid = proof.new_session_id || proof.pending_successor;
-			if (text$1(sid)) result.append(h("p", {}, t(proof.prompt_sent === true ? "orch_handoff_accepted" : "orch_successor_unconfirmed"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(sid)}` }, sid)));
+			if (text$2(sid)) result.append(h("p", {}, t(proof.prompt_sent === true ? "orch_handoff_accepted" : "orch_successor_unconfirmed"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(sid)}` }, sid)));
 		}
 		if (operation.steps?.length) result.append(h("details", { "data-orchestration-steps": "" }, h("summary", {}, t("orch_steps")), h("ul", {}, ...operation.steps.map((step) => h("li", {}, `${step.name} · ${operationStatusLabel(step.status)}`)))));
 	}
@@ -47310,7 +47310,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 //#region src/repository-start.js
 var object = (v) => v && typeof v === "object" && !Array.isArray(v);
 var equal$1 = (a, b) => a === b || Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => equal$1(v, b[i])) || object(a) && object(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => equal$1(a[k], b[k]));
-var text = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max && !/[\x00-\x1f\x7f]/.test(v);
+var text$1 = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max && !/[\x00-\x1f\x7f]/.test(v);
 var oid$1 = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
 var sha = (v) => typeof v === "string" && /^[0-9a-f]{40}$/.test(v);
 var digest$1 = (v) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
@@ -47323,7 +47323,7 @@ var target = (v) => object(v) && Object.keys(v).length === 3 && [
 	"repository",
 	"host",
 	"workspace_id"
-].every((k) => text(v[k], 256));
+].every((k) => text$1(v[k], 256));
 var ref = (v) => typeof v === "string" && /^refs\/heads\/(?!-)(?!.*\.\.)(?!.*\/\/)(?!.*@\{)[A-Za-z0-9._/-]{1,200}$/.test(v) && !/[./]$/.test(v) && v.slice(11).split("/").every((p) => !p.startsWith(".") && !p.endsWith(".lock"));
 var branchRef = (value) => value.startsWith("refs/") ? value : "refs/heads/" + value;
 var preconditions = (v) => object(v) && Object.keys(v).length === 2 && Number.isSafeInteger(v.repository_id) && v.repository_id > 0 && digest$1(v.binding_digest);
@@ -47353,8 +47353,8 @@ var validRequest = (r) => r?.action === "repository.continue" && target(r.target
 	"work_item_id",
 	"source_ref",
 	"source_sha"
-].includes(k)) && ref(r.params.source_ref) && sha(r.params.source_sha) && ["claude", "codex"].includes(r.params.agent) && typeof r.params.prompt === "string" && r.params.prompt.trim() && r.params.prompt.length <= 12e3 && ["title", "model"].every((k) => !(k in r.params) || text(r.params[k], 256)) && (!("artifacts" in r.params) || artifactRefs(r.params.artifacts));
-var validPreview$1 = (p, input) => object(p) && equal$1(p.target, input.target) && p.source_ref === input.source_ref && sha(p.source_sha) && p.exact_ref_head_only === true && preconditions(p.preconditions) && p.repository_id === p.preconditions.repository_id && p.binding_digest === p.preconditions.binding_digest && object(p.workspace) && p.workspace.workspace_id === input.target.workspace_id && text(p.workspace.folder, 4096) && (p.workspace.name == null || typeof p.workspace.name === "string");
+].includes(k)) && ref(r.params.source_ref) && sha(r.params.source_sha) && ["claude", "codex"].includes(r.params.agent) && typeof r.params.prompt === "string" && r.params.prompt.trim() && r.params.prompt.length <= 12e3 && ["title", "model"].every((k) => !(k in r.params) || text$1(r.params[k], 256)) && (!("artifacts" in r.params) || artifactRefs(r.params.artifacts));
+var validPreview$1 = (p, input) => object(p) && equal$1(p.target, input.target) && p.source_ref === input.source_ref && sha(p.source_sha) && p.exact_ref_head_only === true && preconditions(p.preconditions) && p.repository_id === p.preconditions.repository_id && p.binding_digest === p.preconditions.binding_digest && object(p.workspace) && p.workspace.workspace_id === input.target.workspace_id && text$1(p.workspace.folder, 4096) && (p.workspace.name == null || typeof p.workspace.name === "string");
 var noAdmission = new Set(["REPOSITORY_NOT_BOUND", "REPOSITORY_HOST_UNAVAILABLE"]);
 function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, project = null, repairSeed = null, attachmentFactory, submitPreference }) {
 	if (repairSeed && (repairSeed.project_id !== project || !workItemId(repairSeed.work_item_id) || !digest$1(repairSeed.expected_work_item_fingerprint) || typeof repairSeed.prompt !== "string" || !repairSeed.prompt.trim())) throw new Error(t("repair_unavailable"));
@@ -47371,7 +47371,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		title: typeof raw?.title === "string" ? raw.title : ""
 	};
 	if (raw?.intent) {
-		const valid = validRequest(raw.intent.request) && text(raw.intent.key, 200) && (!project || raw.intent.request.params.project_id === project) && (repairSeed ? raw.intent.request.params.work_item_id === repairSeed.work_item_id : !raw.intent.request.params.work_item_id);
+		const valid = validRequest(raw.intent.request) && text$1(raw.intent.key, 200) && (!project || raw.intent.request.params.project_id === project) && (repairSeed ? raw.intent.request.params.work_item_id === repairSeed.work_item_id : !raw.intent.request.params.work_item_id);
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
@@ -47560,7 +47560,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			...intent.request.params.project_id ? { project_id: intent.request.params.project_id } : {},
 			...intent.request.params.work_item_id ? { work_item_id: intent.request.params.work_item_id } : {}
 		})) if (name in refs && refs[name] !== value) throw new Error(t("pub_invalid_result"));
-		if (result != null && (!object(result) || result.host !== intent.request.target.host || result.workspace_id !== intent.request.target.workspace_id || result.repository !== intent.request.target.repository || result.source_ref !== intent.request.params.source_ref || result.source_sha !== intent.request.params.source_sha || result.repository_id !== intent.request.preconditions.repository_id || result.binding_digest !== intent.request.preconditions.binding_digest || !text(result.session_id, 256) || result.session_id !== candidate.external_refs?.session_id)) throw new Error(t("pub_invalid_result"));
+		if (result != null && (!object(result) || result.host !== intent.request.target.host || result.workspace_id !== intent.request.target.workspace_id || result.repository !== intent.request.target.repository || result.source_ref !== intent.request.params.source_ref || result.source_sha !== intent.request.params.source_sha || result.repository_id !== intent.request.preconditions.repository_id || result.binding_digest !== intent.request.preconditions.binding_digest || !text$1(result.session_id, 256) || result.session_id !== candidate.external_refs?.session_id)) throw new Error(t("pub_invalid_result"));
 		if (candidate.status === "succeeded" && (!result || result.message_id !== `batc-${candidate.operation_id}`)) throw new Error(t("pub_invalid_result"));
 		operation = candidate;
 		intent.operation_id = candidate.operation_id;
@@ -47730,7 +47730,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		if (!original || !saved.intent.key) outcome.append(h("p", { class: "error" }, t("permissions_damaged")));
 		if (original?.params.artifacts?.length) outcome.append(h("p", { class: "muted" }, t("dispatch_fixed_inputs")), h("ul", { class: "dispatch-fixed-inputs" }, ...original.params.artifacts.map((r) => h("li", {}, `${r.artifact_id} · r${r.revision} · ${r.digest}`))));
 		const complete = operation?.status === "succeeded" && operation.result?.message_id === `batc-${operation.operation_id}`;
-		const proof = complete ? operation.result : operation?.steps?.some((s) => s.name === "session.start" && s.status === "succeeded") && text(operation.external_refs?.session_id, 256) ? {
+		const proof = complete ? operation.result : operation?.steps?.some((s) => s.name === "session.start" && s.status === "succeeded") && text$1(operation.external_refs?.session_id, 256) ? {
 			host: saved.target.host,
 			session_id: operation.external_refs.session_id
 		} : null;
@@ -48834,6 +48834,374 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		content.dispose();
 		off();
 	};
+}
+//#endregion
+//#region src/observed-resource-strings.js
+var observedStrings = {
+	en: {
+		or_execution: "Execution",
+		or_worktree: "Worktree",
+		or_work: "Work",
+		or_owner: "Owner",
+		or_owner_task: "Managed task",
+		or_owner_operation: "Managed operation",
+		or_owner_registry: "Registered",
+		or_owner_manual: "Manual (read-only)",
+		or_latest: "Latest result",
+		or_sessions: "Sessions",
+		or_session: "Session",
+		or_open_session: "Open session",
+		or_review: "Review result",
+		or_details: "Details",
+		or_raw: "Raw record",
+		or_identity: "This identity is recorded. History does not grant writes.",
+		or_cleanup: "Cleanup needs a fresh preview of active work, undelivered results, reservations, and blockers.",
+		or_unverified: "Not verified",
+		or_verified: "Verified",
+		or_verification_reason: "Result unverified; dispatch acceptance does not verify the work.",
+		or_result_unknown: "No result evidence was returned.",
+		or_unavailable: "Could not read this result.",
+		or_cleanup_preview: "Preview cleanup",
+		or_host: "Host",
+		or_work_id: "Work ID",
+		or_owner_kind: "Owner kind",
+		or_dispatch: "Dispatch",
+		or_reason: "Reason",
+		or_pinned: "Source commit",
+		or_delivered: "Delivered commit",
+		or_pr: "PR #{n}",
+		or_path: "Path",
+		or_branch: "Branch",
+		or_actor: "Actor",
+		or_project: "Project",
+		or_state: "State",
+		or_worktree_id: "Worktree ID",
+		or_owner_id: "Owner ID",
+		or_operation_id: "Operation",
+		or_task_id: "Task",
+		or_session_id: "Session",
+		or_link_operation: "Operation",
+		or_link_execution: "Execution",
+		or_link_worktree: "Worktree"
+	},
+	"zh-TW": {
+		or_execution: "工作執行",
+		or_worktree: "工作目錄",
+		or_work: "工作",
+		or_owner: "負責人",
+		or_owner_task: "受管任務",
+		or_owner_operation: "受管操作",
+		or_owner_registry: "已登記",
+		or_owner_manual: "人工（唯讀）",
+		or_latest: "最新成果",
+		or_sessions: "工作階段",
+		or_session: "工作階段",
+		or_open_session: "開啟工作階段",
+		or_review: "審閱成果",
+		or_details: "詳細資訊",
+		or_raw: "原始紀錄",
+		or_identity: "這是已記錄的身分。歷程不代表可以寫入。",
+		or_cleanup: "整理前需要最新預覽，列出進行中的工作、尚未交付的成果、保留項目與阻擋原因。",
+		or_unverified: "尚未驗證",
+		or_verified: "已驗證",
+		or_verification_reason: "成果尚未驗證；派工已受理不代表工作已通過驗證。",
+		or_result_unknown: "這次讀取未提供成果證據。",
+		or_unavailable: "無法讀取這筆成果。",
+		or_cleanup_preview: "預覽整理",
+		or_host: "主機",
+		or_work_id: "工作識別碼",
+		or_owner_kind: "歸屬類型",
+		or_dispatch: "派工",
+		or_reason: "原因",
+		or_pinned: "來源提交",
+		or_delivered: "交付提交",
+		or_pr: "PR #{n}",
+		or_path: "路徑",
+		or_branch: "分支",
+		or_actor: "執行者",
+		or_project: "專案",
+		or_state: "狀態",
+		or_worktree_id: "工作目錄識別碼",
+		or_owner_id: "負責人識別碼",
+		or_operation_id: "操作",
+		or_task_id: "任務",
+		or_session_id: "工作階段",
+		or_link_operation: "操作",
+		or_link_execution: "執行",
+		or_link_worktree: "工作目錄"
+	}
+};
+function observedText(t, key, values = {}) {
+	const supplied = t(key, values);
+	if (supplied !== key) return supplied;
+	return (observedStrings[locale][key] ?? observedStrings.en[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
+}
+//#endregion
+//#region src/observed-resource.js
+var say = (key, values) => observedText(t, key, values);
+var text = (value) => typeof value === "string" ? value.trim() : "";
+var list = (value) => Array.isArray(value) ? value.filter(Boolean) : [];
+var TASK_PILLS = {
+	queued: "not_started",
+	dispatching: "in_progress",
+	accepted: "in_progress",
+	running: "running",
+	waiting_permission: "asking_you",
+	quota_limited: "blocked",
+	human_owned: "needs_you",
+	needs_ted: "needs_you",
+	verifying: "in_review",
+	done: "done",
+	failed: "failed",
+	uncertain: "unknown",
+	waiting: "waiting"
+};
+function ownerKind(resource) {
+	if (!text(resource?.intent_id)) return "manual";
+	const kind = text(resource?.intent_type);
+	if (kind === "task" || kind === "registry") return kind;
+	if ([
+		"operation",
+		"checkpoint.continue",
+		"integration.handoff",
+		"repository.continue",
+		"session.start"
+	].includes(kind)) return "operation";
+	return "manual";
+}
+function actionLink(h, href, label, variant) {
+	return h("a", {
+		class: `ui-button ${variant} ui-sm`,
+		href
+	}, label);
+}
+function pairs(h, rows) {
+	const kept = rows.filter(([, value]) => value !== null && value !== void 0 && value !== "");
+	return kept.length ? h("dl", { class: "or-dl" }, ...kept.flatMap(([label, value]) => [h("dt", {}, label), h("dd", { class: typeof value === "string" ? "mono" : "" }, value)])) : null;
+}
+function fact(h, label, value) {
+	return h("div", { class: "or-fact" }, h("span", { class: "or-label" }, label), h("div", { class: "or-value" }, value));
+}
+function stamp(value) {
+	return value === null || value === void 0 || value === "" ? null : timeStamp(value);
+}
+function at(value) {
+	if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+	return text(value) ? Date.parse(value) / 1e3 || 0 : 0;
+}
+function sessionHref(session) {
+	return `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`;
+}
+function sessionRow$1(h, session) {
+	const observation = session?.observation || {};
+	const title = text(observation.title) || text(session?.title) || text(session?.host) || say("or_session");
+	const fresh = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale && !observation.gone_at && !["gone", "missing"].includes(observation.state?.enumeration) && observation.state?.lifecycle !== "ended";
+	const activity = fresh && observation.pending ? statusPill("asking_you") : fresh && observation.streaming === true ? statusPill("running") : fresh && observation.streaming === false ? statusPill("waiting") : null;
+	return h("div", {
+		class: "or-session",
+		"data-observed-session": ""
+	}, session?.host && session?.session_id ? h("a", { href: sessionHref(session) }, title) : h("span", {}, title), activity);
+}
+function receipts(item) {
+	return list(item?.delivered_to).filter((row) => text(row.repository) && Number.isInteger(row.pull_number) && row.pull_number > 0).sort((a, b) => at(b.delivered_at) - at(a.delivered_at));
+}
+function prAnchor(h, receipt) {
+	return receipt ? h("a", {
+		class: "or-pr",
+		href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
+		target: "_blank",
+		rel: "noopener",
+		"data-observed-pr": String(receipt.pull_number)
+	}, say("or_pr", { n: receipt.pull_number })) : null;
+}
+function deliveryPill(item) {
+	if (item?.unavailable || !item?.result?.status) return statusPill("unknown");
+	if (item.result.status === "failed") return statusPill("failed");
+	if (item.result.status !== "unverified") return statusPill("unknown");
+	const pill = statusPill("not_assessed");
+	pill.textContent = say("or_unverified");
+	return pill;
+}
+function workName(item) {
+	return text(item?.title) || text(item?.branch) || (item?.action ? actionLabel(item.action) : "") || say("or_work");
+}
+function workLinks(item, repositories, caps) {
+	const links = [];
+	if (item.operation_id) links.push([
+		"operation",
+		say("or_link_operation"),
+		`#/op/${encodeURIComponent(item.operation_id)}`
+	]);
+	if (item.task_id) links.push([
+		"execution",
+		say("or_link_execution"),
+		`#/task/${encodeURIComponent(item.task_id)}`
+	]);
+	if (item.host && item.session_id) links.push([
+		"session",
+		say("or_open_session"),
+		sessionHref(item)
+	]);
+	if (item.worktree_id) links.push([
+		"worktree",
+		say("or_link_worktree"),
+		`#/worktree/${encodeURIComponent(item.worktree_id)}`
+	]);
+	if (item.eligible && item.host && item.kind && item.id && caps?.features?.execution_delivery?.version === 1) {
+		const repo = item.repository || (repositories.length === 1 ? repositories[0] : "");
+		links.push([
+			"review",
+			say("or_review"),
+			`#/delivery/${[
+				item.host,
+				item.kind,
+				item.id,
+				repo
+			].map(encodeURIComponent).join("/")}`
+		]);
+	}
+	return links;
+}
+function rawRecord(h, value) {
+	const nested = disclosure({
+		label: say("or_raw"),
+		body: h("pre", { class: "pre" }, JSON.stringify(value ?? {}, null, 2))
+	});
+	nested.dataset.observedRaw = "";
+	return nested;
+}
+function detailsBlock(body, key) {
+	const root = disclosure({
+		label: say("or_details"),
+		body,
+		key
+	});
+	root.dataset.observedDetails = "";
+	return root;
+}
+function resultReason(h, item) {
+	return h("p", { class: "or-note" }, item?.unavailable ? say("or_unavailable") : item?.result?.status === "unverified" ? say("or_verification_reason") : say("or_result_unknown"));
+}
+function technicalWork(h, item, links) {
+	return h("div", { class: "or-tech-work" }, pairs(h, [
+		[say("or_actor"), text(item.actor)],
+		[say("or_host"), text(item.host)],
+		[say("or_branch"), text(item.branch)],
+		[say("or_work_id"), text(item.id)],
+		[say("or_operation_id"), text(item.operation_id)],
+		[say("or_task_id"), text(item.task_id)],
+		[say("or_session_id"), text(item.session_id)],
+		[say("or_worktree_id"), text(item.worktree_id)],
+		[say("or_path"), text(item.worktree_path)],
+		[say("or_dispatch"), text(item.status)],
+		[say("or_reason"), text(item.unavailable?.code)]
+	]), resultReason(h, item), stamp(item.created_at), ...receipts(item).map((receipt) => h("div", { class: "or-receipt" }, prAnchor(h, receipt), stamp(receipt.delivered_at), pairs(h, [
+		[say("or_operation_id"), text(receipt.operation_id)],
+		[say("or_pinned"), text(receipt.pinned_sha)],
+		[say("or_delivered"), text(receipt.delivered_sha)]
+	]))), links.length ? h("div", { class: "or-links" }, ...links.map(([, label, href]) => h("a", { href }, label))) : null);
+}
+function renderWorktree({ h, id, resource, caps, namespace }) {
+	const kind = ownerKind(resource), work = list(resource?.work), sessions = list(resource?.known_sessions);
+	const latest = [...work].sort((a, b) => Math.max(at(b.created_at), at(receipts(b)[0]?.delivered_at)) - Math.max(at(a.created_at), at(receipts(a)[0]?.delivered_at)))[0];
+	const receipt = receipts(latest)[0], session = sessions.find((item) => item.host && item.session_id);
+	const ownerWork = work.find((item) => kind === "task" ? item.task_id === resource.intent_id : item.operation_id === resource.intent_id);
+	const ownerHref = kind === "task" ? `#/task/${encodeURIComponent(resource.intent_id)}` : kind === "operation" ? `#/op/${encodeURIComponent(resource.intent_id)}` : null;
+	const owner = h("span", { "data-observed-owner": kind }, say(`or_owner_${kind}`), ownerHref ? [" · ", h("a", { href: ownerHref }, text(ownerWork?.title) || say(kind === "task" ? "or_link_execution" : "or_link_operation"))] : null);
+	const actions = [];
+	if (session) actions.push(actionLink(h, sessionHref(session), say("or_open_session"), "primary"));
+	if (kind !== "manual" && (kind === "task" || resource.host)) actions.push(actionLink(h, `#/cleanup/${kind === "task" ? "task" : "host"}/${encodeURIComponent(kind === "task" ? resource.intent_id : resource.host)}`, say("or_cleanup_preview"), "secondary"));
+	const details = detailsBlock(h("div", {}, pairs(h, [
+		[say("or_worktree_id"), text(resource?.resource_id || id)],
+		[say("or_owner_id"), text(resource?.intent_id)],
+		[say("or_owner_kind"), text(resource?.intent_type)],
+		[say("or_path"), text(resource?.worktree_path)],
+		[say("or_branch"), text(resource?.branch)]
+	]), h("p", { class: "or-note" }, say("or_identity")), h("p", { class: "or-note" }, say("or_cleanup")), ...work.map((item) => technicalWork(h, item, workLinks(item, [], caps))), !latest ? h("p", { class: "or-note" }, say("or_result_unknown")) : null, rawRecord(h, resource)), `observed.${namespace}.worktree.${id}`);
+	return [pageHeader({
+		title: text(work[0]?.title) || text(resource?.branch) || say("or_worktree"),
+		meta: [resource?.host, resource?.branch].map(text).filter(Boolean).join(" · "),
+		actions
+	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_owner"), owner), fact(h, say("or_latest"), h("span", {
+		class: "or-result",
+		"data-observed-result": ""
+	}, latest ? deliveryPill(latest) : statusPill("unknown"), prAnchor(h, receipt), stamp(receipt?.delivered_at ?? latest?.created_at))), sessions.length ? h("div", { class: "or-sessions" }, h("span", { class: "or-label" }, say("or_sessions")), ...sessions.map((item) => sessionRow$1(h, item))) : null, details) })];
+}
+function renderExecution({ h, id, task, caps, namespace }) {
+	const choices = [];
+	if (task?.host && task?.session_id) choices.push([say("or_open_session"), sessionHref(task)]);
+	if (caps?.artifacts?.capture?.managed_single_file === true) choices.push([say("or_review"), `#/artifact-review/task/${encodeURIComponent(id)}`]);
+	if (caps?.features?.cleanup_task === true) choices.push([say("or_cleanup_preview"), `#/cleanup/task/${encodeURIComponent(id)}`]);
+	const pause = statusPill([
+		true,
+		false,
+		0,
+		1
+	].includes(task?.paused) ? task.paused ? "stopped" : "in_progress" : "unknown");
+	pause.dataset.taskDispatch = "";
+	if ([
+		true,
+		false,
+		0,
+		1
+	].includes(task?.paused)) pause.textContent = t(task.paused ? "task_paused" : "task_dispatch_enabled");
+	const delivery = task?.delivery, stage = delivery?.stage;
+	const resultPill = [
+		"merged",
+		"deployed",
+		"adopted"
+	].includes(stage) ? statusPill(stage) : statusPill(stage === "verified" ? "accepted" : "unknown");
+	if (stage === "verified") {
+		resultPill.dataset.status = "verified";
+		resultPill.textContent = say("or_verified");
+	}
+	return [pageHeader({
+		title: text(task?.title) || text(task?.original_words).split("\n").find(Boolean) || text(task?.external_branch) || say("or_execution"),
+		meta: [task?.host, task?.external_branch].map(text).filter(Boolean).join(" · "),
+		actions: choices.slice(0, 2).map(([label, href], i) => actionLink(h, href, label, i ? "secondary" : "primary"))
+	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_owner"), say("or_owner_task")), fact(h, say("or_state"), statusPill(TASK_PILLS[task?.state] || "unknown")), fact(h, say("or_dispatch"), pause), fact(h, say("or_latest"), h("span", { class: "or-result" }, resultPill, stamp(delivery?.[stage]?.at))), detailsBlock(h("div", {}, pairs(h, [
+		[say("or_task_id"), text(task?.task_id || id)],
+		[say("or_session_id"), text(task?.session_id)],
+		[say("or_project"), text(task?.project)],
+		[say("or_branch"), text(task?.external_branch)],
+		[say("or_path"), text(task?.external_worktree_path)],
+		[say("or_state"), text(task?.state)]
+	]), choices.length > 2 ? h("div", { class: "or-links" }, ...choices.slice(2).map(([label, href]) => h("a", { href }, label))) : null, !stage ? h("p", { class: "or-note" }, say("or_result_unknown")) : null, h("p", { class: "or-note" }, say("or_identity")), h("p", { class: "or-note" }, say("or_cleanup")), rawRecord(h, task)), `observed.${namespace}.execution.${id}`)) })];
+}
+function renderObservedResource({ h, type, id, resource, caps, namespace = "" }) {
+	return type === "execution" ? renderExecution({
+		h,
+		id,
+		task: resource,
+		caps,
+		namespace
+	}) : renderWorktree({
+		h,
+		id,
+		resource,
+		caps,
+		namespace
+	});
+}
+function renderDeliveryWork(item, repositories = [], compact = false, { h, caps, namespace = "" } = {}) {
+	const links = workLinks(item, list(repositories), caps), review = links.find(([key]) => key === "review");
+	const other = links.filter(([key]) => key !== "review");
+	const overflow = !compact && other.length ? menu({
+		button: iconButton({
+			icon: "more-horizontal",
+			label: t("ui_more")
+		}),
+		items: other.map(([key, label, href]) => ({
+			key,
+			label,
+			href
+		}))
+	}) : null;
+	const details = detailsBlock(technicalWork(h, item, compact ? other : []), `observed.${namespace}.work.${item.kind}.${item.id}`);
+	return h("div", {
+		class: "or-work",
+		"data-project-work": item.id
+	}, h("div", { class: "or-work-main" }, h("span", { class: "or-work-title" }, workName(item)), deliveryPill(item), prAnchor(h, receipts(item)[0])), review || overflow ? h("div", { class: "or-work-actions" }, review ? actionLink(h, review[2], review[1], "secondary") : null, overflow) : null, details);
 }
 //#endregion
 //#region src/app.js
@@ -50466,31 +50834,16 @@ function observationPanels(type, id, path) {
 		}
 	};
 }
-function taskStateLabel(state) {
-	if ([
-		"queued",
-		"dispatching",
-		"accepted",
-		"running",
-		"waiting_permission",
-		"quota_limited",
-		"human_owned",
-		"needs_ted",
-		"verifying",
-		"done",
-		"failed",
-		"uncertain"
-	].includes(state)) return t("task_state_" + state);
-	const operation = t("op_" + state);
-	return operation === "op_" + state ? state || "?" : operation;
-}
 async function viewTask(main, id) {
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
 		generation
 	};
-	const head = h("div", { class: "panel" }), status = h("div", { role: "status" });
+	const head = h("div", {
+		class: "panel",
+		"data-observed-resource": ""
+	}), status = h("div", { role: "status" });
 	const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`);
 	let task = null, readReady = false, active = null, retry;
 	const panel = taskControlsPanel({
@@ -50523,12 +50876,14 @@ async function viewTask(main, id) {
 			assertView(connection);
 			if (data.task?.task_id !== id) throw new Error(t("task_control_invalid"));
 			task = data.task;
-			head.replaceChildren(pageHeader({ title: t("task_title") }), h("p", {}, task.project || id), h("p", { class: "actions" }, chip(t([
-				true,
-				false,
-				0,
-				1
-			].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")), chip(taskStateLabel(task.state))), h("p", { class: "muted" }, task.host || "", " · ", h("code", {}, id)), ...task.host && task.session_id ? [h("p", {}, h("a", { href: `#/session/${encodeURIComponent(task.host)}/${encodeURIComponent(task.session_id)}` }, t("task_open_session")))] : [], ...state.caps?.features?.cleanup_task === true ? [h("p", {}, h("a", { href: `#/cleanup/task/${encodeURIComponent(id)}` }, t("cleanup_task_preview")))] : [], ...state.caps?.artifacts?.capture?.managed_single_file === true ? [h("p", {}, h("a", { href: `#/artifact-review/task/${encodeURIComponent(id)}` }, t("ar_open")))] : [], h("details", {}, h("summary", {}, t("task_evidence")), h("pre", { class: "pre" }, JSON.stringify(task, null, 2))));
+			place(head, "replaceChildren", renderObservedResource({
+				h,
+				type: "execution",
+				id,
+				resource: task,
+				caps: state.caps,
+				namespace: state.namespace
+			}));
 			status.replaceChildren();
 			readReady = true;
 			clearTimeout(retry);
@@ -50538,6 +50893,11 @@ async function viewTask(main, id) {
 		} catch (error) {
 			if (connection.generation === generation && connection.epoch === state.epoch) {
 				readReady = false;
+				if ([
+					403,
+					404,
+					410
+				].includes(error?.status)) place(head, "replaceChildren");
 				status.replaceChildren(errorBox(error));
 				clearTimeout(retry);
 				retry = setTimeout(() => load().catch(() => {}), 3e3);
@@ -50566,32 +50926,44 @@ async function viewTask(main, id) {
 }
 async function viewObservedResource(main, type, id) {
 	const path = type === "execution" ? `/tasks/${encodeURIComponent(id)}` : `/worktrees/${encodeURIComponent(id)}`;
-	const head = h("div", { class: "panel" });
+	const head = h("div", {
+		class: "panel",
+		"data-observed-resource": ""
+	});
+	const status = h("div", { "data-observed-status": "" });
 	const panels = observationPanels(type, id, path);
-	main.append(head, panels.box);
+	main.append(head, status, panels.box);
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
 		generation
 	};
+	let ticket = 0;
 	const load = async () => {
+		const mine = ++ticket;
 		try {
 			const data = await api("GET", path);
 			assertView(connection);
+			if (mine !== ticket) return;
 			const resource = data[type === "execution" ? "task" : "worktree"];
-			const sessions = resource.known_sessions || [];
-			fill(head, pageHeader({ title: t(type === "execution" ? "obs_execution" : "obs_worktree") }), h("code", {}, id), h("p", { class: "muted" }, t("obs_known_identity")), type === "worktree" ? [
-				h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, resource.host || t("obs_unknown")), h("dt", {}, t("delivery_worktree_branch")), h("dd", {}, h("code", {}, resource.branch || t("obs_unknown"))), h("dt", {}, t("delivery_worktree_path")), h("dd", {}, h("code", {}, resource.worktree_path || t("obs_unknown"))), h("dt", {}, t("delivery_worktree_owner")), h("dd", {}, resource.intent_type || t("obs_unknown"), " · ", resource.intent_type === "registry" ? h("code", {}, resource.intent_id || t("obs_unknown")) : observationLink(resource.intent_type === "task" ? "execution" : "operation", resource.intent_id))),
-				h("h2", {}, t("delivery_worktree_sessions")),
-				h("p", { class: "muted" }, t("delivery_worktree_recorded")),
-				...sessions.map((s) => h("div", { class: "row" }, observationLink("session", `${s.host}/${s.session_id}`), chip(t(sessionActivity(s.observation || {}).key), sessionActivity(s.observation || {}).tone))),
-				!sessions.length ? h("p", { class: "muted" }, t("none")) : null,
-				...(resource.work || []).map((item) => deliveryWork(item)),
-				h("p", { class: "note" }, t("delivery_worktree_cleanup")),
-				h("p", {}, h("a", { href: `#/cleanup/${resource.intent_type === "task" ? "task" : "host"}/${encodeURIComponent(resource.intent_type === "task" ? resource.intent_id : resource.host || "")}` }, t("cleanup_preview")))
-			] : null, type === "execution" && state.caps?.features?.cleanup_task === true ? h("p", {}, h("a", { href: `#/cleanup/task/${encodeURIComponent(id)}` }, t("cleanup_task_preview"))) : null, type === "execution" && state.caps?.artifacts?.capture?.managed_single_file === true ? h("p", {}, h("a", { href: `#/artifact-review/task/${encodeURIComponent(id)}` }, t("ar_open"))) : null, h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify(resource, null, 2))));
+			place(head, "replaceChildren", renderObservedResource({
+				h,
+				type,
+				id,
+				resource,
+				caps: state.caps,
+				namespace: state.namespace
+			}));
+			status.replaceChildren();
 		} catch (error) {
-			head.append(errorBox(error));
+			if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== ticket) return;
+			if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) place(head, "replaceChildren");
+			status.replaceChildren(errorBox(error));
 		}
 	};
 	await load();
@@ -51146,7 +51518,7 @@ async function viewSession(main, host, sid, context = null) {
 			workspaceId,
 			refs,
 			title: row?.title || "",
-			from: sessionHref({
+			from: sessionHref$1({
 				host,
 				sessionId: sid,
 				from: originView()
@@ -52196,28 +52568,11 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 	]);
 }
 function deliveryWork(item, repositories = [], compact = false) {
-	const activity = sessionActivity(item.session || {});
-	const repo = item.repository || (repositories.length === 1 ? repositories[0] : "");
-	const links = [];
-	if (item.operation_id) links.push(h("a", { href: `#/op/${encodeURIComponent(item.operation_id)}` }, t("permissions_details")));
-	if (item.task_id) links.push(observationLink("execution", item.task_id));
-	if (!compact && item.host && item.session_id) links.push(observationLink("session", `${item.host}/${item.session_id}`));
-	if (item.worktree_id) links.push(observationLink("worktree", item.worktree_id));
-	if (item.eligible && state.caps?.features?.execution_delivery?.version === 1) links.push(h("a", { href: `#/delivery/${[
-		item.host,
-		item.kind,
-		item.id,
-		repo
-	].map(encodeURIComponent).join("/")}` }, t("delivery_review_result")));
-	return h("div", {
-		class: "row",
-		"data-project-work": item.id
-	}, h("div", { class: "grow" }, compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)], h("p", { class: "muted" }, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)), h("p", { class: "muted" }, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded" ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status), " · ", t("delivery_result_unverified")), item.unavailable ? h("p", { class: "muted" }, t("delivery_source_unavailable"), " ", h("code", {}, item.unavailable.code)) : null, h("div", { class: "actions" }, ...links, ...(item.delivered_to || []).map((receipt) => h("a", {
-		href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
-		target: "_blank",
-		rel: "noopener",
-		title: `${receipt.pinned_sha} → ${receipt.delivered_sha}`
-	}, t("delivered_to", { n: receipt.pull_number }))))));
+	return renderDeliveryWork(item, repositories, compact, {
+		h,
+		caps: state.caps,
+		namespace: state.namespace
+	});
 }
 function deploymentIdentity(identity, empty = "dep_no_version") {
 	if (!identity?.source_sha && !identity?.artifact_id) return emptyState({ title: t(empty) });

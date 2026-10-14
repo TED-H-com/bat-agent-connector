@@ -399,6 +399,29 @@ Session 詳情加分頁 timeline 與 relations；工作項目、execution、oper
 
 兩種語言在 `i18n.js` 同步，390 px 可讀。CSP 禁止 inline style attributes；需要動態樣式用既有 class 或 `el.style.setProperty`。本包不增加 managed 控制動作；既有控制按鈕仍依 backend capability 及資源政策。
 
+### Resource detail presentation
+
+The shared Web/Tauri resource summary reads the existing worktree/task response only.
+Worktree titles use the first returned work title, then the branch; executions use
+the returned title or first request line, then the branch. Ownership labels follow
+recorded creation kinds. Manual, missing and unfamiliar ownership stays read-only.
+No requirement association is inferred or fetched for these summaries.
+
+The latest worktree result uses returned work and delivery receipt times. A recorded
+PR receipt is distinct from result verification; dispatch acceptance cannot establish
+completion. Task delivery pills use the journal's recorded delivery stage, independently
+of dispatch state. Missing evidence is Unknown. Related sessions use their observed
+title or host, with activity pills only for fresh running/waiting observations.
+
+One collapsed Details holds identity, path, source/receipt commits, navigation links
+and cleanup limits; Raw record is separately collapsed within it. Summary actions
+are existing session, artifact-review and gated cleanup-preview routes. Work rows
+keep Review result visible and place other destinations in the shared menu or Details.
+Details preferences are scoped to the connection namespace and resource identity.
+A withdrawn read clears summary rows and Details together; view/request guards
+reject late responses. Existing task controls, durable requests and recovery keys
+remain owned by their original controller module.
+
 ## 必要前置條件、實際副作用與唯讀邊界
 
 Daemon 必須持有既有 owner lock，journal migration 完成；API observe 主體及 host 的 BAT credential 由既有配置提供。沒有 SSH alias 的 host 仍可讀 inventory/history，Git dirty 等欄位標未取得，不能為觀測要求開 write/orchestrate tier。

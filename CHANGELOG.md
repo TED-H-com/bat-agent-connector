@@ -63,6 +63,11 @@
   A text selection anchors its own row when rows above it change height.
   Withdrawn rows and their counts still disappear immediately.
 
+- Worktree and execution pages now read as a name, an owner, and the latest
+  result. Record IDs, the raw record, and cleanup limits stay in Details.
+  A delivery row keeps one review action; other links sit in More actions
+  or in Details. Manual and unknown worktrees stay read-only.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.

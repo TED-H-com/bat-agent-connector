@@ -53,6 +53,7 @@ import { orchestrationPanel, orchestrationActions } from "./orchestration.js";
 import { repositoryStartPanel } from "./repository-start.js";
 import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.js";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
+import {renderDeliveryWork, renderObservedResource} from "./observed-resource.js";
 
 const TOKEN_KEY = "batc.dashboard.token";
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
@@ -1164,15 +1165,9 @@ function observationPanels(type, id, path) {
   return {box: h("div", {}, history.box, relations.box), changed: event => {history.changed(event); relations.changed(event);}};
 }
 
-function taskStateLabel(state) {
-  const known = ["queued", "dispatching", "accepted", "running", "waiting_permission", "quota_limited", "human_owned", "needs_ted", "verifying", "done", "failed", "uncertain"];
-  if (known.includes(state)) return t("task_state_" + state);
-  const operation = t("op_" + state);
-  return operation === "op_" + state ? (state || "?") : operation;
-}
 async function viewTask(main, id) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  const head = h("div", {class: "panel"}), status = h("div", {role: "status"});
+  const head = h("div", {class: "panel", "data-observed-resource": ""}), status = h("div", {role: "status"});
   const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`);
   let task = null, readReady = false, active = null, retry;
   const panel = taskControlsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection), taskId: id,
@@ -1191,19 +1186,14 @@ async function viewTask(main, id) {
       assertView(connection);
       if (data.task?.task_id !== id) throw new Error(t("task_control_invalid"));
       task = data.task;
-      head.replaceChildren(pageHeader({title: t("task_title")}), h("p", {}, task.project || id),
-        h("p", {class: "actions"}, chip(t([true, false, 0, 1].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")),
-          chip(taskStateLabel(task.state))),
-        h("p", {class: "muted"}, task.host || "", " · ", h("code", {}, id)),
-        ...(task.host && task.session_id ? [h("p", {}, h("a", {href: `#/session/${encodeURIComponent(task.host)}/${encodeURIComponent(task.session_id)}`}, t("task_open_session")))] : []),
-        ...(state.caps?.features?.cleanup_task === true ? [h("p", {}, h("a", {href: `#/cleanup/task/${encodeURIComponent(id)}`}, t("cleanup_task_preview")))] : []),
-        ...(state.caps?.artifacts?.capture?.managed_single_file === true ? [h("p", {}, h("a", {href: `#/artifact-review/task/${encodeURIComponent(id)}`}, t("ar_open")))] : []),
-        h("details", {}, h("summary", {}, t("task_evidence")), h("pre", {class: "pre"}, JSON.stringify(task, null, 2))));
+      place(head, "replaceChildren", renderObservedResource({h, type: "execution", id, resource: task, caps: state.caps, namespace: state.namespace}));
       status.replaceChildren(); readReady = true; clearTimeout(retry);
     })();
     try {await active;} catch (error) {
       if (connection.generation === generation && connection.epoch === state.epoch) {
-        readReady = false; status.replaceChildren(errorBox(error));
+        readReady = false;
+        if ([403, 404, 410].includes(error?.status)) place(head, "replaceChildren");
+        status.replaceChildren(errorBox(error));
         clearTimeout(retry); retry = setTimeout(() => load().catch(() => {}), 3000);
       }
       throw error;
@@ -1218,38 +1208,26 @@ async function viewTask(main, id) {
 
 async function viewObservedResource(main, type, id) {
   const path = type === "execution" ? `/tasks/${encodeURIComponent(id)}` : `/worktrees/${encodeURIComponent(id)}`;
-  const head = h("div", {class: "panel"});
+  const head = h("div", {class: "panel", "data-observed-resource": ""});
+  const status = h("div", {"data-observed-status": ""});
   const panels = observationPanels(type, id, path);
-  main.append(head, panels.box);
+  main.append(head, status, panels.box);
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
+  let ticket = 0;
   const load = async () => {
+    const mine = ++ticket;
     try {
       const data = await api("GET", path); assertView(connection);
+      if (mine !== ticket) return;
       const resource = data[type === "execution" ? "task" : "worktree"];
-      const sessions = resource.known_sessions || [];
-      fill(head, pageHeader({title: t(type === "execution" ? "obs_execution" : "obs_worktree")}), h("code", {}, id),
-        h("p", {class: "muted"}, t("obs_known_identity")),
-        type === "worktree" ? [h("dl", {class: "kv"},
-          h("dt", {}, t("host")), h("dd", {}, resource.host || t("obs_unknown")),
-          h("dt", {}, t("delivery_worktree_branch")), h("dd", {}, h("code", {}, resource.branch || t("obs_unknown"))),
-          h("dt", {}, t("delivery_worktree_path")), h("dd", {}, h("code", {}, resource.worktree_path || t("obs_unknown"))),
-          h("dt", {}, t("delivery_worktree_owner")), h("dd", {}, resource.intent_type || t("obs_unknown"), " · ",
-            resource.intent_type === "registry" ? h("code", {}, resource.intent_id || t("obs_unknown"))
-              : observationLink(resource.intent_type === "task" ? "execution" : "operation", resource.intent_id))),
-          h("h2", {}, t("delivery_worktree_sessions")),
-          h("p", {class: "muted"}, t("delivery_worktree_recorded")),
-          ...sessions.map(s => h("div", {class: "row"}, observationLink("session", `${s.host}/${s.session_id}`),
-            chip(t(sessionActivity(s.observation || {}).key), sessionActivity(s.observation || {}).tone))),
-          !sessions.length ? h("p", {class: "muted"}, t("none")) : null,
-          ...(resource.work || []).map(item => deliveryWork(item)),
-          h("p", {class: "note"}, t("delivery_worktree_cleanup")),
-          h("p", {}, h("a", {href: `#/cleanup/${resource.intent_type === "task" ? "task" : "host"}/${encodeURIComponent(resource.intent_type === "task" ? resource.intent_id : resource.host || "")}`}, t("cleanup_preview")))] : null,
-        type === "execution" && state.caps?.features?.cleanup_task === true ?
-          h("p", {}, h("a", {href: `#/cleanup/task/${encodeURIComponent(id)}`}, t("cleanup_task_preview"))) : null,
-        type === "execution" && state.caps?.artifacts?.capture?.managed_single_file === true ?
-          h("p", {}, h("a", {href: `#/artifact-review/task/${encodeURIComponent(id)}`}, t("ar_open"))) : null,
-        h("details", {}, h("summary", {}, t("sessions_details")), h("pre", {class: "pre"}, JSON.stringify(resource, null, 2))));
-    } catch (error) {head.append(errorBox(error));}
+      place(head, "replaceChildren", renderObservedResource({h, type, id, resource, caps: state.caps, namespace: state.namespace}));
+      status.replaceChildren();
+    } catch (error) {
+      if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== ticket) return;
+      if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) return;
+      if ([403, 404, 410].includes(error?.status)) place(head, "replaceChildren");
+      status.replaceChildren(errorBox(error));
+    }
   };
   await load(); const reload = debounceRefresh(load, 500);
   return onEvents(event => {panels.changed(event); if ([type, "task", "operation", "session"].includes(event.resource_type)) return reload();});
@@ -2153,25 +2131,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 }
 
 function deliveryWork(item, repositories = [], compact = false) {
-  const activity = sessionActivity(item.session || {});
-  const repo = item.repository || (repositories.length === 1 ? repositories[0] : "");
-  const links = [];
-  if (item.operation_id) links.push(h("a", {href: `#/op/${encodeURIComponent(item.operation_id)}`}, t("permissions_details")));
-  if (item.task_id) links.push(observationLink("execution", item.task_id));
-  if (!compact && item.host && item.session_id) links.push(observationLink("session", `${item.host}/${item.session_id}`));
-  if (item.worktree_id) links.push(observationLink("worktree", item.worktree_id));
-  if (item.eligible && state.caps?.features?.execution_delivery?.version === 1) links.push(h("a", {
-    href: `#/delivery/${[item.host, item.kind, item.id, repo].map(encodeURIComponent).join("/")}`}, t("delivery_review_result")));
-  return h("div", {class: "row", "data-project-work": item.id}, h("div", {class: "grow"},
-    compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)],
-    h("p", {class: "muted"}, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)),
-    h("p", {class: "muted"}, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded"
-      ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status),
-      " · ", t("delivery_result_unverified")),
-    item.unavailable ? h("p", {class: "muted"}, t("delivery_source_unavailable"), " ", h("code", {}, item.unavailable.code)) : null,
-    h("div", {class: "actions"}, ...links,
-      ...(item.delivered_to || []).map(receipt => h("a", {href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
-        target: "_blank", rel: "noopener", title: `${receipt.pinned_sha} → ${receipt.delivered_sha}`}, t("delivered_to", {n: receipt.pull_number}))))));
+  return renderDeliveryWork(item, repositories, compact, {h, caps: state.caps, namespace: state.namespace});
 }
 
 function deploymentIdentity(identity, empty = "dep_no_version") {
