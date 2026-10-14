@@ -1,8 +1,8 @@
 // An explicit projection. Never spread server/client objects into an export.
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 const reason = value => typeof value === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-const version = value => typeof value === 'string' && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
-const commit = value => typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
+const version = value => typeof value === 'string' && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+const commit = value => typeof value === 'string' && [40,64].includes(value.length) && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
 const action = value => typeof value === 'string' && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
 const protocols = ['bat-remote/v2','bat-remote/legacy-v1'];
 const contractVersion = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;

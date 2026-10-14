@@ -51,7 +51,7 @@ test('final scrubber rejects every review probe as a whole string value',()=>{
  assert.equal(out.hosts[0].alias,'host-1');assert.equal(out.recent_errors[0].path_template,'/v1/sessions/:host/:session');
 });
 test('host versions cannot carry names and protocols come only from the fixed list',()=>{
- for(const value of ['2.1.0-jane-macbook.corp-lan','1.0+ted-devbox']){
+ for(const value of ['2.1.0-jane-macbook.corp-lan','1.0+ted-devbox','2.1.0\n']){
   const input=fixture();input.hosts[0].bat.version=value;input.hosts[0].bat.protocol=value;
   assert.equal(buildDiagnostics(input).hosts[0].bat.version,null);assert.equal(buildDiagnostics(input).hosts[0].bat.protocol,null);
   const fallback={...input,hosts:[{...input.hosts[0],server_version:value,bat:{...input.hosts[0].bat,version:undefined}}]};
@@ -66,6 +66,7 @@ test('frontend commits use the same complete hash format as Connector and native
  for(const length of [40,64])assert.equal(clientIdentity({caps:{build:{commit:'a'.repeat(length)}}}).connector_commit,'a'.repeat(length));
  for(const length of [7,39,41,63,65])assert.equal(clientIdentity({caps:{build:{commit:'a'.repeat(length)}}}).connector_commit,null);
  assert.equal(clientIdentity({caps:{build:{commit:'A'.repeat(40)}}}).connector_commit,null);
+ for(const length of [40,64])assert.equal(clientIdentity({caps:{build:{commit:'a'.repeat(length)+'\n'}}}).connector_commit,null);
 });
 test('real session history reasons each count once per loaded read',()=>{
  const reading={incomplete_reasons:['archive_unconfirmed','archive_budget','message_ids']};
