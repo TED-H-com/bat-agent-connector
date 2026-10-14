@@ -377,8 +377,14 @@ focus to the pencil after recovery controls unlock. Recovery remains attached to
 original rename intent. Tabs associate their panels for assistive technology.
 Rename Escape ignores IME composition. Header Back appears only below 800px.
 Mode pills disappear when they repeat the title. Search matches titles and context
-chip text, with a clear-search empty state. Rename and message receipts stay beside
-the composer independently of panel tabs and visibility. Context chips use current labels and put differing admission labels in tooltips;
+chip text, with a clear-search empty state. Empty thread, search and tool states
+have a short title and one muted line. Answer actions use intrinsic-width buttons
+beside the adoption flow. Report
+save entry points stay hidden without write authorization or a current plan head;
+retained original-request recovery remains visible with a reason when disabled.
+Rename and message receipts stay beside the composer independently of panel tabs
+and visibility.
+Context chips use current labels and put differing admission labels in tooltips;
 withdrawn refs show only their kind and Unavailable, including in the thread list.
 A finding chip uses the shared finding name when `finding` is present, including
 the composer's pre-bind label from the finding's native kind, number and proven

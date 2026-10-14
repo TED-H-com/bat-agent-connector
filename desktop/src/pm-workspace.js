@@ -1043,7 +1043,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     mode.textContent = discussionLabel(t, 'pm_mode_', thread.mode);
     mode.hidden = thread.title.trim().toLocaleLowerCase() === mode.textContent.toLocaleLowerCase();
     boundContext.replaceChildren(...discussionContext(t, thread.context, {limit: 1, onMore: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-more-context]')}), onOpen: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-context]')})}));
-    panelContext.replaceChildren(...discussionContext(t, thread.context), ...(thread.context?.length ? [] : [h('p', {class: 'muted'}, t('pd_no_context'))]));
+    panelContext.replaceChildren(...discussionContext(t, thread.context), ...(thread.context?.length ? [] : [emptyState({title:t('pd_no_context'),text:t('pd_no_context_help')})]));
     discussionHint.textContent = '';
     const transcript = notes.closest('.pd-transcript');
     const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
@@ -1052,7 +1052,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (message.role === 'user') row.querySelector('.pm-note-stamp').append(h('span', {class: 'ui-meta', 'data-discussion-saved': ''}, t('pd_saved')));
       return row;
     }));
-    if (!data.messages?.length) notes.append(emptyState({title:t('pm_no_notes')}));
+    if (!data.messages?.length) notes.append(emptyState({title:t('pd_notes_empty'),text:t('pd_notes_empty_help')}));
     transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
     earlier.hidden = !historyCursor; earlier.disabled = false;
     coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t('pm_partial') : '';
@@ -1118,7 +1118,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       rows.push(row);
     }
     facts.replaceChildren(...rows);
-    if (!rows.length) facts.append(h('p', {class: 'muted'}, t('pm_no_inputs')));
+    if (!rows.length) facts.append(emptyState({title:t('pd_inputs_empty'),text:t('pd_inputs_empty_help')}));
     }
     draft.replaceChildren();
     if (data.draft) {
@@ -1188,7 +1188,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       });
       packages.append(item);
     }
-    if (!packages.children.length) packages.append(emptyState({title:t('pm_packages_empty')}));
+    if (!packages.children.length) packages.append(emptyState({title:t('pd_packages_empty'),text:t('pd_packages_empty_help')}));
     if (page.next_cursor) {
       const more = h('button', {type: 'button', class: 'secondary', onclick: async () => {
         more.disabled = true;
@@ -1223,7 +1223,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const row of rows) row.hidden = !row.dataset.threadSearch.includes(query);
     threadRows.querySelector('[data-discussion-search-empty]')?.remove();
     if (query && !rows.some(row => !row.hidden)) {
-      const empty = emptyState({icon: 'search', title: t('pd_search_empty'), action: button({variant: 'ghost', label: t('pd_clear_search'), onClick: () => {
+      const empty = emptyState({icon: 'search', title: t('pd_search_empty'), text:t('pd_search_empty_help'), action: button({variant: 'ghost', label: t('pd_clear_search'), onClick: () => {
         uiState.search = ''; threadSearch.value = ''; filterThreads(); threadSearch.focus();
       }})});
       empty.dataset.discussionSearchEmpty = ''; threadRows.append(empty);
@@ -1317,7 +1317,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new'))), draftPanel.trigger),
               h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
                 boundContext)),
-            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_empty')})), discussionComposer({t, form: create, draft: true})),
+            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_notes_empty'),text:t('pd_empty')})), discussionComposer({t, form: create, draft: true})),
             draftPanel.home));
 
 

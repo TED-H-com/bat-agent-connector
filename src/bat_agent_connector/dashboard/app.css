@@ -2039,6 +2039,8 @@ body.pm-mode #main { padding: 0; }
 .pd-candidate input[type=checkbox] { width: 16px; height: 16px; min-height: 0; margin: 8px 0 0; }
 .pd-candidate summary { padding-block: var(--space-1); cursor: pointer; }
 .pd-questions { display: grid; gap: var(--space-2); }
+.pd-questions .actions { justify-content: flex-start; margin: 0; }
+.pd-questions .actions > button { flex: 0 0 auto; }
 .pd-questions label { display: flex; flex-direction: column; gap: var(--space-1); }
 .pd-panel-overlay .pd-panel { padding: 0; }
 @media (max-width: 1199px) {
@@ -2049,6 +2051,7 @@ body.pm-mode #main { padding: 0; }
 @media (max-width: 799px) {
   [data-discussions] { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 144px); }
   [data-discussions] .pm-workspace-list { max-height: 176px; border-right: 0; border-bottom: 1px solid var(--line); }
+  [data-discussions] .pm-workspace-list:has([data-discussion-search-empty]) { max-height: none; }
   [data-discussions]:has([data-discussion-title]) .pm-workspace-list, [data-discussions]:has(.pd-new-layout) .pm-workspace-list { display: none; }
   [data-pm-region=discussions] [data-discussions] .pm-workspace-list { display: flex; }
   [data-discussions] .pd-thread-header, .pd-transcript, .pd-composer { padding: var(--space-3); }
@@ -2097,6 +2100,9 @@ body.pm-mode #main { padding: 0; }
 @media (max-width: 799px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
 
 :root body .pd-panel .ui-tabs > button { padding-inline: var(--space-1); }
+:root body .pd-transcript .ui-empty > p, :root body .pd-panel .ui-empty > p, :root body .pd-thread-rows .ui-empty > p,
+:root body [data-pm-plan-proposals] .ui-empty > p, :root body [data-pm-brief] .ui-empty > p { color: var(--text-3); }
+.pd-thread-rows .ui-empty { padding: var(--space-4); gap: var(--space-2); }
 /* Global screens. Tokens only; the shell and PM views keep their own files. */
 .global-inbox { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .global-inbox-tabs { margin: 0 0 var(--space-4); }

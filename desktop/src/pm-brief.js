@@ -38,14 +38,31 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   let head = null, snapshot = null, signature = '', serial = 0, selectedSnapshotId = null;
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const view = h('div', {class: 'pm-brief-view'}), history = h('div'), status = h('div', {role: 'status'});
-  const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
+  const pending = h('p', {id:'pm-brief-pending-'+workspaceId,class:'muted',hidden:true,'data-pm-brief-pending':''});
+  let create = null;
+  const canCreate = () => permitted(false) && caps()?.scopes?.includes('manage')
+    && caps()?.actions?.some(row => row.action === 'pm.snapshot.create' && row.allowed === true);
+  const updateCreate = () => {
+    if (!create) return;
+    const submit = create.box.querySelector('button[type=submit]'), recovering = create.locked();
+    // Hide unavailable write entry points. A retained original request keeps
+    // its recovery controls and draft, including while a fresh head is read.
+    create.box.hidden = !recovering && (!head || !canCreate());
+    submit.hidden = !recovering && !create.canSubmit();
+    pending.hidden = create.box.hidden || submit.hidden || !submit.disabled;
+    pending.textContent = t(create.checking() ? 'pd_report_pending' : 'pd_report_unavailable');
+    if (!pending.hidden) submit.setAttribute('aria-describedby',pending.id);
+    else submit.removeAttribute('aria-describedby');
+  };
+  create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
     params: values => values.title.trim() ? {title: values.title.trim()} : {},
     preconditions: () => ({expected_plan_version: head.version}),
     permitted: () => Boolean(head) && permitted(false), recoverPermitted: () => permitted(false),
     label: 'pm_brief_create', onSaved: async result => {await refresh(result.snapshot_id);},
+    onStateChange: updateCreate,
     extra: h('details', {}, h('summary', {}, t('pm_brief_name_optional')), labelled('pm_brief_snapshot_title', title))});
   const box = h('section', {class: 'pm-brief', 'data-pm-brief': ''}, h('header', {class: 'pm-heading'},
-    h('div', {}, h('h2', {}, t('pm_brief_title')), h('p', {class: 'muted'}, t('pm_brief_intro'))), create.box),
+    h('div', {}, h('h2', {}, t('pm_brief_title')), h('p', {class: 'muted'}, t('pm_brief_intro'))), h('div',{},create.box,pending)),
     status, view, h('details', {}, h('summary', {}, t('pm_brief_history')), history));
   const exports=caps?.()?.features?.pm_workspaces?.brief_export
     ?briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:error=>unavailable(error),errorBox}):null;
@@ -63,7 +80,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   function render(data) {
     snapshot = check(data).snapshot;
     view.replaceChildren();status.replaceChildren();
-    if (!snapshot) {view.append(emptyState({title:t('pm_brief_empty')})); exports?.update();return;}
+    if (!snapshot) {view.append(emptyState({title:t('pd_report_empty'),text:t('pd_report_empty_help')})); exports?.update();return;}
     if (snapshot.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     selectedSnapshotId=snapshot.snapshot_id;
     view.append(h('p', {class: 'pm-brief-date'}, h('strong', {}, snapshot.title || workspace().name), ' · ',

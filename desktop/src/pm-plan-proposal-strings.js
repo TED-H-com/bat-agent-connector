@@ -1,5 +1,6 @@
 export const pmPlanProposalStrings = {
   en: {
+    pcp_empty_title:'No proposals yet', pcp_invalid_title:'Review needed', pcp_details:'Details',
     pcp_resolve_issue: 'Resolve issue', pcp_resolve_rationale: 'Reason for resolving',
     pcp_resolve_default: 'Issue resolved following adoption of {title} (revision #{number}).',
     pcp_plan_context: 'Plan context',
@@ -27,6 +28,7 @@ export const pmPlanProposalStrings = {
     pcp_removed:'Requirements removed by this update', pcp_removed_help:'These original commitments are removed when you adopt the whole update.',
   },
   'zh-TW': {
+    pcp_empty_title:'尚無提案', pcp_invalid_title:'需要審閱', pcp_details:'詳細資訊',
     pcp_resolve_issue: '回報解決', pcp_resolve_rationale: '回報解決的理由',
     pcp_resolve_default: '採用「{title}」（修訂 #{number}）後，回報此問題已解決。',
     pcp_plan_context: '計畫脈絡',

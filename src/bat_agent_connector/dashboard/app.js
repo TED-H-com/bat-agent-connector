@@ -3560,6 +3560,18 @@ var pmPackageHandoffStrings = {
 //#region src/pm-discussions-strings.js
 var discussionStrings = {
 	en: {
+		pd_notes_empty: "No notes yet",
+		pd_notes_empty_help: "Record the problem, an option, or a question to revisit.",
+		pd_search_empty_help: "Try another title or context name.",
+		pd_no_context_help: "Open a discussion from a project record to add context.",
+		pd_inputs_empty: "No inputs yet",
+		pd_inputs_empty_help: "Add a sourced statement or a question from this discussion.",
+		pd_packages_empty: "No saved context",
+		pd_packages_empty_help: "Prepare a context package for the next run.",
+		pd_report_empty: "No reports yet",
+		pd_report_empty_help: "Saved reports will appear here.",
+		pd_report_pending: "Waiting for this request to finish.",
+		pd_report_unavailable: "Checking is currently unavailable.",
 		pd_saved: "Saved",
 		pd_search_empty: "No matching discussions",
 		pd_clear_search: "Clear search",
@@ -3649,6 +3661,18 @@ var discussionStrings = {
 		pm_mode_follow_up: "Follow-up"
 	},
 	"zh-TW": {
+		pd_notes_empty: "尚無筆記",
+		pd_notes_empty_help: "先記下問題、一個選項，或待釐清的疑問。",
+		pd_search_empty_help: "試試其他標題或脈絡名稱。",
+		pd_no_context_help: "從專案紀錄開啟討論，即可帶入脈絡。",
+		pd_inputs_empty: "尚無資訊",
+		pd_inputs_empty_help: "加入有來源的陳述，或這段討論中的疑問。",
+		pd_packages_empty: "尚無脈絡紀錄",
+		pd_packages_empty_help: "為下次執行準備脈絡套件。",
+		pd_report_empty: "尚無報告",
+		pd_report_empty_help: "儲存的報告會顯示在這裡。",
+		pd_report_pending: "正在等待這項請求完成。",
+		pd_report_unavailable: "目前無法查詢這項請求。",
 		pd_saved: "已儲存",
 		pd_search_empty: "沒有符合的討論",
 		pd_clear_search: "清除搜尋",
@@ -4134,6 +4158,9 @@ var workbenchStrings = {
 //#region src/pm-plan-proposal-strings.js
 var pmPlanProposalStrings = {
 	en: {
+		pcp_empty_title: "No proposals yet",
+		pcp_invalid_title: "Review needed",
+		pcp_details: "Details",
 		pcp_resolve_issue: "Resolve issue",
 		pcp_resolve_rationale: "Reason for resolving",
 		pcp_resolve_default: "Issue resolved following adoption of {title} (revision #{number}).",
@@ -4202,6 +4229,9 @@ var pmPlanProposalStrings = {
 		pcp_removed_help: "These original commitments are removed when you adopt the whole update."
 	},
 	"zh-TW": {
+		pcp_empty_title: "尚無提案",
+		pcp_invalid_title: "需要審閱",
+		pcp_details: "詳細資訊",
 		pcp_resolve_issue: "回報解決",
 		pcp_resolve_rationale: "回報解決的理由",
 		pcp_resolve_default: "採用「{title}」（修訂 #{number}）後，回報此問題已解決。",
@@ -15206,7 +15236,25 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		required: false
 	});
 	const view = h("div", { class: "pm-brief-view" }), history = h("div"), status = h("div", { role: "status" });
-	const create = form({
+	const pending = h("p", {
+		id: "pm-brief-pending-" + workspaceId,
+		class: "muted",
+		hidden: true,
+		"data-pm-brief-pending": ""
+	});
+	let create = null;
+	const canCreate = () => permitted(false) && caps()?.scopes?.includes("manage") && caps()?.actions?.some((row) => row.action === "pm.snapshot.create" && row.allowed === true);
+	const updateCreate = () => {
+		if (!create) return;
+		const submit = create.box.querySelector("button[type=submit]"), recovering = create.locked();
+		create.box.hidden = !recovering && (!head || !canCreate());
+		submit.hidden = !recovering && !create.canSubmit();
+		pending.hidden = create.box.hidden || submit.hidden || !submit.disabled;
+		pending.textContent = t(create.checking() ? "pd_report_pending" : "pd_report_unavailable");
+		if (!pending.hidden) submit.setAttribute("aria-describedby", pending.id);
+		else submit.removeAttribute("aria-describedby");
+	};
+	create = form({
 		action: "pm.snapshot.create",
 		target: { workspace_id: workspaceId },
 		fields: { title },
@@ -15218,12 +15266,13 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		onSaved: async (result) => {
 			await refresh(result.snapshot_id);
 		},
+		onStateChange: updateCreate,
 		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title))
 	});
 	const box = h("section", {
 		class: "pm-brief",
 		"data-pm-brief": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_brief_title")), h("p", { class: "muted" }, t("pm_brief_intro"))), create.box), status, view, h("details", {}, h("summary", {}, t("pm_brief_history")), history));
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_brief_title")), h("p", { class: "muted" }, t("pm_brief_intro"))), h("div", {}, create.box, pending)), status, view, h("details", {}, h("summary", {}, t("pm_brief_history")), history));
 	const exports = caps?.()?.features?.pm_workspaces?.brief_export ? briefExport({
 		h,
 		t,
@@ -15267,7 +15316,10 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		view.replaceChildren();
 		status.replaceChildren();
 		if (!snapshot) {
-			view.append(emptyState({ title: t("pm_brief_empty") }));
+			view.append(emptyState({
+				title: t("pd_report_empty"),
+				text: t("pd_report_empty_help")
+			}));
 			exports?.update();
 			return;
 		}
@@ -21137,7 +21189,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		requirementFields = [];
 		detail.replaceChildren();
 		content.replaceChildren();
-		detail.append(h("h4", {}, p.document?.title || t("pcp_review")));
+		if (p.validation.status === "format_valid") detail.append(h("h4", {}, p.document.title));
 		if (conversation && adopted()) {
 			const confirmation = h("div", { "data-proposal-adopted": "" }, statusPill("adopted"));
 			if (typeof p.adopted_revision_id === "string" && /^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id)) confirmation.append(" ", h("a", {
@@ -21159,7 +21211,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		}
 		if (!conversation && p.provenance?.adapter) detail.append(h("p", { class: "muted" }, t("pm_native_origin"), " ", p.provenance.adapter));
 		if (p.validation.status !== "format_valid") {
-			detail.append(note("pcp_invalid"), h("ul", {}, ...(p.validation.errors || []).map((error) => h("li", {}, String(error)))), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
+			detail.append(emptyState({
+				icon: "circle-alert",
+				title: t("pcp_invalid_title"),
+				text: t("pcp_invalid")
+			}), h("details", {}, h("summary", {}, t("pcp_details")), h("ul", {}, ...(p.validation.errors || []).map((error) => h("li", {}, String(error))))), h("details", {}, h("summary", {}, t("pcp_raw")), h("pre", { class: "pm-note-text" }, p.raw_reply)));
 			return;
 		}
 		let saved = original();
@@ -21376,14 +21432,15 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				});
 				questions.append(h("label", {}, question.question, answer));
 			});
-			questions.append(actionButton({
+			questions.append(h("div", { class: "actions" }, actionButton({
 				type: "button",
 				class: "secondary",
+				"data-proposal-send-answers": "",
 				onclick: () => {
 					const values = original()?.answers || {};
 					onAnswer(p.document.questions.map((row, index) => values[index] ? row.question + "\n" + values[index] : null).filter(Boolean).join("\n\n"));
 				}
-			}, t("pd_answer_send")));
+			}, t("pd_answer_send"))));
 			content.append(questions);
 		}
 		if (!conversation) content.prepend(actionButton({
@@ -21478,7 +21535,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")), ...rows.map((row) => h("option", { value: row.proposal_id }, [row.title ?? t("pd_proposed"), row.adoptable_reason === "adopted" ? t("ui_status_adopted") : row.validation?.status !== "format_valid" ? proposalReasonLabel(t, "invalid_proposal") : t(row.adoptable === false ? "pd_stale" : "pcp_proposal")].join(" · "))));
 		picker.value = selected;
 		more.hidden = cursor === null;
-		notice.replaceChildren(...!rows.length && !conversation ? [note("pcp_empty")] : [], ...cursor !== null ? [note("pcp_partial")] : []);
+		notice.replaceChildren(...!rows.length && !conversation ? [emptyState({
+			title: t("pcp_empty_title"),
+			text: t("pcp_empty")
+		})] : [], ...cursor !== null ? [note("pcp_partial")] : []);
 	}
 	async function refresh(preferred) {
 		if (!enabled()) {
@@ -38706,7 +38766,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			onMore: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-more-context]") }),
 			onOpen: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-context]") })
 		}));
-		panelContext.replaceChildren(...discussionContext(t, thread.context), ...thread.context?.length ? [] : [h("p", { class: "muted" }, t("pd_no_context"))]);
+		panelContext.replaceChildren(...discussionContext(t, thread.context), ...thread.context?.length ? [] : [emptyState({
+			title: t("pd_no_context"),
+			text: t("pd_no_context_help")
+		})]);
 		discussionHint.textContent = "";
 		const transcript = notes.closest(".pd-transcript");
 		const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
@@ -38724,7 +38787,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			}, t("pd_saved")));
 			return row;
 		}));
-		if (!data.messages?.length) notes.append(emptyState({ title: t("pm_no_notes") }));
+		if (!data.messages?.length) notes.append(emptyState({
+			title: t("pd_notes_empty"),
+			text: t("pd_notes_empty_help")
+		}));
 		transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
 		earlier.hidden = !historyCursor;
 		earlier.disabled = false;
@@ -38832,7 +38898,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				rows.push(row);
 			}
 			facts.replaceChildren(...rows);
-			if (!rows.length) facts.append(h("p", { class: "muted" }, t("pm_no_inputs")));
+			if (!rows.length) facts.append(emptyState({
+				title: t("pd_inputs_empty"),
+				text: t("pd_inputs_empty_help")
+			}));
 		}
 		draft.replaceChildren();
 		if (data.draft) {
@@ -38895,7 +38964,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			});
 			packages.append(item);
 		}
-		if (!packages.children.length) packages.append(emptyState({ title: t("pm_packages_empty") }));
+		if (!packages.children.length) packages.append(emptyState({
+			title: t("pd_packages_empty"),
+			text: t("pd_packages_empty_help")
+		}));
 		if (page.next_cursor) {
 			const more = h("button", {
 				type: "button",
@@ -38966,6 +39038,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			const empty = emptyState({
 				icon: "search",
 				title: t("pd_search_empty"),
+				text: t("pd_search_empty_help"),
 				action: button({
 					variant: "ghost",
 					label: t("pd_clear_search"),
@@ -39175,7 +39248,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (threadId === "new") discussionTools = draftPanel;
 					boundContext = h("div", { class: "pd-context" });
 					panelContext = contextDraft;
-					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, h("div", { class: "pd-header-main" }, h("div", { class: "pd-heading" }, backLink(), titleDraft?.box || h("h2", {}, t("pd_new"))), draftPanel.trigger), h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), boundContext)), h("div", { class: "pd-transcript" }, emptyState({ title: t("pd_empty") })), discussionComposer({
+					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, h("div", { class: "pd-header-main" }, h("div", { class: "pd-heading" }, backLink(), titleDraft?.box || h("h2", {}, t("pd_new"))), draftPanel.trigger), h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), boundContext)), h("div", { class: "pd-transcript" }, emptyState({
+						title: t("pd_notes_empty"),
+						text: t("pd_empty")
+					})), discussionComposer({
 						t,
 						form: create,
 						draft: true

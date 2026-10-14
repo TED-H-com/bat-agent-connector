@@ -1,5 +1,10 @@
 export const discussionStrings = {
   en: {
+    pd_notes_empty: 'No notes yet', pd_notes_empty_help: 'Record the problem, an option, or a question to revisit.',
+    pd_search_empty_help: 'Try another title or context name.', pd_no_context_help: 'Open a discussion from a project record to add context.',
+    pd_inputs_empty: 'No inputs yet', pd_inputs_empty_help: 'Add a sourced statement or a question from this discussion.',
+    pd_packages_empty: 'No saved context', pd_packages_empty_help: 'Prepare a context package for the next run.',
+    pd_report_empty: 'No reports yet', pd_report_empty_help: 'Saved reports will appear here.', pd_report_pending: 'Waiting for this request to finish.', pd_report_unavailable: 'Checking is currently unavailable.',
     pd_saved: 'Saved', pd_search_empty: 'No matching discussions', pd_clear_search: 'Clear search', pd_tab_meeting: 'Meeting',
     pd_source_time: 'Recorded', pd_source_record: 'Source', pd_source_plan_input: 'Plan input', pd_source_plan_adoption: 'Plan adoption',
     pd_source_plan_revision: 'Plan', pd_source_evidence: 'Evidence', pd_source_statement: 'Statement', pd_source_message: 'Message',
@@ -21,6 +26,11 @@ export const discussionStrings = {
     pm_mode_follow_up: 'Follow-up',
   },
   'zh-TW': {
+    pd_notes_empty: '尚無筆記', pd_notes_empty_help: '先記下問題、一個選項，或待釐清的疑問。',
+    pd_search_empty_help: '試試其他標題或脈絡名稱。', pd_no_context_help: '從專案紀錄開啟討論，即可帶入脈絡。',
+    pd_inputs_empty: '尚無資訊', pd_inputs_empty_help: '加入有來源的陳述，或這段討論中的疑問。',
+    pd_packages_empty: '尚無脈絡紀錄', pd_packages_empty_help: '為下次執行準備脈絡套件。',
+    pd_report_empty: '尚無報告', pd_report_empty_help: '儲存的報告會顯示在這裡。', pd_report_pending: '正在等待這項請求完成。', pd_report_unavailable: '目前無法查詢這項請求。',
     pd_saved: '已儲存', pd_search_empty: '沒有符合的討論', pd_clear_search: '清除搜尋', pd_tab_meeting: '會議',
     pd_source_time: '記錄時間', pd_source_record: '來源', pd_source_plan_input: '計畫資訊', pd_source_plan_adoption: '計畫採用',
     pd_source_plan_revision: '計畫', pd_source_evidence: '證據', pd_source_statement: '陳述', pd_source_message: '訊息',
