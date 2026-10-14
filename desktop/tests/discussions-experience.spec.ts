@@ -1,3 +1,4 @@
+import {recoverOriginalAdoption} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {demoFixture} from './demo/index.ts';
@@ -645,4 +646,48 @@ test('reload during the first thread mount preserves the staged intent without a
   await page.getByRole('button', {name: 'Check original request', exact: true}).click();
   await expect(page.locator('.pm-notes')).toContainText('Keep my first note'); expect(f.discussion.writes).toHaveLength(2);
   expect(f.discussion.writes[1].idempotency_key).toBe(saved.intent.key);
+});
+
+
+test('adoption recovery opens Details and tolerates a completed receipt', async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale: 'zh-TW', viewport: {width: 390, height: 844}});
+  const page = await context.newPage(), f = demoFixture({locale: 'zh-TW', discussions: true}), checks: string[] = [];
+  let op: any;
+  await mountConversation(page, false, async input => {
+    if (input.method === 'GET' && input.path.startsWith('/operations/')) checks.push(input.path);
+    const result = await f.dispatch(input);
+    if (input.body?.action === 'pm.conversation.adopt') {
+      op = [...f.discussion.operations.values()].find((row: any) => row.action === 'pm.conversation.adopt');
+      op.status = 'uncertain'; result.data.operation.status = 'uncertain';
+    }
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+  await page.locator('[data-discussion-ask]').click(); await page.locator('[data-proposal-review]').click();
+  await page.getByLabel('採用這組更新的理由', {exact: true}).fill('採用已審閱的範圍並保留原請求。');
+  await page.getByRole('button', {name: '採用這組更新', exact: true}).click();
+  await expect(page.locator('[data-pm-action="pm.conversation.adopt"] .pm-receipt')).toContainText('結果不明');
+  await page.reload();
+  const card = page.locator('[data-pm-plan-proposals]');
+  await expect(card.locator('[data-proposal-adopted]')).toBeVisible();
+  const retry = card.getByRole('button', {name: '查回原請求', exact: true, includeHidden: true});
+  const saved = card.locator('[data-pm-action="pm.conversation.adopt"] [data-pm-saved]');
+  await expect(retry).toHaveCount(1); await expect(retry).toBeHidden();
+  await recoverOriginalAdoption(card, '查回原請求');
+  await expect.poll(() => checks.length).toBe(1); await expect(retry).toBeEnabled();
+  // The poll can observe this count before an asynchronous receipt changes the
+  // name and removes the old name from the Details locator's `has` filter.
+  expect(await retry.count()).toBe(1);
+  op.status = 'succeeded';
+  await retry.click(); await expect(saved).toHaveCount(1);
+  await expect(retry).toHaveCount(0);
+  // Resume the recovery step with that now-stale observation. It must finish,
+  // leaving the original Saved evidence intact and never sending a new adoption.
+  await recoverOriginalAdoption(card, '查回原請求');
+  await expect(card.locator('[data-proposal-adopted]')).toBeVisible();
+  await expect(saved).toHaveCount(1);
+  expect(checks).toEqual(['/operations/' + op.operation_id, '/operations/' + op.operation_id]);
+  expect(f.discussion.writes).toHaveLength(2);
+  expect(f.discussion.writes.filter((row: any) => row.body.action === 'pm.conversation.adopt')).toHaveLength(1);
+  await context.close();
 });

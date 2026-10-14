@@ -81,6 +81,16 @@ for sending to resume, then requires an explicit retry with the original key and
 envelope. A known original operation ID remains readable without another POST.
 Neither reconnect nor event refresh automatically reposts an unknown admission.
 
+The recovery helper selects the stable adoption form. A `has` filter is relative
+to its candidate: passing a proposal-scoped role locator to a Details filter looks
+for another proposals container inside Details and never matches. Revealing and
+checking the current original-request control in one DOM task also tolerates its
+name changing after Saved. The helper checks connection, visibility, disabled
+state and the original-request name before clicking. The completion predicate still
+requires visible adoption and the retained form's Saved evidence. A focused zh-TW
+mobile regression covers a closed recovery disclosure and completion between
+observing its old control and attempting recovery; only original-ID GETs may occur.
+
 ## Decision loop contract
 
 The integrated backend recognizes retained `governance.goal` input and returns

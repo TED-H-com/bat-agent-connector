@@ -1,4 +1,4 @@
-import {expect, type Page} from '@playwright/test';
+import {expect, type Page, type Locator} from '@playwright/test';
 // Exercise the real shell and disclosures; never force clicks into a hidden view.
 export async function openPmSection(page: Page, view: string, section?: string) {
   if (await page.locator('.ui-inspector[aria-modal=true]:visible').count()) await page.keyboard.press('Escape');
@@ -67,4 +67,21 @@ export async function openThreadBrief(page: Page) {
   await openThreadTab(page, 'plan');
   const fold = page.locator('[data-pm-section=pm_brief_title] > details');
   if (!await fold.evaluate(node => (node as HTMLDetailsElement).open)) await fold.locator(':scope > summary').click();
+}
+
+// A receipt may finish between the caller's count and this recovery step. Use
+// the stable form and one DOM task: its old accessible name may already be gone.
+export async function recoverOriginalAdoption(proposal: Locator, retryName: string) {
+  await proposal.locator('[data-pm-action="pm.conversation.adopt"]').evaluateAll((forms, name) => {
+    if (forms.length !== 1) return;
+    const form = forms[0], button = form.querySelector<HTMLButtonElement>('button[type=submit]');
+    if (!button || button.textContent !== name || form.closest('[hidden], [inert]')) return;
+    const disclosures: HTMLDetailsElement[] = [];
+    for (let parent = form.parentElement; parent; parent = parent.parentElement) {
+      if (parent instanceof HTMLDetailsElement && !parent.open) disclosures.unshift(parent);
+    }
+    for (const details of disclosures) details.querySelector<HTMLElement>(':scope > summary')?.click();
+    if (button.isConnected && !button.disabled && button.textContent === name
+      && button.getClientRects().length && getComputedStyle(button).visibility === 'visible') button.click();
+  }, retryName);
 }

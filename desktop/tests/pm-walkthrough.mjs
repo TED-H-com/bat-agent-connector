@@ -7,7 +7,7 @@ import {homedir} from 'node:os';
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
 import {chromium, expect as baseExpect} from '@playwright/test';
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, recoverOriginalAdoption} from './pm-navigation.ts';
 
 const expect = baseExpect.configure({timeout: 30000});
 const backend = resolve(process.env.BATC_PM_BACKEND || '..');
@@ -195,8 +195,7 @@ async function walkthrough(locale, width) {
       // The child pipeline may outlast automatic bounded checking. An owner can
       // check again in the UI, always reading the acknowledged original ID.
       if (!await originalReceipt.count()) return false;
-      if (!await originalReceipt.isVisible()) await proposal.locator('details').filter({has: originalReceipt}).first().locator(':scope > summary').click();
-      if (await originalReceipt.isEnabled()) await originalReceipt.click();
+      await recoverOriginalAdoption(proposal, l.retry);
       return false;
     }, {intervals: [1000, 1500, 2000]}).toBe(true);
     if (await originalReceipt.count()) await expect(savedReceipt).toHaveCount(1);
