@@ -131,9 +131,9 @@ export function workspaceOverview(options) {
   }
   function attention(data, resetOrder) {
     if (!attentionList) {attentionList = h('div', {class: 'pm-overview-attention', 'data-overview-attention': ''}); attentionCard = sectionCard({title: t('ov_attention'), body: attentionList});}
-    const rows = attentionList, selection = document.getSelection();
+    const rows = attentionList;
     const reading = !resetOrder && (rows.contains(document.activeElement) || Boolean(rows.querySelector('[data-overview-row]:hover'))
-      || Boolean(selection && !selection.isCollapsed && rows.contains(selection.anchorNode) && rows.contains(selection.focusNode)));
+      || attentionSelection());
     const keys = new Set(data.attention.map(row => row.key));
     for (const [key, entry] of attentionNodes) if (!keys.has(key)) {entry.node.remove(); attentionNodes.delete(key);}
     rows.querySelector('.pm-overview-footer')?.remove(); rows.querySelector('.ui-empty')?.remove();
@@ -284,6 +284,10 @@ export function workspaceOverview(options) {
     });
   }
   function resetContent(...nodes) {parts.clear(); content.replaceChildren(...nodes);}
+  function attentionSelection() {
+    const selection = document.getSelection();
+    return Boolean(selection && !selection.isCollapsed && attentionList?.contains(selection.anchorNode) && attentionList.contains(selection.focusNode));
+  }
   function readingAnchor() {
     if (!active || !attentionList?.isConnected) return null;
     const rows = [...attentionList.querySelectorAll('[data-overview-row]')];
@@ -292,7 +296,11 @@ export function workspaceOverview(options) {
     scroller ||= document.scrollingElement;
     if (!scroller) return null;
     const bounds = scroller === document.scrollingElement ? {top: 0, bottom: innerHeight} : scroller.getBoundingClientRect();
-    const row = rows.find(node => node.contains(document.activeElement)) || rows.find(node => node.matches(':hover'))
+    const hovered = rows.find(node => node.matches(':hover'));
+    // Reading from the list's top lets new rows push the rest down in place.
+    if (!attentionList.contains(document.activeElement) && !hovered && !attentionSelection()
+      && attentionList.getBoundingClientRect().top >= Math.max(0, bounds.top)) return null;
+    const row = rows.find(node => node.contains(document.activeElement)) || hovered
       || rows.find(node => {const rect = node.getBoundingClientRect(); return rect.bottom > Math.max(0, bounds.top) && rect.top < Math.min(innerHeight, bounds.bottom);});
     return row ? {key: row.dataset.overviewRow, top: row.getBoundingClientRect().top, scroller} : null;
   }

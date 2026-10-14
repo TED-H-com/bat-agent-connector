@@ -38,6 +38,8 @@
   row being read at its viewport position and preserve Progress Details focus and
   open state. Attention stays in Central's severity/age order during passive viewing
   and on return to Overview; focus, hover or text selection holds the existing order.
+  Passive anchoring starts after scrolling into the list; new top rows otherwise
+  appear in place without moving the page.
   Withdrawn rows and their counts still disappear immediately.
 
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).

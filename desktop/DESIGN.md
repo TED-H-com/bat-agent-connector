@@ -311,8 +311,12 @@ before selection; withdrawn or late record reads cannot reopen an inspector.
 Attention retains the central severity/age ordering, with exact context identities
 passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
 by identity within their own part, including the Progress Details summary and its open state.
-Before updating any Overview region, the focused attention row, hovered row, or first
-visible row anchors the viewport. Focus, hover or a non-collapsed text selection
+Before updating any Overview region, a focused or hovered attention row anchors
+the viewport. A non-collapsed selection inside the list keeps anchoring active,
+falling back to its first visible row. Without interaction, the first
+visible row anchors only after the list's top has scrolled above its scroller's
+visible area; while the list's top is in view, new rows push the rest down without
+compensating scroll. Focus, hover or a non-collapsed text selection
 inside the attention list preserves its existing order and appends new rows. Passive
 visibility uses Central's severity/age order; returning to Overview re-sorts even
 unchanged data. Overview compensates its actual scrolling container after layout,

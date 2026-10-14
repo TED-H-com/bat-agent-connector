@@ -16334,8 +16334,8 @@ function workspaceOverview(options) {
 				body: attentionList
 			});
 		}
-		const rows = attentionList, selection = document.getSelection();
-		const reading = !resetOrder && (rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover")) || Boolean(selection && !selection.isCollapsed && rows.contains(selection.anchorNode) && rows.contains(selection.focusNode)));
+		const rows = attentionList;
+		const reading = !resetOrder && (rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover")) || attentionSelection());
 		const keys = new Set(data.attention.map((row) => row.key));
 		for (const [key, entry] of attentionNodes) if (!keys.has(key)) {
 			entry.node.remove();
@@ -16675,6 +16675,10 @@ function workspaceOverview(options) {
 		parts.clear();
 		content.replaceChildren(...nodes);
 	}
+	function attentionSelection() {
+		const selection = document.getSelection();
+		return Boolean(selection && !selection.isCollapsed && attentionList?.contains(selection.anchorNode) && attentionList.contains(selection.focusNode));
+	}
 	function readingAnchor() {
 		if (!active || !attentionList?.isConnected) return null;
 		const rows = [...attentionList.querySelectorAll("[data-overview-row]")];
@@ -16686,7 +16690,9 @@ function workspaceOverview(options) {
 			top: 0,
 			bottom: innerHeight
 		} : scroller.getBoundingClientRect();
-		const row = rows.find((node) => node.contains(document.activeElement)) || rows.find((node) => node.matches(":hover")) || rows.find((node) => {
+		const hovered = rows.find((node) => node.matches(":hover"));
+		if (!attentionList.contains(document.activeElement) && !hovered && !attentionSelection() && attentionList.getBoundingClientRect().top >= Math.max(0, bounds.top)) return null;
+		const row = rows.find((node) => node.contains(document.activeElement)) || hovered || rows.find((node) => {
 			const rect = node.getBoundingClientRect();
 			return rect.bottom > Math.max(0, bounds.top) && rect.top < Math.min(innerHeight, bounds.bottom);
 		});
