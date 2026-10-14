@@ -1506,13 +1506,41 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-fu-assessments pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size: var(--fs-body);max-width:100%;}
 .pm-fu-assessments button[aria-pressed=true] {border-color:var(--accent);}
 @media(max-width:640px){
-  .pm-follow-up .pm-heading {display:block;}
-  .pm-follow-up .pm-heading > button {margin-bottom:var(--space-2);}
   .pm-follow-up .pm-fu-domain {grid-template-columns:minmax(0,1fr);gap:var(--space-1);}
   .pm-follow-up :is(button,summary,select) {min-height:44px;}
   .pm-follow-up summary {padding:var(--space-2) 0;}
   .pm-follow-up input,.pm-follow-up select {font-size: var(--fs-input-mobile);}
 }
+
+/* Secondary governance tools share the v2 card and compact form rhythm. */
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-heading {display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin-bottom:var(--space-3);}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-heading [data-pm-panel-readonly] {flex:1;min-width:0;margin:0;}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-heading > .ui-icon-button {margin-left:auto;}
+.pm-governance .pm-heading[hidden] {display:none;}
+.pm-governance [data-pm-governance-prompt] {margin:0;}
+.pm-governance [data-pm-governance-row] {padding-inline:var(--space-2);}
+.pm-governance [data-pm-governance-row].is-selected {background:var(--accent-soft);box-shadow:inset 2px 0 var(--accent);}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-fact-heading {display:flex;align-items:center;gap:var(--space-2);}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) label.pm-fact-heading {display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;margin:var(--space-2) 0;}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) label.pm-fact-heading > span {flex:1;min-width:0;}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) label.pm-fact-heading input[type=checkbox] {flex:none;width:auto;margin:var(--space-1) 0;}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-fields {max-width:640px;}
+:is(.pm-governance,.pm-meetings) {min-width:0;}
+.pm-meetings .pm-meeting-work {display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-3) 0;}
+.pm-meetings .pm-meeting-work a {min-width:0;max-width:100%;}
+.pm-meetings .mono {display:block;white-space:nowrap;overflow-x:auto;overflow-wrap:normal;max-width:100%;}
+.pm-meetings :is(input,select,textarea) {max-width:100%;min-width:0;width:100%;}
+.pm-meetings input[type=checkbox] {width:auto;}
+.pm-meetings .capture-fields {grid-template-columns:minmax(0,1fr);}
+.pm-meetings .ui-disclosure {margin:var(--space-2) 0;}
+.pm-meetings .pm-meeting-summary p {margin:var(--space-2) 0;}
+.pm-follow-up summary {color:var(--text-2);}
+.pm-follow-up .pm-fu-domain {padding:var(--space-2) 0;}
+.pm-governance fieldset {min-width:0;border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--space-2);}
+@media(max-width:640px){.pm-meetings :is(input,select,textarea){font-size:var(--fs-input-mobile);}}
+
+.pm-meetings .pm-meeting-summary {margin-top:var(--space-3);}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-heading > button[hidden] {display:none;}
 .pm-lifecycle {padding:var(--space-3) 0;margin-bottom:var(--space-4);border-bottom:1px solid var(--line);min-width:0;}
 .pm-lifecycle h2 {font-size: var(--fs-section);margin:0 0 var(--space-2);}
 .pm-lifecycle h3 {font-size: var(--fs-body);margin:var(--space-4) 0 var(--space-2);}

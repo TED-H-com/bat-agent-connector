@@ -81,7 +81,8 @@ test('repeated governance refreshes release discarded forms and their state call
   expect(errors).toEqual([]);
 });
 
-test('a stale hidden view rebuilds connected forms with the current workspace gates', async ({page}) => {
+for (const withDraft of [false, true]) {
+test(`a stale hidden view rebuilds connected forms with the current workspace gates${withDraft ? ' and preserves an unsent draft' : ''}`, async ({page}) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   const f = governanceFixture();
   const dispatch = async (input: any) => {
@@ -109,27 +110,54 @@ test('a stale hidden view rebuilds connected forms with the current workspace ga
   }, workspaceId);
   const title = action(page, 'revise').getByLabel('Finding title', {exact: true});
   await openAction(page, 'revise'); await expect(title).toBeEnabled();
+  const draftTitle = 'Keep the unsent finding draft across workspace gates';
+  if (withDraft) {
+    await title.fill(draftTitle);
+    await action(page, 'revise').getByLabel('Reason for this record', {exact: true}).fill('Retain this draft without submitting it');
+  }
+  const previous = await action(page, 'revise').elementHandle();
+  const storedDraft = () => page.evaluate(() => Object.fromEntries(Object.entries(localStorage)
+    .filter(([key]) => key.startsWith('batc.pm.stale-form-gates.pm.governance.revise.'))));
+  const saved = await storedDraft();
+  if (withDraft) {
+    expect(Object.keys(saved)).toHaveLength(1);
+    expect(JSON.parse(Object.values(saved)[0]).values.title).toBe(draftTitle);
+  }
   for (const role of ['reader', 'owner']) {
-    const previous = await action(page, 'revise').elementHandle();
     await page.evaluate(workspaceId => (window as any).disposeWorkspace.navigate(workspaceId, null, 'discussions'), workspaceId);
-    f.state.role = role; f.state.workspaceVersion++;
+    f.state.role = role;
+    // A version change intentionally makes a dirty draft stale. Test draft
+    // preservation with permission changes alone; keep the original rebuild
+    // coverage for changing workspace versions when no draft is dirty.
+    if (!withDraft) f.state.workspaceVersion++;
     const before = f.state.reads.filter((path: string) => path.includes('/governance')).length;
     await page.evaluate(workspaceId => (window as any).workspaceEvent({resource_type: 'pm_governance', resource_id: workspaceId}), workspaceId);
     expect(f.state.reads.filter((path: string) => path.includes('/governance'))).toHaveLength(before);
     await expect(action(page, 'revise')).toBeHidden();
     await page.evaluate(workspaceId => (window as any).disposeWorkspace.navigate(workspaceId, null, 'issues'), workspaceId);
     await expect.poll(() => f.state.reads.filter((path: string) => path.includes('/governance')).length).toBeGreaterThan(before);
-    await expect.poll(() => previous!.evaluate(node => node.isConnected)).toBe(false);
+    if (role === 'reader' || !withDraft) await expect.poll(() => previous!.evaluate(node => node.isConnected)).toBe(false);
     await expect(page.locator('[data-pm-source-loading]')).toHaveCount(0);
-    await openAction(page, 'revise'); await expect(title).toBeVisible();
-    if (role === 'reader') await expect(title).toBeDisabled();
-    else await expect(title).toBeEnabled();
-    expect(await action(page, 'revise').evaluate(node => node instanceof HTMLFormElement && node.querySelector('batc-pm-form-connection')?.isConnected)).toBe(true);
-    await previous!.dispose();
+    if (role === 'reader') {
+      await expect(action(page, 'revise')).toHaveCount(0);
+      await expect(page.getByText('Revise finding', {exact: true})).toHaveCount(0);
+    } else {
+      await openAction(page, 'revise'); await expect(title).toBeVisible(); await expect(title).toBeEnabled();
+      if (withDraft) {
+        await expect(title).toHaveValue(draftTitle);
+        await expect(action(page, 'revise').getByLabel('Reason for this record', {exact: true})).toHaveValue('Retain this draft without submitting it');
+      }
+      await expect(action(page, 'revise').locator('button[type=submit]')).toBeEnabled();
+      expect(await action(page, 'revise').evaluate(node => node instanceof HTMLFormElement && node.querySelector('batc-pm-form-connection')?.isConnected)).toBe(true);
+    }
+    expect(await storedDraft()).toEqual(saved);
+    expect(f.state.writes).toEqual([]); expect(errors).toEqual([]);
   }
+  await previous!.dispose();
   expect(f.state.writes).toEqual([]); expect(errors).toEqual([]);
   await page.evaluate(() => (window as any).disposeWorkspace());
 });
+}
 
 test('a thread event restores hidden lifecycle gates after superseding a manual refresh', async ({page}) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));

@@ -122,7 +122,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await editor.getByLabel('Delivery approach',{exact:true}).fill('Review the fixed selected work');
     await editor.getByLabel('Capacity and availability discussed',{exact:true}).fill('One focused improvement');
     await reason(page,'draft');await editor.getByRole('button',{name:'Save discussion draft',exact:true}).click();
-    await expect(page.getByRole('heading',{name:'Saved discussion draft',exact:true})).toBeVisible();
+    await expect(page.locator('[data-pm-fold=pm_meeting_saved_draft] > summary')).toBeVisible();
     expect(f.meetings.state.meetings[0].meeting.status).toBe('draft');
     await openAction(page,'complete');await action(page,'complete').getByLabel('What was discussed and concluded',{exact:true}).fill('The recorded discussion keeps the direction and unresolved quality checks.');
     await reason(page,'complete');f.meetings.state.lost=true;
@@ -130,6 +130,9 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(action(page,'complete')).toContainText('Reply unavailable');const original=structuredClone(f.meetings.state.writes.at(-1));
     await page.reload();await openPmSection(page,'discussions','ui_meetings');await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
     expect(f.meetings.state.writes.at(-1)).toEqual(original);expect(f.meetings.state.ops.size).toBe(3);
+    await expect(action(page,'complete').getByRole('button',{name:'Check original request',exact:true})).toHaveCount(0);
+    await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();
+    await page.locator('[data-pm-fold=pm_meeting_completed] > summary').click();
     await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
     expect(f.sprint.state.writes).toHaveLength(0);expect(f.kanban.state.writes).toHaveLength(0);
   });

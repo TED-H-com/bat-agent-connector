@@ -172,7 +172,8 @@ export async function boot(page: Page, locale = 'en') {
     const {workspaceGovernance} = await import('/__governance_src/pm-governance.js'), {durableForm} = await import('/__governance_src/pm-workspace.js');
     const {connectorRequest} = await import('/__governance_src/transport.js');
     const {pmGovernanceStrings} = await import('/__governance_src/pm-governance-strings.js'), {pmStrings} = await import('/__governance_src/pm-strings.js');
-    const strings = {...pmStrings[locale], ...pmGovernanceStrings[locale]}, t = (key: string) => strings[key] || key;
+    const {uiStrings}=await import('/__governance_src/ui/ui-strings.js');
+    const strings = {...uiStrings[locale],...pmStrings[locale], ...pmGovernanceStrings[locale]}, t = (key: string) => strings[key] || key;
     const h = (tag: string, attrs: any = {}, ...children: any[]) => {
       const node = document.createElement(tag); for (const [key, value] of Object.entries(attrs || {})) {
         if (value === null || value === undefined || value === false) continue;
@@ -199,6 +200,7 @@ export async function boot(page: Page, locale = 'en') {
   await expect(page.locator('[data-pm-governance]')).toBeVisible();
 }
 export async function openAction(page: Page, name: string) {
+  if (name === 'record' && !await action(page, name).isVisible() && await page.locator('[data-pm-governance-record]').isVisible()) await page.locator('[data-pm-governance-record]').click();
   await action(page, name).evaluate(node => {for (let parent = node.parentElement; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') (parent as HTMLDetailsElement).open = true;});
 }
 export async function reason(page: Page, name: string, value = 'Preserve the fixed evidence and make this uncertainty explicit') {

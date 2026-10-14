@@ -213,3 +213,11 @@ immutable result stay unavailable publicly until their source can be established
 the service never substitutes the current head. Replay/control use the same
 original-source check. Internal original-effect receipt recovery is unchanged,
 and source revocation never triggers another write or dispatch.
+
+## 共用次要工具呈現
+
+會議在討論的脈絡欄維持原位置，以類型、狀態、衝刺目標與工作名稱標籤呈現。歷史與表單按需展開；技術識別碼收在詳細資訊，窄欄可橫向捲動完整識別碼。登記後續動作依 meeting_id 與 required.follow_up_id 選取原會議與交辦項目，開啟並聚焦結果表單；導覽不會送出操作。決策文字相容 text 與 title。
+
+建立討論以單一按鈕開啟原位置表單並聚焦第一欄；取消只收起表單，重載仍展開既有草稿或原操作。唯讀時隱藏新增動作，權限說明放在同列左側，重新讀取按鈕保持靠右。會議選單只顯示標題，類型與狀態由下方標記呈現，通用角色以本地化名稱顯示。
+
+唯讀時不提供記錄及建立表單入口；完成討論只向符合原指定擁有者條件的人提供，後續結果依原負責人及成員權限判斷。權限降低時將入口及表單移出畫面，保留草稿與原請求，權限恢復後還原；基準過期及原操作鎖定的行為維持不變。

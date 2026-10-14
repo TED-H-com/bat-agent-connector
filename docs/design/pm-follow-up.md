@@ -245,3 +245,11 @@ with the selected thread's truncation warning. An empty agenda still discloses
 that omitted source records were not assessed. These are the fixed preparation's
 saved coverage flags; rendering does not query newer facts or infer complete
 coverage when a flag is absent.
+
+## 共用次要工具呈現
+
+後續追蹤只展開有輸入的知識面向，其餘以一行說明尚無基準輸入的面向數；不把未知顯示成零。議程附近保留部分涵蓋狀態，省略來源的原因、固定版本、摘要值與比較身分收在詳細資訊。準備與分析表單按需開啟，沿用原操作、草稿及請求恢復。兩处掛載的組合調整仍待後續討論介面工作。
+
+準備討論以單一按鈕開啟表單並聚焦快照選單；取消只收起表單。已選來源及未完成的原操作在重載後仍展開，僅自動綁定基準版本不算使用者草稿。唯讀時隱藏準備動作，權限說明放在同列左側，重新讀取按鈕保持靠右；尚無基準輸入的面向依原領域順序列出名稱。
+
+唯讀時也隱藏準備表單及請 PM 評估入口，已保存的準備內容與評估仍可讀取。權限降低不清除草稿或原請求，權限恢復後還原；基準過期、執行環境尚未就緒及原操作鎖定造成的停用行為維持不變。
