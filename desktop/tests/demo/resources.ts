@@ -78,7 +78,7 @@ function claudeMetrics(total: number) {
   };
 }
 
-function usable(project: DemoProject, sourceId: string, adapter: string, role: string, quota: string | null, metrics: object, observations: number, calls: number | null, configurations: object[], firstAt: string, lastAt: string) {
+function usable(project: DemoProject, sourceId: string, adapter: string, role: string, quota: string | null, metrics: object, observations: number, calls: number | null, configurations: object[], firstAt: string | null, lastAt: string | null) {
   const at = iso(project.now);
   return {
     source_id: sourceId, adapter, role, host_id: project.ids.serverId, host_kind: 'central_local', status: 'current',
@@ -112,8 +112,8 @@ export function resources(project: DemoProject, url: URL) {
       codexComplete: covered && daySamples.every(sample => sample.codexComplete),
       claudeComplete: covered && daySamples.every(sample => sample.claudeComplete)};
   });
-  const firstAt = new Date(Number.isFinite(sinceMs) ? sinceMs + 60 * 60 * 1000 : project.now).toISOString();
-  const lastAt = new Date(Number.isFinite(untilMs) ? untilMs - 60 * 1000 : project.now).toISOString();
+  const firstAt = samples.length ? new Date(samples[0].at).toISOString() : null;
+  const lastAt = samples.length ? new Date(samples[samples.length - 1].at).toISOString() : null;
   const codex = usable(project, project.ids.sources.codex, 'codex-rollout-v1', 'implementer', project.ids.poolId, codexMetrics(sum('codex')), 4, null,
     [{requested_model: 'example-codex', actual_model: null, effort: 'medium', cli_version: '0.120.0'}], firstAt, lastAt);
   const claude = usable(project, project.ids.sources.claude, 'claude-transcript-v1', 'reviewer', null, claudeMetrics(sum('claude')), 6, 6,

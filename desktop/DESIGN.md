@@ -683,16 +683,19 @@ stack position. A covered zero is a baseline tick.
 
 The heading, usage metric, rows, inspector and chart show one consistent read.
 A cached trend is reusable only for the same since instant, until day, zone and
-period, when each readable source's total equals its finite daily totals (nulls
-are skipped; covered zero remains a value). A totals-only read that disagrees
+period, when each readable source has the same fingerprint as in the bucket read:
+source ID, status, observation count, total value/observed/covered and last sample
+time. Idle row totals stay unknown even when complete days have covered zeros;
+partial row subtotals can include samples in a day whose total is unknown. These
+differences alone do not invalidate the cache. A totals-only read that differs
 requests buckets immediately and keeps the previous consistent pair until they
 arrive, without flashing the chart away. Source withdrawal still removes that
 source's numbers, chart contributions and inspector facts immediately. The
 heading uses the window and request zone of the read being shown.
 
 A tick asks for buckets again when the capability is on and the trend is missing,
-the readable sources or window changed, or the trend is older than 15 minutes.
-Until that read returns, the chart draws only series that are still readable.
+the readable row fingerprints or window changed, or the trend is older than
+15 minutes. Until that read returns, the chart draws only series that are still readable.
 A tick waits out a user-initiated read. The Partial pill follows
 unreadable, pending, catching-up, stale or binding-changed rows, and totals that are
 null or observed-only. Today's open bar does not turn the pill on by itself. Quota is

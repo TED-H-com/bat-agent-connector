@@ -103,3 +103,17 @@ test('demo totals count absolute observations with and without zoned buckets', (
     }
   }
 });
+
+test('demo window advancement keeps the actual first and last sample times', () => {
+  const project = demoProject('en');
+  const query = new URLSearchParams(periodWindow(new Date(project.now), 7, 'Asia/Taipei'));
+  const before = resources(project, new URL(`http://fixture/resources?${query}`)).rows;
+  query.set('until', new Date(project.now + 3 * 60000).toISOString());
+  const after = resources(project, new URL(`http://fixture/resources?${query}`)).rows;
+  assert.deepEqual(after, before);
+  for (const row of after as {metrics: object | null, first_at: string, last_at: string}[]) {
+    if (!row.metrics) continue;
+    assert.equal(row.first_at, '2026-10-07T01:00:00.000Z');
+    assert.equal(row.last_at, '2026-10-13T01:00:00.000Z');
+  }
+});

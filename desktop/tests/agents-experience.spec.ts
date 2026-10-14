@@ -713,3 +713,109 @@ test('two rejected zones stop buckets until the view is reopened', async ({brows
   await expect(page.locator('[data-resource-chart]')).toHaveCount(0);
   await context.close();
 });
+
+type CacheRead = {
+  as_of: string, window: {until: string},
+  rows: {source_id: string, metrics: Record<string, {value: number | null, observed: number | null, covered: number}> | null,
+    observations: number | null, calls: number | null, first_at: string | null, last_at: string | null}[],
+  buckets?: {series: {source_id: string, days: {date: string, complete: boolean, tokens: Record<string, number | null>}[]}[]},
+};
+
+for (const locale of ['en', 'zh-TW'] as const) test(`idle and partial sources retain their trend until sample facts change ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
+  const page = await context.newPage(), fixture = tracked(locale);
+  let bucketReads = 0, idleSample = false, missingSample = false;
+  let release = () => {}, hold: Promise<void> | null = null;
+  const dispatch = async (input: {path: string, method?: string}) => {
+    const url = new URL(input.path, 'http://fixture');
+    const bucketRequest = url.pathname.endsWith('/resources') && url.searchParams.get('buckets') === 'day';
+    if (bucketRequest) bucketReads++;
+    const result = await fixture.dispatch(input) as {data?: CacheRead};
+    if (!url.pathname.endsWith('/resources') || !result.data) return result;
+    const read = result.data;
+    read.as_of = read.window.until;
+    const partial = read.rows.find(row => row.source_id === 'codex-implementer')!;
+    const idle = read.rows.find(row => row.source_id === 'claude-reviewer')!;
+    for (const key of Object.keys(partial.metrics!)) partial.metrics![key] = {value: null, observed: null, covered: 0};
+    partial.metrics!.total = {value: null, observed: 120, covered: 2};
+    partial.metrics!.input = {value: null, observed: 120, covered: 2};
+    partial.metrics!.output = {value: null, observed: 0, covered: 2};
+    partial.observations = missingSample ? 4 : 3;
+    partial.first_at = '2026-10-08T01:00:00.000Z';
+    partial.last_at = '2026-10-13T08:59:00.000Z';
+    for (const key of Object.keys(idle.metrics!)) idle.metrics![key] = {value: null, observed: null, covered: 0};
+    idle.observations = idleSample ? 1 : 0; idle.calls = idleSample ? 1 : 0;
+    idle.first_at = idle.last_at = idleSample ? '2026-10-13T09:03:04.000Z' : null;
+    if (idleSample) {
+      idle.metrics!.total = idle.metrics!.input = {value: 42, observed: 42, covered: 1};
+      idle.metrics!.output = {value: 0, observed: 0, covered: 1};
+    }
+    // Reordering rows and a newer collection time do not change the sample facts.
+    if (fixture.reads.length % 2 === 0) read.rows.reverse();
+    for (const series of read.buckets?.series || []) for (const day of series.days) {
+      day.complete = day.date < '2026-10-12';
+      const isPartial = series.source_id === partial.source_id;
+      let total: number | null = day.complete ? 0 : null;
+      if (isPartial && day.date === '2026-10-08') total = missingSample ? null : 60;
+      if (!isPartial && idleSample && day.date === '2026-10-13') total = 42;
+      day.tokens = {input: total, cache_read: null, cache_write: null, output: total == null ? null : 0, reasoning: null, total};
+    }
+    if (bucketRequest && hold) await hold;
+    return result;
+  };
+  await boot(page, dispatch); await openAgents(page, 1440);
+  const chart = page.locator('[data-resource-chart]');
+  const row = page.locator('[data-resource-row="claude-reviewer"]');
+  const metric = page.locator('[data-resource-metrics] .ui-metric-value').first();
+  const dayValue = (date: string, cli: string) => chart.locator(`tr[data-date="${date}"] [data-cli="${cli}"]`);
+  const idleFacts = async (sample: boolean) => {
+    await expect(page.locator('[data-resource-meta]')).toContainText(/Oct 7.*Oct 13|10月7日.*10月13日/);
+    await expect(page.locator('[data-resource-meta] [data-tz]')).toHaveText('Asia/Taipei');
+    await expect(metric).toHaveText(new RegExp(`^${sample ? '162' : '120'}\\s*(Partial|部分)$`));
+    await expect(page.locator('[data-resource-metrics] [data-status="partial"]')).toBeVisible();
+    await expect(row.locator('[data-column="tokens"]')).toHaveText(sample ? '42' : '—');
+    await expect(page.locator('[data-resource-row="codex-implementer"] [data-column="tokens"]')).toHaveText(/120\s*(Partial|部分)/);
+    await expect(page.locator('[data-resource-row="codex-implementer"] [data-status="partial"]')).toBeVisible();
+    for (const date of ['2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']) await expect(dayValue(date, 'claude')).toHaveText('0');
+    await expect(dayValue('2026-10-12', 'claude')).toHaveText('—');
+    await expect(dayValue('2026-10-13', 'claude')).toHaveText(sample ? '42' : '—');
+    await expect(dayValue('2026-10-08', 'codex')).toHaveText('60');
+    await expect(dayValue('2026-10-13', 'codex')).toHaveText('—');
+  };
+  await idleFacts(false); expect(bucketReads).toBe(1);
+  await row.click();
+  const inspectorTotal = page.locator('[data-resource-detail] dt', {hasText: locale === 'en' ? /^Total$/ : /^總計$/}).locator('+ dd');
+  await expect(inspectorTotal).toHaveText('—');
+  await chart.evaluate(node => node.setAttribute('data-consistent-pair', 'retained'));
+  for (let tick = 0; tick < 3; tick++) {
+    const before = fixture.reads.length;
+    await page.clock.fastForward(61000);
+    await expect.poll(() => fixture.reads.length).toBe(before + 1);
+    await idleFacts(false);
+    expect(bucketReads).toBe(1);
+    await expect(chart).toHaveAttribute('data-consistent-pair', 'retained');
+    await expect(inspectorTotal).toHaveText('—');
+  }
+  idleSample = true; hold = new Promise<void>(resolve => {release = resolve;});
+  const before = fixture.reads.length;
+  await page.clock.fastForward(61000);
+  await expect.poll(() => fixture.reads.length).toBe(before + 2);
+  expect(bucketReads).toBe(2);
+  await idleFacts(false); await expect(inspectorTotal).toHaveText('—');
+  await expect(chart).toHaveAttribute('data-consistent-pair', 'retained');
+  release(); hold = null;
+  await idleFacts(true); await expect(inspectorTotal).toHaveText('42');
+  // A late sample without a total makes a formerly known day unknown, while
+  // the observed subtotal and last sample time remain unchanged.
+  missingSample = true; hold = new Promise<void>(resolve => {release = resolve;});
+  const beforePartial = fixture.reads.length;
+  await page.clock.fastForward(61000);
+  await expect.poll(() => fixture.reads.length).toBe(beforePartial + 2);
+  expect(bucketReads).toBe(3);
+  await idleFacts(true);
+  release(); hold = null;
+  await expect(dayValue('2026-10-08', 'codex')).toHaveText('—');
+  await expect(metric).toHaveText(/^162\s*(Partial|部分)$/); await expect(inspectorTotal).toHaveText('42');
+  await expect(page.locator('[data-resource-row="codex-implementer"] [data-column="tokens"]')).toHaveText(/120\s*(Partial|部分)/);
+  await context.close();
+});

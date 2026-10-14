@@ -179,7 +179,8 @@
   window when returning or receiving new usage. Refresh mismatched cached trends
   together with totals, preserving immediate withdrawal. Use human tool names and
   translated roles for sources and Discuss drafts, shared Unknown pills for missing
-  facts, and complete the Traditional Chinese usage labels.
+  facts, and complete the Traditional Chinese usage labels. Reuse trends while
+  readable row facts are unchanged, including idle and partially observed sources.
 - Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
   shared page header, inbox groups, operations table and inspector. Pending opens each operation
   from its inspector and reports a failed read instead of an empty inbox, and every registered

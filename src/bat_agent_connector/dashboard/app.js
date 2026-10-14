@@ -13642,7 +13642,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	let filter = savedFilter(preference.filter);
 	let serial = 0, active = false, busy = false, paused = Boolean(preference.paused), timer = null;
 	let data = null, selected = preference.selected || null, signature = "";
-	let trendBuckets = null, trendReadAt = 0, trendSourceKey = "", trendWindowKey = "";
+	let trendBuckets = null, trendReadAt = 0, trendRowKey = "", trendWindowKey = "";
 	let bucketsStopped = false, requestZone = browserTimeZone(), shownZone = requestZone;
 	let inspectorPanel = null, closing = false, chartNode = null, chartTrendKey = "";
 	const meta = h("p", {
@@ -13667,7 +13667,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			busy = false;
 			trendBuckets = null;
 			trendReadAt = 0;
-			trendSourceKey = "";
+			trendRowKey = "";
 			trendWindowKey = "";
 			data = null;
 			signature = "";
@@ -14149,8 +14149,18 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			]
 		});
 	}
-	function readableKey(rows) {
-		return (rows || []).filter(isReadable).map((row) => `${row.source_id}\u0000${row.status}`).sort().join("\n");
+	function readableFingerprint(rows) {
+		return (rows || []).filter(isReadable).map((row) => JSON.stringify({
+			source_id: row.source_id,
+			status: row.status,
+			observations: row.observations,
+			total: {
+				value: row.metrics.total?.value,
+				observed: row.metrics.total?.observed,
+				covered: row.metrics.total?.covered
+			},
+			last_at: row.last_at
+		})).sort().join("\n");
 	}
 	function filteredBuckets() {
 		if (!isBucketPayload(trendBuckets)) return null;
@@ -14209,18 +14219,12 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function canReuseTrend(result, zone) {
 		if (!isBucketPayload(trendBuckets) || trendBuckets.tz !== zone || windowKey(result.window, zone) !== trendWindowKey) return false;
-		return result.rows.filter(isReadable).every((row) => {
-			const series = trendBuckets.series.find((item) => item?.source_id === row.source_id);
-			if (!series) return false;
-			const parts = (series.days || []).map((day) => finite(day?.tokens?.total)).filter((value) => value != null);
-			const sum = parts.length ? parts.reduce((total, value) => total + value, 0) : null;
-			return (finite(row.metrics?.total?.value) ?? finite(row.metrics?.total?.observed)) === sum;
-		});
+		return readableFingerprint(result.rows) === trendRowKey;
 	}
 	function wantsTrend(now = new Date()) {
 		if (!bucketsSupported || bucketsStopped) return false;
 		if (!trendBuckets) return true;
-		if (readableKey(data?.rows) !== trendSourceKey) return true;
+		if (readableFingerprint(data?.rows) !== trendRowKey) return true;
 		if (windowKey(periodWindow(now, Number(period), requestZone), requestZone) !== trendWindowKey) return true;
 		return now.getTime() - trendReadAt >= TREND_TTL;
 	}
@@ -14441,13 +14445,13 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (!isBucketPayload(result?.buckets)) {
 			trendBuckets = null;
 			trendReadAt = 0;
-			trendSourceKey = "";
+			trendRowKey = "";
 			trendWindowKey = "";
 			return;
 		}
 		trendBuckets = result.buckets;
 		trendReadAt = Date.now();
-		trendSourceKey = readableKey(result.rows);
+		trendRowKey = readableFingerprint(result.rows);
 		trendWindowKey = windowKey(result.window, result.buckets.tz || zoneUsed);
 	}
 	function withdraw({ preserveSelection = false, keepSerial = false } = {}) {
@@ -14457,7 +14461,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		signature = "";
 		trendBuckets = null;
 		trendReadAt = 0;
-		trendSourceKey = "";
+		trendRowKey = "";
 		trendWindowKey = "";
 		clearTimeout(timer);
 		dropChart();
@@ -14523,8 +14527,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			alive();
 			if (ticket !== serial) return;
 			if (result?.workspace_id !== workspaceId || !Array.isArray(result.rows) || !Array.isArray(result.quota_pools)) throw Error(t("pm_scope_mismatch"));
-			const previousKey = trendSourceKey;
-			follow = !asked && bucketsSupported && !bucketsStopped && (readableKey(result.rows) !== previousKey || !canReuseTrend(result, zoneUsed));
+			follow = !asked && bucketsSupported && !bucketsStopped && !canReuseTrend(result, zoneUsed);
 			if (follow) withdrawSources(result);
 			else {
 				if (asked || bucketsStopped) rememberTrend(result, zoneUsed);
