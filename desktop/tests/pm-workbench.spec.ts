@@ -41,9 +41,11 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   });
   test('snapshot lost reply recovers its original request and expected plan version',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);f.state.lost=true;
-    await openPmPanel(page,'ui_report');const form=page.locator('[data-pm-action="pm.snapshot.create"]');
+    await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=save]').click();
+    const form=page.locator('[data-pm-action="pm.snapshot.create"]');
     await form.getByRole('button',{name:'Save report',exact:true}).click();await expect(form).toContainText('Reply unavailable');
-    f.base.state.planHead.version=5;await page.reload();await openPmPanel(page,'ui_report');await form.getByRole('button',{name:'Check original request',exact:true}).click();
+    f.base.state.planHead.version=5;await page.reload();await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=save]').click();
+    await form.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect(page.getByLabel('Report version')).toHaveValue('pmsnap_'+'3'.repeat(32));
     expect(f.state.writes).toHaveLength(2);expect(f.state.writes[1]).toEqual(f.state.writes[0]);expect(f.state.snapshots).toHaveLength(3);
   });

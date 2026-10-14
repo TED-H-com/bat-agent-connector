@@ -1,4 +1,4 @@
-import {emptyState} from './ui/components.js';
+import {disclosure, emptyState, statusPill} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 // Work stays in the Connector; this view preserves explicit PM associations and saved evidence.
 import {fixedQualityPicker} from './pm-quality-projections.js';
@@ -27,6 +27,14 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
   const verify = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const can = decide => loaded && permitted(decide);
   const forms = new Set();
+  const boundPlans = new Map();
+  function updateBoundPlans(read = false) {
+    for (const [row, display] of boundPlans) {
+      if (!row.isConnected) boundPlans.delete(row);
+      else if (read) void display.refresh();
+      else display.withdraw();
+    }
+  }
   const track = value => {forms.add(value); return value;};
   function updateForms() {
     // The action handler uses the same read gate. A still-enabled button would
@@ -95,13 +103,25 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     row.addEventListener('toggle', async () => {
       if (!row.open || opened) return; opened = true;
       detail.append(h('a', {href: `#/item/${item.work_item_id}`}, t('pm_evidence_open_work')));
-      if (can(true)) {
-        const editor = h('details', {}, h('summary', {}, t(binding ? 'pm_evidence_reassociate' : 'pm_evidence_associate_work')));
-        detail.append(editor);
+      let plan = null, planError = null;
+      const planGeneration = generation;
+      if (can(true) || binding?.plan_revision_id) {
         try {
           const accepted = await api('GET', `${endpoint}/plans/accepted`); alive(); if (!row.isConnected) return;
           if (accepted.head.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
-          const plan = accepted.plan, rationale = input('pm_evidence_rationale', {max: 4000});
+          plan = accepted.plan || null;
+        } catch (error) {
+          try {alive();} catch {return;}
+          if (!row.isConnected) return;
+          planError = error;
+        }
+      }
+      if (can(true)) {
+        const editor = h('details', {}, h('summary', {}, t(binding ? 'pm_evidence_reassociate' : 'pm_evidence_associate_work')));
+        detail.append(editor);
+        if (planError) editor.append(errorBox(planError));
+        else {
+          const rationale = input('pm_evidence_rationale', {max: 4000});
           const planId = h('select', {'aria-label': t('pm_evidence_plan_choice')}, h('option', {value: ''}, t('pm_evidence_no_plan_choice')));
           if (plan) planId.append(h('option', {value: plan.revision_id}, plan.document.title));
           if (binding?.plan_revision_id && binding.plan_revision_id !== plan?.revision_id)
@@ -133,12 +153,45 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
             extra: h('div', {}, labelled('pm_evidence_rationale', rationale), labelled('pm_evidence_plan_choice', planId), selectedIds, choices)}));
           planId.addEventListener('change', () => {if (bind.locked()) return; selectedIds.value = '[]'; bind.changed(); showRequirements();});
           editor.append(bind.box); showRequirements();
-        } catch (error) {if (row.isConnected) editor.append(errorBox(error));}
+        }
       }
       if (!binding) return;
-      detail.append(h('p', {class: 'muted'}, t(binding.plan_revision_id ? 'pm_evidence_fixed_plan' : 'pm_evidence_no_plan')));
-      if (binding.plan_revision_id) detail.append(h('code', {}, binding.plan_revision_id),
-        h('p', {}, (binding.requirement_ids || []).join(', ')));
+      if (!binding.plan_revision_id) detail.append(h('p', {class: 'muted'}, t('pm_evidence_no_plan')));
+      if (binding.plan_revision_id) {
+        const labels = h('div', {'data-pm-bound-plan': ''}), reason = h('div', {hidden: true});
+        detail.append(labels, disclosure({label: t('pm_evidence_details'), body: h('div', {},
+          h('p', {class: 'muted'}, t('pm_evidence_fixed_plan')), reason,
+          h('p', {class: 'mono'}, binding.plan_revision_id),
+          (binding.requirement_ids || []).length ? h('p', {class: 'mono'}, binding.requirement_ids.join(', ')) : null)}));
+        let request = 0;
+        const renderPlan = document => {
+          const texts = (binding.requirement_ids || []).map(id => document?.requirements?.find(row => row.id === id)?.text);
+          labels.replaceChildren(...(document?.title ? [h('p', {}, document.title)] : []),
+            ...texts.filter(Boolean).map(text => h('p', {}, text)),
+            ...(!document?.title || texts.some(text => !text) ? [statusPill('unknown')] : []));
+          reason.hidden = Boolean(document?.title) && texts.every(Boolean);
+          reason.textContent = t(document ? 'pm_evidence_labels_unread' : 'pm_evidence_plan_unread');
+        };
+        const display = {
+          withdraw: () => {++request; renderPlan(null);},
+          refresh: async () => {
+            const ticket = ++request, sourceGeneration = generation;
+            try {
+              const value = await api('GET', `${endpoint}/plans/${encodeURIComponent(binding.plan_revision_id)}`); alive();
+              if (ticket !== request || sourceGeneration !== generation || !row.isConnected) return;
+              if (value.plan?.workspace_id !== workspaceId || value.plan?.revision_id !== binding.plan_revision_id) throw Error(t('pm_scope_mismatch'));
+              renderPlan(value.plan.document);
+            } catch (error) {
+              try {alive();} catch {return;}
+              if (ticket !== request || sourceGeneration !== generation || !row.isConnected) return;
+              renderPlan(null); reason.replaceChildren(t('pm_evidence_plan_unread'), errorBox(error));
+            }
+          },
+        };
+        boundPlans.set(row, display);
+        if (planGeneration === generation && plan?.revision_id === binding.plan_revision_id) renderPlan(plan.document);
+        else {renderPlan(null); void display.refresh();}
+      }
       const holder = h('div');
       const selectedQuality = h('input', {type: 'hidden', value: 'null'});
       const picker = qualitySelection ? fixedQualityPicker({h,t,api,alive,workspaceId,workItemId:item.work_item_id,
@@ -154,13 +207,13 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     }); return row;
   }
   async function loadProject() {
-    const ticket = ++generation; loaded = false; updateForms(); status.replaceChildren();
+    const ticket = ++generation; loaded = false; updateForms(); status.replaceChildren(); updateBoundPlans();
     if (!selected) {rows.replaceChildren(); active = null; return;}
     try {
       const data = await api('GET', `/projects/${encodeURIComponent(selected)}`); alive(); if (ticket !== generation) return;
       if (data.project?.project_id !== selected) throw Error(t('pm_scope_mismatch'));
       const signature = JSON.stringify([data, bindings, workBindings]);
-      loaded = true; if (active?.signature === signature) {updateForms(); return;}
+      loaded = true; if (active?.signature === signature) {updateForms(); updateBoundPlans(true); return;}
       active = {signature}; rows.replaceChildren();
       const bound = bindings.some(row => row.project_id === selected);
       if (can(true)) rows.append(bindingForm('pm.project.bind', {project_id: selected},
@@ -183,7 +236,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     throw Error(t('pm_partial'));
   }
   async function refresh() {
-    const ticket = ++generation; loaded = false; updateForms();
+    const ticket = ++generation; loaded = false; updateForms(); updateBoundPlans();
     try {
       const [catalog, associated, work] = await Promise.all([api('GET', '/projects'), allBindings('projects'), allBindings('work')]); alive();
       if (ticket !== generation) return;

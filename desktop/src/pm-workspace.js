@@ -479,7 +479,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const charter = workspaceId && !threadId && caps()?.features?.pm_workspaces?.plan_drafting;
   const brief = workspaceId && caps()?.features?.pm_workspaces?.brief_snapshots
     ? charter ? (liveOverview ? workspaceOverview : workspaceCharter)({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, caps, canRead: () => loaded && Boolean(workspace),
-      onCompare: () => {openPanel(t('ui_compare'), brief.reportTools); void brief.prepareReports().then(() => brief.reportActions.compare());},
+      onCompare: () => {openReport('compare'); void brief.prepareReports().then(() => brief.reportActions.compare());},
       onHeader: ({meta, phase, active}) => {overviewMeta.hidden = !active; overviewMeta.replaceChildren(meta);
         if (active) {phasePill.hidden = !phase; phasePill.textContent = phase || ''; }},
       onOpen: async (ref, row) => {
@@ -649,12 +649,62 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const node of brief.box.querySelectorAll(':scope > details, :scope > [data-pm-brief-export]')) reportTools.append(node);
     drawersHome.append(reportTools);
   }
-  const reportMenu = reportTools.children.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down', iconPosition: 'end'}), items: [
-    {key: 'versions', label: t('ui_report_versions'), onSelect: () => openPanel(t('ui_report'), reportTools)},
-    {label: t('ui_save_snapshot'), onSelect: () => openPanel(t('ui_report'), reportTools)},
-    ...(charter ? [{label: t('ui_compare'), onSelect: () => {if (brief?.reportActions) {openPanel(t('ui_compare'), reportTools); void brief.prepareReports().then(() => brief.reportActions.compare());} else reportTools.querySelector('button[data-report-compare]')?.click();}},
-      {label: t('ui_print'), onSelect: () => brief?.reportActions ? brief.reportActions.print() : reportTools.querySelector('button[data-report-print]')?.click()}] : []),
-    {label: t('ui_export_brief'), onSelect: () => openPanel(t('ui_report'), reportTools)},
+  const historyMore = reportTools.querySelector('.pm-charter-save');
+  const versionBar = reportTools.querySelector('.pm-workbench-toolbar');
+  if (historyMore && versionBar) for (const control of [...historyMore.querySelectorAll(':scope > button')]) versionBar.append(control);
+  const reportKind = node => node.matches('[data-pm-brief-export]') ? 'export'
+    : node.matches('.pm-charter-save, [data-pm-action="pm.snapshot.create"]') || node.querySelector('[data-pm-action="pm.snapshot.create"]') ? 'save'
+    : node.matches('.pm-workbench-toolbar, details') ? 'versions' : 'compare';
+  const reportSlots = [...reportTools.children].map(node => {
+    // Export owns its source-withdrawal visibility. Keep task visibility outside it.
+    if (node.matches('[data-pm-brief-export]')) {
+      const slot = h('div', {'data-pm-report-slot': 'export'});
+      node.before(slot); slot.append(node); return slot;
+    }
+    node.dataset.pmReportSlot = reportKind(node); return node;
+  });
+  const reportState = emptyState({title: t('pm_report_unavailable'), text: t('pm_report_unselected')});
+  reportState.hidden = true; reportState.dataset.pmReportState = ''; reportTools.append(reportState);
+  function focusReportControl(node, panel, read) {
+    if (!node) return;
+    queueMicrotask(() => {
+      const initialFocus = document.activeElement;
+      void Promise.resolve(read).then(() => {
+        if (detailPanel !== panel || !node.isConnected || node.closest('[hidden], [inert]') || node.matches(':disabled')) return;
+        if (document.activeElement === initialFocus) node.focus();
+      });
+    });
+  }
+  function openReport(task) {
+    const shown = task === 'compare' ? ['versions', 'compare'] : [task];
+    for (const slot of reportSlots) slot.hidden = !shown.includes(slot.dataset.pmReportSlot);
+    const titles = {versions: 'ui_report_versions', save: 'ui_save_snapshot', export: 'ui_export_brief', compare: 'ui_compare'};
+    openPanel(t(titles[task] || 'ui_report'), reportTools);
+    const panel = detailPanel, read = brief?.prepareReports?.();
+    reportState.hidden = true;
+    void Promise.resolve(read).then(() => {
+      if (detailPanel !== panel) return;
+      if (task === 'export') reportState.hidden = Boolean(reportTools.querySelector('[data-pm-brief-export]:not([hidden])'));
+      else if (task === 'versions' && versionBar) reportState.hidden = Boolean(versionBar.querySelector('select')?.options.length);
+    });
+    if (task === 'export') {
+      const fold = reportTools.querySelector('[data-pm-brief-export]');
+      if (fold) fold.open = true;
+      focusReportControl(fold?.querySelector('select, button'), panel, read);
+    } else if (task === 'save') focusReportControl(reportTools.querySelector('[data-pm-action="pm.snapshot.create"] button[type="submit"]'), panel, read);
+    else if (task === 'compare') focusReportControl(reportTools.querySelector('[data-report-compare], select'), panel, read);
+    else {
+      const history = reportTools.querySelector('details[data-pm-report-slot="versions"]');
+      if (history) history.open = true;
+      focusReportControl(reportTools.querySelector('.pm-workbench-toolbar select') || history?.querySelector(':scope > summary'), panel, read);
+    }
+  }
+  const reportMenu = reportSlots.length ? menu({button: button({label: t('ui_report'), 'data-pm-report-menu': '', icon: 'chevron-down', iconPosition: 'end'}), items: [
+    {key: 'versions', label: t('ui_report_versions'), onSelect: () => openReport('versions')},
+    {key: 'save', label: t('ui_save_snapshot'), onSelect: () => openReport('save')},
+    ...(charter ? [{key: 'compare', label: t('ui_compare'), onSelect: () => {if (brief?.reportActions) {openReport('compare'); void brief.prepareReports().then(() => brief.reportActions.compare());} else {openReport('versions'); reportTools.querySelector('button[data-report-compare]')?.click();}}},
+      {key: 'print', label: t('ui_print'), onSelect: () => brief?.reportActions ? brief.reportActions.print() : reportTools.querySelector('button[data-report-print]')?.click()}] : []),
+    {key: 'export', label: t('ui_export_brief'), onSelect: () => openReport('export')},
   ]}) : null;
   if (reportMenu) headerActions.insertBefore(reportMenu, refresh);
   if (dependencies?.captureButton) headerActions.insertBefore(dependencies.captureButton, refresh);
@@ -747,10 +797,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       ['overview', brief?.box || (lifecycle ? h('div') : null), []],
       ['discussions', content, [['ui_meetings', meetings?.element]]],
       ['requirements', traceability?.element || (viewTools.requirements.some(([, node]) => node) ? emptyState({title: t('wv_requirements_unavailable')}) : null), []],
-      ['schedule', schedule?.element || roadmap?.box, schedule ? [] : [['ui_sprints', sprints?.box]]],
-      ['dependencies', dependencies?.element || null, [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
+      ['schedule', schedule?.element || roadmap?.box || (sprints ? emptyState({title: t('wv_no_schedule'), text: t('wv_no_schedule_reason')}) : null), schedule ? [] : [['ui_sprints', sprints?.box]]],
+      ['dependencies', dependencies?.element || (maintenancePolicy || releaseBaselines ? emptyState({title: t('wv_no_dependencies'), text: t('wv_no_dependencies_reason')}) : null), [['ui_policy', maintenancePolicy?.element], ['ui_baselines', releaseBaselines?.element]]],
       ['issues', register?.element || governance?.element, [...(register && governance ? [['ui_governance', governance.element]] : []), ['ui_repairs', maintenanceRepairs?.element], ['ui_maintenance_review', maintenanceReview?.element], ['ui_follow_up', followUp?.element]]],
-      ['agents', resources?.element, [['ui_observations', ahp?.element]]],
+      ['agents', resources?.element || (ahp ? emptyState({title: t('wv_no_agents'), text: t('wv_no_agents_reason')}) : null), [['ui_observations', ahp?.element]]],
       ['board', kanban?.element || (workBatches ? emptyState({title: t('wv_board_unavailable')}) : null), []],
     ];
     for (const [id, primarySection, secondaries] of definitions) {
@@ -759,7 +809,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const region = h('div', {'data-pm-region': id}, ...sections); body.append(region);
       if (primarySection) {
         primarySection.classList.add('pm-primary-content');
-        for (const repeated of primarySection.querySelectorAll(':scope > h2, :scope > header h2')) repeated.hidden = true;
+        if (!primarySection.classList.contains('ui-empty')) for (const repeated of primarySection.querySelectorAll(':scope > h2, :scope > header h2')) repeated.hidden = true;
       }
       groups.push({id, sections: [region]});
     }

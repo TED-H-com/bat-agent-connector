@@ -174,6 +174,15 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 
 Secondary tools use collapsed disclosures or the view's tool drawer. They keep their
 original forms and refresh/withdrawal behavior. Do not rebuild contents to move sections.
+When Schedule, Agents or Dependencies has no primary projection, that view shows its own
+unavailable state first. Missing capability does not prove that no records exist.
+Sprints, observations, policy and baselines stay collapsed under their
+labels and do not replace the view. Each Report menu task opens on its own: Versions, Save
+report and Export brief focus that task's first control. A phase change starts on Choose
+phase and does not submit a stage until one is chosen. Workspace settings show the
+bound plan's title and requirement text, including older revisions. Display labels are
+revalidated on refresh; revision and requirement ids stay in Details, with Unknown when
+those labels cannot be read.
 
 Durable PM forms register only while connected. A hidden autonomous child tracks
 connection without changing the ordinary form's layout, selectors or hidden state.

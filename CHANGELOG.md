@@ -46,6 +46,13 @@
   and withdrawn sources lose rows and counts together.
   See the [dependency contract](docs/design/pm-dependencies.md).
 
+- Report tasks open separately and focus their own controls. Change phase starts at
+  Choose phase / 選擇階段 and requires an explicit choice. Workspace settings resolve
+  plan and requirement labels from the bound revision, revalidate them on refresh,
+  and keep their exact IDs in Details. Schedule, Agents and Dependencies show an
+  unavailable state when their projection is unsupported, with secondary tools
+  collapsed below it.
+
 - Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
   decisions, deviations and recent deliveries, retaining confirmed goals and recent
   decided history and unresolved requirement blockers across plan revisions,

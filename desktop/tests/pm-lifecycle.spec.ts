@@ -79,6 +79,31 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     await expect.poll(()=>f.state.writes.length).toBe(1);
     expect(f.state.writes[0].body.preconditions).toEqual({expected_lifecycle_revision:0});
   });
+  test('a Development workspace does not submit Idea from a pristine phase form',async({page})=>{
+    const f=fixture();f.state.stage='development';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
+    await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Development');
+    const editor=await edit(page,'set_stage'),stage=editor.getByLabel('Management stage');
+    await expect(stage).toHaveValue('');
+    await expect(stage.locator('option:checked')).toHaveText('Choose phase');
+    await editor.getByLabel('Reason and retained context').fill('Keep the current delivery.');
+    await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeDisabled();
+    await editor.evaluate((form:HTMLFormElement)=>form.requestSubmit());
+    expect(f.state.writes).toHaveLength(0);
+    await expect(stage).toBeEnabled();
+    await expect(editor.getByLabel('Reason and retained context')).toBeEnabled();
+    await stage.selectOption('planning');
+    await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeEnabled();
+    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await expect(stage).toHaveValue('planning');
+    await expect(editor.getByLabel('Reason and retained context')).toHaveValue('Keep the current delivery.');
+    f.state.lost=true;await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+    await expect(editor).toContainText('Reply unavailable');
+    const original=structuredClone(f.state.writes[0]);
+    await page.reload();await openPmPanel(page,'ui_change_phase');await edit(page,'set_stage');
+    await action(page,'set_stage').getByRole('button',{name:'Check original request',exact:true}).click();
+    expect(f.state.writes).toHaveLength(2);expect(f.state.writes[1]).toEqual(original);
+    expect(original.body.params.stage).toBe('planning');
+  });
   test('Idea remains a readable stage without dispatching or changing its discussion',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Idea');await expect(activity(page)).toContainText('Discussions, Sprint commitments');
