@@ -185,7 +185,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
         threadChoice.value?api('GET',`${endpoint}/threads/${encodeURIComponent(threadChoice.value)}`):null]);
       if(!current(ticket)||sourceTicket!==sourceSerial)return;
       if(snap){check(snap);if(snap.snapshot?.snapshot_id!==snapshotChoice.value||snap.snapshot.workspace_id!==workspaceId||snap.snapshot.visibility?.filtered)throw Error(t('pm_fu_scope_error'));snapshot=snap.snapshot;}
-      if(discussion){check(discussion);if(discussion.thread?.thread_id!==threadChoice.value||discussion.thread.workspace_id!==workspaceId)throw Error(t('pm_fu_scope_error'));thread=discussion.thread;}
+      if(discussion){if(discussion.thread?.thread_id!==threadChoice.value||discussion.thread.workspace_id!==workspaceId)throw Error(t('pm_fu_scope_error'));thread=discussion.thread;}
       // Explicitly selecting a different thread fixes its current version. Head
       // changes during later refreshes still require the visible rebase action.
       if(baseline.value&&!editor.locked()){

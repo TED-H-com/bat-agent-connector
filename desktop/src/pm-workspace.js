@@ -540,7 +540,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
-    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
+    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, nameFor: (kind, id) => kind === 'requirement' ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
   if(governance)body.insertBefore(governance.element,content);
   let openRegisterForm = () => {};
   const routeRegisterAction = action => {
@@ -570,7 +570,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         void openVisibleSource(traceability, () => traceability?.focusRequirement?.(id));
       },
       onAction: routeRegisterAction,
-      nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === 'work_item' ? kanban?.titleFor?.(id) : '') || ''}) : null;
+      nameFor: (kind, id) => kind === 'requirement' ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === 'work_item' ? kanban?.titleFor?.(id) : '') || ''}) : null;
   openRegisterForm = (viewId, section) => {
     const host = body.querySelector(`[data-pm-section="${section}"]`) || viewTools[viewId]?.find(([key]) => key === section)?.[1];
     if (!host) return;
@@ -924,9 +924,53 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!openingReads.has(section)) openingReads.set(section, refreshSection(section, true).finally(() => openingReads.delete(section)));
       reads.push(openingReads.get(section));
     }
-    return settleRefreshes(reads);
+    return settleRefreshes(reads).then(refreshNames);
   }
   const openingReads = new Map();
+  let nameSerial = 0, nameRead = null, namePlan = null, namesLoaded = false;
+  function primaryRequirementName(id) {
+    return (!staleSections.has(traceability) && traceability?.labelFor?.('requirement', id))
+      || (!staleSections.has(brief) && brief?.labelFor?.('requirement', id)) || '';
+  }
+  function requirementName(id) {
+    if (!loaded || !workspace) return '';
+    const value = primaryRequirementName(id) || namePlan?.document?.requirements?.find(row => row.id === id)?.text;
+    return typeof value === 'string' ? value : '';
+  }
+  function relabelNames() {
+    for (const section of [register, governance]) if (sectionVisible(section)) section.relabel();
+  }
+  function withdrawNames() {
+    nameSerial++; nameRead = null; namePlan = null; namesLoaded = false;
+    relabelNames();
+  }
+  function refreshNames() {
+    if (!loaded || !workspace || !charter) return Promise.resolve();
+    if (namesLoaded) {relabelNames(); return Promise.resolve();}
+    const consumers = [register, governance].filter(sectionVisible);
+    const ids = consumers.flatMap(section => section.requirementIds());
+    if (!ids.length) return Promise.resolve();
+    if (ids.every(primaryRequirementName)) {relabelNames(); return Promise.resolve();}
+    // Governance already reads this exact source for admission. Reuse it when
+    // available; Requirements and Overview supply their own loaded names above.
+    const shared = sectionVisible(governance) && !staleSections.has(governance) ? governance.namePlan() : undefined;
+    if (shared !== undefined) {namePlan = shared; namesLoaded = true; relabelNames(); return Promise.resolve();}
+    if (nameRead) return nameRead;
+    const ticket = nameSerial;
+    const read = (async () => {
+      try {
+        const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`);
+        alive(); if (ticket !== nameSerial || !loaded || !workspace) return;
+        if (data.head?.workspace_id !== workspaceId || data.plan && (data.plan.workspace_id !== workspaceId
+          || data.plan.revision_id !== data.head.accepted_revision_id || !Array.isArray(data.plan.document?.requirements))) throw Error(t('pm_scope_mismatch'));
+        namePlan = data.plan || null; namesLoaded = true; relabelNames();
+      } catch (error) {
+        try {alive(); if (ticket !== nameSerial || !loaded || !workspace) return;} catch {return;}
+        namePlan = null; namesLoaded = false; relabelNames(); status.replaceChildren(errorBox(error));
+      }
+    })().finally(() => {if (nameRead === read) nameRead = null;});
+    nameRead = read; return read;
+  }
   async function openVisibleSource(section, open) {
     // A first read can apply a pending selection while its stale content is
     // masked. Wait for reveal before handing off the explicit record and focus.
@@ -1296,7 +1340,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       historyCursor = data.next_message_cursor; historyExpanded = true; renderThread(data);
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
-        loaded = false; lastThreadList = null; workspace = null; publishContext(); detailPanel?.close(); discussionTools?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
+        loaded = false; lastThreadList = null; workspace = null; withdrawNames(); publishContext(); detailPanel?.close(); discussionTools?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
         for (const section of sourceSections()) section.hidden = true;
         updateForms(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, t('pm_stale')));
       }
@@ -1329,7 +1373,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load({event = false} = {}) {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
-    if (!event) {invalidateSections(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
+    if (!event) {invalidateSections(); withdrawNames(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
     try {
       alive(); const list = event ? {workspaces:lastList} : await api('GET', '/pm/workspaces'); alive();
@@ -1454,12 +1498,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       resources?.setActive(workbench?.selected() === 'agents');
       schedule?.setActive(workbench?.selected() === 'schedule' && !detailPanel);
       if (dependencies) await dependencies.setActive(workbench?.selected() === 'dependencies');
-      register?.setActive(workbench?.selected() === 'issues');
+      await register?.setActive(workbench?.selected() === 'issues');
+      alive(); if (ticket !== sequence) return;
+      await refreshNames(); alive(); if (ticket !== sequence) return;
       updateForms();
       if (initialReadComplete) {proposalReview?.recheck(); nativeAnalysis?.recheck();}
     } catch (error) {
       if (!retired(error) && ticket === sequence) {
-        loaded = false; workspace = null; threadData = null;
+        loaded = false; workspace = null; threadData = null; withdrawNames();
         if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
         brief?.withdraw();traceability?.withdraw();kanban?.withdraw();resources?.withdraw();schedule?.withdraw();dependencies?.withdraw();qualityReviews?.withdraw();proposalReview?.withdraw();qualitySelections.clear();
         lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();register?.withdraw();ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();
@@ -1515,7 +1561,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       status.replaceChildren(); publishContext(); updateForms();
     } catch (error) {
       alive(); if (ticket !== sequence) return;
-      loaded = false; workspace = null; threadData = null;
+      loaded = false; workspace = null; threadData = null; withdrawNames();
       if ([403,404].includes(error.status)) forgetWorkspace(namespace,workspaceId);
       if (!authorityHidden.size) {
         for (const node of sourceSections()) authorityHidden.set(node,node.hidden);
@@ -1573,6 +1619,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const kind = event.resource_type;
     if (!pmEvent(kind) && !liveEvent(kind)) return;
     invalidateSections();
+    if (kind.startsWith('pm_plan') || kind === 'pm_workspace') withdrawNames();
     // Withdraw changed authority before coalescing: an earlier unrelated event in
     // this page must not hide the selected workspace's lifecycle invalidation.
     const lifecycleChanged = ['pm_workspace','pm_lifecycle'].includes(kind) && event.resource_id === workspaceId;
@@ -1590,7 +1637,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     // Discussions has no primary projection object. Its own thread list is the read.
     if (!threadId && workbench?.selected() === 'discussions' && pmEvent(kind)) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
-    return settleRefreshes(reads);
+    return settleRefreshes(reads).then(refreshNames);
   });
   const dispose = () => {
     uiState.listScroll = workspaceList.scrollTop;

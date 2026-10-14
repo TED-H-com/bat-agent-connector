@@ -30,7 +30,7 @@ const viewReads = (f: Fixture): Record<string, string[]> => ({
   overview: [f.root + '/overview', f.root + `/plans/${f.ids.planV3}`], discussions: [],
   requirements: ['/plans/accepted', '/kanban', '/issue-mappings', '/quality-reviews', '/roadmap', '/plans/head'].map(path => f.root + path).concat(deliveries(f), sessions(f)),
   schedule: [f.root + '/schedule'], dependencies: [f.root + '/dependencies', f.root + '/dependencies/revisions'],
-  issues: [f.root + '/register'], agents: [f.root + '/resources'],
+  issues: [f.root + '/register', f.root + '/plans/accepted'], agents: [f.root + '/resources'],
   board: ['/kanban', '/plans/accepted', '/roadmap'].map(path => f.root + path).concat(deliveries(f), sessions(f)),
 });
 async function mounted(page: Page, f: Fixture, view: string) {

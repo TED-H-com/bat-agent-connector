@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Issues and Governance retain requirement names on direct opening with one
+  shared accepted-plan read, without loading the Requirements or Board views.
+  Unknown names no longer claim that a saved Governance source is missing.
+- Follow-up preparation and assessment accept the Connector's nested discussion
+  identity while retaining their thread and workspace checks.
+
 - Bind the demo follow-up assessment to its fixed Planning discussion using the backend-supported discussion mode and original version.
 
 - PM workspaces load the selected view and open secondary tools on demand,

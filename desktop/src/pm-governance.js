@@ -34,6 +34,14 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   const fold = (key, body, open = false) => disclosure({label: t(key), body, open});
   const line = (key, value) => h('section', {class: 'pm-brief-row'}, h('h3', {}, t(key)), h('div', {class: 'pm-brief-values'}, value));
   const text = value => h('p', {class: 'pm-note-text'}, value || t('pm_gov_unknown'));
+  const nameLabels = new Map();
+  const namedText = (label, node = text(label())) => {node.textContent = label(); nameLabels.set(node, label); return node;};
+  function relabel() {
+    for (const [node, label] of nameLabels) {
+      if (!node.isConnected) nameLabels.delete(node);
+      else node.textContent = label();
+    }
+  }
   const hidden = value => {const node = h('input', {type: 'hidden', value: JSON.stringify(value)}); node.dataset.pmDefault = JSON.stringify(value); return node;};
   const select = (key, choices, value = '') => {
     const node = h('select', {'aria-label': t(key)}, ...choices.map(([value, label]) => h('option', {value}, label)));
@@ -132,14 +140,14 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     for (const ref of saved) if (!choices.some(choice => key(choice) === key(ref))) choices.push({...ref, missing: true});
     const controls = choices.map(choice => {
       const checkbox = h('input', {type: 'checkbox'});
-      const label = choice.missing ? t('pm_gov_source_missing') : sourceLabel(choice.kind, choice.source);
+      const label = choice.missing ? h('span', {}, t('pm_gov_source_missing')) : namedText(() => sourceLabel(choice.kind, choice.source), h('span'));
       checkbox.addEventListener('change', () => {
         if (!can() || stale || getEditor().locked() || required.has(key(choice))) return;
         const refs = JSON.parse(field.value || '[]').filter(ref => key(ref) !== key(choice));
         if (checkbox.checked) refs.push({kind: choice.kind, id: choice.id});
         getEditor().set('source_refs', JSON.stringify(refs)); dirty = true; update();
       });
-      return {choice, checkbox, element: h('label', {class: 'pm-fact-heading'}, checkbox, h('span', {}, label))};
+      return {choice, checkbox, element: h('label', {class: 'pm-fact-heading'}, checkbox, label)};
     });
     const sync = () => {
       const selected = new Set(JSON.parse(field.value || '[]').map(key));
@@ -154,14 +162,14 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
         h('p', {}, t('pm_gov_review_at'), t('pm_panel_separator'), d.review_at ? timeStamp(d.review_at) : t('pm_gov_unscheduled')))),
       d.dimension ? line('pm_gov_dimension', text(t('pm_gov_' + d.dimension))) : '',
       line('pm_gov_assessment', statusPill('not_assessed')),
-      d.affected_requirement_ids.length ? line('pm_gov_affected', text(d.affected_requirement_ids.map(value => nameFor('requirement', value) || value).join(', '))) : '',
+      d.affected_requirement_ids.length ? line('pm_gov_affected', namedText(() => d.affected_requirement_ids.map(value => nameFor('requirement', value) || value).join(', '))) : '',
       d.alternatives.length ? line('pm_gov_alternatives', h('ul', {}, ...d.alternatives.map(value => h('li', {class: 'pm-note-text'}, value)))) : '',
       d.decision ? line('pm_gov_decision', h('div', {}, text(t('pm_gov_' + d.decision.disposition)), text(d.decision.rationale),
         text(actorLabel(d.decision.recorded_by)))) : '',
       d.adoption ? line('pm_gov_adoption', h('div', {}, statusPill('historical'), id(d.adoption.revision_id),
         h('p', {}, h('a', {href: `#/op/${d.adoption.operation_id}`}, t('pm_operation'))), text(actorLabel(d.adoption.adopted_by)))) : '',
       d.proposed_revision ? fold('pm_gov_proposed', h('div', {}, id(d.proposed_revision.revision_id), id(d.proposed_revision.document_digest))) : '',
-      fold('pm_gov_sources', h('div', {}, ...d.sources.map(ref => h('article', {class: 'pm-fact'}, text(sourceLabel(ref.kind, ref.source)), id(ref.id),
+      fold('pm_gov_sources', h('div', {}, ...d.sources.map(ref => h('article', {class: 'pm-fact'}, namedText(() => sourceLabel(ref.kind, ref.source)), id(ref.id),
         fold('pm_gov_exact_source', h('pre', {class: 'pm-brief-proof'}, JSON.stringify(ref.source, null, 2))))))),
       d.disambiguation ? fold('pm_gov_distinction', h('div', {}, text(d.disambiguation.rationale), ...d.disambiguation.record_ids.map(id))) : '',
       line('pm_gov_reason', text(d.rationale)));
@@ -214,15 +222,16 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     const rebuild = entries => {
       rows.replaceChildren(); controls.length = 0;
       const saved = field.value.split(',').map(value => value.trim()).filter(Boolean);
-      for (const value of saved) if (!entries.some(([id]) => id === value)) entries.push([value, nameFor('requirement', value) || t('pm_gov_source_missing')]);
-      for (const [value, text] of entries) {
+      for (const value of saved) if (!entries.some(([id]) => id === value)) entries.push([value, () => nameFor('requirement', value) || t('pm_gov_unknown')]);
+      for (const [value, label] of entries) {
         const node = h('input', {type: 'checkbox', onchange: () => {
           if (field.disabled) return;
           const values = field.value.split(',').map(value => value.trim()).filter(item => item && item !== value);
           if (node.checked) values.push(value);
           field.value = values.join(', '); field.dispatchEvent(new Event('input', {bubbles: true})); sync();
         }});
-        controls.push([node, value]); rows.append(h('label', {class: 'pm-fact-heading'}, node, h('span', {}, text)));
+        controls.push([node, value]); rows.append(h('label', {class: 'pm-fact-heading'}, node,
+          typeof label === 'function' ? namedText(label, h('span')) : h('span', {}, label)));
       }
       sync();
     };
@@ -425,7 +434,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       }
       const next = JSON.stringify([selectedId, current?.record.version, accepted.head.version, workspace()?.version]);
       const changed = signature && signature !== next;
-      model = {records, detail: current, fixed, head: accepted.head, snapshots, nextCursor: page.next_cursor};
+      model = {records, detail: current, fixed, head: accepted.head, plan: accepted.plan, snapshots, nextCursor: page.next_cursor};
       loaded = true; renderRead();
       if (force || !signature || changed && !dirty && !forms.some(editor => editor.locked())) await renderEditors();
       else {
@@ -435,7 +444,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           await refreshCreateSource(); alive(); if (ticket !== serial) return;
         }
       }
-      if (ticket !== serial || !loaded) return; signature = next; editors.hidden = false; update();
+      if (ticket !== serial || !loaded) return; signature = next; editors.hidden = false; update(); relabel();
       if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {focused.focus({preventScroll: true}); if (selection) focused.setSelectionRange(...selection);}
     } catch (error) {if (ticket === serial) unavailable(error);}
   }
@@ -452,5 +461,9 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     const field = requested === 'resolve' ? editor.fields.rationale : editor.box.querySelector('input:not([type="hidden"]), select, textarea');
     field?.focus(); editor.box.scrollIntoView({block: 'nearest'});
   }
-  return {element, refresh, openRef};
+  return {element, refresh, openRef, relabel,
+    requirementIds: () => model ? [...model.records.flatMap(row => row.revision.document.affected_requirement_ids),
+      ...forms.flatMap(editor => editor.fields?.affected_requirement_ids?.value.split(',').map(value => value.trim()).filter(Boolean) || [])] : [],
+    namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id
+      && Array.isArray(model.plan.document?.requirements) ? model.plan : undefined};
 }

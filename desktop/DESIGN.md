@@ -1050,6 +1050,19 @@ visible view and restores an open tool with its unsent draft. An Overview relate
 inspector keeps its owning Overview projection subscribed while it is mounted in
 Issues. Closed discussion tools wait for their next visible disclosure.
 
+Visible Register and Governance labels share a requirement-name source. Loaded
+Requirements or Overview names take precedence; otherwise one accepted-plan read
+supplies names without loading either full view. Governance can supply its own
+accepted-plan read. Plan events invalidate the cache, including while Issues is
+hidden. Withdrawal clears names and rejects older replies. Relabeling preserves
+the inspector and authored form fields. A saved requirement with an unknown name
+does not assert that its original source is unavailable. Work labels keep their
+existing loaded-table or fixed-snapshot sources and do not cause another read.
+
+Follow-up preparation and assessment read discussion identity from
+`thread.workspace_id`, matching the Connector envelope. The assessment request
+also retains the fixed thread ID, version and Planning mode checks.
+
 Agents event reads respect Pause updates. A later event can supersede an older
 in-flight source read while updates are running; only explicit Refresh bypasses
 the pause. Parent authorization remains checked while the projection is paused.

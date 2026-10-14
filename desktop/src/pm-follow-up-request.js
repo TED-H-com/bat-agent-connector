@@ -56,7 +56,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
     if(next!=null)body.append(h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>void readThreads(next)},t('pm_fa_more_threads')));
     if(!chooser.value)return;status.replaceChildren(note('pm_fa_loading_thread'));
     try{
-      const data=check(await api('GET',`${endpoint}/threads/${encodeURIComponent(chooser.value)}`));if(!current(ticket))return;
+      const data=await api('GET',`${endpoint}/threads/${encodeURIComponent(chooser.value)}`);if(!current(ticket))return;
       if(data.thread?.thread_id!==chooser.value||data.thread.workspace_id!==workspaceId||!Number.isSafeInteger(data.thread.version)
         ||!['idea','planning'].includes(data.thread.mode))throw Error(t('pm_fa_mismatch'));
       thread=data;status.replaceChildren();

@@ -23752,6 +23752,16 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	});
 	const line = (key, value) => h("section", { class: "pm-brief-row" }, h("h3", {}, t(key)), h("div", { class: "pm-brief-values" }, value));
 	const text = (value) => h("p", { class: "pm-note-text" }, value || t("pm_gov_unknown"));
+	const nameLabels = new Map();
+	const namedText = (label, node = text(label())) => {
+		node.textContent = label();
+		nameLabels.set(node, label);
+		return node;
+	};
+	function relabel() {
+		for (const [node, label] of nameLabels) if (!node.isConnected) nameLabels.delete(node);
+		else node.textContent = label();
+	}
 	const hidden = (value) => {
 		const node = h("input", {
 			type: "hidden",
@@ -23942,7 +23952,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		});
 		const controls = choices.map((choice) => {
 			const checkbox = h("input", { type: "checkbox" });
-			const label = choice.missing ? t("pm_gov_source_missing") : sourceLabel(choice.kind, choice.source);
+			const label = choice.missing ? h("span", {}, t("pm_gov_source_missing")) : namedText(() => sourceLabel(choice.kind, choice.source), h("span"));
 			checkbox.addEventListener("change", () => {
 				if (!can() || stale || getEditor().locked() || required.has(key(choice))) return;
 				const refs = JSON.parse(field.value || "[]").filter((ref) => key(ref) !== key(choice));
@@ -23957,7 +23967,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			return {
 				choice,
 				checkbox,
-				element: h("label", { class: "pm-fact-heading" }, checkbox, h("span", {}, label))
+				element: h("label", { class: "pm-fact-heading" }, checkbox, label)
 			};
 		});
 		const sync = () => {
@@ -23973,7 +23983,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	}
 	function documentView(entry) {
 		const d = entry.document;
-		return h("div", {}, text(d.description), line("pm_gov_owner", text(actorLabel(d.owner_actor))), line("pm_gov_response", h("div", {}, text(d.response), d.trigger ? text(t("pm_gov_trigger") + t("pm_panel_separator") + d.trigger) : note("pm_gov_trigger_unknown"), h("p", {}, t("pm_gov_review_at"), t("pm_panel_separator"), d.review_at ? timeStamp(d.review_at) : t("pm_gov_unscheduled")))), d.dimension ? line("pm_gov_dimension", text(t("pm_gov_" + d.dimension))) : "", line("pm_gov_assessment", statusPill("not_assessed")), d.affected_requirement_ids.length ? line("pm_gov_affected", text(d.affected_requirement_ids.map((value) => nameFor("requirement", value) || value).join(", "))) : "", d.alternatives.length ? line("pm_gov_alternatives", h("ul", {}, ...d.alternatives.map((value) => h("li", { class: "pm-note-text" }, value)))) : "", d.decision ? line("pm_gov_decision", h("div", {}, text(t("pm_gov_" + d.decision.disposition)), text(d.decision.rationale), text(actorLabel(d.decision.recorded_by)))) : "", d.adoption ? line("pm_gov_adoption", h("div", {}, statusPill("historical"), id(d.adoption.revision_id), h("p", {}, h("a", { href: `#/op/${d.adoption.operation_id}` }, t("pm_operation"))), text(actorLabel(d.adoption.adopted_by)))) : "", d.proposed_revision ? fold("pm_gov_proposed", h("div", {}, id(d.proposed_revision.revision_id), id(d.proposed_revision.document_digest))) : "", fold("pm_gov_sources", h("div", {}, ...d.sources.map((ref) => h("article", { class: "pm-fact" }, text(sourceLabel(ref.kind, ref.source)), id(ref.id), fold("pm_gov_exact_source", h("pre", { class: "pm-brief-proof" }, JSON.stringify(ref.source, null, 2))))))), d.disambiguation ? fold("pm_gov_distinction", h("div", {}, text(d.disambiguation.rationale), ...d.disambiguation.record_ids.map(id))) : "", line("pm_gov_reason", text(d.rationale)));
+		return h("div", {}, text(d.description), line("pm_gov_owner", text(actorLabel(d.owner_actor))), line("pm_gov_response", h("div", {}, text(d.response), d.trigger ? text(t("pm_gov_trigger") + t("pm_panel_separator") + d.trigger) : note("pm_gov_trigger_unknown"), h("p", {}, t("pm_gov_review_at"), t("pm_panel_separator"), d.review_at ? timeStamp(d.review_at) : t("pm_gov_unscheduled")))), d.dimension ? line("pm_gov_dimension", text(t("pm_gov_" + d.dimension))) : "", line("pm_gov_assessment", statusPill("not_assessed")), d.affected_requirement_ids.length ? line("pm_gov_affected", namedText(() => d.affected_requirement_ids.map((value) => nameFor("requirement", value) || value).join(", "))) : "", d.alternatives.length ? line("pm_gov_alternatives", h("ul", {}, ...d.alternatives.map((value) => h("li", { class: "pm-note-text" }, value)))) : "", d.decision ? line("pm_gov_decision", h("div", {}, text(t("pm_gov_" + d.decision.disposition)), text(d.decision.rationale), text(actorLabel(d.decision.recorded_by)))) : "", d.adoption ? line("pm_gov_adoption", h("div", {}, statusPill("historical"), id(d.adoption.revision_id), h("p", {}, h("a", { href: `#/op/${d.adoption.operation_id}` }, t("pm_operation"))), text(actorLabel(d.adoption.adopted_by)))) : "", d.proposed_revision ? fold("pm_gov_proposed", h("div", {}, id(d.proposed_revision.revision_id), id(d.proposed_revision.document_digest))) : "", fold("pm_gov_sources", h("div", {}, ...d.sources.map((ref) => h("article", { class: "pm-fact" }, namedText(() => sourceLabel(ref.kind, ref.source)), id(ref.id), fold("pm_gov_exact_source", h("pre", { class: "pm-brief-proof" }, JSON.stringify(ref.source, null, 2))))))), d.disambiguation ? fold("pm_gov_distinction", h("div", {}, text(d.disambiguation.rationale), ...d.disambiguation.record_ids.map(id))) : "", line("pm_gov_reason", text(d.rationale)));
 	}
 	function historyView(record) {
 		const holder = h("div"), container = fold("pm_gov_history", holder);
@@ -24062,8 +24072,8 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			rows.replaceChildren();
 			controls.length = 0;
 			const saved = field.value.split(",").map((value) => value.trim()).filter(Boolean);
-			for (const value of saved) if (!entries.some(([id]) => id === value)) entries.push([value, nameFor("requirement", value) || t("pm_gov_source_missing")]);
-			for (const [value, text] of entries) {
+			for (const value of saved) if (!entries.some(([id]) => id === value)) entries.push([value, () => nameFor("requirement", value) || t("pm_gov_unknown")]);
+			for (const [value, label] of entries) {
 				const node = h("input", {
 					type: "checkbox",
 					onchange: () => {
@@ -24076,7 +24086,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					}
 				});
 				controls.push([node, value]);
-				rows.append(h("label", { class: "pm-fact-heading" }, node, h("span", {}, text)));
+				rows.append(h("label", { class: "pm-fact-heading" }, node, typeof label === "function" ? namedText(label, h("span")) : h("span", {}, label)));
 			}
 			sync();
 		};
@@ -24502,6 +24512,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				detail: current,
 				fixed,
 				head: accepted.head,
+				plan: accepted.plan,
 				snapshots,
 				nextCursor: page.next_cursor
 			};
@@ -24520,6 +24531,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			signature = next;
 			editors.hidden = false;
 			update();
+			relabel();
 			if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {
 				focused.focus({ preventScroll: true });
 				if (selection) focused.setSelectionRange(...selection);
@@ -24550,7 +24562,10 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	return {
 		element,
 		refresh,
-		openRef
+		openRef,
+		relabel,
+		requirementIds: () => model ? [...model.records.flatMap((row) => row.revision.document.affected_requirement_ids), ...forms.flatMap((editor) => editor.fields?.affected_requirement_ids?.value.split(",").map((value) => value.trim()).filter(Boolean) || [])] : [],
+		namePlan: () => loaded && model?.plan?.workspace_id === workspaceId && model.plan.revision_id === model.head.accepted_revision_id && Array.isArray(model.plan.document?.requirements) ? model.plan : void 0
 	};
 }
 //#endregion
@@ -25116,6 +25131,20 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			onclick,
 			...attrs
 		}, h("span", { class: "reg-chip-label" }, text));
+	}
+	function relabel() {
+		if (!active) return;
+		render();
+		for (const chip of sheet?.querySelectorAll(".reg-chip[data-reg-requirement], .reg-chip[data-reg-work]") || []) {
+			const requirement = chip.hasAttribute("data-reg-requirement"), kind = requirement ? "requirement" : "work_item";
+			const id = chip.getAttribute(requirement ? "data-reg-requirement" : "data-reg-work"), fallback = t(requirement ? "reg_requirement" : "reg_work");
+			const name = labelSegment(nameFor(kind, id));
+			chip.querySelector(".reg-chip-label").textContent = name || fallback;
+			chip.title = name || id;
+			chip.setAttribute("aria-label", name || `${fallback} ${id}`);
+		}
+		const row = rows.find((row) => row.row_id === selected);
+		if (sheet && row) sheet.querySelector("h2").textContent = displayTitle(row) || t("reg_type_" + row.type);
 	}
 	function relatedItems(row) {
 		const related = row.related || {};
@@ -25842,7 +25871,9 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		setActive,
 		dispose,
 		closeSheet,
-		openRef
+		openRef,
+		relabel,
+		requirementIds: () => rows.flatMap((row) => [...row.related?.requirement_ids || [], ...row.source?.kind === "requirement" ? [row.source.id] : []])
 	};
 }
 //#endregion
@@ -27943,7 +27974,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		if (!chooser.value) return;
 		status.replaceChildren(note("pm_fa_loading_thread"));
 		try {
-			const data = check(await api("GET", `${endpoint}/threads/${encodeURIComponent(chooser.value)}`));
+			const data = await api("GET", `${endpoint}/threads/${encodeURIComponent(chooser.value)}`);
 			if (!current(ticket)) return;
 			if (data.thread?.thread_id !== chooser.value || data.thread.workspace_id !== workspaceId || !Number.isSafeInteger(data.thread.version) || !["idea", "planning"].includes(data.thread.mode)) throw Error(t("pm_fa_mismatch"));
 			thread = data;
@@ -28481,7 +28512,6 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 				snapshot = snap.snapshot;
 			}
 			if (discussion) {
-				check(discussion);
 				if (discussion.thread?.thread_id !== threadChoice.value || discussion.thread.workspace_id !== workspaceId) throw Error(t("pm_fu_scope_error"));
 				thread = discussion.thread;
 			}
@@ -39511,7 +39541,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		errorBox,
 		caps,
 		withRegister: caps()?.features?.pm_register?.version === 1,
-		nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ""
+		nameFor: (kind, id) => kind === "requirement" ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ""
 	}) : null;
 	if (governance) body.insertBefore(governance.element, content);
 	let openRegisterForm = () => {};
@@ -39562,7 +39592,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			openVisibleSource(traceability, () => traceability?.focusRequirement?.(id));
 		},
 		onAction: routeRegisterAction,
-		nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === "work_item" ? kanban?.titleFor?.(id) : "") || ""
+		nameFor: (kind, id) => kind === "requirement" ? requirementName(id) : traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === "work_item" ? kanban?.titleFor?.(id) : "") || ""
 	}) : null;
 	openRegisterForm = (viewId, section) => {
 		const host = body.querySelector(`[data-pm-section="${section}"]`) || viewTools[viewId]?.find(([key]) => key === section)?.[1];
@@ -40344,9 +40374,76 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (!openingReads.has(section)) openingReads.set(section, refreshSection(section, true).finally(() => openingReads.delete(section)));
 			reads.push(openingReads.get(section));
 		}
-		return settleRefreshes(reads);
+		return settleRefreshes(reads).then(refreshNames);
 	}
 	const openingReads = new Map();
+	let nameSerial = 0, nameRead = null, namePlan = null, namesLoaded = false;
+	function primaryRequirementName(id) {
+		return !staleSections.has(traceability) && traceability?.labelFor?.("requirement", id) || !staleSections.has(brief) && brief?.labelFor?.("requirement", id) || "";
+	}
+	function requirementName(id) {
+		if (!loaded || !workspace) return "";
+		const value = primaryRequirementName(id) || namePlan?.document?.requirements?.find((row) => row.id === id)?.text;
+		return typeof value === "string" ? value : "";
+	}
+	function relabelNames() {
+		for (const section of [register, governance]) if (sectionVisible(section)) section.relabel();
+	}
+	function withdrawNames() {
+		nameSerial++;
+		nameRead = null;
+		namePlan = null;
+		namesLoaded = false;
+		relabelNames();
+	}
+	function refreshNames() {
+		if (!loaded || !workspace || !charter) return Promise.resolve();
+		if (namesLoaded) {
+			relabelNames();
+			return Promise.resolve();
+		}
+		const ids = [register, governance].filter(sectionVisible).flatMap((section) => section.requirementIds());
+		if (!ids.length) return Promise.resolve();
+		if (ids.every(primaryRequirementName)) {
+			relabelNames();
+			return Promise.resolve();
+		}
+		const shared = sectionVisible(governance) && !staleSections.has(governance) ? governance.namePlan() : void 0;
+		if (shared !== void 0) {
+			namePlan = shared;
+			namesLoaded = true;
+			relabelNames();
+			return Promise.resolve();
+		}
+		if (nameRead) return nameRead;
+		const ticket = nameSerial;
+		const read = (async () => {
+			try {
+				const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/accepted`);
+				alive();
+				if (ticket !== nameSerial || !loaded || !workspace) return;
+				if (data.head?.workspace_id !== workspaceId || data.plan && (data.plan.workspace_id !== workspaceId || data.plan.revision_id !== data.head.accepted_revision_id || !Array.isArray(data.plan.document?.requirements))) throw Error(t("pm_scope_mismatch"));
+				namePlan = data.plan || null;
+				namesLoaded = true;
+				relabelNames();
+			} catch (error) {
+				try {
+					alive();
+					if (ticket !== nameSerial || !loaded || !workspace) return;
+				} catch {
+					return;
+				}
+				namePlan = null;
+				namesLoaded = false;
+				relabelNames();
+				status.replaceChildren(errorBox(error));
+			}
+		})().finally(() => {
+			if (nameRead === read) nameRead = null;
+		});
+		nameRead = read;
+		return read;
+	}
 	async function openVisibleSource(section, open) {
 		await refreshStaleVisible();
 		if (!disposed && loaded && sectionVisible(section)) return open();
@@ -41078,6 +41175,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				loaded = false;
 				lastThreadList = null;
 				workspace = null;
+				withdrawNames();
 				publishContext();
 				detailPanel?.close();
 				discussionTools?.close();
@@ -41141,6 +41239,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refresh.disabled = true;
 		if (!event) {
 			invalidateSections();
+			withdrawNames();
 			lifecycle?.withdraw();
 			engineering?.withdraw();
 			materialization?.withdraw();
@@ -41409,7 +41508,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			resources?.setActive(workbench?.selected() === "agents");
 			schedule?.setActive(workbench?.selected() === "schedule" && !detailPanel);
 			if (dependencies) await dependencies.setActive(workbench?.selected() === "dependencies");
-			register?.setActive(workbench?.selected() === "issues");
+			await register?.setActive(workbench?.selected() === "issues");
+			alive();
+			if (ticket !== sequence) return;
+			await refreshNames();
+			alive();
+			if (ticket !== sequence) return;
 			updateForms();
 			if (initialReadComplete) {
 				proposalReview?.recheck();
@@ -41420,6 +41524,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				loaded = false;
 				workspace = null;
 				threadData = null;
+				withdrawNames();
 				if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
 				brief?.withdraw();
 				traceability?.withdraw();
@@ -41525,6 +41630,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			loaded = false;
 			workspace = null;
 			threadData = null;
+			withdrawNames();
 			if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
 			if (!authorityHidden.size) {
 				for (const node of sourceSections()) authorityHidden.set(node, node.hidden);
@@ -41641,6 +41747,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const kind = event.resource_type;
 		if (!pmEvent(kind) && !liveEvent(kind)) return;
 		invalidateSections();
+		if (kind.startsWith("pm_plan") || kind === "pm_workspace") withdrawNames();
 		const lifecycleChanged = ["pm_workspace", "pm_lifecycle"].includes(kind) && event.resource_id === workspaceId;
 		if (lifecycleChanged) lifecycle?.withdraw();
 		if (threadId && pmEvent(kind)) return eventRead(load, () => load({ event: true }));
@@ -41653,7 +41760,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			reads.push(eventRead(section, () => refreshSection(section, false, !lifecycleChanged)));
 		}
 		if (!threadId && workbench?.selected() === "discussions" && pmEvent(kind)) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
-		return settleRefreshes(reads);
+		return settleRefreshes(reads).then(refreshNames);
 	});
 	const dispose = () => {
 		uiState.listScroll = workspaceList.scrollTop;
