@@ -40,6 +40,8 @@ for (const [view, budget] of Object.entries(budgets)) test(`20 mixed events coal
   expect(reads.length, JSON.stringify(reads.map(read => read.path))).toBeLessThanOrEqual(budget);
   expect(reads.some(read => read.at >= delivered), 'A central read must start after the final event was delivered').toBe(true);
   expect(reads.filter(read => read.path === '/projects').length).toBeLessThanOrEqual(view === 'projects' ? 2 : 1);
+  if (['overview','discussions','requirements','board','schedule','dependencies','issues','agents','session','settings'].includes(view))
+    expect(reads.filter(read => read.path === '/projects'), 'Ordinary resource events cannot change the project catalog').toEqual([]);
   expect(reads.filter(read => read.path === `/pm/workspaces/${f.ids.workspaceId}`)).toEqual([]);
   expect(reads.filter(read => /\/threads\/[^/]+$/.test(read.path))).toHaveLength(view === 'discussions' ? 1 : 0);
 });
