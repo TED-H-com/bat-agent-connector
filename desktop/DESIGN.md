@@ -196,7 +196,11 @@ Sprints, observations, policy and baselines stay collapsed under their
 labels and do not replace the view. Each Report menu task opens on its own: Versions, Save
 report and Export report focus that task's first control. Export report presents its
 description, format, language and primary download/save action directly, without an
-inner disclosure. A phase change starts on Choose
+inner disclosure. Task focus waits for both the report read and the control's actual
+enabled state, including initial workspace and transport admission. Moving focus or
+closing the task cancels the pending focus handoff. Versions keeps Save hidden;
+saving a quality-evidence report opens the Save task explicitly.
+A phase change starts on Choose
 phase and does not submit a stage until one is chosen. Workspace settings show the
 bound plan's title and requirement text, including older revisions. Display labels are
 revalidated on refresh; revision and requirement ids stay in Details, with Unknown when
