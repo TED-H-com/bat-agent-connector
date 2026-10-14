@@ -1,6 +1,7 @@
 """The shared read memo must never extend source authority or a snapshot."""
 import asyncio
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from dataclasses import replace
@@ -469,6 +470,51 @@ async def test_guarded_scope_cannot_be_shared_with_inherited_tasks_or_threads(db
             executor.submit(copy_context().run, child).result()
         assert read(db) == expected
         assert len(calls) == 9
+
+
+async def test_inherited_guarded_scope_checks_owner_before_reading_connection_metadata():
+    owner_thread, owner_task = threading.current_thread(), asyncio.current_task()
+    calls = []
+
+    class OwnerConnection:
+        def check_owner(self):
+            assert threading.current_thread() is owner_thread
+            assert asyncio.current_task() is owner_task
+
+        @property
+        def total_changes(self):
+            self.check_owner()
+            return 0
+
+        @property
+        def in_transaction(self):
+            self.check_owner()
+            return True
+
+    connection = OwnerConnection()
+
+    def read():
+        def load():
+            calls.append(True)
+            return len(calls)
+        return pm_read_cache.remember('owner-only', 'id', load)
+
+    def child():
+        with pm_read_cache.guarded_scope(connection, OWNER):
+            assert pm_read_cache._CURRENT.get().scope.disabled
+            read()
+            read()
+
+    async def task():
+        child()
+
+    with pm_read_cache.guarded(), pm_read_cache.guarded_scope(connection, OWNER):
+        assert read() == 1
+        await asyncio.create_task(task())
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(copy_context().run, child).result()
+        assert read() == 1
+        assert len(calls) == 5
 
 
 @pytest.mark.parametrize('difference', [

@@ -34,8 +34,8 @@ class _Scope:
     guard_depth: int = 0
 
     def __post_init__(self):
-        self.changes = self.db.total_changes
-        self.disabled = not self.db.in_transaction
+        self.changes = 0 if self.disabled else self.db.total_changes
+        self.disabled = self.disabled or not self.db.in_transaction
 
     def usable(self):
         # ContextVars are inherited by asyncio tasks and copy_context(). Neither
@@ -125,9 +125,8 @@ def guarded_scope(db, principal):
     parent = frame = _CURRENT.get()
     while frame is not None and frame.scope.db is not db:
         frame = frame.parent
-    current = _Scope(db, guard_depth=depth)
-    if frame is not None and not frame.scope.usable():
-        current.disabled = True  # A fresh private scope cannot revive an invalid owner/snapshot.
+    disabled = frame is not None and not frame.scope.usable()
+    current = _Scope(db, guard_depth=depth, disabled=disabled)
     token = _CURRENT.set(_Frame(current, _key(principal), parent))
     try:
         yield
