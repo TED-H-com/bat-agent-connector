@@ -3968,6 +3968,7 @@ var workbenchStrings = {
 		wb_resources: "Resources & budget",
 		wb_risks: "Risks & dependencies",
 		wb_decisions: "Open decisions",
+		wb_no_reports: "No saved reports",
 		wb_no_snapshot: "Start a discussion with PM, then save a report of the available information. Incomplete information is welcome.",
 		wb_no_plan: "No adopted plan in this report",
 		wb_quota: "Usage and remaining quota: not provided",
@@ -4056,6 +4057,7 @@ var workbenchStrings = {
 		wb_resources: "資源與預算",
 		wb_risks: "風險與相依",
 		wb_decisions: "待決事項",
+		wb_no_reports: "尚無已保存報告",
 		wb_no_snapshot: "先與 PM 討論，再保存目前資訊的報告。資訊不完整也可以開始。",
 		wb_no_plan: "這份報告尚無已採用計畫",
 		wb_quota: "用量與剩餘配額：來源未提供",
@@ -15978,7 +15980,11 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const preference = viewState(namespace, workspaceId, "overview");
 	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
-	const status = h("div", { role: "status" }), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
+	const status = h("div", {
+		role: "status",
+		class: "pm-report-status",
+		"data-report-status": ""
+	}), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
 	const title = input("pm_brief_snapshot_title", {
 		max: 160,
 		required: false
@@ -16037,7 +16043,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	const box = h("section", {
 		class: "pm-charter",
 		"data-pm-charter": ""
-	}, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_charter")), primary), h("div", { class: "pm-workbench-toolbar" }, previous, picker, next, compare, print), status, report, comparison, h("div", { class: "pm-charter-save" }, create.box, more));
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_charter")), primary), h("div", { class: "pm-workbench-toolbar" }, previous, picker, next, compare, print, status), report, comparison, h("div", { class: "pm-charter-save" }, create.box, more));
 	const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({
 		h,
 		t,
@@ -16122,6 +16128,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		report.replaceChildren();
 		comparison.replaceChildren();
 		if (!snapshot) {
+			status.replaceChildren(emptyState({ title: t("wb_no_reports") }));
 			report.append(h("p", {}, t("wb_no_snapshot")));
 			historyOptions();
 			return;

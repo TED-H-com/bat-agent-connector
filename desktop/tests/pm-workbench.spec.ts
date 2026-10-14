@@ -51,7 +51,10 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toContainText('Recovery progress');f.state.denySnapshot=true;
     await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare',exact:true}).click();
-    await expect(charter(page)).toContainText('Your token lacks this scope');await expect(charter(page)).not.toContainText('Members can reliably');
+    await expect(page.locator('[data-report-status]')).toContainText('Your token lacks this scope');
+    await expect(page.locator('[data-report-status]')).toBeVisible();await expect(charter(page)).not.toContainText('Members can reliably');
+    await expect(page.locator('[data-pm-report-tools]')).not.toContainText('Members can reliably');
+    await expect(page.locator('.pm-charter-comparison')).toHaveCount(0);
     await expect(page.getByRole('button',{name:'Print',exact:true})).toBeDisabled();
   });
   test('RTM uses exact revisions, distinct work and an Issue with two PRs and three attempts',async({page})=>{

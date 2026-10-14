@@ -46,7 +46,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const preference = viewState(namespace, workspaceId, 'overview');
   let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
-  const status = h('div', {role: 'status'}), report = h('div', {class: 'pm-charter-report'}), comparison = h('div');
+  const status = h('div', {role: 'status', class: 'pm-report-status', 'data-report-status': ''}), report = h('div', {class: 'pm-charter-report'}), comparison = h('div');
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
     params: values => values.title.trim() ? {title: values.title.trim()} : {},
@@ -65,7 +65,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   const box = h('section', {class: 'pm-charter', 'data-pm-charter': ''},
     h('header', {class: 'pm-heading'}, h('h2', {}, t('wb_charter')),
       primary),
-    h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print), status, report, comparison,
+    h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print, status), report, comparison,
     h('div', {class: 'pm-charter-save'}, create.box, more));
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
     snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}, errorBox}) : null;
@@ -107,7 +107,10 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   function render() {
     onChange(snapshot, 'updated');
     report.replaceChildren(); comparison.replaceChildren();
-    if (!snapshot) {report.append(h('p', {}, t('wb_no_snapshot'))); historyOptions(); return;}
+    if (!snapshot) {
+      status.replaceChildren(emptyState({title: t('wb_no_reports')}));
+      report.append(h('p', {}, t('wb_no_snapshot'))); historyOptions(); return;
+    }
     const document = snapshot.baseline?.document, groups = charterSections(snapshot);
     report.append(h('div', {class: 'pm-charter-meta'}, h('strong', {}, snapshot.title),
       h('span', {}, t('wb_snapshot', {number: snapshot.sequence})),

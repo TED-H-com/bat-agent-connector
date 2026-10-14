@@ -50,6 +50,30 @@ for (const locale of ['en', 'zh-TW']) {
     expect(f.writes).toEqual([]);
   });
 
+  test(`Report state stays inside its inspector ${locale}`, async ({page}) => {
+    const f = reviewFixture(locale);
+    let state = 'empty';
+    f.overrides.push((url, r) => {
+      if (/\/snapshots(?:\/[^/]+)?$/.test(url.pathname)) {
+        if (state === 'error') return {status: 404, data: {error: {code: 'NOT_FOUND', message: locale === 'en' ? 'Record unavailable' : '無法取得紀錄'}}};
+        if (r.data.snapshots) r.data.snapshots = []; else r.data.snapshot = null;
+      }
+      return r;
+    });
+    await f.mount(page, 'overview'); await openPmPanel(page, 'ui_report');
+    const tools = page.locator('[data-pm-report-tools]');
+    await expect(tools.locator('[data-report-status]')).toContainText(locale === 'en' ? 'No saved reports' : '尚無已保存報告');
+    await expect(page.locator('[data-report-compare]')).toBeDisabled();
+    await expect(page.locator('[data-report-print]')).toBeDisabled();
+    await page.keyboard.press('Escape'); state = 'error';
+    await page.locator('[data-pm-refresh]').click(); await openPmPanel(page, 'ui_report');
+    await expect(tools.locator('[data-report-status]')).toContainText(locale === 'en' ? 'Record unavailable' : '無法取得紀錄');
+    await expect(tools.locator('[data-report-status]')).not.toContainText(locale === 'en' ? 'No saved reports' : '尚無已保存報告');
+    await expect(page.locator('[data-report-compare]')).toBeDisabled();
+    await expect(page.locator('[data-report-print]')).toBeDisabled();
+    expect(f.writes).toEqual([]);
+  });
+
   test(`Report comparison foregrounds changed statements ${locale}`, async ({page}) => {
     const f = reviewFixture(locale);
     await f.mount(page, 'overview'); await openPmPanel(page, 'ui_report');
@@ -84,6 +108,24 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(result.locator('li').filter({hasText: text})).toBeHidden();
     await result.locator('[data-requirement-review-criteria] > summary').click();
     await expect(result.locator('li').filter({hasText: text})).toBeVisible();
+    expect(f.writes).toEqual([]);
+  });
+
+  test(`Report removals retain text and report identity ${locale}`, async ({page}) => {
+    const f = reviewFixture(locale);
+    f.overrides.push((url, r) => {
+      if (url.pathname.endsWith('/snapshots/' + f.ids.snap2) || url.pathname.endsWith('/snapshots/latest')) {
+        r.data.snapshot.baseline.document.sections.quality.statements = [];
+      }
+      return r;
+    });
+    await f.mount(page, 'overview'); await openPmPanel(page, 'ui_report');
+    await expect(page.locator('[data-report-compare]')).toBeEnabled(); await page.locator('[data-report-compare]').click();
+    const removed = page.locator('[data-report-section=definition] [data-report-pair]').filter({has: page.locator('[data-report-change=removed]')});
+    await expect(removed.locator('[data-report-change=removed]')).toHaveText(locale === 'en' ? 'Removed' : '移除');
+    await expect(removed).toContainText(f.copy.quality);
+    await expect(removed).toContainText('#1');
+    await expect(removed.locator('[data-report-side=after]')).toHaveCount(0);
     expect(f.writes).toEqual([]);
   });
 

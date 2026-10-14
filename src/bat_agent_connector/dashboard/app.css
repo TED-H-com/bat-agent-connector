@@ -1929,6 +1929,8 @@ body.pm-mode #main { padding: 0; }
 .pm-report-tools > .pm-workbench-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pm-report-tools .pm-workbench-toolbar select { grid-column: 1 / -1; width: 100%; min-width: 0; max-width: 100%; }
 .pm-report-tools .pm-workbench-toolbar button { white-space: nowrap; }
+.pm-report-tools .pm-report-status { grid-column: 1 / -1; min-width: 0; }
+.pm-report-tools .pm-report-status:empty { display: none; }
 .pm-report-tools .pm-charter-comparison { display: grid; gap: var(--space-4); }
 .pm-report-tools .pm-charter-comparison h4 { margin: 0 0 var(--space-2); font-size: var(--fs-section); }
 .pm-report-tools .pm-report-pair { display: grid; gap: var(--space-3); padding-block: var(--space-3); border-top: 1px solid var(--line); }
@@ -1937,8 +1939,8 @@ body.pm-mode #main { padding: 0; }
 .pm-report-tools .pm-report-pair [data-report-change="removed"] { color: var(--bad); }
 .pm-report-tools .pm-report-identity { display: block; font-size: var(--fs-small); color: var(--text-3); }
 .pm-report-tools [data-report-unchanged] { margin-top: var(--space-2); }
-.pm-overview-decision-row { display: flex; align-items: start; justify-content: space-between; gap: var(--space-2); }
-.pm-overview-decision-row > .pm-overview-link { flex: 1; min-width: 0; }
+.pm-overview-decision-row { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: var(--space-2); }
+.pm-overview-decision-row > .pm-overview-link { flex: 1 1 16ch; min-width: 0; }
 .pm-overview-decision-row > .ui-button { flex: none; margin-top: 0; }
 .pm-overview-acceptance-gap { margin: 0; font-size: var(--fs-caption); line-height: 1.4; color: var(--text-2); }
 .pm-overview-progress-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); }
@@ -1964,7 +1966,7 @@ body.pm-mode #main { padding: 0; }
 }
 @media (max-width: 540px) {
   .pm-overview-decision-row { flex-direction: column; gap: var(--space-1); }
-  .pm-overview-decision-row > .pm-overview-link { width: 100%; }
+  .pm-overview-decision-row > .pm-overview-link { flex-basis: auto; width: 100%; }
   .pm-overview-decision-row > .ui-button { align-self: end; }
   .pm-overview-status, .pm-overview-side, .pm-overview-charter-grid { grid-template-columns: minmax(0, 1fr); }
   .pm-overview-status > .ui-metric + .ui-metric { border-left: 0; border-top: 1px solid var(--line); }

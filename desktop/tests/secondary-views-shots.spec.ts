@@ -85,6 +85,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
       await shot(`overview-${state}`);
       await openPmPanel(page, 'ui_report');
       await expect(page.locator('[data-report-compare]')).toBeDisabled();
+      if (state === 'empty') await expect(page.locator('[data-report-status]')).toContainText(locale === 'en' ? 'No saved reports' : '尚無已保存報告');
+      else await expect(page.locator('[data-report-status]')).toContainText('NOT_FOUND');
       await shot(`report-${state}`);
       await page.keyboard.press('Escape');
       await go('requirements');

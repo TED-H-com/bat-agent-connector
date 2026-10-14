@@ -356,6 +356,8 @@ Report tools retain the existing durable snapshot operation, original-key recove
 authorized comparison, history pagination, print and export. Compare and Print keep
 single-line labels; every report control has a 44px
 touch target through 800px, including controls mounted outside the project shell.
+Empty and error states stay with those controls when the tools move into the
+inspector; an unavailable report withdraws its content and disables comparison/print.
 Comparison matches statements by original input/source identity, foregrounds changed
 Before/After pairs, labels additions/removals in text, and collapses unchanged
 statements within changed sections. Both report identities remain visible and their
