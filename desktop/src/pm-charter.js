@@ -68,7 +68,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
     h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print, status), report, comparison,
     h('div', {class: 'pm-charter-save'}, create.box, more));
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
-    snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}, errorBox}) : null;
+    snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error, {within:status})); onChange(null, 'error', error);}, errorBox}) : null;
   if (exports) box.append(exports.element);
   const stamp = value => timeStamp(value, {empty:t('wb_unknown')});
   const check = data => {if (data?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
@@ -139,7 +139,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   function withdraw() {serial++; head = null; snapshot = null; history = []; cursor = null; busy = false;
     report.replaceChildren(); comparison.replaceChildren(); picker.replaceChildren(); status.replaceChildren(); controls(); onChange(null, 'withdrawn');}
   function failed(error, ticket) {try {alive(); if (ticket !== serial) return;} catch {return;}
-    withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}
+    withdraw(); status.replaceChildren(errorBox(error, {within:status})); onChange(null, 'error', error);}
   function acceptHistory(data, after, append = false) {
     check(data);
     if (!Array.isArray(data.snapshots) || data.next_cursor != null && (!Number.isSafeInteger(data.next_cursor) || data.next_cursor <= after)) throw Error(t('pm_scope_mismatch'));

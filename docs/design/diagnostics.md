@@ -40,6 +40,11 @@ the named-field projection (history keys are validated reason codes).
 Host protocols have no numeric fallback, and host versions containing names are
 null. All commit validators accept only 40 or 64 lowercase hexadecimal characters.
 
+Shared API and session errors expose one sentence and a ghost export action inside
+Details. Renderers pass their destination through `within` so errors reuse an
+existing disclosure. A detached caller that constructs its own Details passes
+`insideDetails: true`; this avoids adding an error disclosure inside another one.
+
 ## Build identity
 
 Capabilities adds `build: {version, commit, source}`. Git installs use installed

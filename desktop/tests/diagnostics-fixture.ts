@@ -1,11 +1,12 @@
 import type {Page} from '@playwright/test';
 import {attentionFixture, mountAttention} from './attention-fixture.ts';
 export async function diagnosticsFixture(page:Page, native=false, known=true) {
- const base=attentionFixture(),state={hostsStatus:200,hostStale:false,operationsStatus:200,eventStatus:200,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false,reading:{incomplete_reasons:['message_ids_incomplete']}},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
+ const base=attentionFixture(),state={projectsStatus:200,hostsStatus:200,hostStale:false,operationsStatus:200,eventStatus:200,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false,reading:{incomplete_reasons:['archive_unconfirmed','archive_budget','message_ids']}},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
  const caps=()=>({...base.caps(),connector:'0.2.5',build:{version:'0.2.5',commit:known?'a'.repeat(40):null,source:'vcs'},scopes:state.scopes,
   hosts:[{host:'private-box.internal',writes:true}],managed_installation:undefined});
  const dispatch=async(input:any)=>{
   state.reads.push(input.path);const path=new URL(input.path,'http://fixture').pathname;
+  if(path==='/projects'&&state.projectsStatus!==200)return {status:state.projectsStatus,data:{error:{code:'BAT_ERROR',message:'Fixture project read failed'}}};
   if(path==='/capabilities')return {status:200,data:caps()};
   if(path==='/bootstrap'){const response=await base.dispatch(input);response.data.capabilities=caps();return response;}
   if(path==='/hosts'){

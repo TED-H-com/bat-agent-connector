@@ -1091,3 +1091,7 @@ background inert; Tab wraps, Escape closes, and focus returns to the trigger.
 English and zh-TW share behavior. Only loaded session reads and an operation page
 are counted; unavailable sources remain unknown. Withdrawal clears preview facts
 and disables export actions together. See [the diagnostics contract](../docs/design/diagnostics.md).
+
+Diagnostics export stays inside error Details as a ghost action. Error renderers
+pass their destination via `within` (or `insideDetails: true` when constructing a
+detached disclosure) so code, server diagnostics and export reuse existing Details.

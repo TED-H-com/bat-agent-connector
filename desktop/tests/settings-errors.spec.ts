@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {expectNoNestedErrorDetails} from './api-error-assertions.ts';
 import {managedSetupFixture} from './managed-setup-fixture.ts';
 const cases = [
   [404,'NOT_FOUND','This record is unavailable. Refresh the view.','找不到這筆資料，請重新整理。'],
@@ -19,6 +20,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     expect(await error.innerText()).not.toContain(code);await expect(error.locator('details')).not.toHaveAttribute('open','');
     await error.locator('summary').click();await expect(error.locator('[data-error-details] code')).toHaveText(code);
     await expect(error.locator('[data-error-details]')).toContainText('Read the new configuration.');
+    await expectNoNestedErrorDetails(error);
   });
   for(const native of [false,true])test(`quiet connection access and translated setup ${native?'native':'web'}`,async({page})=>{
     const state=await managedSetupFixture(page,native,locale);state.scopes=['observe','operate','manage','start','approve','cleanup','cleanup_discard','deploy','integrate','merge'];
@@ -43,6 +45,7 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
       : '請輸入有效專案、執行程式、最多 63 個非空參數，以及 1–3600 秒逾時。');
     await expect(error.locator('code, [data-error-details] p')).toHaveCount(0);
     await error.locator('summary').click();
+    await expectNoNestedErrorDetails(error);
     await expect(error.locator('[data-export-diagnostics]')).toHaveText(locale==='en'?'Export diagnostics':'匯出診斷資料');
     await expect(page.locator('[data-setup-host] button[type=submit]')).toBeDisabled();
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);

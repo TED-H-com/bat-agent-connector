@@ -199,7 +199,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       line('pmp_github_profile',t(s.github_scope===githubProfile?'pmp_profile_github':'pmp_profile_legacy')),details);
   }
   function withdraw(){repairSourcesReady=false;maintenanceRuns?.withdraw();observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();paintPolicyHeading(null);controls();}
-  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('pmp_unavailable')}),errorBox(error));}
+  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('pmp_unavailable')}),errorBox(error, {within:status}));}
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;
     try{

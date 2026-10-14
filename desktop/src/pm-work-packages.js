@@ -105,7 +105,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
     try{if(!valid(ticket))return;}catch{return;}
     // A later source/permission failure must not leave an earlier quoted title or document visible.
     broken=true;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);picker.replaceChildren();
-    head.hidden=true;status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},errorBox(error),paragraph(t('wp_unavailable'))),refreshButton));
+    head.hidden=true;status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},errorBox(error, {within:status}),paragraph(t('wp_unavailable'))),refreshButton));
   }
   async function select(id){
     if(busy||!idPattern.test(id))return;

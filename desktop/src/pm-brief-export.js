@@ -22,7 +22,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
     element.hidden=!snapshot();button.disabled=busy||!allowed();format.disabled=locale.disabled=busy;
     note.textContent=t(nativeDesktop&&!nativeBriefExportSupport?'pm_export_native_unavailable':'pm_export_help');
     if(pendingReceipt&&caps()?.actor===actor){
-      if(pendingReceipt.error){status.replaceChildren(errorBox(pendingReceipt.error));return;}
+      if(pendingReceipt.error){status.replaceChildren(errorBox(pendingReceipt.error, {within:status}));return;}
       const value=pendingReceipt.receipt;
       status.replaceChildren(h('p',{class:'muted'},value===null?t('pm_export_cancelled'):
         allowed()&&identity()===pendingReceipt.expected?`${t('pm_export_saved')}: ${value.display_name}`:t('pm_export_prior_saved')));
@@ -72,7 +72,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
       }
       if(identity()!==expected)return;
       onUnavailable(rendered);
-      status.replaceChildren(errorBox(rendered));
+      status.replaceChildren(errorBox(rendered, {within:status}));
     }finally{busy=false;update();}
   }
   format.addEventListener('change',update);locale.addEventListener('change',update);update();

@@ -52,7 +52,7 @@ test('session summary reflects client reads, then removes them after scope loss'
  const state=await diagnosticsFixture(page);await page.goto('/dashboard/#/sessions');
  await expect(page.locator('.session-results')).toContainText('Private title');await open(page,'en');
  let bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
- expect(bundle.sessions).toMatchObject({basis:'client_loaded_reads',sampled:2,loaded:1,streaming:1,unknown_activity:0,stale:1,pending:1,history_reasons:{message_ids_incomplete:1}});
+ expect(bundle.sessions).toMatchObject({basis:'client_loaded_reads',sampled:2,loaded:1,streaming:1,unknown_activity:0,stale:1,pending:1,history_reasons:{archive_unconfirmed:1,archive_budget:1,message_ids:1}});
  await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();state.scopes=[];
  const before=state.reads.length;await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
  bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
@@ -78,5 +78,29 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`visua
  await diagnosticsFixture(shot);await shot.goto((test.info().project.use.baseURL as string)+'/dashboard/#/settings');await about(shot,locale).click();await shot.locator('[data-export-diagnostics]').click();await expect(shot.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
  expect(await shot.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
  if(process.env.BATC_DIAGNOSTICS_SHOTS){await mkdir(process.env.BATC_DIAGNOSTICS_SHOTS,{recursive:true});await shot.screenshot({path:process.env.BATC_DIAGNOSTICS_SHOTS+`/diagnostics-${locale}-${width}.png`});}
+ await context.close();
+});
+for(const locale of ['en','zh-TW'])for(const width of [1440,390])test(`review layouts ${locale} ${width}`,async({browser,baseURL})=>{
+ const context=await browser.newContext({locale,baseURL,viewport:{width,height:width===390?844:900}});
+ const capture=async(page,name)=>{
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(process.env.BATC_DIAGNOSTICS_SHOTS){await mkdir(process.env.BATC_DIAGNOSTICS_SHOTS,{recursive:true});await page.screenshot({path:`${process.env.BATC_DIAGNOSTICS_SHOTS}/review-${name}-${locale}-${width}.png`});}
+ };
+ for(const native of [false,true]){
+  const page=await context.newPage();await diagnosticsFixture(page,native);await page.goto('/dashboard/#/settings');await about(page,locale).click();
+  await expect(page.locator('[data-build-line]')).toContainText('Connector 0.2.5');
+  await page.locator('[data-export-diagnostics]').scrollIntoViewIfNeeded();
+  await capture(page,`about-${native?'native':'browser'}`);
+  if(native){
+   await page.locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
+   await page.getByRole('dialog').getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();
+   await expect(page.getByRole('dialog').getByRole('status')).toHaveText(locale==='en'?'Saved':'已儲存');
+   await capture(page,'native-saved');
+  }
+  await page.close();
+ }
+ const page=await context.newPage();await diagnosticsFixture(page);await page.goto('/dashboard/#/session/private-box.internal/private-session');
+ const error=page.locator('[data-session-error]').first();await error.locator('summary').click();
+ await expect(error.locator('[data-export-diagnostics]')).toBeVisible();await error.locator('[data-export-diagnostics]').scrollIntoViewIfNeeded();await capture(page,'error-details');
  await context.close();
 });

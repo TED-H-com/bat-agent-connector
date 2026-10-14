@@ -84,7 +84,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     paintActions();
   }
   function withdraw(){ticket++;ready=false;model=null;imports.forEach(item=>item.dispose());imports=[];view.replaceChildren();scheduleView.replaceChildren();choose.replaceChildren();editors.hidden=true;status.replaceChildren();output=null;update();}
-  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('pmrv_unavailable')}),errorBox(error));paintHeading();}
+  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('pmrv_unavailable')}),errorBox(error, {within:status}));paintHeading();}
   function localForm(config){
     const expected=()=>JSON.stringify({preconditions:config.preconditions(),context:config.context?.()??null});
     const baseline=h('input',{type:'hidden',value:expected()});baseline.dataset.pmDefault=baseline.value;

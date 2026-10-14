@@ -144,7 +144,7 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
     if(filtered)catalog.append(h('p',{class:'muted'},t('pmi_filtered')));
   }
   function withdraw(){serial++;loaded=false;rows=[];cursor=null;filtered=false;current=null;catalog.replaceChildren();detail.replaceChildren();publication.replaceChildren();selected.replaceChildren();update();}
-  function failure(error,ticket){try{if(!valid(ticket))return;}catch{return;}packageRow=null;withdraw();status.replaceChildren(errorBox(error),h('p',{class:'muted'},t('pmi_unavailable')));refreshButton.disabled=false;}
+  function failure(error,ticket){try{if(!valid(ticket))return;}catch{return;}packageRow=null;withdraw();status.replaceChildren(errorBox(error, {within:status}),h('p',{class:'muted'},t('pmi_unavailable')));refreshButton.disabled=false;}
   async function selectMapping(mid){
     if(!loaded)return;selectedId=mid;const ticket=++serial;loaded=false;current=null;detail.replaceChildren();publication.replaceChildren();update();
     try{await readSelected(ticket);if(!valid(ticket))return;loaded=true;renderCatalog();renderPublication();update();}catch(error){failure(error,ticket);}

@@ -13492,7 +13492,7 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
 				write(selected);
 			} catch (error) {
-				if (element.isConnected) status.replaceChildren(errorBox(error));
+				if (element.isConnected) status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				pending = false;
 				update();
@@ -15772,7 +15772,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				return;
 			}
 			withdraw({ keepSerial: true });
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			follow = false;
 		} finally {
 			if (ticket !== serial) return;
@@ -16015,7 +16015,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
 		if (pendingReceipt && caps()?.actor === actor) {
 			if (pendingReceipt.error) {
-				status.replaceChildren(errorBox(pendingReceipt.error));
+				status.replaceChildren(errorBox(pendingReceipt.error, { within: status }));
 				return;
 			}
 			const value = pendingReceipt.receipt;
@@ -16103,7 +16103,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 			}
 			if (identity() !== expected) return;
 			onUnavailable(rendered);
-			status.replaceChildren(errorBox(rendered));
+			status.replaceChildren(errorBox(rendered, { within: status }));
 		} finally {
 			busy = false;
 			update();
@@ -16221,7 +16221,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	const stamp = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
 	const check = (data) => {
@@ -16641,7 +16641,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 			alive();
 			if (box.isConnected) update(page);
 		} catch (error) {
-			if (box.isConnected) status.replaceChildren(errorBox(error));
+			if (box.isConnected) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			morePlans.disabled = false;
 		}
@@ -16685,7 +16685,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 			if (box.isConnected) showBindings(page);
 		} catch (error) {
 			if (box.isConnected) {
-				bindingStatus.replaceChildren(errorBox(error));
+				bindingStatus.replaceChildren(errorBox(error, { within: bindingStatus }));
 				loadBindings.hidden = false;
 			}
 		} finally {
@@ -16772,7 +16772,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 		} catch (error) {
 			if (box.isConnected && ticket === request) {
 				result.replaceChildren();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, text("pm_diff_failure")));
+				status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, text("pm_diff_failure")));
 			}
 		} finally {
 			if (ticket === request) {
@@ -17141,7 +17141,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				if (item.isConnected) {
 					if ([403, 404].includes(error.status)) item.remove();
 					else {
-						detail.replaceChildren(errorBox(error));
+						detail.replaceChildren(errorBox(error, { within: detail }));
 						pill.replaceChildren(statusPill("unknown"));
 					}
 				}
@@ -17178,7 +17178,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						more.remove();
 						renderRows(next, true);
 					} catch (error) {
-						if (more.isConnected) more.after(errorBox(error));
+						if (more.isConnected) more.after(errorBox(error, { within: more }));
 					} finally {
 						busy = false;
 						more.disabled = false;
@@ -17226,7 +17226,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						try {
 							await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);
 						} catch (error) {
-							if (details.isConnected) details.append(errorBox(error));
+							if (details.isConnected) details.append(errorBox(error, { within: details }));
 						}
 					}
 				}, t("pd_copy"))));
@@ -17378,7 +17378,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		readable: canRead,
 		onUnavailable: (error) => {
 			withdraw();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			onChange(null, "error", error);
 		},
 		errorBox
@@ -17499,7 +17499,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			return;
 		}
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 		onChange(null, "error", error);
 	}
 	function acceptHistory(data, after, append = false) {
@@ -17874,7 +17874,7 @@ function workspaceOverview(options) {
 			closeReader();
 			signature = "";
 		}
-		if (event === "error") status.replaceChildren(options.errorBox(error));
+		if (event === "error") status.replaceChildren(options.errorBox(error, { within: status }));
 		if (mode === "saved") render();
 	}
 	function attentionTitle(row) {
@@ -18566,7 +18566,7 @@ function workspaceOverview(options) {
 			signature = "";
 			closeReader();
 			render();
-			status.replaceChildren(options.errorBox(error));
+			status.replaceChildren(options.errorBox(error, { within: status }));
 		}
 	}
 	async function refresh() {
@@ -21479,7 +21479,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 					401,
 					403,
 					404
-				].includes(error?.status) ? inlineError({ error: { message: t("ahp_unavailable") } }) : errorBox(error));
+				].includes(error?.status) ? inlineError({ error: { message: t("ahp_unavailable") } }) : errorBox(error, { within: status }));
 				for (const f of item.forms) f.update();
 			}
 		}
@@ -21828,7 +21828,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			enabled = false;
 			workspace = null;
 			box.replaceChildren();
-			if (![403, 404].includes(error.status)) box.append(errorBox(error));
+			if (![403, 404].includes(error.status)) box.append(errorBox(error, { within: box }));
 		}
 	}
 	function withdraw() {
@@ -22601,7 +22601,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		}
@@ -22661,7 +22661,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		} finally {
@@ -22686,7 +22686,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		} finally {
@@ -22926,7 +22926,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			cursor = null;
 			facts.replaceChildren();
 			status.replaceChildren();
-			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error), h("p", { class: "muted" }, t("wd_unavailable"))), refreshButton);
+			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error, { within: head }), h("p", { class: "muted" }, t("wd_unavailable"))), refreshButton);
 		} finally {
 			if (ticket === sequence) {
 				busy = false;
@@ -23080,7 +23080,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 	}
 	function fail(error) {
 		clear();
-		status.replaceChildren(text("psm_unavailable"), errorBox(error.message?.startsWith("PM_SPEC_") ? Error(t("psm_invalid")) : error));
+		status.replaceChildren(text("psm_unavailable"), errorBox(error.message?.startsWith("PM_SPEC_") ? Error(t("psm_invalid")) : error, { within: status }));
 		if ([
 			401,
 			403,
@@ -23526,7 +23526,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		facts.hidden = true;
 		proofView.hidden = true;
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, text("pmb_unavailable"), errorBox(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? error() : err)), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, text("pmb_unavailable"), errorBox(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? error() : err, { within: status })), refreshButton));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -24218,7 +24218,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		detail.replaceChildren();
 		editors.hidden = true;
 		update();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	async function currentWorkspace() {
 		const value = await api("GET", endpoint);
@@ -24604,7 +24604,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					proof = candidate;
 					proofStatus.replaceChildren(text(value.plan.document?.title || candidate), text(value.plan.document_digest), note("pm_gov_direction_only"));
 				} catch (error) {
-					if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error));
+					if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error, { within: proofStatus }));
 				} finally {
 					update();
 				}
@@ -24699,7 +24699,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					try {
 						await currentWorkspace();
 						if (ticket !== sourceTicket || !editor.box.isConnected) return;
-						sourceStatus.replaceChildren(errorBox(error));
+						sourceStatus.replaceChildren(errorBox(error, { within: sourceStatus }));
 						update();
 					} catch (failure) {
 						if (ticket === sourceTicket && editor.box.isConnected) unavailable(failure);
@@ -24780,7 +24780,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					proof = value;
 					receipt.replaceChildren(note("pm_gov_adoption_historical"), id(operation.target.revision_id), h("a", { href: `#/op/${value}` }, t("pm_operation")));
 				} catch (error) {
-					if (editor.box.isConnected) receipt.replaceChildren(errorBox(error));
+					if (editor.box.isConnected) receipt.replaceChildren(errorBox(error, { within: receipt }));
 				} finally {
 					update();
 				}
@@ -24902,7 +24902,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				current = null;
 				fixed = null;
 				force = true;
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 			const next = JSON.stringify([
 				selectedId,
@@ -26428,7 +26428,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		prepared = null;
 		facts.replaceChildren();
 		outcome.replaceChildren();
-		status.replaceChildren(errorBox(error), ...error.code === "PM_HANDOFF_BLOCKED" ? [] : [h("p", { class: "muted" }, t("ph_unavailable"))]);
+		status.replaceChildren(errorBox(error, { within: status }), ...error.code === "PM_HANDOFF_BLOCKED" ? [] : [h("p", { class: "muted" }, t("ph_unavailable"))]);
 		update();
 	}
 	function bindEditor(row) {
@@ -27362,7 +27362,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_lifecycle_unknown")));
+		status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pm_lifecycle_unknown")));
 	}
 	async function refresh({ event = false } = {}) {
 		if (!event || !ready || !current) {
@@ -27752,7 +27752,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}
 		packageRow = null;
 		withdraw();
-		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pmi_unavailable")));
+		status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pmi_unavailable")));
 		refreshButton.disabled = false;
 	}
 	async function selectMapping(mid) {
@@ -27931,7 +27931,7 @@ function specSources({ h, t, api, alive, workspaceId, errorBox }) {
 			clear();
 			caps = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (ticket === refreshId) {
 				checking = false;
@@ -27971,7 +27971,7 @@ function specSources({ h, t, api, alive, workspaceId, errorBox }) {
 			clear();
 			caps = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			reading = false;
 			controls();
@@ -28040,7 +28040,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 		list.replaceChildren();
 		detail.replaceChildren();
 		more.hidden = true;
-		status.replaceChildren([t("pm_fa_mismatch"), t("pm_fa_read_failed")].includes(error.message) ? inlineError({ error: error.message }) : errorBox(error));
+		status.replaceChildren([t("pm_fa_mismatch"), t("pm_fa_read_failed")].includes(error.message) ? inlineError({ error: error.message }) : errorBox(error, { within: status }));
 		onAccessFailure(error);
 	}
 	function valid(row) {
@@ -28311,7 +28311,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		request?.dispose();
 		request = null;
 		body.replaceChildren();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 		onAccessFailure(error);
 	}
 	function navigation() {
@@ -28652,7 +28652,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		editor?.update();
 		editorFold.hidden = true;
 		if (retired) editor?.box.remove();
-		status.replaceChildren(errorBox(error), h("button", {
+		status.replaceChildren(errorBox(error, { within: status }), h("button", {
 			type: "button",
 			class: "ui-button secondary ui-sm",
 			onclick: () => void refresh()
@@ -29299,7 +29299,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		onSelection(null);
 		picker.replaceChildren();
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error), paragraph(t("wp_unavailable"))), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, { within: status }), paragraph(t("wp_unavailable"))), refreshButton));
 	}
 	async function select(id) {
 		if (busy || !idPattern.test(id)) return;
@@ -29542,7 +29542,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		choose.replaceChildren();
 		editors.hidden = true;
 		toolbar.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error)), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, { within: status })), refreshButton));
 	}
 	const rationale = () => input("pm_sprint_reason", {
 		multiline: true,
@@ -30405,7 +30405,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		} catch (err) {
 			if (valid(ticket)) {
 				clear();
-				status.replaceChildren(errorBox(err));
+				status.replaceChildren(errorBox(err, { within: status }));
 				if ([
 					401,
 					403,
@@ -30539,7 +30539,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		clear();
 		purge();
 		workChoice.replaceChildren();
-		status.replaceChildren(text("pmq_unavailable"), errorBox(err));
+		status.replaceChildren(text("pmq_unavailable"), errorBox(err, { within: status }));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -32008,7 +32008,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		view.replaceChildren();
 		choose.replaceChildren();
 		editors.hidden = true;
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	function localForm(config) {
 		const expected = JSON.stringify({
@@ -34151,7 +34151,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						const doc = value.revision.document;
 						content.replaceChildren(h("p", {}, doc.rationale || t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
-						content.replaceChildren(errorBox(error));
+						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
 					}
 				});
@@ -34171,7 +34171,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 			}
 			return true;
 		} catch (error) {
-			if (history.isConnected) historyBody.append(errorBox(error));
+			if (history.isConnected) historyBody.append(errorBox(error, { within: historyBody }));
 			return false;
 		} finally {
 			historyBusy = false;
@@ -34289,7 +34289,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				view.replaceChildren();
 				historyBody.replaceChildren();
 				historyLoaded = false;
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				baselineForm.update();
 				forecast.update();
 				observe.update();
@@ -34842,7 +34842,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (n === ticket && !dead) {
 				thread = null;
 				body.replaceChildren();
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		} finally {
 			reading = false;
@@ -34868,7 +34868,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (n === ticket && !dead) {
 				thread = null;
 				request?.update();
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		} finally {
 			reading = false;
@@ -35150,7 +35150,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(inlineError({ error: t("pmrv_unavailable") }), errorBox(error));
+		status.replaceChildren(inlineError({ error: t("pmrv_unavailable") }), errorBox(error, { within: status }));
 		paintHeading();
 	}
 	function localForm(config) {
@@ -36402,7 +36402,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	}
 	function failure(error) {
 		withdraw();
-		status.append(inlineError({ error: t("pmr_unavailable") }), errorBox(error));
+		status.append(inlineError({ error: t("pmr_unavailable") }), errorBox(error, { within: status }));
 	}
 	async function refresh() {
 		withdraw();
@@ -36865,7 +36865,7 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 	}
 	function failure(error) {
 		withdraw();
-		status.append(h("p", { class: "muted" }, t("pmc_unavailable")), errorBox(error));
+		status.append(h("p", { class: "muted" }, t("pmc_unavailable")), errorBox(error, { within: status }));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? cursor : 0;
@@ -37165,7 +37165,7 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 	}
 	function failure(error) {
 		withdraw();
-		status.append(h("p", { class: "muted" }, t("pmo_unavailable")), errorBox(error));
+		status.append(h("p", { class: "muted" }, t("pmo_unavailable")), errorBox(error, { within: status }));
 	}
 	async function refresh() {
 		withdraw();
@@ -37760,7 +37760,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(inlineError({ error: t("pmp_unavailable") }), errorBox(error));
+		status.replaceChildren(inlineError({ error: t("pmp_unavailable") }), errorBox(error, { within: status }));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? historyCursor : 0;
@@ -38009,7 +38009,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(inlineError({ error: t("prb_unavailable") }), errorBox(error));
+		status.replaceChildren(inlineError({ error: t("prb_unavailable") }), errorBox(error, { within: status }));
 	}
 	const editorApi = async (...args) => {
 		const ticket = epoch;
@@ -38474,7 +38474,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 						body.replaceChildren(h("dl", { class: "pm-evidence-fields" }, ...brief.flatMap((key) => [h("dt", {}, t("pm_evidence_field_" + key)), h("dd", {}, ["state", "status"].includes(key) ? stateText(fact[key]) : String(fact[key]))])), h("details", { class: "pm-evidence-original" }, h("summary", {}, t("pm_evidence_original")), h("dl", { class: "pm-evidence-fields" }, ...Object.entries(fact).flatMap(([key, value]) => [h("dt", {}, key), h("dd", {}, value === null ? t("pm_evidence_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value))]))), h("small", { class: "muted" }, timeLabel(t, "pm_evidence_saved_at", { time: sourceTime(detail.evidence.captured_at) })));
 						fetched = true;
 					} catch (error) {
-						if (row.isConnected) body.replaceChildren(errorBox(error));
+						if (row.isConnected) body.replaceChildren(errorBox(error, { within: body }));
 					} finally {
 						busy = false;
 					}
@@ -38566,7 +38566,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 					editor.append(bind.box);
 					showRequirements();
 				} catch (error) {
-					if (row.isConnected) editor.append(errorBox(error));
+					if (row.isConnected) editor.append(errorBox(error, { within: editor }));
 				}
 			}
 			if (!binding) return;
@@ -38609,7 +38609,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			try {
 				await loadEvidence(item, holder);
 			} catch (error) {
-				if (holder.isConnected) holder.replaceChildren(errorBox(error));
+				if (holder.isConnected) holder.replaceChildren(errorBox(error, { within: holder }));
 			}
 		});
 		return row;
@@ -38652,7 +38652,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				if (!data.work_items?.length) rows.append(h("p", { class: "muted" }, t("pm_evidence_no_work")));
 			}
 		} catch (error) {
-			if (ticket === generation) status.replaceChildren(errorBox(error));
+			if (ticket === generation) status.replaceChildren(errorBox(error, { within: status }));
 		}
 	}
 	async function allBindings(suffix) {
@@ -38687,7 +38687,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			selected = choose.value;
 			await loadProject();
 		} catch (error) {
-			if (ticket === generation) status.replaceChildren(errorBox(error));
+			if (ticket === generation) status.replaceChildren(errorBox(error, { within: status }));
 		}
 	}
 	return {
@@ -38740,7 +38740,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				}));
 				renderProof();
 			} catch (error) {
-				if (ticket === sequence) proof.replaceChildren(errorBox(error));
+				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
 			} finally {
 				if (ticket === sequence) {
 					reading = false;
@@ -38887,7 +38887,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	for (const [name, input] of Object.entries(fields)) {
@@ -38935,7 +38935,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retired(error)) status.replaceChildren(errorBox(error));
+				if (!retired(error)) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -39085,7 +39085,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 					} catch {}
 				}
 				const handled = onError(error);
-				if (!handled) status.replaceChildren(errorBox(error));
+				if (!handled) status.replaceChildren(errorBox(error, { within: status }));
 				if (error.code === "VERSION_CONFLICT" && !handled) status.append(h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
@@ -41204,7 +41204,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				} catch (error) {
 					if (!item.isConnected || retired(error)) return;
 					if ([403, 404].includes(error.status)) item.remove();
-					else detail.replaceChildren(errorBox(error));
+					else detail.replaceChildren(errorBox(error, { within: detail }));
 				}
 			})();
 			let fetched = false, pending = false;
@@ -41227,7 +41227,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
-					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error));
+					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
 				} finally {
 					pending = false;
 				}
@@ -41252,7 +41252,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						renderPackages(next, true);
 					} catch (error) {
 						if (!retired(error)) {
-							status.replaceChildren(errorBox(error));
+							status.replaceChildren(errorBox(error, { within: status }));
 							more.disabled = false;
 						}
 					}
@@ -41289,7 +41289,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				proposalReview?.withdraw();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -41650,7 +41650,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -41746,7 +41746,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			discussionTools?.close();
 			publishContext();
 			updateForms();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
 		}
 	}
@@ -41821,7 +41821,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				updateForms();
 			}
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
 		}
 	}
@@ -42347,7 +42347,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	};
 	let catalogRows = null;
 	const showReadError = (error) => {
-		const detail = error ? errorBox(error) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
+		const detail = error ? errorBox(error, { insideDetails: true }) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
 		const label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
 		status.replaceChildren(h("div", {
 			class: "workspace-read-error",
@@ -42747,7 +42747,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				try {
 					persist();
 				} catch (error) {
-					message.replaceChildren(errorBox(error));
+					message.replaceChildren(errorBox(error, { within: message }));
 				}
 			}
 			unsaved.hidden = false;
@@ -43090,7 +43090,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function showError(error, options) {
 		if (alive()) {
-			message.replaceChildren(errorBox(error, options));
+			message.replaceChildren(errorBox(error, {
+				...options,
+				within: message
+			}));
 			update();
 		}
 	}
@@ -44130,7 +44133,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	const tags = h("div", { class: "actions session-label-tags" }), message = h("div", { role: "status" }), result = h("div"), restriction = h("p", { class: "muted" });
 	const error = (e) => {
 		if (live()) {
-			message.replaceChildren(errorBox(e));
+			message.replaceChildren(errorBox(e, { within: message }));
 			update();
 		}
 	};
@@ -46017,7 +46020,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			try {
 				show(await (controller.snapshot().intent ? controller.check() : controller.create(document)));
 			} catch (error) {
-				if (alive()) status.replaceChildren(errorBox(error));
+				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				busy = false;
 				if (alive()) update();
@@ -46040,7 +46043,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				outcome.replaceChildren();
 				read();
 			} catch (error) {
-				if (alive()) status.replaceChildren(errorBox(error));
+				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("repair_review_new"));
@@ -46104,7 +46107,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				links(doc.existing);
 			}
 		} catch (error) {
-			if (alive() && mine === serial) status.replaceChildren(errorBox(error));
+			if (alive() && mine === serial) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (alive() && mine === serial) update();
 		}
@@ -46129,7 +46132,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			update();
 			if (controller.snapshot().intent?.operation_id) show(await controller.check());
 		} catch (error) {
-			if (alive()) status.replaceChildren(errorBox(error));
+			if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (alive()) update();
 		}
@@ -46184,7 +46187,7 @@ function repairWorkItemPanel({ h, t, api, guard, projectId, workItemId, originOp
 					box.replaceChildren();
 					box.hidden = true;
 				} else {
-					box.replaceChildren(errorBox(error));
+					box.replaceChildren(errorBox(error, { within: box }));
 					box.hidden = false;
 				}
 			}
@@ -46346,7 +46349,7 @@ function instructionReceiptPanel({ h, t, when, api, guard, host, sessionId, erro
 			status.replaceChildren();
 			more.hidden = !value.can_load_more;
 		} catch (error) {
-			if (alive()) status.replaceChildren(h("p", { class: "muted" }, t("instruction_stale")), errorBox(error));
+			if (alive()) status.replaceChildren(h("p", { class: "muted" }, t("instruction_stale")), errorBox(error, { within: status }));
 		} finally {
 			if (alive()) reload.disabled = more.disabled = false;
 		}
@@ -46434,7 +46437,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	const field = (name, label, multiline = false, max = 2e4) => {
@@ -46543,7 +46546,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 					saved.intent.initialAdmissionRefused = true;
 					persist();
 				}
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			} catch {}
 		} finally {
 			busy = false;
@@ -46577,7 +46580,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				status.replaceChildren();
 				update();
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	});
@@ -48137,7 +48140,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const validInput = (input) => input.host && input.session_id.length >= 6 && input.session_id.length <= 256 && !/[\x00-\x1f\x7f-\x9f/\\]/.test(input.session_id) && input.relative_path && new TextEncoder().encode(input.relative_path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(input.relative_path) && input.relative_path.split("/").every((part) => part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
 	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error));
+		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
 	};
 	const preview = h("button", {
 		class: "secondary",
@@ -48447,7 +48450,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	const message = h("div", { role: "status" }), result = h("div", { "data-task-result": "" }), restriction = h("p", { class: "muted" });
 	const showError = (error) => {
 		if (live()) {
-			message.replaceChildren(errorBox(error));
+			message.replaceChildren(errorBox(error, { within: message }));
 			update();
 		}
 	};
@@ -49005,7 +49008,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 							intent.refused = error.code;
 							persist();
 						}
-						message.replaceChildren(errorBox(error));
+						message.replaceChildren(errorBox(error, { within: message }));
 					}
 				} finally {
 					busy = false;
@@ -49074,7 +49077,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 	function showError(error) {
 		if (current()) {
 			readFailed = true;
-			message.replaceChildren(errorBox(error));
+			message.replaceChildren(errorBox(error, { within: message }));
 			update();
 		}
 	}
@@ -49222,7 +49225,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 				status.replaceChildren();
 				renderPreview();
 			} catch (e) {
-				if (current()) status.replaceChildren(errorBox(e));
+				if (current()) status.replaceChildren(errorBox(e, { within: status }));
 			} finally {
 				busy = false;
 				if (current()) update();
@@ -49276,7 +49279,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 			try {
 				persist(true);
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				update();
 				return;
 			}
@@ -49294,7 +49297,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 							intent.refused = e.code;
 							persist();
 						}
-						status.replaceChildren(errorBox(e));
+						status.replaceChildren(errorBox(e, { within: status }));
 					}
 				} finally {
 					busy = false;
@@ -49438,7 +49441,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 		} catch (e) {
 			if (current()) {
 				readFailed = true;
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(errorBox(e, { within: status }));
 				update();
 			}
 			throw e;
@@ -49572,7 +49575,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	};
 	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e));
+		if (current()) status.replaceChildren(errorBox(e, { within: status }));
 	};
 	function renderWorkspaces() {
 		workspace.replaceChildren(h("option", { value: "" }, t("start_choose_workspace")), ...workspaces.map((w) => h("option", { value: w.workspace_id }, `${w.name || w.workspace_id} · ${w.workspace_id}`)));
@@ -50212,7 +50215,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		maximum.value = saved.max_items;
 	}
 	const showError = (error) => {
-		if (current()) status.replaceChildren(errorBox(error));
+		if (current()) status.replaceChildren(errorBox(error, { within: status }));
 	};
 	function renderSelection() {
 		const id = (row) => sessionMode(mode) ? row.session_id : row.workspace_id;
@@ -50788,7 +50791,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	}
 	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e));
+		if (current()) status.replaceChildren(errorBox(e, { within: status }));
 	};
 	const selected = () => ({
 		target: saved.target,
@@ -51106,7 +51109,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		} catch (e) {
 			if (current()) {
 				projectFailed = true;
-				projectStatus.replaceChildren(errorBox(e));
+				projectStatus.replaceChildren(errorBox(e, { within: projectStatus }));
 				update();
 			}
 			throw e;
@@ -51548,7 +51551,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		}
 	};
 	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error));
+		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
 	};
 	const supported = () => caps()?.artifacts?.capture?.managed_single_file === true;
 	const scope = (name) => caps()?.scopes?.includes(name);
@@ -51862,7 +51865,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	const moreArtifacts = h("button", {
 		class: "secondary",
 		hidden: true,
-		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e)))
+		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice })))
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
 	container.append(pageHeader({ title: t("ar_title") }), disclosure({
@@ -52052,7 +52055,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		try {
 			await catalogReading;
 		} catch (error) {
-			if (currentView()) catalogNotice.replaceChildren(errorBox(error));
+			if (currentView()) catalogNotice.replaceChildren(errorBox(error, { within: catalogNotice }));
 			throw error;
 		} finally {
 			catalogReading = null;
@@ -52112,7 +52115,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	if (!saved.capture) initial.push(loadSource());
 	if (saved.capture?.operation_id || saved.accept?.operation_id || context.kind === "artifact") initial.push(refresh());
 	initial.push(loadCatalog().catch((error) => {
-		if (currentView()) catalogNotice.replaceChildren(errorBox(error));
+		if (currentView()) catalogNotice.replaceChildren(errorBox(error, { within: catalogNotice }));
 	}));
 	const results = await Promise.allSettled(initial);
 	for (const result of results) if (result.status === "rejected") {
@@ -52640,7 +52643,7 @@ function h(tag, attrs = {}, ...children) {
 		try {
 			await openExternal(attrs.href);
 		} catch (error) {
-			document.getElementById("main").prepend(errorBox(error));
+			document.getElementById("main").prepend(errorBox(error, { within: document.getElementById("main") }));
 		}
 	});
 	return el;
@@ -52782,21 +52785,21 @@ async function apiRequest(method, path, body, key, collectReceipt) {
 	}
 	return data;
 }
-function errorBox(e, { summary } = {}) {
+function errorBox(e, { summary, within, insideDetails = false } = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
 	const presentation = errorPresentation(e, t, { summary });
-	const diagnostics = [presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean);
+	const body = h("div", { "data-error-details": "" }, ...[presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean), button({
+		variant: "ghost",
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}));
 	return h("div", { "data-api-error": "" }, h("p", {
 		class: "error",
 		"data-error-summary": ""
-	}, presentation.summary), disclosure({
+	}, presentation.summary), insideDetails || within?.closest?.("details") ? body : disclosure({
 		label: t("global_details"),
-		body: h("div", { "data-error-details": "" }, ...diagnostics, button({
-			variant: "ghost",
-			label: t("diag_export"),
-			onClick: openDiagnostics,
-			"data-export-diagnostics": ""
-		}))
+		body
 	}));
 }
 async function submit(action, target, params, preconditions, scope) {
@@ -53177,11 +53180,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		fill(status);
 		const limit = Math.min(state.caps?.artifacts?.limits?.max_file_bytes || 16777216, nativeDesktop ? 16777216 : Number.MAX_SAFE_INTEGER);
 		if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-			fill(status, errorBox(new Error(t("attachment_unsupported_image"))));
+			fill(status, errorBox(new Error(t("attachment_unsupported_image")), { within: status }));
 			return;
 		}
 		if (file.size > limit) {
-			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`)));
+			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`), { within: status }));
 			return;
 		}
 		let name = file.name;
@@ -53226,7 +53229,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		if (!imageCandidates.length) return;
 		e.preventDefault();
 		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused"))));
+			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
 			return;
 		}
 		for (const file of imageCandidates) handleIncomingFile(file);
@@ -53252,7 +53255,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		if (nativeFiles || !e.dataTransfer?.files?.length) return;
 		e.preventDefault();
 		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused"))));
+			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
 			return;
 		}
 		for (const file of e.dataTransfer.files) handleIncomingFile(file);
@@ -53292,7 +53295,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				persist();
 				render();
 			} catch (e) {
-				if (connection.epoch === state.epoch) fill(status, errorBox(e));
+				if (connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 			} finally {
 				pendingSelections--;
 				changed();
@@ -53308,7 +53311,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			try {
 				await loadCatalog(catalogCursor);
 			} catch (e) {
-				if (box.isConnected) fill(status, errorBox(e));
+				if (box.isConnected) fill(status, errorBox(e, { within: status }));
 			} finally {
 				more.disabled = false;
 			}
@@ -53418,7 +53421,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			if (ev.resource_id === saved.submission?.operation_id || saved.attachments.some((a) => a.operation_id === ev.resource_id)) return refresh();
 		});
 		queueMicrotask(() => settleRefreshes([loadCatalog(), refresh()]).catch((e) => {
-			if (box.isConnected && connection.epoch === state.epoch) fill(status, errorBox(e));
+			if (box.isConnected && connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 		}));
 	}
 	const bindFields = (fields) => {
@@ -53836,7 +53839,7 @@ async function viewSessions(main) {
 		assertView(connection);
 		for (const x of hosts) hostSel.append(h("option", { value: x.host }, x.host));
 	} catch (e) {
-		status.replaceChildren(errorBox(e));
+		status.replaceChildren(errorBox(e, { within: status }));
 		return;
 	}
 	hostSel.value = q.get("host") || "";
@@ -53998,7 +54001,7 @@ async function viewSessions(main) {
 			const current = [...list.querySelectorAll("[data-resource-id]")].find((node) => node.dataset.resourceId === anchorID);
 			if (mode === "refresh" && current && Math.abs(scrollY - before) < 1) scrollBy(0, current.getBoundingClientRect().top - offset);
 		} catch (e) {
-			status.replaceChildren(errorBox(e));
+			status.replaceChildren(errorBox(e, { within: status }));
 		} finally {
 			more.disabled = false;
 		}
@@ -54196,7 +54199,7 @@ function observationPanels(type, id, path, plain = false) {
 				].flat());
 				status.replaceChildren();
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				busy = false;
 				refresh.disabled = more.disabled = false;
@@ -54296,7 +54299,7 @@ async function viewTask(main, id) {
 					404,
 					410
 				].includes(error?.status)) place(head, "replaceChildren");
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				clearTimeout(retry);
 				retry = setTimeout(() => load().catch(() => {}), 3e3);
 			}
@@ -54361,7 +54364,7 @@ async function viewObservedResource(main, type, id) {
 				404,
 				410
 			].includes(error?.status)) place(head, "replaceChildren");
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	await load();
@@ -54407,7 +54410,7 @@ async function viewHostDiscovery(main, host) {
 			assertView(connection);
 			head.replaceChildren(discoveryEvidence(data.scopes));
 		} catch (error) {
-			head.append(errorBox(error));
+			head.append(errorBox(error, { within: head }));
 		}
 	};
 	await load();
@@ -54438,24 +54441,25 @@ function sessionErrorLine(e) {
 	if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
 	return t("session_err_unknown");
 }
-function sessionErrorDetails(e) {
+function sessionErrorDetails(e, { within, insideDetails = false } = {}) {
 	const code = typeof e?.code === "string" ? e.code : "";
 	const detail = [
 		code,
 		e?.status ? `HTTP ${e.status}` : "",
 		e?.message && e.message !== code ? e.message : ""
 	].filter(Boolean).join(" · ");
-	return disclosure({
+	const body = h("div", {}, detail ? h("p", { class: "muted" }, h("code", {}, detail)) : null, button({
+		variant: "ghost",
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}));
+	return insideDetails || within?.closest?.("details") ? body : disclosure({
 		label: t("session_error_details"),
-		body: h("div", {}, detail ? h("p", { class: "muted" }, h("code", {}, detail)) : null, button({
-			variant: "ghost",
-			label: t("diag_export"),
-			onClick: openDiagnostics,
-			"data-export-diagnostics": ""
-		}))
+		body
 	});
 }
-function sessionErrorBox(e, action = null) {
+function sessionErrorBox(e, action = null, options = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
 	return h("div", {
 		class: "session-error",
@@ -54465,7 +54469,7 @@ function sessionErrorBox(e, action = null) {
 		type: "button",
 		class: "session-error-action",
 		onclick: action.run
-	}, action.label) : null), sessionErrorDetails(e));
+	}, action.label) : null), sessionErrorDetails(e, options));
 }
 function sessionPullHref(target) {
 	try {
@@ -54644,7 +54648,7 @@ async function viewSession(main, host, sid, context = null) {
 					mobileLayout?.updateDraft();
 				}
 			} catch (e) {
-				status.replaceChildren(sessionErrorBox(e, sendRecovery(e)));
+				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), { within: status }));
 			} finally {
 				sending = false;
 				send.disabled = !allowed("session.send");
@@ -54670,7 +54674,7 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => stop.click()
-				}));
+				}, { within: status }));
 			}
 		}
 	});
@@ -55104,7 +55108,7 @@ async function viewSession(main, host, sid, context = null) {
 				} : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => answer(params)
-				}));
+				}, { within: status }));
 			}
 		};
 		const actions = h("div", { class: "actions session-asking-actions" });
@@ -55471,7 +55475,7 @@ async function viewSession(main, host, sid, context = null) {
 		withdrawnSlot.replaceChildren(h("div", { "data-session-withdrawn": kind }, emptyState({
 			icon: "circle-alert",
 			title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"),
-			action: h("div", {}, backLink(), sessionErrorDetails(error))
+			action: h("div", {}, backLink(), sessionErrorDetails(error, { within: withdrawnSlot }))
 		})));
 	};
 	const reinstate = () => {
@@ -55514,7 +55518,7 @@ async function viewSession(main, host, sid, context = null) {
 				readError = sessionErrorBox(error, {
 					label: t("ui_retry"),
 					run: () => refresh().catch(() => {})
-				});
+				}, { within: status });
 				readError.error = error;
 				if (!withdrawn) status.replaceChildren(readError);
 				scheduleRetry();
@@ -55611,7 +55615,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					out.replaceChildren(sessionErrorBox(e, {
 						label: t("ui_retry"),
 						run: () => go.click()
-					}));
+					}, { within: out }));
 				}
 				go.disabled = false;
 			}
@@ -55641,7 +55645,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					fill(out, sessionErrorBox(e, {
 						label: t("ui_retry"),
 						run: () => load().catch(() => {})
-					}));
+					}, { within: out }));
 				}
 			}
 		}, t("continue_from_checkpoint"));
@@ -55660,7 +55664,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {
 				label: t("ui_retry"),
 				run: () => load().catch(() => {})
-			}));
+			}, { within: list }));
 		}
 	};
 	const pick = h("select", {
@@ -55694,7 +55698,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			status.replaceChildren(sessionErrorBox(error, {
 				label: t("ui_retry"),
 				run: () => loadPreview().catch(() => {})
-			}));
+			}, { within: status }));
 		}
 	};
 	const create = h("button", {
@@ -55723,7 +55727,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 				status.replaceChildren(sessionErrorBox(e, {
 					label: t("ui_retry"),
 					run: () => load().catch(() => {})
-				}));
+				}, { within: status }));
 			}
 			create.disabled = !can || previewFailed;
 		}
@@ -55909,7 +55913,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 					const receipt = op.result?.merge || op.result || op.external_refs?.merge_receipt;
 					fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), receipt?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: receipt.other_commits_count })) : null);
 				} catch (e) {
-					fill(status, errorBox(e));
+					fill(status, errorBox(e, { within: status }));
 				}
 			};
 			const blocked = pr.state !== "open" || pr.draft || pr.merged || pv.blocking.length > 0 || scopeChanged;
@@ -55944,7 +55948,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 								}
 							}, `merge_deploy.${pv.preview_id}.${r.name}`);
 						} catch (e) {
-							fill(status, errorBox(e));
+							fill(status, errorBox(e, { within: status }));
 						}
 					}
 				}, t("merge_and_deploy_to", { env: r.environment })));
@@ -55957,7 +55961,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 							const op = await submit("deployment.start", { recipe: r.name }, { source_sha: pr.merge_commit_sha }, deploymentPreview.preconditions, `deploy.${r.name}.${pr.merge_commit_sha}`);
 							fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 						} catch (e) {
-							fill(status, errorBox(e));
+							fill(status, errorBox(e, { within: status }));
 						}
 					}
 				}, t("deploy_to", { env: r.environment })));
@@ -55975,7 +55979,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 				rel: "noopener"
 			}, `#${pr.pull_number} ${pr.title || ""}`)), h("dl", { class: "kv" }, h("dt", {}, t("head")), h("dd", {}, h("code", {}, `${pr.head_ref} @ ${pr.head_sha}`)), h("dt", {}, t("base")), h("dd", {}, h("code", {}, `${pr.base_ref} @ ${pr.base_sha}`)), h("dt", {}, t("mergeable")), h("dd", {}, `${pr.state}${pr.draft ? " · draft" : ""} · ${pr.mergeable_state || "?"}`), h("dt", {}, t("checks")), h("dd", {}, t("checks_summary", pr.checks)), pr.merged ? [h("dt", {}, t("merged_sha")), h("dd", {}, h("code", {}, pr.merge_commit_sha))] : null), metadataDrawer(pr, load), scopeChanged ? h("p", { class: "note warn" }, t("merge_scope_reload")) : null, h("h2", {}, t("merge_scope")), h("label", {}, t("merge_method"), " ", method), h("p", { class: "muted" }, t("merge_preview_fixed"), " ", h("code", {}, pv.preview_id)), commitList, affected.length ? h("div", {}, ...affected) : h("p", { class: "muted" }, t("scope_single_pr")), ...pv.blocking.map((b) => h("p", { class: "note warn" }, h("code", {}, b.code), " · ", b.message)), ...pv.warnings.map((w) => h("p", { class: "muted" }, w)), h("div", { class: "actions" }, ...buttons), status, flash instanceof Node ? flash : null, pr.integration?.allowed ? integrationPanel(pr, load, source) : null);
 		} catch (e) {
-			if (!holdCard()) fill(card, errorBox(e));
+			if (!holdCard()) fill(card, errorBox(e, { within: card }));
 		}
 	};
 	reload = async (fromEvent = true) => {
@@ -56052,7 +56056,7 @@ function deploymentReceipt(dep) {
 			];
 			fill(body, h("dl", { class: "kv" }, ...values.filter(([, v]) => v !== null && v !== void 0 && v !== "").flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])), op.status_reason ? h("p", {}, op.status_reason) : null, ...(op.steps || []).map((s) => h("div", { class: "row" }, h("code", {}, s.name), h("span", {}, operationStatusLabel(s.status)))));
 		} catch (e) {
-			fill(body, errorBox(e));
+			fill(body, errorBox(e, { within: body }));
 			read = false;
 		}
 	});
@@ -56112,7 +56116,7 @@ function deploymentIntent(dep, kind, reload) {
 					fill(out, h("p", {}, opStatus(op), " · ", h("a", { href: `#/op/${op.operation_id}` }, t("dep_open_operation"))), deploymentReceipt({ operation_id: op.operation_id }));
 				}
 			} catch (e) {
-				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e)]));
+				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e, { insideDetails: true })]));
 				if ([
 					"DEPLOY_PREVIEW_REQUIRED",
 					"ENVIRONMENT_CHANGED",
@@ -56137,7 +56141,7 @@ function deploymentIntent(dep, kind, reload) {
 			fill(previewBox, deploymentPreviewSummary(preview), preview.readiness?.ready ? null : h("p", { class: "note warn" }, t("dep_missing_verification")));
 			confirm.disabled = busy || accepted || !preview.readiness?.ready;
 		} catch (e) {
-			fill(previewBox, errorBox(e));
+			fill(previewBox, errorBox(e, { within: previewBox }));
 		}
 	}
 	fill(d.box, h("h3", {}, t(kind === "rollback" ? "dep_rollback_review" : "dep_retry_review")), deploymentIdentity(dep.identity), h("p", {}, `${dep.repository} · ${dep.environment}`), kind === "rollback" ? deploymentLimits(dep.rollback?.not_undone) : h("p", { class: "muted" }, t("dep_retry_only")), previewBox, out, h("div", { class: "actions" }, confirm, h("button", {
@@ -56274,7 +56278,7 @@ function environmentCard(group) {
 				fill(card, h("div", { class: "deployment-card-heading" }, h("h2", {}, group[0].environment), needs ? chip(t("dep_attention"), "warn") : null), h("p", { class: "muted" }, group[0].repository, " · ", t("dep_generation", { generation: env.desired_generation })), needs ? h("p", { class: "note warn" }, t(env.attention === "ENVIRONMENT_VERSION_DRIFT" ? "dep_drift" : "dep_attention_help")) : null, h("div", { class: "deployment-versions" }, h("div", {}, h("h3", {}, t("dep_desired")), deploymentRecord(env.desired, env, load, true)), h("div", {}, h("h3", {}, t("dep_observed")), deploymentIdentity(observed), h("p", { class: "muted" }, timeLabel(t, "dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })), env.current?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(env.current.evidence.runtime)) : null)), h("div", { class: "deployment-last-verified" }, h("h3", {}, t("dep_last_verified")), deploymentIdentity(verified?.identity), h("p", { class: "muted" }, timeLabel(t, "dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })), verified?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(verified.evidence.runtime)) : null, verified ? deploymentReceipt(verified) : null), h("h3", {}, t("dep_history")), h("div", { "data-testid": "deployment-history" }, ...history.items.length ? history.items.map((dep) => deploymentRecord(dep, env, load)) : [h("p", { class: "muted" }, t("dep_no_history"))]), !history.items.length && group.every((r) => !r.rollback?.supported) ? h("p", { class: "muted" }, t("dep_ROLLBACK_UNSUPPORTED")) : null, h("div", { class: "actions deployment-pagination" }, previous, h("span", { class: "muted" }, t("dep_page", { page: page + 1 })), more));
 			} catch (e) {
 				if (["CONNECTION_CHANGED", "VIEW_CHANGED"].includes(e.code)) return;
-				const failure = errorBox(e);
+				const failure = errorBox(e, { within: card });
 				if (!holdRender(fromEvent, opens) && !editing) fill(card, failure);
 			}
 		})();
@@ -56331,7 +56335,7 @@ function metadataDrawer(pr, reload) {
 				fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), op.error_code ? chip(op.error_code, "bad") : null, contents, h("p", { class: "muted" }, t("metadata_result_help")));
 				idleReload = () => reload();
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 				save.disabled = false;
 			}
 		}
@@ -56450,7 +56454,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 			doc = op.result;
 			renderPreview();
 		} catch (e) {
-			if (mine === generation) previewBox.replaceChildren(errorBox(e));
+			if (mine === generation) previewBox.replaceChildren(errorBox(e, { within: previewBox }));
 		}
 	};
 	const changed = debounce(() => {
@@ -56487,7 +56491,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 					};
 					follow((await api("POST", "/operations?wait=3", req, "integrate." + doc.preview_id)).operation);
 				} catch (e) {
-					status.replaceChildren(errorBox(e));
+					status.replaceChildren(errorBox(e, { within: status }));
 					go.disabled = false;
 				}
 			}
@@ -56516,7 +56520,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 					try {
 						follow((await api("POST", `/operations/${op.operation_id}/resume`, {})).operation);
 					} catch (e) {
-						status.append(errorBox(e));
+						status.append(errorBox(e, { within: status }));
 					}
 				},
 				cancel: async () => {
@@ -56580,7 +56584,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 				}
 			}, t("add_branch"))));
 		} catch (e) {
-			pickList.replaceChildren(errorBox(e));
+			pickList.replaceChildren(errorBox(e, { within: pickList }));
 		}
 	})();
 	box.append(pickList, h("h3", {}, t("selected_in_order")), order, previewBox, status);
@@ -56605,7 +56609,7 @@ function repairControl(op) {
 					const o = await submit("integration.handoff", { operation_id: op.operation_id }, { agent: agent.value }, {}, `handoff.${op.operation_id}`);
 					out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ", h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
 				} catch (e) {
-					out.append(errorBox(e));
+					out.append(errorBox(e, { within: out }));
 				}
 				go.disabled = false;
 			}
@@ -56754,7 +56758,7 @@ async function viewOperation(main, id) {
 						const o = await submit("deployment.start", { recipe: op.target.recipe }, { source_sha: refs.merged_sha }, preview.preconditions, `deploy.${op.target.recipe}.${refs.merged_sha}`);
 						location.hash = `#/op/${o.operation_id}`;
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("retry_deploy")) : null;
@@ -56767,7 +56771,7 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/resume`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
@@ -56786,7 +56790,7 @@ async function viewOperation(main, id) {
 						await submit("checkpoint.continue.revalidate", { operation_id: id }, { observed_source_head_sha: seen }, { expected_input_manifest_digest: refs.input_manifest_digest }, `revalidate.${id}.${seen}`);
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("confirm_source")) : null;
@@ -56807,7 +56811,7 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/cancel`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("cancel")) : null;
@@ -56825,7 +56829,7 @@ async function viewOperation(main, id) {
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
 		} catch (e) {
-			fill(panel, errorBox(e));
+			fill(panel, errorBox(e, { within: panel }));
 		}
 	};
 	await render();
@@ -57000,7 +57004,7 @@ function viewBrowserSignedOut(main) {
 	const info = h("div", { class: "global-connect-status" });
 	const showConnectError = (error) => {
 		info.setAttribute("role", "alert");
-		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error));
+		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
 	};
 	if (state.connectionError) showConnectError(state.connectionError);
 	const root = firstRunCard({
@@ -57107,7 +57111,7 @@ async function viewManagedSettings(main) {
 					guard();
 					status.replaceChildren();
 				} catch (error) {
-					if (connection.generation === generation) status.replaceChildren(errorBox(error));
+					if (connection.generation === generation) status.replaceChildren(errorBox(error, { within: status }));
 				} finally {
 					open.disabled = false;
 				}
@@ -57120,7 +57124,7 @@ async function viewManagedSettings(main) {
 			login.checked = !!state.login_enabled;
 			login.disabled = false;
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 		login.addEventListener("change", async () => {
 			const wanted = login.checked;
@@ -57136,7 +57140,7 @@ async function viewManagedSettings(main) {
 			} catch (error) {
 				if (connection.generation === generation) {
 					login.checked = !wanted;
-					status.replaceChildren(errorBox(error));
+					status.replaceChildren(errorBox(error, { within: status }));
 				}
 			} finally {
 				login.disabled = false;
@@ -57191,7 +57195,7 @@ async function viewManagedSettings(main) {
 				frame.show("desktop");
 			}
 		} catch (error) {
-			if (connection.generation === generation) status.append(errorBox(error));
+			if (connection.generation === generation) status.append(errorBox(error, { within: status }));
 		}
 		disposeFleet = await mountFleet(fleetRoot, {
 			h,
@@ -57328,7 +57332,7 @@ async function viewNativeSettings(main) {
 		technicalDetails.replaceChildren();
 		if (state.caps) technicalDetails.append(connectionIdentity());
 		if (state.connectionNotice) info.append(h("p", {}, state.connectionNotice));
-		if (state.connectionError) info.append(errorBox(state.connectionError));
+		if (state.connectionError) info.append(errorBox(state.connectionError, { within: info }));
 		if (state.nativeBusy) info.append(h("p", {}, t("desktop_connecting")));
 	};
 	showInfo();
@@ -57405,7 +57409,10 @@ async function viewNativeSettings(main) {
 		if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
 		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
-		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), { summary: t("desktop_status_error") }));
+		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
+			summary: t("desktop_status_error"),
+			within: info
+		}));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
 		platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help") : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";
 		connect.disabled = state.nativeBusy || !!status.error || !status.credential_available;
@@ -57420,7 +57427,7 @@ async function viewNativeSettings(main) {
 		saved.hidden = !status.credential_saved;
 		forget.disabled = state.nativeBusy || !status.credential_saved;
 	} catch (error) {
-		if (mine === generation) info.append(errorBox(error));
+		if (mine === generation) info.append(errorBox(error, { within: info }));
 	}
 	if (mine !== generation) return;
 	if (disposeUpdates) frame.show("updates");
@@ -57492,7 +57499,7 @@ async function change(out, action, target, params, pre, scope) {
 		else fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 	} catch (e) {
 		lastFailure = e.code || "ERROR";
-		fill(out, e.status === 403 ? errorBox(e) : problem(e.code, e.message));
+		fill(out, e.status === 403 ? errorBox(e, { within: out }) : problem(e.code, e.message));
 	}
 	return null;
 }
@@ -58208,7 +58215,7 @@ async function viewWorkItem(main, wid) {
 				archiveLocks.clear();
 			}
 		} catch (error) {
-			fill(notice, errorBox(error));
+			fill(notice, errorBox(error, { within: notice }));
 			throw error;
 		}
 	};
@@ -58257,7 +58264,7 @@ async function viewWorkItem(main, wid) {
 						assertView(connection);
 						await render(true);
 					} catch (error) {
-						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error));
+						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error, { within: notice }));
 					} finally {
 						if (mark.isConnected) mark.disabled = !canRead || progress.read_version >= w.version;
 					}
@@ -58278,7 +58285,7 @@ async function viewWorkItem(main, wid) {
 		try {
 			data = await api("GET", `/work-items/${wid}`);
 		} catch (e) {
-			fill(panel, errorBox(e));
+			fill(panel, errorBox(e, { within: panel }));
 			return;
 		}
 		if (!panel.isConnected) return;
@@ -58372,7 +58379,7 @@ async function viewWorkItem(main, wid) {
 					requireMutable();
 					op = await attachment.perform("work_item.update", { work_item_id: wid }, params, pre, `wi.edit.${wid}`);
 				} catch (e) {
-					fill(notice, errorBox(e));
+					fill(notice, errorBox(e, { within: notice }));
 					if (STALE.includes(e.code)) {
 						draft = params;
 						render();
@@ -58525,7 +58532,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
 					expected_work_item_fingerprint: w.completion.fingerprint
 				} : {}, `continue.${checkpointId}`);
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 				go.disabled = false;
 				return;
 			}
@@ -58554,7 +58561,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
 			if (state.caps?.artifacts && !expectedHead) try {
 				expectedHead = (await api("GET", `/checkpoints/${checkpointId}?live=true`)).source.head;
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 			}
 		}
 	}, t("start_from_checkpoint")), d.box);
@@ -58789,7 +58796,7 @@ async function viewCleanup(main, section, ident) {
 		} catch (e) {
 			assertView(connection);
 			readFailed = true;
-			fill(status, errorBox(e), h("a", { href: `#/op/${intent.operation_id}` }, t("cleanup_open_receipts")));
+			fill(status, errorBox(e, { within: status }), h("a", { href: `#/op/${intent.operation_id}` }, t("cleanup_open_receipts")));
 			throw e;
 		} finally {
 			operationRead = null;
@@ -58870,7 +58877,7 @@ async function viewCleanup(main, section, ident) {
 					intent.refused = e.code;
 					persist(intentKey, intent);
 				}
-				fill(status, errorBox(e), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
+				fill(status, errorBox(e, { within: status }), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
 			} finally {
 				busy = false;
 				finish();
@@ -58918,7 +58925,7 @@ async function viewCleanup(main, section, ident) {
 				renderPreview();
 				fill(status);
 			} catch (e) {
-				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e));
+				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 			} finally {
 				previewButton.disabled = false;
 			}
@@ -58968,7 +58975,7 @@ async function viewCleanup(main, section, ident) {
 				}
 			}, t("more")));
 		} catch (e) {
-			fill(historyOut, errorBox(e));
+			fill(historyOut, errorBox(e, { within: historyOut }));
 		}
 	}
 	async function loadRetained(cursor = "") {
@@ -58987,7 +58994,7 @@ async function viewCleanup(main, section, ident) {
 				}
 			}, t("more")));
 		} catch (e) {
-			fill(retainedOut, errorBox(e));
+			fill(retainedOut, errorBox(e, { within: retainedOut }));
 		}
 	}
 	main.append(pageHeader({
@@ -59010,7 +59017,7 @@ async function viewCleanup(main, section, ident) {
 			const data = await api("GET", `/cleanup-tombstones/${encodeURIComponent(ident)}`);
 			main.append(h("a", { href: "#/cleanup" }, t("nav_cleanup")), resourceRow(data.tombstone), h("h2", {}, t("cleanup_open_receipts")), h("pre", { class: "panel pre" }, JSON.stringify(data.receipts, null, 2)));
 		} catch (e) {
-			main.append(errorBox(e));
+			main.append(errorBox(e, { within: main }));
 		}
 		return;
 	}
@@ -59199,7 +59206,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		}
 		repairSeed = repairDispatchSeed(record);
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 		return;
 	}
 	const panel = repositoryStartPanel({
@@ -59290,7 +59297,7 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
 		data = await api("GET", `/work-items/${encodeURIComponent(wid)}`);
 		assertView(connection);
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 		return;
 	}
 	const sessions = new Map();
@@ -59303,7 +59310,7 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
 	if (!sessions.size) return viewWorkItem(main, wid);
 	const selected = host && sid ? sessions.get(JSON.stringify([host, sid])) : sessions.values().next().value;
 	if (!selected) {
-		main.append(errorBox(new Error(t("workspace_work_missing"))));
+		main.append(errorBox(new Error(t("workspace_work_missing")), { within: main }));
 		return;
 	}
 	main.classList.add("session-view");
@@ -59353,7 +59360,7 @@ async function viewProjectWork(main, pid, kind, id) {
 		if (item.host && item.session_id) return viewSession(main, item.host, item.session_id, { project: data.project });
 		main.append(pageHeader({ title: item.title || item.action || item.id }), deliveryWork(item, data.project.repositories));
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 	}
 }
 async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {

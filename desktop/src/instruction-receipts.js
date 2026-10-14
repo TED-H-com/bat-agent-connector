@@ -82,7 +82,7 @@ export function instructionReceiptPanel({h, t, when, api, guard, host, sessionId
       if (!value.instructions.length) list.replaceChildren(emptyState({title:t('instruction_empty')}));
       for (const [id, entry] of nodes) if (!retained.has(entry.node)) nodes.delete(id);
       status.replaceChildren(); more.hidden = !value.can_load_more;
-    } catch (error) {if (alive()) status.replaceChildren(h('p', {class: 'muted'}, t('instruction_stale')), errorBox(error));}
+    } catch (error) {if (alive()) status.replaceChildren(h('p', {class: 'muted'}, t('instruction_stale')), errorBox(error, {within:status}));}
     finally {if (alive()) reload.disabled = more.disabled = false;}
   }
   return {box, refresh, dispose() {disposed = true;}};

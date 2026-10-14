@@ -68,7 +68,7 @@ export function specSources({h, t, api, alive, workspaceId, errorBox}) {
       status.replaceChildren(h('p', {class: 'muted'}, text(caps.eligible ? 'spec_ready' : caps.reason === 'PM_SPEC_BINDING_UNAVAILABLE' ? 'spec_no_binding' : 'spec_unavailable')));
     } catch (error) {
       if (ticket !== refreshId || !element.isConnected) return;
-      clear(); caps = null; facts.replaceChildren(); status.replaceChildren(errorBox(error));
+      clear(); caps = null; facts.replaceChildren(); status.replaceChildren(errorBox(error, {within:status}));
     } finally {if (ticket === refreshId) {checking = false; controls();}}
   }
   async function read() {
@@ -92,7 +92,7 @@ export function specSources({h, t, api, alive, workspaceId, errorBox}) {
       render(value);
     } catch (error) {
       if (ticket !== readId || !element.isConnected) return;
-      clear(); caps = null; facts.replaceChildren(); status.replaceChildren(errorBox(error));
+      clear(); caps = null; facts.replaceChildren(); status.replaceChildren(errorBox(error, {within:status}));
     } finally {reading = false; controls();}
   }
   return {element, refresh};

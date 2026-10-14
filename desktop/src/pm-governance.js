@@ -60,7 +60,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   function unavailable(error) {
     loaded = false; ++sourceTicket; list.replaceChildren(); detail.replaceChildren(); editors.hidden = true;
-    update(); status.replaceChildren(errorBox(error));
+    update(); status.replaceChildren(errorBox(error, {within:status}));
   }
   async function currentWorkspace() {
     const value = await api('GET', endpoint); alive(); check(value.workspace);
@@ -265,7 +265,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
         if (!editor.box.isConnected || ticket !== proofSerial || fields.proposed_revision_id.value.trim() !== candidate) return;
         check(value.plan); if (value.plan.revision_id !== candidate) invalid();
         proof = candidate; proofStatus.replaceChildren(text(value.plan.document?.title || candidate), text(value.plan.document_digest), note('pm_gov_direction_only'));
-      } catch (error) {if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error));} finally {update();}
+      } catch (error) {if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error, {within:proofStatus}));} finally {update();}
     }}, t('pm_gov_inspect_plan'));
     fields.proposed_revision_id.addEventListener('input', () => {proof = ''; ++proofSerial; proofStatus.replaceChildren(); update();});
     const affected = namedChoices(fields.affected_requirement_ids, sourceChoices(creating ? createSnapshot : snapshot).filter(row => row.kind === 'requirement').map(row => [row.id, sourceLabel(row.kind, row.source)]), 'pm_gov_affected_ids');
@@ -321,7 +321,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           try {
             await currentWorkspace();
             if (ticket !== sourceTicket || !editor.box.isConnected) return;
-            sourceStatus.replaceChildren(errorBox(error)); update();
+            sourceStatus.replaceChildren(errorBox(error, {within:sourceStatus})); update();
           } catch (failure) {if (ticket === sourceTicket && editor.box.isConnected) unavailable(failure);}
         }
       };
@@ -355,7 +355,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           || operation.target?.workspace_id !== workspaceId || operation.target?.revision_id !== d.proposed_revision?.revision_id
           || operation.result?.previous_revision_id !== record.context.plan_revision_id) throw Error(t('pm_gov_adoption_mismatch'));
         proof = value; receipt.replaceChildren(note('pm_gov_adoption_historical'), id(operation.target.revision_id), h('a', {href: `#/op/${value}`}, t('pm_operation')));
-      } catch (error) {if (editor.box.isConnected) receipt.replaceChildren(errorBox(error));} finally {update();}
+      } catch (error) {if (editor.box.isConnected) receipt.replaceChildren(errorBox(error, {within:receipt}));} finally {update();}
     }}, t('pm_gov_inspect_adoption'));
     adoption_operation_id.addEventListener('input', () => {proof = ''; ++ticket; receipt.replaceChildren(); update();});
     editor = localForm({action: 'pm.governance.adoption.link', target: target(), fields: {adoption_operation_id, rationale: adoptionReason}, context: record.revision_id,
@@ -420,7 +420,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
           // failed detail/source read clears selection. Durable drafts stay put.
           for (let i = records.length - 1; i >= 0; i--) if (records[i].record.record_id === withdrawn) records.splice(i, 1);
           selectRecord(''); current = null; fixed = null; force = true;
-          status.replaceChildren(errorBox(error));
+          status.replaceChildren(errorBox(error, {within:status}));
         }
       }
       const next = JSON.stringify([selectedId, current?.record.version, accepted.head.version, workspace()?.version]);

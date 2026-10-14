@@ -67,7 +67,7 @@ export function workspaceOverview(options) {
     if (event === 'selected') {mode = preference.mode = 'saved'; saved = null; closeReader(); signature = '';}
     if (event === 'updated') saved = value;
     if (event === 'withdrawn') {saved = null; closeReader(); signature = '';}
-    if (event === 'error') status.replaceChildren(options.errorBox(error));
+    if (event === 'error') status.replaceChildren(options.errorBox(error, {within:status}));
     // Construction does not notify; callbacks run after the controls are mounted.
     if (mode === 'saved') render();
   }
@@ -397,7 +397,7 @@ export function workspaceOverview(options) {
       projection = data; plan = adopted; loading = false; status.replaceChildren(); render(anchor);
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
-      projection = null; plan = null; loading = false; signature = ''; closeReader(); render(); status.replaceChildren(options.errorBox(error));
+      projection = null; plan = null; loading = false; signature = ''; closeReader(); render(); status.replaceChildren(options.errorBox(error, {within:status}));
     }
   }
   async function refresh() {if (mode === 'live') await refreshLive(); if (reportsLoaded || mode === 'saved') {await reports.refresh(); if (mode === 'saved') render();}}

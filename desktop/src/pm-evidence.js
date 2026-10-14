@@ -81,7 +81,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
                   [h('dt', {}, key), h('dd', {}, value === null ? t('pm_evidence_unknown') : typeof value === 'object' ? JSON.stringify(value) : String(value))]))),
               h('small', {class: 'muted'}, timeLabel(t, 'pm_evidence_saved_at', {time: sourceTime(detail.evidence.captured_at)})));
             fetched = true;
-          } catch (error) {if (row.isConnected) body.replaceChildren(errorBox(error));} finally {busy = false;}
+          } catch (error) {if (row.isConnected) body.replaceChildren(errorBox(error, {within:body}));} finally {busy = false;}
         }); facts.append(row);
       }
     }
@@ -133,7 +133,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
             extra: h('div', {}, labelled('pm_evidence_rationale', rationale), labelled('pm_evidence_plan_choice', planId), selectedIds, choices)}));
           planId.addEventListener('change', () => {if (bind.locked()) return; selectedIds.value = '[]'; bind.changed(); showRequirements();});
           editor.append(bind.box); showRequirements();
-        } catch (error) {if (row.isConnected) editor.append(errorBox(error));}
+        } catch (error) {if (row.isConnected) editor.append(errorBox(error, {within:editor}));}
       }
       if (!binding) return;
       detail.append(h('p', {class: 'muted'}, t(binding.plan_revision_id ? 'pm_evidence_fixed_plan' : 'pm_evidence_no_plan')));
@@ -150,7 +150,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
         onStateChange:()=>picker?.update(),extra:picker ? h('div',{},selectedQuality,picker.element) : undefined}));
       picker?.attach(capture);
       detail.append(capture.box, holder);
-      try {await loadEvidence(item, holder);} catch (error) {if (holder.isConnected) holder.replaceChildren(errorBox(error));}
+      try {await loadEvidence(item, holder);} catch (error) {if (holder.isConnected) holder.replaceChildren(errorBox(error, {within:holder}));}
     }); return row;
   }
   async function loadProject() {
@@ -171,7 +171,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
         rows.append(...flatten(data.work_items).map(workRow));
         if (!data.work_items?.length) rows.append(h('p', {class: 'muted'}, t('pm_evidence_no_work')));
       }
-    } catch (error) {if (ticket === generation) status.replaceChildren(errorBox(error));}
+    } catch (error) {if (ticket === generation) status.replaceChildren(errorBox(error, {within:status}));}
   }
   async function allBindings(suffix) {
     let cursor = 0, records = [];
@@ -193,7 +193,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
       choose.value = projects.some(project => project.project_id === selected) ? selected : '';
       selected = choose.value;
       await loadProject();
-    } catch (error) {if (ticket === generation) status.replaceChildren(errorBox(error));}
+    } catch (error) {if (ticket === generation) status.replaceChildren(errorBox(error, {within:status}));}
   }
   return {box, refresh};
 }

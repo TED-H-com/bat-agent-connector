@@ -145,7 +145,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
       if(r)item.apply(r);else item.catalogBox.append(h('p',{class:'muted'},t('ahp_need_catalog')));
       for(const f of item.forms)f.update();return valid(ticket);
     }catch(error){if(valid(ticket)){item.catalog=null;item.catalogBox.replaceChildren(h('p',{class:'muted'},t('ahp_selection_unavailable')));
-      status.replaceChildren([401,403,404].includes(error?.status)?inlineError({error:{message:t('ahp_unavailable')}}):errorBox(error));for(const f of item.forms)f.update();}}
+      status.replaceChildren([401,403,404].includes(error?.status)?inlineError({error:{message:t('ahp_unavailable')}}):errorBox(error, {within:status}));for(const f of item.forms)f.update();}}
   }
   adapter.addEventListener('change',()=>{try{alive();localStorage.setItem(selectionStorage,adapter.value);}catch{ /* preference only */ }void selectAdapter(adapter.value);});
   function withdraw(){epoch++;detailEpoch++;ready=false;historyBusy=false;choices.clear();body.replaceChildren();history.replaceChildren();detail.replaceChildren();status.replaceChildren();adapter.replaceChildren();adapter.disabled=true;more.hidden=true;
