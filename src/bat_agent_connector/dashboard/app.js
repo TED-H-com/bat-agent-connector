@@ -40578,7 +40578,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		profile.replaceChildren(h("option", { value: "" }, t("setup_manual_profile")), ...(result.profiles || []).map((row) => h("option", { value: row.id }, row.name || row.id)));
 		profile.value = saved.import_profile_id || "";
 		profileField.hidden = !(result.profiles?.length || result.profiles_error);
-		profile.hidden = !result.profiles?.length;
+		profile.hidden = profileField.hidden;
 		profilesError.hidden = !result.profiles_error;
 		profilesError.textContent = result.profiles_error ? t("setup_profiles_unavailable") : "";
 		if (!saved.intent && saved.host && !fields.get("bat_secret").value && !usableSecret("host") && !saved.import_profile_id && !result.hosts?.some((host) => host.name === saved.host && host.token_available)) fieldHint("bat_secret", t("setup_paste_token_again"));

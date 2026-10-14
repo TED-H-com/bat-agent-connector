@@ -49,11 +49,12 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     const state=await managedSetupFixture(page,false,locale);state.hasProfiles=false;
     state.profilesError=unavailable?'Fixture directory cannot be read':null;await page.goto('/dashboard/');
     await page.locator('[data-setup-manual]>summary').click();
-    await expect(page.locator('[data-setup-profile] select')).toBeHidden();
-    if(unavailable)await expect(page.locator('[data-setup-profiles-error]')).toHaveText(locale==='en'
-      ? 'BAT connection profiles could not be read. Paste a connection URL or enter the values manually.'
-      : '無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。');
-    else await expect(page.locator('[data-setup-profile]')).toBeHidden();
+    if(unavailable) {
+      await expect(page.locator('[data-setup-profile] select')).toBeVisible();
+      await expect(page.locator('[data-setup-profiles-error]')).toHaveText(locale==='en'
+        ? 'BAT connection profiles could not be read. Paste a connection URL or enter the values manually.'
+        : '無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。');
+    } else await expect(page.locator('[data-setup-profile]')).toBeHidden();
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
   });
   for (const width of [1440,390]) test(`setup fields and title refresh align at ${width}`,async({page})=>{
@@ -67,5 +68,8 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     });
     expect(geometry.titleTop).toBeLessThan(geometry.refreshBottom);expect(geometry.refreshTop).toBeLessThan(geometry.titleBottom);
     expect(geometry.hintGap).toBe(4);expect(geometry.fieldGap).toBeGreaterThanOrEqual(12);expect(geometry.fieldGap).toBeLessThanOrEqual(16);
+    await page.locator('[data-setup-manual]>summary').click();
+    const heights=await page.locator('[data-setup-manual] input').evaluateAll(inputs=>inputs.map(node=>node.getBoundingClientRect().height));
+    expect(new Set(heights).size).toBe(1);
   });
 });

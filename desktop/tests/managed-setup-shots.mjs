@@ -15,7 +15,7 @@ try {
     const panel=page.locator('[data-managed-setup]'), form=page.locator('[data-setup-host]'); await expect(form).toBeVisible();
     const shot = async name => {
       if (process.env.BATC_SETUP_SETTINGS_ONLY === '1' && !name.startsWith('settings')) return;
-      await page.evaluate(()=>scrollTo(0,0)); await page.screenshot({path:`${output}/${stage}-${name}-${locale}-${width}.png`,fullPage:true});
+      await page.evaluate(()=>scrollTo(0,0)); await page.screenshot({path:`${output}/${stage}-${name}-${locale}-${width}.png`,fullPage:true,animations:'disabled'});
     };
     await shot('first-run');
     if (stage==='fix1' && width!==768) {
