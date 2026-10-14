@@ -53768,9 +53768,14 @@ async function viewSessions(main) {
 		class: "session-project-link",
 		href: "#/projects"
 	}, t("sessions_projects")));
+	const pathsIntro = h("p", {
+		class: "ui-meta",
+		"data-session-paths": "",
+		hidden: true
+	}, t("paths_first"));
 	main.append(h("div", { class: "session-heading" }, pageHeader({
 		title: t("sessions_title"),
-		meta: t("paths_first")
+		meta: pathsIntro
 	}), mayStartSession(state.caps) ? h("a", {
 		href: "#/start",
 		class: "ui-button primary"
@@ -53902,6 +53907,7 @@ async function viewSessions(main) {
 	};
 	const read = async (mode, expectedRevision) => {
 		if (expectedRevision !== revision) return;
+		if (mode === "reset") pathsIntro.hidden = true;
 		const p = new URLSearchParams({
 			limit: "50",
 			order: "id",
@@ -53938,6 +53944,7 @@ async function viewSessions(main) {
 			}
 			cursor = next;
 			more.hidden = !cursor;
+			pathsIntro.hidden = rows.size !== 0 || Boolean(cursor);
 			pages = mode === "more" ? pages + readPages : readPages;
 			const focused = document.activeElement;
 			const focusedID = list.contains(focused) ? focused.closest("[data-resource-id]")?.dataset.resourceId : null;
@@ -53948,6 +53955,7 @@ async function viewSessions(main) {
 			const current = [...list.querySelectorAll("[data-resource-id]")].find((node) => node.dataset.resourceId === anchorID);
 			if (mode === "refresh" && current && Math.abs(scrollY - before) < 1) scrollBy(0, current.getBoundingClientRect().top - offset);
 		} catch (e) {
+			pathsIntro.hidden = true;
 			status.replaceChildren(errorBox(e));
 		} finally {
 			more.disabled = false;

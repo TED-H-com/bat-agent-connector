@@ -41,7 +41,8 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) 
     await expect(card.locator('[data-checkpoint-reason]')).toContainText(copy.paths_start_required);
     await go(page, '#/sessions');
     await expect(page.getByRole('link', {name: copy.paths_start, exact: true})).toHaveCount(0);
-    await expect(page.locator('.session-heading')).toContainText(copy.paths_first);
+    await expect(page.locator('.session-entry').first()).toBeVisible();
+    await expect(page.locator('[data-session-paths]')).toBeHidden();
     expect(s.writes).toHaveLength(0); await s.context.close();
   });
   test(`Agents setup and eligibility ${locale} ${width}`, async ({browser}) => {
@@ -50,8 +51,20 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) 
     await s.context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto('/dashboard/#/settings?section=agents');
     await expect(page.locator('[data-agents-heading]')).toBeFocused();
+    await expect(page.locator('[data-agents-heading]')).toHaveCSS('outline-style', 'none');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('[data-pm-eligibility-check]')).toBeFocused();
+    await expect(page.locator('[data-pm-eligibility-check]')).toHaveCSS('outline-style', 'solid');
+    await expect(page.locator('[data-pm-eligibility-check]')).toHaveCSS('outline-width', '2px');
     await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_ready);
-    await expect(page.locator('[data-mcp-config]')).toContainText('<SCOPED_TOKEN>');
+    const config = page.locator('[data-mcp-config]');
+    await expect(config).toContainText('<SCOPED_TOKEN>');
+    await expect(config).toHaveCSS('font-family', /monospace/);
+    expect(await config.evaluate(node => {
+      const style = getComputedStyle(node);
+      return style.backgroundColor !== getComputedStyle(node.parentElement!).backgroundColor &&
+        parseFloat(style.paddingLeft) > 0 && parseFloat(style.borderRadius) > 0 && node.scrollWidth <= node.clientWidth;
+    })).toBe(true);
     await page.locator('[data-settings-mcp]').getByRole('button', {name: copy.agents_copy, exact: true}).click();
     const copied = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
     expect(copied.mcpServers.bat.env.BATC_API_TOKEN).toBe('<SCOPED_TOKEN>');
@@ -144,17 +157,42 @@ test('eligibility response cannot restore an abandoned Settings view', async ({b
 });
 
 for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) {
-  test(`empty sessions name the paths ${locale} ${width}`, async ({browser}) => {
+  test(`only empty sessions name the paths ${locale} ${width}`, async ({browser}) => {
     const copy = workPathsStrings[locale], s = await pathsFixture(browser, {locale, width}), {page} = s;
-    s.overrides.unshift((_input, url) => url.pathname === '/sessions' ? {status: 200, data: {sessions: [], next_cursor: null}} : undefined);
+    let inventory = 'populated';
+    s.overrides.unshift((_input, url) => {
+      if (url.pathname !== '/sessions' || inventory === 'populated') return;
+      return inventory === 'unavailable' ? {status: 503, data: {error: {code: 'UNAVAILABLE', message: 'Inventory unavailable'}}}
+        : {status: 200, data: {sessions: [], next_cursor: inventory === 'partial' ? 'next-page' : null}};
+    });
     await page.goto('/dashboard/#/sessions');
     const header = page.locator('.session-heading');
+    await expect(page.locator('.session-entry').first()).toBeVisible();
+    await expect(page.locator('[data-session-paths]')).toBeHidden();
+    // A client-side search with no matches is not an empty inventory.
+    await page.locator('.session-filters input[type=search]').fill('no-such-session');
+    await expect(page.locator('.session-entry')).toHaveCount(0);
+    await expect(page.locator('[data-session-paths]')).toBeHidden();
+    await page.locator('.session-filters input[type=search]').fill('');
+    inventory = 'empty'; await page.reload();
+    await expect(page.locator('[data-session-paths]')).toBeVisible();
+    await expect(page.locator('.session-entry')).toHaveCount(0);
     await expect(header).toContainText(copy.paths_first);
     await expect(header.getByRole('link', {name: copy.paths_start})).toHaveAttribute('href', '#/start');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     // Registration alone does not grant a start; keep start scope but withdraw action allowance.
     s.state.startAllowed = false; await page.reload();
     await expect(header.getByRole('link', {name: copy.paths_start})).toHaveCount(0);
+    inventory = 'populated'; await page.reload();
+    await expect(page.locator('.session-entry').first()).toBeVisible();
+    await expect(page.locator('[data-session-paths]')).toBeHidden();
+    for (inventory of ['partial', 'unavailable']) {
+      const reads = s.reads('/sessions'); await page.reload();
+      await expect.poll(() => s.reads('/sessions')).toBeGreaterThan(reads);
+      if (inventory === 'partial') await expect(page.locator('.session-pagination button')).toBeVisible();
+      else await expect(page.locator('#main [data-api-error]')).toContainText('UNAVAILABLE');
+      await expect(page.locator('[data-session-paths]')).toBeHidden();
+    }
     expect(s.writes).toHaveLength(0); await s.context.close();
   });
 }

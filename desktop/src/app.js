@@ -900,7 +900,8 @@ async function viewSessions(main) {
   const scope = h("details", {class: "panel session-scope", open: matchMedia("(min-width: 901px)").matches},
     h("summary", {}, t("sessions_workspaces")), scopeNote, navigation,
     h("a", {class: "session-project-link", href: "#/projects"}, t("sessions_projects")));
-  main.append(h("div", {class: "session-heading"}, pageHeader({title: t("sessions_title"), meta: t("paths_first")}),
+  const pathsIntro = h("p", {class: "ui-meta", "data-session-paths": "", hidden: true}, t("paths_first"));
+  main.append(h("div", {class: "session-heading"}, pageHeader({title: t("sessions_title"), meta: pathsIntro}),
     mayStartSession(state.caps) ? h("a", {href: "#/start", class: "ui-button primary"}, t("paths_start")) : null,
     state.caps?.features?.repository_sync?.length ? h("a", {href: "#/published"}, t("pub_title")) : null,
     state.caps?.actions?.some(a => Object.values(orchestrationActions).includes(a.action)) ? h("a", {href: "#/orchestrate/relay"}, t("orch_title")) : null),
@@ -999,6 +1000,7 @@ async function viewSessions(main) {
   };
   const read = async (mode, expectedRevision) => {
     if (expectedRevision !== revision) return;
+    if (mode === "reset") pathsIntro.hidden = true;
     const p = new URLSearchParams({limit: "50", order: "id", include_gone: "true"});
     if (hostSel.value) p.set("host", hostSel.value);
     if (accessSel.value) p.set("access", accessSel.value);
@@ -1023,6 +1025,7 @@ async function viewSessions(main) {
       rows.clear();
       for (const [id, session] of observed) {rows.set(id, session); rememberObservation("session", id, {session}, [`host:${session.host}`]);}
       cursor = next; more.hidden = !cursor;
+      pathsIntro.hidden = rows.size !== 0 || Boolean(cursor);
       pages = mode === "more" ? pages + readPages : readPages;
       const focused = document.activeElement;
       const focusedID = list.contains(focused) ? focused.closest("[data-resource-id]")?.dataset.resourceId : null;
@@ -1034,7 +1037,7 @@ async function viewSessions(main) {
       }
       const current = [...list.querySelectorAll("[data-resource-id]")].find(node => node.dataset.resourceId === anchorID);
       if (mode === "refresh" && current && Math.abs(scrollY - before) < 1) scrollBy(0, current.getBoundingClientRect().top - offset);
-    } catch (e) { status.replaceChildren(errorBox(e)); }
+    } catch (e) { pathsIntro.hidden = true; status.replaceChildren(errorBox(e)); }
     finally {more.disabled = false;}
   };
   const load = async mode => {

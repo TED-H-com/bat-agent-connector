@@ -61,6 +61,8 @@ h1 { font-size: var(--fs-title); font-weight: 600; line-height: 1.3; letter-spac
 h2, h3 { font-size: var(--fs-section); font-weight: 600; line-height: 1.35; }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Reading targets retain programmatic focus without resembling form controls. */
+:is(h1, h2, h3, h4, h5, h6)[tabindex="-1"]:focus { outline: none; }
 .mono, code { font-family: var(--font-mono); font-size: var(--fs-mono); overflow-wrap: anywhere; }
 .tabular, .numeric { font-variant-numeric: tabular-nums; }
 .numeric { text-align: right; }
@@ -1225,7 +1227,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .work-paths-card .actions { margin: var(--space-3) 0; }
 .settings-agent-group { padding-top: var(--space-4); margin-top: var(--space-4); border-top: 1px solid var(--line); }
 .settings-agent-group h3 { margin: 0; font-size: var(--fs-section); }
-.settings-agent-group pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.settings-agent-group pre { margin: var(--space-3) 0; padding: var(--space-4); background: var(--surface-2);
+  border-radius: var(--r-md); font-family: var(--font-mono); font-size: var(--fs-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .settings-agents { max-width: var(--reading-width); }
 .work-paths-steps { padding-left: var(--space-6); color: var(--text-2); }
 .work-paths-steps li + li { margin-top: var(--space-2); }

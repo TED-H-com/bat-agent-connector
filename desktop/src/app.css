@@ -716,7 +716,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .work-paths-card .actions { margin: var(--space-3) 0; }
 .settings-agent-group { padding-top: var(--space-4); margin-top: var(--space-4); border-top: 1px solid var(--line); }
 .settings-agent-group h3 { margin: 0; font-size: var(--fs-section); }
-.settings-agent-group pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.settings-agent-group pre { margin: var(--space-3) 0; padding: var(--space-4); background: var(--surface-2);
+  border-radius: var(--r-md); font-family: var(--font-mono); font-size: var(--fs-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .settings-agents { max-width: var(--reading-width); }
 .work-paths-steps { padding-left: var(--space-6); color: var(--text-2); }
 .work-paths-steps li + li { margin-top: var(--space-2); }

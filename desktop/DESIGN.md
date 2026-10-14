@@ -1132,13 +1132,15 @@ checkpoint host availability and start scope gate those controls. Continue opens
 focuses the existing checkpoint capture form in Results; it never captures or dispatches
 on behalf of the user. Unavailability is a localized sentence, with configuration keys
 only in the checkpoint disclosure. The Start host hint changes only an editable draft,
-never a saved original operation. Sessions name the three paths in their header.
+never a saved original operation. Sessions name the three paths in their header only
+after a successful empty inventory read; populated, partial and unavailable lists omit it.
 
 Start, project dispatch and PM package handoff share the collapsed How dispatch works
 disclosure. Settings → Agents holds PM eligibility above MCP instructions. Operator
 installs show a placeholder-token config and private CLI issuance instructions; bundled
 installs show documentation because the managed launcher has no MCP or token-issuance
 entry point. Neither view reads or renders a real credential.
+MCP snippets use a padded, wrapping monospace block on the secondary surface.
 
 `section=agents` selects, scrolls to and focuses the Agents heading. Validated internal
 `from` routes show one return link. Discussion origins read existing workspace capabilities
@@ -1147,3 +1149,5 @@ advertised. Every check makes one read, clears previous facts before refreshing 
 creates an operation. Ready denotes installation eligibility for preflight, not model
 execution evidence. Unknown, withdrawn and unsupported reads show Not checked; raw reason
 codes stay in Details. Late responses cannot paint after leaving the view.
+Headings with `tabindex="-1"` keep programmatic focus without an outline; interactive
+controls retain the shared accent focus-visible ring. This also applies to requirement groups.
