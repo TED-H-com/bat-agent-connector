@@ -92,9 +92,11 @@ def _admit(ops, principal, target, params, pre):
 
 def _source_visible(db, principal, operation):
     try:
-        if operation.get("action") != ACTION:
-            row = db.execute("SELECT * FROM operations WHERE operation_id=?", (operation.get("operation_id"),)).fetchone()
-            operation = OperationService._decode(row) if row else {}
+        # Read surfaces can pass only the operation identity/action/target.
+        # Admission evidence always comes from the canonical record, never a
+        # caller's projection, even when its action already matches.
+        row = pm_read_cache.operation_row(db, operation.get("operation_id"))
+        operation = OperationService._decode(row) if row else {}
         if operation.get("action") != ACTION:
             return False
         fixed = operation["external_refs"]["admission_binding"]["pm_spec_materialization"]
@@ -121,7 +123,8 @@ def source_visible(db, principal, operation):
         state = ({}, set())
         token = _SOURCE_READ.set(state)
     results, active = state
-    key = (id(db), principal.actor, tuple(sorted(principal.scopes)), principal.admin, operation.get("operation_id"))
+    key = (id(db), principal.actor, tuple(sorted(principal.scopes)), principal.admin,
+           principal.credential_id, operation.get("operation_id"))
     try:
         if key in active:
             pm_read_cache.refuse()
