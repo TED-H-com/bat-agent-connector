@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Name maintenance findings from the structured `finding` identity in the issues
+  register, Overview attention and discussion chips, in English and zh-TW.
+  Servers that omit `finding` keep the previous fallback. A withdrawn chip stays
+  unavailable and shows no identity.
+
 - Add a repeatable real-central PM decision walkthrough in English and zh-TW,
   with scripted native analysis, temporary Git, explicit issue resolution,
   original-key adoption and resolution recovery, and step screenshots. Keep hidden

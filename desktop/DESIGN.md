@@ -298,7 +298,10 @@ the existing governance tool remains the destination. The destination list settl
 before selection; withdrawn or late record reads cannot reopen an inspector.
 
 Attention retains the central severity/age ordering, with exact context identities
-passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
+passed to `discussHref`. A maintenance finding shows the shared finding name
+instead of the provider number, and a severity word when `finding.severity` is
+present. Its Discuss link uses that same name. A server that omits `finding`
+keeps the provider number and does not invent a severity word. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
 by identity within their own part. Cached ages advance with the projection timestamp.
 Overview records its scroll position before a view switch hides it and restores it after
 the destination header has finished laying out. Repeated selection
@@ -346,6 +349,10 @@ focus to the pencil after recovery controls unlock. Recovery remains attached to
 original rename intent. Tabs associate their panels for assistive technology.
 Context chips use current labels and put differing admission labels in tooltips;
 withdrawn refs show only their kind and Unavailable, including in the thread list.
+A finding chip uses the shared finding name when `finding` is present, including
+the composer's pre-bind label from the finding's native kind, number and proven
+facts. A withdrawn finding chip stays unavailable and shows none of that identity.
+A server that omits `finding` keeps Kind · stored label.
 Chips stay on one line with full accessible labels: up to three in the header, then
 +N opens Context; one per list row. The selected row has the table accent inset.
 The composer has one status/actions row with Send and Ask PM kept together. Failed
@@ -610,8 +617,16 @@ still drops the row when it is gone, without opening the sheet. Leaving the view
 still in flight and closes the inspector.
 Search and owner accept at most 200 characters.
 
-The table shows the type word; Source stays in the inspector facts. A finding with
-no title is named from its kind and its impact or priority. Long owner text
+The table shows the type word; Source stays in the inspector facts. A maintenance
+finding with no title is named from its structured `finding` when the server sends
+one: a GitHub issue or Dependabot pull request uses its kind and number, and a
+security alert uses its package, or its number when the package is absent. The
+same name is used in the list, the table and the inspector title. A server that
+omits `finding` keeps the older register name: the finding kind plus its impact
+or priority. The inspector adds only identity facts that are present — severity
+with its word and colour, package, ecosystem, labels and manifests — and puts
+the GHSA ID in Details. Absent identity facts are not filled in as “Not recorded”;
+`finding.*` unknowns stay out of that list. Long owner text
 ellipsizes. Related requirement and work chips use a loaded name when one is known.
 Filters are one toolbar: type, status, exact owner and title search, with accessible
 names and no visible field labels. Pages follow `next_cursor`; row ids and cursors
