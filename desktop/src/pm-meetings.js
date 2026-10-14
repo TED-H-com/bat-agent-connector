@@ -95,9 +95,13 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     }};
     return {element: fold('pm_meeting_sources', h('div', {}, note('pm_meeting_source_help'), holder)), sync};
   }
+  function workTitle(item) {
+    const fixed = model.detail.snapshot.work?.find(row => row.work_item_id === item.work_item_id && row.binding?.binding_id === item.binding_id);
+    return item.title || fixed?.title || t('pm_meeting_unknown');
+  }
   function workView(items) {
     return h('div', {class: 'pm-meeting-work'}, ...items.map(item => h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`},
-      contextChip({text: item.title || t('pm_meeting_source_unavailable')}))));
+      contextChip({text: workTitle(item)}))));
   }
   function outputView(document) {
     const output = document.output, holder = h('div', {'data-pm-meeting-output': document.kind});
@@ -265,7 +269,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
           const node=input('pm_meeting_outcome',{multiline:true,max:4000,required:false,value:outcomes.find(row=>row.binding_id===item.binding_id)?.observation||''});nodes.push(node);
           const change=values=>{if(!can()||stale||editor.locked())return;fields.outcomes.value=JSON.stringify(values);editor.changed();dirty=true;};
           node.addEventListener('input',()=>change([...JSON.parse(fields.outcomes.value).filter(row=>row.binding_id!==item.binding_id),{binding_id:item.binding_id,observation:node.value}]));
-          const label=h('label',{},t('pm_meeting_outcome'),' · ',h('span',{class:'pm-source'},item.title||item.work_item_id||item.binding_id),node);outcomeHolder.append(label);
+          const label=h('label',{},t('pm_meeting_outcome'),' · ',h('span',{class:'pm-source'},workTitle(item)),node);outcomeHolder.append(label,fold('pm_meeting_details',source(item.binding_id)));
           if(item.unavailable){const remove=h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>{change(JSON.parse(fields.outcomes.value).filter(row=>row.binding_id!==item.binding_id));render();sync();}},t('pm_meeting_remove'));
             nodes.push(remove);outcomeHolder.append(note('pm_meeting_source_unavailable'),remove);}
         }

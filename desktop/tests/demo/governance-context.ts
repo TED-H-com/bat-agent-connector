@@ -13,7 +13,7 @@ export function governanceContext(project: DemoProject, rest: string) {
   const sprint = {workspace_id, sprint_id, version: 1, status: 'active', sequence: 1, started_at: at - 3600,
     definition: {title, owner_actor: actor, developers: [actor]}, goal: {revision_id: hexId('pmsg_', 1, 32), text: project.copy.goal}};
   const context = {meeting_id, context_revision_id, document: {sprint_id, snapshot_ref: {snapshot_id: saved.snapshot_id, snapshot_digest: saved.snapshot_digest, as_of: saved.as_of},
-    sprint_definition: sprint.definition, sprint_goal: sprint.goal, selected_items: [{binding_id: hexId('pmwb_', 1, 32), work_item_id: project.ids.work.reset, title: project.copy.work.reset}],
+    sprint_definition: sprint.definition, sprint_goal: sprint.goal, selected_items: [{binding_id: project.ids.bindings.resetToken, work_item_id: project.ids.work.resetToken, title: project.copy.work.resetToken}],
     artifacts: {dod: {revision_id: hexId('pma_', 1, 32), document: {criteria: [{text: zh ? '核對實際復原流程與測試結果' : 'Check the recovery flow and test evidence'}]}}}}};
   const meeting = {workspace_id, meeting_id, sprint_id, title, kind: 'review', status: 'completed', version: 3, sequence: 1,
     context_revision_id, draft_revision_id: hexId('pmmrev_', 1, 32), completion_id};

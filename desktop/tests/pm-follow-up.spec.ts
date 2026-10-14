@@ -133,7 +133,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`snaps
   const f=fixture();f.state.rows.at(-1).document.agenda=[];
   f.state.rows.at(-1).document.coverage.snapshot={projects_truncated:true,work_truncated:true,evidence_truncated:true,bytes_truncated:true};
   await page.setViewportSize({width,height:900});
-  await mount(page,f,{locale});const warning=page.locator('[data-pm-fu-partial]');await expect(section(page).locator('[data-status=partial]')).toBeVisible();await warning.evaluate(el=>{for(let p=(el.tagName==='SUMMARY'?el.parentElement?.parentElement:el.parentElement);p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});await expect(warning).toBeVisible();
+  await mount(page,f,{locale});const warning=page.locator('[data-pm-fu-partial]');await expect(section(page).locator('[data-status=partial]').first()).toBeVisible();await warning.evaluate(el=>{for(let p=(el.tagName==='SUMMARY'?el.parentElement?.parentElement:el.parentElement);p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});await expect(warning).toBeVisible();
   await expect(warning.locator('li')).toHaveCount(4);await expect(warning).toContainText(locale==='en'?'The agenda does not assess those omitted records':'議程並未評估那些省略的紀錄');
   const output=process.env.BATC_PM_FOLLOW_UP_SCREENSHOTS||info.outputPath('screenshots');await mkdir(output,{recursive:true});
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

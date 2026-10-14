@@ -29665,8 +29665,12 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			sync
 		};
 	}
+	function workTitle(item) {
+		const fixed = model.detail.snapshot.work?.find((row) => row.work_item_id === item.work_item_id && row.binding?.binding_id === item.binding_id);
+		return item.title || fixed?.title || t("pm_meeting_unknown");
+	}
 	function workView(items) {
-		return h("div", { class: "pm-meeting-work" }, ...items.map((item) => h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, contextChip({ text: item.title || t("pm_meeting_source_unavailable") }))));
+		return h("div", { class: "pm-meeting-work" }, ...items.map((item) => h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, contextChip({ text: workTitle(item) }))));
 	}
 	function outputView(document) {
 		const output = document.output, holder = h("div", { "data-pm-meeting-output": document.kind });
@@ -30006,8 +30010,8 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 						binding_id: item.binding_id,
 						observation: node.value
 					}]));
-					const label = h("label", {}, t("pm_meeting_outcome"), " · ", h("span", { class: "pm-source" }, item.title || item.work_item_id || item.binding_id), node);
-					outcomeHolder.append(label);
+					const label = h("label", {}, t("pm_meeting_outcome"), " · ", h("span", { class: "pm-source" }, workTitle(item)), node);
+					outcomeHolder.append(label, fold("pm_meeting_details", source(item.binding_id)));
 					if (item.unavailable) {
 						const remove = h("button", {
 							type: "button",

@@ -34,7 +34,7 @@ async function complete(page:Page) {
 test('fixed source, Goal and quality stay in the meeting without tabs or writes',async({page})=>{
   const f=meetingFixture();await mount(page,f);
   await expect(page.locator('[data-pm-meetings]')).toContainText('Members regain access without losing their account');
-  await openRead(page.getByText('Fixed context',{exact:true}));
+  await openRead(page.getByText('Details',{exact:true}));
   await expect(page.locator('[data-pm-meetings]')).toContainText('Relevant tests and actual behavior are checked');
   await expect(page.locator('[data-pm-meetings]')).toContainText('DoD and improvement effects are unassessed');
   await expect(page.getByRole('tab')).toHaveCount(0);expect(f.state.writes).toEqual([]);
@@ -57,7 +57,10 @@ test('a lost completion reply recovers the exact request after completed state a
   const original=structuredClone(f.state.writes.at(-1));await page.reload();await boot(page);
   await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
   expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(3);
-  await page.locator('[data-pm-meeting-completion]').evaluate(el=>{for(let p=(el.tagName==='SUMMARY'?el.parentElement?.parentElement:el.parentElement);p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
+  await expect(action(page,'complete').getByRole('button',{name:'Check original request',exact:true})).toHaveCount(0);
+  await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();
+  await openRead(page.locator('[data-pm-meeting-completion]').locator('..').locator(':scope > summary'));
+  await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
 });
 test('saving a note preserves another open draft and requires an explicit version refresh',async({page})=>{
   const f=meetingFixture();await mount(page,f);await openAction(page,'draft');
@@ -119,6 +122,8 @@ test('follow-up result is an unverified record on the original assignment',async
   await action(page,'follow_up.record').getByLabel('Result and remaining uncertainty',{exact:true}).fill('The handoff was reviewed; impact remains unmeasured');
   await reason(page,'follow_up.record');await action(page,'follow_up.record').getByRole('button',{name:'Record follow-up result',exact:true}).click();
   expect(f.state.writes[0].body.params).toMatchObject({follow_up_id:'handoff',status:'reported_done'});expect(f.state.writes[0].body.params).not.toHaveProperty('snapshot_id');
+  await expect(action(page,'follow_up.record').getByLabel('Result and remaining uncertainty',{exact:true})).toHaveValue('');
+  await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();
   await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Follow-up results',{exact:true}));await openRead(page.getByText('#1 · developer',{exact:true}));
   await expect(page.locator('[data-pm-meetings]')).toContainText('Reported done — unverified');
   expect(detail.completion.document.follow_ups[0].owner_actor).toBe('developer');
@@ -211,3 +216,10 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`meeti
   expect(await page.locator('[data-pm-meetings]').evaluate(el=>[...el.querySelectorAll('code')].every(node=>Boolean(node.closest('details'))))).toBe(true);
   expect(f.state.writes).toEqual([]);
  });
+
+test('selected work uses the title from its exact saved snapshot binding',async({page})=>{
+  const f=meetingFixture(),detail=f.state.meetings[0],item=detail.context.document.selected_items[0];
+  delete item.title; detail.snapshot.work=[{work_item_id:item.work_item_id,title:'Verify the reset link',binding:{binding_id:item.binding_id}}];
+  await mount(page,f);await expect(page.getByRole('link',{name:'Verify the reset link',exact:true})).toBeVisible();
+  await openAction(page,'draft');expect(f.state.writes).toEqual([]);
+});
