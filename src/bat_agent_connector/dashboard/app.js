@@ -10484,6 +10484,7 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 var paths = {
+	"star": [["polygon", { "points": "12 3 14.8 8.7 21 9.6 16.5 14 17.6 20.2 12 17.3 6.4 20.2 7.5 14 3 9.6 9.2 8.7 12 3" }]],
 	"grip-vertical": [
 		["circle", {
 			"cx": "9",
@@ -40582,6 +40583,12 @@ var observedStrings = {
 		or_worktree: "Worktree",
 		or_work: "Work",
 		or_owner: "Owner",
+		or_ownership: "Ownership",
+		or_paused: "Paused",
+		or_connection_settings: "Connection settings",
+		or_order_first: "Already first in this group.",
+		or_order_last: "Already last in this group.",
+		or_order_pinned: "Pinned and unpinned items stay in separate groups.",
 		or_owner_task: "Managed task",
 		or_owner_operation: "Managed operation",
 		or_owner_registry: "Registered",
@@ -40644,6 +40651,12 @@ var observedStrings = {
 		or_worktree: "工作目錄",
 		or_work: "工作",
 		or_owner: "負責人",
+		or_ownership: "歸屬類型",
+		or_paused: "已暫停",
+		or_connection_settings: "連線設定",
+		or_order_first: "已在這一組的最上方。",
+		or_order_last: "已在這一組的最下方。",
+		or_order_pinned: "置頂與未置頂項目分開排序。",
 		or_owner_task: "受管任務",
 		or_owner_operation: "受管操作",
 		or_owner_registry: "已登記",
@@ -46690,10 +46703,11 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		update();
 	};
 	const help = h("p", { class: "muted" }, t("task_control_help"));
-	const box = h("section", {
-		class: "panel",
-		"data-task-controls": ""
-	}, h("h2", {}, t("task_controls")), help, abortLabel, h("div", { class: "actions" }, apply, check, another), restriction, result, message);
+	const box = sectionCard({
+		title: t("task_controls"),
+		body: h("div", {}, help, abortLabel, h("div", { class: "actions" }, apply, check, another), restriction, result, message)
+	});
+	box.dataset.taskControls = "";
 	function update() {
 		const fixed = Boolean(saved.intent);
 		const canOperate = permitted();
@@ -50299,12 +50313,17 @@ function actionLink(h, href, label, variant) {
 		href
 	}, label);
 }
-function unavailableProject({ h, error, collection = false, transportFailed = false, retry }) {
+function unavailableProject({ h, error, collection = false, transportFailed = false, retry, connection }) {
 	const denied = [401, 403].includes(error?.status), missing = error?.status === 404;
 	const recoverable = error?.status === 503 || error?.status === 0 || transportFailed;
 	const reason = denied ? "or_project_denied" : missing ? collection ? "or_projects_missing" : "or_project_missing" : "or_connector_unavailable";
 	const actions = [];
 	if (!collection) actions.push(actionLink(h, "#/projects", say("or_back_projects"), "secondary"));
+	if (collection && denied && connection) actions.push(button({
+		variant: "secondary",
+		label: say("or_connection_settings"),
+		onClick: connection
+	}));
 	if (recoverable && retry) actions.push(button({
 		variant: "secondary",
 		label: t("retry"),
@@ -50313,9 +50332,13 @@ function unavailableProject({ h, error, collection = false, transportFailed = fa
 	const state = emptyState({
 		icon: "circle-alert",
 		title: say(collection ? "or_projects_unavailable" : "or_project_unavailable"),
-		text: say(reason),
-		action: actions.length ? h("div", { class: "actions" }, ...actions) : null
+		text: say(reason)
 	});
+	if (text(error?.code)) state.append(disclosure({
+		label: say("or_details"),
+		body: h("p", { class: "mono" }, text(error.code))
+	}));
+	if (actions.length) state.append(h("div", { class: "actions" }, ...actions));
 	state.dataset.projectUnavailable = collection ? "list" : "project";
 	return state;
 }
@@ -50477,7 +50500,7 @@ function renderWorktree({ h, id, resource, caps, namespace }) {
 		title: text(work[0]?.title) || text(resource?.branch) || say("or_worktree"),
 		meta: [resource?.host, resource?.branch].map(text).filter(Boolean).join(" · "),
 		actions
-	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_owner"), owner), fact(h, say("or_latest"), h("span", {
+	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_ownership"), owner), fact(h, say("or_latest"), h("span", {
 		class: "or-result",
 		"data-observed-result": ""
 	}, latest ? deliveryPill(latest) : statusPill("unknown"), prAnchor(h, receipt), stamp(receipt?.delivered_at ?? latest?.created_at))), sessions.length ? h("div", { class: "or-sessions" }, h("span", { class: "or-label" }, say("or_sessions")), ...sessions.map((item) => sessionRow$1(h, item))) : null, details) })];
@@ -50490,7 +50513,7 @@ function renderExecution({ h, id, task, caps, namespace }) {
 	const pause = task?.paused === true || task?.paused === 1 ? statusPill("stopped") : null;
 	if (pause) {
 		pause.dataset.taskDispatch = "";
-		pause.textContent = t("task_paused");
+		pause.textContent = say("or_paused");
 	}
 	const reason = pause ? pauseReason(task) : "";
 	const delivery = task?.delivery, stage = delivery?.stage;
@@ -50507,7 +50530,7 @@ function renderExecution({ h, id, task, caps, namespace }) {
 		title: text(task?.title) || text(task?.original_words).split("\n").find(Boolean) || text(task?.external_branch) || say("or_execution"),
 		meta: [task?.host, task?.external_branch].map(text).filter(Boolean).join(" · "),
 		actions: choices.slice(0, 2).map(([label, href], i) => actionLink(h, href, label, i ? "secondary" : "primary"))
-	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_owner"), say("or_owner_task")), fact(h, say("or_state"), statusPill(TASK_PILLS[task?.state] || "unknown")), pause ? fact(h, say("or_dispatch"), h("span", { class: "or-result" }, pause, reason ? h("span", { "data-observed-pause-reason": "" }, reason) : null)) : null, fact(h, say("or_latest"), h("span", { class: "or-result" }, resultPill, stamp(delivery?.[stage]?.at))), detailsBlock(h("div", {}, pairs(h, [
+	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_ownership"), say("or_owner_task")), text(task?.lead_agent) ? fact(h, say("or_owner"), cliName(text(task.lead_agent))) : null, fact(h, say("or_state"), statusPill(TASK_PILLS[task?.state] || "unknown")), pause ? fact(h, say("or_dispatch"), h("span", { class: "or-result" }, pause, reason ? h("span", { "data-observed-pause-reason": "" }, reason) : null)) : null, fact(h, say("or_latest"), h("span", { class: "or-result" }, resultPill, stamp(delivery?.[stage]?.at))), detailsBlock(h("div", {}, pairs(h, [
 		[say("or_task_id"), text(task?.task_id || id)],
 		[say("or_session_id"), text(task?.session_id)],
 		[say("or_project"), text(task?.project)],
@@ -55453,27 +55476,28 @@ function orderButtons(sibs, i, key, run) {
 		run("order", before, order, Object.fromEntries(sibs.map((x) => [x[key], x.version])));
 	};
 	const can = (j) => j >= 0 && j < sibs.length && sibs[j].pinned === me.pinned;
+	const move = (offset, icon, label) => {
+		const j = i + offset, enabled = can(j);
+		const reason = j < 0 ? "or_order_first" : j >= sibs.length ? "or_order_last" : "or_order_pinned";
+		return iconButton({
+			icon,
+			label: t(label),
+			title: enabled ? t(label) : observedText(t, reason),
+			disabled: !enabled,
+			onClick: swap(j)
+		});
+	};
+	const pin = iconButton({
+		icon: "star",
+		label: t(me.pinned ? "unpin" : "pin"),
+		"aria-pressed": String(Boolean(me.pinned)),
+		onClick: () => run("pin", me.pinned)
+	});
+	pin.classList.add("or-order-pin");
 	return [
-		h("button", {
-			class: "mini",
-			title: t("move_up"),
-			"aria-label": t("move_up"),
-			disabled: !can(i - 1),
-			onclick: swap(i - 1)
-		}, "↑"),
-		h("button", {
-			class: "mini",
-			title: t("move_down"),
-			"aria-label": t("move_down"),
-			disabled: !can(i + 1),
-			onclick: swap(i + 1)
-		}, "↓"),
-		h("button", {
-			class: `mini ${me.pinned ? "on" : ""}`,
-			title: me.pinned ? t("unpin") : t("pin"),
-			"aria-label": me.pinned ? t("unpin") : t("pin"),
-			onclick: () => run("pin", me.pinned)
-		}, me.pinned ? "★" : "☆")
+		move(-1, "chevron-up", "move_up"),
+		move(1, "chevron-down", "move_down"),
+		pin
 	];
 }
 var editing = 0;
@@ -55628,15 +55652,19 @@ async function viewProjects(main) {
 		onClick: () => render().catch(() => {})
 	});
 	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
+	const note = manageNote();
+	const help = disclosure({
+		label: t("global_details"),
+		body: h("p", {}, t("projects_help"))
+	});
 	create.box.hidden = true;
 	filter.hidden = true;
+	help.hidden = true;
+	if (note) note.hidden = true;
 	main.append(pageHeader({
 		title: t("nav_projects"),
 		actions: [refresh]
-	}), disclosure({
-		label: t("global_details"),
-		body: h("p", {}, t("projects_help"))
-	}), manageNote() || "", create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived) }));
+	}), note || "", create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived, help) }));
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens, mine = ++request;
 		let received = false;
@@ -55655,6 +55683,8 @@ async function viewProjects(main) {
 			create.box.hidden = !may("manage") || state.caps?.actions?.find((row) => row.action === "project.create")?.allowed === false;
 			filter.hidden = false;
 			refresh.hidden = false;
+			help.hidden = false;
+			if (note) note.hidden = false;
 			const rows = [];
 			const walk = (sibs, depth, parent) => sibs.forEach((p, i) => {
 				const msg = out;
@@ -55743,12 +55773,18 @@ async function viewProjects(main) {
 			filter.hidden = true;
 			refresh.hidden = true;
 			freshPage();
+			help.hidden = true;
+			if (note) note.hidden = true;
 			errorBox(error);
 			fill(tree, unavailableProject({
 				h,
 				error,
 				collection: true,
 				transportFailed: !received && error?.status === void 0,
+				connection: () => {
+					viewState(connection.namespace, "", "settings").section = "connection";
+					location.hash = "#/settings";
+				},
 				retry: () => render().catch(() => {})
 			}));
 		}
@@ -55804,7 +55840,9 @@ async function viewProject(main, pid) {
 	itemCard.dataset.projectItemCard = "";
 	itemCard.hidden = true;
 	create.box.hidden = true;
-	main.append(manageNote() || "", out, head, work, itemCard);
+	const note = manageNote();
+	if (note) note.hidden = true;
+	main.append(note || "", out, head, work, itemCard);
 	const rememberEditors = () => {
 		if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
 		for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden) workDrafts.set(id, {
@@ -55829,6 +55867,7 @@ async function viewProject(main, pid) {
 		fill(archived);
 		fill(out);
 		itemCard.hidden = true;
+		if (note) note.hidden = true;
 		errorBox(error);
 		fill(head, unavailableProject({
 			h,
@@ -55875,6 +55914,7 @@ async function viewProject(main, pid) {
 		workEditors = new Map();
 		freshPage();
 		const p = data.project;
+		if (note) note.hidden = false;
 		itemCard.hidden = false;
 		create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed === false;
 		create.setContext({

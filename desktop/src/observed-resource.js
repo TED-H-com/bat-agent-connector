@@ -1,5 +1,6 @@
 import {t} from './i18n.js';
 import {actionLabel} from './global-labels.js';
+import {cliName} from './pm-agents-trend.js';
 import {button, disclosure, emptyState, iconButton, menu, pageHeader, sectionCard, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {observedText as textOf} from './observed-resource-strings.js';
@@ -23,16 +24,18 @@ function ownerKind(resource) {
 function actionLink(h, href, label, variant) {
   return h('a', {class: `ui-button ${variant} ui-sm`, href}, label);
 }
-export function unavailableProject({h, error, collection = false, transportFailed = false, retry}) {
+export function unavailableProject({h, error, collection = false, transportFailed = false, retry, connection}) {
   const denied = [401, 403].includes(error?.status), missing = error?.status === 404;
   const recoverable = error?.status === 503 || error?.status === 0 || transportFailed;
   const reason = denied ? 'or_project_denied' : missing ? (collection ? 'or_projects_missing' : 'or_project_missing') : 'or_connector_unavailable';
   const actions = [];
   if (!collection) actions.push(actionLink(h, '#/projects', say('or_back_projects'), 'secondary'));
+  if (collection && denied && connection) actions.push(button({variant: 'secondary', label: say('or_connection_settings'), onClick: connection}));
   if (recoverable && retry) actions.push(button({variant: 'secondary', label: t('retry'), onClick: retry}));
   const state = emptyState({icon: 'circle-alert', title: say(collection ? 'or_projects_unavailable' : 'or_project_unavailable'),
-    text: say(reason),
-    action: actions.length ? h('div', {class: 'actions'}, ...actions) : null});
+    text: say(reason)});
+  if (text(error?.code)) state.append(disclosure({label: say('or_details'), body: h('p', {class: 'mono'}, text(error.code))}));
+  if (actions.length) state.append(h('div', {class: 'actions'}, ...actions));
   state.dataset.projectUnavailable = collection ? 'list' : 'project';
   return state;
 }
@@ -159,7 +162,7 @@ function renderWorktree({h, id, resource, caps, namespace}) {
   return [
     pageHeader({title: text(work[0]?.title) || text(resource?.branch) || say('or_worktree'),
       meta: [resource?.host, resource?.branch].map(text).filter(Boolean).join(' · '), actions}),
-    sectionCard({body: h('div', {class: 'or-body'}, fact(h, say('or_owner'), owner),
+    sectionCard({body: h('div', {class: 'or-body'}, fact(h, say('or_ownership'), owner),
       fact(h, say('or_latest'), h('span', {class: 'or-result', 'data-observed-result': ''},
         latest ? deliveryPill(latest) : statusPill('unknown'), prAnchor(h, receipt), stamp(receipt?.delivered_at ?? latest?.created_at))),
       sessions.length ? h('div', {class: 'or-sessions'}, h('span', {class: 'or-label'}, say('or_sessions')), ...sessions.map(item => sessionRow(h, item))) : null,
@@ -172,7 +175,7 @@ function renderExecution({h, id, task, caps, namespace}) {
   if (caps?.artifacts?.capture?.managed_single_file === true) choices.push([say('or_review'), `#/artifact-review/task/${encodeURIComponent(id)}`]);
   if (caps?.features?.cleanup_task === true) choices.push([say('or_cleanup_preview'), `#/cleanup/task/${encodeURIComponent(id)}`]);
   const pause = task?.paused === true || task?.paused === 1 ? statusPill('stopped') : null;
-  if (pause) {pause.dataset.taskDispatch = ''; pause.textContent = t('task_paused');}
+  if (pause) {pause.dataset.taskDispatch = ''; pause.textContent = say('or_paused');}
   const reason = pause ? pauseReason(task) : '';
   const delivery = task?.delivery, stage = delivery?.stage;
   const resultPill = ['merged', 'deployed', 'adopted'].includes(stage) ? statusPill(stage)
@@ -182,7 +185,8 @@ function renderExecution({h, id, task, caps, namespace}) {
   return [pageHeader({title, meta: [task?.host, task?.external_branch].map(text).filter(Boolean).join(' · '),
     actions: choices.slice(0, 2).map(([label, href], i) => actionLink(h, href, label, i ? 'secondary' : 'primary'))}),
   sectionCard({body: h('div', {class: 'or-body'},
-    fact(h, say('or_owner'), say('or_owner_task')),
+    fact(h, say('or_ownership'), say('or_owner_task')),
+    text(task?.lead_agent) ? fact(h, say('or_owner'), cliName(text(task.lead_agent))) : null,
     fact(h, say('or_state'), statusPill(TASK_PILLS[task?.state] || 'unknown')),
     pause ? fact(h, say('or_dispatch'), h('span', {class: 'or-result'}, pause,
       reason ? h('span', {'data-observed-pause-reason': ''}, reason) : null)) : null,

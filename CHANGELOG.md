@@ -43,6 +43,9 @@
   Unavailable projects explain the read failure with a return link and transient
   failures offer Retry. Readers have no execution control card; resource history
   uses plain disclosures, and project overflow/reorder controls use shared icons.
+  Unreadable project lists hide the view-only notice and offer Connection settings
+  when forbidden; error codes stay in Details. Move/pin icons explain disabled
+  moves, and execution facts distinguish ownership kind from a named lead agent.
 
 - Sprints, AHP observations, work packages, package handoff, work batches and
   delivery receipts open on the answer: a status pill, one main action, and

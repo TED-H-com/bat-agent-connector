@@ -404,7 +404,9 @@ Session 詳情加分頁 timeline 與 relations；工作項目、execution、oper
 The shared Web/Tauri resource summary reads the existing worktree/task response only.
 Worktree titles use the first returned work title, then the branch; executions use
 the returned title or first request line, then the branch. Ownership labels follow
-recorded creation kinds. Manual, missing and unfamiliar ownership stays read-only.
+recorded creation kinds, labeled Ownership rather than an unnamed person. Execution
+summaries name the lead agent when the existing task read provides it. Manual,
+missing and unfamiliar ownership stays read-only.
 No requirement association is inferred or fetched for these summaries.
 
 The latest worktree result uses returned work and delivery receipt times. A recorded
@@ -415,7 +417,8 @@ title or the shared untitled label, with host metadata on its own line and
 activity pills only for fresh running/waiting observations. The dispatch row
 appears only while paused; a reason is shown only when the returned pause event
 contains one. Accounts without the operate scope do not see the execution control
-card; paused state and its recorded reason remain in the summary. Controller
+card; paused state and its recorded reason remain in the summary, with the concise
+Paused label beside Dispatch. Control cards use the same shared card padding;
 readback and frozen requests retain their existing rules and original keys.
 
 One collapsed Details holds identity, path, source/receipt commits, navigation links
@@ -445,6 +448,12 @@ and service-unavailable reads offer Retry. List withdrawal clears rows, counts a
 editors; an older successful response cannot restore them. Project and work-item
 overflow controls and reorder grips use shared ghost icon buttons, retain their
 names and keyboard alternatives, and have 44px touch targets.
+Unreadable lists and withdrawn projects hide their view-only notice; a successful
+read restores it. Any response code stays in a small collapsed Details inside the
+unavailable state. Forbidden lists offer Connection settings, selecting Connection
+even when Settings last showed another section. Move and pin controls also use
+shared ghost icons; disabled moves explain the boundary or pinned-group limit in
+their tooltip without changing the registered ordering operation.
 
 ## 必要前置條件、實際副作用與唯讀邊界
 

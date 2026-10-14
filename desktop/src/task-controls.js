@@ -1,6 +1,6 @@
 // Coordinator controls bind the observed task version. A retry never substitutes a newer one.
 import {observedText} from './observed-resource-strings.js';
-import {button} from './ui/components.js';
+import {button, sectionCard} from './ui/components.js';
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 const opId = value => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
 const version = value => Number.isSafeInteger(value) && value >= 0;
@@ -76,9 +76,9 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
     saved.abort = abort.checked; try {persist();} catch (e) {showError(e);} update();
   };
   const help = h("p", {class: "muted"}, t("task_control_help"));
-  const box = h("section", {class: "panel", "data-task-controls": ""}, h("h2", {}, t("task_controls")),
-    help, abortLabel,
-    h("div", {class: "actions"}, apply, check, another), restriction, result, message);
+  const box = sectionCard({title: t("task_controls"), body: h("div", {}, help, abortLabel,
+    h("div", {class: "actions"}, apply, check, another), restriction, result, message)});
+  box.dataset.taskControls = "";
   function update() {
     const fixed = Boolean(saved.intent);
     const canOperate = permitted();

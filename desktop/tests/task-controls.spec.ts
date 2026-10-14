@@ -40,7 +40,7 @@ for (const native of [false,true]) {
     await expect(form(page).getByRole('checkbox')).not.toBeChecked();
     await form(page).getByRole('button',{name:'Pause dispatch',exact:true}).click();
     await expect(form(page)).toContainText('control operation completed');
-    await expect(page.getByText('Dispatch paused',{exact:true})).toBeVisible();
+    await expect(page.getByText('Paused',{exact:true})).toBeVisible();
     expect(state.posts[0].body).toEqual({action:'task.pause',target:{task_id:taskId},params:{abort_current:false},preconditions:{control_version:7}});
     await page.reload(); await expect(form(page)).toContainText('control operation completed');
     expect(state.posts).toHaveLength(1);

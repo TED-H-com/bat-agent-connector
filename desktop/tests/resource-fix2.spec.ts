@@ -17,7 +17,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.setViewportSize({width, height: 900}); await page.goto('/dashboard/#/projects'); await page.reload();
       const unavailable = page.locator('[data-project-unavailable="list"]');
       await expect(unavailable.getByRole('heading')).toHaveText(zh ? '無法取得專案' : 'Projects unavailable');
-      await expect(unavailable.locator('p')).toHaveText(reason(status, true));
+      await expect(unavailable.locator(':scope > p')).toHaveText(reason(status, true));
       expect(await unavailable.innerText()).not.toMatch(/403|404|503|token|FORBIDDEN|NOT_FOUND|undefined|null/);
       await expect(page.locator('#main .row.tree, #main .drawer, #main [data-project-count]')).toHaveCount(0);
       await expect(page.locator('[data-create-record="project"]')).toBeHidden();
@@ -48,7 +48,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       state.projectStatus = status; state.events.push({seq: ++state.seq, resource_type: 'project', resource_id: projectId, kind: 'project.updated'});
       const unavailable = page.locator('[data-project-unavailable="project"]');
       await expect(unavailable.getByRole('heading')).toHaveText(zh ? '無法開啟專案' : 'Project unavailable');
-      await expect(unavailable.locator('p')).toHaveText(reason(status));
+      await expect(unavailable.locator(':scope > p')).toHaveText(reason(status));
       await expect(page.locator('[data-project-work], [data-project-count], [data-project-editor], [data-work-item-inspector]')).toHaveCount(0);
       await expect(page.locator('[data-project-item-card]')).toBeHidden();
       await expect(unavailable.getByRole('button')).toHaveCount(0);
@@ -84,7 +84,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.setViewportSize({width, height: 900}); await page.goto('/dashboard/#/projects');
       const unavailable = page.locator('[data-project-unavailable="list"]');
       await expect(unavailable.getByRole('heading')).toHaveText(zh ? '無法取得專案' : 'Projects unavailable');
-      await expect(unavailable.locator('p')).toHaveText(reason(0));
+      await expect(unavailable.locator(':scope > p')).toHaveText(reason(0));
       await expect(unavailable.getByRole('button', {name: zh ? '重試' : 'Retry', exact: true})).toHaveCount(0);
       await expect(page.locator('[data-create-record="project"]')).toBeHidden();
       await expect(page.locator('#main .row.tree, #main .drawer, #main [data-project-count]')).toHaveCount(0);
@@ -100,7 +100,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       taskEvents: [{kind: 'paused', created_at: 1791600000, body: JSON.stringify({reason: pauseReason})}]});
     for (const width of widths) {
       await page.setViewportSize({width, height: 900}); await page.goto('/dashboard/#/task/' + controlledTask); await page.reload();
-      await expect(page.locator('[data-observed-resource] [data-task-dispatch]')).toHaveText(zh ? '已暫停派工' : 'Dispatch paused');
+      await expect(page.locator('[data-observed-resource] [data-task-dispatch]')).toHaveText(zh ? '已暫停' : 'Paused');
       await expect(page.getByText(pauseReason, {exact: true})).toBeVisible();
       await expect(page.locator('[data-task-controls]')).toBeHidden();
       await expect(page.getByRole('heading', {name: zh ? '執行控制' : 'Execution controls', exact: true})).toHaveCount(0);

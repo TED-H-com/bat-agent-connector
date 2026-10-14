@@ -3142,7 +3142,7 @@ function counts(c) {
     complete && known(c?.done) && known(c?.total) && c.done <= c.total ? h("span", {class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : ""), "data-project-count": "completion"},
       t("wi_done_of", {done: c.done, total: c.total})) : null];
 }
-// ↑ ↓ and pin for one entry among its siblings; pinned entries never cross unpinned ones.
+// Reorder and pin one entry among its siblings; pinned entries never cross unpinned ones.
 function orderButtons(sibs, i, key, run) {
   const me = sibs[i];
   const swap = j => () => {
@@ -3151,10 +3151,16 @@ function orderButtons(sibs, i, key, run) {
     run("order", before, order, Object.fromEntries(sibs.map(x => [x[key], x.version])));
   };
   const can = j => j >= 0 && j < sibs.length && sibs[j].pinned === me.pinned;
-  return [h("button", { class: "mini", title: t("move_up"), "aria-label": t("move_up"), disabled: !can(i - 1), onclick: swap(i - 1) }, "↑"),
-    h("button", { class: "mini", title: t("move_down"), "aria-label": t("move_down"), disabled: !can(i + 1), onclick: swap(i + 1) }, "↓"),
-    h("button", { class: `mini ${me.pinned ? "on" : ""}`, title: me.pinned ? t("unpin") : t("pin"),
-      "aria-label": me.pinned ? t("unpin") : t("pin"), onclick: () => run("pin", me.pinned) }, me.pinned ? "★" : "☆")];
+  const move = (offset, icon, label) => {
+    const j = i + offset, enabled = can(j);
+    const reason = j < 0 ? "or_order_first" : j >= sibs.length ? "or_order_last" : "or_order_pinned";
+    return iconButton({icon, label: t(label), title: enabled ? t(label) : observedText(t, reason),
+      disabled: !enabled, onClick: swap(j)});
+  };
+  const pin = iconButton({icon: "star", label: t(me.pinned ? "unpin" : "pin"),
+    "aria-pressed": String(Boolean(me.pinned)), onClick: () => run("pin", me.pinned)});
+  pin.classList.add("or-order-pin");
+  return [move(-1, "chevron-up", "move_up"), move(1, "chevron-down", "move_down"), pin];
 }
 // A row's "…" opens a small form under it. While any is open, live reloads wait (a draft is never lost) and run
 // once the last one closes.
@@ -3239,10 +3245,12 @@ async function viewProjects(main) {
   const showArchived = h("input", { type: "checkbox" });
   const refresh = iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => render().catch(() => {})});
   const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
-  create.box.hidden = true; filter.hidden = true;
+  const note = manageNote();
+  const help = disclosure({label: t("global_details"), body: h("p", {}, t("projects_help"))});
+  create.box.hidden = true; filter.hidden = true; help.hidden = true;
+  if (note) note.hidden = true;
   main.append(pageHeader({title: t("nav_projects"), actions: [refresh]}),
-    disclosure({label: t("global_details"), body: h("p", {}, t("projects_help"))}), manageNote() || "",
-    create.box, out, sectionCard({body: h("div", {class: "or-item-list"}, filter, tree, archived)}));
+    note || "", create.box, out, sectionCard({body: h("div", {class: "or-item-list"}, filter, tree, archived, help)}));
   const render = async (fromEvent = false) => {
     const opens = drawerOpens, mine = ++request;
     let received = false;
@@ -3257,6 +3265,7 @@ async function viewProjects(main) {
       freshPage();
       create.box.hidden = !may("manage") || state.caps?.actions?.find(row => row.action === "project.create")?.allowed === false;
       filter.hidden = false; refresh.hidden = false;
+      help.hidden = false; if (note) note.hidden = false;
       const rows = [];
       const walk = (sibs, depth, parent) => sibs.forEach((p, i) => {
         const msg = out; // outside the tree: it survives the re-render below
@@ -3308,8 +3317,10 @@ async function viewProjects(main) {
       if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request || !tree.isConnected) return;
       request++; create.setContext({rows: [], active: false}); create.box.hidden = true;
       fill(out); fill(archived); filter.hidden = true; refresh.hidden = true; freshPage();
+      help.hidden = true; if (note) note.hidden = true;
       errorBox(error);
       fill(tree, unavailableProject({h, error, collection: true, transportFailed: !received && error?.status === undefined,
+        connection: () => {viewState(connection.namespace, "", "settings").section = "connection"; location.hash = "#/settings";},
         retry: () => render().catch(() => {})}));
     }
   };
@@ -3337,7 +3348,8 @@ async function viewProject(main, pid) {
   const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
   const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.box, items, archived)});
   itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
-  main.append(manageNote() || "", out, head, work, itemCard);
+  const note = manageNote(); if (note) note.hidden = true;
+  main.append(note || "", out, head, work, itemCard);
   const rememberEditors = () => {
     if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
     for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden)
@@ -3348,6 +3360,7 @@ async function viewProject(main, pid) {
     currentEditor = null; prepared = null; request++;
     create.setContext({rows: [], active: false}); create.box.hidden = true;
     fill(work); work.hidden = true; fill(items); fill(archived); fill(out); itemCard.hidden = true;
+    if (note) note.hidden = true;
     errorBox(error);
     fill(head, unavailableProject({h, error, transportFailed, retry: () => render().catch(() => {})})); freshPage();
   };
@@ -3380,6 +3393,7 @@ async function viewProject(main, pid) {
     rememberEditors(); workEditors = new Map();
     freshPage();
     const p = data.project;
+    if (note) note.hidden = false;
     itemCard.hidden = false;
     create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed === false;
     create.setContext({rows: data.work_items, name: p.name, active: !p.archived});

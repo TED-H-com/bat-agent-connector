@@ -34,7 +34,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     state.paused = true; state.version++;
     state.taskEvents = [{kind: 'paused', created_at: 1791600000, body: JSON.stringify({reason})}];
     state.events.push({seq: 1, resource_type: 'task', resource_id: taskId, kind: 'task.updated'});
-    await expect(resource.locator('[data-task-dispatch]')).toHaveText(zh ? '已暫停派工' : 'Dispatch paused');
+    await expect(resource.locator('[data-task-dispatch]')).toHaveText(zh ? '已暫停' : 'Paused');
     await expect(resource.getByText(reason, {exact: true})).toBeVisible();
     state.paused = false; state.version++;
     state.events.push({seq: 2, resource_type: 'task', resource_id: taskId, kind: 'task.updated'});
