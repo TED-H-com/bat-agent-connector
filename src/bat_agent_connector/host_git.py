@@ -61,7 +61,10 @@ class HostGitRunner:
         configured = config.hosts.get(host)
         if configured is None:
             return None
-        identity = {"name": configured.name, "url": configured.url,
+        # Standalone configuration historically accepts more than bare origins.
+        # Bind exact endpoint bytes without copying a possible secret-bearing
+        # query/userinfo into durable operation JSON.
+        identity = {"name": configured.name, "endpoint_digest": _digest(configured.url),
                     "fingerprint": configured.fingerprint, "profile_id": configured.profile_id}
         transport = git_transport(configured.git)
         relevant = {"transport": transport, "host_identity": identity,
@@ -106,17 +109,19 @@ class HostGitRunner:
         return _digest(binding)
 
     async def run(self, host, script, timeout_s=None):
-        self._require_current(host)
+        binding = self._require_current(host)
         require_execution(host)
-        status = self.status(host)
-        if not status["available"]:
-            raise GitRunnerUnavailable(status["reason"])
+        if binding is None:
+            raise GitRunnerUnavailable("host_unknown")
+        if binding["transport"] == "local":
+            status = self.status(host)
+            raise GitRunnerUnavailable(status["reason"], missing_helpers=status["details"].get("missing_helpers", ()))
         check = _LOCKED_CHECK.get()
         async def locked_check():
             await check()
             self._require_current(host)
             require_execution(host)
-        token = _LOCKED_CHECK.set(locked_check) if check else None
+        token = _LOCKED_CHECK.set(locked_check) if check is not None else None
         try:
             return await self._ssh.run(host, script, timeout_s)
         finally:

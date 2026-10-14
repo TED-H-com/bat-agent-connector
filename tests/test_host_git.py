@@ -107,7 +107,7 @@ def test_local_reader_binds_installation_server_transport_and_host():
     second = host_git.HostGitRunner(config("local"), {}, installation_id="other-install", server_id="fixture-server")
     third = host_git.HostGitRunner(config("local"), {}, installation_id="fixture-install", server_id="other-server")
     assert len({first.reader_binding("fixture"), second.reader_binding("fixture"), third.reader_binding("fixture"), GOLDEN}) == 4
-    assert first.execution_binding("fixture")["host_identity"] == {"name": "fixture", "url": BASE["url"],
+    assert first.execution_binding("fixture")["host_identity"] == {"name": "fixture", "endpoint_digest": host_git._digest(BASE["url"]),
         "fingerprint": BASE["fingerprint"].upper(), "profile_id": "default"}
     assert first.reader_binding("fixture") == host_git.HostGitRunner(config("local"), {"fixture": "another-unused"},
         installation_id="fixture-install", server_id="fixture-server").reader_binding("fixture")
@@ -230,3 +230,55 @@ async def test_unresolved_ssh_never_redirects_to_local_after_reload(operations, 
     assert result["status"] == "needs_attention" and result["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
     assert len(calls) == 1
     assert result["idempotency_key"] == "original-key"
+
+
+def test_reserved_missing_helpers_projection_has_exact_names():
+    error = host_git.GitRunnerUnavailable("local_git_tools_missing", missing_helpers=("git", "flock", "python3"))
+    assert error.code == "GIT_RUNNER_UNAVAILABLE" and error.reason in host_git.LOCAL_GIT_REASONS
+    assert error.details == {"missing_helpers": ["git", "flock", "python3"]}
+
+
+@pytest.mark.parametrize("change", ["alias", "url", "fingerprint", "profile_id", "managed_roots", "installation_id", "server_id"])
+async def test_configuration_digest_and_identity_drift_block_original_intent(operations, change):
+    ops = operations
+    async def unused(ctx):
+        raise AssertionError("only admission is used")
+    op = create(ops, unused)
+    cfg, aliases = config(), {"fixture": "fixture-bat"}
+    identities = {"server_id": "fixture-server"}
+    if change == "alias":
+        aliases["fixture"] = "different-alias"
+    elif change in {"installation_id", "server_id"}:
+        identities[change] = "different-identity"
+    else:
+        setattr(cfg.host("fixture"), change, {"url": "wss://fixture.example.invalid:9876/", "fingerprint": "bb" * 32,
+            "profile_id": "other-profile", "managed_roots": ("/srv/other",)}[change])
+    ops.context["git_runner"] = host_git.HostGitRunner(cfg, aliases, **identities)
+    with host_git.execution(ops, op["operation_id"]):
+        with pytest.raises(NeedsAttention) as error:
+            host_git.require_execution("fixture")
+    assert error.value.code == "GIT_EXECUTION_LOCATION_CHANGED"
+
+
+async def test_ssh_missing_alias_retains_original_runner_error_before_process(monkeypatch):
+    async def spawn(*args, **kwargs):
+        raise AssertionError("missing alias must not spawn")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+    runner = host_git.HostGitRunner(config(), {})
+    assert runner.status("fixture") == {"available": False, "reason": "ssh_alias_missing", "details": {}}
+    with pytest.raises(checkpoints.GitCommandFailed) as error:
+        await runner.run("fixture", "fixed-script", 25)
+    assert error.value.code == "GIT_FAILED"
+    assert error.value.message == "no SSH alias is configured for host fixture"
+
+
+def test_execution_binding_does_not_copy_secret_bearing_standalone_url():
+    cfg = config()
+    cfg.host("fixture").url = "wss://fixture-user:fixture-password@fixture.example.invalid:9876/?token=fixture-private"
+    runner = host_git.HostGitRunner(cfg, {"fixture": "fixture-bat"})
+    binding = runner.execution_binding("fixture")
+    serialized = json.dumps(binding)
+    for secret in ("fixture-password", "fixture-private", "?token=", "fixture-user"):
+        assert secret not in serialized
+    cfg.host("fixture").url = "wss://fixture.example.invalid:9876/"
+    assert not runner.available("fixture")  # exact endpoint remains frozen

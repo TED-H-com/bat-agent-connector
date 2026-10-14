@@ -533,3 +533,40 @@ async def test_local_post_publish_receipt_loss_recovers_after_restart_with_origi
         await restarted.fleet.close()
         await restarted.inventory.close()
         restarted.journal.close()
+
+
+@pytest.mark.parametrize("phase", ["probe", "receipt-recovery"])
+async def test_setup_local_confirmation_is_bound_to_original_installation(installed, mock, monkeypatch, phase):
+    daemon, principal, root = installed
+    daemon.managed_installation["installation_id"] = "fixture-installation"
+    params = host_params(daemon, principal, mock, git="local", local_confirmation=True)
+    original_config = (root / "config" / "hosts.toml").read_bytes()
+    operation = create(installed, "setup.host", {"host": "fixture"}, params)
+    assert operation["external_refs"]["admission_binding"]["git_execution"]["fixture"]["installation_id"] == "fixture-installation"
+    if phase == "probe":
+        original = setup._probe_host
+        async def probe(config, host):
+            result = await original(config, host)
+            daemon.managed_installation["installation_id"] = "other-installation"
+            return result
+        monkeypatch.setattr(setup, "_probe_host", probe)
+    else:
+        original = daemon.ops._step_done
+        def lose_receipt(ident, name, response, **kwargs):
+            if name == "managed_configuration":
+                raise OSError("fixture lost publication receipt")
+            return original(ident, name, response, **kwargs)
+        monkeypatch.setattr(daemon.ops, "_step_done", lose_receipt)
+        await daemon.ops._execute(operation["operation_id"])
+        assert daemon.ops.get(operation["operation_id"])["status"] == "uncertain"
+        monkeypatch.setattr(daemon.ops, "_step_done", original)
+        daemon.managed_installation["installation_id"] = "other-installation"
+    calls = len(mock.auth_frames)
+    await daemon.ops._execute(operation["operation_id"])
+    result = daemon.ops.get(operation["operation_id"])
+    assert result["error_code"] == "SETUP_IDENTITY_CHANGED"
+    assert result["status"] == "needs_attention"
+    if phase == "probe":
+        assert (root / "config" / "hosts.toml").read_bytes() == original_config
+    else:
+        assert len(mock.auth_frames) == calls

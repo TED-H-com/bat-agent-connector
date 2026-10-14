@@ -19,7 +19,7 @@ Local dispatch still refuses before any subprocess: POSIX reports
 No helper or shell-script hardening, Linux enablement, frontend change, package
 or live acceptance is included. PR 3 remains required before local Git executes.
 
-The binding records the logical host's name, endpoint, pin and profile, transport,
+The binding records the logical host's name, endpoint digest, pin and profile, transport,
 managed-root/SSH-alias configuration digest, central server ID, and installation
 ID when available. The central server ID is not a BAT incarnation ID; the upstream
 identity limitation below still applies. A changed binding needs attention and
@@ -28,6 +28,9 @@ remain replayable. Indirect workspace/repository operations that do not yet name
 a host conservatively freeze the configured host inventory at admission; changing
 one of those locations blocks new effects until the original binding is restored.
 No operation key, existing payload or journal schema version is rewritten.
+Standalone config historically accepts broader URLs than guided setup. Exact
+endpoint bytes are bound by digest so a secret-bearing query/userinfo is never
+copied into the new journal fields; SSH URL acceptance remains unchanged.
 
 Backend code owns no frontend string table. fr1 can use this stable projection
 contract (`git_status` in managed setup state, and `HostGitRunner.status(host)`):
@@ -40,6 +43,12 @@ The following local reasons use error code `GIT_RUNNER_UNAVAILABLE`:
 | `local_git_not_enabled` | Local Git is not enabled yet | 尚未開放本機 Git 執行 | Empty in PR 2 |
 | `local_git_platform_unsupported` | Local Git unavailable on Windows | Windows 尚不支援本機 Git 執行 | Empty |
 | `local_git_tools_missing` | Local Git tools missing | 缺少本機 Git 工具 | Reserved for PR 3: `missing_helpers` lists exact missing helper names, never an invented count |
+
+Other transport reasons are **Host is not configured / 尚未設定此主機**
+(`host_unknown`), **SSH alias is not configured / 尚未設定 SSH 連線別名**
+(`ssh_alias_missing`), and **Trusted account auditor is unavailable /
+無法使用可信任的帳號稽核連線** (`account_check_channel_untrusted`). Account
+evidence remains unknown when that independent channel is absent.
 
 Config/setup reject invalid transport with `HOST_GIT_INVALID` (**Choose SSH or
 local Git / 請選擇 SSH 或本機 Git**). Missing or nonboolean local confirmation uses
@@ -931,8 +940,8 @@ pytest-disktmp uv run pytest -q tests/test_client.py tests/test_mcp_and_config.p
 Result: **121 passed, 0 failed**. This validates the existing client/config/setup/
 checkpoint behavior, not the proposed runner/discovery/native enrollment or the
 planned 3.10–3.13 matrix. Ruff and the tracked public-content check also passed.
-No new implementation, UI screenshot, packaged/native or live acceptance is
-claimed. Full suites were not run for this design-only task.
+That baseline run claimed no new implementation, UI screenshot, packaged/native
+or live acceptance. Full suites were not run for the original design-only task.
 
 ## Staged pull requests
 

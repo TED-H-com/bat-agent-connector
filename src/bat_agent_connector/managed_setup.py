@@ -29,7 +29,7 @@ from .client import BatClient
 from .config import DEFAULT_BAT_PROFILES_DIR, git_transport, normalize_fingerprint, parse_config, tomllib
 from .errors import ConfigError, TokenUnavailable
 from .github import GitHubClient
-from .operations import RERUN, TERMINAL, ActionDef, OperationError, Uncertain
+from .operations import RERUN, TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain
 from .redact import redact, redact_secrets, register_secret
 from .task_verifier import parse_settings
 
@@ -519,16 +519,26 @@ def _activate(daemon, config, document, revision=None, *, runner=None):
     return old
 
 
+def _require_setup_identity(daemon, binding):
+    if (binding.get("principal_id") != daemon.managed_installation["principal_id"]
+            or binding.get("server_id") != dashboard_sync._metadata(daemon.journal)["server_id"]):
+        raise NeedsAttention("SETUP_IDENTITY_CHANGED", "Original setup identity is unavailable")
+    locations = binding.get("git_execution") or {}
+    if any(location["installation_id"] != daemon.managed_installation.get("installation_id")
+           for location in locations.values()):
+        raise NeedsAttention("SETUP_IDENTITY_CHANGED", "Original setup installation is unavailable")
+
+
 async def _run(ctx):
     daemon = ctx.service.context["daemon"]
     root = _installation(daemon)
     binding = ctx.admission_binding or {}
-    if binding.get("principal_id") != daemon.managed_installation["principal_id"]:
-        raise _error("SETUP_IDENTITY_CHANGED", "Original setup identity is unavailable", 409)
+    _require_setup_identity(daemon, binding)
     lock = ctx.service.context.setdefault("managed_setup_lock", asyncio.Lock())
     async with lock:
         path = root / "config" / "hosts.toml"
         async def reconcile(_request):
+            _require_setup_identity(daemon, binding)
             _, _, document, revision = _configuration(daemon)
             if revision == binding["after_revision"]:
                 old = _activate(daemon, parse_config(document, path), document, revision)
@@ -565,6 +575,7 @@ async def _run(ctx):
                 raise _error("SETUP_PROBE_FAILED", "Connection or account verification failed; check trust, sign-in and reachability", 409) from None
             ctx.check_cancel()
             # No await between the final guards, publication and activating the parsed config.
+            _require_setup_identity(daemon, binding)
             if _busy(daemon, ctx.operation_id) or _configuration(daemon)[3] != before:
                 raise _error("CONFIGURATION_CHANGED", "Work or configuration changed during verification; review again", 409)
             platform_files.atomic_write(path, encoded)
