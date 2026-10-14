@@ -175,6 +175,11 @@
   unavailable or withdrawn source leaves the totals, chart and inspector together.
   Paused source snapshots remain fixed during event refreshes. Localized chart dates
   keep a measured gap on narrow screens without dropping daily observations.
+- Keep Agents headings, totals, rows, inspectors and daily usage in one consistent
+  window when returning or receiving new usage. Refresh mismatched cached trends
+  together with totals, preserving immediate withdrawal. Use human tool names and
+  translated roles for sources and Discuss drafts, shared Unknown pills for missing
+  facts, and complete the Traditional Chinese usage labels.
 - Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
   shared page header, inbox groups, operations table and inspector. Pending opens each operation
   from its inspector and reports a failed read instead of an empty inbox, and every registered
