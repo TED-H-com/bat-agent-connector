@@ -627,7 +627,7 @@ test('report pages survive refresh and comparisons reauthorize both snapshots', 
   const f = fixture(); f.state.reportPageSize = 1; await boot(page, f);
   await report(page, f.ids.snap1);
   await openPmPanel(page, 'ui_report');
-  await page.getByRole('button', {name: 'Load more report versions', exact: true}).click();
+  await page.getByRole('button', {name: 'More versions', exact: true}).click();
   await page.keyboard.press('Escape');
   await expect(root(page).getByRole('button', {name: 'Next report', exact: true})).toBeEnabled();
   const before = f.state.reads.filter(path => path.includes('/snapshots?')).length; f.state.cursor++;
