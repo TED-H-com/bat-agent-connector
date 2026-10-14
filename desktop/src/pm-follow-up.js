@@ -1,3 +1,5 @@
+import {iconButton} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
 // Saved discussion preparation. Model execution and adopted scope remain separate.
 import {followUpAssessments} from './pm-follow-up-analysis.js';
 import {followUpAnalysisRequest} from './pm-follow-up-request.js';
@@ -12,8 +14,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const note=key=>h('p',{class:'muted pm-note-text'},t(key));
   const code=value=>h('code',{class:'pm-source'},value||t('pm_fu_unknown'));
   const state=value=>{const key='pm_fu_state_'+value;return t(key)===key?String(value||t('pm_fu_unknown')).replaceAll('_',' '):t(key);};
-  const date=value=>{const d=typeof value==='number'?new Date(value*1000):null;return d&&Number.isFinite(d.getTime())
-    ?h('time',{datetime:d.toISOString()},d.toISOString().replace('T',' ').replace(/\.\d+Z$/,' UTC')):t('pm_fu_unknown');};
+  const date=value=>timeStamp(value, {empty:t('pm_fu_unknown')});
   const fold=(key,...nodes)=>h('details',{},h('summary',{},t(key)),...nodes);
   const check=data=>{if(data?.workspace_id!==workspaceId)throw Error(t('pm_fu_scope_error'));return data;};
   const current=ticket=>{alive();if(actor!==caps()?.actor){retired=true;throw Error(t('pm_fu_actor_changed'));}return ticket===serial&&!retired;};
@@ -147,7 +148,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void loadMetadata(next)},t('pm_fu_more'));
   const element=h('section',{class:'panel pm-follow-up','data-pm-follow-up':''},
     h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pm_fu_title')),note('pm_fu_intro')),
-      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pm_fu_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pm_fu_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),
     status,view,fold('pm_fu_history',labelled('pm_fu_history_choose',choose),more),editorFold);
   function metadataPage(data,after) {
     check(data);if(!number(data.head_version)||!Array.isArray(data.intakes)||data.next_cursor!=null&&(!number(data.next_cursor)||data.next_cursor<=after))throw Error(t('pm_fu_scope_error'));

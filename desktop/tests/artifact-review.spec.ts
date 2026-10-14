@@ -81,7 +81,7 @@ for(const native of [false,true]){
  test(`catalog artifact events refresh loaded pages without duplicates and failures hold cursor (${mode})`,async({page})=>{
   const second={...row,artifact_id:'art_'+'7'.repeat(32)},added={...row,artifact_id:'art_'+'8'.repeat(32),display_name:'New ready result'};
   const state=await fixture(page,native,{catalogPages:[[row],[second]]});await page.goto('/dashboard/#/artifact-review');const catalog=page.getByRole('heading',{name:'Saved results from managed sources'}).locator('..');await catalog.getByRole('button',{name:'More',exact:true}).click();await expect(catalog.getByRole('link')).toHaveCount(2);
-  state.catalogPages=[[added,row],[row,second]];state.catalogFail=true;state.events=[{seq:1,kind:'artifact.ready',resource_type:'artifact',resource_id:added.artifact_id}];await expect(page.locator('.live')).toContainText('paused');expect(state.after).toBe(0);await expect(catalog.getByRole('link')).toHaveCount(2);
+  state.catalogPages=[[added,row],[row,second]];state.catalogFail=true;state.events=[{seq:1,kind:'artifact.ready',resource_type:'artifact',resource_id:added.artifact_id}];await expect(page.locator('.live')).toHaveAttribute('data-connection','connected');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);expect(state.after).toBe(0);await expect(catalog.getByRole('link')).toHaveCount(2);
   state.catalogFail=false;await expect(catalog.getByRole('link',{name:'New ready result · r1'})).toBeVisible();await expect.poll(()=>state.after).toBe(1);await expect(catalog.getByRole('link')).toHaveCount(3);expect(state.writes).toHaveLength(0);
  });
  test(`fixed artifact event recovers initial read failure without replacing draft (${mode})`,async({page})=>{
@@ -89,14 +89,14 @@ for(const native of [false,true]){
  });
  test(`published-version execution is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'repository.continue'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'repository.continue'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Continue from published version'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`unproven published-version execution stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'repository.continue',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);expect(state.writes).toHaveLength(0);
  });
  test(`successful prompted start is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'session.start'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Start session'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`prompt-free or unknown start stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);
@@ -148,7 +148,7 @@ for(const native of [false,true]){
  });
  test(`failed operation event read blocks acknowledgment and preserves fixed draft (${mode})`,async({page})=>{
   const state=await fixture(page,native,{captureStatus:'running'}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.getByRole('link',{name:captureId,exact:true})).toBeVisible();
-  state.failRead=true;state.events=[{seq:1,kind:'operation.updated',resource_type:'operation',resource_id:captureId}];await expect(page.locator('.live')).toContainText('paused');expect(state.after).toBe(0);
+  state.failRead=true;state.events=[{seq:1,kind:'operation.updated',resource_type:'operation',resource_id:captureId}];await expect(page.locator('.live')).toHaveAttribute('data-connection','connected');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);expect(state.after).toBe(0);
   state.failRead=false;state.captureStatus='succeeded';await expect(page.locator('[data-artifact-ready]')).toBeVisible();await expect.poll(()=>state.after).toBe(1);expect(state.writes).toHaveLength(1);expect(state.errors).toEqual([]);
  });
  test(`read-only manual context cannot capture or claim managed lineage (${mode})`,async({page})=>{
@@ -166,7 +166,7 @@ for(const native of [false,true]){
   await expect(page.getByRole('textbox',{name:'Relative file path'})).toHaveValue('');expect(state.writes).toHaveLength(0);expect(state.errors).toEqual([]);expect(await page.evaluate(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('batc.artifact-review.')).some(([,v])=>v.includes('result.txt')))).toBe(true);
  });
  test(`exact artifact event keeps focused review text and refuses changed revision (${mode})`,async({page})=>{
-  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');const text=page.locator('[data-artifact-accept] textarea');await text.fill('Review text remains focused');state.events=[{seq:1,kind:'artifact.accepted',resource_type:'artifact',resource_id:artifactId}];await expect.poll(()=>state.after).toBe(1);await expect(text).toHaveValue('Review text remains focused');await expect(text).toBeFocused();expect(state.writes).toHaveLength(0);state.changedArtifactRevision=true;state.events.push({seq:2,kind:'artifact.updated',resource_type:'artifact',resource_id:artifactId});await expect(page.locator('.live')).toContainText('paused');expect(state.after).toBe(1);await expect(page.getByRole('button',{name:'Record review of this revision',exact:true})).toBeDisabled();await expect(text).toHaveValue('Review text remains focused');state.changedArtifactRevision=false;await expect.poll(()=>state.after).toBe(2);
+  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');const text=page.locator('[data-artifact-accept] textarea');await text.fill('Review text remains focused');state.events=[{seq:1,kind:'artifact.accepted',resource_type:'artifact',resource_id:artifactId}];await expect.poll(()=>state.after).toBe(1);await expect(text).toHaveValue('Review text remains focused');await expect(text).toBeFocused();expect(state.writes).toHaveLength(0);state.changedArtifactRevision=true;state.events.push({seq:2,kind:'artifact.updated',resource_type:'artifact',resource_id:artifactId});await expect(page.locator('.live')).toHaveAttribute('data-connection','connected');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);expect(state.after).toBe(1);await expect(page.getByRole('button',{name:'Record review of this revision',exact:true})).toBeDisabled();await expect(text).toHaveValue('Review text remains focused');state.changedArtifactRevision=false;await expect.poll(()=>state.after).toBe(2);
  });
 
 }

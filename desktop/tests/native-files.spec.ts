@@ -77,7 +77,7 @@ test("opaque upload retains original receipt across stop and reload; full progre
 
 test("native selection delayed across account switch cannot submit under the new account",async({page})=>{
   const state=await fixture(page);state.held=true;await open(page);await page.getByRole("button",{name:"Choose files",exact:true}).click();
-  await expect.poll(()=>Boolean(state.release)).toBe(true);await page.getByRole("link",{name:"Connection",exact:true}).click();
+  await expect.poll(()=>Boolean(state.release)).toBe(true);await page.locator("#live").click();
   await page.getByRole("button",{name:"Disconnect",exact:true}).click();state.actor="replacement-person";
   await page.getByRole("button",{name:"Connect",exact:true}).click();await expect(page.getByText("Nothing needs you right now.")).toBeVisible();state.release!();
   await open(page);await expect(page.locator(".native-transfers")).toBeEmpty();await expect(page.locator(".attachment-list")).toBeEmpty();

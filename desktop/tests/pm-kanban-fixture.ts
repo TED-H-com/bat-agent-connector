@@ -1,6 +1,5 @@
 import {expect, type Page} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 
 export const workspaceId = 'ws_' + '1'.repeat(32), projectId = 'prj_' + '2'.repeat(20);
 export const workId = (n:number) => 'wi_' + String(n).repeat(20);
@@ -60,18 +59,18 @@ export function fixture() {
 
 export async function mount(page:Page, f:ReturnType<typeof fixture>, {locale='en', pageSize=2, project=null as string|null}={}) {
   await page.exposeFunction('kanbanFixtureRequest', f.dispatch);
-  await page.route('**/__kanban_src/*', async route => {
-    const file = path.basename(new URL(route.request().url()).pathname);
+  await page.route('**/__kanban_src/**', async route => {
+    const file = new URL(route.request().url()).pathname.split('/__kanban_src/')[1];
     const body = await readFile(new URL('../src/' + file, import.meta.url), 'utf8');
     await route.fulfill({contentType: file.endsWith('.css') ? 'text/css' : 'text/javascript', body});
   });
   await page.route('**/__kanban_harness', route => route.fulfill({contentType: 'text/html', body:
     '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/app.css"><link rel="stylesheet" href="/__kanban_src/pm-kanban.css"><div class="pm-shell"><aside><h2>PM workspace</h2><p>Membership service</p></aside><main class="pm-main" id="mount"><section class="panel"><h1>Membership service</h1><p>Goal · A returning member can access their account.</p></section></main></div>'}));
+  await page.addInitScript(locale => Object.defineProperty(navigator, 'language', {value: locale}), locale);
   await page.goto('/__kanban_harness');
   await page.evaluate(async ({locale, workspaceId, pageSize, project}) => {
     const {workspaceKanban} = await import('/__kanban_src/pm-kanban.js');
-    const {pmKanbanStrings} = await import('/__kanban_src/pm-kanban-strings.js');
-    const strings = pmKanbanStrings[locale], t = (key:string, args:any={}) => Object.entries(args).reduce((text, [key,value]) => text.replaceAll('{'+key+'}', String(value)), strings[key] || key);
+    const {t} = await import('/__kanban_src/i18n.js');
     const h = (tag:string, attrs:any={}, ...children:any[]) => {
       const node = document.createElement(tag);
       for (const [key, value] of Object.entries(attrs)) {
@@ -84,7 +83,7 @@ export async function mount(page:Page, f:ReturnType<typeof fixture>, {locale='en
     };
     const win = window as any, api = async (method:string, path:string) => {
       const result = await win.kanbanFixtureRequest({method, path});
-      if (result.status >= 400) throw Object.assign(Error(result.data.error.message), {code: result.data.error.code});
+      if (result.status >= 400) throw Object.assign(Error(result.data.error.message), {code: result.data.error.code, status: result.status});
       return result.data;
     };
     const ui = workspaceKanban({h,t,api,alive:()=>{},workspaceId,pageSize,projectId:project,

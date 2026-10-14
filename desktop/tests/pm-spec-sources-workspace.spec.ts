@@ -1,3 +1,4 @@
+import {openThreadTab, openPmSection, expectPmWithdrawn} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId,threadId} from './pm-fixture.ts';
@@ -25,7 +26,7 @@ function fixture(){
 const route=`/dashboard/#/pm/${workspaceId}`,box=(page:any)=>page.locator('[data-pm-spec-sources]');
 for(const native of [false,true])test.describe(native?'native workspace specifications':'web workspace specifications',()=>{
   for(const thread of [false,true])test(`fixed sources are available on the shared ${thread?'discussion':'workspace'} page`,async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route+(thread?'/'+threadId:''));
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route+(thread?'/'+threadId:''));if(!thread)await openPmSection(page, 'requirements' , 'ui_specs');else {await openThreadTab(page,'context');await page.locator('[data-pm-section=ui_specs] > details > summary').click();}
     await expect(box(page)).toContainText('example/membership');expect(f.sources.state.reads).toHaveLength(0);
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();
     await expect(box(page)).toContainText(sourcePath);await expect(box(page)).toContainText('Scope adoption, implementation verification, merge and deployment remain unknown.');
@@ -38,20 +39,21 @@ for(const native of [false,true])test.describe(native?'native workspace specific
     expect(f.sources.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
   });
   test('parent authorization failure hides sources and an eligible retry does not read Git again',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_specs');
     await box(page).getByRole('button',{name:'Read fixed sources',exact:true}).click();await expect(box(page)).toContainText(sourcePath);
     f.base.state.failRead=true;f.base.state.cursor++;
-    await expect(box(page)).toBeHidden({timeout:10000});await expect(page.locator('.pm-heading h1')).not.toContainText('Library refresh');
+    await expect(box(page)).toHaveJSProperty('hidden',true,{timeout:10000});await expectPmWithdrawn(page,'requirements','[data-pm-spec-sources]','ui_specs');await expect(page.locator('.shell-workspace-block')).not.toContainText('Library refresh');
     f.base.state.failRead=false;f.base.state.cursor++;
+    await expect(box(page)).toHaveJSProperty('hidden',false,{timeout:10000});await openPmSection(page,'requirements','ui_specs');
     await expect(box(page)).toBeVisible({timeout:10000});expect(f.sources.state.reads).toHaveLength(1);
     f.sources.state.denied=true;f.base.state.cursor++;
     await expect(box(page)).not.toContainText(sourcePath,{timeout:10000});await expect(box(page)).not.toContainText('example/membership');
-    await expect(page.getByRole('button',{name:'Start discussion',exact:true})).toBeVisible();
+    await openPmSection(page,'discussions');await expect(page.getByRole('button',{name:'Start discussion',exact:true})).toBeVisible();
   });
 });
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`shared specification layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_specs');
   await box(page).getByRole('button',{name:locale==='zh-TW'?'讀取固定來源':'Read fixed sources',exact:true}).click();
   await expect(box(page)).toContainText(sourcePath);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

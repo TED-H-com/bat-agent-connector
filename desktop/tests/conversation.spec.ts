@@ -5,6 +5,25 @@ const saved = (page: Page) => page.evaluate(() => JSON.parse(Object.entries(loca
 const bottom = (page: Page) => page.locator('.conversation-scroll').evaluate(el => el.scrollHeight-el.scrollTop-el.clientHeight);
 for (const native of [false,true]) {
   const platform = native ? 'IPC' : 'Web';
+  for (const timestamp of ['', 'not-a-time']) test(`missing message time stays empty after a ticker refresh (${platform}, ${timestamp ? 'invalid' : 'empty'})`, async ({page}) => {
+    const {data, dispatch} = conversationFixture(); await mountConversation(page, native, dispatch);
+    await page.goto('/dashboard/#/session/demo/session-1');
+    const time = page.locator('[data-message-id="message-0"] .message-time');
+    await expect(time).toHaveAttribute('datetime', /2026-10-09/);
+    await time.evaluate(node => (window as any).retainedMessageTime = node);
+    const draft = page.locator('textarea').first(); await draft.fill('Retain this draft.');
+    data.messages[0].ts = timestamp; data.cursor++;
+    await expect.poll(() => saved(page)).toEqual(checkpoint(1));
+    await expect(time).toHaveText('');
+    await expect(time).not.toHaveAttribute('datetime');
+    await expect(time).not.toHaveAttribute('title');
+    await expect(time).not.toHaveAttribute('data-ui-time');
+    await page.evaluate(async () => {const {refreshTimeStamps} = await import('/src/ui/stamps.js'); refreshTimeStamps();});
+    await expect(time).toHaveText('');
+    expect(await time.evaluate(node => node === (window as any).retainedMessageTime)).toBe(true);
+    await expect(page.locator('.msg')).toHaveCount(12); await expect(draft).toHaveValue('Retain this draft.');
+    expect(data.writes).toEqual([]);
+  });
   test(`safe rich content, exact clipboard and failed clipboard fallback (${platform})`, async ({page}) => {
     const {data,dispatch}=conversationFixture();
     data.messages[data.messages.length-1].text += '\n<img src=x onerror="window.attacked=1">\n[unsafe](javascript:alert(1))';
@@ -15,12 +34,15 @@ for (const native of [false,true]) {
     await expect(page.locator('.conversation th')).toHaveText(['Option','Result']);
     await expect(page.locator('.conversation strong')).toHaveText('A');
     await expect(page.locator('.conversation img,.conversation script,.conversation a')).toHaveCount(0);
-    await page.getByRole('button',{name:'Copy original',exact:true}).last().click();
+    const last = page.locator('.msg').last();
+    await last.hover();
+    await last.getByRole('button',{name:'Copy original',exact:true}).click();
     await expect.poll(()=>copied).toEqual([data.messages.at(-1)!.text]);
     await page.getByRole('button',{name:'Copy code',exact:true}).click();
     await expect.poll(()=>copied[1]).toBe('const result = "<script>fixture only</script>";\r\nconsole.log(result);\r\n');
     await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:async()=>{throw new Error('denied');}}}));
-    await page.getByRole('button',{name:'Copy original',exact:true}).last().click();
+    await last.hover();
+    await last.getByRole('button',{name:'Copy original',exact:true}).click();
     const fallback=page.getByRole('textbox',{name:'Original text to copy'});
     await expect(fallback).toHaveValue(data.messages.at(-1)!.text.replace(/\r\n/g,'\n'));
     const manual=await fallback.evaluate(el=>{
@@ -39,6 +61,7 @@ for (const native of [false,true]) {
     const draft=page.locator('textarea').first(); await draft.fill('Keep this draft');
     const row=page.locator('.msg').nth(3);
     await row.evaluate(el=>{const box=el.closest('.conversation-scroll')!; box.scrollTop+=el.getBoundingClientRect().top-box.getBoundingClientRect().top;});
+    await row.hover();
     await row.getByRole('button',{name:'Copy original'}).focus();
     await row.locator('.message-text').evaluate(el=>{const range=document.createRange();range.selectNodeContents(el);const selection=window.getSelection()!;selection.removeAllRanges();selection.addRange(range);});
     const oldTop=await row.evaluate(el=>el.getBoundingClientRect().top), selected=await page.evaluate(()=>String(window.getSelection()));
@@ -49,7 +72,7 @@ for (const native of [false,true]) {
     expect(await page.evaluate(()=>String(window.getSelection()))).toBe(selected);
     await expect(row.getByRole('button',{name:'Copy original'})).toBeFocused(); await expect(draft).toHaveValue('Keep this draft');
     await page.evaluate(()=>window.getSelection()?.removeAllRanges());
-    await page.getByRole('button',{name:'Back to latest',exact:true}).click();
+    await page.getByRole('button',{name:'New messages',exact:true}).click();
     await expect.poll(()=>bottom(page)).toBeLessThanOrEqual(1);
     data.messages.at(-1)!.text += '\nMore streamed content.'.repeat(20); data.cursor++;
     await expect.poll(()=>saved(page)).toEqual(checkpoint(2)); await expect.poll(()=>bottom(page)).toBeLessThanOrEqual(1);
@@ -63,7 +86,8 @@ for (const native of [false,true]) {
     await expect.poll(()=>saved(page)).toEqual(checkpoint(1));
     await expect(page.getByText('Your previous reading position is outside the messages currently loaded.')).toBeVisible();
     data.fail=true; data.cursor++;
-    await expect(page.getByText('UNAVAILABLE Messages unavailable')).toBeVisible();
+    await expect(page.locator('[data-session-error=UNAVAILABLE]')).toContainText('Server error');
+    await expect(page.locator('[data-session-error=UNAVAILABLE] details')).toContainText('UNAVAILABLE');
     expect(await saved(page)).toEqual(checkpoint(1)); await expect(page.locator('.msg')).toHaveCount(9);
     data.fail=false; await expect.poll(()=>saved(page),{timeout:10000}).toEqual(checkpoint(2));
     expect(data.writes).toEqual([]);
@@ -78,7 +102,7 @@ for (const native of [false,true]) {
     data.messages.at(-1)!.text+='\nnew output'; release();
     await expect.poll(()=>saved(page)).toEqual(checkpoint(1));
     expect(await page.locator('.conversation-scroll').evaluate(el=>el.scrollTop)).toBe(100);
-    await expect(page.getByRole('button',{name:'Back to latest',exact:true})).toBeVisible();
+    await expect(page.getByRole('button',{name:'New messages',exact:true})).toBeVisible();
   });
   test(`messages without IDs preserve duplicate rows and a retained anchor when older rows leave (${platform})`, async ({page}) => {
     const {data,dispatch}=conversationFixture();
@@ -88,6 +112,7 @@ for (const native of [false,true]) {
     await expect(page.locator('.msg')).toHaveCount(12);
     const row=page.locator('.msg').filter({hasText:'Review note 5'});
     await row.evaluate(el=>{const box=el.closest('.conversation-scroll')!; box.scrollTop+=el.getBoundingClientRect().top-box.getBoundingClientRect().top;});
+    await row.hover();
     await row.getByRole('button',{name:'Copy original'}).focus();
     const top=await row.evaluate(el=>el.getBoundingClientRect().top);
     data.messages=data.messages.slice(2); data.cursor++;
@@ -99,9 +124,12 @@ for (const native of [false,true]) {
   test(`late clipboard failure cannot show a previous session's text after navigation (${platform})`, async ({page}) => {
     const {dispatch}=conversationFixture(); await mountConversation(page,native,dispatch);
     await page.addInitScript(()=>Object.defineProperty(navigator,'clipboard',{value:{writeText:()=>new Promise((_,reject)=>Object.assign(window,{rejectCopy:reject}))}}));
-    await page.goto('/dashboard/#/session/demo/session-1'); await page.getByRole('button',{name:'Copy original',exact:true}).last().click();
-    await page.locator('.workspace-tools > summary').click();
-    await page.getByRole('link',{name:'Sessions',exact:true}).click();
+    await page.goto('/dashboard/#/session/demo/session-1');
+    const late = page.locator('.msg').last();
+    await late.hover();
+    await late.getByRole('button',{name:'Copy original',exact:true}).click();
+    await page.getByRole('button', {name: 'Tools', exact: true}).click();
+    await page.getByRole('menuitem',{name:'Sessions',exact:true}).click();
     await expect(page.locator('.conversation')).toHaveCount(0);
     await page.evaluate(()=>(window as any).rejectCopy(new Error('denied')));
     await expect(page.getByRole('textbox',{name:'Original text to copy'})).toHaveCount(0);
@@ -117,7 +145,10 @@ for (const native of [false,true]) {
       await page.locator('.conversation').evaluate(el=>scrollBy(0,el.getBoundingClientRect().top-document.querySelector('.top')!.getBoundingClientRect().bottom-12));
       await page.locator('.conversation-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
-      await expect(page.getByRole('button',{name:locale==='zh-TW'?'複製原文':'Copy original',exact:true}).last()).toBeVisible();
+      const article = page.locator('.msg').last();
+      const copyName = locale==='zh-TW'?'複製原文':'Copy original';
+      if (width > 800) await article.hover();
+      await expect(article.getByRole('button',{name:copyName,exact:true})).toBeVisible();
       await page.screenshot({path:info.outputPath(`conversation-${platform}-${locale}-${width}.png`)});
       expect(errors).toEqual([]); expect(data.writes).toEqual([]);
     });

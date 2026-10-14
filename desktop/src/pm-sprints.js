@@ -1,3 +1,5 @@
+import {iconButton} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
 // Central Sprint management, with fixed references and the shared durable operation forms.
 import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
 export function workspaceSprints({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps,qualitySelection=null}) {
@@ -10,7 +12,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_sprint_stale'));
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-sprints': ''},
     h('header', {class: 'pm-heading'}, h('h2', {}, t('pm_sprint_title')),
-      h('button', {type: 'button', class: 'secondary', onclick: () => void refresh()}, t('pm_sprint_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pm_sprint_refresh'), ...{type: 'button', class: 'secondary', onclick: () => void refresh()}})),
     labelled('pm_sprint_choose', choose), status, warning, review, view, editors);
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
   const actor = () => caps()?.actor;
@@ -58,7 +60,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   const row = (label, contents) => h('section', {class: 'pm-brief-row'}, h('h3', {}, t(label)), h('div', {class: 'pm-brief-values'}, contents));
   function workRows(items) {
     return h('div', {class: 'pm-evidence-rows pm-sprint-work-list'}, ...(items.length ? items.map(item => h('article', {class: 'pm-fact', 'data-pm-sprint-work': item.work_item_id},
-      h('div', {class: 'pm-sprint-work-heading'}, h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
+      h('div', {class: 'pm-sprint-work-heading'}, h('a', {href: `#/item/${encodeURIComponent(item.work_item_id)}`}, title(item)),
         item.assignee ? h('span', {class: 'muted'}, item.assignee) : ''),
       item.assignee ? h('p', {class: 'pm-note-text'}, item.how || t('pm_sprint_how_empty')) : '',
       fold('pm_sprint_versions', h('div', {}, note('pm_sprint_unassessed'), source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
@@ -72,8 +74,8 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     view.append(h('div', {class: 'pm-plans'}, h('h3', {}, def.title, ' · ', t('pm_sprint_' + sprint.status)),
       h('p', {class: 'muted'}, t(def.mode === 'scrum' ? 'pm_sprint_scrum' : 'pm_sprint_personal')),
       row('pm_sprint_goal_heading', h('p', {class: 'pm-note-text'}, h('strong', {}, data.goal.text))),
-      row('pm_sprint_period', h('div', {}, h('p', {}, h('time', {datetime: def.starts_at, title: def.starts_at}, def.starts_at.replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', ' UTC')),
-        ' → ', h('time', {datetime: def.ends_at, title: def.ends_at}, def.ends_at.replace('T', ' ').replace(/\.\d+Z$/, 'Z').replace('Z', ' UTC'))), data.timebox_elapsed ? note('pm_sprint_elapsed') : '')),
+      row('pm_sprint_period', h('div', {}, h('p', {}, timeStamp(def.starts_at),
+        ' → ', timeStamp(def.ends_at)), data.timebox_elapsed ? note('pm_sprint_elapsed') : '')),
       fold('pm_sprint_roles', h('dl', {class: 'pm-evidence-fields'}, h('dt', {}, t('pm_sprint_owner')), h('dd', {}, def.owner_actor),
         h('dt', {}, t('pm_sprint_developers')), h('dd', {}, def.developers.join(', ')), h('dt', {}, t('pm_sprint_capacity')), h('dd', {}, def.capacity_note))),
       row('pm_sprint_work', workRows(data.selected_items || [])),
@@ -86,7 +88,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     if (terminal) view.append(closure);
     const endingItems = items => h('div', {class: 'pm-evidence-rows'}, ...items.map(item =>
       h('article', {class: 'pm-fact', 'data-pm-sprint-ended-work': item.work_item_id},
-        h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`}, title(item)),
+        h('a', {href: `#/item/${encodeURIComponent(item.work_item_id)}`}, title(item)),
         item.quality_assessment ? qualityFact({h,t,fact:item.quality_assessment}) : h('p', {class: 'pm-note-text'}, t('pm_sprint_unassessed')),
         h('p', {class: 'pm-note-text'}, t(item.counts_as_done ? 'pq_increment' : 'pm_sprint_reconsider')),
         h('p', {class: 'pm-note-text'}, item.reason),

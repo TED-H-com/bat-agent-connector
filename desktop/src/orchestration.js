@@ -1,3 +1,5 @@
+import {skeleton} from './ui/components.js';
+import {operationStatusLabel} from './global-labels.js';
 // Explicit orchestration intents. Accepted recovery only reads the original operation.
 const object = v => v && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 256) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
@@ -100,7 +102,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
     if (!current() || saved.intent || !caps()?.scopes?.includes('observe') || !saved.host) return;
     const mine = ++discovery, expectedHost = saved.host;
     discovering = true; selected = null; discoveredHost = ''; rows = []; renderSelection(); update();
-    discoveryStatus.textContent = t('orch_loading');
+    discoveryStatus.replaceChildren(skeleton(2));
     try {
       const path = sessionMode(mode) ? `/sessions?host=${encodeURIComponent(expectedHost)}&access=managed&provenance=connector_managed&limit=200` : `/workspaces?host=${encodeURIComponent(expectedHost)}&limit=200`;
       const doc = await api('GET', path); guard();
@@ -221,7 +223,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
     if (operation.status !== 'succeeded') result.append(h('p', {class: 'note'}, t('orch_partial')));
     const links = new Map();
     if (opId(proof.child_operation_id)) links.set(proof.child_operation_id, t('orch_child'));
-    for (const row of childrenOf(operation)) if (opId(row.operation_id)) links.set(row.operation_id, `${row.task}. ${row.title} · ${row.operation_status}`);
+    for (const row of childrenOf(operation)) if (opId(row.operation_id)) links.set(row.operation_id, `${row.task}. ${row.title} · ${operationStatusLabel(row.operation_status)}`);
     // Child admission receipts exist before the aggregate result has caught up.
     for (const step of operation.steps || []) if (opId(step.response?.operation_id)) links.set(step.response.operation_id, links.get(step.response.operation_id) || step.name);
     if (links.size) result.append(h('h2', {}, t('orch_receipts')), h('ul', {}, ...[...links].map(([id, label]) => h('li', {}, h('a', {href: `#/op/${id}`}, label)))));
@@ -234,7 +236,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
       if (text(sid)) result.append(h('p', {}, t(proof.prompt_sent === true ? 'orch_handoff_accepted' : 'orch_successor_unconfirmed'), ' ',
         h('a', {href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(sid)}`}, sid)));
     }
-    if (operation.steps?.length) result.append(h('details', {}, h('summary', {}, t('orch_steps')), h('ul', {}, ...operation.steps.map(step => h('li', {}, `${step.name} · ${step.status}`)))));
+    if (operation.steps?.length) result.append(h('details', {'data-orchestration-steps': ''}, h('summary', {}, t('orch_steps')), h('ul', {}, ...operation.steps.map(step => h('li', {}, `${step.name} · ${operationStatusLabel(step.status)}`)))));
   }
   function update() {
     const fixed = Boolean(saved.intent);

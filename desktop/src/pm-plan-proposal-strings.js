@@ -1,5 +1,8 @@
 export const pmPlanProposalStrings = {
   en: {
+    pcp_resolve_issue: 'Resolve issue', pcp_resolve_rationale: 'Reason for resolving',
+    pcp_resolve_default: 'Issue resolved following adoption of {title} (revision #{number}).',
+    pcp_plan_context: 'Plan context',
     pcp_title:'Plan update from this discussion', pcp_help:'Prepare a sourced proposal, review the whole change, then adopt it once.',
     pcp_purpose:'What should this plan update cover?', pcp_prepare:'Prepare plan update', pcp_model:'Model (optional)',
     pcp_prepare_help:'This creates a proposal. Your accepted plan and existing work continue unchanged.', pcp_saved:'Saved proposal',
@@ -24,6 +27,9 @@ export const pmPlanProposalStrings = {
     pcp_removed:'Requirements removed by this update', pcp_removed_help:'These original commitments are removed when you adopt the whole update.',
   },
   'zh-TW': {
+    pcp_resolve_issue: '回報解決', pcp_resolve_rationale: '回報解決的理由',
+    pcp_resolve_default: '採用「{title}」（修訂 #{number}）後，回報此問題已解決。',
+    pcp_plan_context: '計畫脈絡',
     pcp_title:'從這段討論整理計畫', pcp_help:'先整理有來源的提案，審閱整組變更，再一次採用。',
     pcp_purpose:'這次計畫要整理哪些內容？', pcp_prepare:'整理成計畫', pcp_model:'模型（選填）',
     pcp_prepare_help:'這一步只產生提案；已採用計畫與既有工作仍繼續。', pcp_saved:'已保存提案',

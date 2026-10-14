@@ -1,18 +1,24 @@
 // Projects, managed sessions, and one manual BAT session. The manual session stays read-only.
 import {iso, unix, type DemoProject} from './project.ts';
 
-export function capabilities(project: DemoProject) {
+export function capabilities(project: DemoProject, buckets = true) {
   return {
-    actor: project.ids.actor, scopes: ['observe'], api_version: 1, contract_version: '2026-10-08',
-    hosts: [{host: project.ids.host, writes: false, observe: true}], actions: [],
-    features: {pm_workspaces: {version: 1, plan_drafting: true, plan_adoption: true, brief_snapshots: true, kanban: true,
-      issue_mapping: true, engineering_delivery: {contract: 'pm-engineering-delivery/v1'}, roadmap: true,
-      conversation_proposals: {version: 1}}, pm_resources: {version: 1}},
+    actor: project.ids.actor, scopes: ['observe', 'operate'], api_version: 1, contract_version: '2026-10-08',
+    hosts: [{host: project.ids.host, writes: true, observe: true}],
+    actions: [
+      {action: 'session.send', allowed: true},
+      {action: 'session.answer', allowed: true},
+      {action: 'session.interrupt', allowed: true},
+    ],
+    features: {pm_overview: {version: 1, read_only: true}, pm_workspaces: {version: 1, plan_drafting: true, plan_adoption: true, brief_snapshots: true, kanban: true, governance: true,
+      quality_reviews: true, issue_mapping: true, engineering_delivery: {contract: 'pm-engineering-delivery/v1'}, roadmap: true,
+      conversation_proposals: {version: 1}, maintenance_repairs: {version: 1}}, pm_resources: buckets ? {version: 1, buckets: {granularity: 'day' as const}} : {version: 1},
+      pm_schedule: {version: 1, read_only: true}, pm_dependencies: {version: 1}, pm_register: {version: 1}},
   };
 }
 
-export function bootstrap(project: DemoProject) {
-  return {capabilities: capabilities(project), sync: {version: 1, server_id: project.ids.serverId, principal_id: 'demo-reader',
+export function bootstrap(project: DemoProject, buckets = true) {
+  return {capabilities: capabilities(project, buckets), sync: {version: 1, server_id: project.ids.serverId, principal_id: 'demo-reader',
     checkpoint: {cursor: 0, token: 'demo-0'}}};
 }
 
@@ -53,7 +59,10 @@ export function projectDetail(project: DemoProject) {
     work: [
       session(project.ids.sessions.implement, project.copy.sessionImplement, true, 'running', `op_${'7'.padStart(32, '0')}`),
       session(project.ids.sessions.review, project.copy.sessionReview, false, 'needs_ted'),
-      session(project.ids.sessions.manual, project.copy.manualTitle, false, 'human_owned'),
+      {...session(project.ids.sessions.manual, project.copy.manualTitle, false, 'human_owned'),
+        reading: {unread_count: 3, complete: true}},
+      {kind: 'execution', id: 'failed-delivery', title: project.copy.failedTitle, host: project.ids.host,
+        status: 'failed', session: {}},
     ],
   };
 }

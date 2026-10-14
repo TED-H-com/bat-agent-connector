@@ -1,3 +1,5 @@
+import {place} from './ui/dom.js';
+import {joinLabel} from './label-text.js';
 import {readRequirementReviews,matchesRequirementReview,requirementSelection,boundedQualityMap} from './pm-requirement-quality.js';
 import {checkSpecMaterialization,readSpecMaterializations,fixedSpecSelection} from './pm-spec-materialization.js';
 
@@ -73,7 +75,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
   function update(){
     review.disabled=!active||reading||!write()||!hostReady(active);
     availabilityNotice.hidden=!active||Boolean(write()&&hostReady(active));
-    if(active)summary.textContent=`${active.document.title} · ${t('ph_preparation')} ${active.sequence}`;
+    if(active)summary.textContent=joinLabel([active.document.title, active.sequence == null ? '' : joinLabel([t('ph_preparation'), active.sequence], ' ')]);
     else summary.textContent=t('ph_select');
     if(editor)editor.update();onReviewChange();
   }
@@ -185,7 +187,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
       const proof=h('details',{},h('summary',{},t('ph_sources')),h('p',{class:'mono'},`${t('ph_base')}: ${code.source_sha}`),
         ...(row.document.sources?.documents||[]).map(source=>h('p',{class:'mono'},`${t('ph_spec')}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)),
         h('p',{class:'mono'},`${code.host} · ${code.workspace_id}`),h('p',{class:'mono'},row.package_id),h('p',{class:'mono'},row.document_digest),h('p',{class:'mono'},work.work_fingerprint));
-      facts.replaceChildren(h('h4',{},t('ph_reviewed')),readyForStart?null:h('p',{class:'muted'},t('ph_batch_waiting')),h('p',{},project.name,' · ',code.repository,' · ',code.source_ref.replace(/^refs\/heads\//,'')),
+      place(facts,'replaceChildren',h('h4',{},t('ph_reviewed')),readyForStart?null:h('p',{class:'muted'},t('ph_batch_waiting')),h('p',{},project.name,' · ',code.repository,' · ',code.source_ref.replace(/^refs\/heads\//,'')),
         h('p',{},code.host,' · ',response.preview.workspace.name||t('ph_workspace')),h('p',{class:'muted'},`${t('ph_project_version')} ${project.version}`),
         h('p',{class:'muted'},t('ph_separate')),fixedSpec?h('p',{class:'pm-source'},t('ph_fixed_attachment'),': ',fixedSpec.materialization_id,' · ',fixedSpec.artifact_ref.artifact_id,' · ',fixedSpec.document_digest):null,
         specs.filtered?h('p',{class:'muted'},t('ph_spec_filtered')):null,proof);status.replaceChildren();

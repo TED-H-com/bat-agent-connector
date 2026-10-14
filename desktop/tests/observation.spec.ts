@@ -62,7 +62,8 @@ for (const native of [false, true]) {
     // The pending ID changes before its event reaches this view. Preflight must refuse the old answer.
     pending = {kind: "permission", toolUseId: "permission-2", toolName: "git", input_preview: "Publish branch"};
     await page.getByRole("button", {name: "Answer", exact: true}).click();
-    await expect(page.getByText(/PENDING_CHANGED/)).toBeVisible();
+    await expect(page.locator('[data-session-error=PENDING_CHANGED] .session-error-line')).toContainText('The question changed');
+    await expect(page.locator('[data-session-error=PENDING_CHANGED] details')).toContainText('PENDING_CHANGED');
     expect(writes).toHaveLength(0);
     await expect(page.getByRole("button", {name: "Allow", exact: true})).toBeVisible();
     await page.getByRole("button", {name: "Allow", exact: true}).click();
@@ -72,7 +73,8 @@ for (const native of [false, true]) {
     await expect.poll(() => saved(page)).toEqual(cp(3));
     await expect(answer).toHaveValue("Original answer draft");
     failRead = true; cursor = 4;
-    await expect(page.getByText("UNAVAILABLE Session observation unavailable")).toBeVisible();
+    await expect(page.locator('[data-session-error=UNAVAILABLE] .session-error-line')).toContainText('Server error');
+    await expect(page.locator('[data-session-error=UNAVAILABLE] details')).toContainText('Session observation unavailable');
     expect(await saved(page)).toEqual(cp(3));
     await expect(page.getByRole("button", {name: "Send", exact: true})).toBeDisabled();
     expect(writes).toHaveLength(1);
@@ -105,7 +107,9 @@ for (const native of [false, true]) {
         : {messages: [], checkpoints: [], operations: [], hosts: [], sessions: [], work_items: []}};
     });
     await page.goto("/dashboard/#/session/demo/session-1");
-    await expect(page.getByText("UNAVAILABLE Messages temporarily unavailable")).toBeVisible();
+    const error = page.locator('[data-session-error=UNAVAILABLE]');
+    await expect(error.locator('.session-error-line')).toContainText('Server error');
+    await expect(error.locator('details')).toContainText('Messages temporarily unavailable');
     const composer = page.locator("textarea").first(), answer = page.getByRole("textbox", {name: "Which branch?"});
     await composer.fill("Initial read failure must retain these instructions");
     await answer.fill("Retained answer");
@@ -114,7 +118,7 @@ for (const native of [false, true]) {
     // With no journal event, the initial failed read itself must still recover.
     failMessages = false;
     await expect(page.getByRole("button", {name: "Answer", exact: true})).toBeEnabled();
-    await expect(page.getByText("UNAVAILABLE Messages temporarily unavailable")).toHaveCount(0);
+    await expect(error).toHaveCount(0);
     await expect(answer).toHaveValue("Retained answer");
     pending = {kind: "permission", toolUseId: "permission-2", toolName: "git", input_preview: "Reviewed action"};
     cursor = 1;
@@ -153,7 +157,7 @@ for (const native of [false, true]) {
     await page.getByRole("button", {name: "More", exact: true}).click();
     await page.locator("input[maxlength='120']").fill("Retained project archive draft");
     cursor = 2;
-    await expect(page.locator("#live")).toContainText("Waiting to refresh");
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     // The first refresh is held by this editor. A later archive must still update safety controls.
     archived = true; cursor = 3;
     await expect(page.getByText("This item or its project is archived. Your edit draft is retained.")).toBeVisible();
@@ -271,6 +275,9 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
     const fixture = historyFixture(); await mount(page, false, fixture.read);
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     await page.goto("/dashboard/#/session/demo/session-1");
+    await expect(page.locator("[data-session-view]")).toBeVisible();
+    const opener = page.getByRole("button", {name: /^(Results|成果)$/, exact: true});
+    if (await opener.isVisible()) await opener.click();
     await page.locator(".workspace-evidence > summary").click();
     await page.locator(".observation-evidence > summary").click();
     await page.locator('[data-observation="history"] > summary').click();
@@ -278,6 +285,8 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
     await page.evaluate(() => scrollTo(0, 0));
     await page.screenshot({path: `test-results/observation-${locale}-${width}.png`, fullPage: true});
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const sheet = page.getByRole("dialog");
+    if (await sheet.isVisible()) {await page.keyboard.press("Escape"); await expect(sheet).toBeHidden();}
     await page.locator(".workspace-session-heading").getByRole("link", {name: "demo", exact: true}).click();
     await expect(page.getByText("profile-fixture", {exact: true})).toBeVisible();
     await expect(page.getByText("not_enumerable", {exact: true})).toBeVisible();
@@ -298,12 +307,13 @@ for (const native of [false, true]) test(`failed first read never invents manual
       : {messages: [], checkpoints: [], operations: [], hosts: [], sessions: [], work_items: []}};
   });
   await page.goto('/dashboard/#/session/demo/missing');
-  await expect(page.getByText('NOT_FOUND Session not found', {exact: true})).toBeVisible();
-  await expect(page.getByText('The origin and management permissions', {exact: false})).toBeVisible();
+  await expect(page.locator('[data-session-withdrawn=gone]')).toContainText('This session is no longer available');
+  await expect(page.locator('[data-session-view]')).toHaveCount(0);
+  await expect(page.locator('[data-session-readonly]')).toHaveCount(0);
   await expect(page.getByText('A person created this session in BAT', {exact: false})).toHaveCount(0);
   provenance = 'unknown'; await page.reload();
-  await expect(page.getByText('The origin and management permissions', {exact: false})).toBeVisible();
+  await expect(page.locator('[data-session-readonly]')).toHaveText('Control is unconfirmed, so it is read-only here.');
   await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeHidden();
   provenance = 'manual'; await page.reload();
-  await expect(page.getByText('A person created this session in BAT', {exact: false})).toBeVisible();
+  await expect(page.locator('[data-session-readonly]')).toHaveText("Started in BAT by a person, so it's read-only here.");
 });

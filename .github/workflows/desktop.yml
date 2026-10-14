@@ -96,8 +96,9 @@ jobs:
 
   central-ui:
     runs-on: ubuntu-24.04
-    # Five minutes for setup, plus the scripts' shared ten-minute budget below.
-    timeout-minutes: 15
+    # Five minutes for setup and a shared ten-minute script budget below.
+    # The walkthrough's two minutes sit outside that shared budget.
+    timeout-minutes: 17
     env:
       TZ: UTC
     defaults:
@@ -160,6 +161,11 @@ jobs:
         run: bash scripts/ci-central-ui.sh test:labels
       - name: test:attention
         run: bash scripts/ci-central-ui.sh test:attention
+      - name: PM decision walkthrough with actual central service (English and zh-TW)
+        timeout-minutes: 2
+        env:
+          BATC_WALKTHROUGH_SHOTS: test-results/walkthrough
+        run: npm run test:walkthrough
       - name: Preserve shared UI fixture evidence
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

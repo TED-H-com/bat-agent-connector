@@ -30,7 +30,7 @@ async function setup(page:any,options:any={}) {
    throw Error('unexpected action');
   }}})});
  },{options,fleet});
- await page.goto('/dashboard/#/settings');await expect(page.getByRole('region',{name:'Tailscale',exact:true})).toBeVisible();
+ await page.goto('/dashboard/#/settings');if(!options.browser)await page.getByRole('link',{name:/^(Fleet|機群)$/}).click();await expect(page.getByRole('region',{name:'Tailscale',exact:true})).toBeVisible();
 }
 const panel=(page:any)=>page.getByRole('region',{name:'Tailscale',exact:true});
 const calls=(page:any,action:string)=>page.evaluate((a:string)=>(window as any).__tailscale.calls.filter((c:any)=>c.action===a),action);

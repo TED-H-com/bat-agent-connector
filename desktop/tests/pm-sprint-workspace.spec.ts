@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {fixture,workspaceId,pid,actions} from './pm-sprint-fixture.ts';
@@ -35,7 +36,7 @@ function fullFixture(){
 }
 for(const native of [false,true])test.describe(native?'native Sprint workspace':'web Sprint workspace',()=>{
   test('one mounted Sprint presents fixed facts and explicit cancellation',async({page})=>{
-    const f=fullFixture();await mountWorkspace(page,native,f.dispatch);await page.goto(route);
+    const f=fullFixture();await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');
     const region=page.locator('[data-pm-sprints]');await expect(region).toHaveCount(1);
     await expect(region).toContainText('A returning member can sign in');await expect(region).toContainText('Relevant tests verify the fixed change');
     await expect(region.getByRole('tab')).toHaveCount(0);await region.locator('summary').filter({hasText:/^Cancel Sprint$/}).click();
@@ -44,17 +45,17 @@ for(const native of [false,true])test.describe(native?'native Sprint workspace':
     expect(f.state.writes.map((request:any)=>request.body.action)).toEqual(['pm.sprint.cancel']);
   });
   test('lost start is recovered after whole-page reload with original identity',async({page})=>{
-    const f=fullFixture();await mountWorkspace(page,native,f.dispatch);await page.goto(route);const region=page.locator('[data-pm-sprints]');
+    const f=fullFixture();await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');const region=page.locator('[data-pm-sprints]');
     await region.locator('summary').filter({hasText:/^Start Sprint$/}).click();const form=region.locator('[data-pm-action="pm.sprint.start"]');
     await form.getByLabel('Reason for this decision',{exact:true}).fill('Start the selected work period');f.state.lost=true;
     await form.getByRole('button',{name:'Start Sprint',exact:true}).click();await expect(form).toContainText('Reply unavailable');
-    await page.reload();await form.getByRole('button',{name:'Check original request',exact:true}).click();
+    await page.reload();await openPmSection(page, 'schedule' , 'ui_sprints');await form.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.ops.size).toBe(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
   test('reader sees fixed Goal and cannot decide the Sprint',async({page})=>{
-    const f=fullFixture();f.state.role='reader';f.state.manage=false;await mountWorkspace(page,native,f.dispatch);await page.goto(route);
+    const f=fullFixture();f.state.role='reader';f.state.manage=false;await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');
     const region=page.locator('[data-pm-sprints]');await expect(region).toContainText('A returning member can sign in');
     await region.locator('summary').filter({hasText:/^Cancel Sprint$/}).click();await expect(region.locator('[data-pm-action="pm.sprint.cancel"] button[type=submit]')).toBeDisabled();
     expect(f.state.writes).toHaveLength(0);
@@ -62,7 +63,7 @@ for(const native of [false,true])test.describe(native?'native Sprint workspace':
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`mounted Sprint ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fullFixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);const region=page.locator('[data-pm-sprints]');
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');const region=page.locator('[data-pm-sprints]');
   await expect(region.locator('h2')).toHaveText(locale==='en'?'Sprint and iteration':'Sprint 與迭代');
   expect(await region.innerText()).not.toMatch(/pm_sprint_|\bundefined\b/);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const directory=process.env.BATC_PM_SPRINT_WORKSPACE_SCREENSHOTS;if(directory){await mkdir(directory,{recursive:true});await page.screenshot({path:`${directory}/sprint-${locale}-${width}.png`,fullPage:true});}
@@ -98,11 +99,11 @@ function withQuality(){
 }
 for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`mounted original quality enters Sprint ${native?'IPC':'browser'} ${locale}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width:locale==='en'?1440:390,height:900}}),page=await context.newPage(),f=withQuality();
-  await mountWorkspace(page,native,f.dispatch);await page.goto(route);const quality=page.locator('[data-pm-quality-reviews]');
+  await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_quality');const quality=page.locator('[data-pm-quality-reviews]');
   await quality.getByLabel(locale==='en'?'Work item for review':'審查工作項目',{exact:true}).selectOption(f.bindings[0].work_item_id);
   await quality.locator('select').filter({has:page.locator(`option[value="${f.row.review_id}"]`)}).selectOption(f.row.review_id);
   await quality.getByRole('button',{name:locale==='en'?'Use this assessment':'使用這份評估',exact:true}).click();
-  const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的 Sprint$/}).click();
+  await openPmSection(page,'schedule','ui_sprints');const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的 Sprint$/}).click();
   const form=region.locator('[data-pm-action="pm.sprint.close"]');
   await form.getByRole('button',{name:locale==='en'?'Include chosen assessment':'納入已選評估',exact:true}).click();
   await expect(form.locator('[data-pm-quality-picker]')).toContainText(f.row.context.native_result.candidate_commit);

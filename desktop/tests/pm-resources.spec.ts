@@ -1,6 +1,7 @@
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
+import {periodWindow} from '../src/pm-agents-trend.js';
 import {workbenchFixture,route,workspaceId} from './pm-workbench-fixture.ts';
 
 function fixture(){
@@ -23,42 +24,53 @@ function fixture(){
   return {state,dispatch};
 }
 const resources=(page:any)=>page.locator('[data-pm-resources]');
-async function open(page:any,native:boolean,f:any){await mountConversation(page,native,f.dispatch);await page.goto(route);await page.locator('[data-pm-view="agents"]').click();await expect(resources(page).locator('[data-resource-row]')).toHaveCount(3);}
+async function open(page:any,native:boolean,f:any){await mountConversation(page,native,f.dispatch);await page.goto(route);if((page.viewportSize()?.width||1440)<1000)await page.locator('#workspace-menu').click();await page.locator('[data-pm-view="agents"]').click();await expect(resources(page).locator('[data-resource-row]')).toHaveCount(3);}
 
 for(const native of [false,true])test.describe(native?'native resources':'web resources',()=>{
   test('lazy resource read, distinct model evidence, missing counters and quota',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await expect(page.locator('[data-pm-charter]')).toBeVisible();expect(f.state.reads).toHaveLength(0);
     await page.locator('[data-pm-view="agents"]').click();await expect(resources(page)).toContainText('1,000');
-    await resources(page).getByRole('button',{name:'Implementation',exact:true}).click();const detail=resources(page).locator('[data-resource-detail]');
-    await expect(detail).toBeVisible();await expect(detail).toContainText('Requested model');await expect(detail).toContainText('Not provided');
-    await expect(resources(page).locator('[data-resource-quota]')).toContainText('75%');
-    await resources(page).getByRole('searchbox').fill('reviewer');await expect(resources(page).locator('[data-resource-row]')).toHaveCount(1);
-    await expect(resources(page).locator('[data-resource-quota]')).not.toContainText('75%');
-    await resources(page).getByLabel('Observation window').selectOption('30');await expect.poll(()=>f.state.reads.at(-1)).toContain('since=');
+    await resources(page).locator('[data-resource-row="Implementation"]').click();const detail=resources(page).locator('[data-resource-detail]');
+    await expect(detail).toBeVisible();await expect(detail).toContainText('Requested model');await expect(detail).toContainText('Unknown');
+    await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
+    await expect(resources(page).locator('[data-resource-chart]')).toHaveCount(0);
+    expect(f.state.reads[0]).not.toContain('buckets='); expect(f.state.reads[0]).not.toContain('tz=');
+    await resources(page).locator('[data-resource-filter]').selectOption({label:'Role · Reviewer'});
+    await expect(resources(page).locator('[data-resource-row]')).toHaveCount(1);
+    await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
+    await expect(resources(page).locator('[data-resource-metrics]')).toContainText('1,650');
+    const before=f.state.reads.length;
+    await resources(page).getByRole('radio',{name:'30d',exact:true}).click();
+    await expect.poll(()=>f.state.reads.length).toBe(before+1);
+    expect(f.state.reads.at(-1)).toContain('since=');
+    expect(f.state.reads.at(-1)).not.toContain('buckets='); expect(f.state.reads.at(-1)).not.toContain('tz=');
+    const last=new URL(f.state.reads.at(-1)||'','http://fixture');
+    const zone=await page.evaluate(()=>Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(last.searchParams.get('since')).toBe(periodWindow(new Date(last.searchParams.get('until')||''),30,zone).since);
   });
   test('source withdrawal removes details, quota and counts',async({page})=>{
-    const f=fixture();await open(page,native,f);await resources(page).getByRole('button',{name:'Implementation',exact:true}).click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
-    f.state.deny=true;await resources(page).getByRole('button',{name:'Update records',exact:true}).click();
+    const f=fixture();await open(page,native,f);await resources(page).locator('[data-resource-row="Implementation"]').click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
+    f.state.deny=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(resources(page)).toContainText('Your token lacks this scope');await expect(resources(page).locator('[data-resource-row]')).toHaveCount(0);
-    await expect(resources(page).locator('[data-resource-detail]')).toBeHidden();await expect(resources(page)).not.toContainText('75%');await expect(resources(page)).not.toContainText('1,000');
+    await expect(resources(page).locator('[data-resource-detail]')).toBeHidden();await expect(resources(page)).not.toContainText('25%');await expect(resources(page)).not.toContainText('1,000');
   });
   test('unchanged refresh preserves details disclosure and keyboard focus',async({page})=>{
-    const f=fixture();await open(page,native,f);const select=resources(page).getByRole('button',{name:'Implementation',exact:true});await select.click();
+    const f=fixture();await open(page,native,f);const select=resources(page).locator('[data-resource-row="Implementation"]');await select.click();
     const disclosure=resources(page).locator('[data-resource-detail] details');await disclosure.locator('summary').click();
     await select.focus();await page.clock.install();await page.clock.fastForward(61000);
     await expect(select).toBeFocused();await expect(disclosure).toHaveAttribute('open','');
-    await resources(page).getByRole('button',{name:'Close details',exact:true}).click();await expect(select).toBeFocused();
+    await resources(page).getByRole('button',{name:'Close',exact:true}).click();await expect(select).toBeFocused();
   });
   test('pause and view exit stop polling and late reads cannot restore a departed view',async({page})=>{
     const f=fixture();await page.clock.install();await open(page,native,f);await resources(page).getByRole('button',{name:'Pause updates',exact:true}).click();
     const count=f.state.reads.length;await page.clock.fastForward(120000);expect(f.state.reads).toHaveLength(count);
     await resources(page).getByRole('button',{name:'Resume updates',exact:true}).click();await expect.poll(()=>f.state.reads.length).toBe(count+1);
-    await page.locator('[data-pm-view="charter"]').click();await page.clock.fastForward(120000);expect(f.state.reads).toHaveLength(count+1);
+    await page.locator('[data-pm-view="overview"]').click();await page.clock.fastForward(120000);expect(f.state.reads).toHaveLength(count+1);
   });
   test('empty sources remain unknown and model text is inert',async({page})=>{
     const f=fixture();f.state.data.rows[0].configurations[0].requested_model='<img src=x onerror=alert(1)>';
     await open(page,native,f);await expect(resources(page)).toContainText('<img src=x');await expect(resources(page).locator('img')).toHaveCount(0);
-    f.state.data.rows=[];f.state.data.quota_pools=[];await resources(page).getByRole('button',{name:'Update records',exact:true}).click();
+    f.state.data.rows=[];f.state.data.quota_pools=[];await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(resources(page)).toContainText('No usage sources are connected');await expect(resources(page)).toContainText('No current quota balance');
   });
 });
@@ -70,4 +82,28 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`resou
   expect(await resources(page).innerText()).not.toMatch(/\b(?:undefined|null|res_\w+)\b/);
   const out=process.env.BATC_RESOURCE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/resources-${locale}-${width}.png`,fullPage:true});}
   expect(errors).toEqual([]);await context.close();
+});
+
+for(const locale of ['en','zh-TW']) test(`CLI-less names, observed subtotals, zero and unknown counters ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:1440,height:900}}),page=await context.newPage(),f=fixture();
+  const row=f.state.data.rows[0]; row.adapter=''; row.role='reviewer'; row.calls=0; row.observations=null as any;
+  row.metrics.total={value:null,observed:120,covered:2} as any;
+  row.metrics.input={value:null,observed:0,covered:1} as any;
+  f.state.data.rows[2].adapter=''; f.state.data.rows[2].role='';
+  await open(page,false,f);
+  const name=locale==='en'?'Reviewer':'審閱';
+  await expect(resources(page).locator('[data-resource-row="Implementation"]')).toContainText(name);
+  await expect(resources(page).locator('[data-resource-row="Investigation"]')).toContainText(locale==='en'?'Unnamed source':'未命名來源');
+  await expect(resources(page).locator('[data-resource-metrics] .ui-metric-value').first()).toContainText('770');
+  await resources(page).locator('[data-resource-row="Implementation"]').click();
+  const detail=resources(page).locator('[data-resource-detail]'); await expect(detail.locator('h2')).toHaveText(name);
+  const fact=(en:string,zh:string)=>detail.locator('dt',{hasText:new RegExp(`^${locale==='en'?en:zh}$`)}).locator('+ dd');
+  await expect(fact('Total','總計')).toContainText('120');
+  await expect(fact('Total','總計').locator('[data-status="partial"]')).toBeVisible();
+  await expect(fact('Input','輸入')).toContainText('0');
+  await expect(fact('Input','輸入').locator('[data-status="partial"]')).toBeVisible();
+  await expect(fact('Messages','訊息數')).toHaveText('0');
+  await expect(fact('Messages','訊息數').locator('[data-status="unknown"]')).toHaveCount(0);
+  await expect(fact('Usage observations','用量觀測筆數').locator('[data-status="unknown"]')).toBeVisible();
+  await context.close();
 });

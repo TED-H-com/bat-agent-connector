@@ -1,16 +1,18 @@
+import {iconButton, emptyState} from './ui/components.js';
+import {timeStamp, timeLabel} from './ui/stamps.js';
 const itemHref = item => `#/item/${encodeURIComponent(item.work_item_id)}`;
 const artifactHref = artifact => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
-const date = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : '—';
+const date = value => timeStamp(value);
 export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, onEvents, errorBox}) {
   let doc = null, serial = 0, children = [], refreshing = null;
   const warning = h('div', {'data-child-warning': ''}), status = h('p', {class: 'muted', role: 'status'}), body = h('div');
-  const refresh = h('button', {class: 'mini', type: 'button', onclick: () => load()}, t('results_refresh'));
+  const refresh = iconButton({icon:'refresh-cw', label:t('results_refresh'), ...{class: 'mini', type: 'button', onclick: () => load()}});
   const more = h('button', {class: 'secondary', type: 'button', hidden: true, onclick: () => load(doc?.children_next_cursor)}, t('results_more'));
   const details = h('details', {}, h('summary', {}, t('results_title')), status, h('div', {class: 'actions'}, refresh), body, more);
   const box = h('section', {class: 'result-sources panel', 'data-result-sources': ''}, warning, details);
   function renderSource(item, own = false) {
     const content = h('div', {}, h('p', {class: 'muted'}, t('results_completion', {state: t(`wi_state_${item.completion.display_state}`)})));
-    if (!item.links.length && !item.result_artifacts.length) content.append(h('p', {class: 'muted'}, t('results_empty')));
+    if (!item.links.length && !item.result_artifacts.length) content.append(emptyState({title:t('results_empty')}));
     for (const link of item.links) {
       const row = h('div', {class: 'panel'}, linkTarget(link));
       if (link.note) row.append(h('p', {class: 'muted'}, link.note));
@@ -61,7 +63,7 @@ export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, on
       renderSource(doc.item, true), ...children.map(child => renderSource(child)));
     for (const node of body.querySelectorAll('details[data-result-child]')) node.open = opens.has(node.dataset.resultChild);
     if (focused) [...body.querySelectorAll('a')].find(node => node.getAttribute('href') === focused)?.focus({preventScroll: true});
-    status.textContent = t('models_source', {source: doc.source, time: date(doc.read_at)});
+    status.replaceChildren(timeLabel(t, 'models_source', {source: doc.source, time: date(doc.read_at)}));
     more.hidden = !doc.children_next_cursor;
   }
   function load(after = '') {

@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
@@ -7,7 +8,7 @@ const first='pmrev_'+'a'.repeat(32), second='pmrev_'+'b'.repeat(32), binding='pm
 const shots=process.env.PM_DIFF_SCREENSHOTS;
 test('before comparison fits the existing shared plan layout',async({page})=>{
   const f=pmFixture();f.state.plans=true;
-  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'plan');
   await expect(page.locator('[data-pm-plans]')).toBeVisible();
   if(shots){mkdirSync(shots,{recursive:true});for(const width of [1440,390]){
     await page.setViewportSize({width,height:900});await page.screenshot({path:`${shots}/before-${width}.png`,fullPage:true});}}
@@ -49,7 +50,7 @@ function fixture(){
 const box=(page:any)=>page.locator('[data-pm-plan-diff]');
 async function mount(page:any,native:boolean,f:any){
   await mountConversation(page,native,f.dispatch);
-  await page.goto(pmRoute);
+  await page.goto(pmRoute);await openThreadTab(page,'plan');
   await expect(page.locator('[data-pm-plans]')).toBeVisible();
   await expect(box(page)).toHaveCount(1);
   await expect(box(page)).toBeHidden();
@@ -78,13 +79,13 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
     await expect(result).toContainText('A proposed condition');await expect(result).toContainText('No confirmer recorded');
     await result.getByText('Title and Markdown',{exact:true}).click();await expect(result).toContainText('effect on scope has not been classified');
     await result.locator('summary').filter({hasText:'Review candidate'}).click();await expect(result).toContainText('Title and work state were not saved');
-    await expect(result.getByRole('link',{name:'Open existing work'})).toHaveAttribute('href',/^#\/work\/wi_/);
+    await expect(result.getByRole('link',{name:'Open existing work'})).toHaveAttribute('href','#/item/wi_'+'d'.repeat(32));
     await expect(result.locator('script,img')).toHaveCount(0);
     expect(f.state.writes).toHaveLength(0);
     const firstRequest=new URL(f.comparison.reads[0].path,'http://fixture');expect(firstRequest.searchParams.get('binding_ids')).toBe(binding);
     expect(firstRequest.searchParams.has('journal_cursor')).toBe(false);
     f.comparison.cursor=99;await box(page).getByRole('button',{name:'Recheck this comparison',exact:true}).click();
-    await expect(box(page)).not.toContainText('Reading the fixed comparison');
+    await expect(box(page).getByRole('status',{name:'Reading the fixed comparison…',exact:true})).toHaveCount(0);
     expect(new URL(f.comparison.reads[1].path,'http://fixture').searchParams.get('journal_cursor')).toBe('45');
     const planReads=f.comparison.planReads;
     await page.getByRole('button',{name:'Refresh',exact:true}).click();
@@ -111,7 +112,7 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
   test('late read from a changed selection is discarded',async({page})=>{
     const f=fixture();let release!:()=>void;f.comparison.defer=new Promise<void>(resolve=>release=resolve);
     await mount(page,native,f);await choose(page);await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
-    await expect(box(page)).toContainText('Reading the fixed comparison');await box(page).getByLabel('To version',{exact:true}).selectOption(first);
+    await expect(box(page).getByRole('status',{name:'Reading the fixed comparison…',exact:true})).toBeVisible();await box(page).getByLabel('To version',{exact:true}).selectOption(first);
     release();await page.waitForTimeout(100);await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
     await expect(box(page).getByRole('button',{name:'Compare versions',exact:true})).toBeEnabled();
   });

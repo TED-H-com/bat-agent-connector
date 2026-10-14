@@ -1,9 +1,10 @@
+import {iconButton} from './ui/components.js';
 // Sourced management findings and explicit direction decisions share one journal.
-export function workspaceGovernance({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
+export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = ['risk', 'assumption', 'issue', 'dependency', 'drift', 'change'];
   let serial = 0, loaded = false, dirty = false, stale = false, signature = '', selectedId = '', model = null, forms = [], widgets = [];
   let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
-  const navigationKey = `batc.pm.governance.selection.${workspaceId}.${caps()?.actor}`;
+  const navigationKey = `batc.pm.governance.selection.${namespace}.${workspaceId}.${caps()?.actor}`;
   try {const saved = sessionStorage.getItem(navigationKey); if (/^pmgov_[0-9a-f]{32}$/.test(saved || '')) selectedId = saved;} catch { /* Navigation is optional. */ }
   const selectRecord = value => {selectedId = value; try {alive(); sessionStorage.setItem(navigationKey, value);} catch { /* Form persistence remains authoritative. */ }};
   const status = h('div', {role: 'status'}), list = h('div', {class: 'pm-evidence-rows'}), detail = h('div'), editors = h('div');
@@ -11,7 +12,7 @@ export function workspaceGovernance({h, t, api, alive, workspaceId, workspace, p
   const review = h('button', {class: 'secondary', type: 'button', hidden: true, onclick: () => {if (loaded) void renderEditors(true);}}, t('pm_gov_review_fresh'));
   const element = h('section', {class: 'panel pm-evidence', 'data-pm-governance': ''},
     h('header', {class: 'pm-heading'}, h('div', {}, h('h2', {}, t('pm_gov_title')), h('p', {class: 'muted'}, t('pm_gov_intro'))),
-      h('button', {class: 'secondary', type: 'button', onclick: () => void refresh()}, t('pm_gov_refresh'))),
+      iconButton({icon:'refresh-cw', label:t('pm_gov_refresh'), ...{class: 'secondary', type: 'button', onclick: () => void refresh()}})),
     status, list, detail, warning, review, editors);
   const actor = () => caps()?.actor;
   const can = () => loaded && permitted(false);
@@ -165,7 +166,7 @@ export function workspaceGovernance({h, t, api, alive, workspaceId, workspace, p
       h('div', {class: 'pm-fact-heading'}, h('strong', {class: 'pm-source'}, revision.document.title), h('span', {class: 'muted'}, t('pm_gov_' + record.kind))),
       h('p', {class: 'muted'}, t('pm_gov_' + revision.document.status), ' · ', revision.document.owner_actor,
         revision.document.decision ? ' · ' + t('pm_gov_' + revision.document.decision.disposition) : ''),
-      h('button', {type: 'button', class: 'secondary', 'aria-pressed': selectedId === record.record_id, onclick: () => {selectRecord(record.record_id); void refresh(true);}},
+      h('button', {type: 'button', class: 'secondary', 'aria-pressed': String(selectedId === record.record_id), onclick: () => {selectRecord(record.record_id); void refresh(true);}},
         t(selectedId === record.record_id ? 'pm_gov_selected' : 'pm_gov_inspect')))) : [note('pm_gov_empty')]));
     if (model.nextCursor != null) list.append(note('pm_gov_partial'), h('button', {type: 'button', class: 'secondary', onclick: () => {pageCount++; void refresh();}}, t('pm_gov_more')));
     detail.replaceChildren();
@@ -373,5 +374,10 @@ export function workspaceGovernance({h, t, api, alive, workspaceId, workspace, p
       if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {focused.focus({preventScroll: true}); if (selection) focused.setSelectionRange(...selection);}
     } catch (error) {if (ticket === serial) unavailable(error);}
   }
-  return {element, refresh};
+  return {element, refresh, openRef: async ref => {
+    if (ref.kind !== 'governance') return;
+    selectRecord(ref.id); await refresh(true);
+    const row = list.querySelector(`[data-pm-governance-row="${CSS.escape(ref.id)}"]`);
+    row?.querySelector('button')?.focus(); row?.scrollIntoView({block: 'nearest'});
+  }};
 }

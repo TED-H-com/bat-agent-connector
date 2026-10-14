@@ -1,3 +1,5 @@
+import {cliName} from './pm-agents-trend.js';
+import {emptyState} from './ui/components.js';
 // A fixed, reviewed selection. Runtime events refresh receipts, never select new prompts.
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 const opId = value => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value);
@@ -122,7 +124,7 @@ export function approvalsPanel({h, t, api, caps, guard, ready, errorBox, opStatu
     controls.length = 0; rows.replaceChildren();
     if (!saved.preview) return;
     if (saved.preview.truncated) rows.append(h("p", {class: "note"}, t("bulk_truncated")));
-    if (!saved.preview.items.length) rows.append(h("p", {class: "panel"}, t("bulk_empty")));
+    if (!saved.preview.items.length) rows.append(emptyState({title:t('bulk_empty')}));
     for (const item of saved.preview.items) {
       const choice = h("input", {type: "checkbox", "aria-label": t("bulk_select", {id: item.session_id})});
       const requestMode = saved.intent?.request?.params.selection.find(s => s.item_id === item.item_id);
@@ -139,7 +141,7 @@ export function approvalsPanel({h, t, api, caps, guard, ready, errorBox, opStatu
       rows.append(h("article", {class: "panel bulk-item", "data-approval-item": item.item_id},
         h("div", {class: "row"}, choice, h("div", {class: "grow"},
           h("a", {class: "title", href: `#/session/${encodeURIComponent(item.host)}/${encodeURIComponent(item.session_id)}`}, item.session_id),
-          h("div", {class: "muted"}, [item.host, item.agent_kind].filter(Boolean).join(" · ")))),
+          h("div", {class: "muted"}, [item.host, cliName(item.agent_kind)].filter(Boolean).join(" · ")))),
         item.eligible ? [h("p", {class: "title"}, item.prompt.toolName || t("bulk_answer")),
           h("pre", {class: "pre bulk-prompt"}, typeof item.prompt.input === "string" ? item.prompt.input
             : Object.keys(item.prompt.input || {}).length === 1 && typeof item.prompt.input?.command === "string"

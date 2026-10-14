@@ -32,7 +32,10 @@ function planShell(project: DemoProject, revisionId: string, sequence: number, p
     document: {
       schema_version: 1, revision_id: revisionId, workspace_id: project.ids.workspaceId, title, markdown,
       content_status_at_creation: 'proposal', planning_draft_id: project.ids.draftId, thread_id: project.ids.threadPlanning,
-      source_thread_version: 4, profile_version: 2, selected_inputs: [], sections: documentSections, requirements,
+      source_thread_version: 4, profile_version: 2, selected_inputs: [{input_id: hexId('pmi_', 1, 32), sequence: 1, workspace_id: project.ids.workspaceId, thread_id: project.ids.threadPlanning,
+        slot: 'goal', value: current ? project.copy.goal : project.copy.goalV2, status: 'user_confirmed', source_ref: {kind: 'statement', ref: project.copy.planningRef},
+        recorded_by: project.ids.actor, confirmed_by: project.ids.actor, observed_at: created, applicable_revision: '', supersedes_input_id: null,
+        confirmation_rationale: null, evidence_verification: 'unverified_claim', operation_id: hexId('op_', 321, 32)}], sections: documentSections, requirements,
       unclassified_source_input_ids: [], adoption_status_source: 'workspace_journal', execution_authorized: false,
       scope_coverage: {structured: 'selected_sources_only', markdown: 'unclassified'},
     },

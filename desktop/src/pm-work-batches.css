@@ -1,14 +1,14 @@
 .pm-work-batches { min-width: 0; }
 .pm-work-batches .pm-fields { min-width: 0; grid-template-columns: minmax(0, 1fr); }
 .pm-work-batches select { min-width: 0; max-width: 100%; }
-.pm-batch-entry { padding: 12px 0; border-top: 1px solid var(--line); }
+.pm-batch-entry { padding: var(--space-3) 0; border-top: 1px solid var(--line); }
 .pm-batch-entry h4 { margin: 0 0 6px; }
-.pm-batch-entry details { margin: 8px 0; }
+.pm-batch-entry details { margin: var(--space-2) 0; }
 .pm-batch-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.pm-batch-dependencies label { display: flex; align-items: center; gap: 8px; min-height: 34px; }
+.pm-batch-dependencies label { display: flex; align-items: center; gap: var(--space-2); min-height: 34px; }
 .pm-batch-dependencies input[type=checkbox] { width: auto; flex: 0 0 auto; }
 @media (max-width: 600px) {
-  .pm-work-batches > .pm-heading { flex-direction: column; align-items: start; gap: 8px; padding-bottom: 12px; }
+  .pm-work-batches > .pm-heading { flex-direction: column; align-items: start; gap: var(--space-2); padding-bottom: var(--space-3); }
   .pm-work-batches > .pm-heading p { margin-bottom: 0; }
   .pm-batch-limits { grid-template-columns: minmax(0, 1fr); }
   .pm-batch-dependencies label { min-height: 44px; }

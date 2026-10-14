@@ -1,3 +1,4 @@
+import {skeleton} from './ui/components.js';
 // One fixed standalone start. Reload and events only read accepted operations.
 import {composerShortcut} from './composer-shortcut.js';
 import {modelChoice} from './model-preferences.js';
@@ -64,7 +65,7 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
     models.refresh();
     const expected = ++discovery, selectedHost = saved.host;
     discovering = true; discoveredHost = ""; workspaces = []; renderWorkspaces(); update();
-    discoveryStatus.textContent = t("start_loading_workspaces");
+    discoveryStatus.replaceChildren(skeleton(2));
     try {
       const doc = await api("GET", `/workspaces?host=${encodeURIComponent(selectedHost)}&limit=200`); guard();
       if (expected !== discovery || saved.host !== selectedHost || saved.intent) return;

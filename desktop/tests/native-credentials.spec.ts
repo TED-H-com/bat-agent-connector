@@ -224,7 +224,7 @@ for (const entry of ['startup', 'connect', 'enroll']) {
     await page.evaluate(() => {(window as any).__credentialFixture.missingBootstrap = false;});
     await page.getByRole('button', {name: 'Connect', exact: true}).click();
     await expect(page).toHaveURL(/#\/home$/);
-    await page.getByRole('link', {name: 'Connection', exact: true}).click();
+    await page.locator('#live').click();
     await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
     await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('batc.sync.')).length)).toBe(1);
     expect(await page.evaluate(() => Object.keys(localStorage).some(k => k.includes(':legacy:')))).toBe(false);
@@ -248,7 +248,7 @@ test('unsupported platforms retain honest memory-only connection recovery', asyn
   await page.getByRole('button', {name: 'Disconnect', exact: true}).click();
   await page.getByRole('button', {name: 'Connect', exact: true}).click();
   await expect(page).toHaveURL(/#\/home$/);
-  await page.getByRole('link', {name: 'Connection', exact: true}).click();
+  await page.locator('#live').click();
   await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
 });
 
@@ -263,19 +263,21 @@ test('native account replacement preserves the actual lost-reply session key wit
   const draft = page.locator('textarea').first();
   await draft.fill('Keep the original instructions');
   await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.locator('.session-error').getByText('Error details', {exact: true}).click();
   await expect(page.getByText('Fixture lost operation reply', {exact: false})).toBeVisible();
   const original = await page.evaluate(() => (window as any).__credentialFixture.calls.find((c: any) => c.command === 'connector_request' && c.args.input.method === 'POST').args.input);
-  await page.getByRole('link', {name: 'Connection', exact: true}).click();
+  await page.locator('#live').click();
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
   await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
   await session(); await expect(draft).toHaveValue('');
   expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_request' && c.args.input.method === 'POST').length)).toBe(1);
-  await page.getByRole('link', {name: 'Connection', exact: true}).click();
+  await page.locator('#live').click();
   await page.evaluate(() => {(window as any).__credentialFixture.nextPrincipal = 'original-principal';});
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
   await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
   await session(); await expect(draft).toHaveValue('Keep the original instructions');
   await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.locator('.session-send-record summary').click();
   await expect(page.getByText('op_' + 'a'.repeat(32), {exact: true})).toBeVisible();
   const posts = await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_request' && c.args.input.method === 'POST'));
   expect(posts).toHaveLength(2); expect(posts[1].args.input).toEqual(original);
