@@ -230,9 +230,9 @@ for (const {locale, width, dark} of layouts) {
     await expect(facts).toContainText(words.connected);
     await expect(facts).toContainText(words.noEvent);
     await expect(page.locator('[data-connection-access]')).toContainText(locale === 'en' ? 'View' : '檢視');
-    expect(await page.locator('[data-settings-panel=connection]').innerText()).not.toContain('reader · observe');
+    expect(await page.locator('[data-settings-panel=connection]').innerText()).not.toContain('mei.lin · observe');
     await page.locator('[data-settings-panel=connection] details > summary').click();
-    await expect(page.locator('[data-settings-panel=connection] details')).toContainText('reader');
+    await expect(page.locator('[data-settings-panel=connection] details')).toContainText('mei.lin');
     await expect(page.locator('[data-settings-panel=connection] details')).toContainText('observe');
     await expect(facts.locator('dd').first()).not.toHaveText('—');
     await expect(page.getByRole('button', {name: words.disconnect, exact: true})).toBeVisible();

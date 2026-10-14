@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- The member sign-in demo names its human participant `mei.lin` while retaining
+  the existing read-only role, agent names and stable record identities.
+
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.
