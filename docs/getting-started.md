@@ -17,7 +17,13 @@ GitHub artifacts may require sign-in and expire. Windows validation packages are
 
 ## First launch: your local Connector
 
-Install and open the matching package. It contains the Python runtime and prepares one private local central, its data and your personal identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. The initial Dashboard opens **Get ready to work** when no BAT host is configured.
+Install and open the matching package. It contains the Python runtime and prepares one private local central, its data and your personal identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. With no BAT host configured, the initial Dashboard opens **Settings → Connection**, with **Get ready to work → 1. Connect BAT** expanded.
+
+1. Paste the connection URL copied from BAT into the masked field. It fills the connection details locally.
+2. Check the **Host ID**, then choose **Verify and save host**.
+3. After success, choose **View sessions**. Human sessions remain read-only.
+
+**Bind a GitHub repository** and **Configure verification commands** start collapsed. They are optional for reading sessions. Set them up when dispatch, Git work or Task Service verification needs them. Managed-work permissions also start collapsed; connecting does not grant them.
 
 **Windows Fleet manages local connections and startup; Python Connector / Task Service authorizes and dispatches work; BAT executes it on the selected host.** A remote BAT host does not require BAT to be installed on the Dashboard computer. Windows Fleet settings remain separate from central onboarding.
 
@@ -94,9 +100,10 @@ original native proposal and Follow-up behavior.
 1. Use the workspace switcher → **New workspace**. In **Discussions**, start a
    **New discussion** in Idea mode. Save the goal and constraints in ordinary notes—
    for example, member login and password reset, with referral codes outside the first release.
+   Choose **Send** to create the discussion and save the note before opening **Discussion info**.
    The project sidebar keeps Overview, Discussions, Requirements, Schedule, Dependencies,
    Issues & changes, Agents and Board in the same workspace; **Work** opens bound Sessions.
-2. In **Discussions**, open **Thread panel → Context → Prepare discussion context**
+2. In **Discussions**, open **Discussion info → Context → Prepare discussion context**
    → **Save in a PM worktree**. Choose the
    intended existing repository/host/workspace connection, enter the published
    branch and choose **Preview published revision**. Check the fixed commit,
@@ -104,7 +111,7 @@ original native proposal and Follow-up behavior.
    binding and managed Git/start prerequisites described above. **Discussion
    record only** does not prepare the Git worktree needed for adoption or BAT
    analysis. Later requests can select **Use the existing PM worktree**.
-3. In **Thread panel → Context → Analysis options**, choose an available analysis
+3. In **Discussion info → Context → Analysis options**, choose an available analysis
    adapter, then use **Ask PM**. A record's **Discuss with PM** entry opens Discussions
    with its source chip and automatic title. Review the **Proposed update** card. Review its source quotes, retained
    requirements, exclusions, proposed removals and open questions. Edit the
@@ -112,8 +119,9 @@ original native proposal and Follow-up behavior.
    owner authority and the prepared PM-owned Git worktree.
 4. In **Requirements**, inspect the adopted requirements and their bound work.
    The header's **More actions → Work packages** opens the existing package catalogue.
-   Associate the adopted requirements with work, prepare the engineering packages
-   and review their explicit repository/commit destinations. An accepted plan
+   Review each package’s adopted requirements and explicit repository/commit destination.
+   This UI lists existing packages; package creation uses the registered
+   `pm.work_package.create` API action. An accepted plan
    records direction; starting a package is a separate product action.
 5. In **Requirements → More actions → Quality reviews**, verify the fixed result
    using the configured command or original GitHub checks. Appoint a **Quality review** against the fixed criteria and Definition of Done.
@@ -144,7 +152,7 @@ original native proposal and Follow-up behavior.
    unresolved. Open the selected discussion to confirm or select its direction,
    then explicitly prepare Planning or a plan proposal. Importing a candidate
    does not adopt it, create a discussion automatically or start work.
-9. For another analysis, use **Discussions → Thread panel → Context → Analysis options**
+9. For another analysis, use **Discussions → Discussion info → Context → Analysis options**
    to choose the adapter, then **Ask PM**. Under
    **Accepted plan for this analysis (optional)**, preview the accepted revision,
    check complete/omitted file coverage, then select that exact version. Without
@@ -163,8 +171,8 @@ A missing runtime, Git worktree, verifier or original source is reported at its
 step. Resolve that prerequisite before starting a new action. For a lost reply,
 use **Check original request** with the saved draft; recovery retains its original
 version and operation. Human checkouts and manual sessions remain read-only.
-These steps describe available product actions, not a claim that the complete
-14-step M4 live acceptance has run. Record actual operation, source, runtime and
+These steps describe available product actions, not a claim that full
+lifecycle live acceptance has run. Record actual operation, source, runtime and
 delivery receipts separately from offline tests and CI.
 
 ### Read an AHP host catalog

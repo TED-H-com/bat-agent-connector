@@ -1,9 +1,9 @@
 {
   "schema": "public_ui_screenshots_v1",
-  "frontend_source_commit": "aba02180e872f798ea54aa003b267b14eb7f5018",
+  "frontend_source_commit": "ab960ed23f734944470b982bd2f66b0c30300151",
   "source_pin_kind": "merged",
-  "frontend_source_tree": "994fdcc7081386d819c1670884df2f083fb67f5b",
-  "captured_at": "2026-10-14T09:49:32.530Z",
+  "frontend_source_tree": "9a519aecfad5dae04f62297cc50a2efaf4f49fc9",
+  "captured_at": "2026-10-14T18:37:43.811Z",
   "fixture_clock": "2026-10-13T09:00:00.000Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
@@ -37,8 +37,12 @@
       "sha256": "17ea5317ac2d743121f59a5342368aec1111be31bd302f37fe13b9bccf1a709c"
     },
     {
+      "file": "desktop/tests/demo/governance-context.ts",
+      "sha256": "64101b53d72af7a3e9ba7559012b541bba2edf5f86a632940a9626c30fde84f2"
+    },
+    {
       "file": "desktop/tests/demo/index.ts",
-      "sha256": "cf3b8a471d6d14eb9ebb31efd5144898c661d54fb3365036da43fa142248ecf8"
+      "sha256": "76ea41a0b0737f4dcd316050b9043e32b840f0ff741c919257c876803efdbe50"
     },
     {
       "file": "desktop/tests/demo/kanban.ts",
@@ -62,7 +66,7 @@
     },
     {
       "file": "desktop/tests/demo/register.ts",
-      "sha256": "900f7391e4a98409f4e31f464414ab3ce4b7334656bc82d4b0645d6775293a22"
+      "sha256": "37dcf9a9b175b47ab0df4bf16a0ea2bc8a55f54e57a21326799fb940735fd660"
     },
     {
       "file": "desktop/tests/demo/requirements.ts",
@@ -90,7 +94,7 @@
     },
     {
       "file": "desktop/tests/demo/sessions.ts",
-      "sha256": "4d12a306288c4fccde3bcd26767d75f1e0dcc593cbca05ca1e54cb65477b3761"
+      "sha256": "0104bc5b8378b55f4f140e67107cc94a821328a07175dd6a37e315a289bf65f0"
     },
     {
       "file": "desktop/tests/demo/snapshots.ts",
@@ -102,15 +106,15 @@
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "430b618d59f3f3ef97143157d1b32f41f6e9760fa442815f243743c81942de11"
+      "sha256": "4ea580470967d0c51517e78d19a8c85b5b432c2f0fb0ec8acbdc59a0c610f8bb"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
-      "sha256": "ff9a1b1f2105fbec3fef08cf938ea34c08be7309e35c3863da6ead6cd8c27a68"
+      "sha256": "5c8a4137ada229c9d9c6864abb57d7c960ea1ce162449242993a41d73f79670b"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.js",
-      "sha256": "280f8c216dcda3a5f3d6f6ecd5f33d6cc0cd17a2f6872d40f3bba1b7f315a548"
+      "sha256": "4ba5f92d1561217a755f9c9cb80abd182a9c0ddaf42f97c14066690a2ade1949"
     },
     {
       "file": "src/bat_agent_connector/dashboard/i18n.js",
@@ -124,13 +128,18 @@
   "images": [
     {
       "file": "overview-en.png",
-      "sha256": "f97c01c518f84bfcf22154c1897282526290b4e4e059c77c8a83dea41beaaed5",
+      "sha256": "dbc6b5f0651a5d72456e0264645a3d52476398871f7b27bfaf48dffe10651896",
       "scenario": "overview",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 1517
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001",
       "fixture_sources": [
@@ -158,13 +167,18 @@
     },
     {
       "file": "discussions-en.png",
-      "sha256": "fcea3d162f1308593b9b7d0a031634069a58d4cbf3dc43092deb17dd817a6a70",
+      "sha256": "4ee4751e6e6808fc954e3dead11734d04a3dce9848c3523cced5c25ea50195b4",
       "scenario": "discussions",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/discussions/pmt_000000000000000000000000000002bf",
       "fixture_sources": [
@@ -192,13 +206,18 @@
     },
     {
       "file": "requirements-en.png",
-      "sha256": "5b096d2f27c5c40a6e8ef7ba74d3023bce06bf7e5994ac639db57c16af2bbc60",
+      "sha256": "f5e4cdd37e7faf758aaa29b0390b46b896c7d5a46436d75e085bafa368edf34a",
       "scenario": "requirements",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
-        "height": 960
+        "height": 1600
       },
+      "image_size": {
+        "width": 1440,
+        "height": 1600
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/requirements?select=wi_00000000000000000001",
       "fixture_sources": [
@@ -226,13 +245,18 @@
     },
     {
       "file": "issues-en.png",
-      "sha256": "fa79bf4bac725b6c0075f8443e911bac36babf66c6b99ac21a681986293cca79",
+      "sha256": "7b8c44e42bc339b91f73348bb72b7d9c2b77f7bf853af8f5f3a6fdb8e37e1e47",
       "scenario": "issues",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 1094
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/issues",
       "fixture_sources": [
@@ -267,6 +291,11 @@
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/schedule",
       "fixture_sources": [
@@ -301,6 +330,11 @@
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/dependencies",
       "fixture_sources": [
@@ -328,13 +362,18 @@
     },
     {
       "file": "board-en.png",
-      "sha256": "9f1cfd8df85461151abdb99c8560f82b9eecc1cc7f2fb6fb4e313c60088adefd",
+      "sha256": "a5e811b9e1894503c707866b6c61e5de497c009519acf18c503b4ddb69e2f3b0",
       "scenario": "board",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/board",
       "fixture_sources": [
@@ -369,6 +408,11 @@
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/session/demo-host/manual-reset-notes?from=overview",
       "fixture_sources": [
@@ -396,13 +440,18 @@
     },
     {
       "file": "overview-zh.png",
-      "sha256": "399b717e7ecd13e980bde450224ade12ef9ffe0cbce845ed79c43afee63e6dac",
+      "sha256": "c9dd559e3816554e720b1586b965124c3aa34cfb0b1e2f90931ced5148dd4103",
       "scenario": "overview",
       "locale": "zh-TW",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 1475
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001",
       "fixture_sources": [
@@ -430,13 +479,18 @@
     },
     {
       "file": "discussions-zh.png",
-      "sha256": "e956d4dde8eb900b0c85aa47b694976177b44bd22a0e342b14650295474fefd8",
+      "sha256": "41266bfdbbea1bca1dee627efe3057e0ceaa42dbf8a76371084939c3e88df6f6",
       "scenario": "discussions",
       "locale": "zh-TW",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/discussions/pmt_000000000000000000000000000002bf",
       "fixture_sources": [
@@ -464,13 +518,18 @@
     },
     {
       "file": "requirements-zh.png",
-      "sha256": "772a0fa994e49b3ab6330e40f939e03c09eb071ecfdb90856129d8044dcacaa9",
+      "sha256": "ecd00948909dc879ebee2d169e1eafc1d7bc96dfb305ac5bdb10533f615f8261",
       "scenario": "requirements",
       "locale": "zh-TW",
       "viewport": {
         "width": 1440,
-        "height": 960
+        "height": 1600
       },
+      "image_size": {
+        "width": 1440,
+        "height": 1600
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/requirements?select=wi_00000000000000000001",
       "fixture_sources": [
@@ -498,13 +557,18 @@
     },
     {
       "file": "issues-zh.png",
-      "sha256": "dd19eabf3f20b7879b20635a9c38331d70645b2ada70637c80ad6044455e29fe",
+      "sha256": "d7687c7ba7f4a0f57caef84963dc77c2266f6329a7ed1134580e20533d943595",
       "scenario": "issues",
       "locale": "zh-TW",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 1064
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/issues",
       "fixture_sources": [
@@ -539,6 +603,11 @@
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/schedule",
       "fixture_sources": [
@@ -573,6 +642,11 @@
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/dependencies",
       "fixture_sources": [
@@ -600,13 +674,18 @@
     },
     {
       "file": "board-zh.png",
-      "sha256": "cf64d3cc5be58f3a81c8665bc0cfef20b7f51ab8b81ace7231d3d6b96c9c3293",
+      "sha256": "0318f2beb4a901e75447d7ac9f67f45780eb407001495ca896ee0c5293a62360",
       "scenario": "board",
       "locale": "zh-TW",
       "viewport": {
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/board",
       "fixture_sources": [
@@ -641,6 +720,11 @@
         "width": 1440,
         "height": 960
       },
+      "image_size": {
+        "width": 1440,
+        "height": 960
+      },
+      "full_page": true,
       "theme": "light",
       "route": "/dashboard/#/session/demo-host/manual-reset-notes?from=overview",
       "fixture_sources": [

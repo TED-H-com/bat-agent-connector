@@ -110,6 +110,7 @@ for path in [
     ROOT / "docs/product/pm-v1.2-status.md",
     ROOT / "docs/product/pm-v1.2-history-through-2026-10-12.md",
     ROOT / "docs/handoff/2026-10-12-pm-v1.2.md",
+    ROOT / "docs/handoff/2026-10-14-docs-ux-v2.md",
     SITE / "README.md",
     SITE / "DESIGN.md",
     SITE / "images/README.md",
@@ -135,15 +136,21 @@ if not re.fullmatch(r"[0-9a-f]{40}", manifest.get("frontend_source_commit", ""))
     errors.append("Screenshot manifest must pin a full source commit.")
 if manifest.get("source_pin_kind") != "merged":
     errors.append("Public screenshots must use a merged source pin.")
-if manifest.get("frontend_source_commit") != "aba02180e872f798ea54aa003b267b14eb7f5018":
-    errors.append("Public screenshots must pin merged main at aba02180.")
+if manifest.get("frontend_source_commit") != "ab960ed23f734944470b982bd2f66b0c30300151":
+    errors.append("Public screenshots must pin merged main at ab960ed2.")
 for entry in manifest["images"]:
     path = SITE / "images" / entry["file"]
     if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
         errors.append(f"Screenshot does not match its capture manifest: {entry['file']}")
     language = "zh-TW" if entry["file"].endswith("-zh.png") else "en-US"
-    if entry.get("locale") != language or entry.get("theme") != "light" or entry.get("viewport") != {"width": 1440, "height": 960}:
+    height = 1600 if entry["scenario"] == "requirements" else 960
+    if entry.get("locale") != language or entry.get("theme") != "light" or entry.get("viewport") != {"width": 1440, "height": height}:
         errors.append(f"Screenshot has incorrect capture settings: {entry['file']}")
+    if path.is_file():
+        png = path.read_bytes()
+        size = {"width": int.from_bytes(png[16:20], "big"), "height": int.from_bytes(png[20:24], "big")}
+        if entry.get("image_size") != size or size["width"] != 1440 or size["height"] < height or entry.get("full_page") is not True:
+            errors.append(f"Screenshot is missing full-page dimensions: {entry['file']}")
     checks = entry.get("responsive_checks", [])
     if [check.get("viewport") for check in checks] != [390, 768, 1440] or any(
         check.get("horizontal_overflow") is not False or check.get("content", float("inf")) > check.get("viewport", 0)
