@@ -59,14 +59,14 @@ test('session summary reflects client reads, then removes them after scope loss'
  expect(bundle.sessions.sampled).toBeNull();expect(bundle.hosts).toEqual([]);expect(bundle.operations).toBeNull();
  expect(state.reads.slice(before).filter(path=>path.startsWith('/hosts')||path.startsWith('/operations')||path.startsWith('/managed/setup'))).toEqual([]);
 });
-for(const native of [false,true])test(`history counts use real message-response reading, survive inventory, and clear when absent (${native?'native':'browser'})`,async({page})=>{
+for(const native of [false,true])for(const omitReading of [false,true])test(`history counts use real message-response reading, survive inventory, and clear when ${omitReading?'reading':'reasons'} absent (${native?'native':'browser'})`,async({page})=>{
  const state=await diagnosticsFixture(page,native);state.sessionReads=true;
  await page.goto('/dashboard/#/session/private-box.internal/sample-1');await expect(page.getByText('Private history message',{exact:true})).toBeVisible();
  await page.goto('/dashboard/#/sessions');await expect(page.locator('.session-results')).toContainText('Private title');await open(page,'en');
  let bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
  expect(bundle.sessions.history_reasons).toEqual({archive_unconfirmed:1,archive_budget:1,message_ids:1});
  expect(JSON.stringify(bundle)).not.toContain('Private history message');
- await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();state.historyReasons=undefined;
+ await page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();state.historyReasons=undefined;state.omitReading=omitReading;
  await page.goto('/dashboard/#/session/private-box.internal/sample-1');await expect(page.getByText('Private history message',{exact:true})).toBeVisible();await open(page,'en');
  bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);expect(bundle.sessions.history_reasons).toBeNull();
 });

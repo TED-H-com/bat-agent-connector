@@ -20,7 +20,8 @@ installation with `manage`; other existing reads require `observe`. Session fact
 come from prior successful client reads and contain no conversation content.
 History reasons are sampled from message responses' top-level `reading` object;
 inventory refreshes retain that separate snapshot fact, and a later message read
-without reasons replaces it with unknown. Message content is never cached here.
+without reasons, including an absent `reading` object, replaces it with unknown.
+Message content is never cached here.
 Revocation clears cached counts and the preview; a revision fence rejects late
 reads. Connection changes clear the failure ring and retire previews.
 

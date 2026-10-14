@@ -52779,7 +52779,7 @@ async function api(method, path, body, key, collectReceipt) {
 				});
 			}
 			const messages = path.match(/^\/sessions\/([^/?]+)\/([^/?]+)\/messages(?:[/?]|$)/);
-			if (messages && data.reading) {
+			if (messages) {
 				const id = messages.slice(1).map(decodeURIComponent).join("/");
 				const history = sessionFacts({ reading: data.reading }).history_reasons;
 				diagnosticSessions.set(id, {

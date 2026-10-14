@@ -1,7 +1,7 @@
 import type {Page} from '@playwright/test';
 import {attentionFixture, mountAttention} from './attention-fixture.ts';
 export async function diagnosticsFixture(page:Page, native=false, known=true) {
- const base=attentionFixture(),state={projectsStatus:200,hostsStatus:200,hostStale:false,operationsStatus:200,eventStatus:200,sessionReads:false,historyReasons:['archive_unconfirmed','archive_budget','message_ids'] as string[]|undefined,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
+ const base=attentionFixture(),state={projectsStatus:200,hostsStatus:200,hostStale:false,operationsStatus:200,eventStatus:200,sessionReads:false,omitReading:false,historyReasons:['archive_unconfirmed','archive_budget','message_ids'] as string[]|undefined,scopes:['observe'],reads:[] as string[],hold:false,release:null as any,saved:[] as any[],sessions:[{host:'private-box.internal',session_id:'sample-1',title:'Private title',loaded:true,streaming:false,stale:false},{host:'private-box.internal',session_id:'sample-2',title:'Private title 2',loaded:false,streaming:true,stale:true,pending:{kind:'permission'}}] as any[]};
  const caps=()=>({...base.caps(),connector:'0.2.5',build:{version:'0.2.5',commit:known?'a'.repeat(40):null,source:'vcs'},scopes:state.scopes,
   hosts:[{host:'private-box.internal',writes:true}],managed_installation:undefined});
  const dispatch=async(input:any)=>{
@@ -16,7 +16,7 @@ export async function diagnosticsFixture(page:Page, native=false, known=true) {
   if(path==='/operations')return {status:state.operationsStatus,data:state.operationsStatus===200?{operations:[{operation_id:'op_'+'a'.repeat(32),action:'session.send',status:'failed',error_code:'BAT_ERROR',created_at:'2026-10-14T12:34:56Z',params:{prompt:'private prompt'},actor:'secret@example.invalid'}],next_before:123}:{error:{code:'FORBIDDEN'}}};
   if(path==='/sessions')return {status:200,data:{sessions:state.sessions,next_cursor:null}};
   if(state.sessionReads&&path==='/sessions/private-box.internal/sample-1')return {status:200,data:{session:state.sessions[0]}};
-  if(state.sessionReads&&path==='/sessions/private-box.internal/sample-1/messages')return {status:200,data:{host:'private-box.internal',session_id:'sample-1',messages:[{id:'history-1',role:'assistant',text:'Private history message',ts:'2026-10-14T12:34:56Z'}],next_offset:null,reading:{complete:false,unread_count:null,known_count:1,incomplete_reasons:state.historyReasons}}};
+  if(state.sessionReads&&path==='/sessions/private-box.internal/sample-1/messages')return {status:200,data:{host:'private-box.internal',session_id:'sample-1',messages:[{id:'history-1',role:'assistant',text:'Private history message',ts:'2026-10-14T12:34:56Z'}],next_offset:null,...(state.omitReading?{}:{reading:{complete:false,unread_count:null,known_count:1,incomplete_reasons:state.historyReasons}})}};
   if(state.sessionReads&&path.startsWith('/sessions/private-box.internal/sample-1/'))return {status:200,data:{pending:null,history:[],relations:[],labels:[]}};
   if(path.startsWith('/sessions/'))return {status:503,data:{error:{code:'BAT_ERROR',message:'Private server error /home/example/private'}}};
   if(path==='/events'&&state.eventStatus!==200)return {status:state.eventStatus,data:{error:{code:'FORBIDDEN'}}};
