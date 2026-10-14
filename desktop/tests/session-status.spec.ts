@@ -21,6 +21,8 @@ function fixture(zh: boolean) {
     const path = new URL(input.path, 'http://fixture').pathname;
     if (input.method !== 'GET') return base.dispatch(input);
     if (path === '/hosts') return {status: 200, data: {hosts: [{host: 'demo'}]}};
+    // A known, empty project catalog: the rail opens its session tree (#156 keeps it closed when the catalog is unknown).
+    if (path === '/projects') return {status: 200, data: {projects: []}};
     if (path === '/sessions') return {status: 200, data: {sessions: rows, next_cursor: null}};
     const session = rows.find(row => path === `/sessions/demo/${row.session_id}`);
     if (session) return {status: 200, data: {session}};
