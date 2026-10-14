@@ -28,7 +28,7 @@ var bool = (value) => typeof value === "boolean" ? value : null;
 var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var time = (value) => {
 	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
-	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T[\d:.+-]+Z?$/.test(value) ? value : null;
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 };
 var select = (value, values) => values.includes(value) ? value : null;
 var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));

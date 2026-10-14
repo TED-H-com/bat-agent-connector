@@ -12,7 +12,7 @@ const fixture=()=>({exportedAt:at,os:'linux',managed:true,locale:'en',width:1440
 test('allow-list excludes planted private data and preserves named facts',()=>{
  const out=buildDiagnostics(fixture()),text=JSON.stringify(out);
  for(const value of ['batc_planted_secret','SHA256:plantedfingerprint','private-box.internal','192.0.2.5','/home/example/private','C:\\Users\\example\\private','planted@example.invalid','private-session','Planted session title','Planted message text','Planted prompt','private-actor','private-ssh','private-branch','private-repository'])assert.ok(!text.includes(value),value);
- assert.equal(out.schema,'batc.diagnostics.v1');assert.equal(out.exported_at,at);assert.equal(out.hosts[0].policy.writes,true);assert.equal(out.hosts[0].policy.managed_roots_configured,true);
+ assert.equal(out.schema,'batc.diagnostics.v1');assert.equal(out.exported_at,at);assert.equal(buildDiagnostics({...fixture(),exportedAt:'2026-10-14T192.0.2.5'}).exported_at,null);assert.equal(out.hosts[0].policy.writes,true);assert.equal(out.hosts[0].policy.managed_roots_configured,true);
  assert.equal(out.sessions.loaded,1);assert.equal(out.sessions.history_reasons.message_ids_incomplete,1);
  assert.equal(out.operations[0].id,'op_'+'a'.repeat(32));assert.equal(out.recent_errors[0].path_template,'/v1/sessions/:host/:session');
 });

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import vm from "node:vm";
+import { errorRing } from "../desktop/src/diagnostics.js";
 
 // Browser assets are generated bundles; exercise the shared canonical source directly.
 const root = new URL("../desktop/src/", import.meta.url);
@@ -38,7 +39,7 @@ class FixtureNode {
 
 function render(language, effect, agent, declared = true) {
   const context = vm.createContext({
-    navigator: { language }, Node: FixtureNode, nativeDesktop: false, ...translations,
+    navigator: { language }, Node: FixtureNode, nativeDesktop: false, errorRing, ...translations,
     document: { createElement: () => new FixtureNode(), createTextNode: () => new FixtureNode(), addEventListener() {} },
   });
   vm.runInContext(dom + "\n" + i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
