@@ -80,6 +80,13 @@
   A text selection anchors its own row when rows above it change height.
   Withdrawn rows and their counts still disappear immediately.
 
+- Make compact Requirements rows hide their table header, size report controls for
+  touch, and compare only changed statements with unchanged context collapsed.
+  Requirement inspectors show acceptance criteria once and identify the qualifying
+  review. Overview keeps decision text clear and explains delivered work awaiting
+  this round's acceptance, with Requirements and sourced PM discussion links in
+  English and Traditional Chinese.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.

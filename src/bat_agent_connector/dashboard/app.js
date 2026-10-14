@@ -56,6 +56,9 @@ var overviewStrings = {
 		ov_accepted: "{accepted} of {total} accepted",
 		ov_requirements: "{n} requirements",
 		ov_adopted: "adopted {date}",
+		ov_acceptance_gap: "Work was delivered; acceptance against this round's criteria is still missing.",
+		ov_see_unaccepted: "See unaccepted",
+		ov_ask_pm: "Ask PM",
 		ov_attention: "Needs attention",
 		ov_milestones: "Milestones",
 		ov_deliveries: "Recent deliveries",
@@ -124,6 +127,9 @@ var overviewStrings = {
 		ov_accepted: "{total} 項中 {accepted} 項已驗收",
 		ov_requirements: "{n} 項需求",
 		ov_adopted: "{date} 採用",
+		ov_acceptance_gap: "已有交付紀錄，尚缺對應本輪接受條件的驗收。",
+		ov_see_unaccepted: "查看待驗收需求",
+		ov_ask_pm: "請 PM 整理",
 		ov_attention: "需要關注",
 		ov_milestones: "里程碑",
 		ov_deliveries: "近期交付",
@@ -301,6 +307,9 @@ var workViewStrings = {
 		wv_bound_work: "Bound work",
 		wv_work_unknown: "Bound work unknown",
 		wv_quality_review: "Quality review",
+		wv_review_number: "Quality review #{n}",
+		wv_review_basis: "Matches this plan, scope and every acceptance input.",
+		wv_review_criteria: "Review criteria",
 		wv_decisions_changes: "Decisions and changes",
 		wv_decisions_unknown: "Related records unknown",
 		wv_no_decisions: "No related decisions recorded",
@@ -389,6 +398,9 @@ var workViewStrings = {
 		wv_bound_work: "關聯工作",
 		wv_work_unknown: "關聯工作未知",
 		wv_quality_review: "品質審閱",
+		wv_review_number: "品質審閱 #{n}",
+		wv_review_basis: "符合本輪計畫、範圍與每項驗收條件。",
+		wv_review_criteria: "審閱條件",
 		wv_decisions_changes: "決策與變更",
 		wv_decisions_unknown: "相關紀錄未知",
 		wv_no_decisions: "尚無相關決策紀錄",
@@ -4028,14 +4040,15 @@ var workbenchStrings = {
 		wb_previous: "Previous report",
 		wb_next: "Next report",
 		wb_history: "Report version",
-		wb_history_more: "Load more report versions",
+		wb_history_more: "More versions",
 		wb_snapshot: "Report #{number}",
 		wb_historical: "Historical report",
 		wb_saved: "Saved report",
 		wb_plan: "Referenced plan",
 		wb_full_plan: "Full plan",
-		wb_compare: "Compare with previous report",
-		wb_print: "Print report",
+		wb_compare: "Compare",
+		wb_compare_previous: "Compare with {report}",
+		wb_print: "Print",
 		wb_discuss: "Discuss with PM",
 		wb_review: "Review plan updates",
 		wb_definition: "Purpose & success",
@@ -4044,15 +4057,19 @@ var workbenchStrings = {
 		wb_resources: "Resources & budget",
 		wb_risks: "Risks & dependencies",
 		wb_decisions: "Open decisions",
+		wb_no_reports: "No saved reports",
 		wb_no_snapshot: "Start a discussion with PM, then save a report of the available information. Incomplete information is welcome.",
 		wb_no_plan: "No adopted plan in this report",
 		wb_quota: "Usage and remaining quota: not provided",
 		wb_no_decisions: "No open decisions recorded in this report.",
 		wb_partial: "Some sources are missing, filtered or outside the loaded range.",
 		wb_comparison: "Report changes",
-		wb_before: "Previous report",
-		wb_after: "Selected report",
+		wb_before: "Before",
+		wb_after: "After",
 		wb_unchanged: "No changes in the six report sections.",
+		wb_unchanged_count: "Unchanged ({n})",
+		wb_added: "Added",
+		wb_removed: "Removed",
 		wb_loading: "Reading saved sources…",
 		wb_current: "Current records",
 		wb_requirements: "Requirement",
@@ -4112,14 +4129,15 @@ var workbenchStrings = {
 		wb_previous: "上一份報告",
 		wb_next: "下一份報告",
 		wb_history: "報告版本",
-		wb_history_more: "載入更多報告版本",
+		wb_history_more: "更多版本",
 		wb_snapshot: "報告 #{number}",
 		wb_historical: "歷史報告",
 		wb_saved: "已保存報告",
 		wb_plan: "引用的計畫",
 		wb_full_plan: "完整計畫",
-		wb_compare: "與上一份報告比較",
-		wb_print: "列印報告",
+		wb_compare: "比較",
+		wb_compare_previous: "與{report}比較",
+		wb_print: "列印",
 		wb_discuss: "與 PM 討論",
 		wb_review: "審閱計畫更新",
 		wb_definition: "目的與成功條件",
@@ -4128,15 +4146,19 @@ var workbenchStrings = {
 		wb_resources: "資源與預算",
 		wb_risks: "風險與相依",
 		wb_decisions: "待決事項",
+		wb_no_reports: "尚無已保存報告",
 		wb_no_snapshot: "先與 PM 討論，再保存目前資訊的報告。資訊不完整也可以開始。",
 		wb_no_plan: "這份報告尚無已採用計畫",
 		wb_quota: "用量與剩餘配額：來源未提供",
 		wb_no_decisions: "這份報告尚未記錄待決事項。",
 		wb_partial: "部分來源缺少、已過濾，或尚未載入。",
 		wb_comparison: "報告變更",
-		wb_before: "上一份報告",
-		wb_after: "選取的報告",
+		wb_before: "變更前",
+		wb_after: "變更後",
 		wb_unchanged: "六個摘要區塊沒有變更。",
+		wb_unchanged_count: "未變更（{n}）",
+		wb_added: "新增",
+		wb_removed: "移除",
 		wb_loading: "正在讀取已保存來源…",
 		wb_current: "目前紀錄",
 		wb_requirements: "需求",
@@ -12876,9 +12898,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		}
 		panel.querySelector("[data-work-discuss]").href = href;
 		if (data.error) {
-			panel.body.replaceChildren(h$1("section", { "data-work-section": "error" }, paragraph(t("wv_detail_unavailable")), button({
-				label: t("wv_retry"),
-				onClick: data.onRetry
+			panel.body.replaceChildren(h$1("section", { "data-work-section": "error" }, inlineError({
+				error: { message: t("wv_detail_unavailable") },
+				retry: data.onRetry
 			})), disclosure({
 				label: t("wv_details"),
 				body: paragraph(labelSegment(data.error.code))
@@ -12957,7 +12979,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				}
 				return pill;
 			};
-			served.replaceChildren(h$1("h3", {}, t("wv_criteria")), statusPill(data.acceptance || "unknown"), h$1("ul", {}, ...(requirement.acceptance || []).map((item) => h$1("li", {}, labelSegment(item.text), " ", criterionPill(item)))));
+			served.replaceChildren(h$1("h3", {}, t("wv_criteria")), ...data.acceptance === "accepted" && requirement.acceptance?.length ? [] : [statusPill(data.acceptance || "unknown")], h$1("ul", {}, ...(requirement.acceptance || []).map((item) => h$1("li", {}, labelSegment(item.text), " ", criterionPill(item)))));
 			state.dataset.workSection = "work";
 			state.querySelector("h3").textContent = t("wv_bound_work");
 			for (const work of data.work || []) state.append(paragraph(button({
@@ -12969,8 +12991,16 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			if (data.workIncomplete) state.append(statusPill("partial"));
 			for (const row of data.milestones || []) state.append(paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}` }, row.title)));
 			const review = data.reviews?.at(-1);
-			if (review) result.append(statusPill("accepted"), paragraph(t("wv_quality_review")), h$1("ul", {}, ...(review.assessment?.document?.criteria || []).filter((row) => row.criterion?.requirement_id === requirement.id).map((row) => h$1("li", {}, labelSegment(requirement.acceptance?.find((item) => item.source_input_id === row.criterion.input_id)?.text), " ", statusPill(row.status === "accepted" ? "accepted" : "unknown")))));
-			else {
+			if (review) {
+				const criteria = (review.assessment?.document?.criteria || []).filter((row) => row.criterion?.kind === "acceptance" && row.criterion.requirement_id === requirement.id);
+				const breakdown = disclosure({
+					label: t("wv_review_criteria"),
+					key: `${workspaceId}:${requirement.id}:review-criteria`,
+					body: h$1("ul", {}, ...criteria.map((row) => h$1("li", {}, labelSegment(requirement.acceptance?.find((item) => item.source_input_id === row.criterion.input_id)?.text), " ", statusPill(row.status === "accepted" ? "accepted" : "unknown"))))
+				});
+				breakdown.dataset.requirementReviewCriteria = "";
+				result.append(paragraph(t("wv_review_number", { n: review.sequence }), " · ", stamp(review.assessment?.created_at ?? review.created_at)), paragraph(t("wv_review_basis")), breakdown);
+			} else {
 				const work = (data.work || []).filter((work) => work.latest_capture).sort((a, b) => (b.latest_capture.captured_at || 0) - (a.latest_capture.captured_at || 0))[0];
 				if (work) result.append(h$1("div", { "data-requirement-capture": "" }, paragraph(work.work.title), paragraph(t("pm_kanban_capture"), " · ", stamp(work.latest_capture.captured_at)), ...captureFacts(work.latest_capture)));
 				if (data.acceptance === "unknown") result.append(paragraph(t("wv_acceptance_unknown")));
@@ -16029,11 +16059,45 @@ function charterSections(snapshot) {
 		decisions: items("decisions").filter((row) => row.source?.kind !== "plan_adoption")
 	};
 }
+function statementChanges(before, after) {
+	const identity = (row) => row.input_id || row.source?.input_id || row.source?.evidence_id || row.source?.work_item_id;
+	const equal = (a, b) => a.text === b.text && a.status === b.status;
+	const remaining = [...after], unchanged = [], pairs = [];
+	for (const row of before) {
+		const id = identity(row);
+		let index = id ? remaining.findIndex((other) => identity(other) === id) : -1;
+		if (index < 0) index = remaining.findIndex((other) => equal(row, other));
+		if (index < 0) pairs.push({
+			before: row,
+			after: null
+		});
+		else {
+			const [other] = remaining.splice(index, 1);
+			if (equal(row, other)) unchanged.push(other);
+			else pairs.push({
+				before: row,
+				after: other
+			});
+		}
+	}
+	pairs.push(...remaining.map((row) => ({
+		before: null,
+		after: row
+	})));
+	return {
+		pairs,
+		unchanged
+	};
+}
 function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead, onChange = () => {}, onControls = () => {} }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const preference = viewState(namespace, workspaceId, "overview");
 	let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
-	const status = h("div", { role: "status" }), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
+	const status = h("div", {
+		role: "status",
+		class: "pm-report-status",
+		"data-report-status": ""
+	}), report = h("div", { class: "pm-charter-report" }), comparison = h("div");
 	const title = input("pm_brief_snapshot_title", {
 		max: 160,
 		required: false
@@ -16053,6 +16117,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			body: labelled("pm_brief_snapshot_title", title)
 		})
 	});
+	for (const node of create.box.querySelectorAll("button")) node.classList.add("ui-button", "ui-md");
 	const previous = iconButton({
 		icon: "chevron-left",
 		label: t("wb_previous"),
@@ -16067,23 +16132,23 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		"aria-label": t("wb_history"),
 		onchange: () => void select(picker.value)
 	});
-	const compare = h("button", {
+	const compare = button({
 		"data-report-compare": "",
-		type: "button",
-		class: "secondary",
-		onclick: () => void comparePrevious()
-	}, t("wb_compare"));
-	const more = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void loadMore()
-	}, t("wb_history_more"));
-	const print = h("button", {
+		variant: "secondary",
+		label: t("wb_compare"),
+		onClick: () => void comparePrevious()
+	});
+	const more = button({
+		variant: "ghost",
+		label: t("wb_history_more"),
+		onClick: () => void loadMore()
+	});
+	const print = button({
 		"data-report-print": "",
-		type: "button",
-		class: "secondary",
-		onclick: () => window.print()
-	}, t("wb_print"));
+		variant: "ghost",
+		label: t("wb_print"),
+		onClick: () => window.print()
+	});
 	const primary = discussLink({
 		workspaceId,
 		from: "overview"
@@ -16091,7 +16156,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	const box = h("section", {
 		class: "pm-charter",
 		"data-pm-charter": ""
-	}, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_charter")), primary), h("div", { class: "pm-workbench-toolbar" }, previous, picker, next, compare, print), status, report, comparison, h("div", { class: "pm-charter-save" }, create.box, more));
+	}, h("header", { class: "pm-heading" }, h("h2", {}, t("wb_charter")), primary), h("div", { class: "pm-workbench-toolbar" }, previous, picker, next, compare, print, status), report, comparison, h("div", { class: "pm-charter-save" }, create.box, more));
 	const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({
 		h,
 		t,
@@ -16122,6 +16187,9 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	}
 	function controls() {
 		const index = history.findIndex((row) => row.snapshot_id === selectedId);
+		const prior = history[index - 1];
+		if (prior) compare.setAttribute("aria-description", t("wb_compare_previous", { report: t("wb_snapshot", { number: prior.sequence }) }));
+		else compare.removeAttribute("aria-description");
 		previous.disabled = busy || index <= 0;
 		next.disabled = busy || index < 0 || index >= history.length - 1;
 		compare.disabled = previous.disabled;
@@ -16173,6 +16241,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		report.replaceChildren();
 		comparison.replaceChildren();
 		if (!snapshot) {
+			status.replaceChildren(emptyState({ title: t("wb_no_reports") }));
 			report.append(h("p", {}, t("wb_no_snapshot")));
 			historyOptions();
 			return;
@@ -16371,8 +16440,38 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			status.replaceChildren();
 			render();
 			const left = charterSections(before), right = charterSections(snapshot);
-			const changes = sections.filter((key) => JSON.stringify(left[key]) !== JSON.stringify(right[key]));
-			comparison.append(h("h3", {}, t("wb_comparison")), changes.length ? h("div", { class: "pm-charter-comparison" }, ...changes.map((key) => h("section", {}, h("h4", {}, t("wb_" + key)), h("div", { class: "pm-charter-grid" }, h("div", {}, h("strong", {}, t("wb_before")), renderItems(left[key])), h("div", {}, h("strong", {}, t("wb_after")), renderItems(right[key])))))) : h("p", {}, t("wb_unchanged")));
+			const changes = sections.map((key) => ({
+				key,
+				...statementChanges(left[key], right[key])
+			})).filter((row) => row.pairs.length);
+			const statement = (row) => h("p", {}, labelSegment(row.text), [
+				"agent_assumption",
+				"unresolved",
+				"conflicting",
+				"repo_evidence"
+			].includes(row.status) ? h("span", { class: "chip" }, t("pm_status_" + row.status)) : null);
+			const side = (row, label, report, change) => h("div", { "data-report-side": label }, h("strong", {}, t("wb_" + label)), h("span", { class: "pm-report-identity" }, t("wb_snapshot", { number: report.sequence }), " · ", report.title), change ? h("span", { "data-report-change": change }, t("wb_" + change)) : null, statement(row));
+			comparison.append(h("h3", {}, t("wb_comparison")), changes.length ? h("div", { class: "pm-charter-comparison" }, ...changes.map(({ key, pairs, unchanged }) => h("section", { "data-report-section": key }, h("h4", {}, t("wb_" + key)), ...pairs.map((pair) => h("div", {
+				class: "pm-report-pair",
+				"data-report-pair": ""
+			}, pair.before ? side(pair.before, "before", before, pair.after ? null : "removed") : null, pair.after ? side(pair.after, "after", snapshot, pair.before ? null : "added") : null)), unchanged.length ? disclosure({ element: h("details", { "data-report-unchanged": "" }, h("summary", {}, t("wb_unchanged_count", { n: unchanged.length })), h("ul", {}, ...unchanged.map((row) => h("li", {}, statement(row))))) }) : null))) : h("p", {}, t("wb_unchanged")));
+			if (changes.length) comparison.append(disclosure({
+				label: t("wv_details"),
+				body: h("pre", { class: "mono" }, JSON.stringify({
+					before: {
+						snapshot_id: before.snapshot_id,
+						snapshot_digest: before.snapshot_digest,
+						view_digest: before.view_digest,
+						sections: left
+					},
+					after: {
+						snapshot_id: snapshot.snapshot_id,
+						snapshot_digest: snapshot.snapshot_digest,
+						view_digest: snapshot.view_digest,
+						sections: right
+					}
+				}, null, 2))
+			}));
 		} catch (error) {
 			failed(error, ticket);
 		} finally {
@@ -16599,6 +16698,22 @@ function workspaceOverview(options) {
 	}
 	function statusStrip(data, fixed = false) {
 		const p = data?.progress, complete = p && classes.every((key) => Number.isSafeInteger(p[key]));
+		const acceptanceGap = !fixed && complete && p.complete === true && Number.isSafeInteger(p.requirements) && p.accepted < p.requirements && data.recent_deliveries?.length > 0;
+		const progressTitle = acceptanceGap ? `${t("ov_progress")} · ${t("ov_accepted", {
+			accepted: p.accepted,
+			total: p.requirements
+		})}` : "";
+		const askProgress = acceptanceGap ? discussLink({
+			workspaceId,
+			refs: refs(),
+			title: progressTitle,
+			from: "overview"
+		}, {
+			"data-overview-ask-progress": "",
+			"data-overview-link": "status:progress:discuss",
+			class: "ui-button ghost ui-sm"
+		}) : null;
+		if (askProgress) askProgress.textContent = t("ov_ask_pm");
 		const goalReason = (data?.unknown || []).find((row) => row.field === "plan.goal")?.reason;
 		const goal = metric({
 			label: t("ov_goal"),
@@ -16614,7 +16729,12 @@ function workspaceOverview(options) {
 				accepted: p.accepted,
 				total: p.requirements
 			}) : t("ov_requirements", { n: p.requirements }),
-			context: h("div", {}, fixed && p ? h("div", {}, t("ov_requirements", { n: p.requirements })) : p && !complete ? statusPill("partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
+			context: h("div", {}, fixed && p ? h("div", {}, t("ov_requirements", { n: p.requirements })) : p && !complete ? statusPill("partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, acceptanceGap ? h("div", { "data-overview-acceptance-gap": "" }, h("p", { class: "pm-overview-acceptance-gap" }, t("ov_acceptance_gap")), h("div", { class: "pm-overview-progress-actions" }, h("a", {
+				class: "ui-button ghost ui-sm",
+				href: `#/pm/${encodeURIComponent(workspaceId)}/requirements`,
+				"data-overview-unaccepted": "",
+				"data-overview-link": "status:progress:requirements"
+			}, t("ov_see_unaccepted")), askProgress)) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
 			bar: complete ? classes.map((key, i) => ({
 				tone: tones[i],
 				value: p[key]
@@ -16635,7 +16755,10 @@ function workspaceOverview(options) {
 			const node = metric({
 				label: t(kind === "blocker" ? "ov_blockers" : "ov_decisions"),
 				value: data?.attention_counts?.[kind] ?? null,
-				context: h("div", {}, itemLink(first, "status"), kind === "decision" && first ? discuss(first, "status") : null, kind === "decision" && !fixed ? recentDecisions(data) : null)
+				context: h("div", {}, kind === "decision" && first ? h("div", {
+					class: "pm-overview-decision-row",
+					"data-overview-open-decision": first.key
+				}, itemLink(first, "status"), discuss(first, "status")) : itemLink(first, "status"), kind === "decision" && !fixed ? recentDecisions(data) : null)
 			});
 			node.dataset.overviewMetric = kind;
 			return node;
@@ -17153,7 +17276,8 @@ function workspaceOverview(options) {
 					projection.recent_decisions,
 					projection.recent_decisions_count,
 					projection.recent_decisions_complete,
-					projection.recent_decisions_truncated
+					projection.recent_decisions_truncated,
+					projection.recent_deliveries.length > 0
 				],
 				render: () => statusStrip(projection)
 			},
