@@ -71,8 +71,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "These redesigned views are a candidate preview at 944a854f, not merged main. Backend #132, decision loop #134 and frontend #133 are not merged yet. Match a validated package to its source before installing.",
-        "這組改版介面與截圖來自候選 commit 944a854f，尚非主線。後端 #132、決策流程 #134、前端 #133 都尚未合併；安裝前請核對套件來源與驗證紀錄。",
+        "These redesigned views are a candidate preview at 944a854f, not merged main. Backend #132 merged as 0c354861 on October 13, 2026; it is not installed or live-tested. Decision-loop backend #134 and frontend #133 remain unmerged; the walkthrough belongs to #133. Match a validated package to its source before installing.",
+        "這組改版介面與截圖來自候選 commit 944a854f，尚非主線。後端 #132 已於 2026 年 10 月 13 日以 0c354861 合併；尚未安裝或實機驗收。決策流程後端 #134 與前端 #133 尚未合併，操作旅程腳本屬於 #133。安裝前請核對套件來源與驗證紀錄。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -578,14 +578,14 @@ for label, lz, en, zh in [
     (
         "Merged main",
         "已合併主線",
-        "Desktop and central foundation; PM plans, quality/dependency evidence, bounded dispatch, policy-bounded repairs, BAT proposals/Follow-up and AHP read-only observation.",
-        "桌面與中央底座、PM 計畫、品質／依賴證據、有界派工、政策內修復、BAT 提案／Follow-up 及 AHP 唯讀觀察。",
+        "Desktop and central foundation; PM plans, quality/dependency evidence, bounded dispatch, policy-bounded repairs, BAT proposals/Follow-up and AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets.",
+        "桌面與中央底座、PM 計畫、品質／依賴證據、有界派工、政策內修復、BAT 提案／Follow-up 及 AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶。",
     ),
     (
         "Candidate work",
         "候選工作",
-        "The redesign connects live Overview, source-bound Discussions, RTM inspectors, the register, Schedule, Dependencies, Agents, Board and Session. Backend #132, decision loop #134 and frontend #133 are not merged yet. M4/M5 retain their separate historical status.",
-        "改版串起即時總覽、來源討論、需求詳情、登記表、時程、技術相依、Agent 資源、看板與工作階段。後端 #132、決策流程 #134、前端 #133 都尚未合併；M4／M5 的歷史狀態另列。",
+        "The redesign connects live Overview, source-bound Discussions, RTM inspectors, the register, Schedule, Dependencies, Agents, Board and Session. Decision-loop backend #134 and frontend #133, including the walkthrough, are not merged yet. M4/M5 retain their separate historical status.",
+        "改版串起即時總覽、來源討論、需求詳情、登記表、時程、技術相依、Agent 資源、看板與工作階段。決策流程後端 #134 與前端 #133（含操作旅程腳本與截圖）尚未合併；M4／M5 的歷史狀態另列。",
     ),
     (
         "Still ahead",

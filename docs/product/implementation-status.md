@@ -13,23 +13,28 @@ Python Connector／Task Service 保持唯一中央權威；Web／Tauri 共用 `d
 
 | 項目 | 分支交付 | 合併狀態 |
 | --- | --- | --- |
-| [#132 後端](https://github.com/teddashh/bat-agent-connector/pull/132) | 固定相依清冊／impact、唯讀時程、登記、每日資源桶、即時總覽、討論來源／改名及提案可採用性 | 尚未合併 |
-| [#134 決策流程](https://github.com/teddashh/bat-agent-connector/pull/134) | 真中央 walkthrough、scripted analysis、暫存 Git 與原 key 採用恢復；Return 的 Overview 投影缺口仍記在來源文件 | 尚未合併；未宣稱完整 walkthrough 通過 |
-| [#133 前端](https://github.com/teddashh/bat-agent-connector/pull/133) | Overview／Discussions／Requirements／Schedule／Dependencies／Issues & changes／Agents／Board；Session 保留 managed 操作與人工唯讀 | 尚未合併 |
+| [#132 後端](https://github.com/teddashh/bat-agent-connector/pull/132) | 固定相依清冊／impact、唯讀時程、登記、每日資源桶、即時總覽、討論來源／改名及提案可採用性的中央讀取與操作 | 2026-10-13 以 `0c354861` 合併至 main；尚未安裝或實機驗收 |
+| [#134 決策流程後端](https://github.com/teddashh/bat-agent-connector/pull/134) | `feat/pm-overview-decision-loop`：保留採用後目標、`recent_decisions`、跨版本原需求 ID 的阻礙比對及採用後問題結案引導；結案不代表需求驗收 | 尚未合併；不在圖庫候選 `944a854f` 中 |
+| [#133 前端](https://github.com/teddashh/bat-agent-connector/pull/133) | Overview／Discussions／Requirements／Schedule／Dependencies／Issues & changes／Agents／Board；Session 保留 managed 操作與人工唯讀；包含 [walkthrough 腳本](../../desktop/tests/pm-walkthrough.mjs)與截圖 | 尚未合併 |
 
 即時總覽與已存報告分開。原紀錄的討論入口保留來源標籤與自動標題。
 RTM 共用詳情、甘特圖、相依矩陣／圖、登記時間線及每日資源趨勢已在分支。
 來源撤回、unknown／partial、草稿與原操作 key 不因改版改變。
-先前本節將這輪管理合約寫成主線，現依候選 PR 狀態修正。
+#134 依固定欄位順序讀取已確認輸入中的目標，並比較 current／blocked／absent 需求 ID。
+問題已解決的回報使用既有 `pm.governance.revise`，須在新版本採用後進行。
+整合者回報 #134 的 GitHub CI 通過；Python 3.14 完整套件為 6322 passed、48 skipped、0 failed。
+交接時 Python 3.10 仍在執行；本文件工作線未重跑或重查這些結果。
 
 | 層級 | 狀態 |
 | --- | --- |
 | 分支整合（branch） | 本頁描述 `944a854f` 候選；公開圖庫用同一個合成會員專案，沒有 native／live 效果。 |
-| 主線（merged） | #132／#134／#133 尚未合併；既有 #121 Charter／RTM 與 #122 本機資源不代表本輪完成。 |
-| 安裝／原生驗收（installed/native） | 尚無此候選的安裝／原生驗收回執。 |
-| 實機驗收（live-tested） | 尚無此候選的實際 BAT／provider／模型／部署驗收回執；CI 與截圖不代替實機證據。 |
+| 主線（merged） | #132 已於 2026-10-13 以 `0c354861` 合併；#134／#133 尚未合併。既有 #121 Charter／RTM 與 #122 本機資源不代表本輪完成。 |
+| 安裝／原生驗收（installed/native） | #132 尚未安裝；尚無前端候選的安裝／原生驗收回執。 |
+| 實機驗收（live-tested） | #132 尚未實機驗收；尚無前端候選的實際 BAT／provider／模型／部署驗收回執；CI 與截圖不代替實機證據。 |
 
-接續工作為最終來源 review／完整 checks、walkthrough 缺口收斂及合併後重釘公開圖庫。
+候選 `944a854f` 的 walkthrough 仍停在 Return，因為該樹未含 #134 的目標與決策資料。
+#133 整合已合併的 #132 與候選 #134 後，再記錄完整端到端結果。
+接續工作為最終來源 review／完整 checks、#134／#133 合併及重釘公開圖庫。
 安裝與實機驗收另行留證；遠端資源收集、交付效率歸因、一般 native coding、AHP 寫入、
 其餘文件／簡報與完整 PM v1.2 backlog 仍待完成。
 詳見[本輪進度草稿](progress-2026-10-14.md)、[PM 狀態](pm-v1.2-status.md)與
