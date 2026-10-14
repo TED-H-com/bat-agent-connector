@@ -10,7 +10,7 @@ const terminal = value => ['succeeded', 'failed', 'cancelled'].includes(value?.s
 const admissionRefusals = {INVALID_PARAMS: 422, INVALID_TARGET: 422, NAME_TAKEN: 409,
   PROJECT_NOT_FOUND: 404, WORK_ITEM_NOT_FOUND: 404, PROJECT_ARCHIVED: 409,
   WORK_ITEM_ARCHIVED: 409, WRONG_PROJECT: 409};
-export function createRecordForm({h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, errorBox, opStatus}) {
+export function createRecordForm({h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, onStateChange = () => {}, errorBox, opStatus}) {
   const project = kind === 'project', action = project ? 'project.create' : 'work_item.create';
   const target = project ? {} : {project_id: projectId}, key = `batc.create.${namespace}.${kind}.${projectId || 'root'}`;
   const primary = project ? 'name' : 'title', fields = new Map(), choices = new Map();
@@ -127,6 +127,7 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
     create.textContent = t(saved.intent ? 'create_check_original' : project ? 'add_project' : 'add_item');
     review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal(operation) && operation.status !== 'succeeded');
     review.disabled = busy || !allowed || !permitted();
+    onStateChange();
   }
   if (damaged) status.replaceChildren(h('p', {class: 'error'}, t('create_invalid_draft')));
   update();

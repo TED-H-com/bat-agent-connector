@@ -205,7 +205,8 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   test('source read failure clears prior facts and blocks new investment',async({page})=>{
     const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Keep the released version');f.state.failed=true;f.base.state.cursor++;
-    await expect(activity(page).getByRole('heading',{name:'Activity unavailable',exact:true})).toBeVisible({timeout:10000});
+    await expect(activity(page).locator('[data-error-summary]')).toHaveText('Workspace state unavailable', {timeout:10000});
+    await expect(activity(page).locator('[data-api-error]')).toHaveCount(1);
     await expect(activity(page)).not.toContainText('Keep the released version');await expect(activity(page).locator('[data-pm-lifecycle-operation]')).toHaveCount(0);
     const editor=await edit(page,'reopen');await expect(editor.getByRole('button',{name:'Reopen workspace',exact:true})).toBeDisabled();
   });

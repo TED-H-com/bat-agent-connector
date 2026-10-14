@@ -144,6 +144,22 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await expect(form).toContainText('Draft storage unavailable'); expect(f.state.writes).toHaveLength(0);
   });
 
+  test('work item recovery stays open and uses the original request after reload', async ({page}) => {
+    const f = fixture(); f.state.lost = true; await mountConversation(page, native, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid); await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    await form.getByLabel('New work item', {exact: true}).fill('Recover this creation');
+    await form.getByRole('button', {name: 'Add', exact: true}).click();
+    await expect(form).toContainText('Original reply unavailable');
+    await expect(form.getByRole('button', {name: 'Cancel', exact: true})).toHaveCount(0);
+    await page.reload(); await expect(form).toBeVisible();
+    await expect(page.locator('[data-project-work-create]')).toBeHidden();
+    await expect(form.getByLabel('New work item', {exact: true})).toHaveValue('Recover this creation');
+    await form.getByRole('button', {name: 'Check original request', exact: true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(2);
+    expect(f.state.writes[1]).toEqual(f.state.writes[0]); await expect(form).toBeHidden();
+  });
+
   test('observe scope and archived projects keep creation disabled',async({page})=>{
     const f=fixture(); f.state.manage=false; await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects');
     const project=page.locator('[data-create-record="project"]');

@@ -3382,16 +3382,18 @@ async function viewProject(main, pid) {
   const out = h("div", {});
   const archived = h("div", {});
   const showArchived = h("input", { type: "checkbox" });
+  let createClose;
   const create = createRecordForm({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     namespace: connection.namespace, kind: "work_item", projectId: pid, showScope: false, errorBox, opStatus,
-    onCreated: async () => {createOpen = false; await render();}});
+    onStateChange: () => {if (createClose) createClose.hidden = create.pending();},
+    onCreated: async () => {createOpen = false; await render(); if (!createToggle.hidden) createToggle.focus();}});
   let createOpen = create.pending();
   const createToggle = button({variant: 'primary', label: t('new_item_title'), 'data-project-work-create': '',
     onClick: () => {
       createOpen = true; create.box.hidden = false; createToggle.hidden = true;
       create.box.querySelector('input')?.focus();
     }});
-  const createClose = button({variant: 'secondary', label: t('cancel'), onClick: () => {
+  createClose = button({variant: 'secondary', label: t('cancel'), onClick: () => {
     if (create.pending()) return;
     createOpen = false; create.box.hidden = true; createToggle.hidden = false; createToggle.focus();
   }});
