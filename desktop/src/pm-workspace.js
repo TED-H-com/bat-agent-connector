@@ -909,9 +909,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   function refreshStaleVisible() {
     if (!loaded) return Promise.resolve();
     const reads = [];
-    for (const section of staleSections) if (sectionVisible(section)) {maskSource(section); reads.push(refreshSection(section, true));}
+    for (const section of staleSections) if (sectionVisible(section)) {
+      maskSource(section);
+      // View activation and disclosure toggles can arrive in the same turn.
+      // Share their opening read; event reads still require a post-event read.
+      if (!openingReads.has(section)) openingReads.set(section, refreshSection(section, true).finally(() => openingReads.delete(section)));
+      reads.push(openingReads.get(section));
+    }
     return settleRefreshes(reads);
   }
+  const openingReads = new Map();
   function invalidateSections() {
     for (const section of sectionModules()) if (!sectionVisible(section)) {staleSections.add(section); maskSource(section);}
   }
@@ -1308,7 +1315,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   async function load({event = false} = {}) {
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
-    if (!event) {lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
+    if (!event) {invalidateSections(); lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
     try {
       alive(); const list = event ? {workspaces:lastList} : await api('GET', '/pm/workspaces'); alive();
@@ -1403,9 +1410,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         alive(); if (ticket !== sequence) return;
       }
       worktreeChoice?.update();
+      // Restore workspace visibility before choosing its readable sections, also
+      // when recovering from a withdrawn workspace. The workbench keeps other
+      // views hidden and their first/manual refresh deferred until opened.
+      for (const section of sourceSections()) section.hidden = false;
+      workbench?.apply();
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         const lazy = lazyThreadSections.get(section);
-        if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)
+        if (section && sectionRequired(section) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)
           && (!threadId || section !== meetings || sectionVisible(section))) {
           // The initial view activation already started its projection read.
           // Reuse that read rather than replacing its just-rendered status.
@@ -1417,8 +1429,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         alive(); if (ticket !== sequence) return;
       }
       nativeAnalysis?.update(runs?.runs || []);
-      for (const section of sourceSections()) section.hidden = false;
-      workbench?.apply();
       const stage = lifecycle?.phase?.(); phasePill.hidden = !stage;
       phasePill.textContent = stage && ['idea','planning','development','maintain','paused','closed'].includes(stage) ? t('ui_phase_' + stage) : '';
       publishContext(); brief?.setActive?.(workbench?.selected() === 'overview');

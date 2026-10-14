@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- PM workspaces load the selected view and open secondary tools on demand,
+  including on first load and manual Refresh. Hidden event updates wait until
+  opened, while workspace withdrawal and lifecycle admission checks remain intact.
+
 - The member sign-in demo names its human participant `mei.lin` while retaining
   the existing read-only role, agent names and stable record identities.
 

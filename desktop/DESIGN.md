@@ -29,6 +29,14 @@ withdraw admission before reading; a policy event in a coalesced page still clos
 the gates. Failed or withdrawn lifecycle reads clear the prior policy, and older
 responses cannot restore it.
 
+The initial workspace snapshot and manual Refresh follow the same visibility rule:
+only the selected view and its open secondary tools read their projections. Unopened
+sections remain stale and load through the existing view/disclosure path. Opening
+toggles share a pending opening read, while event reads still require a post-event
+read before acknowledgment. Shared shell/workspace reads and lifecycle admission
+remain available independently of the selected view. Workspace withdrawal clears
+all modules, including unopened ones, before any later reply can reveal data.
+
 ## Tokens and type
 
 `src/ui/tokens.css` is the colour and type source of truth. Use semantic variables,

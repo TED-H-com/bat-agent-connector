@@ -1,6 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, openThreadBrief} from './pm-navigation.ts';
 import {handoffFixture} from './pm-package-handoff-fixture.ts';
 import {pmRoute} from './pm-fixture.ts';
 import {workbenchFixture, route, workspaceId} from './pm-workbench-fixture.ts';
@@ -116,6 +116,7 @@ for (const locale of ['en-US', 'zh-TW']) test(`PM views hide missing values (${l
   await assertNoMissingLabels(page);
 
   await page.goto(pmRoute);
+  await openThreadBrief(page);
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   const unknown = zh ? '未知' : 'Unknown';
   const unavailable = zh ? '資訊尚未取得' : 'Information unavailable';

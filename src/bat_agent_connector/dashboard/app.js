@@ -40335,10 +40335,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const reads = [];
 		for (const section of staleSections) if (sectionVisible(section)) {
 			maskSource(section);
-			reads.push(refreshSection(section, true));
+			if (!openingReads.has(section)) openingReads.set(section, refreshSection(section, true).finally(() => openingReads.delete(section)));
+			reads.push(openingReads.get(section));
 		}
 		return settleRefreshes(reads);
 	}
+	const openingReads = new Map();
 	function invalidateSections() {
 		for (const section of sectionModules()) if (!sectionVisible(section)) {
 			staleSections.add(section);
@@ -41128,6 +41130,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refreshing = true;
 		refresh.disabled = true;
 		if (!event) {
+			invalidateSections();
 			lifecycle?.withdraw();
 			engineering?.withdraw();
 			materialization?.withdraw();
@@ -41338,6 +41341,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if (ticket !== sequence) return;
 			}
 			worktreeChoice?.update();
+			for (const section of sourceSections()) section.hidden = false;
+			workbench?.apply();
 			for (const section of [
 				lifecycle,
 				evidence,
@@ -41365,7 +41370,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				traceability
 			]) {
 				const lazy = lazyThreadSections.get(section);
-				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden) && (!threadId || section !== meetings || sectionVisible(section))) {
+				if (section && sectionRequired(section) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden) && (!threadId || section !== meetings || sectionVisible(section))) {
 					const activation = !initialReadComplete && activationReads.get(section);
 					activationReads.delete(section);
 					await (activation || (section === lifecycle ? section.refresh({ event }) : section.refresh()));
@@ -41375,8 +41380,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if (ticket !== sequence) return;
 			}
 			nativeAnalysis?.update(runs?.runs || []);
-			for (const section of sourceSections()) section.hidden = false;
-			workbench?.apply();
 			const stage = lifecycle?.phase?.();
 			phasePill.hidden = !stage;
 			phasePill.textContent = stage && [
