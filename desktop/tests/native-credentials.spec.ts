@@ -1,5 +1,15 @@
-import {test, expect} from '@playwright/test';
+import {test, expect, type Page} from '@playwright/test';
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {mkdir, readFile} from 'node:fs/promises';
+
+async function expectConnectedIdentity(page: Page) {
+  const access = page.locator('[data-connection-access]');
+  await expect(access).toBeVisible();
+  await expect(access).toHaveText(/Access: View · Operate|可用權限: 檢視 · 操作/);
+  await expect(access).not.toContainText('fixture-operator');
+  await expect(page.locator('.native-connection > details code').filter({hasText: 'fixture-operator'})).toHaveText('fixture-operator');
+  await expect(page.locator('.native-connection > details code').filter({hasText: 'observe, operate'})).toHaveText('observe, operate');
+}
 
 async function setup(page: any, options: any = {}) {
   await page.addInitScript((options: any) => {
@@ -61,7 +71,7 @@ async function setup(page: any, options: any = {}) {
 test('managed startup failure remains visible beside advanced external setup', async ({page}) => {
   await setup(page, {setup: true, configurationSource: 'managed', startupError: 'MANAGED_RUNTIME_START_FAILED'});
   await expect(page.getByRole('heading', {name: 'Local background service is not ready'})).toBeVisible();
-  await expect(page.getByText('MANAGED_RUNTIME_START_FAILED', {exact: false})).toBeVisible();
+  await expectErrorDetails(page, 'MANAGED_RUNTIME_START_FAILED');
   await expect(page.locator('[data-native-setup] input')).toHaveCount(2);
   await expect(page.locator('[data-native-setup] input').first()).toBeHidden();
   await page.getByText('Advanced: join an existing central', {exact: true}).click();
@@ -91,7 +101,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await expect(form.locator('input').nth(1)).toHaveValue('fixture-operator');
     await page.evaluate(() => {const f = (window as any).__credentialFixture; f.cancel = false; f.fail = true;});
     await form.getByRole('button').click();
-    await expect(page.getByText('Fixture configuration appeared during review', {exact: false})).toBeVisible();
+    await expectErrorDetails(page, 'Fixture configuration appeared during review');
     await expect(form.locator('input').nth(0)).toHaveValue('https://first.example');
     await page.screenshot({path: `${shots}/refused-${locale}-${width}.png`, fullPage: true});
     await page.evaluate(() => {(window as any).__credentialFixture.fail = false;});
@@ -103,7 +113,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
       command: 'connector_setup_configuration', args: {locale, config: {endpoint: 'https://first.example', expected_actor: 'fixture-operator', contract_version: '2026-10-08'}}}));
     expect(calls.some((c: any) => ['connector_connect', 'connector_enroll', 'connector_request'].includes(c.command))).toBe(false);
     await page.getByRole('button', {name: locale === 'en-US' ? 'Add credential' : '新增憑證', exact: true}).click();
-    await expect(page.getByText(/Connected as fixture-operator|已連線：fixture-operator/)).toBeVisible();
+    await expectConnectedIdentity(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]); await context.close();
   });
@@ -122,7 +132,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await mkdir('/tmp/bac-credentials-after', {recursive: true});
     await page.screenshot({path: `/tmp/bac-credentials-after/settings-${locale}-${width}.png`, fullPage: true});
     await add.click();
-    await expect(page.getByText(/Connected as fixture-operator|已連線：fixture-operator/)).toBeVisible();
+    await expectConnectedIdentity(page);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_enroll')))
       .toEqual([{command: 'connector_enroll', args: {locale}}]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -136,11 +146,11 @@ test('cancelled or refused replacement preserves the current account and saved d
   await page.evaluate(() => localStorage.setItem('batc.draft.synthetic-original', JSON.stringify({key: 'original-key', operation_id: 'op_original', text: 'keep this'})));
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
   await expect(page.getByText('Credential entry cancelled. The existing connection is unchanged.')).toBeVisible();
-  await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+  await expectConnectedIdentity(page);
   await page.evaluate(() => {const f = (window as any).__credentialFixture; f.cancel = false; f.fail = true;});
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
-  await expect(page.getByText('Fixture identity mismatch; previous credential retained', {exact: false})).toBeVisible();
-  await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+  await expectErrorDetails(page, 'Fixture identity mismatch; previous credential retained');
+  await expectConnectedIdentity(page);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('batc.draft.synthetic-original')!)))
     .toEqual({key: 'original-key', operation_id: 'op_original', text: 'keep this'});
   expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_disconnect'))).toEqual([]);
@@ -148,7 +158,7 @@ test('cancelled or refused replacement preserves the current account and saved d
 
 test('replacement isolates checkpoint namespace and never replays prior-account writes', async ({page}) => {
   await setup(page, {available: true, saved: true});
-  await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+  await expectConnectedIdentity(page);
   await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('batc.sync.')).length)).toBe(1);
   const original = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
@@ -160,8 +170,8 @@ test('replacement isolates checkpoint namespace and never replays prior-account 
 test('identity changes between native verification and mounted bootstrap leave the client disconnected', async ({page}) => {
   await setup(page, {wrongBootstrap: true});
   await page.getByRole('button', {name: 'Add credential', exact: true}).click();
-  await expect(page.getByText('Invalid central bootstrap identity', {exact: false})).toBeVisible();
-  await expect(page.getByText(/Connected as/)).toHaveCount(0);
+  await expectErrorDetails(page, 'Invalid central bootstrap identity');
+  await expect(page.locator('[data-connection-access]')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__credentialFixture.connected)).toBe(false);
   expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('batc.sync.')))).toEqual([]);
 });
@@ -172,7 +182,7 @@ test('configuration reload disconnects and waits for explicit verification witho
   await page.getByRole('button', {name: 'Reload configuration', exact: true}).click();
   await expect(page.getByText('https://replacement.example/', {exact: true})).toBeVisible();
   await expect(page.getByRole('button', {name: 'Connect', exact: true})).toBeDisabled();
-  await expect(page.getByText(/Connected as/)).toHaveCount(0);
+  await expect(page.locator('[data-connection-access]')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('batc.draft.original'))).toBe('fixed-intent');
   expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_reload_configuration')))
     .toEqual([{command: 'connector_reload_configuration', args: {}}]);
@@ -181,7 +191,7 @@ test('configuration reload disconnects and waits for explicit verification witho
 for (const kind of ['connect', 'enroll']) {
   test(`disconnect stays available during manual ${kind} and ignores a late successful response`, async ({page}) => {
     await setup(page, {available: true, saved: true});
-    await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+    await expectConnectedIdentity(page);
     await page.evaluate(kind => {
       const fixture = (window as any).__credentialFixture;
       if (kind === 'connect') fixture.delayConnect = true; else fixture.delay = true;
@@ -192,10 +202,10 @@ for (const kind of ['connect', 'enroll']) {
     await expect(disconnect).toBeEnabled(); // no navigation or rerender is needed to cancel
     await disconnect.click();
     await expect(page.getByText('Disconnected. Central work continues.')).toBeVisible();
-    await expect(page.getByText(/Connected as/)).toHaveCount(0);
+    await expect(page.locator('[data-connection-access]')).toHaveCount(0);
     await page.evaluate(kind => (window as any).__credentialFixture[kind === 'connect' ? 'releaseConnect' : 'release'](), kind);
     await expect(page.getByText('Disconnected. Central work continues.')).toBeVisible();
-    await expect(page.getByText(/Connected as/)).toHaveCount(0);
+    await expect(page.locator('[data-connection-access]')).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_request' && c.args.input.path === '/bootstrap').length)).toBe(1);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_disconnect').length)).toBe(1);
   });
@@ -206,7 +216,7 @@ for (const entry of ['startup', 'connect', 'enroll']) {
     await setup(page, {available: entry !== 'enroll', saved: entry !== 'enroll', missingBootstrap: entry === 'startup'});
     let original: Record<string, string> = {};
     if (entry === 'connect') {
-      await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+      await expectConnectedIdentity(page);
       await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('batc.sync.')).length)).toBe(1);
       original = await page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
     }
@@ -214,8 +224,8 @@ for (const entry of ['startup', 'connect', 'enroll']) {
       await page.evaluate(() => {(window as any).__credentialFixture.missingBootstrap = true;});
       await page.getByRole('button', {name: entry === 'connect' ? 'Connect' : 'Add credential', exact: true}).click();
     }
-    await expect(page.getByText('Fixture bootstrap unavailable', {exact: false})).toBeVisible();
-    await expect(page.getByText(/Connected as/)).toHaveCount(0);
+    await expectErrorDetails(page, 'Fixture bootstrap unavailable');
+    await expect(page.locator('[data-connection-access]')).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__credentialFixture.connected)).toBe(false);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_disconnect').length)).toBe(1);
     expect(await page.evaluate(() => Object.keys(localStorage).some(k => k.includes(':legacy:')))).toBe(false);
@@ -225,7 +235,7 @@ for (const entry of ['startup', 'connect', 'enroll']) {
     await page.getByRole('button', {name: 'Connect', exact: true}).click();
     await expect(page).toHaveURL(/#\/home$/);
     await page.locator('#live').click();
-    await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+    await expectConnectedIdentity(page);
     await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('batc.sync.')).length)).toBe(1);
     expect(await page.evaluate(() => Object.keys(localStorage).some(k => k.includes(':legacy:')))).toBe(false);
   });
@@ -249,7 +259,7 @@ test('unsupported platforms retain honest memory-only connection recovery', asyn
   await page.getByRole('button', {name: 'Connect', exact: true}).click();
   await expect(page).toHaveURL(/#\/home$/);
   await page.locator('#live').click();
-  await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+  await expectConnectedIdentity(page);
 });
 
 
@@ -268,13 +278,13 @@ test('native account replacement preserves the actual lost-reply session key wit
   const original = await page.evaluate(() => (window as any).__credentialFixture.calls.find((c: any) => c.command === 'connector_request' && c.args.input.method === 'POST').args.input);
   await page.locator('#live').click();
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
-  await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+  await expectConnectedIdentity(page);
   await session(); await expect(draft).toHaveValue('');
   expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_request' && c.args.input.method === 'POST').length)).toBe(1);
   await page.locator('#live').click();
   await page.evaluate(() => {(window as any).__credentialFixture.nextPrincipal = 'original-principal';});
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
-  await expect(page.getByText(/Connected as fixture-operator/)).toBeVisible();
+  await expectConnectedIdentity(page);
   await session(); await expect(draft).toHaveValue('Keep the original instructions');
   await page.getByRole('button', {name: 'Send', exact: true}).click();
   await page.locator('.session-send-record summary').click();
@@ -291,7 +301,7 @@ test('slow startup renders recovery controls and discards verification completed
   await page.getByRole('button', {name: 'Disconnect', exact: true}).click();
   await expect(page.getByText('Disconnected. Central work continues.')).toBeVisible();
   await page.evaluate(() => (window as any).__credentialFixture.releaseConnect());
-  await expect(page.getByText(/Connected as fixture-operator/)).toHaveCount(0);
+  await expect(page.locator('[data-connection-access]')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_request' && c.args.input.path === '/bootstrap'))).toEqual([]);
 });
 

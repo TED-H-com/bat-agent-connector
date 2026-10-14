@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect} from '@playwright/test';
 import {publishedFixture, selected, dispatchProject} from './repository-start-fixture';
 
@@ -5,7 +6,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) t
   const context = await browser.newContext({locale, viewport: {width, height: 900}});
   const page = await context.newPage();
   await page.goto('/dashboard/#/projects');
-  const token = page.getByLabel('API token', {exact: true});
+  const token = page.getByLabel(locale === 'zh-TW' ? 'API 權杖' : 'API token', {exact: true});
   await expect(token).toBeVisible(); await token.fill('fixture-only');
   await expect(page.locator('#nav a')).toHaveCount(1);
   await expect(page.locator('#nav a.on')).toHaveAttribute('href', '#/settings');
@@ -40,7 +41,7 @@ for (const native of [false, true]) test(`delivery accepts pasted PR links and r
   await expect(page.getByRole('textbox', {name: 'Repository or GitHub PR URL'})).toHaveValue('example/project');
   await expect(page.getByRole('textbox', {name: 'PR number', exact: true})).toHaveValue('24');
   await page.getByRole('button', {name: 'Load PR', exact: true}).click();
-  await expect(page.getByText('The full details of this PR are unavailable.', {exact: false})).toBeVisible();
+  await expectErrorDetails(page, 'The full details of this PR are unavailable.');
   expect(state.reads.some(path => path.replace(/\?$/, '') === '/repositories/example/project/pulls/24')).toBe(true);
   expect(state.posts).toEqual([]);
   const before = state.reads.length;

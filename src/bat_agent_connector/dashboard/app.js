@@ -8562,7 +8562,7 @@ var STRINGS = {
 		need_token: "請先在「連線」輸入 API 權杖。",
 		unreachable_hosts: "主機異常",
 		loading: "載入中…",
-		forbidden_scope: "你的 token 沒有這個權限。",
+		forbidden_scope: "目前帳號沒有這項操作的權限。",
 		queue_behind: "排在目前這一輪之後",
 		no_messages: "還沒有訊息。",
 		update_pr_results: "更新 PR 成果",
@@ -10177,7 +10177,7 @@ var STRINGS = {
 		need_token: "Enter an API token under Connection first.",
 		unreachable_hosts: "Host problems",
 		loading: "Loading…",
-		forbidden_scope: "Your token lacks this scope.",
+		forbidden_scope: "Your account does not have the required scope.",
 		queue_behind: "Queue behind the running turn",
 		no_messages: "No messages yet.",
 		update_pr_results: "Update PR results",
@@ -40524,7 +40524,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		}
 		if (disposed || serial !== readSerial) return;
 		if (!validVerification(result.verification)) {
-			if (allowed("verification")) throw Error(t("setup_verification_invalid"));
+			if (allowed("verification")) {
+				readReady = false;
+				update();
+				throw Error(t("setup_verification_invalid"));
+			}
 			result.verification = {
 				commands: {},
 				timeout_s: 600

@@ -123,3 +123,17 @@ test('an expired or rejected staged credential requires a fresh paste while keep
   expect(state.staged).toHaveLength(2);expect(state.posts[1].body.params.secret_ref).not.toBe(state.posts[0].body.params.secret_ref);
   expect(await storage(page)).not.toContain('fresh-synthetic-secret');
 });
+
+test('a malformed setup refresh cannot enable a new submission',async({page})=>{
+  const state=await managedSetupFixture(page,false);await page.goto('/dashboard/');await field(page,'connection_url').fill(url);
+  state.verification.timeout_s=0;
+  await page.locator('[data-managed-setup]').getByRole('button',{name:'Recheck configuration',exact:true}).click();
+  await expect(page.locator('[data-error-summary]')).toBeVisible();
+  await expect(formFor(page).locator('button[type=submit]')).toBeDisabled();
+  expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
+  state.verification.timeout_s=300;
+  await page.locator('[data-managed-setup]').getByRole('button',{name:'Recheck configuration',exact:true}).click();
+  await expect(formFor(page).locator('button[type=submit]')).toBeEnabled();
+  await expect(field(page,'bat_secret')).toHaveValue('synthetic-bat-secret');
+  expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
+});

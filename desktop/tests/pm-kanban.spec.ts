@@ -107,7 +107,7 @@ test('pagination failure clears facts and retry starts from the first page rathe
 test('revocation during a lazy card read clears list, detail and counters',async({page})=>{
   const f=fixture();await mount(page,f);f.state.failRead=403;
   await row(page,1).locator('[data-board-open]').click();
-  await expect(page.locator('[data-pm-kanban]')).toContainText('Your token lacks this scope.');
+  await expect(page.locator('[data-pm-kanban]')).toContainText('Your account does not have the required scope.');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(0);
   await expect(page.locator('[data-pm-kanban]')).not.toContainText('Member login');
@@ -135,7 +135,7 @@ test('a late old refresh never restores facts cleared by a newer permission fail
   await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect.poll(()=>f.state.held.length).toBe(1);
   f.state.failRead=403;await reload(page);f.state.held.shift()();
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(0);
-  await expect(page.locator('[data-pm-kanban]')).toContainText('Your token lacks this scope.');
+  await expect(page.locator('[data-pm-kanban]')).toContainText('Your account does not have the required scope.');
   await expect(page.locator('[data-pm-kanban-column]')).toHaveCount(0);
 });
 

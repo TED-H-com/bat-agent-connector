@@ -987,7 +987,7 @@ const STRINGS = {
     token: "API 權杖", token_help: "以 batc api-token issue 發行；只存在這台瀏覽器。", connect: "連線",
     remember: "在這台電腦記住", disconnect: "中斷", connected_as: "已連線：{actor}（{scopes}）",
     need_token: "請先在「連線」輸入 API 權杖。", unreachable_hosts: "主機異常", loading: "載入中…",
-    forbidden_scope: "你的 token 沒有這個權限。", queue_behind: "排在目前這一輪之後", no_messages: "還沒有訊息。",
+    forbidden_scope: "目前帳號沒有這項操作的權限。", queue_behind: "排在目前這一輪之後", no_messages: "還沒有訊息。",
     update_pr_results: "更新 PR 成果",
     update_pr_help: "把選定的成果整合進這個 PR 的 head：一般 push，不會強制覆蓋；不會改動你本機的資料夾。",
     needs_integrate_scope: "需要 integrate 權限：用 --scope integrate 重新發 token。",
@@ -1990,7 +1990,7 @@ const STRINGS = {
     token: "API token", token_help: "Issue one with batc api-token issue; it stays in this browser.",
     connect: "Connect", remember: "Remember on this computer", disconnect: "Disconnect",
     connected_as: "Connected as {actor} ({scopes})", need_token: "Enter an API token under Connection first.",
-    unreachable_hosts: "Host problems", loading: "Loading…", forbidden_scope: "Your token lacks this scope.",
+    unreachable_hosts: "Host problems", loading: "Loading…", forbidden_scope: "Your account does not have the required scope.",
     queue_behind: "Queue behind the running turn", no_messages: "No messages yet.",
     update_pr_results: "Update PR results",
     update_pr_help: "Put the chosen results into this PR's head branch: a normal push, never forced; your local " +

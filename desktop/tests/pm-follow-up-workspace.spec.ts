@@ -250,7 +250,7 @@ test('withdrawn original target retains its unknown intent and never substitutes
   await box.locator(':scope > summary').click();await box.locator('select').first().selectOption(followUpThreadId);await form.locator('[data-pm-structured-analysis] select').selectOption(BAT);await form.locator('textarea').fill('Original private discussion');await form.locator('button[type=submit]').click();
   await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
   withdrawn=true;f.followUp.state.failSource='/threads/'+followUpThreadId;await page.reload();await openPmSection(page, 'issues' , 'ui_follow_up');await box.locator(':scope > summary').click();
-  await expect(page.locator('[data-pm-follow-up]')).toContainText('Your token lacks this scope.');await expect(form).toHaveCount(0);
+  await expect(page.locator('[data-pm-follow-up]')).toContainText('Your account does not have the required scope.');await expect(form).toHaveCount(0);
   expect(f.analysis.writes).toHaveLength(1);expect(reads.some(path=>path.endsWith('/threads/'+other))).toBe(false);
   expect(await page.evaluate(key=>Object.values(localStorage).some(value=>value.includes(key)),original.idempotency_key)).toBe(true);
   withdrawn=false;f.followUp.state.failSource=null;await page.reload();await openPmSection(page, 'issues' , 'ui_follow_up');await box.locator(':scope > summary').click();await expect(box.locator('select').first()).toHaveValue(followUpThreadId);await expect(box.locator('select').first()).toBeDisabled();

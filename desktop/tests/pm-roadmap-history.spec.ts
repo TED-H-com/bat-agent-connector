@@ -143,7 +143,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
     await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const history=page.locator('[data-pm-roadmap-history]');
     await history.locator(':scope > summary').click();await expect(history.locator('details')).toHaveCount(20);
     const more=history.getByRole('button');f.history.failMore=true;await more.click();await expect(history).toContainText('History page unavailable');
-    await expect(more).toBeEnabled();await more.click();await expect(history.locator('details')).toHaveCount(21);
+    await expect(more).toBeEnabled();await more.click();await expect(history.locator(':scope > div > details')).toHaveCount(21);
     expect(f.history.pages).toEqual([0,20,20]);
   });
 });

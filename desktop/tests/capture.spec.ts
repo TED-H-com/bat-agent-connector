@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from '@playwright/test';
 const op = 'op_' + 'a'.repeat(32), aid = 'art_' + 'b'.repeat(32), wid = 'wi_' + 'c'.repeat(20);
 const ref = {artifact_id: aid, revision: 1, digest: 'd'.repeat(64)};
@@ -89,7 +90,7 @@ for (const native of [false, true]) {
     await box.getByRole('button', {name: 'Preview source file', exact: true}).click();
     await box.getByRole('checkbox').check();
     await box.getByRole('button', {name: 'Save reviewed file', exact: true}).click();
-    await expect(box.getByText('LOST Lost capture reply')).toBeVisible();
+    await expectErrorDetails(box, 'Lost capture reply', 'LOST');
     const original = structuredClone(state.writes[0]);
     expect(original.body).toEqual({action: 'artifact.capture', target: {preview_id: 'acpv_'+'e'.repeat(32)},
       params: {preview_token: 'cap1.fixture.signature'}, preconditions: {expected_fingerprint: 'f'.repeat(64)}}); // gitleaks:allow (unsigned mock preview)

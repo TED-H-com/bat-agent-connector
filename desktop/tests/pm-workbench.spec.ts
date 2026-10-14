@@ -51,7 +51,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toContainText('Recovery progress');f.state.denySnapshot=true;
     await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare with previous report',exact:true}).click();
-    await expect(charter(page)).toContainText('Your token lacks this scope');await expect(charter(page)).not.toContainText('Members can reliably');
+    await expect(charter(page)).toContainText('Your account does not have the required scope');await expect(charter(page)).not.toContainText('Members can reliably');
     await expect(page.getByRole('button',{name:'Print report',exact:true})).toBeDisabled();
   });
   test('RTM uses exact revisions, distinct work and an Issue with two PRs and three attempts',async({page})=>{
@@ -76,7 +76,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toContainText('PR #10');
     f.state.denyWork=true;await page.locator('[data-pm-refresh]').click();
-    await expect(rtm(page)).toContainText('Your token lacks this scope');await expect(rtm(page)).not.toContainText('PR #10');
+    await expect(rtm(page)).toContainText('Your account does not have the required scope');await expect(rtm(page)).not.toContainText('PR #10');
     await expect(rtm(page)).not.toContainText('Members can sign in');await expect(rtm(page)).not.toContainText('3 distinct');
     f.state.denyWork=false;await page.locator('[data-pm-refresh]').click();
     await expect(rtm(page).locator('[data-rtm-detail]')).toBeVisible();await expect(rtm(page)).toContainText('PR #10');
@@ -101,7 +101,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     await expect(rtm(page).locator('[data-rtm-detail]').getByRole('status',{name:'Reading the selected work and its delivery records…',exact:true})).toBeVisible();
     f.state.denyWork=true;
-    try{await page.locator('[data-pm-refresh]').click();await expect(rtm(page)).toContainText('Your token lacks this scope');}
+    try{await page.locator('[data-pm-refresh]').click();await expect(rtm(page)).toContainText('Your account does not have the required scope');}
     finally{release();}
     await expect(rtm(page).locator('[data-rtm-detail]')).toBeHidden();await expect(rtm(page)).not.toContainText('PR #10');
   });

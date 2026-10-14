@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {taskFixture, taskId, opId} from './task-controls-fixture';
@@ -114,7 +115,7 @@ for (const native of [false,true]) {
     state.events.push({seq:1,resource_type:'operation',resource_id:opId,kind:'operation.succeeded'});
     state.status='succeeded'; state.failRead=true;
     await expect.poll(()=>state.reads.some((p:string)=>p.includes('/events'))).toBe(true);
-    state.holdPost(); await expect(page.getByText('Operation read failed',{exact:false}).first()).toBeVisible();
+    state.holdPost(); await expectErrorDetails(page, 'Operation read failed');
     expect(state.after).toBe(0);
     state.failRead=false;
     await expect(form(page)).toContainText('control operation completed');

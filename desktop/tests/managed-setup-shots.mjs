@@ -13,7 +13,10 @@ try {
     page.on('pageerror', error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${process.env.BATC_UI_TEST_PORT}/dashboard/`);
     const panel=page.locator('[data-managed-setup]'), form=page.locator('[data-setup-host]'); await expect(form).toBeVisible();
-    const shot = async name => {await page.evaluate(()=>scrollTo(0,0)); await page.screenshot({path:`${output}/${stage}-${name}-${locale}-${width}.png`,fullPage:true});};
+    const shot = async name => {
+      if (process.env.BATC_SETUP_SETTINGS_ONLY === '1' && !name.startsWith('settings')) return;
+      await page.evaluate(()=>scrollTo(0,0)); await page.screenshot({path:`${output}/${stage}-${name}-${locale}-${width}.png`,fullPage:true});
+    };
     await shot('first-run');
     if (stage==='before') {
       await form.getByLabel(locale==='en'?'BAT connection profile':'BAT 連線 profile',{exact:true}).selectOption('profile-demo');
@@ -29,7 +32,13 @@ try {
     if(stage==='before') {await panel.locator('.actions').first().locator('button').last().click();await form.locator('input').first().fill('local');}
     if(stage==='after') await form.locator('[data-setup-field=host]').fill('local');
     await form.locator('button[type=submit]').click(); await expect(panel.locator('a[href^="#/op/"]')).toBeVisible();
-    await shot('connected'); await shot('settings');
+    await shot('connected');
+    if (stage==='after') {
+      await panel.locator('[data-setup-sessions]').click(); await expect(page.locator('#main h1')).toHaveText(locale==='en'?'Sessions':'工作階段');
+      await page.goto(`http://127.0.0.1:${process.env.BATC_UI_TEST_PORT}/dashboard/#/settings`);
+      await expect(page.locator('[data-connection-card]')).toBeVisible(); await expect(panel.locator('[data-setup-sessions]')).toBeVisible();
+    }
+    await shot('settings');
     if(stage==='after' && width===1440 && locale==='en') {await page.emulateMedia({colorScheme:'dark'});await shot('settings-dark');}
     if (await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)) throw Error('Horizontal overflow');
     if(errors.length)throw Error('Page errors: '+errors.join('; '));

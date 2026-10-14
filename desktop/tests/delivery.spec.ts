@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect} from "@playwright/test";
 
 for (const native of [false, true]) {
@@ -158,7 +159,7 @@ for (const native of [false, true]) {
     expect(environmentReads).toBe(2);
     expect(await saved()).toEqual(checkpoints(0));
     release();
-    await expect(card).toContainText("UNAVAILABLE Environment refresh failed");
+    await expectErrorDetails(card, "Environment refresh failed", "UNAVAILABLE");
     await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/actions paused/);
     expect(await saved()).toEqual(checkpoints(0));
     failing = false;

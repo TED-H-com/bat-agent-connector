@@ -409,7 +409,10 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     }
     if (disposed || serial !== readSerial) return;
     if (!validVerification(result.verification)) {
-      if (allowed("verification")) throw Error(t("setup_verification_invalid"));
+      if (allowed("verification")) {
+        readReady = false; update();
+        throw Error(t("setup_verification_invalid"));
+      }
       result.verification = {commands: {}, timeout_s: 600};
     }
     snapshot = result; readReady = true;
