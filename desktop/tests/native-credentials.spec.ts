@@ -1,11 +1,12 @@
 import {test, expect, type Page} from '@playwright/test';
-import {expectErrorDetails} from './api-error-assertions.ts';
+import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {mkdir, readFile} from 'node:fs/promises';
 
 async function expectConnectedIdentity(page: Page) {
   const access = page.locator('[data-connection-access]');
   await expect(access).toBeVisible();
-  await expect(access).toHaveText(/Access: View · Operate|可用權限: 檢視 · 操作/);
+  await expect(access).toHaveText(/View · Operate|檢視 · 操作/);
+  await expect(access.locator('xpath=preceding-sibling::dt[1]')).toHaveText(/Access|權限/);
   await expect(access).not.toContainText('fixture-operator');
   await expect(page.locator('.native-connection > details code').filter({hasText: 'fixture-operator'})).toHaveText('fixture-operator');
   await expect(page.locator('.native-connection > details code').filter({hasText: 'observe, operate'})).toHaveText('observe, operate');
@@ -80,6 +81,19 @@ test('managed startup failure remains visible beside advanced external setup', a
   expect(calls.some((call: any) => ['connector_setup_configuration', 'connector_enroll', 'connector_connect'].includes(call.command))).toBe(false);
 });
 
+for (const locale of ['en','zh-TW']) test(`native status error keeps diagnostics behind a localized summary ${locale}`,async({page})=>{
+  await page.addInitScript(locale=>Object.defineProperty(navigator,'language',{value:locale}),locale);
+  await setup(page,{startupError:'FIXTURE_NATIVE_START_FAILED'});
+  const error=page.locator('[data-api-error]');
+  await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'
+    ? 'The local Connector connection is unavailable. Check its settings.'
+    : '無法使用本機 Connector 連線，請檢查設定。');
+  expect(await error.innerText()).not.toContain('FIXTURE_NATIVE_START_FAILED');
+  await error.locator('summary').click();await expect(error.locator('[data-error-details]')).toContainText('FIXTURE_NATIVE_START_FAILED');
+  await expect(error.locator('code')).toHaveCount(0);
+  expect((await page.evaluate(()=>(window as any).__credentialFixture.calls)).some((call:any)=>call.command==='connector_connect')).toBe(false);
+});
+
 for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
   test(`first connection preserves native-reviewed settings ${locale} ${width}`, async ({browser}) => {
     const context = await browser.newContext({locale, viewport: {width, height: 900}});
@@ -101,7 +115,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await expect(form.locator('input').nth(1)).toHaveValue('fixture-operator');
     await page.evaluate(() => {const f = (window as any).__credentialFixture; f.cancel = false; f.fail = true;});
     await form.getByRole('button').click();
-    await expectErrorDetails(page, 'Fixture configuration appeared during review');
+    await expectClientError(page, 'Fixture configuration appeared during review');
     await expect(form.locator('input').nth(0)).toHaveValue('https://first.example');
     await page.screenshot({path: `${shots}/refused-${locale}-${width}.png`, fullPage: true});
     await page.evaluate(() => {(window as any).__credentialFixture.fail = false;});
@@ -149,7 +163,7 @@ test('cancelled or refused replacement preserves the current account and saved d
   await expectConnectedIdentity(page);
   await page.evaluate(() => {const f = (window as any).__credentialFixture; f.cancel = false; f.fail = true;});
   await page.getByRole('button', {name: 'Replace credential', exact: true}).click();
-  await expectErrorDetails(page, 'Fixture identity mismatch; previous credential retained');
+  await expectClientError(page, 'Fixture identity mismatch; previous credential retained');
   await expectConnectedIdentity(page);
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('batc.draft.synthetic-original')!)))
     .toEqual({key: 'original-key', operation_id: 'op_original', text: 'keep this'});
@@ -170,7 +184,7 @@ test('replacement isolates checkpoint namespace and never replays prior-account 
 test('identity changes between native verification and mounted bootstrap leave the client disconnected', async ({page}) => {
   await setup(page, {wrongBootstrap: true});
   await page.getByRole('button', {name: 'Add credential', exact: true}).click();
-  await expectErrorDetails(page, 'Invalid central bootstrap identity');
+  await expectClientError(page, 'Invalid central bootstrap identity');
   await expect(page.locator('[data-connection-access]')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__credentialFixture.connected)).toBe(false);
   expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('batc.sync.')))).toEqual([]);

@@ -1,4 +1,4 @@
-import {expectErrorDetails} from './api-error-assertions.ts';
+import {expectClientError} from './api-error-assertions.ts';
 import {test, expect} from '@playwright/test';
 import {publishedFixture, selected, dispatchProject} from './repository-start-fixture';
 
@@ -41,7 +41,7 @@ for (const native of [false, true]) test(`delivery accepts pasted PR links and r
   await expect(page.getByRole('textbox', {name: 'Repository or GitHub PR URL'})).toHaveValue('example/project');
   await expect(page.getByRole('textbox', {name: 'PR number', exact: true})).toHaveValue('24');
   await page.getByRole('button', {name: 'Load PR', exact: true}).click();
-  await expectErrorDetails(page, 'The full details of this PR are unavailable.');
+  await expectClientError(page, 'The full details of this PR are unavailable.');
   expect(state.reads.some(path => path.replace(/\?$/, '') === '/repositories/example/project/pulls/24')).toBe(true);
   expect(state.posts).toEqual([]);
   const before = state.reads.length;

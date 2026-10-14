@@ -904,7 +904,7 @@ labels. PM writer states reuse nativeRunState; step names remain identifiers.
 ## Setup glossary
 
 Use these terms in setup, Settings and Connection. Product, provider and protocol
-names stay BAT, GitHub, Git, SSH, Tailscale, Codex and Claude. Keep Agent for an AI
+names stay BAT, Connector, GitHub, Git, SSH, Tailscale, Codex and Claude. Keep Agent for an AI
 worker; call the project manager PM. Platform labels are macOS / Linux
 (「macOS／Linux」) and Windows, with protocol values kept out of ordinary labels.
 BAT's own labels may be quoted exactly in field hints, including 「連線 Token」
@@ -926,10 +926,16 @@ and “Certificate fingerprint (SHA-256)”.
 | clone | 複本 |
 | metadata | 中繼資料 |
 
-First use opens Connect BAT with a masked connection URL and Host ID. Individual
+First use opens 1. Connect BAT with a masked connection URL and Host ID. Individual
 connection fields and managed-work permissions stay in collapsed disclosures.
+Fields stack label, input, hint and error, with a 4px hint gap and 12px between
+fields. Refresh sits on the setup card's title row. Settings uses the shared page
+header, whose mobile actions remain below the title.
 Pasting parses locally, clears the URL and stores only non-secret drafts; submit
-validates before credential staging. A loopback endpoint can suggest `local` when
+validates before credential staging. Typing parses silently; paste, change, blur
+and submit report an invalid URL. Unreadable BAT profiles have a muted note beside
+the profile control; an empty profile list without an error hides the control.
+A loopback endpoint can suggest `local` when
 no hosts exist, without proving a shared machine or choosing an execution mode.
 
 Only central `admission_refused: true` releases an unacknowledged setup intent.
@@ -938,11 +944,18 @@ or replay that same request. Old code-only refusal drafts follow this conservati
 path too. A principal/kind-bound staged credential reference may stay in page memory
 for one hour; raw credentials never enter drafts or return to the DOM after staging.
 A fresh editable draft after reload explains that another credential paste is needed.
-Successful configuration offers View sessions as the primary next action.
+Successful configuration offers View sessions as the primary next action and
+collapses 1. Connect BAT. Change settings or expanding the disclosure opens it
+again; later visits with a configured host start collapsed.
 
-Connection access uses human labels, with actor/scopes and storage facts in one
+Connection access is a row in the facts list and uses human labels, with actor/scopes and storage facts in one
 Details disclosure. Tailscale guidance belongs with an actual Fleet connection.
-Errors show a localized summary and one Details disclosure for technical facts.
+Errors prefer a caller summary, then a known code's translation, then an explicitly
+localized API message or plain client Error message. Unknown server codes and
+programming errors use the generic summary; transport messages use their explicit
+NETWORK_ERROR or TIMEOUT code. Details appears only for additional technical facts,
+without an empty code or repeated summary. Refresh-cycle read-error gates remain
+unchanged.
 `errorBox(error, {summary})` lets a caller supply its own sentence without duplicating
 it. Rendering an error still records the same refresh-cycle failure, so failed reads
 cannot acknowledge event checkpoints or enable mutations. IME Escape leaves menus,

@@ -8,6 +8,11 @@
   setup terms are readable; successful setup leads to sessions. IME Escape preserves
   open inspectors, menus and the mobile drawer.
 
+- Preserve specific client error messages and show technical Details only when
+  they add information. Setup fields keep hints beside their inputs, flag unreadable
+  BAT profiles, and collapse the completed connection step. Connector keeps its
+  product name in both locales.
+
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 

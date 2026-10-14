@@ -73,7 +73,8 @@ test("browser retains observation compatibility when an older central has no boo
   await page.goto("/dashboard/");
   await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
   await page.locator("#live").click();
-  await expect(page.locator('[data-connection-access]')).toHaveText('Access: View · Operate');
+  await expect(page.locator('[data-connection-access]')).toHaveText('View · Operate');
+  await expect(page.locator('[data-connection-access]').locator('xpath=preceding-sibling::dt[1]')).toHaveText('Access');
   await page.locator('[data-settings-panel=connection] details > summary').click();
   await expect(page.locator('[data-settings-panel=connection]')).toContainText('fixture-operator');
   await expect(page.locator('[data-settings-panel=connection]')).toContainText('observe, operate');

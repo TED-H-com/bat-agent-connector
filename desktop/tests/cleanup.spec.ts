@@ -1,4 +1,4 @@
-import {expectErrorDetails} from './api-error-assertions.ts';
+import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {test, expect, type Page} from "@playwright/test";
 
 const rid = "wt_" + "a".repeat(32), oid = "op_" + "b".repeat(32);
@@ -168,7 +168,7 @@ for (const native of [false, true]) {
     await page.getByRole('button', {name: 'Preview cleanup', exact: true}).click();
     await page.getByRole('checkbox', {name: 'I reviewed the resources', exact: false}).check();
     await page.getByRole('button', {name: 'Apply reviewed cleanup'}).click();
-    await expectErrorDetails(page, 'does not match');
+    await expectClientError(page, 'does not match');
     await expect(page.getByRole('link', {name: 'View item receipts'})).toHaveCount(0);
     await page.evaluate(() => {for (const key of Object.keys(sessionStorage).filter(k => k.startsWith('batc.cleanup.'))) sessionStorage.removeItem(key);});
     bad = false; await page.reload();

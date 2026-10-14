@@ -15,6 +15,7 @@ import {prSelector} from "./pr-selector.js";
 import {mountPmWorkspace, pmAvailable} from "./pm-workspace.js";
 import {workspaceNavigation} from "./workspace-nav.js";
 import {managedSetupPanel} from "./managed-setup.js";
+import {ApiError, errorPresentation} from "./error-presentation.js";
 import {managedControl, fleetAvailability} from "./transport/index.ts";
 import {restoreBrowserSession, browserSessionToken, forgetBrowserSession} from "./transport/index.ts";
 import {setupSidebarResizer, setupMobileSessionLayout} from "./workspace-layout.js";
@@ -182,13 +183,10 @@ function rememberOp(scope, key, op, namespace) {
 function dropKey(scope, namespace) { try { localStorage.removeItem(`batc.key.${namespace}.${scope}`); } catch { /* ignore */ } }
 
 // ------------------------------------------------------------------ API
-class ApiError extends Error {
-  constructor(status, code, message) { super(message || code); this.status = status; this.code = code; }
-}
 async function api(method, path, body, key, collectReceipt) {
-  if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"));
+  if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), {localized: true});
   if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady))
-    throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
+    throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), {localized: true});
   const epoch = state.epoch;
   let response;
   try {response = await connectorRequest(method, path, body, key, state.token);}
@@ -213,15 +211,11 @@ function errorBox(e, {summary} = {}) {
   // Renderers display read errors locally. Also report them to the event batch so a
   // caught refresh error cannot acknowledge its checkpoint or re-enable mutations.
   if (state.refreshCycle) state.refreshCycle.error ||= e;
-  const key = `error_code_${e.code}`;
-  const known = e.code && t(key) !== key;
-  const timeout = ['AbortError', 'TimeoutError'].includes(e.name);
-  const network = e instanceof TypeError;
-  const text = summary ?? (known ? t(key) : timeout ? t('error_code_TIMEOUT') : network ? t('error_code_NETWORK_ERROR')
-    : t('error_generic'));
-  return h('div', {'data-api-error': ''}, h("p", { class: "error", 'data-error-summary': '' }, text),
-    disclosure({label: t('global_details'), body: h('div', {'data-error-details': ''},
-      h('code', {}, e.code || ''), h('p', {}, e.message || String(e)))}));
+  const presentation = errorPresentation(e, t, {summary});
+  const diagnostics = [presentation.code ? h('code', {}, presentation.code) : null,
+    presentation.message && presentation.message !== presentation.code ? h('p', {}, presentation.message) : null].filter(Boolean);
+  return h('div', {'data-api-error': ''}, h("p", { class: "error", 'data-error-summary': '' }, presentation.summary),
+    diagnostics.length ? disclosure({label: t('global_details'), body: h('div', {'data-error-details': ''}, ...diagnostics)}) : null);
 }
 async function submit(action, target, params, preconditions, scope) {
   const connection = { epoch: state.epoch, namespace: state.namespace };
@@ -384,7 +378,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
       };
       while (["accepted", "running"].includes(op.status)) op = await readNext();
       if (op.status === "waiting_external") {
-        if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
+        if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), {localized: true});
         const epoch = state.epoch;
         const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
         guard(true);
@@ -426,7 +420,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
       return;
     }
     if (file.size > limit) {
-      fill(status, errorBox(new Error(`ARTIFACT_TOO_LARGE (${limit})`)));
+      fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`)));
       return;
     }
     let name = file.name;
@@ -2816,7 +2810,8 @@ function connectionFacts() {
   const dl = h("dl", {class: "kv global-connection-facts"},
     h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"),
     h("dt", {}, t("global_state")), stateCell,
-    h("dt", {}, t("global_last_event")), eventCell);
+    h("dt", {}, t("global_last_event")), eventCell,
+    h("dt", {}, t("connection_access")), connectionAccess());
   const render = () => {
     const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
     const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
@@ -2834,7 +2829,7 @@ function connectionFacts() {
 function connectionAccess() {
   const known = ['observe', 'operate', 'manage', 'start', 'approve', 'cleanup', 'cleanup_discard', 'deploy', 'integrate', 'merge'];
   const labels = [...new Set((state.caps?.scopes || []).map(scope => t(known.includes(scope) ? `connection_scope_${scope}` : 'connection_other_access')))];
-  return h('p', {'data-connection-access': ''}, t('connection_access'), ': ', joinLabel(labels));
+  return h('dd', {'data-connection-access': ''}, joinLabel(labels));
 }
 function connectionIdentity() {
   return h('dl', {class: 'kv'}, h('dt', {}, t('connection_actor')), h('dd', {}, h('code', {}, state.caps?.actor || '—')),
@@ -2873,7 +2868,7 @@ function viewBrowserSettings(main) {
   const managed = state.token === browserSessionToken;
   const facts = connectionFacts();
   frame.panel("connection").append(h("section", {class: "panel"},
-    facts, connectionAccess(),
+    facts,
     managed ? h("h2", {}, t("managed_browser_connected")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
     h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
@@ -2923,7 +2918,6 @@ async function viewManagedSettings(main) {
   const frame = openSettings(main, {exclusive: !nativeDesktop});
   const local = h("section", {class: "panel", 'data-connection-card': ''}, h("h2", {}, t("managed_browser_connected")),
     connectionFacts(),
-    connectionAccess(),
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(),
       h("p", {}, t("managed_background_help")), !nativeDesktop ? h('p', {}, t('managed_browser_help')) : null,
       h("div", {"data-managed-locations": ""}, h('h3', {}, t('managed_locations')),
@@ -3079,7 +3073,6 @@ async function viewNativeSettings(main) {
     info.replaceChildren();
     technicalDetails.replaceChildren();
     if (state.caps) technicalDetails.append(connectionIdentity());
-    if (state.caps) info.append(connectionAccess());
     if (state.connectionNotice) info.append(h("p", {}, state.connectionNotice));
     if (state.connectionError) info.append(errorBox(state.connectionError));
     if (state.nativeBusy) info.append(h("p", {}, t("desktop_connecting")));
@@ -3124,7 +3117,8 @@ async function viewNativeSettings(main) {
     if (status.expected_actor) technicalDetails.append(h("dt", {}, t("desktop_expected_actor")), h("dd", {}, status.expected_actor));
     if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
     if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
-    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error)));
+    if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
+    if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {summary: t("desktop_status_error")}));
     else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
     platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help")
       : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";

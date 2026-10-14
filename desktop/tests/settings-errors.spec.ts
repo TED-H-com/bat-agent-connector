@@ -24,6 +24,8 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     const state=await managedSetupFixture(page,native,locale);state.scopes=['observe','operate','manage','start','approve','cleanup','cleanup_discard','deploy','integrate','merge'];
     await page.goto('/dashboard/#/settings');const card=page.locator('[data-connection-card]');await expect(card).toBeVisible();
     await expect(card.locator('details')).toHaveCount(1);await expect(card.locator('[data-connection-access]')).toContainText(locale==='en'?'View':'檢視');
+    await expect(card.locator('[data-connection-access]')).toHaveJSProperty('tagName','DD');
+    await expect(card.locator('[data-connection-access]').locator('xpath=preceding-sibling::dt[1]')).toHaveText(locale==='en'?'Access':'權限');
     const visible=await card.innerText();expect(visible).not.toContain('cleanup_discard');expect(visible).not.toContain('fixture-person');
     if(!native)expect(visible).not.toContain('Tailscale');
     await card.locator('summary').click();await expect(card).toContainText(state.scopes.join(', '));
@@ -32,5 +34,38 @@ for(const locale of ['en','zh-TW'])test.describe(`${locale} Settings`,()=>{
     await expect(page.getByRole('heading',{name:locale==='en'?'Connect BAT':'連線至 BAT',exact:true})).toHaveCount(0); // one disclosure heading, no repeated H3
     await expect(page.locator('[data-setup-host]').locator('input[style]')).toHaveCount(0);
     expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
+  });
+  test('client setup validation keeps its specific localized sentence without redundant Details',async({page})=>{
+    const state=await managedSetupFixture(page,false,locale);state.verification.timeout_s=0;await page.goto('/dashboard/');
+    const error=page.locator('[data-api-error]');
+    await expect(error.locator('[data-error-summary]')).toHaveText(locale==='en'
+      ? 'Enter a valid project, executable, at most 63 nonempty arguments and a 1–3600 second timeout.'
+      : '請輸入有效專案、執行程式、最多 63 個非空參數，以及 1–3600 秒逾時。');
+    await expect(error.locator('details, code')).toHaveCount(0);
+    await expect(page.locator('[data-setup-host] button[type=submit]')).toBeDisabled();
+    expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
+  });
+  for (const unavailable of [false,true]) test(`empty BAT profiles ${unavailable?'unreadable':'without error'}`,async({page})=>{
+    const state=await managedSetupFixture(page,false,locale);state.hasProfiles=false;
+    state.profilesError=unavailable?'Fixture directory cannot be read':null;await page.goto('/dashboard/');
+    await page.locator('[data-setup-manual]>summary').click();
+    await expect(page.locator('[data-setup-profile] select')).toBeHidden();
+    if(unavailable)await expect(page.locator('[data-setup-profiles-error]')).toHaveText(locale==='en'
+      ? 'BAT connection profiles could not be read. Paste a connection URL or enter the values manually.'
+      : '無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。');
+    else await expect(page.locator('[data-setup-profile]')).toBeHidden();
+    expect(state.posts).toEqual([]);expect(state.staged).toEqual([]);
+  });
+  for (const width of [1440,390]) test(`setup fields and title refresh align at ${width}`,async({page})=>{
+    await page.setViewportSize({width,height:900});await managedSetupFixture(page,false,locale);await page.goto('/dashboard/');
+    const geometry=await page.locator('[data-managed-setup]').evaluate(panel=>{
+      const rect=(selector:string)=>panel.querySelector(selector)!.getBoundingClientRect();
+      const title=rect('header h2'), refresh=rect('header button');
+      const input=rect('#setup-connection_url'), hint=rect('#setup-connection_url-hint'), label=rect('label[for=setup-host]');
+      return {titleTop:title.top,titleBottom:title.bottom,refreshTop:refresh.top,refreshBottom:refresh.bottom,
+        hintGap:hint.top-input.bottom,fieldGap:label.top-hint.bottom};
+    });
+    expect(geometry.titleTop).toBeLessThan(geometry.refreshBottom);expect(geometry.refreshTop).toBeLessThan(geometry.titleBottom);
+    expect(geometry.hintGap).toBe(4);expect(geometry.fieldGap).toBeGreaterThanOrEqual(12);expect(geometry.fieldGap).toBeLessThanOrEqual(16);
   });
 });

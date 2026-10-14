@@ -1,4 +1,4 @@
-import {expectErrorDetails} from './api-error-assertions.ts';
+import {expectClientError} from './api-error-assertions.ts';
 import {openThreadTab} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
@@ -103,7 +103,7 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
   test('mismatched response and lost access never leave stale differences visible',async({page})=>{
     const f=fixture();await mount(page,native,f);await choose(page);f.comparison.mismatch=true;
     await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
-    await expectErrorDetails(box(page), 'The response does not match the selected comparison.');await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
+    await expectClientError(box(page), 'The response does not match the selected comparison.');await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
     f.comparison.mismatch=false;await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
     await expect(box(page)).toContainText('Changed · login');f.comparison.failure=true;
     await box(page).getByRole('button',{name:'Recheck this comparison',exact:true}).click();

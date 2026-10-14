@@ -11,3 +11,10 @@ export async function expectErrorDetails(root: Page | Locator, message: string |
   await expect(error.locator('[data-error-details]')).toContainText(message);
   if (code) await expect(error.locator('[data-error-details] code')).toHaveText(code);
 }
+
+export async function expectClientError(root: Page | Locator, message: string | RegExp) {
+  const error = root.locator('[data-api-error]').filter({hasText: message}).first();
+  await expect(error.locator('[data-error-summary]')).toBeVisible();
+  await expect(error.locator('[data-error-summary]')).toContainText(message);
+  await expect(error.locator('details, code')).toHaveCount(0);
+}

@@ -1,4 +1,4 @@
-import {expectErrorDetails} from './api-error-assertions.ts';
+import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -101,7 +101,7 @@ for(const native of [false,true]){
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`prompt-free or unknown start stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);
-  await page.goto('/dashboard/#/op/'+executionId);await expect(page.getByRole('link',{name:"Capture and review this execution's file",exact:true})).toHaveCount(0);await page.goto('/dashboard/#/artifact-review/operation/'+executionId);await expectErrorDetails(page, 'Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
+  await page.goto('/dashboard/#/op/'+executionId);await expect(page.getByRole('link',{name:"Capture and review this execution's file",exact:true})).toHaveCount(0);await page.goto('/dashboard/#/artifact-review/operation/'+executionId);await expectClientError(page, 'Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
  });
  test(`managed capture and acceptance keep separate exact intents (${mode})`,async({page})=>{
   const state=await fixture(page,native),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toContainText(artifactId);
@@ -133,12 +133,12 @@ for(const native of [false,true]){
 
  for(const mismatch of ['key','actor','params','ref']) test(`mismatched capture ${mismatch} cannot enable review (${mode})`,async({page})=>{
   const state=await fixture(page,native,{badResult:mismatch}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();
-  await expectErrorDetails(page, 'does not match');await expect(page.locator('[data-artifact-ready]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Capture another file'})).toBeDisabled();
+  await expectClientError(page, 'does not match');await expect(page.locator('[data-artifact-ready]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Capture another file'})).toBeDisabled();
   expect(state.writes).toHaveLength(1);expect(state.errors).toEqual([]);
  });
  test(`mismatched acceptance receipt never reports reviewed (${mode})`,async({page})=>{
   const state=await fixture(page,native,{badResult:'accept-receipt'});await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');const box=page.locator('[data-artifact-accept]');
-  await box.getByRole('textbox').fill('My exact review');await box.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expectErrorDetails(page, 'does not match');
+  await box.getByRole('textbox').fill('My exact review');await box.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expectClientError(page, 'does not match');
   await expect(page.locator('[data-artifact-accepted]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Record another review',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(1);
  });
  test(`task selector offers accepted commands and rejects unsafe file paths (${mode})`,async({page})=>{
@@ -153,12 +153,12 @@ for(const native of [false,true]){
   state.failRead=false;state.captureStatus='succeeded';await expect(page.locator('[data-artifact-ready]')).toBeVisible();await expect.poll(()=>state.after).toBe(1);expect(state.writes).toHaveLength(1);expect(state.errors).toEqual([]);
  });
  test(`read-only manual context cannot capture or claim managed lineage (${mode})`,async({page})=>{
-  const state=await fixture(page,native,{manual:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expectErrorDetails(page, 'Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
+  const state=await fixture(page,native,{manual:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expectClientError(page, 'Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
  });
 
  test(`preview mismatch and expiry cannot submit managed capture (${mode})`,async({page})=>{
   const state=await fixture(page,native,{badPreview:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');
-  await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expectErrorDetails(page, 'does not match');
+  await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expectClientError(page, 'does not match');
   state.badPreview=false;state.expired=true;await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText('Preview expired');await expect(box.getByRole('button',{name:'Save reviewed file',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(0);
  });
  test(`late preview cannot follow navigation into another principal (${mode})`,async({page})=>{

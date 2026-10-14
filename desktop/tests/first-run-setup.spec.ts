@@ -21,20 +21,49 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     expect(await storage(page)).not.toMatch(/synthetic-bat-secret|token=/);
     await formFor(page).locator('button[type=submit]').click();
     await expect(page.locator('[data-setup-sessions]')).toBeVisible();
+    await expect(page.locator('[data-setup-connect]')).not.toHaveAttribute('open', '');
     expect(state.posts).toHaveLength(1);expect(state.staged).toHaveLength(1);
     expect(state.posts[0].body.params.url).toBe('wss://127.0.0.1:9876');
     expect(JSON.stringify(state.posts)).not.toMatch(/synthetic-bat-secret|token=/);
     expect(await storage(page)).not.toMatch(/synthetic-bat-secret|token=/);
     await expect(field(page,'bat_secret')).toHaveValue('');
     await page.locator('[data-setup-sessions]').click(); await expect(page).toHaveURL(/#\/sessions$/);
+    await page.goto('/dashboard/#/settings');
+    await expect(page.locator('[data-setup-connect]')).not.toHaveAttribute('open', '');
+    await page.locator('[data-setup-connect]>summary').click(); await expect(field(page,'connection_url')).toBeVisible();
   });
   test('malformed masked URL is localized and never saved; edits can clear it',async({page})=>{
     const state = await managedSetupFixture(page,native,locale); await page.goto('/dashboard/');
     await field(page,'connection_url').fill('wss://localhost?token=synthetic-bat-secret');
+    await expect(page.locator('[data-setup-error=connection_url]')).toBeHidden();
+    await field(page,'connection_url').blur();
     await expect(page.locator('[data-setup-error=connection_url]')).toHaveText(locale==='en'?'This is not a BAT connection URL':'這不是 BAT 連線網址');
     await expect(field(page,'connection_url')).toHaveValue('wss://localhost?token=synthetic-bat-secret');
     expect(await storage(page)).not.toMatch(/synthetic-bat-secret|token=/);expect(state.staged).toEqual([]);expect(state.posts).toEqual([]);
     await field(page,'connection_url').fill('');await expect(page.locator('[data-setup-error=connection_url]')).toBeHidden();
+  });
+  test('URL errors wait for paste, change, blur or submit rather than typing',async({page})=>{
+    const state = await managedSetupFixture(page,native,locale); await page.goto('/dashboard/');
+    const input=field(page,'connection_url'), error=page.locator('[data-setup-error=connection_url]');
+    await input.pressSequentially('wss'); await expect(error).toBeHidden();
+    await input.dispatchEvent('change'); await expect(error).toBeVisible();
+    await input.fill('ws'); await expect(error).toBeHidden();
+    await formFor(page).locator('button[type=submit]').click(); await expect(error).toBeVisible();
+    await input.fill('');
+    await input.evaluate(node=>{
+      const event=new Event('paste',{bubbles:true,cancelable:true});
+      Object.defineProperty(event,'clipboardData',{value:{getData:()=> 'malformed BAT URL'}});node.dispatchEvent(event);
+    });
+    await expect(error).toHaveText(locale==='en'?'This is not a BAT connection URL':'這不是 BAT 連線網址');
+    expect(state.posts).toEqual([]); expect(state.staged).toEqual([]);
+  });
+  test('completed connection collapses, and Change settings reopens its editable form',async({page})=>{
+    const state=await managedSetupFixture(page,native,locale); await page.goto('/dashboard/');await field(page,'connection_url').fill(url);
+    await formFor(page).locator('button[type=submit]').click();await expect(page.locator('[data-setup-sessions]')).toBeVisible();
+    await expect(page.locator('[data-setup-connect]')).not.toHaveAttribute('open','');
+    await page.getByRole('button',{name:locale==='en'?'Change settings':'修改設定',exact:true}).click();
+    await expect(field(page,'host')).toBeEditable();await expect(field(page,'connection_url')).toBeVisible();
+    expect(state.posts).toHaveLength(1);expect(state.staged).toHaveLength(1);
   });
   test('Chinese host ID fails inline before staging and preserves the token through IME',async({page})=>{
     const state = await managedSetupFixture(page,native,locale); await page.goto('/dashboard/');await field(page,'connection_url').fill(url);

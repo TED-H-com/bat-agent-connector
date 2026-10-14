@@ -7069,15 +7069,17 @@ var STRINGS = {
 		setup_token_hint: "BAT「遠端存取」的「連線 Token」。",
 		setup_profile_hint: "BAT 工作區的設定檔代號；一般使用 default。",
 		setup_paste_token_again: "請重新貼上 BAT 連線網址或權杖；權杖不會保存為草稿。",
-		setup_secret_staged: "權杖已暫存於中央，這一頁可在一小時內重試。重新載入後需再貼上。",
+		setup_secret_staged: "權杖已暫存於 Connector，這一頁可在一小時內重試。重新載入後需再貼上。",
 		setup_required: "請填寫此欄位。",
 		setup_invalid_fingerprint: "請輸入 64 個十六進位字元的 SHA-256 憑證指紋，可含冒號。",
-		setup_retained_request: "原設定請求仍保留；請查回同一筆請求。確認未受理前，不會另建請求。",
+		setup_retained_request: "原設定請求仍保留。請先查回這筆請求，再進行其他變更。",
 		setup_view_sessions: "查看工作階段",
 		error_generic: "無法完成此要求，請查看詳細資料。",
+		desktop_status_error: "無法使用本機 Connector 連線，請檢查設定。",
+		error_code_ARTIFACT_TOO_LARGE: "檔案過大，請選擇較小的檔案。",
 		connection_actor: "帳號識別碼",
 		connection_scopes: "授權範圍代碼",
-		connection_access: "可用權限",
+		connection_access: "權限",
 		connection_other_access: "其他授權",
 		error_code_NOT_MANAGED: "此安裝未提供引導設定。",
 		error_code_FORBIDDEN: "目前帳號沒有這項操作的權限。",
@@ -7096,7 +7098,7 @@ var STRINGS = {
 		error_code_REPOSITORY_BINDING_CHANGED: "儲存庫連結已變更，請重新核對工作區與遠端位址。",
 		error_code_EXISTING_INTEGRATION: "已有整合設定，請保留既有政策。",
 		error_code_PRECONDITION_REQUIRED: "請重新整理設定後再試。",
-		error_code_SETUP_BUSY: "中央仍有工作執行中，請等工作結束後再試。",
+		error_code_SETUP_BUSY: "Connector 仍有工作執行中，請等工作結束後再試。",
 		error_code_CONFIGURATION_CHANGED: "設定已在別處變更，請重新整理後再試。",
 		error_code_PROFILE_NOT_FOUND: "BAT 未回報此設定檔，請核對設定檔代號。",
 		error_code_SSH_NOT_VERIFIED: "請先驗證 SSH 別名與主機金鑰。",
@@ -7109,7 +7111,7 @@ var STRINGS = {
 		error_code_SOURCE_TOO_LARGE: "來源資料過大，請縮小範圍後再試。",
 		error_code_NETWORK_ERROR: "連線中斷，請檢查網路後查回原請求。",
 		error_code_TIMEOUT: "連線逾時，請查回原請求。",
-		error_code_CENTRAL_OFFLINE: "中央服務離線，請恢復連線後再試。",
+		error_code_CENTRAL_OFFLINE: "Connector 離線，請恢復連線後再試。",
 		error_code_UNAUTHORIZED: "請先提供有效的 API 權杖。",
 		connection_scope_observe: "檢視",
 		connection_scope_operate: "操作",
@@ -7124,7 +7126,7 @@ var STRINGS = {
 		setup_title: "準備開始工作",
 		setup_unsaved: "有未儲存設定",
 		setup_resume_help: "可稍後繼續。非機密草稿會保留；帳號授權與主機信任仍須由你確認。",
-		setup_host_title: "連線至 BAT",
+		setup_host_title: "1. 連線至 BAT",
 		setup_host_help: "選取已有的 BAT 連線設定檔，或填入要連線的主機。先確認主機，再選擇可執行的工作。",
 		setup_profile: "BAT 連線設定檔",
 		setup_manual_profile: "手動輸入",
@@ -7178,13 +7180,13 @@ var STRINGS = {
 		setup_connected: "已連線",
 		setup_unverified: "等待連線驗證",
 		setup_busy: "目前仍有工作或操作；設定會等安全時機再變更。",
-		setup_profiles_unavailable: "可選取既有連線設定檔，或手動輸入 BAT 連線資訊。",
+		setup_profiles_unavailable: "無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。",
 		managed_join_existing: "進階：加入既有中央",
 		managed_join_help: "輸入另一個中央的位址與預期帳號，再於原生視窗確認。設定後須另行加入該中央的憑證；此電腦原有的背景工作會繼續運作。",
-		managed_background_help: "中央服務在背景持續運作。關閉這個畫面不會停止工作。",
+		managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
 		managed_open_browser: "在瀏覽器開啟 Dashboard",
 		managed_start_login: "登入電腦時啟動",
-		managed_browser_connected: "已連線至本機中央",
+		managed_browser_connected: "已連線至本機 Connector",
 		managed_browser_help: "此瀏覽器沿用桌面的個人身分。登出後，可從桌面選單重新開啟 Dashboard。",
 		delivery_list_prs: "瀏覽 Pull Requests",
 		delivery_no_prs: "找不到 PR。",
@@ -8012,16 +8014,16 @@ var STRINGS = {
 		desktop_source_launch_environment: "本次啟動的記憶體憑證",
 		desktop_source_windows_credential_manager: "Windows 認證管理員",
 		desktop_source_macos_keychain: "macOS 鑰匙圈",
-		desktop_enrollment_help: "在系統安全輸入框中輸入中央服務 API 權杖。驗證身分後，才會儲存至此帳戶的保護儲存區，供下次使用。",
+		desktop_enrollment_help: "在系統安全輸入框中輸入 Connector API 權杖。驗證身分後，才會儲存至此帳戶的保護儲存區，供下次使用。",
 		desktop_enrollment_unsupported: "此平台尚未支援保護儲存與憑證輸入。可使用啟動時提供的記憶體憑證；不會儲存至磁碟。",
-		desktop_forget_help: "只移除此電腦的已儲存憑證並中斷連線；不會撤銷中央權杖。草稿與原操作識別仍保留。",
+		desktop_forget_help: "只移除此電腦的已儲存憑證並中斷連線；不會撤銷 Connector 權杖。草稿與原操作識別仍保留。",
 		desktop_forgotten: "已移除本機憑證並中斷連線。",
 		desktop_reloaded: "已重新載入設定。請驗證連線；原草稿仍保留。",
 		desktop_disconnected: "已中斷連線；中央工作仍繼續。",
 		desktop_enrollment_cancelled: "已取消憑證輸入，保留原連線。",
 		desktop_connection: "桌面中央連線",
 		desktop_local: "本機功能",
-		desktop_connect_needed: "請連到已配置的中央服務。",
+		desktop_connect_needed: "請連到已配置的 Connector。",
 		desktop_polling: "已連線 · 每秒更新",
 		desktop_config_needed: "尚未配置中央連線。",
 		desktop_credential_missing: "尚未提供可用的本機憑證。",
@@ -8683,12 +8685,14 @@ var STRINGS = {
 		setup_token_hint: "BAT Remote Access → “Connection Token”.",
 		setup_profile_hint: "BAT workspace profile ID; usually default.",
 		setup_paste_token_again: "Paste the connection URL or token again; credentials are never saved as drafts.",
-		setup_secret_staged: "Credential staged centrally; this page can retry within one hour. Paste it again after reloading.",
+		setup_secret_staged: "Token staged in Connector; this page can retry within one hour. Paste it again after reloading.",
 		setup_required: "Fill in this field.",
 		setup_invalid_fingerprint: "Enter a SHA-256 fingerprint with 64 hexadecimal characters; colons are allowed.",
-		setup_retained_request: "The original request is retained. Check it before starting another request; admission has not been ruled out.",
+		setup_retained_request: "The original request is kept. Check it before making another change.",
 		setup_view_sessions: "View sessions",
 		error_generic: "This request could not be completed. Check Details.",
+		desktop_status_error: "The local Connector connection is unavailable. Check its settings.",
+		error_code_ARTIFACT_TOO_LARGE: "This file is too large. Choose a smaller file.",
 		connection_actor: "Actor ID",
 		connection_scopes: "Scope codes",
 		connection_access: "Access",
@@ -8710,7 +8714,7 @@ var STRINGS = {
 		error_code_REPOSITORY_BINDING_CHANGED: "Review the repository workspace and remote; its binding changed.",
 		error_code_EXISTING_INTEGRATION: "Preserve the existing integration policy.",
 		error_code_PRECONDITION_REQUIRED: "Refresh configuration before trying again.",
-		error_code_SETUP_BUSY: "Wait for central work to settle before trying again.",
+		error_code_SETUP_BUSY: "Wait for Connector work to settle before trying again.",
 		error_code_CONFIGURATION_CHANGED: "Configuration changed elsewhere. Refresh before trying again.",
 		error_code_PROFILE_NOT_FOUND: "BAT did not report this profile. Check its ID.",
 		error_code_SSH_NOT_VERIFIED: "Verify the SSH alias and host key first.",
@@ -8723,7 +8727,7 @@ var STRINGS = {
 		error_code_SOURCE_TOO_LARGE: "This source is too large. Narrow the selection and try again.",
 		error_code_NETWORK_ERROR: "Connection failed. Check your network and the original request.",
 		error_code_TIMEOUT: "The connection timed out. Check the original request.",
-		error_code_CENTRAL_OFFLINE: "Reconnect to central before trying again.",
+		error_code_CENTRAL_OFFLINE: "Reconnect to Connector before trying again.",
 		error_code_UNAUTHORIZED: "Provide a valid API token first.",
 		connection_scope_observe: "View",
 		connection_scope_operate: "Operate",
@@ -8738,7 +8742,7 @@ var STRINGS = {
 		setup_title: "Get ready to work",
 		setup_unsaved: "Unsaved settings",
 		setup_resume_help: "Continue later without losing non-secret drafts. You still confirm account authorization and host trust.",
-		setup_host_title: "Connect BAT",
+		setup_host_title: "1. Connect BAT",
 		setup_host_help: "Choose an existing BAT connection profile or enter a host. Verify the host, then choose which work it may run.",
 		setup_profile: "BAT connection profile",
 		setup_manual_profile: "Enter manually",
@@ -8792,7 +8796,7 @@ var STRINGS = {
 		setup_connected: "Connected",
 		setup_unverified: "Awaiting connection verification",
 		setup_busy: "Work or operations are still active; configuration changes wait for a safe point.",
-		setup_profiles_unavailable: "No BAT connection profile can be imported, or its authorization is protected by the operating system. Configure the connection below.",
+		setup_profiles_unavailable: "BAT connection profiles could not be read. Paste a connection URL or enter the values manually.",
 		managed_join_existing: "Advanced: join an existing central",
 		managed_join_help: "Enter another central address and expected account, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
 		managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
@@ -9629,14 +9633,14 @@ var STRINGS = {
 		desktop_source_macos_keychain: "macOS Keychain",
 		desktop_enrollment_help: "Enter the Connector API token in the system’s secure dialog. After identity verification, it is saved to this account’s protected storage for the next login.",
 		desktop_enrollment_unsupported: "Protected storage and credential entry are not available on this platform yet. A launch credential can be used in memory; it is never saved to disk.",
-		desktop_forget_help: "Removes this computer’s saved credential and disconnects; it does not revoke the central token. Drafts and original operation IDs stay saved.",
+		desktop_forget_help: "Removes this computer’s saved credential and disconnects; it does not revoke the Connector token. Drafts and original operation IDs stay saved.",
 		desktop_forgotten: "Saved credential removed and disconnected.",
 		desktop_reloaded: "Configuration reloaded. Verify the connection to continue; existing drafts stay saved.",
 		desktop_disconnected: "Disconnected. Central work continues.",
 		desktop_enrollment_cancelled: "Credential entry cancelled. The existing connection is unchanged.",
 		desktop_connection: "Desktop central connection",
 		desktop_local: "Local capabilities",
-		desktop_connect_needed: "Connect to the configured central Connector.",
+		desktop_connect_needed: "Connect to the configured Connector.",
 		desktop_polling: "connected · updates every second",
 		desktop_config_needed: "Central connection is not configured.",
 		desktop_credential_missing: "No native credential is available yet.",
@@ -39858,7 +39862,7 @@ function validSetupEndpoint(value) {
 var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
 function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, onConfigured, caps }) {
 	const key = `batc.managed.setup.${namespace}`;
-	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false;
+	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
 	const stagedSecrets = new Map();
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
@@ -39908,6 +39912,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		hidden: true
 	}, t("setup_unsaved"));
 	const fields = new Map(), errors = new Map(), hints = new Map(), composing = new Set();
+	function fieldHint(name, text) {
+		const help = hints.get(name);
+		help.textContent = text;
+		help.hidden = !text;
+	}
 	function fieldError(name, key) {
 		const node = fields.get(name), error = errors.get(name);
 		if (!node || !error) return;
@@ -39916,8 +39925,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		node.setAttribute("aria-invalid", text ? "true" : "false");
 		error.textContent = text;
 		error.hidden = !text;
-		const line = node.parentElement?.querySelector("[data-setup-error-break]");
-		if (line) line.hidden = !text;
 	}
 	function focusField(name) {
 		const node = fields.get(name);
@@ -39944,7 +39951,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		});
 		const help = h("span", {
 			id: `${id}-hint`,
-			class: "muted"
+			class: "muted",
+			hidden: !hint
 		}, hint ? t(hint) : "");
 		node.setAttribute("aria-describedby", `${id}-hint ${id}-error`);
 		errors.set(name, error);
@@ -39972,13 +39980,13 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			unsaved.hidden = false;
 			if (!composing.has(name)) fieldError(name, null);
 			if (name === "url") suggestLocal();
-			if (secret && name !== "connection_url" && node.value) help.textContent = hint ? t(hint) : "";
+			if (secret && name !== "connection_url" && node.value) fieldHint(name, hint ? t(hint) : "");
 		});
 		node.addEventListener("compositionstart", () => composing.add(name));
 		node.addEventListener("compositionend", () => {
 			composing.delete(name);
 			if (!alive() || saved.intent || busy) return;
-			if (name === "connection_url") consumeConnectionUrl();
+			if (name === "connection_url") consumeConnectionUrl(false);
 			else if ([
 				"host",
 				"url",
@@ -39990,11 +39998,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		fields.set(name, node);
 		return h("label", {
 			for: id,
-			class: "connection-token"
-		}, h("span", {}, t(label)), node, hint ? h("br") : null, help, h("br", {
-			hidden: true,
-			"data-setup-error-break": name
-		}), error);
+			class: "connection-token setup-field"
+		}, h("span", {}, t(label)), node, help, error);
 	};
 	const checkbox = (name, label) => {
 		const node = h("input", { type: "checkbox" });
@@ -40013,6 +40018,16 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		return h("label", {}, node, " ", t(label));
 	};
 	const profile = h("select", { "aria-label": t("setup_profile") });
+	const profilesError = h("span", {
+		class: "muted",
+		hidden: true,
+		"data-setup-profiles-error": ""
+	});
+	const profileField = h("label", {
+		class: "connection-token setup-field",
+		hidden: true,
+		"data-setup-profile": ""
+	}, h("span", {}, t("setup_profile")), profile, profilesError);
 	profile.addEventListener("change", () => {
 		if (!alive() || saved.intent) return;
 		const selected = snapshot?.profiles?.find((row) => row.id === profile.value);
@@ -40032,7 +40047,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			showError(error);
 		}
 	});
-	const manual = h("details", { "data-setup-manual": "" }, h("summary", {}, t("setup_enter_manually")), h("label", {}, t("setup_profile"), profile), h("div", { class: "capture-fields" }, input("url", "setup_host_url", {
+	const manual = h("details", { "data-setup-manual": "" }, h("summary", {}, t("setup_enter_manually")), profileField, h("div", { class: "capture-fields" }, input("url", "setup_host_url", {
 		type: "url",
 		required: true,
 		placeholder: "wss://host:9876",
@@ -40178,6 +40193,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			try {
 				persist();
 				operation = null;
+				hostDisclosure.open = true;
 				update();
 				refresh().catch(showError);
 			} catch (error) {
@@ -40192,10 +40208,14 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		hidden: true,
 		"data-setup-sessions": ""
 	}, t("setup_view_sessions"));
+	const hostDisclosure = h("details", {
+		open: true,
+		"data-setup-connect": ""
+	}, h("summary", {}, t("setup_host_title")), hostForm);
 	const box = h("section", {
-		class: "panel managed-setup",
+		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("h2", {}, t("setup_title"), " ", unsaved), summary, sessions, h("div", { class: "actions" }, refreshButton, retry, next), message, receipt, h("details", { open: true }, h("summary", {}, t("setup_host_title")), hostForm), h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", {}, h("summary", {}, t("global_details")), h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved), h("div", { class: "ui-header-actions" }, refreshButton)), summary, sessions, h("div", { class: "actions" }, retry, next), message, receipt, hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", {}, h("summary", {}, t("global_details")), h("p", {}, t("setup_resume_help"))));
 	function suggestLocal() {
 		if (!snapshot || snapshot.hosts?.length !== 0 || fields.get("host").value) return;
 		try {
@@ -40208,7 +40228,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			persist();
 		} catch {}
 	}
-	function consumeConnectionUrl() {
+	function consumeConnectionUrl(reportError = true) {
 		if (!alive() || busy || saved.intent || composing.has("connection_url")) return;
 		const node = fields.get("connection_url");
 		if (!node.value) {
@@ -40217,7 +40237,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		}
 		const parsed = parseBatConnectionUrl(node.value);
 		if (!parsed) {
-			fieldError("connection_url", "setup_invalid_connection_url");
+			if (reportError) fieldError("connection_url", "setup_invalid_connection_url");
 			return;
 		}
 		node.value = "";
@@ -40235,7 +40255,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		saved.import_profile_id = "";
 		profile.value = "";
 		manual.open = false;
-		hints.get("bat_secret").textContent = t("setup_token_hint");
+		fieldHint("bat_secret", t("setup_token_hint"));
 		try {
 			suggestLocal();
 			persist();
@@ -40244,7 +40264,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			showError(error);
 		}
 	}
-	for (const event of ["input", "change"]) fields.get("connection_url").addEventListener(event, consumeConnectionUrl);
+	fields.get("connection_url").addEventListener("input", () => consumeConnectionUrl(false));
+	for (const event of ["change", "blur"]) fields.get("connection_url").addEventListener(event, () => consumeConnectionUrl());
 	fields.get("connection_url").addEventListener("paste", (event) => {
 		if (!alive() || busy || saved.intent || event.isComposing || composing.has("connection_url")) return;
 		const value = event.clipboardData?.getData("text");
@@ -40335,6 +40356,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		persist();
 		if (candidate.status === "succeeded") {
 			unsaved.hidden = true;
+			if (candidate.action === "setup.host") hostDisclosure.open = false;
 			Promise.resolve(onConfigured?.()).catch(showError);
 		}
 		update();
@@ -40384,7 +40406,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 					ref: secretRef,
 					expiresAt: Date.now() + 36e5
 				});
-				hints.get(kind === "host" ? "bat_secret" : "github_secret").textContent = t("setup_secret_staged");
+				fieldHint(kind === "host" ? "bat_secret" : "github_secret", t("setup_secret_staged"));
 			}
 			const imported = kind === "host" && !secretRef && saved.import_profile_id;
 			const params = kind === "host" ? {
@@ -40465,7 +40487,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 				WORKSPACE_NOT_FOUND: "workspace_id"
 			}[error.code] : null;
 			if (error.code === "INVALID_SECRET") stagedSecrets.delete(kind);
-			if (!usableSecret(kind) && kind !== "verification") hints.get(kind === "host" ? "bat_secret" : "github_secret").textContent = t("setup_paste_token_again");
+			if (!usableSecret(kind) && kind !== "verification") fieldHint(kind === "host" ? "bat_secret" : "github_secret", t("setup_paste_token_again"));
 		} else if (saved.intent && !saved.intent.operation_id && [
 			"CONFIGURATION_CHANGED",
 			"SETUP_BUSY",
@@ -40517,6 +40539,8 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 					summary.replaceChildren();
 					verificationCommands.replaceChildren();
 					profile.replaceChildren();
+					profileField.hidden = true;
+					profilesError.hidden = true;
 				}
 				update();
 			}
@@ -40536,6 +40560,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		}
 		snapshot = result;
 		readReady = true;
+		if (!hostDisclosureReady) {
+			hostDisclosure.open = !result.hosts?.length;
+			hostDisclosureReady = true;
+		}
 		suggestLocal();
 		if (!saved.verification_timeout) fields.get("verification_timeout").value = String(result.verification.timeout_s);
 		verificationCommands.replaceChildren(...Object.entries(result.verification.commands).map(([project, argv]) => h("details", {}, h("summary", {}, project), h("pre", { class: "pre" }, argv.join("\n")), h("button", {
@@ -40549,7 +40577,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		})), ...(result.hosts || []).map((row) => h("p", {}, h("strong", {}, row.name), " · ", t(row.connected ? "setup_connected" : "setup_unverified"), " · ", row.url)), ...[result.busy ? h("p", { class: "note warn" }, t("setup_busy")) : null].filter(Boolean));
 		profile.replaceChildren(h("option", { value: "" }, t("setup_manual_profile")), ...(result.profiles || []).map((row) => h("option", { value: row.id }, row.name || row.id)));
 		profile.value = saved.import_profile_id || "";
-		if (!saved.intent && saved.host && !fields.get("bat_secret").value && !usableSecret("host") && !saved.import_profile_id && !result.hosts?.some((host) => host.name === saved.host && host.token_available)) hints.get("bat_secret").textContent = t("setup_paste_token_again");
+		profileField.hidden = !(result.profiles?.length || result.profiles_error);
+		profile.hidden = !result.profiles?.length;
+		profilesError.hidden = !result.profiles_error;
+		profilesError.textContent = result.profiles_error ? t("setup_profiles_unavailable") : "";
+		if (!saved.intent && saved.host && !fields.get("bat_secret").value && !usableSecret("host") && !saved.import_profile_id && !result.hosts?.some((host) => host.name === saved.host && host.token_available)) fieldHint("bat_secret", t("setup_paste_token_again"));
 		update();
 	}
 	return {
@@ -40571,6 +40603,29 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 				"github_secret"
 			]) fields.get(name).value = "";
 		}
+	};
+}
+//#endregion
+//#region src/error-presentation.js
+var ApiError = class extends Error {
+	constructor(status, code, message, { localized = false } = {}) {
+		super(message || code);
+		this.status = status;
+		this.code = code;
+		this.localized = localized;
+	}
+};
+function errorPresentation(error, t, { summary } = {}) {
+	const code = error?.code || "";
+	const message = error?.message || String(error);
+	const key = `error_code_${code}`;
+	const known = code && t(key) !== key;
+	const client = error?.localized === true || !code && error?.constructor === Error;
+	const text = summary ?? (known ? t(key) : client ? message : t("error_generic"));
+	return {
+		summary: text,
+		code: code === text ? "" : code,
+		message: message === text ? "" : message
 	};
 }
 var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
@@ -49436,16 +49491,9 @@ function dropKey(scope, namespace) {
 		localStorage.removeItem(`batc.key.${namespace}.${scope}`);
 	} catch {}
 }
-var ApiError = class extends Error {
-	constructor(status, code, message) {
-		super(message || code);
-		this.status = status;
-		this.code = code;
-	}
-};
 async function api(method, path, body, key, collectReceipt) {
-	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"));
-	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
+	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
+	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 	const epoch = state.epoch;
 	let response;
 	try {
@@ -49466,17 +49514,15 @@ async function api(method, path, body, key, collectReceipt) {
 }
 function errorBox(e, { summary } = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
-	const key = `error_code_${e.code}`;
-	const known = e.code && t(key) !== key;
-	const timeout = ["AbortError", "TimeoutError"].includes(e.name);
-	const network = e instanceof TypeError;
+	const presentation = errorPresentation(e, t, { summary });
+	const diagnostics = [presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean);
 	return h("div", { "data-api-error": "" }, h("p", {
 		class: "error",
 		"data-error-summary": ""
-	}, summary ?? (known ? t(key) : timeout ? t("error_code_TIMEOUT") : network ? t("error_code_NETWORK_ERROR") : t("error_generic"))), disclosure({
+	}, presentation.summary), diagnostics.length ? disclosure({
 		label: t("global_details"),
-		body: h("div", { "data-error-details": "" }, h("code", {}, e.code || ""), h("p", {}, e.message || String(e)))
-	}));
+		body: h("div", { "data-error-details": "" }, ...diagnostics)
+	}) : null);
 }
 async function submit(action, target, params, preconditions, scope) {
 	const connection = {
@@ -49803,7 +49849,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			};
 			while (["accepted", "running"].includes(op.status)) op = await readNext();
 			if (op.status === "waiting_external") {
-				if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
+				if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 				const epoch = state.epoch;
 				const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
 				guard(true);
@@ -49860,7 +49906,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			return;
 		}
 		if (file.size > limit) {
-			fill(status, errorBox(new Error(`ARTIFACT_TOO_LARGE (${limit})`)));
+			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`)));
 			return;
 		}
 		let name = file.name;
@@ -53523,7 +53569,7 @@ function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
 	const stateCell = h("dd");
 	const eventCell = h("dd");
-	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell);
+	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
 		const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
 		const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
@@ -53554,8 +53600,7 @@ function connectionAccess() {
 		"integrate",
 		"merge"
 	];
-	const labels = [...new Set((state.caps?.scopes || []).map((scope) => t(known.includes(scope) ? `connection_scope_${scope}` : "connection_other_access")))];
-	return h("p", { "data-connection-access": "" }, t("connection_access"), ": ", joinLabel(labels));
+	return h("dd", { "data-connection-access": "" }, joinLabel([...new Set((state.caps?.scopes || []).map((scope) => t(known.includes(scope) ? `connection_scope_${scope}` : "connection_other_access")))]));
 }
 function connectionIdentity() {
 	return h("dl", { class: "kv" }, h("dt", {}, t("connection_actor")), h("dd", {}, h("code", {}, state.caps?.actor || "—")), h("dt", {}, t("connection_scopes")), h("dd", {}, h("code", {}, (state.caps?.scopes || []).join(", "))));
@@ -53628,7 +53673,7 @@ function viewBrowserSettings(main) {
 	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
 	const facts = connectionFacts();
-	frame.panel("connection").append(h("section", { class: "panel" }, facts, connectionAccess(), managed ? h("h2", {}, t("managed_browser_connected")) : null, disclosure({
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
 	}), h("button", {
@@ -53705,7 +53750,7 @@ async function viewManagedSettings(main) {
 	const local = h("section", {
 		class: "panel",
 		"data-connection-card": ""
-	}, h("h2", {}, t("managed_browser_connected")), connectionFacts(), connectionAccess(), disclosure({
+	}, h("h2", {}, t("managed_browser_connected")), connectionFacts(), disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), h("p", {}, t("managed_background_help")), !nativeDesktop ? h("p", {}, t("managed_browser_help")) : null, h("div", { "data-managed-locations": "" }, h("h3", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))))
 	}), status);
@@ -53971,7 +54016,6 @@ async function viewNativeSettings(main) {
 		info.replaceChildren();
 		technicalDetails.replaceChildren();
 		if (state.caps) technicalDetails.append(connectionIdentity());
-		if (state.caps) info.append(connectionAccess());
 		if (state.connectionNotice) info.append(h("p", {}, state.connectionNotice));
 		if (state.connectionError) info.append(errorBox(state.connectionError));
 		if (state.nativeBusy) info.append(h("p", {}, t("desktop_connecting")));
@@ -54049,7 +54093,8 @@ async function viewNativeSettings(main) {
 		if (status.expected_actor) technicalDetails.append(h("dt", {}, t("desktop_expected_actor")), h("dd", {}, status.expected_actor));
 		if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
-		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error)));
+		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
+		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), { summary: t("desktop_status_error") }));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
 		platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help") : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";
 		connect.disabled = state.nativeBusy || !!status.error || !status.credential_available;
