@@ -1,6 +1,6 @@
 import {timeStamp} from './ui/stamps.js';
 import {h} from './ui/dom.js';
-import {discussLink, inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button} from './ui/components.js';
+import {discussLink, inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button, inlineError} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {discussHref} from './pm-discuss-link.js';
@@ -147,8 +147,8 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     }
     panel.querySelector('[data-work-discuss]').href = href;
     if (data.error) {
-      panel.body.replaceChildren(h('section', {'data-work-section': 'error'}, paragraph(t('wv_detail_unavailable')),
-        button({label: t('wv_retry'), onClick: data.onRetry})), disclosure({label: t('wv_details'), body: paragraph(labelSegment(data.error.code))}));
+      panel.body.replaceChildren(h('section', {'data-work-section': 'error'}, inlineError({error: {message: t('wv_detail_unavailable')}, retry: data.onRetry})),
+        disclosure({label: t('wv_details'), body: paragraph(labelSegment(data.error.code))}));
       return;
     }
     const sections = [
@@ -208,7 +208,8 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
         if (result?.status === 'rejected') {pill.textContent = t('pq_rejected'); pill.dataset.qualityResult = 'rejected';}
         return pill;
       };
-      served.replaceChildren(h('h3', {}, t('wv_criteria')), statusPill(data.acceptance || 'unknown'),
+      served.replaceChildren(h('h3', {}, t('wv_criteria')),
+        ...(data.acceptance === 'accepted' && requirement.acceptance?.length ? [] : [statusPill(data.acceptance || 'unknown')]),
         h('ul', {}, ...(requirement.acceptance || []).map(item => h('li', {}, labelSegment(item.text), ' ',
           criterionPill(item)))));
       state.dataset.workSection = 'work'; state.querySelector('h3').textContent = t('wv_bound_work');
@@ -217,8 +218,15 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       if (data.workIncomplete) state.append(statusPill('partial'));
       for (const row of data.milestones || []) state.append(paragraph(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}`}, row.title)));
       const review = data.reviews?.at(-1);
-      if (review) result.append(statusPill('accepted'), paragraph(t('wv_quality_review')), h('ul', {}, ...(review.assessment?.document?.criteria || []).filter(row => row.criterion?.requirement_id === requirement.id)
-        .map(row => h('li', {}, labelSegment(requirement.acceptance?.find(item => item.source_input_id === row.criterion.input_id)?.text), ' ', statusPill(row.status === 'accepted' ? 'accepted' : 'unknown')))));
+      if (review) {
+        const criteria = (review.assessment?.document?.criteria || []).filter(row => row.criterion?.kind === 'acceptance' && row.criterion.requirement_id === requirement.id);
+        const breakdown = disclosure({label: t('wv_review_criteria'), key: `${workspaceId}:${requirement.id}:review-criteria`, body: h('ul', {}, ...criteria.map(row => h('li', {},
+          labelSegment(requirement.acceptance?.find(item => item.source_input_id === row.criterion.input_id)?.text), ' ',
+          statusPill(row.status === 'accepted' ? 'accepted' : 'unknown'))))});
+        breakdown.dataset.requirementReviewCriteria = '';
+        result.append(paragraph(t('wv_review_number', {n: review.sequence}), ' · ', stamp(review.assessment?.created_at ?? review.created_at)),
+          paragraph(t('wv_review_basis')), breakdown);
+      }
       else {
         const work = (data.work || []).filter(work => work.latest_capture).sort((a, b) => (b.latest_capture.captured_at || 0) - (a.latest_capture.captured_at || 0))[0];
         if (work) result.append(h('div', {'data-requirement-capture': ''}, paragraph(work.work.title),

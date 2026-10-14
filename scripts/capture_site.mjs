@@ -12,14 +12,15 @@ import {DEMO_NOW} from '../desktop/tests/demo/project.ts';
 import {mountConversation} from '../desktop/tests/conversation-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-// Candidate pin. The integrator must re-pin to merged main and recapture before publication.
-const source = '944a854fc381f61c6281edb7fcbcf887321a0c68';
+// Merged main after #133 and #145. Documentation-only commits may recapture this tree.
+const source = 'aba02180e872f798ea54aa003b267b14eb7f5018';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = new Date(DEMO_NOW).toISOString();
 const viewport = {width: 1440, height: 960};
 const assets = ['index.html', 'app.js', 'app.css', 'i18n.js'];
 const scenes = ['overview', 'discussions', 'requirements', 'issues', 'schedule', 'dependencies', 'board', 'session'];
+const reviewScenes = ['agents', 'overview-unknown', 'overview-empty'];
 const git = (...args) => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 const sourceCommit = git('rev-parse', source);
@@ -45,10 +46,28 @@ async function prepare(page, scenario, locale) {
   const zh = locale === 'zh-TW';
   // The real managed-browser-session fixture avoids an optional bearer-only 404 probe.
   const fixture = demoFixture({locale, now: DEMO_NOW, discussions: scenario === 'discussions', managedSession: true});
+  // The older demo Overview omits #134's history. Project its existing synthetic
+  // plan adoption receipts using the central read shape, without inventing decisions.
+  const base = `/pm/workspaces/${fixture.ids.workspaceId}`;
+  const decisions = [];
+  for (const id of [fixture.ids.planV3, fixture.ids.planV2]) {
+    const {data: {plan}} = await fixture.dispatch({method: 'GET', path: `${base}/plans/${id}`});
+    decisions.push({key: `plan_revision.${id}`, title: plan.document.title, decided_at: plan.adoption.created_at,
+      actor: plan.adoption.adopted_by, status: 'adopted', ref: {kind: 'plan_revision', id}});
+  }
   const writes = [];
   await mountConversation(page, false, async input => {
     if (input.method !== 'GET') writes.push(input);
     const result = await fixture.dispatch(input);
+    if (new URL(input.path, 'http://fixture').pathname === `${base}/overview`) {
+      Object.assign(result.data, {recent_decisions: decisions, recent_decisions_count: decisions.length,
+        recent_decisions_complete: true, recent_decisions_truncated: false});
+      if (scenario === 'overview-unknown' || scenario === 'overview-empty') {
+        const complete = scenario === 'overview-empty';
+        Object.assign(result.data, {milestones: [], next_milestone: null, recent_deliveries: [], recent_deliveries_complete: complete});
+        result.data.coverage.sources.roadmap.complete = complete;
+      }
+    }
     // Discussion mock operations otherwise use the capture machine's wall clock.
     if (result.data.operation) result.data.operation.created_at = DEMO_NOW / 1000 - 42;
     return result;
@@ -64,9 +83,17 @@ async function prepare(page, scenario, locale) {
     await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
   }
   let composition;
-  if (scenario === 'overview') {
-    await expect(page.locator('[data-overview-row]')).toHaveCount(5);
-    composition = 'Live adopted-plan progress, one blocker, two pending decisions and recorded milestone dates; not a saved report.';
+  if (scenario.startsWith('overview')) {
+    await expect(page.locator('[data-overview-row]')).toHaveCount(6);
+    await expect(page.locator('[data-overview-recent-decisions]')).toContainText(zh ? '近期決策' : 'Recently decided');
+    await expect(page.locator('[data-overview-decided]')).toHaveCount(decisions.length);
+    await expect(page.locator('[data-overview-row]').filter({hasText: 'lodash'})).toHaveCount(1);
+    if (scenario !== 'overview') {
+      await expect(page.locator('.pm-overview-side')).toContainText(scenario === 'overview-empty'
+        ? zh ? '尚無紀錄' : 'None recorded' : zh ? '未知' : 'Unknown');
+      await expect(page.locator('.pm-overview-side').locator('[data-status=unknown]')).toHaveCount(scenario === 'overview-empty' ? 0 : 2);
+    }
+    composition = 'Live adopted-plan progress, one blocker, two pending decisions, named maintenance finding and recorded milestone dates; Recently decided derives from the demo plan adoption receipts, not the pending count. Not a saved report.';
   } else if (scenario === 'discussions') {
     const row = page.locator('[data-overview-row]').filter({hasText: fixture.copy.blocker});
     await row.getByRole('link', {name: zh ? '討論' : 'Discuss', exact: true}).click();
@@ -98,14 +125,17 @@ async function prepare(page, scenario, locale) {
     await openView('issues');
     await expect(page.locator('[data-reg-table] [data-row-key]')).toHaveCount(3);
     await page.locator('[data-reg-more]').click();
-    await expect(page.locator('[data-reg-table] [data-row-key]')).toHaveCount(6);
-    composition = 'All two demo register pages loaded: risks, issues, action, proposed change and decision; open items remain open.';
+    await expect(page.locator('[data-reg-table] [data-row-key]')).toHaveCount(9);
+    await expect(page.locator('[data-reg-table]')).toContainText('lodash');
+    composition = 'Both demo register pages loaded: nine risks, issues, action, proposed change and decision records, including structured finding names; open items remain open.';
   } else if (scenario === 'schedule') {
     await openView('schedule');
     await expect(page.locator('.schedule-chart [data-schedule-row]').first()).toBeVisible();
     await page.locator('[data-schedule-row="milestone:design_review"] button[aria-expanded=true]').click();
     await expect(page.locator('[data-schedule-row="milestone:recovery_review"] [data-schedule-delta]')).toContainText('+3');
-    composition = 'Recorded baseline, forecast and actual timeline; Design review collapsed through its normal control to show Recovery review forecast three days late. Undated session attempts remain unscheduled.';
+    if (page.viewportSize().width < 800) await expect(page.locator('[data-schedule-axis-caption]')).toBeVisible();
+    else assert.ok(await page.locator('[data-schedule-tick]').count() > 0, 'Schedule must retain date-axis labels');
+    composition = 'Recorded baseline, forecast and actual timeline with readable date axis; Design review collapsed through its normal control to show Recovery review forecast three days late. Phone tracks share a fitted range. Undated session attempts remain unscheduled.';
   } else if (scenario === 'dependencies') {
     await openView('dependencies');
     await page.getByRole('radio', {name: zh ? '關係圖' : 'Graph', exact: true}).click();
@@ -116,6 +146,12 @@ async function prepare(page, scenario, locale) {
     await openView('board');
     await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(12);
     composition = 'Twelve synthetic work items in five workflow lanes; accepted content, work in review and waiting work keep their recorded states.';
+  } else if (scenario === 'agents') {
+    await openView('agents');
+    await expect(page.locator('[data-resource-row]')).toHaveCount(3);
+    await expect(page.locator('[data-resource-metrics]')).toContainText(zh ? '已觀測用量' : 'Tokens observed');
+    await expect(page.locator('[data-resource-chart]')).toBeVisible();
+    composition = 'Review only: sourced usage rows, daily trend and reported quota windows; unavailable source remains unknown.';
   } else if (scenario === 'session') {
     // A hash navigation keeps the selected project and its in-app connection.
     await page.evaluate(hash => {location.hash = hash;}, new URL(origin + demoRoute('manual')).hash);
@@ -146,7 +182,7 @@ try {
   }
   const fixtures = ['desktop/tests/demo/index.ts', 'desktop/tests/conversation-fixture.ts'];
   for (const fixture of fixtures) await include(fixture);
-  for (const [language, locale] of [['en', 'en-US'], ['zh', 'zh-TW']]) for (const scenario of scenes) {
+  for (const [language, locale] of [['en', 'en-US'], ['zh', 'zh-TW']]) for (const scenario of [...scenes, ...(review ? reviewScenes : [])]) {
     const responsive = [];
     let scene;
     for (const width of [390, 768, 1440]) {
@@ -174,8 +210,12 @@ try {
         assert.deepEqual(errors, [], 'Browser errors'); assert.deepEqual(blocked, [], 'Unexpected external requests');
         responsive.push({...dimensions, horizontal_overflow: false});
         if (review) await page.screenshot({path: path.join(review, `${scenario}-${language}-${width}.png`), animations: 'disabled', caret: 'hide'});
-        if (width === viewport.width) await page.screenshot({path: path.join(output, `${scenario}-${language}.png`), animations: 'disabled', caret: 'hide'});
+        if (scenes.includes(scenario) && width === viewport.width) await page.screenshot({path: path.join(output, `${scenario}-${language}.png`), animations: 'disabled', caret: 'hide'});
       } finally {await context.close();}
+    }
+    if (!scenes.includes(scenario)) {
+      process.stdout.write(`Reviewed ${scenario}-${language}; 390/768/1440: no horizontal overflow\n`);
+      continue;
     }
     const file = `${scenario}-${language}.png`;
     images.push({file, sha256: sha256(await readFile(path.join(output, file))), scenario, locale, viewport, theme: 'light',
@@ -184,7 +224,7 @@ try {
   }
   assert.equal(images.length, 16);
   const sourceFiles = await Promise.all([...sources].sort().map(async file => ({file, sha256: sha256(await readFile(path.join(root, file)))})));
-  const manifest = {schema: 'public_ui_screenshots_v1', frontend_source_commit: sourceCommit, source_pin_kind: 'candidate', frontend_source_tree: git('rev-parse', sourceCommit + ':desktop/src'),
+  const manifest = {schema: 'public_ui_screenshots_v1', frontend_source_commit: sourceCommit, source_pin_kind: 'merged', frontend_source_tree: git('rev-parse', sourceCommit + ':desktop/src'),
     captured_at: new Date().toISOString(), fixture_clock: fixtureClock, timezone: 'UTC', browser: browser.version(), node: process.version,
     synthetic_data: true, native_or_live_acceptance: false, dom_content_modified: false, source_files: sourceFiles, images};
   await writeFile(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');

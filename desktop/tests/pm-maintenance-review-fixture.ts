@@ -135,5 +135,5 @@ export async function boot(page:Page,locale='en'){
   },locale);
   await expect(page.locator('[data-pm-maintenance-review]')).toBeVisible();
 }
-export async function openAction(page:Page,name:string){await action(page,name).evaluate(el=>{let node=el.parentElement;while(node){if(node.tagName==='DETAILS')(node as HTMLDetailsElement).open=true;node=node.parentElement;}});}
+export async function openAction(page:Page,name:string){const form=action(page,name);if(await form.isVisible())return;const primary=page.locator(`[data-review-open="${name}"]`);if(await primary.isVisible())await primary.click();else{await page.locator('[data-review-more]').click();await page.locator(`[data-menu-key="${name}"]`).click();}await expect(form).toBeVisible();}
 export async function reason(page:Page,name:string,value='Keep the fixed discussion outcome'){await openAction(page,name);await action(page,name).getByLabel('Reason for this record',{exact:true}).fill(value);}

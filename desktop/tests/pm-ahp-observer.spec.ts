@@ -39,7 +39,7 @@ function fixture(){
     return pm.dispatch(input);
   };return {state,pm,make,dispatch};
 }
-async function open(page:any,native:boolean,f:ReturnType<typeof fixture>){await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await expect(page.getByRole('button',{name:'Capture host catalog',exact:true})).toBeEnabled();}
+async function open(page:any,native:boolean,f:ReturnType<typeof fixture>){await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await expect(page.getByRole('button',{name:'Capture host catalog',exact:true})).toBeEnabled();}
 for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP Web',()=>{
   test('reader captures catalog explicitly, max eight original sessions and optional static changesets',async({page})=>{
     const f=fixture();await open(page,native,f);expect(f.state.writes).toHaveLength(0);await expect(page.getByRole('button',{name:'Capture selected snapshots'})).toBeDisabled();
@@ -53,7 +53,7 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
   });
   test('selection draft survives reload and is separated by adapter and binding',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();await page.getByLabel('Snapshot contents').selectOption('true');
-    await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeChecked();
+    await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeChecked();
     await expect(page.getByLabel('Snapshot contents')).toHaveValue('true');await page.getByLabel('Configured adapter').selectOption({label:'review'});
     await expect(page.locator('[data-ahp-catalog] input[type=checkbox]')).toHaveCount(0);await page.getByRole('button',{name:'Capture host catalog',exact:true}).click();await expect(page.getByLabel('Select review session 1',{exact:true})).not.toBeChecked();
     await page.getByLabel('Configured adapter').selectOption({label:'editor'});await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeChecked();
@@ -65,12 +65,12 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
     await expect(page.locator('[data-pm-ahp]')).toContainText('Reply unavailable');const original=structuredClone(f.state.writes[0]);
     await page.getByLabel('Configured adapter').selectOption({label:'review'});await expect(page.getByRole('button',{name:'Check original request'})).toHaveCount(0);
     await page.getByLabel('Configured adapter').selectOption({label:'editor'});await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeDisabled();
-    await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await page.getByRole('button',{name:'Check original request'}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
+    await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await page.getByRole('button',{name:'Check original request'}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.writes[1].idempotency_key).toBe(original.idempotency_key);expect(f.state.writes[1].body).toEqual(original.body);
   });
   test('known running receipt recovery uses GET and no duplicate admission',async({page})=>{
     const f=fixture();f.state.pending=true;await open(page,native,f);await page.getByRole('button',{name:'Capture host catalog',exact:true}).click();await expect(page.locator('[data-pm-ahp]')).toContainText('running');
-    await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await expect.poll(()=>f.state.reads.filter(s=>s.startsWith('/operations/')).length).toBeGreaterThan(0);expect(f.state.writes).toHaveLength(1);
+    await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await expect.poll(()=>f.state.reads.filter(s=>s.startsWith('/operations/')).length).toBeGreaterThan(0);expect(f.state.writes).toHaveLength(1);
   });
   test('empty filtered history preserves next cursor and saved details use original source',async({page})=>{
     const f=fixture();f.make();f.state.filteredPage=true;await open(page,native,f);await page.locator('[data-ahp-history] > summary').click();await expect(page.locator('[data-ahp-history]')).toContainText('current source access');
@@ -81,7 +81,7 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
   });
   test('source withdrawal on event removes original titles and details without a write',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeVisible();f.state.denied=true;f.pm.state.cursor++;
-    await expect(page.locator('[data-pm-ahp]')).toContainText('Previous source content has been hidden');await expect(page.locator('[data-ahp-detail]')).toHaveCount(0);await expect(page.locator('[data-pm-ahp]')).not.toContainText('editor session 1');expect(f.state.writes).toHaveLength(0);
+    await expect(page.locator('[data-pm-ahp]')).toContainText('Previous source content has been hidden');await expect(page.locator('[data-pm-ahp]')).not.toContainText('NOT_FOUND');await expect(page.locator('[data-ahp-detail]')).toHaveCount(0);await expect(page.locator('[data-pm-ahp]')).not.toContainText('editor session 1');expect(f.state.writes).toHaveLength(0);
   });
   test('catalog source 404 preserves ability to capture a replacement without preserving its titles',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();f.state.rows=[];await page.getByRole('button',{name:'Reload saved observations'}).click();
@@ -115,7 +115,7 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
       ];
       Object.assign(r.document.evidence,{snapshots:cases.map((c,i)=>({resource:`copilot:/original-${i}`,source_kind:'session',from_seq:i,
         ...c.fields,state:{title:c.title,provider:'copilot',lifecycle:'ready'}}))});
-      await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();
+      await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');
       await page.getByText(locale==='zh-TW'?'快照詳情':'Snapshot details',{exact:true}).click();
       for(const c of cases){const title=page.getByText(c.title,{exact:true});await title.click();
         await expect(title.locator('..').getByText(`${locale==='zh-TW'?'已記錄後續事件':'Later events recorded'}: ${locale==='zh-TW'?c.zh:c.en}`,{exact:true})).toBeVisible();}
@@ -154,13 +154,13 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
     expect(f.state.writes).toHaveLength(0);
   });
   test('an explicit non-session catalog kind cannot become a session selection',async({page})=>{
-    const f=fixture(),r=f.make('editor',1);r.document.evidence.catalog[0].source_kind='changeset';await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();
+    const f=fixture(),r=f.make('editor',1);r.document.evidence.catalog[0].source_kind='changeset';await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');
     await expect(page.locator('[data-pm-ahp]')).toContainText('does not match its original workspace');await expect(page.locator('[data-ahp-catalog] input')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
   });
   test('another central identity cannot inherit the original selection draft',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();
-    f.pm.state.principal='person-2';await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await expect(page.getByLabel('Select editor session 1',{exact:true})).not.toBeChecked();
-    f.pm.state.principal='person-1';await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeChecked();expect(f.state.writes).toHaveLength(0);
+    f.pm.state.principal='person-2';await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await expect(page.getByLabel('Select editor session 1',{exact:true})).not.toBeChecked();
+    f.pm.state.principal='person-1';await page.reload();await openPmSection(page, 'agents' , 'ui_observations');await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeChecked();expect(f.state.writes).toHaveLength(0);
   });
   test('a mismatched saved document clears the whole source display',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await page.locator('[data-ahp-history] > summary').click();f.state.bad=true;await page.locator('.pm-ahp-history-row button').click();
@@ -168,13 +168,13 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
   });
 });
 test('AHP no configured adapters explains central prerequisite without an endpoint field',async({page})=>{
-  const f=fixture();f.state.adapters=[];await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await expect(page.locator('[data-pm-ahp]')).toContainText('No AHP adapters are configured');await expect(page.locator('[data-pm-ahp] form')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+  const f=fixture();f.state.adapters=[];await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await expect(page.locator('[data-pm-ahp]')).toContainText('No AHP adapters are configured');await expect(page.locator('[data-pm-ahp] form')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
 });
 test('AHP shared responsive observations in English and Traditional Chinese',async({browser,baseURL},testInfo)=>{
   const folder=process.env.PM_AHP_SCREENSHOTS||testInfo.outputPath('screenshots');mkdirSync(folder,{recursive:true});
   for(const locale of ['en','zh-TW']){
     for(const [width,height]of [[1440,900],[768,900],[390,844]]){const context=await browser.newContext({locale,baseURL,viewport:{width,height}}),page=await context.newPage(),f=fixture();f.make('editor',3);await mountConversation(page,false,f.dispatch);
-      await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await page.locator('[data-pm-ahp] > summary').click();await expect(page.locator('[data-ahp-catalog] input[type=checkbox]').first()).toBeVisible();await expect(page.locator('[data-ahp-catalog] input[type=checkbox]')).toHaveCount(3);
+      await page.goto(route);await openPmSection(page, 'agents' , 'ui_observations');await expect(page.locator('[data-ahp-catalog] input[type=checkbox]').first()).toBeVisible();await expect(page.locator('[data-ahp-catalog] input[type=checkbox]')).toHaveCount(3);
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
       const check=await page.locator('.pm-ahp-session input').first().boundingBox(),title=await page.locator('.pm-ahp-session strong').first().boundingBox();expect(check!.x+check!.width).toBeLessThan(title!.x);expect(Math.abs(check!.y-title!.y)).toBeLessThan(12);
       await page.screenshot({path:`${folder}/ahp-${locale}-${width}.png`,fullPage:true});await context.close();}}
