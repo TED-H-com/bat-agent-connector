@@ -97,6 +97,36 @@ async function boot(browser: import('@playwright/test').Browser, baseURL: string
 }
 
 for (const locale of locales) {
+  test(`returning Issues reserves its inspector before delayed reads (${locale})`, async ({browser, baseURL}) => {
+    const {page, context, copy, errors} = await boot(browser, baseURL, locale, 1440);
+    let releaseList!: () => void, releaseDetail!: () => void, detailStarted = false;
+    const list = new Promise<void>(resolve => {releaseList = resolve;});
+    const detail = new Promise<void>(resolve => {releaseDetail = resolve;});
+    try {
+      await openView(page, 'issues');
+      await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+      await expect(page.locator('[data-reg-timeline] [data-reg-step]')).toHaveCount(3);
+      await openView(page, 'requirements');
+      await page.route('**/register?*', async route => {await list; await route.fallback();});
+      await page.route('**/register/*', async route => {detailStarted = true; await detail; await route.fallback();});
+      await openView(page, 'issues');
+      const inspector = page.locator('[data-reg-inspector]');
+      await expect(inspector).toBeVisible();
+      await expect(inspector).toHaveAttribute('data-reg-loading', '');
+      const tableLink = page.locator(`[data-reg-table] [data-reg-requirement="${copy.project.ids.requirements.email}"]`);
+      await expect(tableLink).toBeHidden();
+      releaseList();
+      await expect.poll(() => detailStarted).toBe(true);
+      await expect(tableLink).toBeHidden();
+      releaseDetail();
+      await expect(inspector).not.toHaveAttribute('data-reg-loading');
+      await inspector.locator(`[data-reg-requirement="${copy.project.ids.requirements.email}"]`).click();
+      await expect(page.locator('[data-pm-view="requirements"]')).toHaveAttribute('aria-current', 'page');
+      await expect(page.locator(`[data-rtm-requirement="${copy.project.ids.requirements.email}"] button`)).toBeFocused();
+      expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+    } finally {releaseList(); releaseDetail(); await context.close();}
+  });
+
   test(`issues register experience (${locale})`, async ({browser, baseURL}) => {
     test.setTimeout(60_000);
     const {page, context, errors, calls, copy} = await boot(browser, baseURL, locale, 1440);

@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Keep Board recovery controls and keyboard focus stable across repeated read
+  failures, and reuse the initial activation read during workspace loading.
+
+- Reserve the returning Issues inspector before its reads finish, so related
+  chips do not disappear under the pointer when the side panel arrives.
+
 - Schedule at phone width fits every bar to the shared date range, with a range
   caption and the Today line, and does not offer Day zoom there. Week ticks label
   week starts only, so a partial opening week is not crowded under the sticky column.
@@ -47,6 +53,16 @@
   Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
   See the [overview contract](docs/design/pm-overview-discussion-context.md).
 
+- Overview distinguishes unread milestone, delivery and charter sources from known
+  empty records in English and Traditional Chinese. Live updates keep the attention
+  row being read at its viewport position and preserve Progress Details focus and
+  open state. Attention stays in Central's severity/age order during passive viewing
+  and on return to Overview; focus, hover or text selection holds the existing order.
+  Passive anchoring starts after scrolling into the list; new top rows otherwise
+  appear in place without moving the page.
+  A text selection anchors its own row when rows above it change height.
+  Withdrawn rows and their counts still disappear immediately.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.
@@ -58,6 +74,12 @@
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.
   Totals and summaries require complete relevant sources; hidden or withdrawn records
   are omitted from rows and aggregates together, while other readable records remain.
+  See the [register contract](docs/design/pm-register.md).
+
+- Expose a structured `finding` identity on maintenance findings in `pm_register_list`,
+  `pm_register_get`, overview attention and discussion context chips. `title` stays null.
+  Missing or unproven facts are omitted and listed in `unknowns`. A withdrawn source
+  removes the row and the identity together.
   See the [register contract](docs/design/pm-register.md).
 
 - Maintenance repairs, maintenance review, maintenance policy and release baselines
@@ -201,6 +223,12 @@
   unavailable or withdrawn source leaves the totals, chart and inspector together.
   Paused source snapshots remain fixed during event refreshes. Localized chart dates
   keep a measured gap on narrow screens without dropping daily observations.
+- Keep Agents headings, totals, rows, inspectors and daily usage in one consistent
+  window when returning or receiving new usage. Refresh mismatched cached trends
+  together with totals, preserving immediate withdrawal. Use human tool names and
+  translated roles for sources and Discuss drafts, shared Unknown pills for missing
+  facts, and complete the Traditional Chinese usage labels. Reuse trends while
+  readable row facts are unchanged, including idle and partially observed sources.
 - Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
   shared page header, inbox groups, operations table and inspector. Pending opens each operation
   from its inspector and reports a failed read instead of an empty inbox, and every registered
@@ -318,6 +346,8 @@
 - Diagnose durable-operation test timeouts with worker/step details and join failed
   test workers before journal teardown, preserving the existing deadline and original-key
   recovery.
+- The cleanup integration test keeps reading the same operation until its status is terminal
+  before the existing success checks, so early item receipts no longer fail a still-running cleanup.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
