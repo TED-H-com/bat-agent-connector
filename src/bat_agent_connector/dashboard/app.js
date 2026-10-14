@@ -3714,9 +3714,16 @@ var resourceStrings = {
 		res_no_data: "No data",
 		res_source: "Source / CLI",
 		res_role: "Role",
+		res_source_id: "Source ID",
+		res_unnamed: "Unnamed source",
+		res_role_implementer: "Implementer",
+		res_role_reviewer: "Reviewer",
+		res_role_investigator: "Investigator",
+		res_role_planner: "Planner",
+		res_role_maintainer: "Maintainer",
 		res_empty: "No usage sources are connected to this workspace.",
 		res_no_match: "No sources match this filter.",
-		res_unknown: "Not provided",
+		res_unknown: "Unknown",
 		res_local: "Central host · local files",
 		res_observations: "Usage observations",
 		res_calls: "Messages",
@@ -3808,16 +3815,23 @@ var resourceStrings = {
 	},
 	"zh-TW": {
 		wb_agents: "Agent 資源",
-		res_filter: "篩選 CLI、模型或角色",
+		res_filter: "篩選工具、模型或角色",
 		res_window: "觀測期間",
 		res_pause: "暫停更新",
 		res_resume: "繼續更新",
 		res_no_data: "無資料",
-		res_source: "來源／CLI",
+		res_source: "來源",
 		res_role: "角色",
+		res_source_id: "來源識別碼",
+		res_unnamed: "未命名來源",
+		res_role_implementer: "實作",
+		res_role_reviewer: "審閱",
+		res_role_investigator: "調查",
+		res_role_planner: "規劃",
+		res_role_maintainer: "維護",
 		res_empty: "此工作區尚未連接用量來源。",
 		res_no_match: "沒有符合篩選條件的來源。",
-		res_unknown: "來源未提供",
+		res_unknown: "未知",
 		res_local: "中央主機・本機檔案",
 		res_observations: "用量觀測筆數",
 		res_calls: "訊息數",
@@ -3829,7 +3843,7 @@ var resourceStrings = {
 		res_actual: "回報模型",
 		res_requested: "要求的模型",
 		res_effort: "推理強度",
-		res_version: "CLI 版本",
+		res_version: "工具版本",
 		res_input: "輸入",
 		res_cache_read: "快取讀取",
 		res_cache_write: "快取寫入",
@@ -3863,7 +3877,7 @@ var resourceStrings = {
 		res_in_min: "{n} 分鐘後",
 		res_in_hr: "{n} 小時後",
 		res_in_day: "{n} 天後",
-		res_tokens: "已觀測 Tokens",
+		res_tokens: "已觀測用量",
 		res_sources: "來源",
 		res_sources_value: "{current} / {total}",
 		res_next_reset: "下次配額重設",
@@ -3874,15 +3888,15 @@ var resourceStrings = {
 		res_seen: "最後出現",
 		res_status: "狀態",
 		res_model_col: "模型",
-		res_tokens_col: "Tokens",
+		res_tokens_col: "用量",
 		res_total: "總計",
 		res_requested_short: "要求：{model}",
 		res_more_models: "另外 {count} 個",
 		res_filter_all: "全部來源",
-		res_filter_cli: "CLI · {name}",
+		res_filter_cli: "工具 · {name}",
 		res_filter_role: "角色 · {name}",
 		res_filter_model: "模型 · {name}",
-		res_filter_group_cli: "CLI",
+		res_filter_group_cli: "工具",
 		res_filter_group_role: "角色",
 		res_filter_group_model: "模型",
 		res_discuss: "討論",
@@ -13782,8 +13796,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	let filter = savedFilter(preference.filter);
 	let serial = 0, active = false, busy = false, paused = Boolean(preference.paused), timer = null;
 	let data = null, selected = preference.selected || null, signature = "";
-	let trendBuckets = null, trendReadAt = 0, trendSourceKey = "", trendUntilDay = "";
-	let bucketsStopped = false, requestZone = browserTimeZone();
+	let trendBuckets = null, trendReadAt = 0, trendRowKey = "", trendWindowKey = "";
+	let bucketsStopped = false, requestZone = browserTimeZone(), shownZone = requestZone;
 	let inspectorPanel = null, closing = false, chartNode = null, chartTrendKey = "";
 	const meta = h("p", {
 		class: "ui-meta",
@@ -13807,11 +13821,13 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			busy = false;
 			trendBuckets = null;
 			trendReadAt = 0;
-			trendSourceKey = "";
-			trendUntilDay = "";
+			trendRowKey = "";
+			trendWindowKey = "";
 			data = null;
 			signature = "";
 			dropChart();
+			inspectorPanel?.body.replaceChildren(skeleton(4));
+			updateMeta();
 			main.replaceChildren(skeleton(4));
 			refresh({
 				user: true,
@@ -13868,7 +13884,18 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		return isReadable(row) ? clock(row.last_at) : EM;
 	}
 	function roleLabel(role) {
-		return role === "unassigned" ? t("wb_unassigned") : role || EM;
+		if (role === "unassigned") return t("wb_unassigned");
+		if ([
+			"implementer",
+			"reviewer",
+			"investigator",
+			"planner",
+			"maintainer"
+		].includes(role)) return t("res_role_" + role);
+		return t("ui_status_unknown");
+	}
+	function sourceName(row) {
+		return [isReadable(row) ? cliName(cliOf(row)) : "", row.role ? roleLabel(row.role) : ""].filter(Boolean).join(" · ") || t("res_unnamed");
 	}
 	function effortLabel(value) {
 		if (value === "low" || value === "medium" || value === "high") return t("res_effort_" + value);
@@ -13969,29 +13996,34 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (!isReadable(row)) return EM;
 		const items = row.configurations || [];
 		const first = items[0];
-		if (!first) return t("res_unknown");
+		if (!first) return statusPill("unknown");
 		const requested = first.requested_model && first.requested_model !== first.actual_model ? h("div", { class: "pm-agents-requested" }, t("res_requested_short", { model: first.requested_model })) : null;
-		return h("div", { class: "pm-agents-model" }, first.actual_model || (!requested ? t("res_unknown") : null), requested, items.length > 1 ? h("div", { class: "pm-agents-requested" }, t("res_more_models", { count: items.length - 1 })) : null);
+		return h("div", { class: "pm-agents-model" }, first.actual_model || statusPill("unknown"), requested, items.length > 1 ? h("div", { class: "pm-agents-requested" }, t("res_more_models", { count: items.length - 1 })) : null);
 	}
 	function partText(metricValue) {
 		if (finite(metricValue?.value) != null) return finite(metricValue.value).toLocaleString();
 		if (finite(metricValue?.observed) != null) return t("res_partial", { count: finite(metricValue.observed).toLocaleString() });
-		return t("res_not_reported");
+		return t("ui_status_unknown");
+	}
+	function partNode(metricValue) {
+		if (finite(metricValue?.value) != null) return finite(metricValue.value).toLocaleString();
+		if (finite(metricValue?.observed) != null) return h("span", {}, finite(metricValue.observed).toLocaleString(), " ", statusPill("partial"));
+		return statusPill("unknown");
 	}
 	function tokenHeadline(row) {
 		const total = row.metrics?.total;
 		if (finite(total?.value) != null) return finite(total.value).toLocaleString();
-		if (finite(total?.observed) != null) return t("res_partial", { count: finite(total.observed).toLocaleString() });
+		if (finite(total?.observed) != null) return h("span", {}, finite(total.observed).toLocaleString(), " ", statusPill("partial"));
 		return EM;
 	}
-	function tokenBreakdown(row) {
+	function tokenBreakdown(row, format = partText) {
 		const metrics = row.metrics || {};
 		return [
-			[t("res_input"), partText(metrics.input)],
-			[t("res_cache_read"), partText(metrics.cache_read)],
-			[t("res_cache_write"), partText(metrics.cache_write)],
-			[t("res_output"), partText(metrics.output)],
-			[t("res_reasoning"), partText(metrics.reasoning)]
+			[t("res_input"), format(metrics.input)],
+			[t("res_cache_read"), format(metrics.cache_read)],
+			[t("res_cache_write"), format(metrics.cache_write)],
+			[t("res_output"), format(metrics.output)],
+			[t("res_reasoning"), format(metrics.reasoning)]
 		];
 	}
 	function tokenTitle(row) {
@@ -14011,10 +14043,10 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	}
 	function sourceCell(row) {
 		const cli = cliOf(row);
-		return h("div", { class: "pm-agents-source" }, isReadable(row) && cli ? agentMark(cli) : null, h("div", { class: "pm-agents-source-id" }, row.source_id, isReadable(row) && cli ? h("div", { class: "ui-meta" }, cliName(cli)) : null));
+		return h("div", { class: "pm-agents-source" }, isReadable(row) && cli ? agentMark(cli) : null, h("div", { class: "pm-agents-source-id" }, sourceName(row)));
 	}
 	function metaZone() {
-		return isBucketPayload(data?.buckets) && data.buckets.tz || requestZone || "UTC";
+		return shownZone;
 	}
 	function updateMeta() {
 		if (!data) {
@@ -14071,7 +14103,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 	function tokenMetric() {
 		const rows = data?.rows || [];
 		const readable = rows.filter(isReadable);
-		const known = readable.map((row) => finite(row.metrics?.total?.value)).filter((value) => value != null);
+		const known = readable.map((row) => finite(row.metrics?.total?.value) ?? finite(row.metrics?.total?.observed)).filter((value) => value != null);
 		const partial = rows.some(needsPartial);
 		if (!known.length) return metric({
 			label: t("res_tokens"),
@@ -14155,9 +14187,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const rows = (pool?.sources || []).map((id) => (data?.rows || []).find((row) => row.source_id === id)).filter(Boolean);
 		const names = [...new Set(rows.filter(isReadable).map((row) => cliClass(cliOf(row)) === cliOf(row) ? cliName(cliOf(row)) : "").filter(Boolean))];
 		if (names.length === 1) return names[0];
-		if (rows.length === 1) return rows[0].source_id;
-		const only = (pool?.sources || []).filter(Boolean);
-		return only.length === 1 ? only[0] : EM;
+		if (rows.length === 1) return sourceName(rows[0]);
+		return (pool?.sources || []).filter(Boolean).length === 1 ? t("res_unnamed") : EM;
 	}
 	function quotaBlock(pool, item) {
 		const used = item ? finite(item.used_percent) : null;
@@ -14202,10 +14233,10 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			"data-resource-row": row.source_id,
 			"data-resource-select": row.source_id,
 			onclick: () => choose(row.source_id)
-		}, h("div", { class: "pm-agents-list-mark" }, readable && cli ? agentMark(cli) : null), h("div", { class: "pm-agents-list-id" }, h("span", { class: "pm-agents-list-name" }, row.source_id), readable && cli ? h("span", { class: "pm-agents-list-cli" }, cliName(cli)) : null), h("div", {
+		}, h("div", { class: "pm-agents-list-mark" }, readable && cli ? agentMark(cli) : null), h("div", { class: "pm-agents-list-id" }, h("span", { class: "pm-agents-list-name" }, sourceName(row))), h("div", {
 			class: "pm-agents-list-tokens tabular",
 			title: readable ? tokenTitle(row) : null
-		}, readable ? tokenHeadline(row) : EM), h("div", { class: "pm-agents-list-meta" }, readable ? `${modelName(row)} · ${roleLabel(row.role)}` : roleLabel(row.role)), h("div", { class: "pm-agents-list-status" }, statusNode(row)));
+		}, readable ? tokenHeadline(row) : EM), h("div", { class: "pm-agents-list-meta" }, readable ? modelName(row) : null), h("div", { class: "pm-agents-list-status" }, statusNode(row)));
 	}
 	function tableFor(visible) {
 		if (!data?.rows?.length) return emptyState({ title: t("res_empty") });
@@ -14272,8 +14303,18 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			]
 		});
 	}
-	function readableKey(rows) {
-		return (rows || []).filter(isReadable).map((row) => `${row.source_id}\u0000${row.status}`).sort().join("\n");
+	function readableFingerprint(rows) {
+		return (rows || []).filter(isReadable).map((row) => JSON.stringify({
+			source_id: row.source_id,
+			status: row.status,
+			observations: row.observations,
+			total: {
+				value: row.metrics.total?.value,
+				observed: row.metrics.total?.observed,
+				covered: row.metrics.total?.covered
+			},
+			last_at: row.last_at
+		})).sort().join("\n");
 	}
 	function filteredBuckets() {
 		if (!isBucketPayload(trendBuckets)) return null;
@@ -14321,14 +14362,50 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		chartTrendKey = key;
 		return chartNode;
 	}
+	function windowKey(window, zone) {
+		const until = Date.parse(window?.until);
+		return JSON.stringify([
+			Date.parse(window?.since),
+			Number.isFinite(until) ? dayKey(new Date(until), zone) : "",
+			zone,
+			period
+		]);
+	}
+	function canReuseTrend(result, zone) {
+		if (!isBucketPayload(trendBuckets) || trendBuckets.tz !== zone || windowKey(result.window, zone) !== trendWindowKey) return false;
+		return readableFingerprint(result.rows) === trendRowKey;
+	}
 	function wantsTrend(now = new Date()) {
 		if (!bucketsSupported || bucketsStopped) return false;
 		if (!trendBuckets) return true;
-		if (readableKey(data?.rows) !== trendSourceKey) return true;
-		const today = dayKey(now, trendBuckets.tz || requestZone);
-		if (trendUntilDay && today > trendUntilDay) return true;
-		if (now.getTime() - trendReadAt >= TREND_TTL) return true;
-		return false;
+		if (readableFingerprint(data?.rows) !== trendRowKey) return true;
+		if (windowKey(periodWindow(now, Number(period), requestZone), requestZone) !== trendWindowKey) return true;
+		return now.getTime() - trendReadAt >= TREND_TTL;
+	}
+	function withdrawSources(result) {
+		if (!data) return;
+		const latest = new Map(result.rows.map((row) => [row.source_id, row]));
+		const withdrawn = new Set(data.rows.filter((row) => isReadable(row) && !isReadable(latest.get(row.source_id))).map((row) => row.source_id));
+		data = {
+			...data,
+			rows: data.rows.flatMap((row) => {
+				const current = latest.get(row.source_id);
+				if (!current) return [];
+				return [withdrawn.has(row.source_id) ? {
+					...current,
+					metrics: null,
+					configurations: [],
+					calls: null,
+					observations: null
+				} : row];
+			}),
+			quota_pools: data.quota_pools.filter((pool) => !pool.sources?.some((id) => withdrawn.has(id)))
+		};
+		if (trendBuckets) trendBuckets = {
+			...trendBuckets,
+			series: trendBuckets.series.filter((item) => !withdrawn.has(item.source_id) && latest.has(item.source_id))
+		};
+		render();
 	}
 	function paint(visible) {
 		const activeEl = document.activeElement;
@@ -14360,7 +14437,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (row && inspectorPanel?.isConnected) {
 			inspectorPanel.dataset.source = row.source_id;
 			const title = inspectorPanel.querySelector("h2");
-			if (title) title.textContent = row.source_id;
+			if (title) title.textContent = sourceName(row);
 			fillInspector(row);
 		} else if (row) renderInspector();
 		else if (inspectorPanel) clearInspector();
@@ -14393,23 +14470,23 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const nodes = [h("div", {}, statusNode(row)), h("p", {}, discussLink({
 			workspaceId,
 			refs: [],
-			title: row.source_id,
+			title: sourceName(row),
 			from: "agents"
 		}, { "data-resource-discuss": "" }))];
 		if (isReadable(row)) {
 			const models = row.configurations || [];
 			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_model_col")));
 			nodes.push(...(models.length ? models : [{}]).map((item) => facts([
-				[t("res_actual"), item.actual_model || t("res_unknown")],
-				[t("res_requested"), item.requested_model || t("res_unknown")],
-				[t("res_effort"), effortLabel(item.effort)],
-				[t("res_version"), item.cli_version || t("res_unknown")]
+				[t("res_actual"), item.actual_model || statusPill("unknown")],
+				[t("res_requested"), item.requested_model || statusPill("unknown")],
+				[t("res_effort"), item.effort ? effortLabel(item.effort) : statusPill("unknown")],
+				[t("res_version"), item.cli_version || statusPill("unknown")]
 			])));
 			nodes.push(h("h3", { class: "pm-agents-group" }, t("res_tokens_col")), facts([
 				[t("res_total"), tokenHeadline(row)],
-				...tokenBreakdown(row),
-				[t("res_calls"), finite(row.calls) == null ? t("res_unknown") : finite(row.calls).toLocaleString()],
-				[t("res_observations"), finite(row.observations) == null ? t("res_unknown") : finite(row.observations).toLocaleString()]
+				...tokenBreakdown(row, partNode),
+				[t("res_calls"), finite(row.calls) == null ? statusPill("unknown") : finite(row.calls).toLocaleString()],
+				[t("res_observations"), finite(row.observations) == null ? statusPill("unknown") : finite(row.observations).toLocaleString()]
 			]));
 		}
 		const reason = reasonBits(row.status);
@@ -14422,7 +14499,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		const details = disclosure({
 			label: t("res_details"),
 			key: `agents-coverage:${workspaceId}:${row.source_id}`,
-			body: h("div", { class: "pm-agents-scope" }, isReadable(row) ? h("p", {}, t(row.adapter === "codex-rollout-v1" ? "res_codex_units" : "res_claude_units")) : null, h("p", {}, t("res_adapter"), " ", h("code", { class: "mono" }, row.adapter || t("res_unknown"))), isReadable(row) ? facts([
+			body: h("div", { class: "pm-agents-scope" }, facts([[t("res_source_id"), h("code", { class: "mono" }, row.source_id)], [t("res_role"), roleLabel(row.role)]]), isReadable(row) ? h("p", {}, t(row.adapter === "codex-rollout-v1" ? "res_codex_units" : "res_claude_units")) : null, h("p", {}, t("res_adapter"), " ", h("code", { class: "mono" }, row.adapter || t("res_unknown"))), isReadable(row) ? facts([
 				[t("res_first"), clock(row.first_at) === EM ? t("res_unknown") : clock(row.first_at)],
 				[t("res_last"), clock(row.last_at) === EM ? t("res_unknown") : clock(row.last_at)],
 				[t("res_collected"), clock(row.successful_at) === EM ? t("res_unknown") : clock(row.successful_at)]
@@ -14441,12 +14518,12 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		if (inspectorPanel?.isConnected) {
 			inspectorPanel.dataset.source = row.source_id;
 			const title = inspectorPanel.querySelector("h2");
-			if (title) title.textContent = row.source_id;
+			if (title) title.textContent = sourceName(row);
 			fillInspector(row);
 			return;
 		}
 		const panel = inspector({
-			title: row.source_id,
+			title: sourceName(row),
 			onClose() {
 				if (closing) return;
 				const id = selected;
@@ -14518,19 +14595,18 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			});
 		}, Math.max(1e4, Number(data?.interval_s || 60) * 1e3));
 	}
-	function rememberTrend(result, until, zoneUsed) {
+	function rememberTrend(result, zoneUsed) {
 		if (!isBucketPayload(result?.buckets)) {
 			trendBuckets = null;
 			trendReadAt = 0;
-			trendSourceKey = "";
-			trendUntilDay = "";
+			trendRowKey = "";
+			trendWindowKey = "";
 			return;
 		}
 		trendBuckets = result.buckets;
 		trendReadAt = Date.now();
-		trendSourceKey = readableKey(result.rows);
-		const untilMs = Date.parse(result.window?.until || until);
-		trendUntilDay = dayKey(new Date(Number.isFinite(untilMs) ? untilMs : Date.now()), result.buckets.tz || zoneUsed);
+		trendRowKey = readableFingerprint(result.rows);
+		trendWindowKey = windowKey(result.window, result.buckets.tz || zoneUsed);
 	}
 	function withdraw({ preserveSelection = false, keepSerial = false } = {}) {
 		if (!keepSerial) serial++;
@@ -14539,8 +14615,8 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 		signature = "";
 		trendBuckets = null;
 		trendReadAt = 0;
-		trendSourceKey = "";
-		trendUntilDay = "";
+		trendRowKey = "";
+		trendWindowKey = "";
 		clearTimeout(timer);
 		dropChart();
 		if (!preserveSelection) selected = null;
@@ -14605,15 +14681,14 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			alive();
 			if (ticket !== serial) return;
 			if (result?.workspace_id !== workspaceId || !Array.isArray(result.rows) || !Array.isArray(result.quota_pools)) throw Error(t("pm_scope_mismatch"));
-			const previousKey = trendSourceKey;
-			if (asked) rememberTrend(result, win.until, zoneUsed);
-			else if (trendBuckets) result = {
-				...result,
-				buckets: trendBuckets
-			};
-			data = result;
-			follow = !asked && bucketsSupported && !bucketsStopped && readableKey(result.rows) !== previousKey;
-			render();
+			follow = !asked && bucketsSupported && !bucketsStopped && !canReuseTrend(result, zoneUsed);
+			if (follow) withdrawSources(result);
+			else {
+				if (asked || bucketsStopped) rememberTrend(result, zoneUsed);
+				data = result;
+				shownZone = zoneUsed;
+				render();
+			}
 		} catch (error) {
 			try {
 				alive();

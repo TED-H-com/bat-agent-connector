@@ -703,6 +703,11 @@ source-reported models from requested model context, and observed tokens from cu
 quota windows. Missing counters stay unknown. Source failures withdraw numbers, chart
 contributions and model details together. The source filter sits with the list and
 narrows that list only; metrics, the chart and quota keep describing every row.
+Rows, filters, inspector titles and Discuss drafts use the CLI's human name and
+translated role. An inaccessible or CLI-less source uses its translated role;
+missing identity uses Unnamed source. The source ID stays in inspector Details as
+mono. Missing models, token parts and counters use the shared Unknown pill;
+observed subtotals keep Partial and an unobserved total stays an em dash.
 Below 800px each source is a tabbable button in a list, marked with `aria-current`.
 The toolbar can pause view updates without stopping collection. While paused the meta
 line shows the absolute collection time ("Paused · data from 5:00 PM") and the button
@@ -724,10 +729,22 @@ with a hatch and the in-progress or settling marker. An incomplete day shows its
 window is "Partial day", never Settling. A null total is a dashed stub in that CLI's
 stack position. A covered zero is a baseline tick.
 
-A tick asks for buckets again only when the capability is on and the trend is missing,
-the readable sources changed, the local date moved past the trend, or the trend is
-older than 15 minutes. Until that read returns, the chart draws only series that are
-still readable. A tick waits out a user-initiated read. The Partial pill follows
+The heading, usage metric, rows, inspector and chart show one consistent read.
+A cached trend is reusable only for the same since instant, until day, zone and
+period, when each readable source has the same fingerprint as in the bucket read:
+source ID, status, observation count, total value/observed/covered and last sample
+time. Idle row totals stay unknown even when complete days have covered zeros;
+partial row subtotals can include samples in a day whose total is unknown. These
+differences alone do not invalidate the cache. A totals-only read that differs
+requests buckets immediately and keeps the previous consistent pair until they
+arrive, without flashing the chart away. Source withdrawal still removes that
+source's numbers, chart contributions and inspector facts immediately. The
+heading uses the window and request zone of the read being shown.
+
+A tick asks for buckets again when the capability is on and the trend is missing,
+the readable row fingerprints or window changed, or the trend is older than
+15 minutes. Until that read returns, the chart draws only series that are still readable.
+A tick waits out a user-initiated read. The Partial pill follows
 unreadable, pending, catching-up, stale or binding-changed rows, and totals that are
 null or observed-only. Today's open bar does not turn the pill on by itself. Quota is
 one block per pool and window, titled by the CLI or source and the window length, as
