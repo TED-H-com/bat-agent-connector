@@ -1,6 +1,8 @@
 import {contextChip, tabs, inspector, button, iconButton, disclosure} from './ui/components.js';
 import {h} from './ui/dom.js';
 import {viewState} from './ui/view-state.js';
+import {locale} from './i18n.js';
+import {findingName} from './ui/finding-name.js';
 
 // Unknown enums are neutral, never machine keys in the reading surface.
 export function discussionLabel(t, prefix, value) {
@@ -10,7 +12,8 @@ export function discussionLabel(t, prefix, value) {
 export function discussionContext(t, refs = [], {limit = refs.length, onMore} = {}) {
   const chips = refs.slice(0, limit).map(ref => {
     const kind = ['risk','issue','action','change','decision'].includes(ref.record_type) ? t('reg_type_' + ref.record_type) : discussionLabel(t, 'pd_kind_', ref.kind);
-    const text = `${kind} · ${ref.available === false ? t('pd_unavailable') : ref.label || t('pd_unavailable')}`;
+    const named = ref.available !== false && ref.kind === 'finding' ? findingName(ref.finding, locale, '') : '';
+    const text = named || `${kind} · ${ref.available === false ? t('pd_unavailable') : ref.label || t('pd_unavailable')}`;
     const chip = contextChip({text});
     chip.dataset.discussionContext = ref.kind;
     chip.title = text; chip.setAttribute('aria-label', text);

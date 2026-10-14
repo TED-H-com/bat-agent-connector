@@ -121,10 +121,10 @@ test('unknown demo routes fail loudly and pages keep their cursors', async () =>
   expect(register.data.rows).toHaveLength(3);
   expect(register.data.next_cursor).toBe('cmVnMQ');
   expect(register.data.coverage.complete).toBe(true);
-  expect(register.data.total_by_type).toEqual({risk: 1, issue: 2, action: 1, change: 1, decision: 1});
+  expect(register.data.total_by_type).toEqual({risk: 1, issue: 5, action: 1, change: 1, decision: 1});
   expect(register.data.summary.blocking_reasons).toHaveLength(1);
   const registerNext = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/register?after=${register.data.next_cursor}&limit=50`});
-  expect(registerNext.data.rows).toHaveLength(3);
+  expect(registerNext.data.rows).toHaveLength(6);
   expect(registerNext.data.next_cursor).toBeNull();
   const registerPartial = await dispatch({method: 'GET', path: `/pm/workspaces/${ids.workspaceId}/register?owner=unavailable-source&limit=50`});
   expect(registerPartial.data.coverage.complete).toBe(false);

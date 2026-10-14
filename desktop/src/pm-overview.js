@@ -6,6 +6,8 @@ import {discussLink, button, sectionCard, metric, statusPill, disclosure, emptyS
 import {reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
+import {locale} from './i18n.js';
+import {acceptedFinding, findingName, findingSeverity} from './ui/finding-name.js';
 
 const domains = ['definition', 'scope', 'schedule', 'resources', 'risks', 'decisions'];
 const classes = ['accepted', 'in_review', 'in_progress', 'blocked', 'not_started'];
@@ -68,8 +70,12 @@ export function workspaceOverview(options) {
     // Construction does not notify; callbacks run after the controls are mounted.
     if (mode === 'saved') render();
   }
+  function attentionTitle(row) {
+    const fallback = typeof row?.title === 'string' ? row.title : '';
+    return findingName(row?.finding, locale, fallback);
+  }
   function discuss(row, part = 'attention') {
-    return discussLink({workspaceId, refs: row.ref ? [row.ref] : [], title: row.title, from:'overview'}, {'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`});
+    return discussLink({workspaceId, refs: row.ref ? [row.ref] : [], title: attentionTitle(row), from:'overview'}, {'data-overview-row-discuss': row.key || row.milestone_id, 'data-overview-link': `${part}:${row.key || row.milestone_id}:discuss`});
   }
   function open(row) {onOpen(row.ref, row);}
   function itemLink(row, part) {return row ? h('button', {type: 'button', class: 'pm-overview-link', 'data-overview-link': `${part}:${row.key || row.milestone_id || row.work_item_id}`, onclick: () => open(row)}, row.title) : null;}
@@ -145,12 +151,15 @@ export function workspaceOverview(options) {
       }
       const label = ['blocker', 'decision', 'deviation', 'risk'].includes(row.kind) ? t('ov_' + row.kind) : reasonLabel(t, 'unknown');
       const elapsed = age(row.since);
+      const severity = findingSeverity(acceptedFinding(row.finding)?.severity, locale);
       const link = h('button', {type: 'button', class: 'pm-overview-attention-main', 'data-overview-open': row.key, 'data-overview-link': `attention:${row.key}:open`, onclick: () => open(row)},
         h('span', {class: 'pm-overview-kind', title: label, 'aria-label': label}, icon(row.kind === 'decision' ? 'message-square' : 'circle-alert')),
-        h('span', {}, h('strong', {}, row.title)));
+        h('span', {}, h('strong', {}, attentionTitle(row))));
       const node = h('div', {class: 'pm-overview-attention-row', 'data-overview-row': row.key}, link,
         h('div', {class: 'pm-overview-attention-meta'}, h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · ')),
-          h('span', {class: 'pm-overview-attention-actions'}, elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed),
+          h('span', {class: 'pm-overview-attention-actions'},
+            severity ? h('span', {class: `ui-pill tone-${severity.tone}`, 'data-finding-severity': severity.severity}, severity.label) : null,
+            elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed),
             discuss(row))));
       cached?.node.remove(); attentionNodes.set(row.key, {signature: rowSignature, node});
       rows.insertBefore(node, rows.children[position] || null); position++;
@@ -173,7 +182,7 @@ export function workspaceOverview(options) {
   function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
   function openRelated(row, host, returnFocus) {
     closeReader(); relatedSelection = row;
-    reader = inspector({title: row.title, returnFocus, onClose: () => {reader = null; relatedSelection = null;}});
+    reader = inspector({title: attentionTitle(row), returnFocus, onClose: () => {reader = null; relatedSelection = null;}});
     reader.classList.add('pm-overview-related'); reader.dataset.overviewRelated = row.key;
     reader.body.append(h('section', {'data-overview-related-row': row.key, 'aria-current': 'true'},
       h('p', {}, t('ov_' + row.kind)), h('p', {}, contextText(row)),

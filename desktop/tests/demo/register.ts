@@ -7,8 +7,20 @@ export const REGISTER_PAGE_CURSOR = 'cmVnMQ';
 
 const TYPES = ['risk', 'issue', 'action', 'change', 'decision'] as const;
 
-function findingId(project: DemoProject) {
-  return hexId('pmfn_', 1, 32);
+export function demoFindings(project: DemoProject) {
+  const observation_id = hexId('pmgh_', 1, 32);
+  const document_digest = digest(1);
+  const issue = hexId('pmfn_', 1, 32);
+  const pull = hexId('pmfn_', 2, 32);
+  const alert = hexId('pmfn_', 3, 32);
+  const bare = hexId('pmfn_', 4, 32);
+  return {
+    observation_id, document_digest,
+    issue: {id: issue, finding: {source: 'issues', number: 87, labels: ['dependency']}, native: {kind: 'issues', number: 87}, facts: {labels: ['dependency']}},
+    pull: {id: pull, finding: {source: 'dependabot_pull_requests', number: 12, manifests: ['package.json']}, native: {kind: 'dependabot_pull_requests', number: 12}, facts: {manifests: ['package.json']}},
+    alert: {id: alert, finding: {source: 'dependabot_alerts', number: 14, package: 'lodash', ecosystem: 'npm', ghsa_id: 'GHSA-35jh-r3h4-6jhm', severity: 'high'}, native: {kind: 'dependabot_alerts', number: 14}, facts: {package: 'lodash', ecosystem: 'npm', ghsa_id: 'GHSA-35jh-r3h4-6jhm', severity: 'high'}},
+    bare: {id: bare, finding: {source: 'dependabot_alerts', number: 5}, native: {kind: 'dependabot_alerts', number: 5}, facts: {}},
+  };
 }
 function riskId() {
   return hexId('pmgov_', 1, 32);
@@ -31,11 +43,14 @@ function labels(project: DemoProject) {
 }
 
 export function registerIds(project: DemoProject) {
-  const finding = findingId(project);
+  const findings = demoFindings(project);
   return {
-    finding: `finding.${finding}`,
-    findingSource: finding,
-    findingRef: {kind: 'finding' as const, id: finding, observation_id: hexId('pmgh_', 1, 32), document_digest: digest(1)},
+    finding: `finding.${findings.issue.id}`,
+    findingSource: findings.issue.id,
+    findingRef: {kind: 'finding' as const, id: findings.issue.id, observation_id: findings.observation_id, document_digest: findings.document_digest},
+    pull: `finding.${findings.pull.id}`,
+    alert: `finding.${findings.alert.id}`,
+    bare: `finding.${findings.bare.id}`,
     decision: `plan_revision.${project.ids.planV3}`,
     change: `proposal.${project.ids.proposalId}`,
     mapping: `issue_mapping.${project.ids.issueMapping}`,
@@ -49,31 +64,33 @@ function row(project: DemoProject, spec: {
   impact?: string | null, priority?: string | null, next_step?: string | null, due?: string | null,
   source: {kind: string, id: string}, requirements?: string[], work?: string[], prs?: {repository: string, number: number}[],
   actions?: {action: string, target: Record<string, unknown>, required: Record<string, unknown>}[],
-  unknowns?: Record<string, string>,
+  unknowns?: Record<string, string>, finding?: Record<string, unknown>,
 }) {
-  return {
+  const value: Record<string, unknown> = {
     row_id: spec.row_id, type: spec.type, type_basis: spec.basis, title: spec.title, status: spec.status,
     owner: spec.owner, due: spec.due ?? null, impact: spec.impact ?? null, priority: spec.priority ?? null,
     next_step: spec.next_step ?? null, created_at: null, updated_at: null, source: spec.source,
     related: {requirement_ids: spec.requirements || [], work_item_ids: spec.work || [], prs: spec.prs || []},
     available_actions: spec.actions || [], unknowns: spec.unknowns || {},
   };
+  if (spec.finding) value.finding = spec.finding;
+  return value;
 }
 
 function rowsFor(project: DemoProject) {
   const text = labels(project);
   const ids = registerIds(project);
-  const finding = findingId(project);
+  const findings = demoFindings(project);
+  const observed = {type: 'issue', basis: 'neutral', title: null, status: 'observed_open', owner: null, next_step: null};
   return [
-    row(project, {row_id: ids.finding, type: 'issue', basis: 'neutral', title: null, status: 'observed_open', owner: null,
-      impact: text.impact, priority: text.priority, next_step: null, source: {kind: 'finding', id: finding},
+    row(project, {row_id: ids.finding, ...observed, impact: text.impact, priority: text.priority, source: {kind: 'finding', id: findings.issue.id},
       requirements: [project.ids.requirements.email], work: [project.ids.work.email],
       prs: [{repository: project.ids.repository, number: 87}],
       actions: [{action: 'pm.maintenance.repair', target: {workspace_id: project.ids.workspaceId}, required: {
         policy_id: hexId('pmmp_', 1, 32), rule_key: 'dependency',
-        finding_ref: {observation_id: ids.findingRef.observation_id, document_digest: ids.findingRef.document_digest, finding_id: finding},
+        finding_ref: {observation_id: ids.findingRef.observation_id, document_digest: ids.findingRef.document_digest, finding_id: findings.issue.id},
       }}],
-      unknowns: {owner: 'not_recorded'}}),
+      unknowns: {owner: 'not_recorded'}, finding: findings.issue.finding}),
     row(project, {row_id: ids.decision, type: 'decision', basis: 'explicit', title: project.copy.decisions.budget, status: 'open', owner: project.ids.actor,
       due: '2026-10-20T12:00:00.000+00:00', source: {kind: 'plan_revision', id: project.ids.planV3}}),
     row(project, {row_id: ids.change, type: 'change', basis: 'explicit', title: project.copy.proposalTitle, status: 'proposed', owner: project.ids.actor,
@@ -85,6 +102,10 @@ function rowsFor(project: DemoProject) {
       actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId}, required: {}}]}),
     row(project, {row_id: ids.action, type: 'action', basis: 'explicit', title: text.action, status: 'in_progress', owner: project.ids.actor,
       source: {kind: 'follow_up', id: followId()}}),
+    row(project, {...observed, row_id: ids.pull, source: {kind: 'finding', id: findings.pull.id}, finding: findings.pull.finding, unknowns: {title: 'not_recorded'}}),
+    row(project, {...observed, row_id: ids.alert, source: {kind: 'finding', id: findings.alert.id}, finding: findings.alert.finding, unknowns: {title: 'not_recorded'}}),
+    row(project, {...observed, row_id: ids.bare, source: {kind: 'finding', id: findings.bare.id}, finding: findings.bare.finding,
+      unknowns: {title: 'not_recorded', 'finding.package': 'not_recorded'}}),
   ];
 }
 
@@ -219,10 +240,17 @@ export function registerMaintenanceRoutes(project: DemoProject, rest: string) {
   if (rest === '/release-baselines/current') return {status: 200, data: {workspace_id, baseline: null, visibility_filtered: false}};
   if (rest === '/lifecycle') return {status: 200, data: {workspace_id, lifecycle: {revision: 1}}};
   if (rest === '/maintenance-findings/current') {
-    const finding = findingId(project);
+    const findings = demoFindings(project);
+    const item = (entry: {id: string, native: Record<string, unknown>, facts: Record<string, unknown>}) => ({
+      finding_id: entry.id, native: entry.native, facts: entry.facts, existing_pull_request: null, existing_work: [],
+    });
     return {status: 200, data: {workspace_id, visibility_filtered: false,
-      observation_ref: {observation_id: hexId('pmgh_', 1, 32), document_digest: digest(1)},
-      sources: {issues: {status: 'complete', findings: [{finding_id: finding, native: {number: 87}, facts: {labels: ['dependency']}, existing_pull_request: null, existing_work: []}]}}}};
+      observation_ref: {observation_id: findings.observation_id, document_digest: findings.document_digest},
+      sources: {
+        issues: {status: 'complete', findings: [item(findings.issue)]},
+        dependabot_pull_requests: {status: 'complete', findings: [item(findings.pull)]},
+        dependabot_alerts: {status: 'complete', findings: [item(findings.alert), item(findings.bare)]},
+      }}};
   }
   if (rest === '/maintenance-repairs') return {status: 200, data: {workspace_id, repairs: [], next_after: null}};
   return null;

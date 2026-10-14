@@ -34,7 +34,7 @@ for (const locale of ['en','zh-TW'] as const) for (const kind of kinds) test(`ce
   });
   const from=kind==='work_item'?'#/session/mock/session':kind==='requirement'?'schedule':'requirements';
   await page.goto('/dashboard/'+discussHref({workspaceId:wid,refs:[ref],title:'Untrusted URL label',from}));
-  const chip=page.locator(`[data-discussion-context=${kind}]`);await expect(chip).toContainText(title);
+  const chip=page.locator(`.pm-discussion [data-discussion-context=${kind}]`);await expect(chip).toContainText(title);
   await expect(chip).not.toContainText('Untrusted URL label');await expect(chip).not.toContainText(/(?:pm[a-z]*|wi)_a{20}/);
   if(kind==='plan_revision')await expect(chip).toContainText(locale==='en'?'Revision 7':'版本 7');
   if(kind==='governance')await expect(chip).toContainText(locale==='en'?'Risk ·':'風險 ·');

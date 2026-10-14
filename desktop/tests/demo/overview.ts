@@ -2,6 +2,7 @@ import {hexId, digest, unix, type DemoProject} from './project.ts';
 import {plans} from './plans.ts';
 import {snapshots} from './snapshots.ts';
 import {roadmap} from './roadmap.ts';
+import {demoFindings} from './register.ts';
 
 // GET /overview: same nullable counts, ready-made refs, epoch times and bounded lists
 // as pm_overview.Projection.read. The state field is the backend delivery contract.
@@ -20,14 +21,18 @@ export function overview(project: DemoProject) {
     ref: {kind: 'governance', id: hexId('pmgov_', n, 32)},
   });
   const next = milestones.find((row: any) => row.milestone_id === 'recovery_review');
+  const findings = demoFindings(project);
+  const alert = findings.alert;
   return {version: 1, workspace_id: ids.workspaceId, as_of: unix(project.now), lifecycle: {stage: 'development', since: unix(project.now, -9)},
     plan: {revision_id: plan.revision_id, number: plan.sequence, title: plan.document.title, goal: plan.document.selected_inputs.find(row => row.slot === 'goal' && row.status === 'user_confirmed')?.value ?? null, adopted_at: plan.adoption.created_at, adopted_by: ids.actor},
     progress: {basis: {revision_id: ids.planV3}, requirements: 8, accepted: 3, in_review: 1, in_progress: 2, blocked: 1, not_started: 1, complete: true, unknown_reason: null},
     next_milestone: next, milestones, milestones_truncated: false,
     attention: [row('blocker', copy.blocker, 1, 5, ids.requirements.audit), row('decision', copy.decisions.budget, 2, 4), row('decision', copy.decisions.lockout, 3, 3),
       {key: 'deviation:milestone:recovery_review', kind: 'deviation', title: next.title, severity: 'medium', since: unix(project.now, -2),
-        context: {milestone_id: 'recovery_review'}, ref: next.ref, delta_days: 3, reason: 'forecast_later_than_baseline'}, row('risk', copy.smtp, 4, 1)],
-    attention_counts: {blocker: 1, decision: 2, deviation: 1, risk: 1}, attention_truncated: false,
+        context: {milestone_id: 'recovery_review'}, ref: next.ref, delta_days: 3, reason: 'forecast_later_than_baseline'}, row('risk', copy.smtp, 4, 1),
+      {key: `risk:finding:${alert.id}`, kind: 'risk', title: String(alert.finding.number), severity: 'high', since: unix(project.now, -1), context: {},
+        ref: {kind: 'finding', id: alert.id, observation_id: findings.observation_id, document_digest: findings.document_digest}, finding: alert.finding}],
+    attention_counts: {blocker: 1, decision: 2, deviation: 1, risk: 2}, attention_truncated: false,
     recent_deliveries: [{work_item_id: ids.work.email, title: copy.work.email, state: 'deployed', at: unix(project.now, -1), operation_id: ids.deployOp},
       {work_item_id: ids.work.l10n, title: copy.work.l10n, state: 'merged', at: unix(project.now, -2), operation_id: ids.mergeOp},
       {work_item_id: ids.work.unlock, title: copy.work.unlock, state: 'accepted', at: unix(project.now, -3)}], recent_deliveries_complete: true,

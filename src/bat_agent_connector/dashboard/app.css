@@ -125,7 +125,6 @@ a { color: var(--accent); }
 .ui-skeleton > div { height: 32px; background: var(--surface-2); border-radius: var(--r-xs); }
 .ui-disclosure > summary { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; font-size: var(--fs-small); font-weight: 500; color: var(--text-2); min-height: 32px; list-style: none; }
 .ui-disclosure > summary::-webkit-details-marker { display: none; }
-.ui-disclosure > summary .ui-icon { transition: transform var(--motion); }
 .ui-disclosure[open] > summary .ui-icon { transform: rotate(90deg); }
 .ui-inline-error { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); color: var(--bad); background: var(--bad-soft); border-radius: var(--r-sm); overflow-wrap: anywhere; }
 .ui-context-chip { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 24px; padding: 0 8px; background: var(--surface-2); border-radius: var(--r-pill); font-size: var(--fs-small); }
@@ -200,7 +199,6 @@ a { color: var(--accent); }
   transform: rotate(45deg); transition: transform var(--motion);
 }
 :root body details[open] > summary:not(:has(> .ui-icon))::before { transform: rotate(135deg); }
-:root body details > summary > .ui-icon:first-child { transition: transform var(--motion); }
 :root body details[open] > summary > .ui-icon:first-child { transform: rotate(90deg); }
 :root body .workspace-session-tree > summary { display: grid; column-gap: var(--rail-gap); }
 @media (max-width: 800px) { :root body :is(details, .ui-disclosure) > summary { min-height: 44px; } }
@@ -1614,6 +1612,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-shell [data-pm-register] a.reg-chip { position: relative; overflow: visible; height: 24px; min-height: 24px; line-height: 24px; }
 .reg-chip-more { flex: none; font-size: var(--fs-caption); color: var(--text-3); }
 .reg-facts .reg-chips { flex-wrap: wrap; }
+.reg-facts span.reg-chip { cursor: default; }
+.reg-facts [data-finding-manifests] { overflow-wrap: anywhere; }
 .reg-main .ui-data-table th, .reg-main .ui-data-table td { white-space: nowrap; vertical-align: middle; }
 .reg-main .ui-data-table td:nth-child(2), .reg-main .ui-data-table th:nth-child(2),
 .reg-main .ui-data-table td:nth-child(8), .reg-main .ui-data-table th:nth-child(8) { white-space: normal; }

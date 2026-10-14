@@ -5,6 +5,7 @@ import {demoFixture, demoRoute} from './demo/index.ts';
 import {demoProject} from './demo/project.ts';
 import {overview} from './demo/overview.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
+import {findingName} from '../src/ui/finding-name.js';
 import {openPmPanel, openPmSection} from './pm-navigation.ts';
 
 const colorScheme = process.env.BATC_UI_TEST_SCHEME === 'dark' ? 'dark' : 'light';
@@ -241,7 +242,7 @@ for (const native of [false, true]) test(`discussion links bind exact identities
   for (const row of f.state.data.attention) {
     const link = root(page).locator(`[data-overview-row="${row.key}"] a`), href = await link.getAttribute('href');
     const query = new URLSearchParams(href!.split('?')[1]);
-    expect(parseDiscussRefs(query).refs).toEqual([row.ref]); expect(query.get('title')).toBe(row.title); expect(query.get('from')).toBe('overview');
+    expect(parseDiscussRefs(query).refs).toEqual([row.ref]); expect(query.get('title')).toBe(findingName(row.finding, 'en', row.title)); expect(query.get('from')).toBe('overview');
   }
   await report(page, f.ids.snap1);
   const query = new URLSearchParams((await page.locator('[data-overview-discuss]').getAttribute('href'))!.split('?')[1]);

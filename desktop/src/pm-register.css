@@ -50,6 +50,8 @@
 .pm-shell [data-pm-register] a.reg-chip { position: relative; overflow: visible; height: 24px; min-height: 24px; line-height: 24px; }
 .reg-chip-more { flex: none; font-size: var(--fs-caption); color: var(--text-3); }
 .reg-facts .reg-chips { flex-wrap: wrap; }
+.reg-facts span.reg-chip { cursor: default; }
+.reg-facts [data-finding-manifests] { overflow-wrap: anywhere; }
 .reg-main .ui-data-table th, .reg-main .ui-data-table td { white-space: nowrap; vertical-align: middle; }
 .reg-main .ui-data-table td:nth-child(2), .reg-main .ui-data-table th:nth-child(2),
 .reg-main .ui-data-table td:nth-child(8), .reg-main .ui-data-table th:nth-child(8) { white-space: normal; }
