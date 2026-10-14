@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Restore short Month axis labels, localize Schedule attempt actions, and format bar intervals with shared calendar dates.
+
 - Keep Requirements acceptance labels within their columns with the CI font, and verify background preservation after the initial detail read settles.
 
 - Preserve shared search and chip sizes against legacy view styles, with invisible mobile chip touch targets.

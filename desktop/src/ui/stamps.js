@@ -1,10 +1,11 @@
 import {locale} from '../i18n.js';
 import {h} from './dom.js';
-import {calendarDate, compactDate, compactTime, fullTime} from './time.js';
+import {axisDate, calendarDate, compactDate, compactTime, fullTime} from './time.js';
 
 // Central timestamps are epoch seconds; Date objects and ISO strings are instants.
 const instant = (value, milliseconds) => typeof value === 'number' ? new Date(value * (milliseconds ? 1 : 1000)) : value;
 export const timeText = (value, options = {}) => (options.dateOnly || calendarDate(value) ? compactDate : compactTime)(instant(value, options.milliseconds), {locale, ...options});
+export const axisDateText = (value, options = {}) => axisDate(value, {locale, ...options});
 export function timeStamp(value, options = {}) {
   const date = instant(value, options.milliseconds), text = timeText(value, options);
   if (!text) return options.empty ?? '—';

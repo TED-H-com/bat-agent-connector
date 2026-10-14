@@ -26,6 +26,13 @@ export function compactDate(value, {locale = 'en', now = Date.now()} = {}) {
   return zh(locale) ? `${year == null ? '' : `${year}年`}${date.getMonth() + 1}月${date.getDate()}日`
     : `${MONTHS[date.getMonth()]} ${date.getDate()}${year == null ? '' : `, ${year}`}`;
 }
+// Axis labels describe the scale, rather than an event at that date.
+export function axisDate(value, {locale = 'en', unit = 'day', now = Date.now()} = {}) {
+  const date = parse(value);
+  if (!date) return '';
+  if (unit === 'month') return zh(locale) ? `${date.getMonth() + 1}月` : MONTHS[date.getMonth()];
+  return compactDate(date, {locale, now});
+}
 export function compactTime(value, {locale = 'en', now = Date.now()} = {}) {
   const date = parse(value);
   if (!date) return '';

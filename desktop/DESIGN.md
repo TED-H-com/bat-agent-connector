@@ -441,7 +441,12 @@ today. A terminal attempt with no recorded end says End time not recorded and is
 drawn as open. Waiting and blocked stay visible on an open bar. Only a `blocked`
 status produces hatching. Milestone delta compares recorded dates. Recorded baseline,
 forecast and actual dates stay visible in the inspector. Day labels are spaced so they
-do not collide, and the Today mark sits under the axis text.
+do not collide, and the Today mark sits under the axis text. Month ticks show only
+the localized short month; Day and Week retain month and day. Scale labels use the
+shared time module without becoming event timestamps. Bar tooltips use the same
+calendar-date formatter as visible dates. Operation attempts use the shared action
+labels in the tree, inspector and tooltips; their raw action id appears only as code
+in Details.
 
 Reads follow opaque cursors sequentially, at most ten pages per refresh. The chart
 range uses all loaded rows; any partial/truncated page keeps a Partial pill and a

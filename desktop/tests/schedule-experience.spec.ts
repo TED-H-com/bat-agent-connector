@@ -404,7 +404,7 @@ test('inspector shows visible schedule dates and milestone delta, links mileston
       },
     });
   }});
-  await expect(page.locator('[data-schedule-track="milestone:recovery_review"] [data-schedule-bar="baseline"]')).toHaveAttribute('title', 'Baseline · 2026-10-16');
+  await expect(page.locator('[data-schedule-track="milestone:recovery_review"] [data-schedule-bar="baseline"]')).toHaveAttribute('title', 'Baseline · Oct 16');
   await item(page, 'milestone:recovery_review').click();
   const inspector = page.locator('[data-schedule-inspector]');
   const statusSection = inspector.locator('[data-schedule-section="status"]');
@@ -424,6 +424,32 @@ test('inspector shows visible schedule dates and milestone delta, links mileston
   await expect(inspector.locator('[data-schedule-section="requirement"]')).toContainText(f.copy.requirements[0].text);
   await inspector.locator('[data-schedule-section="details"] > summary').click();
   await expect(inspector.locator('[data-schedule-section="details"]')).toContainText(`${project.ids.repository}#42`);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`attempt action names and interval tooltips are localized ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL}), page = await context.newPage();
+  const f = await start(page, locale);
+  const attempt = page.locator('.schedule-chart [data-schedule-select^="attempt:operation:"]');
+  const name = locale === 'en' ? 'Start session' : '開始工作階段';
+  await expect(attempt).toHaveAccessibleName(name);
+  await expect(attempt.locator('.schedule-title')).toHaveText(name);
+  await expect(attempt.locator('.schedule-title')).toHaveAttribute('title', name);
+  const bar = page.locator('[data-schedule-track^="attempt:operation:"] .schedule-bar');
+  const interval = locale === 'en' ? 'Actual · Oct 6' : '實際 · 10月6日';
+  await expect(bar).toHaveAttribute('title', interval);
+  await expect(bar).toHaveAccessibleName(interval);
+  const tooltips = await page.locator('.schedule-bar').evaluateAll(nodes => nodes.map(node => node.getAttribute('title')));
+  expect(tooltips.join('\n')).not.toMatch(/\d{4}-\d{2}-\d{2}|session\.start/);
+  await attempt.click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  await expect(inspector.getByRole('heading', {level: 2})).toHaveText(name);
+  await inspector.locator('[data-schedule-section="details"] > summary').click();
+  await expect(inspector.locator('[data-schedule-section="details"] code').filter({hasText: /^session\.start$/})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await item(page, `work:${f.ids.work.resetEmail}`).click();
+  await expect(inspector.locator('[data-schedule-attempt^="attempt:operation:"] strong')).toHaveText(name);
+  expect(f.writes).toEqual([]);
+  await context.close();
 });
 
 test('viewport has no nested vertical scroll cap, Day ticks and Today marker never collide in EN or zh-TW, and mobile rows share one horizontal origin', async ({browser, baseURL}) => {

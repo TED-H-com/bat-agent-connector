@@ -1,4 +1,4 @@
-import {timeStamp, timeLabel} from './ui/stamps.js';
+import {axisDateText, timeText, timeStamp, timeLabel} from './ui/stamps.js';
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, segmented, statusPill, inspector, disclosure, emptyState, skeleton, inlineError} from './ui/components.js';
@@ -6,6 +6,7 @@ import {viewState} from './ui/view-state.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {DAY, ZOOM, firstLine, dayNumber, spans, milestoneDelta, readSchedule, scheduleTree, scheduleRef} from './pm-schedule-model.js';
 import {render as renderInspector, rowStatus} from './pm-schedule-inspector.js';
+import {scheduleTitle, scheduleFirstLine} from './pm-schedule-labels.js';
 
 export function workspaceSchedule({api, alive, namespace, workspaceId, canRead}) {
   const preference = viewState(namespace, workspaceId, 'schedule');
@@ -73,12 +74,12 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     const next = JSON.stringify([row, data.rows.filter(value => value.parent_id === row.id || value.kind === 'requirement'), data.rows.find(value => value.id === row.parent_id), data.unknown, data.baseline, data.forecast]);
     if (panel && next === panelSignature) return;
     if (!panel) {
-      panel = inspector({title: firstLine(row), onClose: () => {
+      panel = inspector({title: scheduleFirstLine(row), onClose: () => {
         const previous = selected; panel = null; panelSignature = ''; selected = null; remember(); markSelection();
         if (active && previous) element.querySelector(`[data-schedule-select="${CSS.escape(previous)}"]`)?.focus({preventScroll: true});
       }}); panel.dataset.scheduleInspector = ''; layout.append(panel);
     }
-    panel.querySelector('h2').textContent = firstLine(row);
+    panel.querySelector('h2').textContent = scheduleFirstLine(row);
     const opened = [...panel.body.querySelectorAll('details')].map(node => node.open), scroll = panel.scrollTop;
     const focus = [...panel.body.querySelectorAll('a, summary')].indexOf(document.activeElement);
     panel.body.replaceChildren(renderInspector(row, {workspaceId, data})); panelSignature = next;
@@ -108,7 +109,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     if (visible.some(v => v.row.id === id)) focusId = id;
     remember(); markSelection(); showPanel();
   }
-  const label = row => row.kind === 'group' ? t('sched_unassigned') : firstLine(row);
+  const label = row => row.kind === 'group' ? t('sched_unassigned') : scheduleFirstLine(row);
   function toggle(id) {collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); remember(); draw();}
   function focusRow(id) {
     if (!id || !visible.some(v => v.row.id === id)) return;
@@ -142,7 +143,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const step = zoom === 'day' ? Math.max(2, Math.ceil(72 / scale), Math.ceil(length / 300)) : zoom === 'week' ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9000));
       for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
         const instant = new Date(date * DAY);
-        const text = timeStamp(instant.toISOString().slice(0, 10), {dateOnly:true});
+        const text = axisDateText(instant.toISOString().slice(0, 10), {unit: zoom});
         const tick = h('span', {class: 'schedule-tick'}, text); tick.style.left = `${(date - domain.start) * scale}px`; node.append(tick);
         if (zoom === 'month') {instant.setUTCMonth(instant.getUTCMonth() + step, 1); date = instant.getTime() / DAY;}
         else if (zoom === 'week' && count === 0) date += ((8 - instant.getUTCDay()) % 7 || 7);
@@ -153,8 +154,10 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       for (const span of rowSpans) {
         const start = span.start ?? span.end, end = span.end ?? start;
         const marker = row.kind === 'milestone';
-        const endText = span.open ? t('sched_open') : span.unknownEnd ? reasonLabel(t, 'terminal_time_unrecorded') : span.end !== null ? row[span.kind].end : null;
-        const rangeText = endText && row[span.kind].end !== row[span.kind].start ? `${row[span.kind].start || '—'} → ${endText}` : (row[span.kind].start || endText || '—');
+        const interval = row[span.kind], startText = timeText(interval.start?.slice(0, 10), {dateOnly: true});
+        const endText = span.open ? t('sched_open') : span.unknownEnd ? reasonLabel(t, 'terminal_time_unrecorded')
+          : span.end !== null ? timeText(interval.end?.slice(0, 10), {dateOnly: true}) : null;
+        const rangeText = endText && span.end !== span.start ? `${startText || '—'} → ${endText}` : (startText || endText || '—');
         const barTitle = `${t('sched_' + span.kind)} · ${rangeText}`;
         const bar = h('span', {class: `schedule-bar ${span.kind}${marker ? ' milestone' : ''}${span.open ? ' open' : ''}${row.status === 'blocked' ? ' blocked' : ''}`,
           role: 'img', 'aria-label': barTitle, 'data-schedule-bar': span.kind, 'data-open': span.open ? 'true' : null,
@@ -204,7 +207,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const cell = h('div', {class: 'schedule-tree-cell', role: 'treeitem', 'aria-level': depth, 'aria-expanded': expandable ? String(!collapsed.has(row.id)) : null,
         'aria-label': label(row), 'aria-describedby': [statusId, descId].filter(Boolean).join(' '), tabindex: tabId === row.id ? 0 : -1,
         'data-schedule-select': row.id, onclick: event => row.kind === 'group' ? toggle(row.id) : select(row.id, event.currentTarget), onkeydown: event => keydown(event, item, index)},
-        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: row.title}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, ...(dates.length ? dates.flatMap((date, index) => index ? [' · ', date] : [date]) : [t('sched_no_dates')]))),
+        expand, h('span', {class: 'schedule-tree-copy'}, h('span', {class: 'schedule-title', title: scheduleTitle(row)}, label(row)), h('span', {id: descId, class: 'schedule-date-range'}, ...(dates.length ? dates.flatMap((date, index) => index ? [' · ', date] : [date]) : [t('sched_no_dates')]))),
         pill);
       cell.style.paddingLeft = `${8 + (depth - 1) * 16}px`;
       const lane = h('div', {class: 'schedule-lane'}, track(row));
@@ -240,7 +243,7 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       meta.replaceChildren(...(upcoming ? [h('span', {class: 'schedule-answer'}, firstLine(upcoming), delta ? ' · ' + t('sched_delta', {n: delta > 0 ? '+' + delta : delta}) : '')] : []),
         h('span', {}, t(data.partial ? 'sched_loaded' : 'sched_count', {n: data.rows.length})), ...(data.partial ? [statusPill('partial')] : []), details);
       const list = h('ul', {}, ...data.unscheduled.map(row => h('li', {},
-        button({variant: 'ghost', label: firstLine(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}),
+        button({variant: 'ghost', label: scheduleFirstLine(row), 'data-schedule-select': row.id, title: scheduleTitle(row), onClick: event => select(row.id, event.currentTarget)}),
         row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null)));
       unscheduled.replaceChildren(...(data.unscheduled.length ? [disclosure({label: t('sched_unscheduled', {n: data.unscheduled.length}), key: `${namespace}:${workspaceId}:schedule:unscheduled`, body: list})] : []));
       draw();
