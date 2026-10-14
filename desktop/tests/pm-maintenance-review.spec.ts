@@ -7,7 +7,7 @@ import {action,boot,mount,openAction,reason,reviewFixture,wid,pid,bid} from './p
 
 test.use({timezoneId:'America/New_York'});
 
-async function saveNote(page:any){await reason(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('Keep this actual discussion');await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();}
+async function saveNote(page:any){await reason(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('Keep this actual discussion');await action(page,'note').getByRole('button',{name:'Save note',exact:true}).click();}
 
 for(const locale of ['en','zh-TW'])test(`saved repair distinguishes publication from held original capacity ${locale}`,async({page})=>{
   const f=reviewFixture(),report=f.state.reviews[0].snapshot.maintenance.report;
@@ -43,7 +43,11 @@ for(const locale of ['en','zh-TW'])test(`fixed configured findings remain in the
 test('fixed report and weekly status do not mark discussion complete or create work',async({page})=>{
   const f=reviewFixture();await mount(page,f);
   await expect(page.getByRole('heading',{name:'Membership service maintenance',exact:true})).toBeVisible();
-  await expect(page.locator('[data-review-discussion]')).toContainText('No completed discussion');
+  await expect(page.locator('[data-pm-maintenance-review]')).toContainText('No completed discussion');
+  await expect(page.locator('[data-review-count="github"]')).toContainText('1');
+  for(const kind of ['workload','checks']){await expect(page.locator(`[data-review-count="${kind}"] [data-status="unknown"]`)).toHaveCount(1);await expect(page.locator(`[data-review-count="${kind}"]`)).not.toContainText('0');}
+  for(const name of ['finished','pending']){await expect(page.locator(`[data-review-effort="${name}"] [data-status="unknown"]`)).toHaveCount(1);await expect(page.locator(`[data-review-effort="${name}"]`)).not.toContainText('0');}
+  await expect(page.locator('[data-review-blockers] [data-status="unknown"]')).toHaveCount(1);await expect(page.locator('[data-review-blockers]')).not.toContainText('None in this saved selection');
   await page.getByText('Weekly report schedule',{exact:true}).click();await expect(page.locator('[data-pm-maintenance-review]')).toContainText('waiting for discussion');
   expect(f.state.writes).toHaveLength(0);
   await saveNote(page);expect(f.state.writes[0].body).toEqual({action:'pm.maintenance_review.note',target:{workspace_id:wid,review_id:f.state.reviews[0].review.review_id},
@@ -64,7 +68,7 @@ test('candidate requires original evidence and keeps ordinary fields and proposa
   const f=reviewFixture();await mount(page,f);await reason(page,'candidate.record');const editor=action(page,'candidate.record');
   for(const[label,value]of [['Candidate title','Cover a gap'],['Observed problem','Dependency evidence is missing'],['Relationship to the goal','Maintain predictable releases'],['Expected effect','Better evidence']])await editor.getByLabel(label,{exact:true}).fill(value);
   await expect(editor.locator('button[type=submit]')).toBeDisabled();
-  await editor.getByText('Original report sources',{exact:true}).click();await editor.getByLabel('Adopted maintenance policy · '+pid,{exact:true}).check();
+  await editor.getByText('Original report sources',{exact:true}).click();await editor.getByLabel('Adopted maintenance policy',{exact:true}).check();await expect(editor).toContainText(pid);
   await editor.locator('button[type=submit]').click();
   expect(f.state.writes[0].body.params.source_refs).toEqual(['pmrs_'+'1'.repeat(24)]);expect(f.state.writes[0].body.params.options).toEqual([]);
   await expect(page.locator('[data-review-discussion]')).toContainText('has not changed the accepted scope');expect(f.state.reviews[0].review.status).toBe('prepared');
@@ -110,7 +114,7 @@ test('source withdrawal clears report and selector facts while preserving disabl
 test('a dirty draft keeps focus and text on refresh and explicitly rebases only its CAS',async({page})=>{
   const f=reviewFixture();await mount(page,f);await reason(page,'note','Preserve this draft');const content=action(page,'note').getByLabel('Discussion note',{exact:true});await content.fill('An unfinished thought');
   f.state.reviews[0].review.version=7;await page.evaluate(()=>(window as any).refreshReviews());await expect(content).toHaveValue('An unfinished thought');
-  await expect(action(page,'note').locator('button[type=submit]')).toBeDisabled();await page.getByRole('button',{name:'Use the displayed versions for this draft',exact:true}).click();
+  await expect(action(page,'note').locator('button[type=submit]')).toBeDisabled();await page.getByRole('button',{name:'Update baseline',exact:true}).click();
   await openAction(page,'note');await expect(action(page,'note').getByLabel('Discussion note',{exact:true})).toHaveValue('An unfinished thought');await action(page,'note').locator('button[type=submit]').click();
   expect(f.state.writes[0].body.preconditions).toEqual({expected_version:7});
 });
@@ -136,7 +140,7 @@ test('hidden latest report never falls back to a visible older report',async({pa
 test('public source collection draft survives reload and records dated attributed claims',async({page})=>{
   const f=reviewFixture();await mount(page,f);await reason(page,'candidate.record');let editor=action(page,'candidate.record');
   for(const[label,value]of [['Candidate title','Check upstream compatibility'],['Observed problem','Dependency evidence is absent'],['Relationship to the goal','Maintain compatibility'],['Expected effect','Fill the evidence gap']])await editor.getByLabel(label,{exact:true}).fill(value);
-  await editor.getByText('Original report sources',{exact:true}).click();await editor.getByLabel('Adopted maintenance policy · '+pid,{exact:true}).check();
+  await editor.getByText('Original report sources',{exact:true}).click();await editor.getByLabel('Adopted maintenance policy',{exact:true}).check();await expect(editor).toContainText(pid);
   await editor.getByText('Attributed public sources (optional)',{exact:true}).click();await editor.getByRole('button',{name:'Add public source',exact:true}).click();
   await editor.getByLabel('Public source URL',{exact:true}).fill('https://example.org/release');await editor.getByLabel('Source title',{exact:true}).fill('Upstream release notes');
   await editor.getByLabel('Source checked at',{exact:true}).fill('2026-10-08T09:00');await editor.getByLabel('Attributed source claim',{exact:true}).fill('The author reports changed compatibility.');
@@ -184,7 +188,7 @@ test('original sample provenance and bounded previous discussion remain separate
   detail.snapshot.maintenance.report.previous_review={review_id:previousId,status:'prepared',snapshot_ref:{snapshot_id:'pmsnap_'+'d'.repeat(32)},history_truncated:true,completion:null,notes:[priorNote],candidates:[],follow_up_results:[]};
   await mount(page,f);await page.getByText('Original saved samples',{exact:true}).click();await expect(page.locator('[data-review-report]')).toContainText('Observed open PRs: 0');
   await page.getByText('Previous discussion context',{exact:true}).click();await expect(page.locator('[data-review-report]')).toContainText('full history remains in that report');
-  await expect(page.locator('[data-review-report]')).toContainText('We discussed the incomplete workload evidence.');await expect(page.locator('[data-review-discussion]')).toContainText('No completed discussion');
+  await expect(page.locator('[data-review-report]')).toContainText('We discussed the incomplete workload evidence.');await expect(page.locator('[data-pm-maintenance-review]')).toContainText('No completed discussion');
 });
 
 for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`maintenance Review layout ${locale} ${width}`,async({page},info)=>{
