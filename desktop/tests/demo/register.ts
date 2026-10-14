@@ -89,7 +89,7 @@ function rowsFor(project: DemoProject) {
       actions: [{action: 'pm.maintenance.repair', target: {workspace_id: project.ids.workspaceId}, required: {
         policy_id: hexId('pmmp_', 1, 32), rule_key: 'dependency',
         finding_ref: {observation_id: ids.findingRef.observation_id, document_digest: ids.findingRef.document_digest, finding_id: findings.issue.id},
-      }}],
+      }}, {action: 'pm.maintenance.repair.evidence.record', target: {workspace_id: project.ids.workspaceId, repair_id: hexId('pmrp_', 1, 32)}, required: {}}],
       unknowns: {owner: 'not_recorded'}, finding: findings.issue.finding}),
     row(project, {row_id: ids.decision, type: 'decision', basis: 'explicit', title: project.copy.decisions.budget, status: 'open', owner: project.ids.actor,
       due: '2026-10-20T12:00:00.000+00:00', source: {kind: 'plan_revision', id: project.ids.planV3}}),
@@ -99,7 +99,7 @@ function rowsFor(project: DemoProject) {
       source: {kind: 'issue_mapping', id: project.ids.issueMapping}, unknowns: {title: 'not_recorded', owner: 'not_recorded'}}),
     row(project, {row_id: ids.risk, type: 'risk', basis: 'explicit', title: text.risk, status: 'blocked', owner: project.ids.actor,
       source: {kind: 'governance', id: riskId()},
-      actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId}, required: {}}]}),
+      actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId, record_id: riskId()}, required: {}}]}),
     row(project, {row_id: ids.action, type: 'action', basis: 'explicit', title: text.action, status: 'in_progress', owner: project.ids.actor,
       source: {kind: 'follow_up', id: followId()}}),
     row(project, {...observed, row_id: ids.pull, source: {kind: 'finding', id: findings.pull.id}, finding: findings.pull.finding, unknowns: {title: 'not_recorded'}}),
@@ -234,11 +234,41 @@ export function registerLabels(project: DemoProject) {
   return labels(project);
 }
 
+function demoRepair(project: DemoProject) {
+  const findings = demoFindings(project);
+  const workspace_id = project.ids.workspaceId;
+  return {
+    workspace_id, repair_id: hexId('pmrp_', 1, 32), operation_id: hexId('op_', 2, 32), version: 0,
+    work_item_id: project.ids.work.email, policy_id: hexId('pmmp_', 1, 32),
+    deadline_at: Math.floor(project.now / 1000) + 1800, retries_used: 0, capacity_held: true, evidence: [],
+    operation_status: 'succeeded', progress: {},
+    context: {
+      rule: {key: 'dependency'},
+      finding_ref: {observation_id: findings.observation_id, document_digest: findings.document_digest},
+      finding: {native: {number: 87}},
+    },
+    child: {operation_id: hexId('op_', 3, 32), action: 'repository.continue', status: 'succeeded', result: null, error_code: null},
+  };
+}
+
 export function registerMaintenanceRoutes(project: DemoProject, rest: string) {
   const workspace_id = project.ids.workspaceId;
-  if (rest === '/maintenance-policies/current') return {status: 200, data: {workspace_id, policy: null, visibility_filtered: false}};
-  if (rest === '/release-baselines/current') return {status: 200, data: {workspace_id, baseline: null, visibility_filtered: false}};
-  if (rest === '/lifecycle') return {status: 200, data: {workspace_id, lifecycle: {revision: 1}}};
+  const policy_id = hexId('pmmp_', 1, 32);
+  const baseline_id = hexId('pmrb_', 8, 32);
+  const repair = demoRepair(project);
+  if (rest === '/maintenance-policies/current') return {status: 200, data: {
+    workspace_id, visibility_filtered: false, head: {policy_id, revision: 1},
+    policy: {workspace_id, policy_id, revision: 1, actor: project.ids.actor, document: {
+      workspace_id, policy_id, revision: 1,
+      policy: {enabled: true, repair_rules: [{key: 'dependency', work_kind: 'dependency_fix', labels_all: ['dependency'], paths: ['package.json']}],
+        limits: {max_parallel: 1, period_runs: 4, period_seconds: 86400, run_seconds: 1800}},
+    }},
+  }};
+  if (rest === '/release-baselines/current') return {status: 200, data: {
+    workspace_id, visibility_filtered: false, head: {baseline_id, version: 1},
+    baseline: {workspace_id, baseline_id, version: 1, document: {workspace_id, baseline_id, version: 1}},
+  }};
+  if (rest === '/lifecycle') return {status: 200, data: {workspace_id, lifecycle: {revision: 1, stage: 'development', status: 'active'}}};
   if (rest === '/maintenance-findings/current') {
     const findings = demoFindings(project);
     const item = (entry: {id: string, native: Record<string, unknown>, facts: Record<string, unknown>}) => ({
@@ -252,6 +282,10 @@ export function registerMaintenanceRoutes(project: DemoProject, rest: string) {
         dependabot_alerts: {status: 'complete', findings: [item(findings.alert), item(findings.bare)]},
       }}};
   }
-  if (rest === '/maintenance-repairs') return {status: 200, data: {workspace_id, repairs: [], next_after: null}};
+  if (rest === '/maintenance-repairs') return {status: 200, data: {workspace_id, repairs: [repair], next_after: null}};
+  if (rest === `/maintenance-repairs/${repair.repair_id}`) return {status: 200, data: {workspace_id, repair}};
+  const quality = /^\/work\/([^/]+)\/quality$/.exec(rest);
+  if (quality && decodeURIComponent(quality[1]) === project.ids.work.email)
+    return {status: 200, data: {workspace_id, reviews: [], next_cursor: null, visibility_filtered: false}};
   return null;
 }

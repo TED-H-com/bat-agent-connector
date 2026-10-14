@@ -1,3 +1,4 @@
+import {governanceContext} from './governance-context.ts';
 import {qualityReviews} from './quality.ts';
 import {overview, overviewGovernance} from './overview.ts';
 import {discussionDemo} from './discussions.ts';
@@ -46,6 +47,9 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   if (rest === '/governance') return ok({version: 1, workspace_id: project.ids.workspaceId, records: overviewGovernance(project), next_cursor: null});
   const governance = rest.match(/^\/governance\/([^/]+)$/);
   if (governance) {const row = overviewGovernance(project).find(row => row.record.record_id === governance[1]); return row ? ok({version: 1, workspace_id: project.ids.workspaceId, ...row}) : notFound();}
+  const governanceHistory = rest.match(/^\/governance\/([^/]+)\/history$/);
+  if (governanceHistory) {const row = overviewGovernance(project).find(row => row.record.record_id === governanceHistory[1]); return row ? ok({workspace_id: project.ids.workspaceId, record_id: row.record.record_id, context: row.record.context, revisions: [row.revision], next_cursor: null}) : notFound();}
+  const context = governanceContext(project, rest); if (context) return ok(context.data);
   if (rest === '/capabilities') return ok(workspaceCapabilities(project));
   if (rest === '/plans/head') return ok({version: 1, head: plans(project).head});
   if (rest === '/plans/accepted') {

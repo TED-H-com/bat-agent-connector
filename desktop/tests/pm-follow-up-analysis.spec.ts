@@ -1,3 +1,4 @@
+async function openRead(node:any) {await node.first().evaluate((el:Element)=>{for(let p=(el.tagName==='SUMMARY'?el.parentElement?.parentElement:el.parentElement);p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});await node.first().click();}
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {fixture,mount,intakeId,workspaceId,threadId} from './pm-follow-up-fixture.ts';
@@ -79,9 +80,9 @@ test('assessment is read in the selected preparation with quoted sources and exp
   await expect(section(page)).toContainText('Format and source references checked');
   await expect(section(page)).toContainText('conclusions have not been verified');
   await expect(section(page)).toContainText('Suggested owner — not assigned');
-  await section(page).getByText('Read the quoted preparation sources',{exact:true}).first().click();
+  await openRead(section(page).getByText('Details',{exact:true}).first());
   await expect(section(page)).toContainText('Members can recover access to their account.');
-  await section(page).getByText('Original agent reply',{exact:true}).click();
+  await openRead(section(page).getByText('Original agent reply',{exact:true}));
   await expect(section(page).locator('pre').last()).toHaveText(f.state.assessments[0].raw_reply,{useInnerText:false});
   expect(await page.evaluate(()=>(window as any).agentMarkupRan)).toBeUndefined();
   expect(f.state.writes).toHaveLength(0);await expect(page.getByRole('tab')).toHaveCount(0);
@@ -92,7 +93,7 @@ test('assessment lists only fixed preparation results and explicitly loads an ol
   expect(f.state.assessmentReads).toEqual([`/pm/workspaces/${workspaceId}/follow-up-assessments?intake_id=${intakeId(3)}&after=0&limit=2`]);
   await expect(section(page)).not.toContainText('Recovery is reported complete');await select(page,2);
   await expect(section(page).locator('[data-pm-assessment-record]')).toHaveAttribute('data-pm-assessment-record',assessmentId(2));
-  await page.getByText('Preparation history',{exact:true}).click();await page.getByLabel('Saved preparation',{exact:true}).selectOption(intakeId(1));
+  await openRead(page.getByText('Preparation history',{exact:true}));await page.getByLabel('Saved preparation',{exact:true}).selectOption(intakeId(1));
   await expect(section(page)).not.toContainText('Recovery is reported complete');
   await expect(section(page).getByRole('button',{name:/^Assessment 4 ·/})).toBeVisible();
   expect(f.state.writes).toHaveLength(0);
@@ -103,7 +104,7 @@ test('invalid structured response retains raw reply without rendering a professi
   f.state.assessments[0].document=null;await mount(page,f);await select(page);
   await expect(section(page)).toContainText('Response needs review');await expect(section(page)).toContainText('questions[3]: limit exceeded');
   await expect(section(page).getByRole('heading',{name:'Findings and impact'})).toHaveCount(0);
-  await section(page).getByText('Original agent reply',{exact:true}).click();await expect(section(page)).toContainText('Original analysis');
+  await openRead(section(page).getByText('Original agent reply',{exact:true}));await expect(section(page)).toContainText('Original analysis');
 });
 
 for(const error of [403,404,503])test(`assessment refresh ${error} removes quoted facts and stale metadata`,async({page})=>{
@@ -173,14 +174,32 @@ test('unsent analysis preserves purpose and requires an explicit thread-version 
   const f=assessedFixture();await mount(page,f);await openAnalysis(page);await page.getByLabel('What should PM assess?',{exact:true}).fill('Review the saved scope.');
   f.state.threadVersion=6;await refresh(page);await expect(page.getByLabel('What should PM assess?',{exact:true})).toHaveValue('Review the saved scope.');
   await expect(page.getByRole('button',{name:'Analyze this preparation',exact:true})).toBeDisabled();
-  await page.getByRole('button',{name:'Use the current discussion version',exact:true}).click();await page.getByRole('button',{name:'Analyze this preparation',exact:true}).click();
+  await page.getByRole('button',{name:'Use current version',exact:true}).click();await page.getByRole('button',{name:'Analyze this preparation',exact:true}).click();
   await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.preconditions.expected_version).toBe(6);
 });
 
 for(const reason of ['reader','start','runtime'])test(`analysis respects ${reason} capability without hiding saved results`,async({page})=>{
   const f=assessedFixture();if(reason==='reader'){f.state.manage=false;f.state.role='reader';}if(reason==='start')f.state.start=false;if(reason==='runtime')f.state.runtimeEligible=false;
-  await mount(page,f);await select(page);await openAnalysis(page);await expect(page.getByRole('button',{name:'Analyze this preparation',exact:true})).toBeDisabled();
+  await mount(page,f);await select(page);
+  if(reason==='reader') {
+    await expect(page.locator('[data-pm-follow-up-analyze]')).toBeHidden();
+    await expect(section(page).locator('[data-pm-action]:visible button:enabled')).toHaveCount(0);
+  } else {await openAnalysis(page);await expect(page.getByRole('button',{name:'Analyze this preparation',exact:true})).toBeDisabled();}
   await expect(section(page)).toContainText('Recovery is reported complete');expect(f.state.writes).toHaveLength(0);
+});
+
+for(const locale of ['en','zh-TW'])test(`read-only Follow-ups hide write controls and restore the analysis draft ${locale}`,async({page})=>{
+  const f=assessedFixture();await mount(page,f,{locale});
+  const entry=page.locator('[data-pm-follow-up-analyze]');await entry.locator(':scope > summary').click();
+  const purpose=page.locator('[data-pm-action="pm.follow_up.analyze"] textarea').first();await purpose.fill('Keep the PM assessment draft');
+  const stored=()=>page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.includes('pm.follow_up.analyze.'))));
+  const draft=await stored();f.state.manage=false;f.state.role='reader';await refresh(page);
+  await expect(entry).toBeHidden();await expect(page.locator('[data-pm-fu-editor]')).toBeHidden();
+  await expect(page.locator('[data-pm-action]:visible button:enabled')).toHaveCount(0);
+  await expect(page.getByText(locale==='en'?'Read only: needs operate permission':'唯讀：需要操作權限',{exact:true})).toHaveCount(1);
+  await expect(section(page).getByRole('button').first()).toBeVisible();expect(await stored()).toEqual(draft);expect(f.state.writes).toEqual([]);
+  f.state.manage=true;f.state.role='owner';await refresh(page);await expect(entry).toBeVisible();await expect(purpose).toHaveValue('Keep the PM assessment draft');
+  expect(await stored()).toEqual(draft);expect(f.state.writes).toEqual([]);
 });
 
 test('analysis submission disappears when the preparation source is withdrawn',async({page})=>{
@@ -234,9 +253,9 @@ test('a late rejected analysis from an old preparation cannot clear the current 
     ?new Promise(resolve=>{release=()=>resolve({status:403,data:{error:{code:'FORBIDDEN',message:'Old request authority withdrawn'}}});}):original(input);
   await mount(page,f);await openAnalysis(page);await page.getByLabel('What should PM assess?',{exact:true}).fill('Read preparation three.');
   await page.getByRole('button',{name:'Analyze this preparation',exact:true}).click();await expect.poll(()=>Boolean(release)).toBe(true);
-  await page.getByText('Preparation history',{exact:true}).click();await page.getByLabel('Saved preparation',{exact:true}).selectOption(intakeId(1));
+  await openRead(page.getByText('Preparation history',{exact:true}));await page.getByLabel('Saved preparation',{exact:true}).selectOption(intakeId(1));
   await expect(page.locator('[data-pm-follow-up]').getByText('Preparation 1',{exact:true})).toBeVisible();
-  await release();await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+  await release();await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);
   await expect(page.locator('[data-pm-follow-up]')).not.toContainText('Old request authority withdrawn');
   await expect(page.getByLabel('What should PM assess?',{exact:true})).toHaveValue('');
 });

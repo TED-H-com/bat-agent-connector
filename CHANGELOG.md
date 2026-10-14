@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
+  build once after detaching only this job's leftover `/Volumes` images.
+
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 
@@ -14,10 +17,34 @@
   Redrawing the board while it is scrolled does not drop those labels. Open ends
   stay Open in English and zh-TW.
 
+- Governance, Meetings and Follow-ups use shared cards, compact context, localized
+  details and date-time editing. Register handoffs select and focus the requested
+  durable form without submitting it; original drafts and recovery keys remain intact.
+  Creation has one entry with focus and Cancel, read-only access explains its permission
+  requirement, and missing follow-up baseline areas are named in both languages.
+  Read-only reasons stay beside Refresh; unselected register governance shows a
+  selection hint, and finding toggles retain their label when selected.
+  Unavailable write entry points are hidden using each action's existing permissions;
+  drafts and original requests return when permission is restored.
+
 - Reviewed handoff facts no longer print empty placeholders. The issues register
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited
   sources only; conclusions stay unaccepted). zh-TW operation, agent and provider
   words use the existing label tables.
+
+- Sprints, AHP observations, work packages, package handoff, work batches and
+  delivery receipts open on the answer: a status pill, one main action, and
+  identifiers in Details. zh-TW uses 衝刺, 工作階段, 完成定義, 推送, 合併 and
+  工作流程執行. A saved merge, a deployment and an acceptance stay separate facts.
+
+- Those work tools keep Refresh on the first line, at the top right of the
+  selector or status. In a narrow row, including the inspector, a secondary
+  action such as New batch wraps under the selector. A new batch, result
+  evidence and every sprint form except the one next action stay closed until
+  asked. A failed read shows the error without an empty
+  catalog or an empty Sprint selector. Sprint dates are both absolute. A
+  delivery state is a pill, `PR #12` stays with its repository, and handoff
+  names the permission in words.
 
 - Name maintenance findings from the structured `finding` identity in the issues
   register, Overview attention and discussion chips, in English and zh-TW.
@@ -36,9 +63,9 @@
 
 - Refresh the English and Traditional Chinese README, PM first-use navigation and public
   website around the project-to-decision journey. Replace the gallery with eight bilingual
-  scenes from one synthetic project, pinned to a labelled candidate with capture hashes.
+  scenes from one synthetic project, pinned to merged main `aba02180` with capture hashes.
   Record which PRs are merged, and separate branch, installation and live evidence, in the
-  [October 14 progress draft](docs/product/progress-2026-10-14.md).
+  [October 14 progress report](docs/product/progress-2026-10-14.md).
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
@@ -77,6 +104,13 @@
   A text selection anchors its own row when rows above it change height.
   Withdrawn rows and their counts still disappear immediately.
 
+- Make compact Requirements rows hide their table header, size report controls for
+  touch, and compare only changed statements with unchanged context collapsed.
+  Requirement inspectors show acceptance criteria once and identify the qualifying
+  review. Overview keeps decision text clear and explains delivered work awaiting
+  this round's acceptance, with Requirements and sourced PM discussion links in
+  English and Traditional Chinese.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.
@@ -95,6 +129,18 @@
   Missing or unproven facts are omitted and listed in `unknowns`. A withdrawn source
   removes the row and the identity together.
   See the [register contract](docs/design/pm-register.md).
+
+- Maintenance repairs, maintenance review, maintenance policy and release baselines
+  open on the current state, in English and zh-TW. Status uses a shared pill.
+  Record identifiers, digests and the limit note stay in Details, and each durable
+  form stays behind one action. "Turn into work" binds the finding and its matching
+  rule. "Record evidence" selects that saved repair. Nothing is written until submit,
+  and an unknown result still recovers with the original operation key.
+  The state sits beside Refresh. A repair limit reads as "4 per 24 h". Counts from
+  a source that was not observed stay Unknown. Each panel has one Details disclosure,
+  and review keeps one primary action with the rest under More actions.
+  Policy and release baselines keep that state on the Refresh row, with one divider.
+  A baseline's channel pills sit on the next line, under the selection.
 
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
   dates, including unscheduled work and execution attempts for a future schedule view.

@@ -9,7 +9,7 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toBeVisible();await expect(charter(page).locator('[data-charter-section]')).toHaveCount(6);
     await expect(page.locator('[data-pm-kanban]')).toBeHidden();await expect(charter(page)).toContainText('Recovery progress');
-    await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare with previous report',exact:true}).click();
+    await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare',exact:true}).click();
     await expect(charter(page)).toContainText('Report changes');await expect(charter(page).locator('.pm-charter-comparison')).toContainText('Login PR merge recorded');
     await page.getByRole('button',{name:'Previous report',exact:true}).click();await page.getByRole('button',{name:'Close',exact:true}).click();
     await expect(charter(page)).toContainText('Scope agreed');await expect(charter(page)).not.toContainText('Login PR merge recorded');
@@ -52,9 +52,12 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
   test('comparison withdrawal removes both summary and comparison facts',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toContainText('Recovery progress');f.state.denySnapshot=true;
-    await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare with previous report',exact:true}).click();
-    await expect(charter(page)).toContainText('Your token lacks this scope');await expect(charter(page)).not.toContainText('Members can reliably');
-    await expect(page.getByRole('button',{name:'Print report',exact:true})).toBeDisabled();
+    await openPmPanel(page,'ui_report');await page.getByRole('button',{name:'Compare',exact:true}).click();
+    await expect(page.locator('[data-report-status]')).toContainText('Your token lacks this scope');
+    await expect(page.locator('[data-report-status]')).toBeVisible();await expect(charter(page)).not.toContainText('Members can reliably');
+    await expect(page.locator('[data-pm-report-tools]')).not.toContainText('Members can reliably');
+    await expect(page.locator('.pm-charter-comparison')).toHaveCount(0);
+    await expect(page.getByRole('button',{name:'Print',exact:true})).toBeDisabled();
   });
   test('RTM uses exact revisions, distinct work and an Issue with two PRs and three attempts',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
