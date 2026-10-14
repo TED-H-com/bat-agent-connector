@@ -1,5 +1,5 @@
 import {h} from './ui/dom.js';
-import {searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState} from './ui/components.js';
+import {searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState, inlineError} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {cliName} from './pm-agents-trend.js';
@@ -74,7 +74,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     const signature = JSON.stringify([message, labelSegment(error.code)]);
     if (signature === failureSignature) return;
     failureSignature = signature;
-    status.replaceChildren(h('p', {class: 'error'}, message),
+    status.replaceChildren(inlineError({error: {message}}),
     ...(error.code ? [disclosure({label: t('wv_details'), body: h('p', {}, labelSegment(error.code))})] : []),
     h('button', {type: 'button', class: 'ui-button secondary', onclick: () => {if (reading) return; pages = 1; void refresh();}}, t('pm_kanban_retry')));}
   function requirements(card) {const bound = card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id);
@@ -162,7 +162,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       const toggle = h('button', {type: 'button', class: 'pm-board-lane-toggle', 'aria-expanded': String(!collapsed), onclick: () => {
         holder.hidden = !holder.hidden; toggle.setAttribute('aria-expanded', String(!holder.hidden));
         preference.collapsed = [...list.children].filter(lane => lane.querySelector('.pm-kanban-cards').hidden).map(lane => lane.dataset.pmKanbanColumn);
-      }}, icon('chevron-right'), h('span', {}, name), h('span', {class: 'pm-kanban-count'})); holder.hidden = collapsed;
+      }}, icon('chevron-right'), h('span', {class: 'pm-board-lane-name', title: name}, name), h('span', {class: 'pm-kanban-count'})); holder.hidden = collapsed;
       const lane = h('section', {class: 'pm-kanban-column', 'data-pm-kanban-column': key, 'aria-label': name}, h('header', {}, h('h2', {}, toggle)), holder);
       lane.addEventListener('pointerleave', () => requestAnimationFrame(() => renderColumns()));
       lane.addEventListener('focusout', () => requestAnimationFrame(() => renderColumns()));
@@ -278,7 +278,24 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     pages++; await refresh();
   }
   function titleFor(id) {const title = rows.get(id)?.card?.work?.title; return typeof title === 'string' ? title : '';}
+  function fitLanes() {
+    if (matchMedia('(max-width: 799px)').matches) {
+      if (list.style.getPropertyValue('--board-lane')) list.style.removeProperty('--board-lane');
+      return;
+    }
+    const width = list.clientWidth;
+    const lanes = list.querySelectorAll(':scope > .pm-kanban-column').length;
+    if (width < 32 || !lanes) return;
+    const gap = Number.parseFloat(getComputedStyle(list).columnGap) || 0;
+    const min = 168;
+    const fit = Math.max(1, Math.floor((width + gap) / (min + gap)));
+    const count = Math.max(1, Math.min(lanes, fit));
+    const lane = (width - gap * (count - 1)) / count;
+    const next = `${lane.toFixed(2)}px`;
+    if (list.style.getPropertyValue('--board-lane') !== next) list.style.setProperty('--board-lane', next);
+  }
   function updateEdges() {
+    fitLanes();
     content.classList.toggle('pm-board-clipped-start', list.scrollLeft > 1);
     content.classList.toggle('pm-board-clipped-end', list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
   }

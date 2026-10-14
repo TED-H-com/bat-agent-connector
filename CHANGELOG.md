@@ -70,6 +70,15 @@
   The PM profile catalog uses version 3; version 2 plans still read and adopt.
   See the [discussion contract](docs/design/pm-overview-discussion-context.md).
 
+- Issues & changes filters by shared status, open age and opening week. An age bar
+  or a week point filters the loaded rows and shows a removable chip. Status choices are the
+  shared groups, and an unknown status stays under Other. Counts say how many rows
+  are shown unless the catalogue is complete; a loaded count appears once in the
+  header. The type, title, status and next step
+  stay visible as the table narrows. A mapping row without a title uses its source
+  name. Board lanes fill the width in whole columns, keep each count, and ellipsize
+  the lane name. The board toolbar wraps whole controls.
+
 - Add a read-only issues, actions and changes register via `pm_register_list` and
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.
   Totals and summaries require complete relevant sources; hidden or withdrawn records
