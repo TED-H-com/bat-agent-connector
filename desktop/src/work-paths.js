@@ -18,6 +18,7 @@ export function internalFrom(value) {
   try {decoded = decodeURIComponent(value);} catch {return null;}
   if (/[\\\s\u0000-\u001f\u007f]/u.test(decoded) || decoded.includes('://') || decoded.includes('//') || decoded.slice(1).includes('#')) return null;
   const path = decoded.split('?')[0];
-  if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions\/(?:new|[a-zA-Z0-9_-]+)|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
+  if (path.split('/').some(part => part === '.' || part === '..')) return null;
+  if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions(?:\/(?:new|[a-zA-Z0-9_-]+))?|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
   return value;
 }

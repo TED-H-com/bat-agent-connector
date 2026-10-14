@@ -9085,7 +9085,7 @@ var STRINGS = {
 		read_only_note: "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
 		continue_from_checkpoint: "從這裡接續",
 		checkpoints: "檢查點",
-		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的儲存庫複本裡，以新的分支與工作階段進行。",
+		checkpoint_help: "記錄選定的提交與最近對話，原工作階段與目錄維持唯讀",
 		create_checkpoint: "記下這個版本",
 		no_checkpoints: "還沒有記下的檢查點。",
 		excerpt_count: "{n} 則對話",
@@ -10719,7 +10719,7 @@ var STRINGS = {
 		read_only_note: "A person created this session in BAT, so the API never writes to it. To have an agent continue, start a new managed session from its commit.",
 		continue_from_checkpoint: "Start from here",
 		checkpoints: "Checkpoints",
-		checkpoint_help: "Records this session's current commit and recent conversation (read-only; the session and its folder are not changed). Agent work started from it runs in the connector's own clone on a new branch and session.",
+		checkpoint_help: "Records the selected commit and recent conversation; the source stays read-only",
 		create_checkpoint: "Record this version",
 		no_checkpoints: "No checkpoints yet.",
 		excerpt_count: "{n} messages",
@@ -12033,7 +12033,8 @@ function internalFrom(value) {
 	}
 	if (/[\\\s\u0000-\u001f\u007f]/u.test(decoded) || decoded.includes("://") || decoded.includes("//") || decoded.slice(1).includes("#")) return null;
 	const path = decoded.split("?")[0];
-	if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions\/(?:new|[a-zA-Z0-9_-]+)|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
+	if (path.split("/").some((part) => part === "." || part === "..")) return null;
+	if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions(?:\/(?:new|[a-zA-Z0-9_-]+))?|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
 	return value;
 }
 //#endregion
@@ -12107,7 +12108,7 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 		status.className = `ui-pill tone-${ready ? "info" : "neutral"}`;
 		const failures = descriptors.map((value) => value.action_registered === false ? "agents_action" : value.reason ? eligibilityReasons[value.reason] || (value === bat ? "agents_bat_unknown" : "agents_installation") : !permitted || value.authorized === false ? "agents_scope" : "agents_installation");
 		reason.textContent = t(ready ? "agents_preflight" : failures[0]);
-		codes.replaceChildren(...descriptors.flatMap((value, i) => value.reason ? [h("p", {}, t(i ? "agents_bat" : "agents_native"), ": ", h("code", {}, value.reason))] : []));
+		codes.replaceChildren(...descriptors.flatMap((value) => value.reason ? [h("p", {}, t(value === bat ? "agents_bat" : "agents_native"), ": ", h("code", {}, value.reason))] : []));
 		if (!ready && descriptors.length > 1) codes.prepend(h("p", {}, t(failures[1])));
 		technical.hidden = !codes.childElementCount;
 	};

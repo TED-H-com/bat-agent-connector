@@ -35,7 +35,7 @@ export function settingsAgents({h, t, api, caps, guard, from}) {
       : value.reason ? eligibilityReasons[value.reason] || (value === bat ? 'agents_bat_unknown' : 'agents_installation')
       : !permitted || value.authorized === false ? 'agents_scope' : 'agents_installation');
     reason.textContent = t(ready ? 'agents_preflight' : failures[0]);
-    codes.replaceChildren(...descriptors.flatMap((value, i) => value.reason ? [h('p', {}, t(i ? 'agents_bat' : 'agents_native'), ': ', h('code', {}, value.reason))] : []));
+    codes.replaceChildren(...descriptors.flatMap(value => value.reason ? [h('p', {}, t(value === bat ? 'agents_bat' : 'agents_native'), ': ', h('code', {}, value.reason))] : []));
     // The alternate adapter's reason remains inspectable even when local PM is ready.
     if (!ready && descriptors.length > 1) codes.prepend(h('p', {}, t(failures[1])));
     technical.hidden = !codes.childElementCount;

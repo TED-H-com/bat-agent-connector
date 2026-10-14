@@ -92,3 +92,69 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) 
     expect(s.writes).toHaveLength(0); await s.context.close();
   });
 }
+
+for (const locale of ['en', 'zh-TW'] as const) {
+  const copy = workPathsStrings[locale];
+  test(`bundled MCP guidance ${locale}`, async ({browser}) => {
+    const s = await pathsFixture(browser, {locale, managed: true});
+    await s.page.goto('/dashboard/#/settings?section=agents');
+    const mcp = s.page.locator('[data-settings-mcp]');
+    await expect(mcp).toContainText(copy.agents_bundle);
+    await expect(mcp.locator('[data-mcp-config]')).toHaveCount(0);
+    await expect(mcp.getByRole('button')).toHaveCount(0);
+    await expect(mcp).not.toContainText('batc api-token');
+    await expect(mcp.getByRole('link', {name: copy.agents_mcp_docs})).toHaveAttribute('href', /#cli-and-agent-access$/);
+    expect(s.writes).toHaveLength(0); await s.context.close();
+  });
+  test(`workspace BAT eligibility ${locale}`, async ({browser}) => {
+    const s = await pathsFixture(browser, {locale, native: null, bat: {action_registered: true, authorized: true, eligible_for_preflight: true, reason: null}});
+    const {page, ids} = s, discussion = `#/pm/${ids.workspaceId}/discussions/${ids.threadIdea}`;
+    const path = `/pm/workspaces/${ids.workspaceId}/capabilities`;
+    await page.goto('/dashboard/#/settings?section=agents&from=' + encodeURIComponent(discussion));
+    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_ready);
+    expect(s.reads('/pm/installation-capabilities')).toBe(0);
+    for (const code of ['PM_WORKTREE_REQUIRED', 'REPOSITORY_BINDING_CHANGED', 'REPOSITORY_NOT_BOUND', 'REPOSITORY_HOST_UNAVAILABLE', 'HOST_READ_ONLY', 'TIER_DISABLED']) {
+      s.state.bat = {action_registered: true, authorized: true, eligible_for_preflight: false, reason: code};
+      const reads = s.reads(path);
+      await page.locator('[data-pm-eligibility-check]').click();
+      await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_unavailable);
+      await expect(page.locator('[data-pm-eligibility-reason]')).toHaveText(copy[eligibilityReasons[code] as keyof typeof copy]);
+      expect(s.reads(path)).toBe(reads + 1);
+    }
+    expect(s.writes).toHaveLength(0); await s.context.close();
+  });
+}
+
+test('eligibility response cannot restore an abandoned Settings view', async ({browser}) => {
+  const s = await pathsFixture(browser), {page} = s;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => {release = resolve;});
+  s.overrides.unshift(async (_input, url) => {
+    if (url.pathname !== '/pm/installation-capabilities') return;
+    await held;
+    return {status: 200, data: {native_analysis: {action_registered: true, eligible_for_preflight: false, reason: 'PM_NATIVE_AUTH_UNAVAILABLE'}}};
+  });
+  await page.goto('/dashboard/#/settings?section=agents');
+  await expect.poll(() => s.reads('/pm/installation-capabilities')).toBe(1);
+  await go(page, '#/sessions'); await expect(page.locator('.session-heading')).toBeVisible();
+  release();
+  await expect(page.locator('[data-pm-eligibility]')).toHaveCount(0);
+  await expect(page.locator('body')).not.toContainText(workPathsStrings.en.agents_auth);
+  expect(s.writes).toHaveLength(0); await s.context.close();
+});
+
+for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) {
+  test(`empty sessions name the paths ${locale} ${width}`, async ({browser}) => {
+    const copy = workPathsStrings[locale], s = await pathsFixture(browser, {locale, width}), {page} = s;
+    s.overrides.unshift((_input, url) => url.pathname === '/sessions' ? {status: 200, data: {sessions: [], next_cursor: null}} : undefined);
+    await page.goto('/dashboard/#/sessions');
+    const header = page.locator('.session-heading');
+    await expect(header).toContainText(copy.paths_first);
+    await expect(header.getByRole('link', {name: copy.paths_start})).toHaveAttribute('href', '#/start');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    // Registration alone does not grant a start; keep start scope but withdraw action allowance.
+    s.state.startAllowed = false; await page.reload();
+    await expect(header.getByRole('link', {name: copy.paths_start})).toHaveCount(0);
+    expect(s.writes).toHaveLength(0); await s.context.close();
+  });
+}

@@ -78,7 +78,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
       : 'Member sign-in & password reset · demo-host · Oct 12, 5:00 AM');
     expect(await meta.innerText()).not.toMatch(/:\s*demo-host/);
     expect(await meta.innerText()).not.toMatch(/\d:\d{2}:\d{2}/);
-    await expect(page.locator('.session-checkpoint-state')).toHaveText(zh ? '此主機無法建立檢查點' : 'Not available on this host');
+    await expect(page.locator('.session-checkpoint-state')).toHaveText(zh ? '此主機尚未設定受管工作' : 'This host is not set up for managed work');
     await expect(page.getByRole('button', {name: zh ? '記下這個檢查點' : 'Record this version'})).toHaveCount(0);
     await expect(page.locator('[data-session-sources]')).toHaveText(zh ? '尚無成果來源' : 'No result sources');
     await expect(page.locator('.ui-inspector-body')).not.toContainText(zh ? '請在 BAT 中搜尋' : 'Search in BAT');
@@ -184,7 +184,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await go(page, `#/session/${ids.host}/${ids.sessions.manual}`);
     await expect(page.locator('.session-pill .ui-pill')).toHaveCount(0);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
-    await expect(page.locator('[data-session-readonly]')).toContainText(zh ? '這裡只能檢視' : 'read-only here');
+    await expect(page.locator('[data-session-readonly]')).toContainText(zh ? '僅供檢視' : 'View only');
     await expect(page.getByRole('button', {name: send, exact: true})).toHaveCount(0);
     await expect(page.getByRole('button', {name: zh ? '中斷這一輪' : 'Interrupt turn', exact: true})).toHaveCount(0);
     const text = await page.locator('#main, .workspace-nav').evaluateAll(nodes => nodes.map(node => (node as HTMLElement).innerText).join('\n'));

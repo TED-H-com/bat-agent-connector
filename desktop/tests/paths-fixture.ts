@@ -10,7 +10,7 @@ export async function pathsFixture(browser: Browser, options: any = {}) {
       const caps = url.pathname === '/bootstrap' ? response.data.capabilities : response.data;
       caps.scopes = ['manage', ...caps.scopes.filter((x: string) => x !== 'start'), ...(state.start ? ['start'] : [])];
       caps.actions = [...caps.actions.filter((x: any) => !['session.start', 'checkpoint.create', 'checkpoint.continue'].includes(x.action)),
-        {action: 'session.start', allowed: state.start}, {action: 'checkpoint.create', allowed: true}, {action: 'checkpoint.continue', allowed: state.start}];
+        {action: 'session.start', allowed: state.start && state.startAllowed !== false}, {action: 'checkpoint.create', allowed: true}, {action: 'checkpoint.continue', allowed: state.start}];
       caps.features.checkpoints = state.checkpoints ? [s.ids.host] : [];
       caps.features.pm_workspaces.installation_eligibility = true;
       if (state.managed) caps.managed_installation = {installation_id: 'fixture-install', runtime_version: '0.1'};
@@ -18,6 +18,7 @@ export async function pathsFixture(browser: Browser, options: any = {}) {
     }
     if (url.pathname === `/pm/workspaces/${s.ids.workspaceId}/capabilities`) return {status: state.status, data: {native_analysis: state.native, ...(state.bat ? {bat_analysis: state.bat} : {})}};
     if (url.pathname === '/pm/installation-capabilities') return {status: state.status, data: state.status === 200 ? {native_analysis: state.native, workspace_required: true} : {error: {code: 'FORBIDDEN', message: 'Unavailable'}}};
+    if (url.pathname === '/managed/setup') return {status: 403, data: {error: {code: 'FORBIDDEN', message: 'Setup is not available to this fixture principal'}}};
     if (url.pathname === '/workspaces') return {status: 200, data: {workspaces: [{host: s.ids.host, workspace_id: 'demo-workspace', name: 'Demo', folder: '/srv/demo'}], has_more: false, errors: {}}};
     return checkpoints(input, url);
   }) as Override);

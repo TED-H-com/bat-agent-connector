@@ -1,8 +1,8 @@
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {pathsFixture} from './paths-fixture.ts';
-import {go} from './session-fixture.ts';
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) {
+import {go, consoleNoise} from './session-fixture.ts';
+for (const locale of ['en', 'zh-TW']) for (const width of (process.env.FR4_WIDTHS || '1440,390').split(',').map(Number)) {
   test(`paths screenshots ${locale} ${width}`, async ({browser}) => {
     test.skip(!process.env.FR4_SHOTS, 'Explicit before/after capture');
     const s = await pathsFixture(browser, {locale, width, height: width === 390 ? 844 : 900});
@@ -25,6 +25,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) {
     if (await page.locator('[data-settings-nav=agents]').count()) await expect(page.locator('[data-settings-panel=agents]')).toBeVisible();
     await shot('agents');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    expect(s.writes).toHaveLength(0);
+    expect(s.errors.filter(error => !consoleNoise(error))).toEqual([]);
     await s.context.close();
   });
 }
