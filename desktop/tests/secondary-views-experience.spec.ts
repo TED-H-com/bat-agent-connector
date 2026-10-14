@@ -168,7 +168,9 @@ for (const locale of ['en', 'zh-TW']) {
     expect(launch.title).toBe(title); expect(launch.refs).toEqual([{kind: 'plan_revision', id: f.ids.planV3}]);
     await ask.click();
     await expect(page.locator('[data-discussion-title]')).toHaveText(title);
-    await expect(page.locator('[data-discussion-context=plan_revision]')).toContainText(f.copy.planTitle);
+    const context = page.locator('button[data-discussion-context=plan_revision]');
+    await expect(context).toBeVisible();
+    await expect(context).toContainText(f.copy.planTitle);
     await expect(page.locator('[data-discussion-composer]')).toBeFocused();
     await openPmSection(page, 'overview');
     for (state of ['unknown', 'partial', 'no-delivery', 'accepted']) {
