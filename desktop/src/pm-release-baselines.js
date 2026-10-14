@@ -1,4 +1,4 @@
-import {button, disclosure, emptyState, iconButton, inlineError, statusPill} from './ui/components.js';
+import {button, disclosure, iconButton, inlineError, statusPill} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 // Release selection records a fixed source. It does not publish or authorize Maintain.
 export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace}) {
@@ -42,9 +42,9 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
     choose,sourceStatus,sourceView,labelled('prb_branch',branch),h('p',{class:'muted'},t('prb_branch_help')),
     readPreview,previewView,usePreview,editorView)});
   const permission=h('p',{class:'muted'},t('prb_owner'));
-  const note=disclosure({element:h('details',{},h('summary',{},t('prb_note')),h('p',{class:'muted'},t('prb_intro')),permission)});
+  const headingState=h('div',{class:'pm-answer'},h('h3',{},t('prb_title')));
   const element=h('section',{class:'pm-brief','data-pm-release-baselines':''},h('header',{class:'pm-heading'},
-    iconButton({icon:'refresh-cw', label:t('prb_refresh'), ...{type:'button',onclick:()=>void refresh()}})),status,view,note,historyDetails,editorDetails);
+    headingState,iconButton({icon:'refresh-cw', label:t('prb_refresh'), ...{type:'button',onclick:()=>void refresh()}})),status,view,historyDetails,editorDetails);
   function controls(){
     const can=ready&&allowed();
     for(const field of [repository,kind,branch])field.disabled=!can||reading;
@@ -57,7 +57,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
   function withdraw(){
     epoch++;selectionEpoch++;ready=false;head=null;reading=false;historyLoaded=false;historyCursor=null;
     bindings=[];bindingCursor=null;repository.replaceChildren(h('option',{value:''},t('prb_choose_repository')));moreBindings.hidden=true;
-    view.replaceChildren();history.replaceChildren();sourceStatus.replaceChildren();resetSources();controls();
+    view.replaceChildren();history.replaceChildren();sourceStatus.replaceChildren();resetSources();headingState.replaceChildren(h('h3',{},t('prb_title')));controls();
   }
   function failure(error){withdraw();status.replaceChildren(inlineError({error:t('prb_unavailable')}),errorBox(error));}
   const editorApi=async(...args)=>{
@@ -85,13 +85,20 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
     const doc=row.document,delivery=doc.delivery_status||{};
     const details=fixedDetails(doc,doc.proof,row);
     details.append(h('p',{},t(delivery.github_release==='published'?'prb_gh_published':'prb_gh_unknown')),
-      h('p',{},t('prb_registry')),h('p',{},t(delivery.deployment==='verified'?'prb_dep_verified':'prb_dep_unknown')),
-      delivery.deployment==='verified'?h('p',{class:'muted'},t('prb_not_live')):null,h('p',{class:'muted'},t('prb_quality')));
+      h('p',{},t('prb_registry')),h('p',{},t(delivery.deployment==='verified'?'prb_dep_verified':'prb_dep_unknown')));
+    if(delivery.deployment==='verified')details.append(h('p',{class:'muted'},t('prb_not_live')));
+    details.append(h('p',{class:'muted'},t('prb_quality')));
+    if(current){details.append(h('p',{class:'muted'},t('prb_intro')),permission);
+      headingState.replaceChildren(h('h3',{},t('prb_current')),
+      fact('prb_github_release',delivery.github_release==='published'?'adopted':'not_assessed'),
+      fact('prb_registry_short','not_assessed'),
+      fact('prb_dep_name',delivery.deployment==='verified'?'deployed':'not_assessed'),
+      fact('prb_acceptance','not_assessed'));}
     return h('article',{'data-release-baseline':row.baseline_id},
-      h('div',{class:'pm-answer'},h('h3',{},current?t('prb_current'):`${t('prb_version')} ${row.version}`)),
+      current?null:h('div',{class:'pm-answer'},h('h3',{},`${t('prb_version')} ${row.version}`)),
       h('p',{},h('strong',{},doc.release_version?.value||doc.commit_sha),' · ',doc.repository,' · ',doc.channel),
       h('p',{class:'muted'},t('prb_version'), ' ', row.version, ' · ', stamp(row.created_at)),
-      h('div',{class:'pm-baseline-facts'},
+      current?null:h('div',{class:'pm-baseline-facts'},
         fact('prb_github_release',delivery.github_release==='published'?'adopted':'not_assessed'),
         fact('prb_registry_short','not_assessed'),
         fact('prb_dep_name',delivery.deployment==='verified'?'deployed':'not_assessed'),
@@ -101,7 +108,10 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
   }
   function renderCurrent(data){
     check(data);if(!Number.isSafeInteger(data.head?.version))throw Error(t('prb_invalid'));
-    head=data.head;view.replaceChildren(data.baseline?baselineRow(data.baseline,true):emptyState({title:t(data.visibility_filtered||head.version>0?'prb_hidden':'prb_empty')}));
+    head=data.head;
+    if(data.baseline)view.replaceChildren(baselineRow(data.baseline,true));
+    else{const details=disclosure({element:h('details',{},h('summary',{},t('prb_note')),h('p',{class:'muted'},t('prb_intro')),permission)});
+      view.replaceChildren(details);headingState.replaceChildren(h('h3',{},t(data.visibility_filtered||head.version>0?'prb_hidden':'prb_empty')));}
   }
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;

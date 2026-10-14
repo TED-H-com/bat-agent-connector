@@ -1,4 +1,4 @@
-import {button, disclosure, emptyState, iconButton, inlineError, statusPill} from './ui/components.js';
+import {button, disclosure, iconButton, inlineError, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {maintenanceRepairPolicyControls,maintenanceRepairPolicyView} from './pm-maintenance-repair-policy.js';
 import {findingPolicyControls,findingPolicyView} from './pm-maintenance-findings.js';
@@ -113,11 +113,15 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     ?maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}):null;
   const observations=caps()?.features?.pm_workspaces?.workload?.version===1
     ?maintenanceObservations({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}):null;
-  const note=disclosure({element:h('details',{},h('summary',{},t('pmp_note')),h('p',{class:'muted'},t('pmp_intro')),
-    h('p',{class:'muted'},t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version===1?'pmr_policy_runtime':maintenanceRuns?'pmc_runtime_available':'pmp_runtime')),permission)});
+  const headingState=h('div',{class:'pm-answer'},h('h3',{},t('pmp_title')));
+  const runtimeText=()=>t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version===1?'pmr_policy_runtime':maintenanceRuns?'pmc_runtime_available':'pmp_runtime');
+  function paintPolicyHeading(tone){headingState.replaceChildren();
+    if(tone)headingState.append(h('h3',{},t('pmp_current')),statusPill(tone));
+    else if(ready&&current)headingState.append(h('h3',{},t(current.visibility_filtered||current.head?.revision?'pmp_hidden':'pmp_empty')));
+    else headingState.append(h('h3',{},t('pmp_title')));}
   const element=h('section',{class:'pm-brief pm-maintenance-policy','data-pm-maintenance-policy':''},h('header',{class:'pm-heading'},
-    iconButton({icon:'refresh-cw', label:t('pmp_refresh'), ...{type:'button',onclick:()=>void refresh()}})),
-    status,view,note,historyDetails,editorDetails,...(maintenanceRuns?[maintenanceRuns.element]:[]),...(observations?[observations.element]:[]));
+    headingState,iconButton({icon:'refresh-cw', label:t('pmp_refresh'), ...{type:'button',onclick:()=>void refresh()}})),
+    status,view,historyDetails,editorDetails,...(maintenanceRuns?[maintenanceRuns.element]:[]),...(observations?[observations.element]:[]));
   function controls(){editorDetails.hidden=!owner()&&!(editor.locked()&&recover());permission.hidden=owner();editor.update();}
   function initialize(){
     const p=current.policy?.document?.policy||{enabled:false,after_release_policy:'manual',sources:['issues','pull_requests'],allowed_work_kinds:[],allowed_paths:['.'],
@@ -164,7 +168,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   }
   const line=(label,value)=>h('p',{},h('strong',{},`${t(label)}: `),value??t('pmp_none'));
   function record(row,isCurrent=false){
-    fixed(row);const doc=row.document,p=doc.policy,s=doc.scope,details=h('details',{},h('summary',{},t('pmp_details')));
+    fixed(row);const doc=row.document,p=doc.policy,s=doc.scope,details=h('details',{},h('summary',{},t('pmp_note')));
     const names=values=>values.length?values.map(value=>t(`pmp_${value}`)).join(' · '):t('pmp_none');
     details.append(line('pmp_after',t(`pmp_${p.after_release_policy}`)),line('pmp_sources',names(p.sources)),h('p',{class:'muted'},t('pmp_sources_help')),
       line('pmp_work',names(p.allowed_work_kinds)),line('pmp_paths',p.allowed_paths.join(' · ')),line('pmp_delivery',t(`pmp_${p.delivery.maximum}`)),
@@ -181,14 +185,20 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     const findingPolicy=findingPolicyView({h,t,config:p.observation.maintenance_sources});if(findingPolicy)details.append(findingPolicy);
     details.append(h('p',{},t(p.enabled?'pmp_permitted':'pmp_disabled'),' · ',t(`pmp_${p.delivery.maximum}`)),
       h('p',{class:'muted'},p.allowed_work_kinds.length?names(p.allowed_work_kinds):t('pmp_observation')));
+    if(isCurrent){
+      details.append(h('p',{class:'muted'},t('pmp_intro')),h('p',{class:'muted'},runtimeText()),permission);
+      const branch=baseline?.baseline?.document?.proof?.maintenance_branch;
+      if(baseline?.baseline)details.append(h('p',{class:'muted'},branch?.status==='verified_at_observation'?`${t('pmp_branch')}: ${branch.ref}`:t('pmp_no_branch')));
+    }
     disclosure({element:details});
     const tone=!p.enabled?'stopped':p.allowed_work_kinds.length?'adopted':'read_only';
+    if(isCurrent)paintPolicyHeading(tone);
     return h('article',{'data-maintenance-policy':row.policy_id},
-      h('div',{class:'pm-answer'},h('h3',{},isCurrent?t('pmp_current'):`${t('pmp_revision')} ${row.revision}`),statusPill(tone)),
+      isCurrent?null:h('div',{class:'pm-answer'},h('h3',{},`${t('pmp_revision')} ${row.revision}`),statusPill(tone)),
       h('p',{},h('strong',{},`${t('pmp_revision')} ${row.revision}`),' · ',s.repository,' · ',s.channel),
       line('pmp_github_profile',t(s.github_scope===githubProfile?'pmp_profile_github':'pmp_profile_legacy')),details);
   }
-  function withdraw(){repairSourcesReady=false;maintenanceRuns?.withdraw();observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();controls();}
+  function withdraw(){repairSourcesReady=false;maintenanceRuns?.withdraw();observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();paintPolicyHeading(null);controls();}
   function failure(error){withdraw();status.replaceChildren(inlineError({error:t('pmp_unavailable')}),errorBox(error));}
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;
@@ -215,12 +225,11 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
         ||!b.baseline&&!b.visibility_filtered&&(b.head.baseline_id!==null||b.head.version!==0)
         ||b.baseline&&(b.baseline.document?.workspace_id!==workspaceId||b.baseline.document.baseline_id!==b.baseline.baseline_id||b.baseline.document.version!==b.baseline.version||b.baseline.workspace_id!==workspaceId||b.baseline.baseline_id!==b.head.baseline_id||b.baseline.version!==b.head.version))throw Error(t('pmp_invalid'));
       if(p.policy)fixed(p.policy);current=p;baseline=b;lifecycle=l.lifecycle;ready=true;
-      view.replaceChildren(p.policy?record(p.policy,true):emptyState({title:t(p.visibility_filtered||p.head.revision?'pmp_hidden':'pmp_empty')}));
-      if(b.baseline){const row=b.baseline,doc=row.document;
-        source.append(h('h3',{},t('pmp_baseline')),h('p',{},doc.release_version.value,' · ',doc.repository,' · ',doc.channel),
-          h('p',{class:'muted'},doc.proof.maintenance_branch.status==='verified_at_observation'?`${t('pmp_branch')}: ${doc.proof.maintenance_branch.ref}`:t('pmp_no_branch')),
-          h('details',{},h('summary',{},t('pmp_versions')),line('pmp_revision',p.head.revision),line('pmp_lifecycle',l.lifecycle.revision),
-            line('pmp_original_baseline',row.baseline_id),h('p',{class:'mono'},row.document_digest)));
+      if(p.policy)view.replaceChildren(record(p.policy,true));
+      else{const details=disclosure({element:h('details',{},h('summary',{},t('pmp_note')),h('p',{class:'muted'},t('pmp_intro')),h('p',{class:'muted'},runtimeText()),permission)});view.replaceChildren(details);paintPolicyHeading(null);}
+      if(b.baseline){const doc=b.baseline.document;
+        source.append(h('p',{},t('pmp_baseline'),': ',doc.release_version.value,' · ',doc.repository,' · ',doc.channel),
+          h('p',{class:'muted'},doc.proof.maintenance_branch.status==='verified_at_observation'?`${t('pmp_branch')}: ${doc.proof.maintenance_branch.ref}`:t('pmp_no_branch')));
       }
       controls();if(!p.visibility_filtered&&!b.visibility_filtered){await repairControls.checkSources({api,endpoint,workspaceId,valid:()=>valid(ticket)});if(!valid(ticket))return;repairSourcesReady=true;controls();}
       if(historyDetails.open)await readHistory(false);if(valid(ticket))await maintenanceRuns?.refresh();if(valid(ticket))await observations?.refresh();

@@ -53,6 +53,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
     start?.update();proof?.update();
     finding.disabled=rule.disabled=!ready||!owner()||Boolean(start?.locked());history.disabled=!ready;
     evidence.disabled=!proofReady||!owner()||Boolean(proof?.locked());
+    historyLabel.hidden=!ready;startFold.style.display=ready||start?.locked()?'':'none';evidenceFold.hidden=!ready&&!proof?.locked();tools.hidden=historyLabel.hidden&&startFold.style.display==='none';
     stale.hidden=rebase.hidden=!ready||!start||start.locked()||!startFields.context.value||same(parse(startFields.context),pre());
     rebase.disabled=!active();startView.hidden=!ready&&!start?.locked();proofView.hidden=!ready&&!proof?.locked();
     if(start?.locked())startFold.open=true;if(proof?.locked())evidenceFold.open=true;
@@ -75,12 +76,14 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   evidence.addEventListener('change',()=>{if(!proof||proof.locked())return;proof.set('selection',evidence.value?JSON.stringify(choices.get(evidence.value)?.selection):'');update();});
   const verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,
     namespace:`${namespace}.repair`,onSaved:()=>refresh(),onUnavailable:error=>failure(error)});
-  startFold=h('details',{'data-repair-start':''},h('summary',{},t('pmr_new')),startView);
+  startFold=h('details',{'data-repair-start':''},h('summary',{class:'ui-button secondary ui-md'},t('pmr_new')),startView);
   evidenceFold=h('details',{'data-repair-evidence':''},h('summary',{},t('pmr_evidence_open')),proofView);
   disclosure({element:startFold});disclosure({element:evidenceFold});
+  const headingState=h('div',{class:'pm-answer'},h('h3',{},t('pmr_title')));
+  const historyLabel=labelled('pmr_history',history),tools=h('div',{class:'pm-repair-tools'},historyLabel,startFold);
   const element=h('section',{class:'panel pm-maintenance-repairs','data-pm-maintenance-repairs':''},
-    h('div',{class:'pm-heading'},iconButton({icon:'refresh-cw', label:t('pmr_refresh'), ...{type:'button',onclick:()=>void refresh()}})),
-    status,budget,labelled('pmr_history',history),facts,startFold,verifier.element,evidenceFold);
+    h('div',{class:'pm-heading'},headingState,iconButton({icon:'refresh-cw', label:t('pmr_refresh'), ...{type:'button',onclick:()=>void refresh()}})),
+    status,budget,tools,facts,verifier.element,evidenceFold);
   function options(field,rows,value=''){field.replaceChildren(h('option',{value:''},t('pmr_choose')),...rows.map(([id,label])=>h('option',{value:id},label)));field.value=rows.some(([id])=>id===value)?value:'';}
   async function pages(path,list,cursor,ticket){const result=[];let after=0;
     for(let page=0;page<20;page++){const data=check(await api('GET',`${base}/${path}${path.includes('?')?'&':'?'}after=${after}&limit=50`));if(!valid(ticket))return null;
@@ -96,7 +99,9 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   }
   function validate(row){if(row?.workspace_id!==workspaceId||!/^pmrp_[0-9a-f]{32}$/.test(row.repair_id)||!op.test(row.operation_id)||!Number.isSafeInteger(row.version)
     ||!row.context?.rule||!row.context.finding_ref||!Array.isArray(row.evidence))throw invalid();return row;}
-  function render(row){const c=row.context,p=row.progress||{},box=h('article',{'data-repair':row.repair_id},h('div',{class:'pm-answer'},h('h3',{},`${t('pmr_issue')} #${c.finding.native.number}`),pill(row.operation_status||row.child?.status||'unknown')));
+  function paintHeading(row){const title=row?h('h3',{},`${t('pmr_issue')} #${row.context.finding.native.number}`):h('h3',{},t(ready?'pmr_choose':'pmr_title'));
+    headingState.replaceChildren(...(row?[title,pill(row.operation_status||row.child?.status||'unknown')]:[title]));}
+  function render(row){const c=row.context,p=row.progress||{};paintHeading(row);const box=h('article',{'data-repair':row.repair_id});
     if(['published_for_review','merged','deployed'].includes(row.outcome))box.append(line('pmr_outcome',t('pmr_'+row.outcome)));
     if(p.new_investment_blocked_reason||p.blocked_reason)box.append(h('p',{class:'muted'},reason(p.new_investment_blocked_reason||p.blocked_reason)));
     const detail=h('details',{},h('summary',{},t('pmr_details')),
@@ -168,7 +173,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
     if(!valid(ticket))return;if(filtered&&!status.querySelector('[data-repair-filtered]')){const notice=text('pmr_filtered');notice.dataset.repairFiltered='';status.append(notice);}proofReady=true;const saved=parse(editor.fields.selection),value=[...choices].find(([,v])=>same(v.selection,saved))?.[0]||'';
     options(evidence,[...choices].map(([id,value])=>[id,value.label]),value);editor.rebase.hidden=Number(editor.fields.version.value)===row.version||editor.locked();update();
   }
-  function withdraw(){epoch++;verifier.withdraw();verifier.element.hidden=true;filtered=false;ready=false;policy=baseline=lifecycle=findings=repair=null;proofReady=false;choices.clear();for(const field of [finding,rule,history,evidence])field.replaceChildren();facts.replaceChildren();budget.replaceChildren();status.replaceChildren();
+  function withdraw(){epoch++;verifier.withdraw();verifier.element.hidden=true;filtered=false;ready=false;policy=baseline=lifecycle=findings=repair=null;proofReady=false;choices.clear();for(const field of [finding,rule,history,evidence])field.replaceChildren();facts.replaceChildren();budget.replaceChildren();status.replaceChildren();paintHeading(null);
     for(const editor of [start,...editors.values()])editor?.box.querySelector('.pm-receipt')?.replaceChildren();update();}
   function failure(error){withdraw();status.append(inlineError({error:t('pmr_unavailable')}),errorBox(error));}
   async function refresh(){withdraw();const ticket=epoch;status.append(skeleton(2, {label:t('pmr_loading')}));
@@ -185,10 +190,12 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       options(finding,issueRows().map(row=>[row.finding_id,`${t('pmr_issue')} #${row.native.number} · ${(row.facts.labels||[]).join(' · ')}`]),wanted||saved?.finding_ref?.finding_id);
       pendingFinding='';
       options(rule,rules().map(row=>[row.key,`${row.key} · ${t('pmp_'+row.work_kind)}`]),saved?.rule_key);
-      options(history,rows.map(row=>[row.repair_id,`${t('pmr_issue')} #${row.context.finding.native.number} · ${row.context.rule.key} · ${state(row.operation_status)}`]),selected);
-      if(selected){const data=check(await api('GET',`${base}/maintenance-repairs/${encodeURIComponent(selected)}`));if(!valid(ticket))return;repair=validate(data.repair);if(repair.repair_id!==selected)throw invalid();facts.append(render(repair));await loadProof(ticket);}else{proof=null;proofView.replaceChildren();}
+      const ruleTitle=row=>{const kind=row.context?.rule?.work_kind,title=kind?t('pmp_'+kind):'';return title&&title!=='pmp_'+kind?title:t('pmr_rule');};
+      options(history,rows.map(row=>[row.repair_id,`${t('pmr_issue')} #${row.context.finding.native.number} · ${ruleTitle(row)} · ${state(row.operation_status)}`]),selected);
+      if(selected){const data=check(await api('GET',`${base}/maintenance-repairs/${encodeURIComponent(selected)}`));if(!valid(ticket))return;repair=validate(data.repair);if(repair.repair_id!==selected)throw invalid();facts.append(render(repair));await loadProof(ticket);}else{proof=null;proofView.replaceChildren();paintHeading(null);}
       if(!valid(ticket))return;const limits=policy?.document.policy.limits;
-      if(limits)budget.append(line('pmr_budget',`${limits.max_parallel} ${t('pmr_parallel')} · ${limits.period_runs} / ${duration(limits.period_seconds)} · ${duration(limits.run_seconds)}`),text('pmr_cost'));
+      if(limits){const runs=limits.period_runs,period=duration(limits.period_seconds);
+        budget.append(line('pmr_budget',`${limits.max_parallel} ${t('pmr_parallel')} · ${t('pmr_period_budget',{runs,period}).replaceAll('{runs}',String(runs)).replaceAll('{period}',period)} · ${duration(limits.run_seconds)}`));}
       if(!owner())status.append(text('pmr_owner'));else if(!active())status.append(text('pmr_stopped'));else if(!rules().length)status.append(text('pmr_no_rules'));
       if(wanted&&finding.value===wanted&&!start.locked()){finding.dispatchEvent(new Event('change'));startFold.open=true;}
       update();

@@ -66,6 +66,9 @@
   form stays behind one action. "Turn into work" binds the finding and its matching
   rule. "Record evidence" selects that saved repair. Nothing is written until submit,
   and an unknown result still recovers with the original operation key.
+  The state sits beside Refresh. A repair limit reads as "4 per 24 h". Counts from
+  a source that was not observed stay Unknown. Each panel has one Details disclosure,
+  and review keeps one primary action with the rest under More actions.
 
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
   dates, including unscheduled work and execution attempts for a future schedule view.
