@@ -69,6 +69,8 @@
   The state sits beside Refresh. A repair limit reads as "4 per 24 h". Counts from
   a source that was not observed stay Unknown. Each panel has one Details disclosure,
   and review keeps one primary action with the rest under More actions.
+  Policy and release baselines keep that state on the Refresh row, with one divider.
+  A baseline's channel pills sit on the next line, under the selection.
 
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
   dates, including unscheduled work and execution attempts for a future schedule view.

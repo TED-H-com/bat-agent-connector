@@ -88,21 +88,21 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
       h('p',{},t('prb_registry')),h('p',{},t(delivery.deployment==='verified'?'prb_dep_verified':'prb_dep_unknown')));
     if(delivery.deployment==='verified')details.append(h('p',{class:'muted'},t('prb_not_live')));
     details.append(h('p',{class:'muted'},t('prb_quality')));
-    if(current){details.append(h('p',{class:'muted'},t('prb_intro')),permission);
-      headingState.replaceChildren(h('h3',{},t('prb_current')),
+    const facts=()=>h('div',{class:'pm-baseline-facts'},
       fact('prb_github_release',delivery.github_release==='published'?'adopted':'not_assessed'),
       fact('prb_registry_short','not_assessed'),
       fact('prb_dep_name',delivery.deployment==='verified'?'deployed':'not_assessed'),
-      fact('prb_acceptance','not_assessed'));}
+      fact('prb_acceptance','not_assessed'));
+    // Quality stays unassessed until acceptance is verified. Channel receipts do not promote the selection.
+    const overall=doc.quality?.functional_acceptance_verified===true?'accepted':doc.quality?.status==='unassessed'||doc.quality?.status==='not_assessed'?'not_assessed':'unknown';
+    if(current){details.append(h('p',{class:'muted'},t('prb_intro')),permission);
+      headingState.replaceChildren(h('h3',{},t('prb_current')),statusPill(overall));}
     return h('article',{'data-release-baseline':row.baseline_id},
       current?null:h('div',{class:'pm-answer'},h('h3',{},`${t('prb_version')} ${row.version}`)),
+      current?facts():null,
       h('p',{},h('strong',{},doc.release_version?.value||doc.commit_sha),' · ',doc.repository,' · ',doc.channel),
       h('p',{class:'muted'},t('prb_version'), ' ', row.version, ' · ', stamp(row.created_at)),
-      current?null:h('div',{class:'pm-baseline-facts'},
-        fact('prb_github_release',delivery.github_release==='published'?'adopted':'not_assessed'),
-        fact('prb_registry_short','not_assessed'),
-        fact('prb_dep_name',delivery.deployment==='verified'?'deployed':'not_assessed'),
-        fact('prb_acceptance','not_assessed')),
+      current?null:facts(),
       doc.intent?.rationale?h('p',{},doc.intent.rationale):null,
       ...(doc.quality?.known_limitations||[]).map(item=>h('p',{},`${t('prb_limit_claim')}: ${item.text}`)),details);
   }
