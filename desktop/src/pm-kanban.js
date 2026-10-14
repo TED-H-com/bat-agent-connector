@@ -2,6 +2,7 @@ import {h} from './ui/dom.js';
 import {searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
+import {cliName} from './pm-agents-trend.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatus, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 
@@ -81,7 +82,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       select.value = current;
     };
     fill(requirementFilter, 'wv_all_requirements', [...rows.values()].flatMap(({card}) => (card.binding.requirement_ids || []).map(id => [id, firstLabel(requirements(card).find(req => req.id === id)?.text, t('wv_earlier_plan'))])), preference.requirement);
-    fill(agentFilter, 'wv_all_agents', [...sources.values()].flatMap(source => workAgents(source).map(agent => [agent, agent])), preference.agent);
+    fill(agentFilter, 'wv_all_agents', [...sources.values()].flatMap(source => workAgents(source).map(agent => [agent, cliName(agent)])), preference.agent);
   }
   const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
   function renderMetrics() {

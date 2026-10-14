@@ -3,6 +3,7 @@ import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, segmented, statusPill, inspector, disclosure, emptyState, skeleton, inlineError} from './ui/components.js';
 import {viewState} from './ui/view-state.js';
+import {actionLabel, actionMessageKey} from './global-labels.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {DAY, ZOOM, firstLine, dayNumber, spans, milestoneDelta, readSchedule, scheduleTree, scheduleRef} from './pm-schedule-model.js';
 import {render as renderInspector, rowStatus} from './pm-schedule-inspector.js';
@@ -73,12 +74,12 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     const next = JSON.stringify([row, data.rows.filter(value => value.parent_id === row.id || value.kind === 'requirement'), data.rows.find(value => value.id === row.parent_id), data.unknown, data.baseline, data.forecast]);
     if (panel && next === panelSignature) return;
     if (!panel) {
-      panel = inspector({title: firstLine(row), onClose: () => {
+      panel = inspector({title: label(row), onClose: () => {
         const previous = selected; panel = null; panelSignature = ''; selected = null; remember(); markSelection();
         if (active && previous) element.querySelector(`[data-schedule-select="${CSS.escape(previous)}"]`)?.focus({preventScroll: true});
       }}); panel.dataset.scheduleInspector = ''; layout.append(panel);
     }
-    panel.querySelector('h2').textContent = firstLine(row);
+    panel.querySelector('h2').textContent = label(row);
     const opened = [...panel.body.querySelectorAll('details')].map(node => node.open), scroll = panel.scrollTop;
     const focus = [...panel.body.querySelectorAll('a, summary')].indexOf(document.activeElement);
     panel.body.replaceChildren(renderInspector(row, {workspaceId, data})); panelSignature = next;
@@ -108,7 +109,8 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
     if (visible.some(v => v.row.id === id)) focusId = id;
     remember(); markSelection(); showPanel();
   }
-  const label = row => row.kind === 'group' ? t('sched_unassigned') : firstLine(row);
+  const shownTitle = title => actionMessageKey(title) ? actionLabel(title) : title;
+  const label = row => row.kind === 'group' ? t('sched_unassigned') : shownTitle(firstLine(row));
   function toggle(id) {collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id); remember(); draw();}
   function focusRow(id) {
     if (!id || !visible.some(v => v.row.id === id)) return;
@@ -237,10 +239,10 @@ export function workspaceSchedule({api, alive, namespace, workspaceId, canRead})
       const upcoming = data.rows.filter(row => row.kind === 'milestone' && dayNumber(row.forecast?.start || row.baseline?.start) >= dayNumber(new Date().toISOString()))
         .sort((a, b) => dayNumber(a.forecast?.start || a.baseline?.start) - dayNumber(b.forecast?.start || b.baseline?.start))[0];
       const delta = upcoming ? milestoneDelta(upcoming) : null;
-      meta.replaceChildren(...(upcoming ? [h('span', {class: 'schedule-answer'}, firstLine(upcoming), delta ? ' · ' + t('sched_delta', {n: delta > 0 ? '+' + delta : delta}) : '')] : []),
+      meta.replaceChildren(...(upcoming ? [h('span', {class: 'schedule-answer'}, label(upcoming), delta ? ' · ' + t('sched_delta', {n: delta > 0 ? '+' + delta : delta}) : '')] : []),
         h('span', {}, t(data.partial ? 'sched_loaded' : 'sched_count', {n: data.rows.length})), ...(data.partial ? [statusPill('partial')] : []), details);
       const list = h('ul', {}, ...data.unscheduled.map(row => h('li', {},
-        button({variant: 'ghost', label: firstLine(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}),
+        button({variant: 'ghost', label: label(row), 'data-schedule-select': row.id, title: row.title, onClick: event => select(row.id, event.currentTarget)}),
         row.kind === 'work' || row.kind === 'attempt' ? rowStatus(row, data) : null)));
       unscheduled.replaceChildren(...(data.unscheduled.length ? [disclosure({label: t('sched_unscheduled', {n: data.unscheduled.length}), key: `${namespace}:${workspaceId}:schedule:unscheduled`, body: list})] : []));
       draw();

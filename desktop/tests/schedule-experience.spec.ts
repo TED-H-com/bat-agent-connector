@@ -69,6 +69,11 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   expect(await inspector.locator('[data-schedule-section]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-schedule-section')))).toEqual(['requirement','status','result','blocker','delivery','details']);
   await expect(inspector).toContainText(f.copy.requirements.find(value => value.id === f.ids.requirements.resetEmail)!.text);
   await expect(inspector.locator('[data-schedule-attempt]')).toHaveCount(2);
+  const attempts = (await inspector.locator('[data-schedule-attempt]').allInnerTexts()).join('\n');
+  expect(attempts).toContain(locale === 'en' ? 'Start session' : '開始工作階段');
+  expect(attempts).toContain('Codex');
+  expect(attempts).not.toContain('session.start');
+  await expect(region.locator(`[data-schedule-row^="attempt:operation:"] .schedule-title`)).toHaveText(locale === 'en' ? 'Start session' : '開始工作階段');
   await expect(inspector.locator('a[href*="/session/"]')).toHaveCount(1);
   await expect(inspector.locator('[data-status=read_only]')).toBeVisible();
   await expect(inspector.locator('a[href*="run"]')).toHaveCount(0);

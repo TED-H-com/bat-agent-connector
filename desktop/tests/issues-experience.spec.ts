@@ -102,6 +102,8 @@ for (const locale of locales) {
     const {page, context, errors, calls, copy} = await boot(browser, baseURL, locale, 1440);
     await openView(page, 'issues');
     await expect(page.getByRole('heading', {level: 1})).toHaveText(copy.title);
+    await expect(page.locator('[data-reg-status] option[value="format_valid"]')).toHaveText(copy.zh ? '格式已核對' : 'Format checked');
+    await expect(page.locator('[data-reg-status]')).not.toContainText(copy.zh ? '格式有效' : 'Format valid');
     const meta = page.locator('[data-pm-header-meta]');
     await expect(meta).toHaveText(copy.totals([1, 2, 1, 1, 1]));
     await expect(page.locator('[data-reg-summary]')).toBeVisible();

@@ -2,6 +2,8 @@ import {timeStamp} from './ui/stamps.js';
 // Narrow adapter for the shared work inspector: render(row, context) returns content only.
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
+import {cliName} from './pm-agents-trend.js';
+import {actionLabel, actionMessageKey} from './global-labels.js';
 import {agentMark, disclosure, statusPill} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
@@ -23,6 +25,8 @@ export function dateRange(span) {
   return format(span.start) || '—';
 }
 const unknown = () => h('span', {class: 'ui-meta'}, t('sched_unavailable'));
+const shownTitle = title => actionMessageKey(title) ? actionLabel(title) : title;
+const shownAgent = agent => agent?.cli ? cliName(agent.cli) : (agent?.model || '');
 const section = (key, ...body) => h('section', {'data-schedule-section': key}, h('h3', {}, t('sched_' + key)), ...body);
 export function render(row, {workspaceId, data}) {
   const refs = row.refs || {}, work = row.kind === 'attempt' || row.kind === 'issue' ? data.rows.find(value => value.id === row.parent_id) : row;
@@ -44,13 +48,13 @@ export function render(row, {workspaceId, data}) {
     row.status === 'in_progress' ? t('sched_open') + ' · ' + t('sched_no_dates') : t('sched_no_dates')));
   for (const attempt of sessions) {
     const agent = attempt.refs?.agent, session = attempt.refs?.session;
-    if (agent) status.append(h('div', {class: 'schedule-agent'}, agent.cli ? agentMark(agent.cli) : null, agent.cli || agent.model));
+    if (agent) status.append(h('div', {class: 'schedule-agent'}, agent.cli ? agentMark(agent.cli) : null, shownAgent(agent)));
     if (session) status.append(h('div', {class: 'schedule-session'},
       h('a', {href: sessionHref({host: session.host, sessionId: session.session_id, from: 'schedule'})}, t('sched_session')),
       session.read_only ? statusPill('read_only') : null));
   }
   const attemptList = h('ul', {class: 'schedule-attempts'}, ...attempts.map(attempt => h('li', {'data-schedule-attempt': attempt.id},
-    h('strong', {}, attempt.title), h('div', {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t('sched_agent')),
+    h('strong', {}, shownTitle(attempt.title)), h('div', {}, shownAgent(attempt.refs?.agent) || t('sched_agent')),
     h('div', {}, rowStatus(attempt, data)), h('div', {class: 'ui-meta'}, sessionAttempt(attempt) ? t('sched_no_dates') : dateRange(attempt.actual)),
     sessionAttempt(attempt) && attempt.status === 'in_progress' ? h('span', {class: 'ui-meta'}, t('sched_open')) : null)));
   if (attempts.length) status.append(disclosure({label: t('sched_attempts'), body: attemptList, open: true}));
@@ -60,7 +64,7 @@ export function render(row, {workspaceId, data}) {
     h('a', {class: 'ui-button secondary', href: discussHref({workspaceId, refs: [scheduleRef(row, data)], title: t('sched_change_title', {title: firstLine(row)}), from: 'schedule'}), 'data-schedule-discuss': ''}, t('sched_propose')));
   const notes = [...data.unknown || [], ...row.notes || []];
   const details = disclosure({label: t('sched_details'), body: h('div', {},
-    h('div', {class: 'schedule-full-title'}, row.title),
+    h('div', {class: 'schedule-full-title'}, shownTitle(row.title)),
     ...['baseline', 'forecast', 'actual'].filter(key => row[key]).map(key => h('p', {}, t('sched_' + key), ': ', dateRange(row[key]))),
     ...notes.map(note => h('p', {}, reasonLabel(t, note.reason), h('code', {}, note.reason))),
     h('code', {}, row.id), refs.issue ? h('code', {}, `${refs.issue.repository}#${refs.issue.number}`) : null,

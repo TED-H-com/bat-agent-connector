@@ -86,6 +86,11 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await expect(page.locator('[data-session-back=requirements]')).toHaveText(back);
     await expect(page.locator('.shell-crumb-view')).toHaveText(zh ? ['工作', '工作階段'] : ['Work', 'Session']);
     await expect(page.locator('.session-pill')).toContainText(zh ? '執行中' : 'Running');
+    await page.locator('[data-session-details] > summary').click();
+    const detailsText = await page.locator('[data-session-details]').innerText();
+    expect(detailsText).toContain('Codex · example-codex');
+    expect(detailsText).not.toMatch(/(^|\n)codex ·/);
+    await page.locator('[data-session-details] > summary').click();
     await expect(page.locator('.session-work-line')).toHaveText(zh ? '工作 · 電子郵件登入' : 'Work · Email sign-in');
     await expect(page.locator('.session-label-state')).toHaveText(zh ? '無法讀取標籤' : 'Labels unavailable');
     await expect(page.locator('[data-session-labels] summary')).not.toContainText(zh ? '編輯標籤' : 'Edit labels');

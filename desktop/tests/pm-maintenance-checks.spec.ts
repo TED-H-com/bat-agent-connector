@@ -24,7 +24,9 @@ for(const native of [false,true])test.describe(native?'Native maintenance checks
   });
   test('acknowledged original ID is recovered with GET and capacity remains explicit',async({page})=>{
     const f=checkFixture();f.state.operationStatus='waiting_external';await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');await submit(page).click();
-    await expect(section(page)).toContainText('waiting_external');await page.reload();await openPmSection(page, 'dependencies' , 'ui_policy');
+    await expect(section(page)).toContainText('waiting for GitHub/deploy');
+    await expect(section(page)).not.toContainText('waiting_external');
+    await page.reload();await openPmSection(page, 'dependencies' , 'ui_policy');
     await expect(section(page)).toContainText('Run capacity remains reserved');await section(page).getByRole('button',{name:'Check original request',exact:true}).click();
     await expect.poll(()=>f.state.receiptReads).toBeGreaterThan(0);expect(f.state.writes).toHaveLength(1);
   });

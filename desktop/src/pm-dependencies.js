@@ -5,6 +5,7 @@ import {icon} from './ui/icons.js';
 import {discussHref} from './pm-discuss-link.js';
 import {boundGraph, layoutGraph, limitColumns} from './pm-dependencies-layout.js';
 import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
+import {place} from './ui/dom.js';
 import {joinLabel} from './label-text.js';
 // Captured inventory only. Counts, versions and owners come from the central projection.
 const RELATIONS = ['runtime', 'build', 'test', 'contract', 'reference'];
@@ -632,7 +633,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       const group = svg('g', {class: node.external ? 'dep-node dep-node-external' : 'dep-node', tabindex: '-1', role: 'button', 'aria-label': accessible, 'aria-pressed': String(selectedIds.has(id)), 'data-dep-node': id, 'data-dep-external': node.external ? 'true' : null, 'data-dep-focus': id.startsWith('d:') ? `col:${id.slice(2)}` : `row:${id.slice(2)}`, 'data-dep-mark': markOf(id)});
       const nameY = top + (repo ? Math.round(nodeHeight * 0.42) : nodeHeight / 2 + 5);
       const shownRepo = repo && repo.length > 22 ? repo.slice(0, 21) + '…' : repo;
-      group.append(svg('title', {}, accessible), svg('rect', {x: left, y: top, width: NODE_W, height: nodeHeight, rx: 6, class: 'dep-node-shape'}), svg('text', {x: left + 10, y: nameY, class: 'dep-node-name'}, abbreviate(node.name)), repo ? svg('text', {x: left + 10, y: top + Math.round(nodeHeight * 0.82), class: 'dep-node-repo'}, shownRepo) : null);
+      place(group, 'append', svg('title', {}, accessible), svg('rect', {x: left, y: top, width: NODE_W, height: nodeHeight, rx: 6, class: 'dep-node-shape'}), svg('text', {x: left + 10, y: nameY, class: 'dep-node-name'}, abbreviate(node.name)), repo ? svg('text', {x: left + 10, y: top + Math.round(nodeHeight * 0.82), class: 'dep-node-repo'}, shownRepo) : null);
       picture.append(group);
     }
     const focusNode = picture.querySelector(`[data-dep-node="${CSS.escape(selectedId)}"]`) || picture.querySelector('[data-dep-node]');

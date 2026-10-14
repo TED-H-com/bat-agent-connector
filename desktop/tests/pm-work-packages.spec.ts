@@ -132,7 +132,9 @@ for(const native of [false,true])test.describe(native?'native saved engineering 
     await mountConversation(page,native,dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await review(page);
     await openPmSection(page,'requirements','ui_packages');
     const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator('summary').click();
-    await expect(box).toContainText('This page is incomplete.');await box.getByRole('button',{name:'More delivery records',exact:true}).click();
+    await expect(box).toContainText('This page is incomplete.');
+    expect((await box.innerText()).toLowerCase()).not.toContain('null');expect((await box.innerText()).toLowerCase()).not.toContain('undefined');
+    await box.getByRole('button',{name:'More delivery records',exact:true}).click();
     await expect(box).toContainText('Merge observed: Yes');await expect(box).toContainText('Merge verification: No');
     await expect(box).toContainText('Runtime verification: Yes');await expect(box).toContainText('Current deployment: No');
     await expect(box).toContainText('Requirements and Definition of Done still need their own assessment.');

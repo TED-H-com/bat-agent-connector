@@ -1,3 +1,4 @@
+import {operationStatusLabel} from './global-labels.js';
 import {iconButton} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {acceptanceProfile,requirementCondition,readRequirementReviews,matchesRequirementReview,referenceKey,checkRequirementMap} from './pm-requirement-quality.js';
@@ -172,7 +173,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
       h('details',{},h('summary',{},t('pmb_fixed_sources')),line('pmb_entry_key',entry.key),line('pmb_package',entry.package_ref.package_id),line('pmb_base',entry.source_sha),
         ...entry.depends_on.map(edge=>h('p',{},t('pmb_wait_for'),' ',edge.entry_key))),
       ...entry.verification_evidence.map(proofFacts)));
-    facts.replaceChildren(h('h3',{},t('pmb_saved')),line('pmb_operation_status',batch.operation_status),
+    facts.replaceChildren(h('h3',{},t('pmb_saved')),line('pmb_operation_status',operationStatusLabel(batch.operation_status)),
       h('p',{},`${t('pmb_starts')}: ${limits.max_starts} · ${t('pmb_parallel')}: ${limits.max_parallel} · ${t('pmb_retries')}: ${limits.max_retries}`),
       line('pmb_deadline',timeStamp(limits.deadline_at)),text('pmb_budget_help'),text('pmb_boundary'),
       h('a',{href:`#/op/${batch.operation_id}`},t('pmb_parent_operation')),...children);
@@ -242,7 +243,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
       if(!await checkDraft(draft(),ticket)||!valid(ticket))return;sourceReady=true;
       if(baseline.value==='null'&&!start.locked())start.set('_baseline',JSON.stringify(currentPre()));
       if(batch)await bindProof(ticket);if(!valid(ticket))return;
-      history.replaceChildren(h('option',{value:''},t('pmb_choose')),...historyData.rows.map(row=>h('option',{value:row.batch_id},`${t('pmb_batch')} ${row.sequence} · ${row.operation_status}`)));
+      history.replaceChildren(h('option',{value:''},t('pmb_choose')),...historyData.rows.map(row=>h('option',{value:row.batch_id},`${t('pmb_batch')} ${row.sequence} · ${operationStatusLabel(row.operation_status)}`)));
       if(selected&&!historyData.rows.some(row=>row.batch_id===selected))history.append(h('option',{value:selected},t('pmb_selected_original')));history.value=selected;
       ready=true;startView.hidden=false;proofView.hidden=!batch;renderEntries();renderBatch();status.replaceChildren();if(historyData.filtered)status.append(text('pmb_filtered'));update();
     }catch(err){if(valid(ticket))failure(err);}
