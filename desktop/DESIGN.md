@@ -276,6 +276,14 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
+When a complete progress read has unaccepted requirements and at least one loaded
+delivery, a quiet line explains that this round's acceptance evidence is still
+missing. See unaccepted opens Requirements (there is currently no acceptance
+filter); Ask PM generates a progress title and carries the current plan context.
+Unknown, partial, fully accepted and delivery-empty reads omit the line. Delivery
+is not described as failed. Context chips retain the central plan label; the
+current context contract has no separate Progress identity.
+
 Empty milestone and delivery lists say None recorded / 尚無紀錄 only with complete
 roadmap or recent-delivery coverage, including any delivery output-reference limit.
 Otherwise they show Unknown and the recorded localized reason. Empty charter cards
@@ -345,8 +353,16 @@ Print includes the status strip and full charter; the saved-charter fallback pri
 inside its Overview region as well. Interactive controls and live attention are omitted.
 
 Report tools retain the existing durable snapshot operation, original-key recovery,
-authorized comparison, history pagination, print and export. Report history loads on
-demand and rereads every loaded page after a refresh. Selecting a report
+authorized comparison, history pagination, print and export. Compare and Print keep
+single-line labels; every report control has a 44px
+touch target through 800px, including controls mounted outside the project shell.
+Empty and error states stay with those controls when the tools move into the
+inspector; an unavailable report withdraws its content and disables comparison/print.
+Comparison matches statements by original input/source identity, foregrounds changed
+Before/After pairs, labels additions/removals in text, and collapses unchanged
+statements within changed sections. Both report identities remain visible and their
+source records remain in Details. Report history loads on demand and rereads every
+loaded page after a refresh. Selecting a report
 replaces the status and charter with that report's fixed content; live attention,
 milestones, delivery rows and phase are absent. Historical snapshots do not contain
 central acceptance counts, so those metrics stay unknown with the requirement
@@ -463,6 +479,8 @@ stacked work rows and an Open requirement action. Desktop selection stays unchan
 With the inspector docked, Milestone and Next blocker move out of the table; both
 remain in the inspector. Explicit column tracks reclaim that width, milestones
 ellipsis with full titles, PR pills wrap, and Work remains numeric and right-aligned.
+The same compact presentation applies below a 720px table-container width, even
+on larger viewports. Its entire header is hidden; the wide table retains its header.
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
 six ordered work sections: Requirements served; Status & ownership; Latest result;
@@ -474,6 +492,9 @@ execution duration. Technical records and source times appear in Details. A requ
 Criteria, Bound work, Latest result, Decisions and changes, Delivery, then Details.
 Criterion results use the exact current plan, digest, scope and input identity; a recorded
 rejection stays visible even when no review qualifies the overall requirement as Accepted.
+Accepted criterion states appear once in Criteria. Latest result names the qualifying
+review, its assessment time and its exact plan/scope/input basis; per-criterion review
+details start collapsed. Unknown and Not assessed summaries retain their evidence limits.
 Auxiliary source failures clear only their own facts and offer Retry; plan and work
 catalogue withdrawal clears the view. Inspector actions retain their nodes across live
 age updates, and closing returns to the current selection.

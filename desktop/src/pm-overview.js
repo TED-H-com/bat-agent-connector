@@ -83,6 +83,12 @@ export function workspaceOverview(options) {
     row.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null);}
   function statusStrip(data, fixed = false) {
     const p = data?.progress, complete = p && classes.every(key => Number.isSafeInteger(p[key]));
+    const acceptanceGap = !fixed && complete && p.complete === true && Number.isSafeInteger(p.requirements)
+      && p.accepted < p.requirements && data.recent_deliveries?.length > 0;
+    const progressTitle = acceptanceGap ? `${t('ov_progress')} · ${t('ov_accepted', {accepted: p.accepted, total: p.requirements})}` : '';
+    const askProgress = acceptanceGap ? discussLink({workspaceId, refs: refs(), title: progressTitle, from: 'overview'},
+      {'data-overview-ask-progress': '', 'data-overview-link': 'status:progress:discuss', class: 'ui-button ghost ui-sm'}) : null;
+    if (askProgress) askProgress.textContent = t('ov_ask_pm');
     const goalReason = (data?.unknown || []).find(row => row.field === 'plan.goal')?.reason;
     const goal = metric({label: t('ov_goal'), value: data?.plan?.goal ?? '—', context: h('div', {},
       !data?.plan?.goal ? goalReason === 'goal_unconfirmed' ? statusPill('unconfirmed') : !goalReason || goalReason === 'unknown' ? statusPill('unknown') : h('span', {class: 'ui-meta'}, reasonLabel(t, goalReason)) : null,
@@ -94,6 +100,9 @@ export function workspaceOverview(options) {
     const progress = metric({label: t('ov_progress'), value: !p || fixed ? null : complete ? t('ov_accepted', {accepted: p.accepted, total: p.requirements}) : t('ov_requirements', {n: p.requirements}),
       context: h('div', {}, fixed && p ? h('div', {}, t('ov_requirements', {n: p.requirements})) : p && !complete ? statusPill('partial') : null,
         !p && (data?.unknown || []).some(row => row.reason === 'no_adopted_plan') ? h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/discussions`}, reasonLabel(t, 'no_adopted_plan')) : null,
+        acceptanceGap ? h('div', {'data-overview-acceptance-gap': ''}, h('p', {class: 'pm-overview-acceptance-gap'}, t('ov_acceptance_gap')),
+          h('div', {class: 'pm-overview-progress-actions'}, h('a', {class: 'ui-button ghost ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/requirements`,
+            'data-overview-unaccepted': '', 'data-overview-link': 'status:progress:requirements'}, t('ov_see_unaccepted')), askProgress)) : null,
         next ? h('div', {class: 'pm-overview-next'}, next.title, h('div', {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: next.delta_days})) : null)) : null),
       bar: complete ? classes.map((key, i) => ({tone: tones[i], value: p[key]})) : null});
     progress.dataset.overviewMetric = 'progress';
@@ -105,7 +114,7 @@ export function workspaceOverview(options) {
     const metrics = ['blocker', 'decision'].map(kind => {
       const first = data?.attention?.find(row => row.kind === kind);
       const node = metric({label: t(kind === 'blocker' ? 'ov_blockers' : 'ov_decisions'), value: data?.attention_counts?.[kind] ?? null,
-        context: h('div', {}, itemLink(first, 'status'), kind === 'decision' && first ? discuss(first, 'status') : null,
+        context: h('div', {}, kind === 'decision' && first ? h('div', {class: 'pm-overview-decision-row', 'data-overview-open-decision': first.key}, itemLink(first, 'status'), discuss(first, 'status')) : itemLink(first, 'status'),
           kind === 'decision' && !fixed ? recentDecisions(data) : null)});
       node.dataset.overviewMetric = kind; return node;
     });
@@ -359,7 +368,8 @@ export function workspaceOverview(options) {
     const main = attention(projection, resetOrder);
     commitParts([
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown,
-        projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated], render: () => statusStrip(projection)},
+        projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated,
+        projection.recent_deliveries.length > 0], render: () => statusStrip(projection)},
       {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete, projection.coverage, projection.unknown], render: () => {
         const columns = parts.get('columns')?.node;
         if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}

@@ -147,12 +147,13 @@ for (const locale of ['en-US', 'zh-TW']) test(`Selected work package omits missi
   const fixture = handoffFixture(); fixture.row.sequence = undefined as any;
   await mountConversation(page, false, fixture.dispatch); await page.goto(route);
   await openPmSection(page, 'requirements', 'ui_packages');
-  await page.locator('[data-pm-work-packages]').getByRole('button', {name: /Restore member access/}).click();
+  const picker = page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);
+  await picker.selectOption({label: (await picker.locator('option').allTextContents()).find(text => /Restore member access/.test(text)) || ''});
   await openPmSection(page, 'requirements', 'ui_handoff');
   await page.locator('[data-pm-package-handoff-controls] > summary').click();
   await expect(page.locator('[data-pm-package-handoff]')).toContainText('Restore member access');
   const zh = locale === 'zh-TW';
-  await page.getByRole('button', {name: zh ? '核對固定實作基底' : 'Review fixed implementation base', exact: true}).click();
+  await page.getByRole('button', {name: zh ? '核對基底' : 'Review base', exact: true}).click();
   await expect(page.getByRole('heading', {name: zh ? '已核對實作基底' : 'Reviewed implementation base'})).toBeVisible();
   const reviewed = (await page.locator('[data-pm-package-handoff]').innerText()).toLowerCase();
   expect(reviewed).not.toContain('null');
