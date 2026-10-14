@@ -399,8 +399,18 @@ for (const width of [1440, 768, 390]) test(`SF-9: form and graph controls meet t
   await page.getByRole('radio', {name: 'Graph', exact: true}).click();
   const buttons = await page.locator('.dep-graph-bar button').evaluateAll(nodes => nodes.map(node => ({width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height})));
   expect(buttons.every(box => box.height >= (width <= 800 ? 44 : 32) && box.width >= (width <= 800 ? 44 : 32))).toBe(true);
-  const chips = await page.locator('.dep-chip').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height));
-  expect(chips.every(height => height >= (width <= 800 ? 44 : 32))).toBe(true);
+  const chips = await page.locator('.dep-chip').evaluateAll(nodes => nodes.map(node => {
+    const box=node.getBoundingClientRect(),hit=getComputedStyle(node,'::before');
+    return {height:box.height,targetHeight:box.height-parseFloat(hit.top)-parseFloat(hit.bottom),targetWidth:box.width};
+  }));
+  expect(chips.every(box => box.height === 24)).toBe(true);
+  if(width<=800){
+    expect(chips.every(box => box.targetHeight>=44 && box.targetWidth>=44)).toBe(true);
+    const chip=page.locator('[data-dep-relation]').first(),box=(await chip.boundingBox())!;
+    await expect(chip).toHaveAttribute('aria-pressed','true');
+    await page.mouse.click(box.x+box.width/2,box.y-6);
+    await expect(chip).toHaveAttribute('aria-pressed','false');
+  }
 });
 
 test('VP-3: graph uses the available width and has a roomy zoom bar', async ({page}) => {
