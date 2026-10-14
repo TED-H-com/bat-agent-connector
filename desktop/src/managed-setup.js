@@ -217,11 +217,12 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     catch (error) {saved = previous; showError(error);}
   }}, t("setup_next_change"));
   const sessions = h('a', {href: '#/sessions', class: 'ui-button primary', hidden: true, 'data-setup-sessions': ''}, t('setup_view_sessions'));
+  const actions = h('div', {class: 'actions', hidden: true, 'data-setup-actions': ''}, sessions, retry, next);
   const hostDisclosure = h('details', {open: true, 'data-setup-connect': ''}, h('summary', {}, t('setup_host_title')), hostForm);
   const operationReceipt = h('div', {'data-setup-receipt': ''});
   const box = h("section", {class: "panel ui-section-card managed-setup", "data-managed-setup": ""},
     h('header', {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary,
-    h("div", {class: "actions", 'data-setup-actions': ''}, sessions, retry, next), message, receipt,
+    actions, message, receipt,
     hostDisclosure,
     h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm),
     h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm),
@@ -308,6 +309,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
       t('setup_operation_receipt', {status: operation.status === 'succeeded' ? t('setup_operation_done') : operationStatusLabel(operation.status)})));
     else if (saved.intent) receipt.append(h("p", {class: "note"}, t(saved.intent.problemCode ? 'setup_retained_request' : "setup_uncertain")));
     sessions.hidden = !snapshot?.hosts?.length;
+    actions.hidden = sessions.hidden && retry.hidden && next.hidden;
     hostForm.querySelector('button[type=submit]').className = sessions.hidden ? 'primary' : 'secondary';
   }
   function accept(candidate) {

@@ -41468,6 +41468,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		hidden: true,
 		"data-setup-sessions": ""
 	}, t("setup_view_sessions"));
+	const actions = h("div", {
+		class: "actions",
+		hidden: true,
+		"data-setup-actions": ""
+	}, sessions, retry, next);
 	const hostDisclosure = h("details", {
 		open: true,
 		"data-setup-connect": ""
@@ -41476,10 +41481,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	const box = h("section", {
 		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary, h("div", {
-		class: "actions",
-		"data-setup-actions": ""
-	}, sessions, retry, next), message, receipt, hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), operationReceipt, h("p", {}, t("setup_resume_help"))));
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary, actions, message, receipt, hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), operationReceipt, h("p", {}, t("setup_resume_help"))));
 	function suggestLocal() {
 		if (!snapshot || snapshot.hosts?.length !== 0 || fields.get("host").value) return;
 		try {
@@ -41621,6 +41623,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}, t("setup_operation_receipt", { status: operation.status === "succeeded" ? t("setup_operation_done") : operationStatusLabel(operation.status) })));
 		else if (saved.intent) receipt.append(h("p", { class: "note" }, t(saved.intent.problemCode ? "setup_retained_request" : "setup_uncertain")));
 		sessions.hidden = !snapshot?.hosts?.length;
+		actions.hidden = sessions.hidden && retry.hidden && next.hidden;
 		hostForm.querySelector("button[type=submit]").className = sessions.hidden ? "primary" : "secondary";
 	}
 	function accept(candidate) {

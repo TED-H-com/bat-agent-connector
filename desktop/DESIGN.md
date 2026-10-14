@@ -972,7 +972,8 @@ A fresh editable draft after reload explains that another credential paste is ne
 Successful configuration offers View sessions as the primary next action and
 collapses 1. Connect BAT. Change settings or expanding the disclosure opens it
 again; later visits with a configured host start collapsed. The two actions share
-a wrapping row with an 8px gap. Setup steps have 16px between groups, and the
+a wrapping row with an 8px gap. Collapsed setup steps have even spacing; 16px
+separates an action row from the next step, and the
 localized operation link/status lives in Details. English configured counts use
 singular/plural host and repository labels.
 
