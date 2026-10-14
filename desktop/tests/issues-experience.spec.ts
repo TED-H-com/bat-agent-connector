@@ -40,7 +40,7 @@ function textFor(locale: Locale) {
   const project = demoProject(locale);
   return {
     zh, project, labels: registerLabels(project), rows: registerIds(project),
-    findingName: zh ? `發現 · ${registerLabels(project).impact}` : `Finding · ${registerLabels(project).impact}`,
+    findingName: zh ? 'GitHub Issue #87' : 'GitHub issue #87',
     matching: (n: number) => zh ? `${n} 筆符合` : `${n} matching`,
     title: zh ? '問題與變更' : 'Issues & changes',
     totals: (counts: number[]) => (zh ? ['風險', '問題', '行動', '變更', '決策'] : ['Risk', 'Issue', 'Action', 'Change', 'Decision'])
@@ -103,7 +103,7 @@ for (const locale of locales) {
     await openView(page, 'issues');
     await expect(page.getByRole('heading', {level: 1})).toHaveText(copy.title);
     const meta = page.locator('[data-pm-header-meta]');
-    await expect(meta).toHaveText(copy.totals([1, 2, 1, 1, 1]));
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]));
     await expect(page.locator('[data-reg-summary]')).toBeVisible();
     await expect(page.locator('[data-reg-age="0-7d"]')).toContainText('2');
     await expect(page.locator('[data-reg-unknown-age]')).toHaveText(copy.age);
@@ -119,11 +119,11 @@ for (const locale of locales) {
     await expect(page.locator('[data-reg-count]')).toHaveText(copy.shown(3));
     await page.locator('[data-reg-more]').click();
     await expect.poll(() => calls.some(path => path.includes(`/register?`) && path.includes(`after=${REGISTER_PAGE_CURSOR}`))).toBe(true);
-    await expect(table).toHaveCount(6);
+    await expect(table).toHaveCount(9);
     await expect(page.locator('[data-pm-register]')).toContainText(copy.labels.risk);
     await expect(page.locator('[data-reg-more]')).toHaveCount(0);
     await expect(page.locator('[data-reg-count]')).toHaveCount(0);
-    await expect(meta).toHaveText(copy.totals([1, 2, 1, 1, 1]));
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]));
 
     await page.locator('[data-reg-type="decision"]').click();
     await expect(meta).toHaveText(copy.matching(1));
@@ -161,7 +161,7 @@ for (const locale of locales) {
     await expect(page.locator('[data-reg-summary]')).toBeHidden();
     await page.locator('[data-reg-owner]').fill('');
     await expect(table).toHaveCount(3);
-    await expect(meta).toHaveText(copy.totals([1, 2, 1, 1, 1]));
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]));
 
     const finding = page.locator(`[data-row-key="${copy.rows.finding}"]`);
     await finding.focus();
@@ -355,13 +355,13 @@ test('issues keeps loaded pages and the selected row across a view change', asyn
   const {page, context, errors, copy} = await boot(browser, baseURL, 'en', 1440);
   await openView(page, 'issues');
   await page.locator('[data-reg-more]').click();
-  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(6);
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(9);
   await page.locator(`[data-row-key="${copy.rows.risk}"]`).click();
   await expect(page.locator('[data-reg-inspector]')).toBeVisible();
   await openView(page, 'board');
   await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
   await openView(page, 'issues');
-  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(6);
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(9);
   await expect(page.locator(`[data-row-key="${copy.rows.risk}"]`)).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('[data-reg-inspector]')).toBeVisible();
   await expect(page.locator('[data-reg-inspector]')).toContainText(copy.labels.risk);

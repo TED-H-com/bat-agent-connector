@@ -2,6 +2,7 @@
 // the same way pm_discussions.list_threads does, so the catalog version replaces the outer version.
 import {digest, hexId, unix, type DemoProject} from './project.ts';
 import {plans} from './plans.ts';
+import {demoFindings} from './register.ts';
 
 const POLICY = {context_first: true, max_questions: 3, min_questions: 0, priority: 'consequential gaps for the next decision',
   reuse_existing_answers: true, include_options_and_consequences: true, no_forced_questionnaire: false};
@@ -52,13 +53,17 @@ function inputRow(project: DemoProject, n: number, slotName: string, value: stri
 
 export function threadRows(project: DemoProject) {
   const stamp = (offset: number) => unix(project.now, offset);
+  const findings = demoFindings(project);
   return [
     {thread_id: project.ids.threadIdea, workspace_id: project.ids.workspaceId, title: project.copy.threads.idea, mode: 'idea', version: 2,
       created_by: project.ids.actor, created_at: stamp(-30), updated_at: stamp(-28), draft_id: null, operation_id: hexId('op_', 1, 32)},
     {thread_id: project.ids.threadPlanning, workspace_id: project.ids.workspaceId, title: project.copy.threads.planning, mode: 'planning', version: 4,
       created_by: project.ids.actor, created_at: stamp(-20), updated_at: stamp(-10), draft_id: project.ids.draftId, operation_id: hexId('op_', 2, 32)},
     {thread_id: project.ids.threadFollow, workspace_id: project.ids.workspaceId, title: project.copy.threads.delivery, mode: 'follow_up', version: 3,
-      created_by: project.ids.actor, created_at: stamp(-2), updated_at: stamp(-1), draft_id: null, operation_id: hexId('op_', 3, 32)},
+      created_by: project.ids.actor, created_at: stamp(-2), updated_at: stamp(-1), draft_id: null, operation_id: hexId('op_', 3, 32),
+      context: [{kind: 'finding', id: findings.alert.id, observation_id: findings.observation_id,
+        document_digest: findings.document_digest, position: 0, available: true, label: '#14', bound_label: '#14',
+        finding: findings.alert.finding}]},
   ];
 }
 
