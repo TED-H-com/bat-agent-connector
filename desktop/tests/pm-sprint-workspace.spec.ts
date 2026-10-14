@@ -39,14 +39,14 @@ for(const native of [false,true])test.describe(native?'native Sprint workspace':
     const f=fullFixture();await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');
     const region=page.locator('[data-pm-sprints]');await expect(region).toHaveCount(1);
     await expect(region).toContainText('A returning member can sign in');await expect(region).toContainText('Relevant tests verify the fixed change');
-    await expect(region.getByRole('tab')).toHaveCount(0);await region.locator('summary').filter({hasText:/^Cancel Sprint$/}).click();
+    await expect(region.getByRole('tab')).toHaveCount(0);await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.cancel"]').click();
     const form=region.locator('[data-pm-action="pm.sprint.cancel"]');await form.getByLabel('Reason for this decision',{exact:true}).fill('The selected Goal is no longer useful');
     await form.getByRole('button',{name:'Cancel Sprint',exact:true}).click();await expect(region.locator('[data-pm-sprint-closure]')).toContainText('DoD has not been assessed');
     expect(f.state.writes.map((request:any)=>request.body.action)).toEqual(['pm.sprint.cancel']);
   });
   test('lost start is recovered after whole-page reload with original identity',async({page})=>{
     const f=fullFixture();await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');const region=page.locator('[data-pm-sprints]');
-    await region.locator('summary').filter({hasText:/^Start Sprint$/}).click();const form=region.locator('[data-pm-action="pm.sprint.start"]');
+    await region.locator('[data-pm-sprint-primary="pm.sprint.start"]').click();const form=region.locator('[data-pm-action="pm.sprint.start"]');
     await form.getByLabel('Reason for this decision',{exact:true}).fill('Start the selected work period');f.state.lost=true;
     await form.getByRole('button',{name:'Start Sprint',exact:true}).click();await expect(form).toContainText('Reply unavailable');
     await page.reload();await openPmSection(page, 'schedule' , 'ui_sprints');await form.getByRole('button',{name:'Check original request',exact:true}).click();
@@ -57,7 +57,7 @@ for(const native of [false,true])test.describe(native?'native Sprint workspace':
   test('reader sees fixed Goal and cannot decide the Sprint',async({page})=>{
     const f=fullFixture();f.state.role='reader';f.state.manage=false;await mountWorkspace(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');
     const region=page.locator('[data-pm-sprints]');await expect(region).toContainText('A returning member can sign in');
-    await region.locator('summary').filter({hasText:/^Cancel Sprint$/}).click();await expect(region.locator('[data-pm-action="pm.sprint.cancel"] button[type=submit]')).toBeDisabled();
+    await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.cancel"]').click();await expect(region.locator('[data-pm-action="pm.sprint.cancel"] button[type=submit]')).toBeDisabled();
     expect(f.state.writes).toHaveLength(0);
   });
 });
@@ -103,7 +103,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`mounte
   await quality.getByLabel(locale==='en'?'Work item for review':'審查工作項目',{exact:true}).selectOption(f.bindings[0].work_item_id);
   await quality.locator('select').filter({has:page.locator(`option[value="${f.row.review_id}"]`)}).selectOption(f.row.review_id);
   await quality.getByRole('button',{name:locale==='en'?'Use this assessment':'使用這份評估',exact:true}).click();
-  await openPmSection(page,'schedule','ui_sprints');const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的衝刺$/}).click();
+  await openPmSection(page,'schedule','ui_sprints');const region=page.locator('[data-pm-sprints]');await region.getByRole('button',{name:locale==='en'?'More actions':'其他操作',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.close"]').click();
   const form=region.locator('[data-pm-action="pm.sprint.close"]');
   await form.getByRole('button',{name:locale==='en'?'Include chosen assessment':'納入已選評估',exact:true}).click();
   await expect(form.locator('[data-pm-quality-picker]')).toContainText(f.row.context.native_result.candidate_commit);

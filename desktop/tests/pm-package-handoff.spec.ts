@@ -4,7 +4,7 @@ import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
 import {handoffFixture,packageId,route,workspaceId,projectId,workId,codeSha,specSha,target} from './pm-package-handoff-fixture.ts';
 const section=(page:any)=>page.locator('[data-pm-package-handoff]'),form=(page:any)=>section(page).locator('[data-pm-action="repository.continue"]');
-async function select(page:any,sequence=1){await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:`Restore member access · Preparation ${sequence}`,exact:true}).click();}
+async function select(page:any,sequence=1){await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByLabel('Package',{exact:true}).selectOption({label:`Restore member access · Preparation ${sequence}`});}
 async function open(page:any){await openPmSection(page,'requirements','ui_handoff');const fold=section(page).locator('[data-pm-package-handoff-controls]');if(!await fold.evaluate((node:any)=>node.open))await fold.locator(':scope > summary').click();}
 async function review(page:any){await section(page).getByRole('button',{name:'Review base',exact:true}).click();await expect(section(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();}
 async function fill(page:any,text='Use the existing recovery module as the implementation base'){
@@ -135,7 +135,7 @@ test('reviewed facts stay free of empty markers when the base is ready and when 
 
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`handoff ${locale} ${width}px`,async({browser,baseURL},testInfo)=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=handoffFixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:/Restore member access/}).click();await open(page);
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});await open(page);
   await section(page).getByRole('button',{name:locale==='zh-TW'?'核對基底':'Review base',exact:true}).click();
   await expect(section(page).getByRole('heading',{name:locale==='zh-TW'?'已核對實作基底':'Reviewed implementation base',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);const folder=process.env.PM_SCREENSHOTS||testInfo.outputPath('screenshots');mkdirSync(folder,{recursive:true});
@@ -146,7 +146,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`ha
 
 for(const native of [false,true])test(`${native?'Native':'Web'} Chinese fixed package start`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale:'zh-TW'}),page=await context.newPage(),f=handoffFixture();
-  await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await page.locator('[data-pm-work-packages]').getByRole('button',{name:/Restore member access/}).click();await open(page);
+  await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel('工作包',{exact:true});await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});await open(page);
   await section(page).getByRole('button',{name:'核對基底',exact:true}).click();
   await expect(form(page).getByLabel('Agent',{exact:true})).toBeVisible();
   await expect(section(page)).not.toContainText('BAT agent');

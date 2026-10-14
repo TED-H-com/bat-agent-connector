@@ -85,7 +85,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
   test('failed workspace authorization hides previous facts and recovers the local draft',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');const region=page.locator('[data-pm-sprints]');
     await expect(region).toContainText('A returning member can sign in');
-    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});await draft.fill('Keep this unsent direction');
     f.base.state.failRead=true;f.publish('pm_workspace');
@@ -97,7 +97,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
   for(const bootstrapFails of [false,true])test(`access reset clears focused private facts and preserves drafts (bootstrap failure: ${bootstrapFails})`,async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
     const region=page.locator('[data-pm-sprints]');await expect(region).toContainText('A returning member can sign in');
-    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});
     await draft.fill('Preserve an unsubmitted direction');await expect(draft).toBeFocused();
@@ -107,7 +107,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(region).toBeHidden();expect(f.sprint.state.writes).toHaveLength(0);
     f.bootstrapFailure(false);f.base.state.failRead=false;f.changeAccess();
     await expect(region).toBeVisible({timeout:15000});
-    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     await expect(draft).toHaveValue('Preserve an unsubmitted direction');expect(f.sprint.state.writes).toHaveLength(0);
   });

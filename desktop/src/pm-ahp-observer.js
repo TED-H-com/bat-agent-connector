@@ -10,10 +10,11 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
   const refreshButton=iconButton({icon:'refresh-cw', label:t('ahp_refresh'), ...{type:'button',onclick:()=>void refresh()}});
   const more=button({variant:'secondary', label:t('ahp_more'), onClick:()=>void historyPage(cursor)});
   more.hidden=true;
+  const adapterFields=h('div',{class:'capture-fields'},h('label',{},t('ahp_adapter'),adapter));
+  const historyDetails=h('details',{'data-ahp-history':''},h('summary',{},t('ahp_history')),history,more);
   const element=h('section',{class:'panel pm-ahp','data-pm-ahp':''},sectionCard({body:h('div',{},
     h('div',{class:'pm-tool-head'},statusPill('read_only'),refreshButton),
-    h('div',{class:'capture-fields'},h('label',{},t('ahp_adapter'),adapter)),status,body,
-    disclosure({element:h('details',{'data-ahp-history':''},h('summary',{},t('ahp_history')),history,more)}),detail)}));
+    adapterFields,status,body,disclosure({element:historyDetails}),detail)}));
   const valid=ticket=>{try{alive();return !disposed&&ticket===epoch;}catch{return false;}};
   const check=value=>{if(value?.workspace_id!==workspaceId)throw Error(t('ahp_invalid'));return value;};
   const stamp=value=>timeStamp(value);
@@ -88,12 +89,15 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
       item.catalogBox.append(h('div',{class:'pm-tool-head'},e.catalog_complete?null:statusPill('partial'),stamp(item.catalog.document.finished_at)));
       if(list.some(uri=>!e.catalog.some(s=>s.resource===uri)))item.catalogBox.append(h('p',{class:'muted'},t('ahp_selection_unavailable')));
       if(!pageRows.length)item.catalogBox.append(emptyState({title:t('ahp_no_sessions'),heading:'h3'}));
-      else item.catalogBox.append(dataTable({columns:[{key:'session',label:t('ahp_catalog_column'),render:s=>{
-        const box=h('input',{type:'checkbox',value:s.resource,'aria-label':`${t('ahp_select')} ${s.title}`});
-        box.addEventListener('change',()=>{if(item.observe.locked()||!canRead())return;const before=selectedUris(),values=box.checked?[...before,s.resource]:before.filter(uri=>uri!==s.resource);
-          if(values.length<=8)item.observe.set('session_uris',JSON.stringify(values));item.observe.update();updateChecks();});
-        return h('label',{class:'pm-ahp-session'},box,h('span',{},h('strong',{},s.title||s.resource),h('small',{},s.provider)));
-      }}],rows:pageRows,rowKey:s=>s.resource,expandable:s=>h('p',{class:'mono'},s.resource)}));
+      else item.catalogBox.append(dataTable({columns:[
+        {key:'check',label:'',render:s=>{
+          const box=h('input',{type:'checkbox',value:s.resource,'aria-label':`${t('ahp_select')} ${s.title}`});
+          box.addEventListener('change',()=>{if(item.observe.locked()||!canRead())return;const before=selectedUris(),values=box.checked?[...before,s.resource]:before.filter(uri=>uri!==s.resource);
+            if(values.length<=8)item.observe.set('session_uris',JSON.stringify(values));item.observe.update();updateChecks();});
+          return h('label',{class:'pm-ahp-session'},box);
+        }},
+        {key:'session',label:t('ahp_catalog_column'),render:s=>h('span',{class:'pm-ahp-session'},h('strong',{},s.title||s.resource),h('small',{},s.provider))},
+      ],rows:pageRows,rowKey:s=>s.resource,expandable:s=>h('p',{class:'mono'},s.resource)}));
       if(e.catalog.length>20){const prev=button({variant:'secondary',size:'sm',label:t('pagination_prev'),disabled:item.page===0,onClick:()=>{item.page--;renderCatalog();}});
         const next=button({variant:'secondary',size:'sm',label:t('pagination_next'),disabled:start+20>=e.catalog.length,onClick:()=>{item.page++;renderCatalog();}});
         item.catalogBox.append(h('div',{class:'actions'},prev,h('span',{},`${start+1}–${Math.min(start+20,e.catalog.length)} / ${e.catalog.length}`),next));}
@@ -146,15 +150,15 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
   adapter.addEventListener('change',()=>{try{alive();localStorage.setItem(selectionStorage,adapter.value);}catch{ /* preference only */ }void selectAdapter(adapter.value);});
   function withdraw(){epoch++;detailEpoch++;ready=false;historyBusy=false;choices.clear();body.replaceChildren();history.replaceChildren();detail.replaceChildren();status.replaceChildren();adapter.replaceChildren();adapter.disabled=true;more.hidden=true;
     for(const item of editors.values()){item.catalog=null;item.catalogBox.replaceChildren();for(const f of item.forms)f.update();}}
-  function failure(error){withdraw();const withdrawn=[401,403,404].includes(error?.status);
+  function failure(error){withdraw();adapterFields.hidden=true;historyDetails.hidden=true;const withdrawn=[401,403,404].includes(error?.status);
     status.append(inlineError({error:{message:withdrawn?t('ahp_unavailable'):(error?.message||t('ahp_unavailable'))}}));}
-  async function refresh(){const prior=selected;withdraw();const ticket=epoch;refreshButton.disabled=true;try{
+  async function refresh(){const prior=selected;withdraw();adapterFields.hidden=true;historyDetails.hidden=true;const ticket=epoch;refreshButton.disabled=true;try{
     const [a,c,l]=await Promise.all(['ahp-adapters','ahp-observations/current','ahp-observations?after=0&limit=20'].map(path=>request('GET',`${base}/${path}`)));
     if(!valid(ticket))return;check(a);check(c);check(l);
     if(!Array.isArray(a.adapters)||typeof c.visibility_filtered!=='boolean'||c.visibility_filtered&&c.observation!==null)throw Error(t('ahp_invalid'));
     for(const option of a.adapters){if(typeof option.adapter_id!=='string'||!/^([0-9a-f]{64})$/.test(option.binding_digest)||option.contract!=='ahp_observer_v1')throw Error(t('ahp_invalid'));
       const key=`${option.adapter_id}.${option.binding_digest}`;choices.set(key,{...option,key});adapter.append(h('option',{value:key},option.adapter_id));}
-    if(c.observation)row(c.observation,true);historyAfter=0;renderHistory(l);ready=true;adapter.disabled=!choices.size;
+    if(c.observation)row(c.observation,true);historyAfter=0;renderHistory(l);ready=true;adapter.disabled=!choices.size;adapterFields.hidden=false;historyDetails.hidden=false;
     const key=choices.has(prior)?prior:choices.keys().next().value||'';adapter.value=key;
     const unchanged=await selectAdapter(key,c.observation);if(!unchanged||!ready)return;
     if(c.visibility_filtered)status.append(h('p',{class:'muted'},t('ahp_hidden')));

@@ -8,18 +8,19 @@ import {checkSpecMaterialization,readSpecMaterializations,fixedSpecSelection} fr
 const contract='pm-engineering-handoff/v1';
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace,onSourceFailure=()=>{},onReviewChange=()=>{}}){
-  let active=null,prepared=null,serial=0,reading=false,editor=null,qualityCatalog=[];
+  let active=null,prepared=null,serial=0,reading=false,editor=null,qualityCatalog=[],broken=false;
   const editors=new Map(),facts=h('div'),status=h('div',{role:'status'}),editorView=h('div'),outcome=h('div');
-  const summary=h('p',{class:'muted'},t('ph_select')),availabilityNotice=h('p',{class:'muted',hidden:true},t('ph_not_allowed'));
+  const summary=h('p',{class:'pm-package-name'},t('ph_select')),availabilityNotice=h('p',{class:'muted',hidden:true},t('ph_not_allowed'));
   const review=button({variant:'secondary', label:t('ph_review'), onClick:()=>void inspect()});
   const useReview=button({variant:'secondary', label:t('ph_use_review'), onClick:()=>{
     if(!editor||editor.locked()||!prepared||!write())return;
     editor.set('review',JSON.stringify(prepared.fixed));update();
   }});
   useReview.hidden=true;
+  const head=h('div',{class:'pm-tool-head'},summary);
   const controls=h('details',{'data-pm-package-handoff-controls':''},h('summary',{},t('ph_title')),
-    sectionCard({body:h('div',{},summary,availabilityNotice,review,status,facts,useReview,editorView,outcome,
-      disclosure({label:t('ph_details'),body:h('div',{},h('p',{class:'muted'},t('ph_intro')),h('p',{class:'muted'},t('ph_boundary')))}))}));
+    sectionCard({body:h('div',{},head,availabilityNotice,review,status,facts,useReview,editorView,outcome,
+      disclosure({label:t('ph_details'),body:h('div',{},h('p',{class:'muted'},t('ph_intro')),h('p',{class:'muted'},t('ph_boundary')),h('p',{class:'muted'},t('ph_agent_help')))}))}));
   const element=h('section',{class:'pm-packages','data-pm-package-handoff':''},controls);
   const available=()=>{const cap=caps()?.features?.pm_workspaces?.package_handoff;return cap?.available===true&&cap.action==='repository.continue'&&cap.contract===contract&&cap.code_basis_required===true&&['bounded_full_prompt','bounded_full_prompt_or_fixed_spec_artifact'].includes(cap.source_materialization);};
   const writer=()=>permitted(false)&&['owner','contributor'].includes(workspace()?.membership?.role)&&['observe','manage','start'].every(scope=>caps()?.scopes?.includes(scope))
@@ -76,14 +77,16 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
     }catch{return null;}
   }
   function update(){
+    if(broken){head.hidden=true;summary.hidden=true;availabilityNotice.hidden=true;review.hidden=true;useReview.hidden=true;editorView.hidden=true;return;}
+    head.hidden=false;summary.hidden=false;editorView.hidden=false;review.hidden=false;
     review.disabled=!active||reading||!write()||!hostReady(active);
     availabilityNotice.hidden=!active||Boolean(write()&&hostReady(active));
     if(active)summary.textContent=joinLabel([active.document.title, active.sequence == null ? '' : joinLabel([t('ph_preparation'), active.sequence], ' ')]);
     else summary.textContent=t('ph_select');
     if(editor)editor.update();onReviewChange();
   }
-  function withdraw(){serial++;reading=false;active=null;prepared=null;qualityCatalog=[];for(const value of editors.values())value.qualityBox?.replaceChildren();facts.replaceChildren();status.replaceChildren();outcome.replaceChildren();editorView.replaceChildren();editor=null;useReview.hidden=true;update();}
-  function fail(error){if(error.message?.startsWith('PM_SPEC_')||error.code==='PM_REQUIREMENT_QUALITY_INVALID')error=Error(t('ph_invalid'));if([401,403,404].includes(error.status)){withdraw();onSourceFailure();}prepared=null;facts.replaceChildren();outcome.replaceChildren();status.replaceChildren(errorBox(error),...(error.code==='PM_HANDOFF_BLOCKED'?[]:[h('p',{class:'muted'},t('ph_unavailable'))]));update();}
+  function withdraw(){serial++;reading=false;broken=false;active=null;prepared=null;qualityCatalog=[];for(const value of editors.values())value.qualityBox?.replaceChildren();facts.replaceChildren();status.replaceChildren();outcome.replaceChildren();editorView.replaceChildren();editor=null;useReview.hidden=true;update();}
+  function fail(error){if(error.message?.startsWith('PM_SPEC_')||error.code==='PM_REQUIREMENT_QUALITY_INVALID')error=Error(t('ph_invalid'));const auth=[401,403,404].includes(error.status);if(auth){withdraw();onSourceFailure();broken=true;}prepared=null;facts.replaceChildren();outcome.replaceChildren();status.replaceChildren(errorBox(error),...(error.code==='PM_HANDOFF_BLOCKED'?[]:[h('p',{class:'muted'},t('ph_unavailable'))]));update();}
   function bindEditor(row){
     if(!editors.has(row.package_id)){
       const quality=h('input',{type:'hidden',value:'{}'});quality.dataset.pmDefault='{}';
@@ -111,7 +114,6 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
           prepared=null;facts.replaceChildren();outcome.replaceChildren(h('p',{},t('ph_started')),
             h('a',{href:`#/session/${encodeURIComponent(result.host)}/${encodeURIComponent(result.session_id)}`},t('ph_open')));update();
         },extra:h('div',{class:'pm-fields'},warning,qualityBox,specBox,labelled('ph_rationale',basis),labelled('ph_prompt',prompt),labelled('ph_agent',agent),
-          disclosure({label:t('ph_details'),body:h('p',{class:'muted'},t('ph_agent_help'))}),
           disclosure({element:h('details',{},h('summary',{},t('ph_options')),labelled('start_title',title),labelled('start_model',model))}))});
       const original=value.update;
       value.update=()=>{if(syncing)return;syncing=true;try{

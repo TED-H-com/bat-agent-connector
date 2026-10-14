@@ -84,7 +84,7 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`spec 
 
 for(const native of [false,true])test(native?'native workspace fixed specification handoff':'browser workspace fixed specification handoff',async({page})=>{
   const f=specFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);await openPmSection(page,'requirements','ui_packages');
-  await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
+  await page.locator('[data-pm-work-packages]').getByLabel('Package',{exact:true}).selectOption({label:'Restore member access · Preparation 1'});
   await openPmSection(page,'requirements','ui_materialization');await panel(page).locator('summary').first().click();await materialize(page).locator('button[type=submit]').click();
   await expect(panel(page)).toContainText('Fixed specification saved');expect(f.state.writes).toHaveLength(1);expect(f.base.state.writes).toHaveLength(0);
   f.base.state.deny=true;f.base.fixture.base.state.cursor++;

@@ -14,7 +14,7 @@ export const pmPackageHandoffStrings={en:{
   ph_blocked:'The package has unresolved checks beyond the implementation-base decision. Review the package details above.',
   ph_target_changed:'The published code or repository binding differs from the fixed package. Prepare a new package with an explicitly chosen base; this preview cannot rewrite it.',
   ph_unavailable:'Implementation sources or permissions could not be verified. Displayed source facts were removed; local drafts and original requests remain.',
-  ph_not_allowed:'This handoff needs current workspace write membership, observe, manage and start scopes, plus an enabled managed BAT destination.',
+  ph_not_allowed:'This handoff needs workspace write membership, permission to view, manage, and start, and managed work to be allowed.',
   ph_invalid:'The response does not match the selected fixed engineering package.',ph_reading:'Reading the original package, project and published base…',
   ph_started:'Implementation was started. Verification and delivery remain unassessed.',ph_open:'Open managed execution',ph_preparation:'Preparation',ph_project_version:'Project version',
 },'zh-TW':{
@@ -33,7 +33,7 @@ export const pmPackageHandoffStrings={en:{
   ph_blocked:'除了實作基底決定外，工作包仍有未解決的檢查；請查看上方工作包詳情。',
   ph_target_changed:'已發布程式或儲存庫關聯與固定工作包不符。請明確選定基底並準備新工作包；此預覽不會改寫原工作包。',
   ph_unavailable:'無法核對實作來源或權限，已移除顯示中的來源事實；本地草稿與原請求仍保留。',
-  ph_not_allowed:'此交接需要目前工作區寫入資格、observe／manage／start 權限，以及已允許管理工作的 BAT 目的地。',
+  ph_not_allowed:'需要工作區寫入資格、檢視／管理／啟動權限，並允許受管工作。',
   ph_invalid:'回應與所選固定工程工作包不符。',ph_reading:'讀取原工作包、專案與已發布基底…',
   ph_started:'已開始實作；驗證與交付仍未評估。',ph_open:'開啟自有執行',ph_preparation:'準備版本',ph_project_version:'專案版本',
 }};

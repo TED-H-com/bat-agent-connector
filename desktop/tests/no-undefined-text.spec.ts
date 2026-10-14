@@ -147,7 +147,8 @@ for (const locale of ['en-US', 'zh-TW']) test(`Selected work package omits missi
   const fixture = handoffFixture(); fixture.row.sequence = undefined as any;
   await mountConversation(page, false, fixture.dispatch); await page.goto(route);
   await openPmSection(page, 'requirements', 'ui_packages');
-  await page.locator('[data-pm-work-packages]').getByRole('button', {name: /Restore member access/}).click();
+  const picker = page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);
+  await picker.selectOption({label: (await picker.locator('option').allTextContents()).find(text => /Restore member access/.test(text)) || ''});
   await openPmSection(page, 'requirements', 'ui_handoff');
   await page.locator('[data-pm-package-handoff-controls] > summary').click();
   await expect(page.locator('[data-pm-package-handoff]')).toContainText('Restore member access');

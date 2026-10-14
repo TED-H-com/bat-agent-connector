@@ -1874,6 +1874,15 @@ var workDeliveryStrings = {
 		wd_yes: "Yes",
 		wd_no: "No",
 		wd_unknown: "Unknown",
+		wd_state_verified: "Verified",
+		wd_state_unverified: "Unverified",
+		wd_state_succeeded: "Succeeded",
+		wd_state_failed: "Failed",
+		wd_state_cancelled: "Cancelled",
+		wd_state_superseded: "Superseded",
+		wd_state_uncertain: "Uncertain",
+		wd_state_needs_attention: "Needs attention",
+		wd_state_drift: "Drift",
 		wd_empty: "No readable delivery records in this page.",
 		wd_loading: "Reading saved delivery evidence…",
 		wd_invalid: "The reply does not match this work and its fixed delivery contract.",
@@ -1924,6 +1933,15 @@ var workDeliveryStrings = {
 		wd_yes: "是",
 		wd_no: "否",
 		wd_unknown: "未知",
+		wd_state_verified: "已驗證",
+		wd_state_unverified: "未驗證",
+		wd_state_succeeded: "已成功",
+		wd_state_failed: "失敗",
+		wd_state_cancelled: "已取消",
+		wd_state_superseded: "已取代",
+		wd_state_uncertain: "不確定",
+		wd_state_needs_attention: "需要處理",
+		wd_state_drift: "已偏移",
 		wd_empty: "這一頁沒有目前可讀的交付紀錄。",
 		wd_loading: "正在讀取已保存交付證據…",
 		wd_invalid: "回覆與本工作及固定交付契約不符。",
@@ -1963,6 +1981,8 @@ var pmWorkBatchesStrings = {
 		pmb_intro: "Choose reviewed handoffs, set limits, and track their original operations.",
 		pmb_refresh: "Refresh batch sources",
 		pmb_draft: "New batch selection",
+		pmb_new: "New batch",
+		pmb_record_open: "Record evidence",
 		pmb_selection_help: "Review an engineering handoff and fill its instructions first. Adding it saves that exact request here; later handoff edits do not replace it.",
 		pmb_add: "Add reviewed handoff",
 		pmb_history: "Saved batch",
@@ -2010,7 +2030,7 @@ var pmWorkBatchesStrings = {
 		pmb_no_history: "No saved batch selected.",
 		pmb_batch: "Batch",
 		pmb_selected_original: "Selected original batch",
-		pmb_saved: "Original batch and result evidence",
+		pmb_saved: "Batch result",
 		pmb_state: "Entry state",
 		pmb_operation_status: "Parent operation",
 		pmb_blocked_reason: "Admission or verification reason",
@@ -2056,6 +2076,8 @@ var pmWorkBatchesStrings = {
 		pmb_intro: "選入已核對的交接、設定限制，並追蹤原始操作。",
 		pmb_refresh: "更新批次來源",
 		pmb_draft: "新批次選擇",
+		pmb_new: "新增批次",
+		pmb_record_open: "記錄結果證據",
 		pmb_selection_help: "先核對工程交接並填寫執行指示。加入時會保存這份確切請求；之後修改交接不會取代已選入的內容。",
 		pmb_add: "加入已核對的交接",
 		pmb_history: "已保存批次",
@@ -2103,7 +2125,7 @@ var pmWorkBatchesStrings = {
 		pmb_no_history: "尚未選擇已保存批次。",
 		pmb_batch: "批次",
 		pmb_selected_original: "原本選定的批次",
-		pmb_saved: "原始批次與結果證據",
+		pmb_saved: "批次結果",
 		pmb_state: "項目狀態",
 		pmb_operation_status: "父操作",
 		pmb_blocked_reason: "受理或驗證原因",
@@ -3529,7 +3551,7 @@ var pmPackageHandoffStrings = {
 		ph_blocked: "The package has unresolved checks beyond the implementation-base decision. Review the package details above.",
 		ph_target_changed: "The published code or repository binding differs from the fixed package. Prepare a new package with an explicitly chosen base; this preview cannot rewrite it.",
 		ph_unavailable: "Implementation sources or permissions could not be verified. Displayed source facts were removed; local drafts and original requests remain.",
-		ph_not_allowed: "This handoff needs current workspace write membership, observe, manage and start scopes, plus an enabled managed BAT destination.",
+		ph_not_allowed: "This handoff needs workspace write membership, permission to view, manage, and start, and managed work to be allowed.",
 		ph_invalid: "The response does not match the selected fixed engineering package.",
 		ph_reading: "Reading the original package, project and published base…",
 		ph_started: "Implementation was started. Verification and delivery remain unassessed.",
@@ -3573,7 +3595,7 @@ var pmPackageHandoffStrings = {
 		ph_blocked: "除了實作基底決定外，工作包仍有未解決的檢查；請查看上方工作包詳情。",
 		ph_target_changed: "已發布程式或儲存庫關聯與固定工作包不符。請明確選定基底並準備新工作包；此預覽不會改寫原工作包。",
 		ph_unavailable: "無法核對實作來源或權限，已移除顯示中的來源事實；本地草稿與原請求仍保留。",
-		ph_not_allowed: "此交接需要目前工作區寫入資格、observe／manage／start 權限，以及已允許管理工作的 BAT 目的地。",
+		ph_not_allowed: "需要工作區寫入資格、檢視／管理／啟動權限，並允許受管工作。",
 		ph_invalid: "回應與所選固定工程工作包不符。",
 		ph_reading: "讀取原工作包、專案與已發布基底…",
 		ph_started: "已開始實作；驗證與交付仍未評估。",
@@ -5450,6 +5472,9 @@ var workPackageStrings = {
 		wp_refresh: "Refresh work packages",
 		wp_empty: "No readable work packages on this page.",
 		wp_more: "Load more packages",
+		wp_package: "Package",
+		wp_choose: "Choose…",
+		wp_plan_section: "Plan",
 		wp_partial: "This list covers only the loaded, currently readable packages.",
 		wp_select: "Select a package to review its fixed sources and current checks.",
 		wp_review: "Review package",
@@ -5549,6 +5574,9 @@ var workPackageStrings = {
 		wp_refresh: "重新整理工作包",
 		wp_empty: "這一頁沒有目前可讀的工程工作包。",
 		wp_more: "載入更多工作包",
+		wp_package: "工作包",
+		wp_choose: "請選擇…",
+		wp_plan_section: "規劃內容",
 		wp_partial: "清單僅涵蓋已載入且目前可讀的工作包。",
 		wp_select: "選取工作包，查看固定來源與目前檢查結果。",
 		wp_review: "檢視工作包",
@@ -5659,6 +5687,9 @@ var pmSprintStrings = {
 		pm_sprint_choose: "Sprint",
 		pm_sprint_empty: "No Sprint has been planned.",
 		pm_sprint_new: "Plan a Sprint",
+		pm_sprint_plan_open: "Plan sprint",
+		pm_sprint_start_open: "Start sprint",
+		pm_sprint_more: "More actions",
 		pm_sprint_refresh: "Refresh Sprint",
 		pm_sprint_review_fresh: "Review updated baseline",
 		pm_sprint_stale: "The saved baseline changed. Your draft is preserved; review the updated baseline before a new request.",
@@ -5758,6 +5789,9 @@ var pmSprintStrings = {
 		pm_sprint_choose: "衝刺",
 		pm_sprint_empty: "尚未規劃衝刺。",
 		pm_sprint_new: "規劃衝刺",
+		pm_sprint_plan_open: "規劃衝刺",
+		pm_sprint_start_open: "開始衝刺",
+		pm_sprint_more: "其他操作",
 		pm_sprint_refresh: "重新整理衝刺",
 		pm_sprint_review_fresh: "檢視更新後的基準",
 		pm_sprint_stale: "已保存的基準有變動。草稿已保留；請先檢視更新後的基準，再提出新請求。",
@@ -19544,10 +19578,12 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		onClick: () => void historyPage(cursor)
 	});
 	more.hidden = true;
+	const adapterFields = h("div", { class: "capture-fields" }, h("label", {}, t("ahp_adapter"), adapter));
+	const historyDetails = h("details", { "data-ahp-history": "" }, h("summary", {}, t("ahp_history")), history, more);
 	const element = h("section", {
 		class: "panel pm-ahp",
 		"data-pm-ahp": ""
-	}, sectionCard({ body: h("div", {}, h("div", { class: "pm-tool-head" }, statusPill("read_only"), refreshButton), h("div", { class: "capture-fields" }, h("label", {}, t("ahp_adapter"), adapter)), status, body, disclosure({ element: h("details", { "data-ahp-history": "" }, h("summary", {}, t("ahp_history")), history, more) }), detail) }));
+	}, sectionCard({ body: h("div", {}, h("div", { class: "pm-tool-head" }, statusPill("read_only"), refreshButton), adapterFields, status, body, disclosure({ element: historyDetails }), detail) }));
 	const valid = (ticket) => {
 		try {
 			alive();
@@ -19723,8 +19759,8 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			}));
 			else item.catalogBox.append(dataTable({
 				columns: [{
-					key: "session",
-					label: t("ahp_catalog_column"),
+					key: "check",
+					label: "",
 					render: (s) => {
 						const box = h("input", {
 							type: "checkbox",
@@ -19738,8 +19774,12 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 							item.observe.update();
 							updateChecks();
 						});
-						return h("label", { class: "pm-ahp-session" }, box, h("span", {}, h("strong", {}, s.title || s.resource), h("small", {}, s.provider)));
+						return h("label", { class: "pm-ahp-session" }, box);
 					}
+				}, {
+					key: "session",
+					label: t("ahp_catalog_column"),
+					render: (s) => h("span", { class: "pm-ahp-session" }, h("strong", {}, s.title || s.resource), h("small", {}, s.provider))
 				}],
 				rows: pageRows,
 				rowKey: (s) => s.resource,
@@ -19942,6 +19982,8 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 	}
 	function failure(error) {
 		withdraw();
+		adapterFields.hidden = true;
+		historyDetails.hidden = true;
 		const withdrawn = [
 			401,
 			403,
@@ -19952,6 +19994,8 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 	async function refresh() {
 		const prior = selected;
 		withdraw();
+		adapterFields.hidden = true;
+		historyDetails.hidden = true;
 		const ticket = epoch;
 		refreshButton.disabled = true;
 		try {
@@ -19979,6 +20023,8 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			renderHistory(l);
 			ready = true;
 			adapter.disabled = !choices.size;
+			adapterFields.hidden = false;
+			historyDetails.hidden = false;
 			const key = choices.has(prior) ? prior : choices.keys().next().value || "";
 			adapter.value = key;
 			if (!await selectAdapter(key, c.observation) || !ready) return;
@@ -21140,11 +21186,12 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 		hidden: true,
 		onClick: () => void read(true)
 	});
+	const head = h("div", { class: "pm-tool-head" }, refreshButton, more);
 	const element = h("details", {
 		"data-pm-work-deliveries": "",
 		class: "pm-spec-card",
 		hidden: true
-	}, h("summary", {}, t("wd_title")), sectionCard({ body: h("div", {}, h("div", { class: "pm-tool-head" }, refreshButton, more), status, facts) }));
+	}, h("summary", {}, t("wd_title")), sectionCard({ body: h("div", {}, head, status, facts) }));
 	disclosure({ element });
 	const valid = (ticket) => {
 		alive();
@@ -21162,27 +21209,66 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 		const key = "wd_status_" + value, label = t(key);
 		return label === key ? String(value ?? "") : label;
 	};
-	const details = (...nodes) => nodes.some(Boolean) ? disclosure({
-		label: t("wd_details"),
-		body: h("div", {}, ...nodes)
-	}) : null;
+	const deployTones = {
+		verified: "ok",
+		succeeded: "ok",
+		failed: "bad",
+		cancelled: "warn",
+		needs_attention: "warn",
+		uncertain: "warn",
+		drift: "warn",
+		unverified: "neutral",
+		superseded: "neutral"
+	};
+	function deployPill(state) {
+		if (state === null || state === void 0 || state === "") return h("span", {
+			class: "ui-pill tone-neutral",
+			"data-status": "unknown"
+		}, t("wd_unknown"));
+		const key = "wd_state_" + state, label = t(key);
+		if (label === key) return h("span", {
+			class: "ui-pill tone-neutral",
+			"data-status": "unknown"
+		}, t("wd_unknown"));
+		return h("span", {
+			class: `ui-pill tone-${deployTones[state] || "neutral"}`,
+			"data-status": state
+		}, label);
+	}
+	function referenceLine(row) {
+		const repo = row.target?.repository ? String(row.target.repository) : "";
+		const number = row.target?.pull_number;
+		const text = [repo, number === null || number === void 0 || number === "" ? "" : `PR #${number}`].filter(Boolean).join(" · ");
+		return text ? h("p", {}, text) : null;
+	}
+	function showHead(ok) {
+		head.replaceChildren(...ok ? [statusPill("not_assessed"), more] : [], refreshButton);
+	}
 	function render() {
-		place(facts, "replaceChildren", h("div", { class: "pm-tool-head" }, statusPill("not_assessed")), packages.length ? h("p", { class: "muted" }, t("wd_packages")) : null, ...packages.map((ref) => h("div", { class: "pm-delivery-package" }, h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")), details(mono("wd_package", ref.package_id), mono("wd_digest", ref.document_digest)))), ...rows.map((row) => {
-			const commits = [];
+		const notes = [];
+		place(facts, "replaceChildren", packages.length ? h("p", { class: "muted" }, t("wd_packages")) : null, ...packages.map((ref) => {
+			notes.push(mono("wd_package", ref.package_id), mono("wd_digest", ref.document_digest));
+			return h("div", { class: "pm-delivery-package" }, h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")));
+		}), ...rows.map((row) => {
 			if (row.integration) {
-				commits.push(mono("wd_head", row.integration.new_head));
-				for (const source of row.integration.sources || []) commits.push(mono("wd_pinned", source.pinned_sha ? source.pinned_sha + " · " + namedStatus(source.status) : null));
+				notes.push(mono("wd_head", row.integration.new_head));
+				for (const source of row.integration.sources || []) notes.push(mono("wd_pinned", source.pinned_sha ? source.pinned_sha + " · " + namedStatus(source.status) : null));
 			}
-			if (row.merge) commits.push(mono("wd_merged_sha", row.merge.merged_sha));
+			if (row.merge) notes.push(mono("wd_merged_sha", row.merge.merged_sha));
+			const state = row.deployment?.state;
 			if (row.deployment) {
-				commits.push(mono("wd_source_sha", row.deployment.source_sha));
-				commits.push(mono("wd_run", row.deployment.run_id));
+				notes.push(mono("wd_source_sha", row.deployment.source_sha), mono("wd_run", row.deployment.run_id));
+				if (state !== null && state !== void 0 && state !== "" && t("wd_state_" + state) === "wd_state_" + state) notes.push(mono("wd_deploy_state", state));
 			}
-			return h("article", { class: "pm-delivery" }, h("div", { class: "pm-tool-head" }, h("h4", {}, t("wd_action_" + row.action)), row.merge?.merged === true ? statusPill("merged") : null), fact("wd_status", namedStatus(row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), row.target?.repository ? h("p", {}, String(row.target.repository)) : null, row.target?.pull_number ? fact("wd_pull", row.target.pull_number) : null, row.integration ? fact("wd_pushed", boolean(row.integration.pushed)) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified))) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_state", row.deployment.state), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current))) : null, details(...commits));
-		}), details(h("p", { class: "muted" }, t("wd_boundary"))), !rows.length ? emptyState({
+			return h("article", { class: "pm-delivery" }, h("div", { class: "pm-tool-head" }, h("h4", {}, t("wd_action_" + row.action)), row.merge?.merged === true ? statusPill("merged") : null, row.deployment ? deployPill(state) : null), fact("wd_status", namedStatus(row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), referenceLine(row), row.integration ? fact("wd_pushed", boolean(row.integration.pushed)) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified))) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current))) : null);
+		}), disclosure({
+			label: t("wd_details"),
+			body: h("div", {}, ...notes, h("p", { class: "muted" }, t("wd_boundary")))
+		}), !rows.length ? emptyState({
 			title: t("wd_empty"),
 			heading: "h3"
 		}) : null);
+		showHead(true);
 	}
 	function check(data, id) {
 		if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || data.requirement_acceptance !== "not_evaluated_by_delivery" || !Array.isArray(data.original_packages) || !Array.isArray(data.deliveries) || typeof data.source_visibility_filtered !== "boolean" || data.next_after !== null && (!Number.isSafeInteger(data.next_after) || data.next_after <= 0)) throw Error(t("wd_invalid"));
@@ -21230,7 +21316,8 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			packages = [];
 			cursor = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("wd_unavailable")));
+			status.replaceChildren();
+			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error), h("p", { class: "muted" }, t("wd_unavailable"))), refreshButton);
 		} finally {
 			if (ticket === sequence) {
 				busy = false;
@@ -21691,18 +21778,29 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		}
 	});
 	rebase.hidden = true;
-	const draftDetails = h("details", {
-		"data-batch-draft": "",
-		open: true
-	}, h("summary", {}, t("pmb_draft")), add, stale, rebase, startView);
-	const element = h("section", {
-		class: "panel pm-work-batches",
-		"data-pm-work-batches": ""
-	}, sectionCard({ body: h("div", {}, h("div", { class: "pm-tool-head" }, iconButton({
+	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("pmb_refresh"),
 		onClick: () => void refresh()
-	})), status, disclosure({ element: draftDetails }), labelled("pmb_history", history), facts, proofView) }));
+	});
+	const draftDetails = h("details", { "data-batch-draft": "" }, h("summary", {}, t("pmb_draft")), add, stale, rebase, startView);
+	const newBatch = button({
+		variant: "secondary",
+		label: t("pmb_new"),
+		onClick: () => showDraft(true)
+	});
+	const historyLabel = labelled("pmb_history", history);
+	const head = h("div", { class: "pm-tool-head" }, historyLabel, newBatch, refreshButton);
+	const element = h("section", {
+		class: "panel pm-work-batches",
+		"data-pm-work-batches": ""
+	}, sectionCard({ body: h("div", {}, head, status, disclosure({ element: draftDetails }), facts, proofView) }));
+	function showDraft(open) {
+		draftDetails.hidden = !open;
+		draftDetails.open = open;
+		newBatch.hidden = open || !ready;
+	}
+	showDraft(false);
 	const cap = () => caps()?.features?.pm_workspaces?.work_batches;
 	const supported = () => cap()?.version === 1 && cap()?.actions?.includes(START$1) && cap()?.profiles?.includes(profile.profile);
 	const valid = (ticket) => {
@@ -21813,7 +21911,13 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	}
 	function failure(err) {
 		withdraw();
-		status.replaceChildren(text("pmb_unavailable"), errorBox(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? error() : err));
+		showDraft(false);
+		newBatch.hidden = true;
+		historyLabel.hidden = true;
+		facts.hidden = true;
+		proofView.hidden = true;
+		head.hidden = true;
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, text("pmb_unavailable"), errorBox(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? error() : err)), refreshButton));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -22299,7 +22403,10 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			proof.box.addEventListener("change", update);
 		}
 		syncProofOptions();
-		proofView.replaceChildren(h("details", { open: true }, h("summary", {}, t("pmb_evidence")), proof.box));
+		proofView.replaceChildren(h("details", {
+			"data-batch-evidence": "",
+			open: proof.locked() || null
+		}, h("summary", {}, t("pmb_record_open")), proof.box));
 	}
 	async function refresh() {
 		const ticket = ++serial;
@@ -22340,6 +22447,11 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			if (selected && !historyData.rows.some((row) => row.batch_id === selected)) history.append(h("option", { value: selected }, t("pmb_selected_original")));
 			history.value = selected;
 			ready = true;
+			historyLabel.hidden = false;
+			facts.hidden = false;
+			head.hidden = false;
+			if (!head.contains(refreshButton)) head.replaceChildren(historyLabel, newBatch, refreshButton);
+			showDraft(!batch || Boolean(start?.locked()));
 			startView.hidden = false;
 			proofView.hidden = !batch;
 			renderEntries();
@@ -24171,9 +24283,9 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 var contract = "pm-engineering-handoff/v1";
 var equal$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSourceFailure = () => {}, onReviewChange = () => {} }) {
-	let active = null, prepared = null, serial = 0, reading = false, editor = null, qualityCatalog = [];
+	let active = null, prepared = null, serial = 0, reading = false, editor = null, qualityCatalog = [], broken = false;
 	const editors = new Map(), facts = h("div"), status = h("div", { role: "status" }), editorView = h("div"), outcome = h("div");
-	const summary = h("p", { class: "muted" }, t("ph_select")), availabilityNotice = h("p", {
+	const summary = h("p", { class: "pm-package-name" }, t("ph_select")), availabilityNotice = h("p", {
 		class: "muted",
 		hidden: true
 	}, t("ph_not_allowed"));
@@ -24192,12 +24304,13 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		}
 	});
 	useReview.hidden = true;
+	const head = h("div", { class: "pm-tool-head" }, summary);
 	const element = h("section", {
 		class: "pm-packages",
 		"data-pm-package-handoff": ""
-	}, h("details", { "data-pm-package-handoff-controls": "" }, h("summary", {}, t("ph_title")), sectionCard({ body: h("div", {}, summary, availabilityNotice, review, status, facts, useReview, editorView, outcome, disclosure({
+	}, h("details", { "data-pm-package-handoff-controls": "" }, h("summary", {}, t("ph_title")), sectionCard({ body: h("div", {}, head, availabilityNotice, review, status, facts, useReview, editorView, outcome, disclosure({
 		label: t("ph_details"),
-		body: h("div", {}, h("p", { class: "muted" }, t("ph_intro")), h("p", { class: "muted" }, t("ph_boundary")))
+		body: h("div", {}, h("p", { class: "muted" }, t("ph_intro")), h("p", { class: "muted" }, t("ph_boundary")), h("p", { class: "muted" }, t("ph_agent_help")))
 	})) })));
 	const available = () => {
 		const cap = caps()?.features?.pm_workspaces?.package_handoff;
@@ -24284,6 +24397,19 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		}
 	}
 	function update() {
+		if (broken) {
+			head.hidden = true;
+			summary.hidden = true;
+			availabilityNotice.hidden = true;
+			review.hidden = true;
+			useReview.hidden = true;
+			editorView.hidden = true;
+			return;
+		}
+		head.hidden = false;
+		summary.hidden = false;
+		editorView.hidden = false;
+		review.hidden = false;
 		review.disabled = !active || reading || !write() || !hostReady(active);
 		availabilityNotice.hidden = !active || Boolean(write() && hostReady(active));
 		if (active) summary.textContent = joinLabel([active.document.title, active.sequence == null ? "" : joinLabel([t("ph_preparation"), active.sequence], " ")]);
@@ -24294,6 +24420,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 	function withdraw() {
 		serial++;
 		reading = false;
+		broken = false;
 		active = null;
 		prepared = null;
 		qualityCatalog = [];
@@ -24315,6 +24442,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		].includes(error.status)) {
 			withdraw();
 			onSourceFailure();
+			broken = true;
 		}
 		prepared = null;
 		facts.replaceChildren();
@@ -24413,10 +24541,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 					outcome.replaceChildren(h("p", {}, t("ph_started")), h("a", { href: `#/session/${encodeURIComponent(result.host)}/${encodeURIComponent(result.session_id)}` }, t("ph_open")));
 					update();
 				},
-				extra: h("div", { class: "pm-fields" }, warning, qualityBox, specBox, labelled("ph_rationale", basis), labelled("ph_prompt", prompt), labelled("ph_agent", agent), disclosure({
-					label: t("ph_details"),
-					body: h("p", { class: "muted" }, t("ph_agent_help"))
-				}), disclosure({ element: h("details", {}, h("summary", {}, t("ph_options")), labelled("start_title", title), labelled("start_model", model)) }))
+				extra: h("div", { class: "pm-fields" }, warning, qualityBox, specBox, labelled("ph_rationale", basis), labelled("ph_prompt", prompt), labelled("ph_agent", agent), disclosure({ element: h("details", {}, h("summary", {}, t("ph_options")), labelled("start_title", title), labelled("start_model", model)) }))
 			});
 			const original = value.update;
 			value.update = () => {
@@ -27002,7 +27127,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSize = 20, onSelection = () => {} }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
 	const idPattern = /^pmwp_[0-9a-f]{32}$/, digestPattern = /^[0-9a-f]{64}$/;
-	let sequence = 0, rows = [], cursor = null, pages = 1, selected = null, busy = false;
+	let sequence = 0, rows = [], cursor = null, pages = 1, selected = null, busy = false, broken = false;
 	const status = h("div", { role: "status" }), list = h("div"), facts = h("div", { "data-pm-wp-detail": "" });
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -27018,10 +27143,18 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 			refresh();
 		}
 	});
+	const picker = h("select", {
+		"aria-label": t("wp_package"),
+		onchange: () => {
+			if (picker.value) select(picker.value);
+		}
+	});
+	const pickerLabel = h("label", {}, t("wp_package"), picker);
+	const head = h("div", { class: "pm-tool-head" }, pickerLabel, refreshButton);
 	const element = h("section", {
 		class: "pm-packages",
 		"data-pm-work-packages": ""
-	}, sectionCard({ body: h("div", {}, h("div", { class: "pm-tool-head" }, refreshButton), status, list, more, facts, disclosure({
+	}, sectionCard({ body: h("div", {}, head, status, list, more, facts, disclosure({
 		label: t("wp_details"),
 		body: h("p", { class: "muted" }, t("wp_intro"))
 	})) }));
@@ -27044,21 +27177,22 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	}
 	function controls() {
 		refreshButton.disabled = busy;
+		picker.disabled = busy || broken;
 		more.disabled = busy;
 		more.hidden = cursor === null;
 	}
 	function renderList() {
-		list.replaceChildren(...cursor === null ? [] : [h("div", { class: "pm-tool-head" }, statusPill("partial"), h("p", { class: "muted" }, t("wp_partial")))], ...rows.map((row) => h("div", {
-			class: "pm-workspace-row",
-			"data-pm-wp-row": row.package_id
-		}, button({
-			variant: "secondary",
-			disabled: busy,
-			"aria-pressed": selected === row.package_id ? "true" : "false",
-			label: joinLabel([row.document.title, joinLabel([t("wp_preparation"), row.sequence], " ")]),
-			onClick: () => void select(row.package_id)
-		}))));
-		if (!rows.length) list.append(emptyState({
+		if (broken) {
+			picker.replaceChildren();
+			pickerLabel.hidden = true;
+			list.replaceChildren();
+			return;
+		}
+		pickerLabel.hidden = false;
+		picker.replaceChildren(h("option", { value: "" }, t("wp_choose")), ...rows.map((row) => h("option", { value: row.package_id }, joinLabel([row.document.title, joinLabel([t("wp_preparation"), row.sequence], " ")]))));
+		picker.value = rows.some((row) => row.package_id === selected) ? selected : "";
+		list.replaceChildren(...cursor === null ? [] : [h("div", { class: "pm-tool-head" }, statusPill("partial"), h("p", { class: "muted" }, t("wp_partial")))]);
+		if (!rows.length && !busy) list.append(emptyState({
 			title: t("wp_empty"),
 			heading: "h3"
 		}));
@@ -27087,7 +27221,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		facts.replaceChildren(h("div", { class: "pm-tool-head" }, h("h3", {}, doc.title), h("p", { "data-pm-wp-readiness": "" }, pill)), labelled("wp_checks", checks), disclosure({
 			label: t("wp_details"),
 			body: h("div", {}, paragraph(t(ready ? "wp_ready" : "wp_blocked")), paragraph(t("wp_boundary")), paragraph(t("wp_coverage")))
-		}), labelled("wp_requirements", requirements), detail(t("wp_design"), paragraph(doc.design.text), fact("wp_reason", doc.rationale), refs(doc.design.source_ids)), detail(t("wp_tasks"), tasks), detail(t("wp_verification"), verification), detail(t("wp_delivery"), deliveryNode), detail(t("wp_dod"), h("p", { class: "muted" }, t(doc.dod ? "wp_dod_note" : "wp_no_dod")), doc.dod ? h("ul", {}, ...(doc.dod.criteria || []).map((item) => h("li", {}, item.text))) : null), ...doc.unresolved.length ? [labelled("wp_unresolved", h("ul", {}, ...doc.unresolved.map((value) => h("li", {}, value))))] : [], sources);
+		}), labelled("wp_requirements", requirements), labelled("wp_plan_section", h("div", {}, detail(t("wp_design"), paragraph(doc.design.text), fact("wp_reason", doc.rationale), refs(doc.design.source_ids)), detail(t("wp_tasks"), tasks), detail(t("wp_verification"), verification), detail(t("wp_delivery"), deliveryNode), detail(t("wp_dod"), h("p", { class: "muted" }, t(doc.dod ? "wp_dod_note" : "wp_no_dod")), doc.dod ? h("ul", {}, ...(doc.dod.criteria || []).map((item) => h("li", {}, item.text))) : null), sources)), ...doc.unresolved.length ? [labelled("wp_unresolved", h("ul", {}, ...doc.unresolved.map((value) => h("li", {}, value))))] : []);
 	}
 	async function readSelected(ticket) {
 		const id = selected;
@@ -27103,24 +27237,34 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		render(row, readiness);
 		onSelection(row);
 	}
+	function restoreHead() {
+		broken = false;
+		head.hidden = false;
+		pickerLabel.hidden = false;
+		if (!head.contains(refreshButton)) head.replaceChildren(pickerLabel, refreshButton);
+	}
 	function failed(error, ticket) {
 		try {
 			if (!valid(ticket)) return;
 		} catch {
 			return;
 		}
+		broken = true;
 		rows = [];
 		cursor = null;
 		list.replaceChildren();
 		facts.replaceChildren();
 		onSelection(null);
-		status.replaceChildren(errorBox(error), paragraph(t("wp_unavailable")));
+		picker.replaceChildren();
+		head.hidden = true;
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error), paragraph(t("wp_unavailable"))), refreshButton));
 	}
 	async function select(id) {
 		if (busy || !idPattern.test(id)) return;
 		selected = id;
 		const ticket = ++sequence;
 		busy = true;
+		restoreHead();
 		facts.replaceChildren();
 		onSelection(null);
 		renderList();
@@ -27144,8 +27288,10 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	async function refresh() {
 		const ticket = ++sequence;
 		busy = true;
+		restoreHead();
 		rows = [];
 		cursor = null;
+		picker.replaceChildren();
 		list.replaceChildren();
 		facts.replaceChildren();
 		onSelection(null);
@@ -27184,12 +27330,17 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	function withdraw() {
 		sequence++;
 		busy = false;
+		broken = false;
 		rows = [];
 		cursor = null;
+		picker.replaceChildren();
 		list.replaceChildren();
 		facts.replaceChildren();
 		onSelection(null);
 		status.replaceChildren();
+		head.hidden = false;
+		pickerLabel.hidden = false;
+		if (!head.contains(refreshButton)) head.replaceChildren(pickerLabel, refreshButton);
 		controls();
 	}
 	return {
@@ -27224,15 +27375,18 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		class: "muted",
 		hidden: true
 	}, t("pm_sprint_stale"));
-	const box = h("section", {
-		class: "panel pm-evidence",
-		"data-pm-sprints": ""
-	}, sectionCard({ body: h("div", {}, h("div", { class: "pm-tool-head" }, labelled("pm_sprint_choose", choose), review, iconButton({
+	const chooseLabel = labelled("pm_sprint_choose", choose);
+	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("pm_sprint_refresh"),
 		type: "button",
 		onclick: () => void refresh()
-	})), status, warning, view, editors) }));
+	});
+	const toolbar = h("div", { class: "pm-tool-head" }, chooseLabel, review, refreshButton);
+	const box = h("section", {
+		class: "panel pm-evidence",
+		"data-pm-sprints": ""
+	}, sectionCard({ body: h("div", {}, toolbar, status, warning, view, editors) }));
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
 	const actor = () => caps()?.actor;
 	const can = (decide) => loaded && permitted(decide);
@@ -27345,7 +27499,8 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		view.replaceChildren();
 		choose.replaceChildren();
 		editors.hidden = true;
-		status.replaceChildren(errorBox(error));
+		toolbar.hidden = true;
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error)), refreshButton));
 	}
 	const rationale = () => input("pm_sprint_reason", {
 		multiline: true,
@@ -27357,6 +27512,12 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			class: "pm-fact",
 			"data-pm-sprint-work": item.work_item_id
 		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
+	}
+	function absoluteStamp(value) {
+		const parsed = new Date(value);
+		if (!Number.isFinite(parsed.getTime())) return timeText(value, { now: 0 });
+		const day = 864e5, yearStart = new Date(parsed.getFullYear(), 0, 1).getTime();
+		return timeText(value, { now: Math.abs(parsed.getTime() - yearStart) >= day ? yearStart : parsed.getTime() + day * 2 });
 	}
 	function renderView() {
 		view.replaceChildren();
@@ -27374,7 +27535,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			if (index) developers.append(", ");
 			developers.append(mono(id));
 		});
-		view.append(h("div", { class: "pm-sprint-answer" }, h("div", { class: "pm-tool-head" }, sprintPill(sprint.status), data.quality === "fixed_original_assessments" ? null : sprintPill("not_assessed")), h("p", { class: "pm-sprint-goal" }, data.goal.text), items.length ? h("ul", { class: "pm-sprint-work" }, ...items.map((item) => h("li", { "data-pm-sprint-work": item.work_item_id }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item))))) : note("pm_sprint_no_work"), h("p", { class: "pm-sprint-period" }, timeStamp(def.starts_at), " – ", timeStamp(def.ends_at)), data.timebox_elapsed ? note("pm_sprint_elapsed") : null, fold("pm_sprint_details", h("div", {}, h("p", { class: "muted" }, t(def.mode === "scrum" ? "pm_sprint_scrum" : "pm_sprint_personal")), h("p", {}, t("pm_sprint_owner"), ": ", t("pm_sprint_role_owner"), " ", mono(def.owner_actor)), h("p", {}, t("pm_sprint_developers"), ": ", developers), h("p", {}, t("pm_sprint_capacity"), ": ", def.capacity_note), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), data.quality === "fixed_original_assessments" ? null : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, mono(def.product_goal_revision_id)), h("p", {}, mono(def.dod_revision_id)), h("p", {}, mono(def.backlog_revision_id))))));
+		view.append(h("div", { class: "pm-sprint-answer" }, h("div", { class: "pm-tool-head" }, sprintPill(sprint.status), data.quality === "fixed_original_assessments" ? null : sprintPill("not_assessed")), h("p", { class: "pm-sprint-goal" }, data.goal.text), items.length ? h("ul", { class: "pm-sprint-work" }, ...items.map((item) => h("li", { "data-pm-sprint-work": item.work_item_id }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item))))) : note("pm_sprint_no_work"), h("p", { class: "pm-sprint-period" }, absoluteStamp(def.starts_at), " – ", absoluteStamp(def.ends_at)), data.timebox_elapsed ? note("pm_sprint_elapsed") : null, fold("pm_sprint_details", h("div", {}, h("p", { class: "muted" }, t(def.mode === "scrum" ? "pm_sprint_scrum" : "pm_sprint_personal")), h("p", {}, t("pm_sprint_owner"), ": ", t("pm_sprint_role_owner"), " ", mono(def.owner_actor)), h("p", {}, t("pm_sprint_developers"), ": ", developers), h("p", {}, t("pm_sprint_capacity"), ": ", def.capacity_note), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), data.quality === "fixed_original_assessments" ? null : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, mono(def.product_goal_revision_id)), h("p", {}, mono(def.dod_revision_id)), h("p", {}, mono(def.backlog_revision_id))))));
 		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
 		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
 		const closure = h("section", {
@@ -27666,7 +27827,13 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			}
 		});
 		content.append(history);
-		return fold("pm_sprint_commitments", content, !artifacts.backlog);
+		return {
+			key: "pm.sprint.commitments",
+			label: t("pm_sprint_commitments"),
+			node: content,
+			hidden: false,
+			locked: false
+		};
 	}
 	function creationEditor() {
 		const artifacts = model.artifacts, members = workspace()?.members || [], ready = artifacts.product_goal && artifacts.dod && artifacts.backlog;
@@ -27728,14 +27895,20 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			extra: h("div", { class: "pm-fields" }, !ready ? note("pm_sprint_plan_required") : "", !members.length ? note("pm_sprint_no_members") : "", labelled("pm_sprint_name", name), labelled("pm_sprint_goal", goal), labelled("pm_sprint_mode", mode), h("div", { class: "capture-fields" }, h("div", { class: "pm-time-field" }, labelled("pm_sprint_start_at", starts), h("span", { class: "pm-local-time" }, t("pm_sprint_shown"), " ", chosenUtc(starts))), h("div", { class: "pm-time-field" }, labelled("pm_sprint_end_at", ends), h("span", { class: "pm-local-time" }, t("pm_sprint_shown"), " ", chosenUtc(ends)))), note("pm_sprint_period_help"), labelled("pm_sprint_owner", lead), h("div", {}, h("p", {}, t("pm_sprint_developers")), developers, picks.box), labelled("pm_sprint_master", master), labelled("pm_sprint_capacity", capacity), labelled("pm_sprint_reason", reason), note("pm_sprint_no_execution"))
 		});
 		picks.sync();
-		return fold("pm_sprint_new", create.box, !model.detail || create.locked());
+		return {
+			key: "pm.sprint.create",
+			label: t("pm_sprint_new"),
+			node: create.box,
+			hidden: false,
+			locked: create.locked()
+		};
 	}
 	function sprintEditors() {
 		const detail = model.detail, sprint = detail.sprint, def = sprint.definition, target = {
 			workspace_id: workspaceId,
 			sprint_id: sprint.sprint_id
 		};
-		const holder = h("div", { class: "pm-plans" }), preconditions = () => ({ expected_version: sprint.version });
+		const sections = [], preconditions = () => ({ expected_version: sprint.version });
 		const currentOwner = () => owner(def), canSelect = () => can(false) && (currentOwner() || def.developers.includes(actor())) && ["planned", "active"].includes(sprint.status) && !(sprint.status === "active" && detail.timebox_elapsed);
 		const items = hidden((detail.selected_items || []).map(({ binding_id, assignee, how }) => ({
 			binding_id,
@@ -27802,7 +27975,13 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			extra: h("div", { class: "pm-fields" }, note("pm_sprint_how_help"), items, workChoices, labelled("pm_sprint_reason", reason))
 		});
 		widgets.forEach((sync) => sync());
-		holder.append(fold("pm_sprint_select", selection.box, selection.locked()));
+		sections.push({
+			key: "pm.sprint.select",
+			label: t("pm_sprint_select"),
+			node: selection.box,
+			hidden: false,
+			locked: selection.locked()
+		});
 		const newGoal = input("pm_sprint_goal", {
 			multiline: true,
 			max: 4e3,
@@ -27821,9 +28000,13 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			label: "pm_sprint_save_sprint_goal",
 			extra: h("div", { class: "pm-fields" }, labelled("pm_sprint_goal", newGoal), labelled("pm_sprint_reason", goalReason))
 		});
-		const goalBox = fold("pm_sprint_revise_goal", goalEditor.box, goalEditor.locked());
-		goalBox.hidden = sprint.status !== "planned" && !goalEditor.locked();
-		holder.append(goalBox);
+		sections.push({
+			key: "pm.sprint.goal.revise",
+			label: t("pm_sprint_revise_goal"),
+			node: goalEditor.box,
+			hidden: sprint.status !== "planned" && !goalEditor.locked(),
+			locked: goalEditor.locked()
+		});
 		for (const action of [
 			"start",
 			"close",
@@ -27868,20 +28051,62 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 				extra: h("div", { class: "pm-fields" }, note(!currentOwner() ? "pm_sprint_owner_only" : action === "close" ? "pm_sprint_close_help" : action === "cancel" ? "pm_sprint_cancel_help" : "pm_sprint_future"), labelled("pm_sprint_reason", reasonField), ...picks.length ? [refs, ...picks.map(({ item, picker }) => h("div", { class: "pm-fact" }, h("p", {}, title(item)), picker.element))] : [])
 			});
 			picks.forEach(({ picker }) => picker.attach(editor));
-			const section = fold("pm_sprint_" + action, editor.box, editor.locked());
-			section.hidden = (action === "start" ? sprint.status !== "planned" : action === "close" ? sprint.status !== "active" : !["planned", "active"].includes(sprint.status)) && !editor.locked();
-			holder.append(section);
+			sections.push({
+				key: `pm.sprint.${action}`,
+				label: t("pm_sprint_" + action),
+				node: editor.box,
+				hidden: (action === "start" ? sprint.status !== "planned" : action === "close" ? sprint.status !== "active" : !["planned", "active"].includes(sprint.status)) && !editor.locked(),
+				locked: editor.locked()
+			});
 		}
-		return holder;
+		return sections;
+	}
+	function presentActions(sections) {
+		const statusName = model.detail?.sprint.status || "";
+		const primaryKey = !model.detail ? "pm.sprint.create" : statusName === "planned" ? "pm.sprint.start" : null;
+		const visible = sections.filter((section) => !section.hidden);
+		const primary = visible.find((section) => section.key === primaryKey) || null;
+		const rest = visible.filter((section) => section !== primary);
+		const parked = h("div", { hidden: true });
+		const slot = h("div", { "data-pm-sprint-slot": "" });
+		const openLocked = visible.find((section) => section.locked) || null;
+		const primaryButton = primary ? button({
+			variant: "primary",
+			label: t(primary.key === "pm.sprint.start" ? "pm_sprint_start_open" : "pm_sprint_plan_open"),
+			"data-pm-sprint-primary": primary.key,
+			onClick: () => reveal(primary.key)
+		}) : null;
+		const menuNode = rest.length ? menu({
+			button: button({
+				variant: "secondary",
+				label: t("pm_sprint_more")
+			}),
+			items: rest.map((section) => ({
+				key: section.key,
+				label: section.label,
+				onSelect: () => reveal(section.key)
+			}))
+		}) : null;
+		function reveal(key) {
+			const shown = sections.find((section) => section.key === key) || null;
+			if (primaryButton) primaryButton.hidden = Boolean(shown && primary && shown.key === primary.key);
+			slot.replaceChildren(...shown ? [shown.node] : []);
+			for (const section of sections) if (section !== shown) parked.append(section.node);
+		}
+		editors.replaceChildren(h("div", { class: "pm-sprint-actions" }, primaryButton, menuNode), slot, parked);
+		if (openLocked) reveal(openLocked.key);
+		else for (const section of sections) parked.append(section.node);
 	}
 	function renderEditors(reviewBaselines = false) {
 		stale = false;
 		dirty = false;
 		forms = [];
 		reviewing = reviewBaselines;
-		editors.replaceChildren();
-		if (model.detail) editors.append(sprintEditors());
-		editors.append(creationEditor(), artifactEditors());
+		presentActions([
+			...model.detail ? sprintEditors() : [],
+			creationEditor(),
+			artifactEditors()
+		]);
 		reviewing = false;
 		update();
 	}
@@ -27983,6 +28208,8 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			};
 			loaded = true;
 			editors.hidden = false;
+			toolbar.hidden = false;
+			if (!toolbar.contains(refreshButton)) toolbar.append(refreshButton);
 			choose.replaceChildren(...sprints.length ? sprints.map((item) => h("option", { value: item.sprint_id }, `${item.definition.title} · ${t("pm_sprint_" + item.status)}`)) : [h("option", { value: "" }, t("pm_sprint_empty"))]);
 			choose.value = selectedId;
 			renderView();

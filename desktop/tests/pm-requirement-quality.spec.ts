@@ -36,7 +36,8 @@ function fixture(){
   return {...f,review,reviews,condition,ref,quality:state,saved,downstream};
 }
 async function reviewed(page:Page){await handoff(page).getByRole('button',{name:'Review base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base'})).toBeVisible();const rebase=handoff(page).getByRole('button',{name:'Use this version',exact:true});if(await rebase.isVisible())await rebase.click();await handoff(page).getByLabel('Why use this implementation base?',{exact:true}).fill('Reviewed original base');await handoff(page).getByLabel('Instructions for this implementation',{exact:true}).fill('Implement exact selected original requirements.');}
-async function selectProof(page:Page,f:ReturnType<typeof fixture>){await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await proof(page).getByLabel('Qualified original assessment',{exact:true}).selectOption(JSON.stringify(f.ref()));await proof(page).getByLabel('Reason for this request',{exact:true}).fill('Select the original complete reasoned assessment.');}
+async function openProof(page:Page){if(await proof(page).isVisible())return;await panel(page).locator('[data-batch-evidence] > summary').click();}
+async function selectProof(page:Page,f:ReturnType<typeof fixture>){await openProof(page);await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await proof(page).getByLabel('Qualified original assessment',{exact:true}).selectOption(JSON.stringify(f.ref()));await proof(page).getByLabel('Reason for this request',{exact:true}).fill('Select the original complete reasoned assessment.');}
 
 test('explicit result profile freezes every original acceptance identity and never treats dependency checkbox as proof',async({page})=>{
   const f=fixture();await mountBatch(page,f);await reviewed(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();
@@ -54,7 +55,7 @@ test('source-gated qualified original assessment is explicitly recorded with fix
 
 for(const change of ['unqualified','other-child','other-plan','incomplete'])test(`${change} assessment cannot become semantic batch evidence`,async({page})=>{
   const f=fixture();f.saved();if(change==='unqualified')f.review.qualified=false;else if(change==='other-child')f.review.context.execution_operation_id='op_'+'7'.repeat(32);else if(change==='other-plan')f.review.context.plan_ref={...f.review.context.plan_ref,scope_revision:'pmscope_'+'8'.repeat(32)};else f.review.assessment.document.criteria.pop();
-  await mountBatch(page,f);await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await expect(proof(page).getByLabel('Qualified original assessment',{exact:true}).locator('option')).toHaveCount(1);await expect(proof(page).locator('button[type=submit]')).toBeDisabled();expect(f.state.writes).toHaveLength(0);
+  await mountBatch(page,f);await openProof(page);await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await expect(proof(page).getByLabel('Qualified original assessment',{exact:true}).locator('option')).toHaveCount(1);await expect(proof(page).locator('button[type=submit]')).toBeDisabled();expect(f.state.writes).toHaveLength(0);
 });
 
 test('refresh never replaces selected original with newer assessment and withdrawal removes private selectors',async({page})=>{
@@ -81,7 +82,7 @@ test('handoff readiness carries only explicitly selected original prerequisite m
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`semantic selector ${locale} ${width}`,async({page},info)=>{
   const f=fixture();f.saved();const row=f.downstream();await page.setViewportSize({width,height:900});await mountBatch(page,f,locale);await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);
   await handoff(page).getByRole('button',{name:locale==='en'?'Review base':'核對基底',exact:true}).click();
-  await proof(page).getByLabel(locale==='en'?'Original batch entry':'原始批次項目',{exact:true}).selectOption('first');
+  await openProof(page);await proof(page).getByLabel(locale==='en'?'Original batch entry':'原始批次項目',{exact:true}).selectOption('first');
   expect(await page.evaluate(()=>[...document.querySelectorAll('main *')].filter(node=>node.getBoundingClientRect().right>innerWidth+1).map(node=>node.tagName))).toEqual([]);expect(await page.locator('main').innerText()).not.toMatch(/(?:ph|pmb)_[a-z_]+/);
   const out=process.env.BATC_PM_REQUIREMENT_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/semantic-${locale}-${width}.png`,fullPage:true});
 });
@@ -179,9 +180,9 @@ test('batch preparation never bypasses unrelated original source readiness check
 
 for(const native of [false,true])test(`mounted ${native?'native':'browser'} batch preserves unmet declared prerequisites without single dispatch`,async({page})=>{
   const f=fixture();f.reviews.length=0;await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);await openPmSection(page,'requirements','ui_packages');
-  await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();await openPmSection(page,'requirements','ui_handoff');await handoff(page).locator('details>summary').first().click();await reviewed(page);
+  await page.locator('[data-pm-work-packages]').getByLabel('Package',{exact:true}).selectOption({label:'Restore member access · Preparation 1'});await openPmSection(page,'requirements','ui_handoff');await handoff(page).locator('details>summary').first().click();await reviewed(page);
   await openPmSection(page,'board','ui_batches');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await start(page).getByLabel('Result condition',{exact:true}).selectOption(PROFILE);
-  f.downstream();await openPmSection(page,'requirements','ui_packages');await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Downstream implementation · Preparation 2',exact:true}).click();await openPmSection(page,'requirements','ui_handoff');await reviewed(page);
+  f.downstream();await openPmSection(page,'requirements','ui_packages');await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();await page.locator('[data-pm-work-packages]').getByLabel('Package',{exact:true}).selectOption({label:'Downstream implementation · Preparation 2'});await openPmSection(page,'requirements','ui_handoff');await reviewed(page);
   await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();await openPmSection(page,'board','ui_batches');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();const entries=start(page).locator('.pm-batch-entry');await entries.nth(1).getByText('Prerequisites in this selection',{exact:true}).click();await entries.nth(1).getByRole('checkbox').check();
   await start(page).getByLabel('Starts',{exact:true}).fill('2');await start(page).getByLabel('Reason for this request',{exact:true}).fill('Bounded dependency admission');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(await futureLocalTime(page));
   await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.entries[1].depends_on[0].condition).toEqual(f.condition);expect(f.base.state.writes).toHaveLength(0);

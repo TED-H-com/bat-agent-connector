@@ -1,7 +1,7 @@
 export const pmWorkBatchesStrings={
   en:{
     pmb_acceptance_profile:'Qualified original requirement acceptance',pmb_acceptance_help:'Requires all original package acceptance criteria and DoD, independent verification, and the responsible reviewer’s reasoned conclusions.',pmb_changed_dependency:'An upstream result condition changed. Clear and select its prerequisite again to review that exact condition.',pmb_accepted:'Original requirements accepted with complete qualified review.',pmb_assessment:'Qualified original assessment',pmb_assessment_operation:'Original assessment operation',pmb_assessment_version:'Assessment version',pmb_state_requirements_accepted:'Original requirements accepted',
-    pmb_title:'Selected engineering batch',pmb_intro:'Choose reviewed handoffs, set limits, and track their original operations.',pmb_refresh:'Refresh batch sources',pmb_draft:'New batch selection',
+    pmb_title:'Selected engineering batch',pmb_intro:'Choose reviewed handoffs, set limits, and track their original operations.',pmb_refresh:'Refresh batch sources',pmb_draft:'New batch selection',pmb_new:'New batch',pmb_record_open:'Record evidence',
     pmb_selection_help:'Review an engineering handoff and fill its instructions first. Adding it saves that exact request here; later handoff edits do not replace it.',pmb_add:'Add reviewed handoff',
     pmb_history:'Saved batch',pmb_choose:'Choose…',pmb_stale:'Workspace or lifecycle version changed. Review the current state before using its versions for a new request.',pmb_use_versions:'Use current workspace versions',
     pmb_rationale:'Reason for this request',pmb_starts:'Starts',pmb_parallel:'Parallel',pmb_retries:'Retries',pmb_deadline:'Deadline (local time)',pmb_deadline_short:'Deadline',pmb_shown:'Shown time',pmb_details:'Details',
@@ -16,7 +16,7 @@ export const pmWorkBatchesStrings={
     pmb_selection_required:'Choose readable original entries and evidence; prerequisites must exist and have no cycle.',pmb_deadline_invalid:'Choose a future deadline within the next 24 hours.',
     pmb_invalid:'The response does not match the original batch or source.',pmb_history_bound:'Source history exceeds this view’s bounded read limit.',pmb_unavailable:'Original batch sources are unavailable. Drafts remain saved; no new batch can start here.',
     pmb_not_supported:'The selected batch contract is not available for this workspace.',pmb_reading:'Reading original batch sources…',pmb_no_history:'No saved batch selected.',pmb_batch:'Batch',pmb_selected_original:'Selected original batch',
-    pmb_saved:'Original batch and result evidence',pmb_state:'Entry state',pmb_operation_status:'Parent operation',pmb_blocked_reason:'Admission or verification reason',pmb_fixed_sources:'Original sources and prerequisites',
+    pmb_saved:'Batch result',pmb_state:'Entry state',pmb_operation_status:'Parent operation',pmb_blocked_reason:'Admission or verification reason',pmb_fixed_sources:'Original sources and prerequisites',
     pmb_parent_operation:'Open parent operation and controls',pmb_child_operation:'Open original child operation',pmb_no_child:'No child operation admitted.',
     pmb_verified:'Recorded fixed revision checks passed; requirement acceptance remains unassessed.',pmb_unproven:'Recorded evidence did not prove the fixed result.',
     pmb_observation_digest:'Original observation digest',pmb_result_commit:'Verified candidate revision',pmb_source_seq:'Original integration source',pmb_verification_id:'Observed verification',pmb_result_tree:'Candidate tree',pmb_command_digest:'Required command digest',
@@ -29,7 +29,7 @@ export const pmWorkBatchesStrings={
   },
   'zh-TW':{
     pmb_acceptance_profile:'合格原始需求驗收',pmb_acceptance_help:'需要原始套件的全部驗收條件與完成定義、獨立驗證，以及負責審查人的具理由結論。',pmb_changed_dependency:'上游結果條件已變更。請取消並重新選擇前置項目，明確核對這份條件。',pmb_accepted:'原始需求已通過完整合格審查。',pmb_assessment:'合格原始評估',pmb_assessment_operation:'原始評估操作',pmb_assessment_version:'評估版本',pmb_state_requirements_accepted:'原始需求已驗收',
-    pmb_title:'選定工程批次',pmb_intro:'選入已核對的交接、設定限制，並追蹤原始操作。',pmb_refresh:'更新批次來源',pmb_draft:'新批次選擇',
+    pmb_title:'選定工程批次',pmb_intro:'選入已核對的交接、設定限制，並追蹤原始操作。',pmb_refresh:'更新批次來源',pmb_draft:'新批次選擇',pmb_new:'新增批次',pmb_record_open:'記錄結果證據',
     pmb_selection_help:'先核對工程交接並填寫執行指示。加入時會保存這份確切請求；之後修改交接不會取代已選入的內容。',pmb_add:'加入已核對的交接',
     pmb_history:'已保存批次',pmb_choose:'請選擇…',pmb_stale:'工作空間或生命週期版本已變更。請核對目前狀態，再將目前版本用於新請求。',pmb_use_versions:'使用目前工作空間版本',
     pmb_rationale:'這次請求的理由',pmb_starts:'開始上限',pmb_parallel:'並行上限',pmb_retries:'重試上限',pmb_deadline:'截止時間（本地時間）',pmb_deadline_short:'截止時間',pmb_shown:'顯示時間',pmb_details:'詳細資訊',
@@ -44,7 +44,7 @@ export const pmWorkBatchesStrings={
     pmb_selection_required:'請選擇可讀取的原始項目與證據；前置項目必須存在且不能形成循環。',pmb_deadline_invalid:'請選擇未來 24 小時內的截止時間。',
     pmb_invalid:'回應與原始批次或來源不符。',pmb_history_bound:'來源歷史超出此檢視的有界讀取限制。',pmb_unavailable:'無法讀取原始批次來源。草稿仍已保存，目前不能從這裡開始新批次。',
     pmb_not_supported:'此工作空間尚未提供選定的批次合約。',pmb_reading:'正在讀取原始批次來源…',pmb_no_history:'尚未選擇已保存批次。',pmb_batch:'批次',pmb_selected_original:'原本選定的批次',
-    pmb_saved:'原始批次與結果證據',pmb_state:'項目狀態',pmb_operation_status:'父操作',pmb_blocked_reason:'受理或驗證原因',pmb_fixed_sources:'原始來源與前置條件',
+    pmb_saved:'批次結果',pmb_state:'項目狀態',pmb_operation_status:'父操作',pmb_blocked_reason:'受理或驗證原因',pmb_fixed_sources:'原始來源與前置條件',
     pmb_parent_operation:'開啟父操作與控制',pmb_child_operation:'開啟原始子操作',pmb_no_child:'尚未受理子操作。',
     pmb_verified:'已記錄固定版本檢查通過；需求驗收仍未評估。',pmb_unproven:'已記錄的證據尚未證明固定結果。',
     pmb_observation_digest:'原始觀察摘要',pmb_result_commit:'驗證候選版本',pmb_source_seq:'原始整合來源序號',pmb_verification_id:'已觀察驗證',pmb_result_tree:'候選檔案樹',pmb_command_digest:'指定命令摘要',

@@ -2,6 +2,7 @@ export const workPackageStrings = {
   en: {
     wp_title: 'Engineering work packages', wp_intro: 'Review the adopted requirements, implementation design and proposed verification together.',
     wp_refresh: 'Refresh work packages', wp_empty: 'No readable work packages on this page.', wp_more: 'Load more packages',
+    wp_package: 'Package', wp_choose: 'Choose…', wp_plan_section: 'Plan',
     wp_partial: 'This list covers only the loaded, currently readable packages.', wp_select: 'Select a package to review its fixed sources and current checks.',
     wp_review: 'Review package', wp_loading: 'Reading the fixed package and current review checks…', wp_unavailable: 'This package is no longer readable. Refresh the list to review another package.',
     wp_invalid: 'The response does not match the selected work package.', wp_ready: 'Ready for engineering review', wp_blocked: 'Engineering review needs attention',
@@ -46,6 +47,7 @@ export const workPackageStrings = {
   'zh-TW': {
     wp_title: '工程工作包', wp_intro: '一起檢視已採用需求、實作設計與預定驗證方式。',
     wp_refresh: '重新整理工作包', wp_empty: '這一頁沒有目前可讀的工程工作包。', wp_more: '載入更多工作包',
+    wp_package: '工作包', wp_choose: '請選擇…', wp_plan_section: '規劃內容',
     wp_partial: '清單僅涵蓋已載入且目前可讀的工作包。', wp_select: '選取工作包，查看固定來源與目前檢查結果。',
     wp_review: '檢視工作包', wp_loading: '正在讀取固定工作包與目前檢查…', wp_unavailable: '這份工作包已無法讀取；重新整理清單可選取其他工作包。',
     wp_invalid: '回覆與選定的工程工作包不符。', wp_ready: '可進行工程交接審閱', wp_blocked: '工程交接仍有待處理事項',

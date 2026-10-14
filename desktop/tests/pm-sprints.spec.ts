@@ -42,7 +42,19 @@ async function boot(page:Page,locale='en') {
   },locale);
   await expect(page.locator('[data-pm-sprints]')).toBeVisible();
 }
-async function openAction(page:Page,name:string){await action(page,name).evaluate(el=>{let parent=el.parentElement;while(parent){if(parent.tagName==='DETAILS')(parent as HTMLDetailsElement).open=true;parent=parent.parentElement;}});}
+async function openAction(page:Page,name:string){
+  const node=action(page,name);
+  const openFolds=()=>node.evaluate(el=>{let parent=el.parentElement;while(parent){if(parent.tagName==='DETAILS')(parent as HTMLDetailsElement).open=true;parent=parent.parentElement;}});
+  if(await node.isVisible()){await openFolds();return;}
+  const primary=page.locator(`[data-pm-sprint-primary="${name}"]`);
+  if(await primary.count()&&await primary.isVisible())await primary.click();
+  else{
+    await page.getByRole('button',{name:/^(More actions|其他操作)$/}).click();
+    const item=page.locator(`[data-menu-key="${name}"]`);
+    if(await item.count())await item.click();else await page.locator('[data-menu-key="pm.sprint.commitments"]').click();
+  }
+  await openFolds();
+}
 const reason=async(page:Page,name:string,text='A deliberate management decision')=>{await openAction(page,name);await action(page,name).getByLabel('Reason for this decision',{exact:true}).fill(text);};
 
 test('fixed Goal, period, work and DoD share one view without fabricated completion',async({page})=>{
@@ -108,7 +120,7 @@ test('close only after elapsed period preserves unknown quality and does not cla
 });
 test('failed or mismatched read freezes mutations while preserving form text',async({page})=>{
   const f=fixture();await mount(page,f);await reason(page,'pm.sprint.cancel','Keep my text');f.state.failRead=true;
-  await page.evaluate(()=> (window as any).refreshSprint());await expect(action(page,'pm.sprint.cancel').locator('button[type=submit]')).toBeDisabled();
+  await page.evaluate(()=> (window as any).refreshSprint());await expect(page.getByLabel('Sprint',{exact:true})).toBeHidden();await expect(action(page,'pm.sprint.cancel').locator('button[type=submit]')).toBeDisabled();
   await expect(action(page,'pm.sprint.cancel').getByLabel('Reason for this decision',{exact:true})).toHaveValue('Keep my text');
   f.state.failRead=false;f.state.wrongScope=true;await page.evaluate(()=> (window as any).refreshSprint());
   await expect(action(page,'pm.sprint.cancel').locator('button[type=submit]')).toBeDisabled();expect(f.state.writes).toHaveLength(0);
@@ -158,7 +170,8 @@ test('changed adopted plan cannot silently rebind an unsent Product Goal draft a
   expect(f.state.writes[0].body.params.plan_revision_id).toBe(f.state.planId);
 });
 test('product commitment history loads exact revisions without authorizing work',async({page})=>{
-  const f=fixture();await mount(page,f);await page.getByText('Product commitments',{exact:true}).click();
+  const f=fixture();await mount(page,f);await page.getByRole('button',{name:'More actions',exact:true}).click();
+  await page.locator('[data-menu-key="pm.sprint.commitments"]').click();
   await page.getByText('Product commitment revisions',{exact:true}).click();
   await expect(page.getByText('#1 · owner',{exact:true})).toHaveCount(3);expect(f.state.writes).toHaveLength(0);
 });

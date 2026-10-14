@@ -1,5 +1,5 @@
-import {button, disclosure, emptyState, iconButton, sectionCard} from './ui/components.js';
-import {timeStamp} from './ui/stamps.js';
+import {button, disclosure, emptyState, iconButton, menu, sectionCard} from './ui/components.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 // Central Sprint management, with fixed references and the shared durable operation forms.
 import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
 export function workspaceSprints({h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps,qualitySelection=null}) {
@@ -11,8 +11,9 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   const review = button({variant: 'secondary', label: t('pm_sprint_review_fresh'), onClick: () => {if (loaded) renderEditors(true);}});
   review.hidden = true;
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_sprint_stale'));
-  const toolbar = h('div', {class: 'pm-tool-head'}, labelled('pm_sprint_choose', choose), review,
-    iconButton({icon:'refresh-cw', label:t('pm_sprint_refresh'), ...{type: 'button', onclick: () => void refresh()}}));
+  const chooseLabel = labelled('pm_sprint_choose', choose);
+  const refreshButton = iconButton({icon:'refresh-cw', label:t('pm_sprint_refresh'), ...{type: 'button', onclick: () => void refresh()}});
+  const toolbar = h('div', {class: 'pm-tool-head'}, chooseLabel, review, refreshButton);
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-sprints': ''},
     sectionCard({body: h('div', {}, toolbar, status, warning, view, editors)}));
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
@@ -71,8 +72,8 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     warning.hidden = !stale; review.hidden = !stale; review.disabled = !loaded; choose.disabled = !loaded;
   }
   function unavailable(error) {
-    loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
-    status.replaceChildren(errorBox(error));
+    loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true; toolbar.hidden = true;
+    status.replaceChildren(h('div', {class: 'pm-tool-head'}, h('div', {class: 'pm-tool-note'}, errorBox(error)), refreshButton));
   }
   const rationale = () => input('pm_sprint_reason', {multiline: true, max: 4000});
   const row = (label, contents) => h('section', {class: 'pm-brief-row'}, h('h3', {}, t(label)), h('div', {class: 'pm-brief-values'}, contents));
@@ -83,6 +84,14 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       item.assignee ? h('p', {class: 'pm-note-text'}, item.how || t('pm_sprint_how_empty')) : '',
       fold('pm_sprint_versions', h('div', {}, note('pm_sprint_unassessed'), source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
         h('p', {}, (item.requirement_ids || []).join(', ')))))) : [note('pm_sprint_no_work')]));
+  }
+  // A period inside one day is otherwise "1h ago". Step the clock so both ends stay absolute, in this year.
+  function absoluteStamp(value) {
+    const parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime())) return timeText(value, {now: 0});
+    const day = 86400000, yearStart = new Date(parsed.getFullYear(), 0, 1).getTime();
+    const now = Math.abs(parsed.getTime() - yearStart) >= day ? yearStart : parsed.getTime() + day * 2;
+    return timeText(value, {now});
   }
   function renderView() {
     view.replaceChildren();
@@ -96,7 +105,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       h('p', {class: 'pm-sprint-goal'}, data.goal.text),
       items.length ? h('ul', {class: 'pm-sprint-work'}, ...items.map(item => h('li', {'data-pm-sprint-work': item.work_item_id},
         h('a', {href: `#/item/${encodeURIComponent(item.work_item_id)}`}, title(item))))) : note('pm_sprint_no_work'),
-      h('p', {class: 'pm-sprint-period'}, timeStamp(def.starts_at), ' – ', timeStamp(def.ends_at)),
+      h('p', {class: 'pm-sprint-period'}, absoluteStamp(def.starts_at), ' – ', absoluteStamp(def.ends_at)),
       data.timebox_elapsed ? note('pm_sprint_elapsed') : null,
       fold('pm_sprint_details', h('div', {},
         h('p', {class: 'muted'}, t(def.mode === 'scrum' ? 'pm_sprint_scrum' : 'pm_sprint_personal')),
@@ -282,7 +291,8 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
         fetched = true;
       } catch (error) {if (history.isConnected) unavailable(error);} finally {reading = false;}
     });
-    content.append(history); return fold('pm_sprint_commitments', content, !artifacts.backlog);
+    content.append(history);
+    return {key: 'pm.sprint.commitments', label: t('pm_sprint_commitments'), node: content, hidden: false, locked: false};
   }
   function creationEditor() {
     const artifacts = model.artifacts, members = workspace()?.members || [], ready = artifacts.product_goal && artifacts.dod && artifacts.backlog;
@@ -313,11 +323,12 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
           h('div', {class: 'pm-time-field'}, labelled('pm_sprint_end_at', ends), h('span', {class: 'pm-local-time'}, t('pm_sprint_shown'), ' ', chosenUtc(ends)))), note('pm_sprint_period_help'),
         labelled('pm_sprint_owner', lead), h('div', {}, h('p', {}, t('pm_sprint_developers')), developers, picks.box),
         labelled('pm_sprint_master', master), labelled('pm_sprint_capacity', capacity), labelled('pm_sprint_reason', reason), note('pm_sprint_no_execution'))});
-    picks.sync(); return fold('pm_sprint_new', create.box, !model.detail || create.locked());
+    picks.sync();
+    return {key: 'pm.sprint.create', label: t('pm_sprint_new'), node: create.box, hidden: false, locked: create.locked()};
   }
   function sprintEditors() {
     const detail = model.detail, sprint = detail.sprint, def = sprint.definition, target = {workspace_id: workspaceId, sprint_id: sprint.sprint_id};
-    const holder = h('div', {class: 'pm-plans'}), preconditions = () => ({expected_version: sprint.version});
+    const sections = [], preconditions = () => ({expected_version: sprint.version});
     const currentOwner = () => owner(def), canSelect = () => can(false) && (currentOwner() || def.developers.includes(actor()))
       && ['planned', 'active'].includes(sprint.status) && !(sprint.status === 'active' && detail.timebox_elapsed);
     const items = hidden((detail.selected_items || []).map(({binding_id, assignee, how}) => ({binding_id, assignee, how}))), reason = rationale();
@@ -348,12 +359,14 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       params: values => ({items: JSON.parse(values.items || '[]'), rationale: values.rationale}), preconditions,
       permitted: canSelect, label: 'pm_sprint_save_selection', onStateChange: () => widgets.forEach(sync => sync()),
       extra: h('div', {class: 'pm-fields'}, note('pm_sprint_how_help'), items, workChoices, labelled('pm_sprint_reason', reason))});
-    widgets.forEach(sync => sync()); holder.append(fold('pm_sprint_select', selection.box, selection.locked()));
+    widgets.forEach(sync => sync());
+    sections.push({key: 'pm.sprint.select', label: t('pm_sprint_select'), node: selection.box, hidden: false, locked: selection.locked()});
     const newGoal = input('pm_sprint_goal', {multiline: true, max: 4000, value: detail.goal.text}), goalReason = rationale();
     const goalEditor = localForm({action: 'pm.sprint.goal.revise', target, fields: {goal: newGoal, rationale: goalReason}, params: values => values,
       preconditions, permitted: () => currentOwner() && sprint.status === 'planned', label: 'pm_sprint_save_sprint_goal',
       extra: h('div', {class: 'pm-fields'}, labelled('pm_sprint_goal', newGoal), labelled('pm_sprint_reason', goalReason))});
-    const goalBox = fold('pm_sprint_revise_goal', goalEditor.box, goalEditor.locked()); goalBox.hidden = sprint.status !== 'planned' && !goalEditor.locked(); holder.append(goalBox);
+    sections.push({key: 'pm.sprint.goal.revise', label: t('pm_sprint_revise_goal'), node: goalEditor.box,
+      hidden: sprint.status !== 'planned' && !goalEditor.locked(), locked: goalEditor.locked()});
     for (const action of ['start', 'close', 'cancel']) {
       const reasonField = rationale();
       const refs = hidden({}), picks = qualitySelection && action !== 'start' ? detail.selected_items.map(item => ({item,
@@ -370,15 +383,38 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
           : action === 'cancel' ? 'pm_sprint_cancel_help' : 'pm_sprint_future'), labelled('pm_sprint_reason', reasonField),
           ...(picks.length ? [refs,...picks.map(({item,picker})=>h('div',{class:'pm-fact'},h('p',{},title(item)),picker.element))] : []))});
       picks.forEach(({picker})=>picker.attach(editor));
-      const section = fold('pm_sprint_' + action, editor.box, editor.locked());
-      section.hidden = (action === 'start' ? sprint.status !== 'planned' : action === 'close' ? sprint.status !== 'active'
-        : !['planned', 'active'].includes(sprint.status)) && !editor.locked(); holder.append(section);
-    } return holder;
+      sections.push({key: `pm.sprint.${action}`, label: t('pm_sprint_' + action), node: editor.box,
+        hidden: (action === 'start' ? sprint.status !== 'planned' : action === 'close' ? sprint.status !== 'active'
+          : !['planned', 'active'].includes(sprint.status)) && !editor.locked(), locked: editor.locked()});
+    } return sections;
+  }
+  function presentActions(sections) {
+    const statusName = model.detail?.sprint.status || '';
+    const primaryKey = !model.detail ? 'pm.sprint.create' : statusName === 'planned' ? 'pm.sprint.start' : null;
+    const visible = sections.filter(section => !section.hidden);
+    const primary = visible.find(section => section.key === primaryKey) || null;
+    const rest = visible.filter(section => section !== primary);
+    const parked = h('div', {hidden: true});
+    const slot = h('div', {'data-pm-sprint-slot': ''});
+    const openLocked = visible.find(section => section.locked) || null;
+    const primaryButton = primary ? button({variant: 'primary', label: t(primary.key === 'pm.sprint.start' ? 'pm_sprint_start_open' : 'pm_sprint_plan_open'),
+      'data-pm-sprint-primary': primary.key, onClick: () => reveal(primary.key)}) : null;
+    const menuNode = rest.length ? menu({button: button({variant: 'secondary', label: t('pm_sprint_more')}),
+      items: rest.map(section => ({key: section.key, label: section.label, onSelect: () => reveal(section.key)}))}) : null;
+    function reveal(key) {
+      const shown = sections.find(section => section.key === key) || null;
+      if (primaryButton) primaryButton.hidden = Boolean(shown && primary && shown.key === primary.key);
+      slot.replaceChildren(...(shown ? [shown.node] : []));
+      for (const section of sections) if (section !== shown) parked.append(section.node);
+    }
+    editors.replaceChildren(h('div', {class: 'pm-sprint-actions'}, primaryButton, menuNode), slot, parked);
+    if (openLocked) reveal(openLocked.key);
+    else for (const section of sections) parked.append(section.node);
   }
   function renderEditors(reviewBaselines = false) {
-    stale = false; dirty = false; forms = []; reviewing = reviewBaselines; editors.replaceChildren();
-    if (model.detail) editors.append(sprintEditors());
-    editors.append(creationEditor(), artifactEditors()); reviewing = false; update();
+    stale = false; dirty = false; forms = []; reviewing = reviewBaselines;
+    presentActions([...(model.detail ? sprintEditors() : []), creationEditor(), artifactEditors()]);
+    reviewing = false; update();
   }
   async function pages(suffix, property) {
     let cursor = 0, records = [];
@@ -426,6 +462,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
         selectedId, detail?.sprint.version, detail?.timebox_elapsed, workspace()?.version]);
       const changed = signature && signature !== nextSignature;
       titles = names; model = {artifacts, accepted, bindings, sprints, detail, fixed}; loaded = true; editors.hidden = false;
+      toolbar.hidden = false; if (!toolbar.contains(refreshButton)) toolbar.append(refreshButton);
       choose.replaceChildren(...(sprints.length ? sprints.map(item => h('option', {value: item.sprint_id}, `${item.definition.title} · ${t('pm_sprint_' + item.status)}`))
         : [h('option', {value: ''}, t('pm_sprint_empty'))])); choose.value = selectedId; renderView();
       if (force || !signature || changed && !dirty && !forms.some(editor => editor.locked())) renderEditors();

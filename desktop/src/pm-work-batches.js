@@ -33,10 +33,15 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
   const stale=text('pmb_stale');stale.hidden=true;
   const rebase=button({variant:'secondary', label:t('pmb_use_versions'), onClick:()=>{if(ready&&!start.locked()){start.set('_baseline',JSON.stringify(currentPre()));update();}}});
   rebase.hidden=true;
-  const draftDetails=h('details',{'data-batch-draft':'',open:true},h('summary',{},t('pmb_draft')),add,stale,rebase,startView);
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('pmb_refresh'), onClick:()=>void refresh()});
+  const draftDetails=h('details',{'data-batch-draft':''},h('summary',{},t('pmb_draft')),add,stale,rebase,startView);
+  const newBatch=button({variant:'secondary', label:t('pmb_new'), onClick:()=>showDraft(true)});
+  const historyLabel=labelled('pmb_history',history);
+  const head=h('div',{class:'pm-tool-head'},historyLabel,newBatch,refreshButton);
   const element=h('section',{class:'panel pm-work-batches','data-pm-work-batches':''},sectionCard({body:h('div',{},
-    h('div',{class:'pm-tool-head'},iconButton({icon:'refresh-cw', label:t('pmb_refresh'), onClick:()=>void refresh()})),status,
-    disclosure({element:draftDetails}),labelled('pmb_history',history),facts,proofView)}));
+    head,status,disclosure({element:draftDetails}),facts,proofView)}));
+  function showDraft(open){draftDetails.hidden=!open;draftDetails.open=open;newBatch.hidden=open||!ready;}
+  showDraft(false);
   const cap=()=>caps()?.features?.pm_workspaces?.work_batches;
   const supported=()=>cap()?.version===1&&cap()?.actions?.includes(START)&&cap()?.profiles?.includes(profile.profile);
   const valid=ticket=>{try{alive();return ticket===serial;}catch{return false;}};
@@ -66,7 +71,8 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
   function clearSources(){sourceTicket++;labels.clear();packages.clear();qualityReviews=[];sourceReady=false;proofReady=false;evidenceFiltered=false;evidenceNotice.hidden=true;receipts=[];observations=[];entriesView.replaceChildren();entrySignature='';facts.replaceChildren();history.replaceChildren();startView.hidden=true;proofView.hidden=true;
     if(proof){proofChoices ||= Object.fromEntries(['entry','receipt','observation','assessment'].map(name=>[name,proof.fields[name].value]));for(const name of ['entry','receipt','observation','assessment'])proof.fields[name].replaceChildren();}}
   function withdraw(){serial++;ready=false;context=null;batch=null;clearSources();status.replaceChildren();update();}
-  function failure(err){withdraw();status.replaceChildren(text('pmb_unavailable'),errorBox(err.code==='PM_REQUIREMENT_QUALITY_INVALID'?error():err));}
+  function failure(err){withdraw();showDraft(false);newBatch.hidden=true;historyLabel.hidden=true;facts.hidden=true;proofView.hidden=true;head.hidden=true;
+    status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},text('pmb_unavailable'),errorBox(err.code==='PM_REQUIREMENT_QUALITY_INVALID'?error():err)),refreshButton));}
   const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err);throw err;}};
   async function readContext(){
     const [w,l]=await Promise.all([api('GET',base),api('GET',`${base}/lifecycle`)]);
@@ -235,7 +241,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
         extra:h('div',{class:'pm-fields'},text('pmb_evidence_help'),evidenceNotice,labelled('pmb_evidence_entry',entry),labelled('pmb_delivery',receipt),labelled('pmb_observation',observation),labelled('pmb_assessment',assessment),labelled('pmb_rationale',rationale),h('div',{class:'actions'},rebase))});
       proofBaseline.version=JSON.parse(version.value);entry.addEventListener('change',()=>{syncProofOptions();update();});proof.box.addEventListener('input',update);proof.box.addEventListener('change',update);
     }
-    syncProofOptions();proofView.replaceChildren(h('details',{open:true},h('summary',{},t('pmb_evidence')),proof.box));
+    syncProofOptions();proofView.replaceChildren(h('details',{'data-batch-evidence':'',open:proof.locked()||null},h('summary',{},t('pmb_record_open')),proof.box));
   }
   async function refresh(){
     const ticket=++serial;ready=false;batch=null;clearSources();status.replaceChildren(text('pmb_reading'));update();
@@ -254,7 +260,9 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
       if(batch)await bindProof(ticket);if(!valid(ticket))return;
       history.replaceChildren(h('option',{value:''},t('pmb_choose')),...historyData.rows.map(row=>h('option',{value:row.batch_id},`${t('pmb_batch')} ${row.sequence} · ${operationStatusLabel(row.operation_status)}`)));
       if(selected&&!historyData.rows.some(row=>row.batch_id===selected))history.append(h('option',{value:selected},t('pmb_selected_original')));history.value=selected;
-      ready=true;startView.hidden=false;proofView.hidden=!batch;renderEntries();renderBatch();status.replaceChildren();if(historyData.filtered)status.append(text('pmb_filtered'));update();
+      ready=true;historyLabel.hidden=false;facts.hidden=false;head.hidden=false;
+      if(!head.contains(refreshButton))head.replaceChildren(historyLabel,newBatch,refreshButton);
+      showDraft(!batch||Boolean(start?.locked()));startView.hidden=false;proofView.hidden=!batch;renderEntries();renderBatch();status.replaceChildren();if(historyData.filtered)status.append(text('pmb_filtered'));update();
     }catch(err){if(valid(ticket))failure(err);}
   }
   update();return {element,refresh,withdraw,update};
