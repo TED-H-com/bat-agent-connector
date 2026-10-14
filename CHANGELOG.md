@@ -8,6 +8,14 @@
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 
+- First-run BAT setup accepts a masked Connection URL paste, confirms the address
+  and abbreviated fingerprint without exposing credentials, and validates fields
+  before staging. Only proven admission refusals release the request; uncertain
+  replies retain its original key. English and zh-TW errors and connection terms
+  are readable, with technical facts in Details. Connected actions stay together,
+  completed steps collapse with even spacing, and one Settings Refresh preserves
+  page-only credentials and drafts. IME Escape keeps inspectors and menus open.
+
 - Reserve the returning Issues inspector before its reads finish, so related
   chips do not disappear under the pointer when the side panel arrives.
 

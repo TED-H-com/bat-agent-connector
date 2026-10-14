@@ -7247,29 +7247,101 @@ var STRINGS = {
 		repair_unavailable: "目前無法派出這筆修復工作。請重新查回證據。",
 		repair_dispatched: "這筆修復工作已有派工紀錄，可從原操作查回結果。",
 		repair_dispatch_help: "修復指示取自這筆工作的固定證據。選取儲存庫與分支、核對版本後，再開始新的管理工作。",
+		setup_connection_url: "貼上 BAT 連線網址",
+		setup_connection_url_hint: "BAT：設定 → 遠端 → 遠端存取 → 連線網址 → 複製；無介面模式請複製啟動訊息的 connect: 行。",
+		setup_invalid_connection_url: "這不是 BAT 連線網址",
+		setup_connection_url_read: "✓ 已從 BAT 讀取：{host} · 指紋 {fingerprint} · 權杖已備妥",
+		setup_operation_receipt: "設定操作 · {status}",
+		setup_operation_done: "完成",
+		setup_count_host_one: "台主機",
+		setup_count_host_many: "台主機",
+		setup_count_repository_one: "個儲存庫",
+		setup_count_repository_many: "個儲存庫",
+		setup_refused: "設定未儲存，請修正標示的欄位。",
+		setup_enter_manually: "手動輸入",
+		setup_host_hint: "英文字母、數字、-、_ 或 .，例如 local",
+		setup_endpoint_hint: "BAT「遠端存取」的「連線網址」主機與連接埠，不含權杖或查詢參數。",
+		setup_fingerprint_hint: "BAT「遠端存取」的「Certificate fingerprint (SHA-256)」。",
+		setup_token_hint: "BAT「遠端存取」的「連線 Token」。",
+		setup_profile_hint: "BAT 工作區的設定檔代號；一般使用 default。",
+		setup_paste_token_again: "請重新貼上 BAT 連線網址或權杖；權杖不會保存為草稿。",
+		setup_secret_staged: "權杖已暫存於 Connector，這一頁可在一小時內重試。重新載入後需再貼上。",
+		setup_required: "請填寫此欄位。",
+		setup_invalid_fingerprint: "請輸入 64 個十六進位字元的 SHA-256 憑證指紋，可含冒號。",
+		setup_retained_request: "原設定請求仍保留。請先查回這筆請求，再進行其他變更。",
+		setup_view_sessions: "查看工作階段",
+		error_generic: "無法完成此要求，請查看詳細資料。",
+		desktop_status_error: "無法使用本機 Connector 連線，請檢查設定。",
+		error_code_ARTIFACT_TOO_LARGE: "檔案過大，請選擇較小的檔案。",
+		connection_actor: "帳號識別碼",
+		connection_scopes: "授權範圍代碼",
+		connection_access: "權限",
+		connection_other_access: "其他授權",
+		error_code_NOT_MANAGED: "此安裝未提供引導設定。",
+		error_code_FORBIDDEN: "目前帳號沒有這項操作的權限。",
+		error_code_INVALID_CONFIGURATION: "設定無效，請核對連線、憑證指紋與受管目錄。",
+		error_code_INVALID_HOST: "請輸入含主機與連接埠的 wss:// 位址，不含權杖或查詢參數。",
+		error_code_INVALID_TARGET: "主機代號須以英文字母或數字開頭，只能含英數字、-、_ 或 .。",
+		error_code_INVALID_PARAMS: "輸入內容不符合要求，請檢查欄位。",
+		error_code_INVALID_SECRET: "權杖無效或已過期，請重新貼上有效權杖。",
+		error_code_SECRET_STAGING_FULL: "暫存權杖已達上限，請先完成或檢查既有設定。",
+		error_code_PROFILE_UNAVAILABLE: "連線設定檔無法使用，請改用連線網址或手動輸入。",
+		error_code_CREDENTIAL_REQUIRED: "請貼上連線網址或權杖。",
+		error_code_HOST_IDENTITY_CHANGED: "此主機的連線設定已變更，請使用新的主機代號。",
+		error_code_MANAGED_ROOT_REQUIRED: "請指定供新受管工作使用的目錄。",
+		error_code_UNKNOWN_HOST: "找不到已設定的主機，請重新選取。",
+		error_code_GITHUB_ENDPOINT_UNSUPPORTED: "引導設定僅支援 github.com。",
+		error_code_REPOSITORY_BINDING_CHANGED: "儲存庫連結已變更，請重新核對工作區與遠端位址。",
+		error_code_EXISTING_INTEGRATION: "已有整合設定，請保留既有政策。",
+		error_code_PRECONDITION_REQUIRED: "請重新整理設定後再試。",
+		error_code_SETUP_BUSY: "Connector 仍有工作執行中，請等工作結束後再試。",
+		error_code_CONFIGURATION_CHANGED: "設定已在別處變更，請重新整理後再試。",
+		error_code_PROFILE_NOT_FOUND: "BAT 未回報此設定檔，請核對設定檔代號。",
+		error_code_SSH_NOT_VERIFIED: "請先驗證 SSH 別名與主機金鑰。",
+		error_code_WORKSPACE_NOT_FOUND: "BAT 未回報此工作區，請重新選取。",
+		error_code_REPOSITORY_NOT_VERIFIED: "GitHub 無法驗證儲存庫存取權，請核對帳號授權。",
+		error_code_SETUP_IDENTITY_CHANGED: "原設定帳號無法使用，請恢復原帳號後再查回。",
+		error_code_SETUP_PROBE_FAILED: "連線驗證失敗，請核對憑證指紋、登入狀態與連線位址。",
+		error_code_NOT_FOUND: "找不到這筆資料，請重新整理。",
+		error_code_VERSION_CONFLICT: "資料版本已變更，請重新整理後再試。",
+		error_code_SOURCE_TOO_LARGE: "來源資料過大，請縮小範圍後再試。",
+		error_code_NETWORK_ERROR: "連線中斷，請檢查網路後查回原請求。",
+		error_code_TIMEOUT: "連線逾時，請查回原請求。",
+		error_code_CENTRAL_OFFLINE: "Connector 離線，請恢復連線後再試。",
+		error_code_UNAUTHORIZED: "請先提供有效的 API 權杖。",
+		connection_scope_observe: "檢視",
+		connection_scope_operate: "操作",
+		connection_scope_manage: "管理",
+		connection_scope_start: "啟動",
+		connection_scope_approve: "核准",
+		connection_scope_cleanup: "整理",
+		connection_scope_cleanup_discard: "捨棄內容",
+		connection_scope_deploy: "部署",
+		connection_scope_integrate: "整合",
+		connection_scope_merge: "合併",
 		setup_title: "準備開始工作",
 		setup_unsaved: "有未儲存設定",
 		setup_resume_help: "可稍後繼續。非機密草稿會保留；帳號授權與主機信任仍須由你確認。",
 		setup_host_title: "1. 連線至 BAT",
-		setup_host_help: "選取已有的 BAT profile，或填入要連線的主機。先確認主機，再選擇可執行的工作。",
-		setup_profile: "BAT 連線 profile",
-		setup_manual_profile: "手動設定主機",
-		setup_host_name: "主機名稱",
+		setup_host_help: "選取已有的 BAT 連線設定檔，或填入要連線的主機。先確認主機，再選擇可執行的工作。",
+		setup_profile: "BAT 連線設定檔",
+		setup_manual_profile: "手動輸入",
+		setup_host_name: "主機代號",
 		setup_host_url: "BAT 連線位址",
-		setup_fingerprint: "主機憑證 SHA-256 指紋",
-		setup_workspace_profile: "Workspace profile ID",
-		setup_bat_token: "BAT 連線 token（使用 profile 時可留白）",
+		setup_fingerprint: "憑證指紋（SHA-256）",
+		setup_workspace_profile: "BAT 工作區設定檔代號",
+		setup_bat_token: "BAT 連線權杖（使用設定檔時可留白）",
 		setup_trust_help: "請與主機擁有者核對指紋。儲存前會驗證連線；不會跳過主機信任。",
-		setup_managed_work: "允許管理工作",
-		setup_allow_messages: "允許操作 Connector 管理的對話",
-		setup_allow_start: "允許在獨立管理工作區開工",
-		setup_managed_roots: "遠端管理目錄（多個目錄用分號分隔）",
-		setup_ssh_alias: "此電腦已設定的 SSH alias",
-		setup_shared_clone: "允許共享 clone 的 Git worktree",
-		setup_shared_clone_help: "新 worktree 會與來源 clone 共用 Git metadata。只有明確開啟才允許；人工 session 和工作目錄仍保持唯讀。",
+		setup_managed_work: "允許受管工作",
+		setup_allow_messages: "允許操作受管工作階段",
+		setup_allow_start: "允許在獨立受管工作區開工",
+		setup_managed_roots: "受管工作目錄（多個目錄用分號分隔）",
+		setup_ssh_alias: "此電腦已設定的 SSH 別名",
+		setup_shared_clone: "允許共用 Git 複本的獨立工作目錄",
+		setup_shared_clone_help: "新的獨立工作目錄會與來源複本共用 Git 中繼資料。只有明確開啟才允許；人工工作階段和工作目錄仍保持唯讀。",
 		setup_verification_title: "3. 設定驗證命令",
-		setup_verification_help: "依 Task Service 的專案名稱設定明確命令。儲存只變更設定，不執行命令；其他專案的命令會保留。逾時秒數套用到所有專案。",
-		setup_verification_project: "Task Service 專案名稱",
+		setup_verification_help: "依任務服務的專案名稱設定明確命令。儲存只變更設定，不執行命令；其他專案的命令會保留。逾時秒數套用到所有專案。",
+		setup_verification_project: "任務服務專案名稱",
 		setup_verification_executable: "執行程式",
 		setup_verification_arguments: "參數（每行一個）",
 		setup_verification_timeout: "逾時秒數（1–3600）",
@@ -7280,22 +7352,22 @@ var STRINGS = {
 		setup_verification_changed: "中央設定已變動；目前草稿保留。重新載入已存驗證設定後，再檢視並儲存。",
 		setup_verification_invalid: "請輸入有效專案、執行程式、最多 63 個非空參數，以及 1–3600 秒逾時。",
 		setup_scope_required: "目前中央身分未獲准修改此設定。",
-		setup_roots_help: "指定專供新管理工作使用的遠端目錄；人工專案保持唯讀。Git 同步與成果操作使用你選擇的 SSH 連線。",
+		setup_roots_help: "指定專供新受管工作使用的遠端目錄；人工專案保持唯讀。Git 同步與成果操作使用你選擇的 SSH 連線。",
 		setup_save_host: "驗證並儲存主機",
 		setup_repository_title: "2. 連結 GitHub 儲存庫",
-		setup_repository_help: "將儲存庫明確連結到選定主機與 workspace。驗證只讀取資料，不會建立 PR 或推送。",
+		setup_repository_help: "將儲存庫明確連結到選定主機與工作區。驗證只讀取資料，不會建立 PR 或推送。",
 		setup_repository: "GitHub 儲存庫",
-		setup_workspace_id: "BAT workspace ID",
-		setup_remote_url: "Git remote 位址",
-		setup_github_token: "GitHub token（已有有效授權時可留白）",
+		setup_workspace_id: "BAT 工作區代號",
+		setup_remote_url: "Git 遠端位址",
+		setup_github_token: "GitHub 權杖（已有有效授權時可留白）",
 		setup_allow_integrate: "允許整合成果到 PR",
 		setup_allow_merge: "允許合併 PR",
 		setup_allow_pr_update: "允許更新 PR 資料",
-		setup_find_workspaces: "讀取這台主機的 workspace",
+		setup_find_workspaces: "讀取主機工作區",
 		setup_save_repository: "驗證並連結儲存庫",
 		setup_refresh: "重新檢查設定",
-		setup_recover: "查回原設定請求",
-		setup_next_change: "檢視下一筆設定",
+		setup_recover: "查回請求",
+		setup_next_change: "修改設定",
 		setup_open_projects: "開啟專案，開始派工",
 		setup_operation: "查看設定操作",
 		setup_uncertain: "原設定請求尚未確認。查回同一筆請求後再繼續。",
@@ -7304,7 +7376,7 @@ var STRINGS = {
 		setup_connected: "已連線",
 		setup_unverified: "等待連線驗證",
 		setup_busy: "目前仍有工作或操作；設定會等安全時機再變更。",
-		setup_profiles_unavailable: "尚無可匯入的 BAT profile，或其授權受系統保護。可在下方手動設定。",
+		setup_profiles_unavailable: "無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。",
 		managed_join_existing: "進階：加入既有中央",
 		managed_join_help: "輸入另一個中央的位址與預期帳號，再於原生視窗確認。設定後須另行加入該中央的憑證；此電腦原有的背景工作會繼續運作。",
 		managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
@@ -8140,14 +8212,14 @@ var STRINGS = {
 		desktop_source_macos_keychain: "macOS 鑰匙圈",
 		desktop_enrollment_help: "在系統安全輸入框中輸入 Connector API 權杖。驗證身分後，才會儲存至此帳戶的保護儲存區，供下次使用。",
 		desktop_enrollment_unsupported: "此平台尚未支援保護儲存與憑證輸入。可使用啟動時提供的記憶體憑證；不會儲存至磁碟。",
-		desktop_forget_help: "只移除此電腦的已儲存憑證並中斷連線；不會撤銷中央 token。草稿與原操作識別仍保留。",
+		desktop_forget_help: "只移除此電腦的已儲存憑證並中斷連線；不會撤銷 Connector 權杖。草稿與原操作識別仍保留。",
 		desktop_forgotten: "已移除本機憑證並中斷連線。",
 		desktop_reloaded: "已重新載入設定。請驗證連線；原草稿仍保留。",
 		desktop_disconnected: "已中斷連線；中央工作仍繼續。",
 		desktop_enrollment_cancelled: "已取消憑證輸入，保留原連線。",
 		desktop_connection: "桌面中央連線",
 		desktop_local: "本機功能",
-		desktop_connect_needed: "請連到已配置的中央 Connector。",
+		desktop_connect_needed: "請連到已配置的 Connector。",
 		desktop_polling: "已連線 · 每秒更新",
 		desktop_config_needed: "尚未配置中央連線。",
 		desktop_credential_missing: "尚未提供可用的本機憑證。",
@@ -8679,16 +8751,16 @@ var STRINGS = {
 		created: "建立時間",
 		error: "錯誤",
 		reason: "原因",
-		token: "API token",
+		token: "API 權杖",
 		token_help: "以 batc api-token issue 發行；只存在這台瀏覽器。",
 		connect: "連線",
 		remember: "在這台電腦記住",
 		disconnect: "中斷",
 		connected_as: "已連線：{actor}（{scopes}）",
-		need_token: "請先在「連線」輸入 API token。",
+		need_token: "請先在「連線」輸入 API 權杖。",
 		unreachable_hosts: "主機異常",
 		loading: "載入中…",
-		forbidden_scope: "你的 token 沒有這個權限。",
+		forbidden_scope: "目前帳號沒有這項操作的權限。",
 		queue_behind: "排在目前這一輪之後",
 		no_messages: "還沒有訊息。",
 		update_pr_results: "更新 PR 成果",
@@ -8798,17 +8870,89 @@ var STRINGS = {
 		repair_unavailable: "This repair cannot be dispatched yet. Read its current evidence again.",
 		repair_dispatched: "This repair already has a dispatch record. Check the original operation for its result.",
 		repair_dispatch_help: "Repair instructions come from this work item's fixed evidence. Select a repository and branch, review the version, then start new managed work.",
+		setup_connection_url: "Paste BAT connection URL",
+		setup_connection_url_hint: "BAT: Settings → Remote → Remote Access → Connection URL → Copy; headless: copy the startup banner’s connect: line.",
+		setup_invalid_connection_url: "This is not a BAT connection URL",
+		setup_connection_url_read: "✓ Read from BAT: {host} · fingerprint {fingerprint} · token ready",
+		setup_operation_receipt: "Setup operation · {status}",
+		setup_operation_done: "Done",
+		setup_count_host_one: "host",
+		setup_count_host_many: "hosts",
+		setup_count_repository_one: "repository",
+		setup_count_repository_many: "repositories",
+		setup_refused: "Setup was not saved. Correct the marked field.",
+		setup_enter_manually: "Enter manually",
+		setup_host_hint: "Letters, numbers, -, _ or .; for example local",
+		setup_endpoint_hint: "Host and port from BAT’s Remote Access → Connection URL, without credentials or query parameters.",
+		setup_fingerprint_hint: "BAT Remote Access → “Certificate fingerprint (SHA-256)”.",
+		setup_token_hint: "BAT Remote Access → “Connection Token”.",
+		setup_profile_hint: "BAT workspace profile ID; usually default.",
+		setup_paste_token_again: "Paste the connection URL or token again; credentials are never saved as drafts.",
+		setup_secret_staged: "Token staged in Connector; this page can retry within one hour. Paste it again after reloading.",
+		setup_required: "Fill in this field.",
+		setup_invalid_fingerprint: "Enter a SHA-256 fingerprint with 64 hexadecimal characters; colons are allowed.",
+		setup_retained_request: "The original request is kept. Check it before making another change.",
+		setup_view_sessions: "View sessions",
+		error_generic: "This request could not be completed. Check Details.",
+		desktop_status_error: "The local Connector connection is unavailable. Check its settings.",
+		error_code_ARTIFACT_TOO_LARGE: "This file is too large. Choose a smaller file.",
+		connection_actor: "Actor ID",
+		connection_scopes: "Scope codes",
+		connection_access: "Access",
+		connection_other_access: "Other access",
+		error_code_NOT_MANAGED: "Guided setup is unavailable for this installation.",
+		error_code_FORBIDDEN: "Your account does not have the required scope.",
+		error_code_INVALID_CONFIGURATION: "Check the connection, certificate fingerprint and managed directories.",
+		error_code_INVALID_HOST: "Enter a wss:// host and port without credentials or query parameters.",
+		error_code_INVALID_TARGET: "Host ID must start with a letter or number and contain only letters, numbers, -, _ or .",
+		error_code_INVALID_PARAMS: "Check the required fields and their format.",
+		error_code_INVALID_SECRET: "The credential is invalid or expired. Paste a valid credential again.",
+		error_code_SECRET_STAGING_FULL: "Too many credentials are staged. Finish or check existing setup first.",
+		error_code_PROFILE_UNAVAILABLE: "This connection profile is unavailable. Paste a connection URL or enter it manually.",
+		error_code_CREDENTIAL_REQUIRED: "Paste a connection URL or credential.",
+		error_code_HOST_IDENTITY_CHANGED: "Use a new host ID for changed connection or trust settings.",
+		error_code_MANAGED_ROOT_REQUIRED: "Choose a directory for new managed work.",
+		error_code_UNKNOWN_HOST: "Choose a configured host.",
+		error_code_GITHUB_ENDPOINT_UNSUPPORTED: "Guided setup supports github.com only.",
+		error_code_REPOSITORY_BINDING_CHANGED: "Review the repository workspace and remote; its binding changed.",
+		error_code_EXISTING_INTEGRATION: "Preserve the existing integration policy.",
+		error_code_PRECONDITION_REQUIRED: "Refresh configuration before trying again.",
+		error_code_SETUP_BUSY: "Wait for Connector work to settle before trying again.",
+		error_code_CONFIGURATION_CHANGED: "Configuration changed elsewhere. Refresh before trying again.",
+		error_code_PROFILE_NOT_FOUND: "BAT did not report this profile. Check its ID.",
+		error_code_SSH_NOT_VERIFIED: "Verify the SSH alias and host key first.",
+		error_code_WORKSPACE_NOT_FOUND: "BAT did not report this workspace. Choose it again.",
+		error_code_REPOSITORY_NOT_VERIFIED: "Check GitHub authorization for this repository.",
+		error_code_SETUP_IDENTITY_CHANGED: "Restore the original setup identity before checking the request.",
+		error_code_SETUP_PROBE_FAILED: "Check the certificate fingerprint, sign-in and address; connection verification failed.",
+		error_code_NOT_FOUND: "This record is unavailable. Refresh the view.",
+		error_code_VERSION_CONFLICT: "The record changed. Refresh before trying again.",
+		error_code_SOURCE_TOO_LARGE: "This source is too large. Narrow the selection and try again.",
+		error_code_NETWORK_ERROR: "Connection failed. Check your network and the original request.",
+		error_code_TIMEOUT: "The connection timed out. Check the original request.",
+		error_code_CENTRAL_OFFLINE: "Reconnect to Connector before trying again.",
+		error_code_UNAUTHORIZED: "Provide a valid API token first.",
+		connection_scope_observe: "View",
+		connection_scope_operate: "Operate",
+		connection_scope_manage: "Manage",
+		connection_scope_start: "Start",
+		connection_scope_approve: "Approve",
+		connection_scope_cleanup: "Cleanup",
+		connection_scope_cleanup_discard: "Discard content",
+		connection_scope_deploy: "Deploy",
+		connection_scope_integrate: "Integrate",
+		connection_scope_merge: "Merge",
 		setup_title: "Get ready to work",
 		setup_unsaved: "Unsaved settings",
 		setup_resume_help: "Continue later without losing non-secret drafts. You still confirm account authorization and host trust.",
 		setup_host_title: "1. Connect BAT",
-		setup_host_help: "Choose an existing BAT profile or enter a host. Verify the host, then choose which work it may run.",
+		setup_host_help: "Choose an existing BAT connection profile or enter a host. Verify the host, then choose which work it may run.",
 		setup_profile: "BAT connection profile",
-		setup_manual_profile: "Configure a host manually",
-		setup_host_name: "Host name",
+		setup_manual_profile: "Enter manually",
+		setup_host_name: "Host ID",
 		setup_host_url: "BAT endpoint",
-		setup_fingerprint: "Host certificate SHA-256 fingerprint",
-		setup_workspace_profile: "Workspace profile ID",
+		setup_fingerprint: "Certificate fingerprint (SHA-256)",
+		setup_workspace_profile: "BAT workspace profile ID",
 		setup_bat_token: "BAT connection token (optional with a profile)",
 		setup_trust_help: "Confirm the fingerprint with the host owner. The connection is verified before saving; host trust is never bypassed.",
 		setup_managed_work: "Allow managed work",
@@ -8845,17 +8989,17 @@ var STRINGS = {
 		setup_find_workspaces: "Read this host's workspaces",
 		setup_save_repository: "Verify and bind repository",
 		setup_refresh: "Recheck configuration",
-		setup_recover: "Recover original setup request",
-		setup_next_change: "Review another configuration change",
+		setup_recover: "Check request",
+		setup_next_change: "Change settings",
 		setup_open_projects: "Open projects and start work",
 		setup_operation: "View setup operation",
 		setup_uncertain: "The original configuration request is unconfirmed. Recover that same request before continuing.",
 		setup_receipt_mismatch: "The receipt does not match the original configuration request.",
-		setup_counts: "Configured: {hosts} hosts, {repositories} repositories",
+		setup_counts: "Configured: {hosts} {hostLabel}, {repositories} {repositoryLabel}",
 		setup_connected: "Connected",
 		setup_unverified: "Awaiting connection verification",
 		setup_busy: "Work or operations are still active; configuration changes wait for a safe point.",
-		setup_profiles_unavailable: "No BAT profile can be imported, or its authorization is protected by the operating system. Configure the connection below.",
+		setup_profiles_unavailable: "BAT connection profiles could not be read. Paste a connection URL or enter the values manually.",
 		managed_join_existing: "Advanced: join an existing central",
 		managed_join_help: "Enter another central address and expected account, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
 		managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
@@ -9692,14 +9836,14 @@ var STRINGS = {
 		desktop_source_macos_keychain: "macOS Keychain",
 		desktop_enrollment_help: "Enter the Connector API token in the system’s secure dialog. After identity verification, it is saved to this account’s protected storage for the next login.",
 		desktop_enrollment_unsupported: "Protected storage and credential entry are not available on this platform yet. A launch credential can be used in memory; it is never saved to disk.",
-		desktop_forget_help: "Removes this computer’s saved credential and disconnects; it does not revoke the central token. Drafts and original operation IDs stay saved.",
+		desktop_forget_help: "Removes this computer’s saved credential and disconnects; it does not revoke the Connector token. Drafts and original operation IDs stay saved.",
 		desktop_forgotten: "Saved credential removed and disconnected.",
 		desktop_reloaded: "Configuration reloaded. Verify the connection to continue; existing drafts stay saved.",
 		desktop_disconnected: "Disconnected. Central work continues.",
 		desktop_enrollment_cancelled: "Credential entry cancelled. The existing connection is unchanged.",
 		desktop_connection: "Desktop central connection",
 		desktop_local: "Local capabilities",
-		desktop_connect_needed: "Connect to the configured central Connector.",
+		desktop_connect_needed: "Connect to the configured Connector.",
 		desktop_polling: "connected · updates every second",
 		desktop_config_needed: "Central connection is not configured.",
 		desktop_credential_missing: "No native credential is available yet.",
@@ -10240,7 +10384,7 @@ var STRINGS = {
 		need_token: "Enter an API token under Connection first.",
 		unreachable_hosts: "Host problems",
 		loading: "Loading…",
-		forbidden_scope: "Your token lacks this scope.",
+		forbidden_scope: "Your account does not have the required scope.",
 		queue_behind: "Queue behind the running turn",
 		no_messages: "No messages yet.",
 		update_pr_results: "Update PR results",
@@ -11070,7 +11214,7 @@ function menu({ button: trigger, items }) {
 		if (!root.contains(event.target)) close(false);
 	}
 	function keys(event) {
-		if (event.key === "Escape") {
+		if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
 			event.preventDefault();
 			event.stopPropagation();
 			close();
@@ -11173,7 +11317,7 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 	}
 	function keys(event) {
 		if (dock && (root.hidden || media.matches)) return;
-		if (event.key === "Escape") {
+		if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
 			if (!root.contains(event.target) && event.target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])")) return;
 			event.preventDefault();
 			close();
@@ -11529,7 +11673,11 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	toggle.onclick = () => scrim.hidden ? openDrawer() : closeDrawer();
 	function keydown(event) {
 		if (scrim.hidden) return;
-		if (event.key === "Escape") {
+		if (event.key === "Escape" && (event.isComposing || event.keyCode === 229)) {
+			event.stopPropagation();
+			return;
+		}
+		if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
 			event.preventDefault();
 			closeDrawer();
 		} else trapFocus(aside, event);
@@ -11537,7 +11685,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 	function resize() {
 		if (media.matches) closeDrawer(false);
 	}
-	document.addEventListener("keydown", keydown);
+	document.addEventListener("keydown", keydown, true);
 	media.addEventListener("change", resize);
 	aside.addEventListener("click", (event) => {
 		if (event.target.closest("a, [data-pm-view]") && !scrim.hidden) {
@@ -11851,7 +11999,7 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			menus.forEach((control) => control.dispose());
 			tools.dispose();
 			closeDrawer(false);
-			document.removeEventListener("keydown", keydown);
+			document.removeEventListener("keydown", keydown, true);
 			media.removeEventListener("change", resize);
 			scrim.remove();
 			top.append(document.getElementById("live"));
@@ -40925,13 +41073,55 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 }
 //#endregion
 //#region src/managed-setup.js
-function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, onConfigured, caps }) {
+function normalizeSetupFingerprint(value) {
+	const normalized = value.trim().toUpperCase().replace(/^SHA256:/, "").replace(/[: ]/g, "");
+	return /^[0-9A-F]{64}$/.test(normalized) ? normalized : null;
+}
+var explicitPort = (value) => value.replace(/^wss?:\/\//i, "").split(/[/?#]/, 1)[0].match(/:(\d+)$/)?.[1];
+function parseBatConnectionUrl(value) {
+	try {
+		const raw = value.trim();
+		if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) && !/^wss?:\/\//i.test(raw)) return null;
+		const url = new URL(/^wss?:\/\//i.test(raw) ? raw : `wss://${raw}`);
+		const token = url.searchParams.get("token"), fingerprint = normalizeSetupFingerprint(url.searchParams.get("fp") || "");
+		const port = Number(explicitPort(raw) || 9876);
+		if (!["wss:", "ws:"].includes(url.protocol) || !url.hostname || url.username || url.password || !token || !fingerprint || !Number.isInteger(port) || port < 1 || port > 65535) return null;
+		return {
+			endpoint: `wss://${url.hostname}:${port}`,
+			fingerprint,
+			token,
+			loopback: [
+				"127.0.0.1",
+				"[::1]",
+				"localhost"
+			].includes(url.hostname.toLowerCase())
+		};
+	} catch {
+		return null;
+	}
+}
+function validSetupEndpoint(value) {
+	try {
+		const url = new URL(value);
+		return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) && url.protocol === "wss:" && !!url.hostname && Number(explicitPort(value)) > 0 && !url.username && !url.password && !value.includes("?") && !value.includes("#") && /^wss:\/\/[^/]+\/?$/i.test(value);
+	} catch {
+		return false;
+	}
+}
+var validSetupHostId = (value) => /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/.test(value);
+function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButton, onConfigured, caps }) {
 	const key = `batc.managed.setup.${namespace}`;
-	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null;
+	let saved = {}, snapshot = null, busy = false, disposed = false, operation = null, readSerial = 0, readReady = false, hostDisclosureReady = false;
+	const stagedSecrets = new Map();
 	try {
 		saved = JSON.parse(localStorage.getItem(key) || "{}");
 	} catch {}
 	if (!saved || typeof saved !== "object" || Array.isArray(saved)) saved = {};
+	if (saved.intent?.refused) {
+		saved.intent.problemCode = saved.intent.refused;
+		delete saved.intent.refused;
+	}
+	if (typeof saved.url === "string" && /[?@#]/.test(saved.url)) delete saved.url;
 	const equal = (a, b) => JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 	function canonical(value) {
 		if (Array.isArray(value)) return value.map(canonical);
@@ -40970,21 +41160,74 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		class: "chip",
 		hidden: true
 	}, t("setup_unsaved"));
-	const fields = new Map();
+	const pasteRead = h("span", {
+		id: "setup-connection_url-read",
+		class: "muted",
+		hidden: true,
+		role: "status",
+		"data-setup-paste-read": ""
+	});
+	function clearPasteRead() {
+		pasteRead.textContent = "";
+		pasteRead.hidden = true;
+	}
+	const fields = new Map(), errors = new Map(), hints = new Map(), composing = new Set();
+	function fieldHint(name, text) {
+		const help = hints.get(name);
+		help.textContent = text;
+		help.hidden = !text;
+	}
+	function fieldError(name, key) {
+		const node = fields.get(name), error = errors.get(name);
+		if (!node || !error) return;
+		const text = key ? t(key) : "";
+		node.setCustomValidity(text);
+		node.setAttribute("aria-invalid", text ? "true" : "false");
+		error.textContent = text;
+		error.hidden = !text;
+	}
+	function focusField(name) {
+		const node = fields.get(name);
+		for (let parent = node?.parentElement; parent; parent = parent.parentElement) if (parent.tagName === "DETAILS") parent.open = true;
+		node?.focus();
+	}
 	const input = (name, label, options = {}) => {
 		const secret = options.type === "password";
-		const { multiline, ...attributes } = options;
+		const { multiline, hint, ...attributes } = options;
+		const id = `setup-${name}`;
 		const node = h(multiline ? "textarea" : "input", {
+			id,
+			"aria-label": t(label),
+			"data-setup-field": name,
 			autocomplete: "off",
 			maxlength: secret ? 4096 : 1024,
 			...attributes
 		});
+		const error = h("span", {
+			id: `${id}-error`,
+			class: "error",
+			hidden: true,
+			"data-setup-error": name
+		});
+		const help = h("span", {
+			id: `${id}-hint`,
+			class: "muted",
+			hidden: !hint
+		}, hint ? t(hint) : "");
+		node.setAttribute("aria-describedby", `${id}-hint ${id}-error${name === "connection_url" ? " setup-connection_url-read" : ""}`);
+		errors.set(name, error);
+		hints.set(name, help);
 		if (!secret) node.value = typeof saved[name] === "string" ? saved[name] : "";
 		node.addEventListener("input", () => {
 			if (!alive() || saved.intent || busy) return;
+			if ([
+				"url",
+				"fingerprint",
+				"connection_url"
+			].includes(name)) clearPasteRead();
 			if (name.startsWith("verification_")) seedVerificationBase();
 			if (!secret) {
-				saved[name] = node.value;
+				saved[name] = name === "url" && /[?@#]/.test(node.value) ? "" : node.value;
 				if ([
 					"url",
 					"fingerprint",
@@ -41000,9 +41243,28 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 				}
 			}
 			unsaved.hidden = false;
+			if (!composing.has(name)) fieldError(name, null);
+			if (name === "url") suggestLocal();
+			if (secret && name !== "connection_url" && node.value) fieldHint(name, hint ? t(hint) : "");
+		});
+		node.addEventListener("compositionstart", () => composing.add(name));
+		node.addEventListener("compositionend", () => {
+			composing.delete(name);
+			if (!alive() || saved.intent || busy) return;
+			if (name === "connection_url") consumeConnectionUrl(false);
+			else if ([
+				"host",
+				"url",
+				"fingerprint",
+				"bat_secret",
+				"profile_id"
+			].includes(name)) validateHost(name);
 		});
 		fields.set(name, node);
-		return h("label", {}, t(label), node);
+		return h("label", {
+			for: id,
+			class: "connection-token setup-field"
+		}, h("span", {}, t(label)), node, name === "connection_url" ? pasteRead : null, help, error);
 	};
 	const checkbox = (name, label) => {
 		const node = h("input", { type: "checkbox" });
@@ -41021,9 +41283,20 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		return h("label", {}, node, " ", t(label));
 	};
 	const profile = h("select", { "aria-label": t("setup_profile") });
+	const profilesError = h("span", {
+		class: "muted",
+		hidden: true,
+		"data-setup-profiles-error": ""
+	});
+	const profileField = h("label", {
+		class: "connection-token setup-field",
+		hidden: true,
+		"data-setup-profile": ""
+	}, h("span", {}, t("setup_profile")), profile, profilesError);
 	profile.addEventListener("change", () => {
 		if (!alive() || saved.intent) return;
 		const selected = snapshot?.profiles?.find((row) => row.id === profile.value);
+		if (selected) clearPasteRead();
 		saved.import_profile_id = selected?.id || "";
 		if (selected) for (const name of [
 			"url",
@@ -41040,20 +41313,36 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			showError(error);
 		}
 	});
+	const manual = h("details", { "data-setup-manual": "" }, h("summary", {}, t("setup_enter_manually")), profileField, h("div", { class: "capture-fields" }, input("url", "setup_host_url", {
+		type: "url",
+		required: true,
+		placeholder: "wss://host:9876",
+		hint: "setup_endpoint_hint"
+	}), input("fingerprint", "setup_fingerprint", {
+		required: true,
+		hint: "setup_fingerprint_hint"
+	}), input("profile_id", "setup_workspace_profile", {
+		placeholder: "default",
+		hint: "setup_profile_hint"
+	}), input("bat_secret", "setup_bat_token", {
+		type: "password",
+		hint: "setup_token_hint"
+	})), h("p", { class: "muted" }, t("setup_trust_help")));
 	const hostForm = h("form", {
+		novalidate: true,
 		"data-setup-host": "",
 		onsubmit: (event) => {
 			event.preventDefault();
 			run("host");
 		}
-	}, h("h3", {}, t("setup_host_title")), h("p", { class: "muted" }, t("setup_host_help")), h("label", {}, t("setup_profile"), profile), h("div", { class: "capture-fields" }, input("host", "setup_host_name", {
+	}, h("div", { class: "capture-fields" }, input("connection_url", "setup_connection_url", {
+		type: "password",
+		hint: "setup_connection_url_hint"
+	})), h("div", { class: "capture-fields" }, input("host", "setup_host_name", {
 		required: true,
-		maxlength: 64
-	}), input("url", "setup_host_url", {
-		type: "url",
-		required: true,
-		placeholder: "wss://host:9876/"
-	}), input("fingerprint", "setup_fingerprint", { required: true }), input("profile_id", "setup_workspace_profile", { placeholder: "default" }), input("bat_secret", "setup_bat_token", { type: "password" })), h("p", { class: "muted" }, t("setup_trust_help")), h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("button", {
+		maxlength: 64,
+		hint: "setup_host_hint"
+	})), manual, h("details", {}, h("summary", {}, t("setup_managed_work")), checkbox("writes", "setup_allow_messages"), checkbox("orchestrate", "setup_allow_start"), checkbox("shared_clone_worktrees", "setup_shared_clone"), h("p", { class: "muted" }, t("setup_shared_clone_help")), h("div", { class: "capture-fields" }, input("managed_roots", "setup_managed_roots"), input("ssh_alias", "setup_ssh_alias")), h("p", { class: "muted" }, t("setup_roots_help"))), h("button", {
 		type: "submit",
 		class: "primary"
 	}, t("setup_save_host")));
@@ -41145,12 +41434,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			showError(error);
 		}
 	}
-	const refreshButton = iconButton({
-		icon: "refresh-cw",
-		label: t("setup_refresh"),
-		class: "secondary",
-		onclick: () => refresh().catch(showError)
-	});
 	const retry = h("button", {
 		class: "secondary",
 		hidden: true,
@@ -41160,7 +41443,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		class: "secondary",
 		hidden: true,
 		onclick: () => {
-			if (!alive() || damaged || !terminal() && !saved.intent?.refused) return;
+			if (!alive() || damaged || !terminal()) return;
 			const previous = saved;
 			saved = {
 				...saved,
@@ -41170,6 +41453,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			try {
 				persist();
 				operation = null;
+				hostDisclosure.open = true;
 				update();
 				refresh().catch(showError);
 			} catch (error) {
@@ -41178,19 +41462,133 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			}
 		}
 	}, t("setup_next_change"));
+	const sessions = h("a", {
+		href: "#/sessions",
+		class: "ui-button primary",
+		hidden: true,
+		"data-setup-sessions": ""
+	}, t("setup_view_sessions"));
+	const actions = h("div", {
+		class: "actions",
+		hidden: true,
+		"data-setup-actions": ""
+	}, sessions, retry, next);
+	const hostDisclosure = h("details", {
+		open: true,
+		"data-setup-connect": ""
+	}, h("summary", {}, t("setup_host_title")), hostForm);
+	const operationReceipt = h("div", { "data-setup-receipt": "" });
 	const box = h("section", {
-		class: "panel managed-setup",
+		class: "panel ui-section-card managed-setup",
 		"data-managed-setup": ""
-	}, h("h2", {}, t("setup_title"), " ", unsaved), h("p", { class: "muted" }, t("setup_resume_help")), summary, h("div", { class: "actions" }, refreshButton, retry, next), message, receipt, h("details", { open: true }, h("summary", {}, t("setup_host_title")), hostForm), h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("a", { href: "#/projects" }, t("setup_open_projects")));
-	function showError(error) {
+	}, h("header", {}, h("h2", {}, t("setup_title"), " ", unsaved)), summary, actions, message, receipt, hostDisclosure, h("details", {}, h("summary", {}, t("setup_repository_title")), repoForm), h("details", {}, h("summary", {}, t("setup_verification_title")), verificationForm), h("details", { "data-setup-details": "" }, h("summary", {}, t("global_details")), operationReceipt, h("p", {}, t("setup_resume_help"))));
+	function suggestLocal() {
+		if (!snapshot || snapshot.hosts?.length !== 0 || fields.get("host").value) return;
+		try {
+			if (![
+				"127.0.0.1",
+				"[::1]",
+				"localhost"
+			].includes(new URL(fields.get("url").value).hostname.toLowerCase())) return;
+			fields.get("host").value = saved.host = "local";
+			persist();
+		} catch {}
+	}
+	function consumeConnectionUrl(reportError = true) {
+		if (!alive() || busy || saved.intent || composing.has("connection_url")) return;
+		const node = fields.get("connection_url");
+		if (!node.value) {
+			fieldError("connection_url", null);
+			return;
+		}
+		clearPasteRead();
+		const parsed = parseBatConnectionUrl(node.value);
+		if (!parsed) {
+			if (reportError) fieldError("connection_url", "setup_invalid_connection_url");
+			return;
+		}
+		node.value = "";
+		fieldError("connection_url", null);
+		for (const [name, value] of Object.entries({
+			url: parsed.endpoint,
+			fingerprint: parsed.fingerprint,
+			bat_secret: parsed.token
+		})) {
+			fields.get(name).value = value;
+			fieldError(name, null);
+			if (name !== "bat_secret") saved[name] = value;
+		}
+		stagedSecrets.delete("host");
+		saved.import_profile_id = "";
+		profile.value = "";
+		manual.open = false;
+		fieldHint("bat_secret", t("setup_token_hint"));
+		pasteRead.textContent = t("setup_connection_url_read", {
+			host: parsed.endpoint.slice(6),
+			fingerprint: `${parsed.fingerprint.slice(0, 4)}…${parsed.fingerprint.slice(-4)}`
+		});
+		pasteRead.hidden = false;
+		try {
+			suggestLocal();
+			persist();
+			unsaved.hidden = false;
+		} catch (error) {
+			showError(error);
+		}
+	}
+	fields.get("connection_url").addEventListener("input", () => consumeConnectionUrl(false));
+	for (const event of ["change", "blur"]) fields.get("connection_url").addEventListener(event, () => consumeConnectionUrl());
+	fields.get("connection_url").addEventListener("paste", (event) => {
+		if (!alive() || busy || saved.intent || event.isComposing || composing.has("connection_url")) return;
+		const value = event.clipboardData?.getData("text");
+		if (value === void 0) return;
+		event.preventDefault();
+		clearPasteRead();
+		fields.get("connection_url").value = value;
+		consumeConnectionUrl();
+	});
+	const usableSecret = (kind) => {
+		const secret = stagedSecrets.get(kind);
+		if (secret && secret.expiresAt > Date.now()) return secret.ref;
+		stagedSecrets.delete(kind);
+		return null;
+	};
+	function validateHost(only) {
+		const value = (name) => fields.get(name).value.trim(), faults = {};
+		if (fields.get("connection_url").value) faults.connection_url = "setup_invalid_connection_url";
+		if (!value("host")) faults.host = "setup_required";
+		else if (!validSetupHostId(value("host"))) faults.host = "error_code_INVALID_TARGET";
+		if (!value("url")) faults.url = "setup_required";
+		else if (!validSetupEndpoint(value("url"))) faults.url = "error_code_INVALID_HOST";
+		if (!value("fingerprint")) faults.fingerprint = "setup_required";
+		else if (!normalizeSetupFingerprint(value("fingerprint")) || value("fingerprint").length > 200) faults.fingerprint = "setup_invalid_fingerprint";
+		if (value("profile_id").length > 256 || /[\x00-\x1f]/.test(value("profile_id"))) faults.profile_id = "error_code_INVALID_PARAMS";
+		const token = fields.get("bat_secret").value;
+		if (token && (token.length < 8 || token.length > 4096 || /[^\x21-\x7e]/.test(token))) faults.bat_secret = "error_code_INVALID_SECRET";
+		else if (!token && !usableSecret("host") && !saved.import_profile_id && !snapshot?.hosts?.some((host) => host.name === value("host") && host.token_available)) faults.bat_secret = "error_code_CREDENTIAL_REQUIRED";
+		if (fields.get("orchestrate").checked && !value("managed_roots")) faults.managed_roots = "error_code_MANAGED_ROOT_REQUIRED";
+		const names = [
+			"connection_url",
+			"host",
+			"url",
+			"fingerprint",
+			"profile_id",
+			"bat_secret",
+			"managed_roots"
+		];
+		for (const name of only ? [only] : names) fieldError(name, faults[name]);
+		if (!only && Object.keys(faults).length) focusField(names.find((name) => faults[name]));
+		return !Object.keys(faults).length;
+	}
+	function showError(error, options) {
 		if (alive()) {
-			message.replaceChildren(errorBox(error));
+			message.replaceChildren(errorBox(error, options));
 			update();
 		}
 	}
 	function update() {
 		if (!alive()) return;
-		const locked = busy || !snapshot || !!saved.intent || snapshot.busy;
+		const locked = busy || !snapshot || !readReady || !!saved.intent || snapshot.busy;
 		for (const [kind, form] of [
 			["host", hostForm],
 			["repository", repoForm],
@@ -41212,14 +41610,21 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		verificationNotice.hidden = !stale;
 		verificationNotice.textContent = t("setup_verification_changed");
 		refreshButton.disabled = busy;
-		retry.hidden = !saved.intent || terminal();
+		retry.hidden = !saved.intent || terminal() || damaged;
 		retry.disabled = busy;
-		next.hidden = !saved.intent || !terminal() && !saved.intent.refused;
+		next.hidden = !saved.intent || !terminal();
 		next.disabled = busy || damaged;
 		if (damaged) retry.disabled = true;
 		receipt.replaceChildren();
-		if (operation) receipt.append(opStatus(operation), " ", h("a", { href: `#/op/${operation.operation_id}` }, t("setup_operation")));
-		else if (saved.intent) receipt.append(h("p", { class: "note" }, t("setup_uncertain")));
+		operationReceipt.replaceChildren();
+		if (operation && snapshot) operationReceipt.append(h("a", {
+			href: `#/op/${operation.operation_id}`,
+			"data-setup-operation": ""
+		}, t("setup_operation_receipt", { status: operation.status === "succeeded" ? t("setup_operation_done") : operationStatusLabel(operation.status) })));
+		else if (saved.intent) receipt.append(h("p", { class: "note" }, t(saved.intent.problemCode ? "setup_retained_request" : "setup_uncertain")));
+		sessions.hidden = !snapshot?.hosts?.length;
+		actions.hidden = sessions.hidden && retry.hidden && next.hidden;
+		hostForm.querySelector("button[type=submit]").className = sessions.hidden ? "primary" : "secondary";
 	}
 	function accept(candidate) {
 		const intent = saved.intent;
@@ -41229,6 +41634,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		persist();
 		if (candidate.status === "succeeded") {
 			unsaved.hidden = true;
+			if (candidate.action === "setup.host") hostDisclosure.open = false;
 			Promise.resolve(onConfigured?.()).catch(showError);
 		}
 		update();
@@ -41240,12 +41646,14 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		accept(result.operation);
 	}
 	async function recover() {
-		if (!alive() || busy || !saved.intent || damaged || saved.intent.refused) return;
+		if (!alive() || busy || !saved.intent || damaged) return;
 		busy = true;
 		update();
 		try {
 			await sendOriginal();
 			await refresh();
+		} catch (error) {
+			handleSubmissionError(error, saved.intent?.request.action.split(".")[1]);
 		} finally {
 			busy = false;
 			if (alive()) update();
@@ -41253,7 +41661,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 	}
 	async function run(kind) {
 		const form = kind === "host" ? hostForm : kind === "repository" ? repoForm : verificationForm;
-		if (!alive() || busy || !snapshot || snapshot.busy || saved.intent || !allowed(kind) || !form.reportValidity()) return;
+		if (!alive() || busy || composing.size || !snapshot || !readReady || snapshot.busy || saved.intent || !allowed(kind) || kind === "host" && !validateHost() || !form.reportValidity()) return;
 		busy = true;
 		update();
 		message.replaceChildren();
@@ -41263,7 +41671,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			const value = (name) => fields.get(name).value.trim();
 			const checked = (name) => fields.get(name).checked;
 			const tokenField = kind === "verification" ? null : fields.get(kind === "host" ? "bat_secret" : "github_secret");
-			let secretRef;
+			let secretRef = usableSecret(kind);
 			if (tokenField?.value) {
 				const staged = await api("POST", "/managed/setup/secrets", {
 					kind: kind === "host" ? "bat" : "github",
@@ -41272,6 +41680,11 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 				guard();
 				secretRef = staged.secret_ref;
 				tokenField.value = "";
+				stagedSecrets.set(kind, {
+					ref: secretRef,
+					expiresAt: Date.now() + 36e5
+				});
+				fieldHint(kind === "host" ? "bat_secret" : "github_secret", t("setup_secret_staged"));
 			}
 			const imported = kind === "host" && !secretRef && saved.import_profile_id;
 			const params = kind === "host" ? {
@@ -41314,18 +41727,62 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 			await sendOriginal();
 			await refresh();
 		} catch (error) {
-			if (alive() && saved.intent && !saved.intent.operation_id && (error.admissionRefused || [
-				"CONFIGURATION_CHANGED",
-				"SETUP_BUSY",
-				"PRECONDITION_REQUIRED"
-			].includes(error.code))) {
-				saved.intent.refused = error.code;
-				persist();
-			}
-			showError(error);
+			handleSubmissionError(error, kind);
 		} finally {
 			busy = false;
 			if (alive()) update();
+		}
+	}
+	function handleSubmissionError(error, kind) {
+		if (!alive()) return;
+		let field;
+		if (saved.intent && !saved.intent.operation_id && error.admissionRefused === true) {
+			const previous = saved.intent;
+			delete saved.intent;
+			try {
+				persist();
+			} catch (storageError) {
+				saved.intent = previous;
+				showError(storageError);
+				return;
+			}
+			field = kind === "host" ? {
+				INVALID_TARGET: "host",
+				INVALID_HOST: "url",
+				HOST_IDENTITY_CHANGED: "host",
+				INVALID_CONFIGURATION: "fingerprint",
+				CREDENTIAL_REQUIRED: "bat_secret",
+				INVALID_SECRET: "bat_secret",
+				MANAGED_ROOT_REQUIRED: "managed_roots",
+				SSH_NOT_VERIFIED: "ssh_alias",
+				PROFILE_UNAVAILABLE: "profile_id",
+				PROFILE_NOT_FOUND: "profile_id"
+			}[error.code] : kind === "repository" ? {
+				INVALID_TARGET: "repository",
+				CREDENTIAL_REQUIRED: "github_secret",
+				INVALID_SECRET: "github_secret",
+				UNKNOWN_HOST: "repository_host",
+				WORKSPACE_NOT_FOUND: "workspace_id"
+			}[error.code] : null;
+			if (error.code === "INVALID_SECRET") stagedSecrets.delete(kind);
+			if (!usableSecret(kind) && kind !== "verification") fieldHint(kind === "host" ? "bat_secret" : "github_secret", t("setup_paste_token_again"));
+		} else if (saved.intent && !saved.intent.operation_id && [
+			"CONFIGURATION_CHANGED",
+			"SETUP_BUSY",
+			"PRECONDITION_REQUIRED"
+		].includes(error.code)) {
+			saved.intent.problemCode = error.code;
+			persist();
+		}
+		showError(error, field ? { summary: t("setup_refused") } : void 0);
+		if (field) {
+			fieldError(field, `error_code_${error.code}`);
+			queueMicrotask(() => {
+				if (alive()) {
+					update();
+					focusField(field);
+				}
+			});
 		}
 	}
 	async function workspaces() {
@@ -41347,33 +41804,70 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		}, `${row.name || row.title || row.workspace_id || row.id} · ${row.workspace_id || row.id}`)));
 	}
 	async function refresh() {
-		const result = await api("GET", "/managed/setup");
-		guard();
-		if (disposed) return;
+		const serial = ++readSerial;
+		let result;
+		try {
+			result = await api("GET", "/managed/setup");
+			guard();
+		} catch (error) {
+			if (alive() && serial === readSerial) {
+				readReady = false;
+				if ([403, 404].includes(error.status)) {
+					snapshot = null;
+					summary.replaceChildren();
+					verificationCommands.replaceChildren();
+					profile.replaceChildren();
+					profileField.hidden = true;
+					profilesError.hidden = true;
+				}
+				update();
+			}
+			throw error;
+		}
+		if (disposed || serial !== readSerial) return;
 		if (!validVerification(result.verification)) {
-			if (allowed("verification")) throw Error(t("setup_verification_invalid"));
+			if (allowed("verification")) {
+				readReady = false;
+				update();
+				throw Error(t("setup_verification_invalid"));
+			}
 			result.verification = {
 				commands: {},
 				timeout_s: 600
 			};
 		}
 		snapshot = result;
+		readReady = true;
+		if (!hostDisclosureReady) {
+			hostDisclosure.open = !result.hosts?.length;
+			hostDisclosureReady = true;
+		}
+		suggestLocal();
 		if (!saved.verification_timeout) fields.get("verification_timeout").value = String(result.verification.timeout_s);
 		verificationCommands.replaceChildren(...Object.entries(result.verification.commands).map(([project, argv]) => h("details", {}, h("summary", {}, project), h("pre", { class: "pre" }, argv.join("\n")), h("button", {
 			type: "button",
 			class: "mini",
 			onclick: () => fillVerification(project)
 		}, t("setup_verification_edit", { project })))));
+		const hosts = result.hosts?.length || 0, repositories = result.repositories?.length || 0;
 		summary.replaceChildren(h("p", {}, t("setup_counts", {
-			hosts: result.hosts?.length || 0,
-			repositories: result.repositories?.length || 0
-		})), ...(result.hosts || []).map((row) => h("p", {}, h("strong", {}, row.name), " · ", t(row.connected ? "setup_connected" : "setup_unverified"), " · ", row.url)), ...[result.busy ? h("p", { class: "note warn" }, t("setup_busy")) : null].filter(Boolean), ...[result.profiles_error ? h("p", { class: "muted" }, t("setup_profiles_unavailable")) : null].filter(Boolean));
+			hosts,
+			repositories,
+			hostLabel: t(hosts === 1 ? "setup_count_host_one" : "setup_count_host_many"),
+			repositoryLabel: t(repositories === 1 ? "setup_count_repository_one" : "setup_count_repository_many")
+		})), ...(result.hosts || []).map((row) => h("p", {}, h("strong", {}, row.name), " · ", t(row.connected ? "setup_connected" : "setup_unverified"), " · ", row.url)), ...[result.busy ? h("p", { class: "note warn" }, t("setup_busy")) : null].filter(Boolean));
 		profile.replaceChildren(h("option", { value: "" }, t("setup_manual_profile")), ...(result.profiles || []).map((row) => h("option", { value: row.id }, row.name || row.id)));
 		profile.value = saved.import_profile_id || "";
+		profileField.hidden = !(result.profiles?.length || result.profiles_error);
+		profile.hidden = profileField.hidden;
+		profilesError.hidden = !result.profiles_error;
+		profilesError.textContent = result.profiles_error ? t("setup_profiles_unavailable") : "";
+		if (!saved.intent && saved.host && !fields.get("bat_secret").value && !usableSecret("host") && !saved.import_profile_id && !result.hosts?.some((host) => host.name === saved.host && host.token_available)) fieldHint("bat_secret", t("setup_paste_token_again"));
 		update();
 	}
 	return {
 		box,
+		reload: () => refresh().catch(showError),
 		async load() {
 			try {
 				await refresh();
@@ -41384,8 +41878,36 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, opStatus, on
 		},
 		dispose() {
 			disposed = true;
-			for (const name of ["bat_secret", "github_secret"]) fields.get(name).value = "";
+			stagedSecrets.clear();
+			for (const name of [
+				"connection_url",
+				"bat_secret",
+				"github_secret"
+			]) fields.get(name).value = "";
 		}
+	};
+}
+//#endregion
+//#region src/error-presentation.js
+var ApiError = class extends Error {
+	constructor(status, code, message, { localized = false } = {}) {
+		super(message || code);
+		this.status = status;
+		this.code = code;
+		this.localized = localized;
+	}
+};
+function errorPresentation(error, t, { summary } = {}) {
+	const code = error?.code || "";
+	const message = error?.message || String(error);
+	const key = `error_code_${code}`;
+	const known = code && t(key) !== key;
+	const client = error?.localized === true || !code && error?.constructor === Error;
+	const text = summary ?? (known ? t(key) : client ? message : t("error_generic"));
+	return {
+		summary: text,
+		code: code === text ? "" : code,
+		message: message === text ? "" : message
 	};
 }
 var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
@@ -50251,18 +50773,17 @@ function dropKey(scope, namespace) {
 		localStorage.removeItem(`batc.key.${namespace}.${scope}`);
 	} catch {}
 }
-var ApiError = class extends Error {
-	constructor(status, code, message) {
-		super(message || code);
-		this.status = status;
-		this.code = code;
-	}
-};
 async function api(method, path, body, key, collectReceipt) {
-	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"));
-	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
+	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
+	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 	const epoch = state.epoch;
-	const { status, data } = await connectorRequest(method, path, body, key, state.token);
+	let response;
+	try {
+		response = await connectorRequest(method, path, body, key, state.token);
+	} catch (cause) {
+		throw new ApiError(0, ["AbortError", "TimeoutError"].includes(cause?.name) || /timed?\s*out|timeout/i.test(cause?.message || String(cause)) ? "TIMEOUT" : "NETWORK_ERROR", cause?.message || String(cause));
+	}
+	const { status, data } = response;
 	if (status >= 200 && status < 300) collectReceipt?.(data);
 	if (epoch !== state.epoch) throw new ApiError(0, "CONNECTION_CHANGED", "Connection changed while the request was in flight");
 	if (status < 200 || status >= 300) {
@@ -50273,9 +50794,17 @@ async function api(method, path, body, key, collectReceipt) {
 	}
 	return data;
 }
-function errorBox(e) {
+function errorBox(e, { summary } = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
-	return h("p", { class: "error" }, e.status === 403 && e.code === "FORBIDDEN" ? t("forbidden_scope") : `${e.code || ""} ${e.message || e}`);
+	const presentation = errorPresentation(e, t, { summary });
+	const diagnostics = [presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean);
+	return h("div", { "data-api-error": "" }, h("p", {
+		class: "error",
+		"data-error-summary": ""
+	}, presentation.summary), diagnostics.length ? disclosure({
+		label: t("global_details"),
+		body: h("div", { "data-error-details": "" }, ...diagnostics)
+	}) : null);
 }
 async function submit(action, target, params, preconditions, scope) {
 	const connection = {
@@ -50602,7 +51131,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			};
 			while (["accepted", "running"].includes(op.status)) op = await readNext();
 			if (op.status === "waiting_external") {
-				if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"));
+				if (!state.online || !state.viewReady) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 				const epoch = state.epoch;
 				const response = await connectorUploadArtifact(op.operation_id, bytes, state.token);
 				guard(true);
@@ -50659,7 +51188,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			return;
 		}
 		if (file.size > limit) {
-			fill(status, errorBox(new Error(`ARTIFACT_TOO_LARGE (${limit})`)));
+			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`)));
 			return;
 		}
 		let name = file.name;
@@ -54322,7 +54851,7 @@ function connectionFacts() {
 	const endpoint = state.endpoint || (state.token ? location.origin : "");
 	const stateCell = h("dd");
 	const eventCell = h("dd");
-	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell);
+	const dl = h("dl", { class: "kv global-connection-facts" }, h("dt", {}, t("global_endpoint")), h("dd", {}, endpoint || "—"), h("dt", {}, t("global_state")), stateCell, h("dt", {}, t("global_last_event")), eventCell, h("dt", {}, t("connection_access")), connectionAccess());
 	const render = () => {
 		const key = !state.token ? "ui_offline" : state.pollHealth === "connected" ? "ui_connected" : state.pollHealth === "initial" && state.online ? "ui_connected" : "ui_reconnecting";
 		const tone = key === "ui_connected" ? "ok" : key === "ui_reconnecting" ? "warn" : "neutral";
@@ -54340,7 +54869,36 @@ function connectionFacts() {
 	connectionPainters.add(paint);
 	return dl;
 }
-function openSettings(main, { exclusive = false } = {}) {
+function connectionAccess() {
+	const known = [
+		"observe",
+		"operate",
+		"manage",
+		"start",
+		"approve",
+		"cleanup",
+		"cleanup_discard",
+		"deploy",
+		"integrate",
+		"merge"
+	];
+	return h("dd", { "data-connection-access": "" }, joinLabel([...new Set((state.caps?.scopes || []).map((scope) => t(known.includes(scope) ? `connection_scope_${scope}` : "connection_other_access")))]));
+}
+function connectionIdentity() {
+	return h("dl", { class: "kv" }, h("dt", {}, t("connection_actor")), h("dd", {}, h("code", {}, state.caps?.actor || "—")), h("dt", {}, t("connection_scopes")), h("dd", {}, h("code", {}, (state.caps?.scopes || []).join(", "))));
+}
+async function fleetTailscale(root, guard) {
+	try {
+		const availability = await fleetAvailability();
+		guard();
+		if (availability.configured && availability.platform_supported) return mountTailscale(root, {
+			h,
+			t
+		});
+	} catch {}
+	return () => {};
+}
+function openSettings(main, { exclusive = false, refreshButton } = {}) {
 	const memory = viewState(state.namespace || "", "", "settings");
 	const frame = settingsFrame({
 		h,
@@ -54383,7 +54941,7 @@ function openSettings(main, { exclusive = false } = {}) {
 	});
 	if (state.token && state.caps) main.append(pageHeader({
 		title: t("ui_settings"),
-		actions: [iconButton({
+		actions: [refreshButton || iconButton({
 			icon: "refresh-cw",
 			label: t("global_refresh"),
 			onClick: () => route()
@@ -54397,26 +54955,19 @@ function viewBrowserSettings(main) {
 	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
 	const facts = connectionFacts();
-	facts.append(h("dt", {}, t("global_access")), h("dd", {}, joinLabel([state.caps.actor, ...state.caps.scopes || []])));
-	const footer = h("div", { class: "global-card-footer" });
-	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, managed ? disclosure({
+	frame.panel("connection").append(h("section", { class: "panel" }, facts, managed ? h("h2", {}, t("managed_browser_connected")) : null, disclosure({
 		label: t("global_details"),
-		body: h("p", {}, t("managed_browser_help"))
-	}) : null, h("button", {
+		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
+	}), h("button", {
 		class: "danger",
 		onclick: () => {
 			disconnect();
 			route();
 		}
-	}, t("disconnect")), footer));
-	const note = mountTailscale(footer, {
-		h,
-		t,
-		presentation: "note"
-	});
+	}, t("disconnect"))));
 	frame.show("fleet");
 	frame.panel("fleet").append(fleetEmpty());
-	return note;
+	return () => {};
 }
 function viewBrowserSignedOut(main) {
 	const input = h("input", {
@@ -54431,45 +54982,37 @@ function viewBrowserSignedOut(main) {
 		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error));
 	};
 	if (state.connectionError) showConnectError(state.connectionError);
-	const form = h("form", {
-		class: "global-connect-form",
-		onsubmit: async (event) => {
-			event.preventDefault();
-			disconnect();
-			state.token = input.value.trim();
-			try {
-				await activate(await api("GET", "/capabilities"));
-				saveToken(state.token, remember.checked);
-				location.hash = "#/home";
-				await route();
-			} catch (e) {
-				state.token = null;
-				showConnectError(e);
-			}
-		}
-	}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
-		class: "primary",
-		type: "submit"
-	}, t("connect")), h("a", {
-		class: "global-quiet-link",
-		href: setupGuide()
-	}, t("global_setup_guide"))), disclosure({
-		label: t("global_details"),
-		body: h("p", {}, t("token_help"))
-	}), info);
-	const footer = h("div", { class: "global-card-footer" });
 	const root = firstRunCard({
 		h,
 		t,
-		body: form,
-		footer
+		body: h("form", {
+			class: "global-connect-form",
+			onsubmit: async (event) => {
+				event.preventDefault();
+				disconnect();
+				state.token = input.value.trim();
+				try {
+					await activate(await api("GET", "/capabilities"));
+					saveToken(state.token, remember.checked);
+					location.hash = "#/home";
+					await route();
+				} catch (e) {
+					state.token = null;
+					showConnectError(e);
+				}
+			}
+		}, h("label", { class: "connection-token" }, t("token"), input), h("label", { class: "global-remember" }, remember, " ", t("remember")), h("div", { class: "global-connect-actions" }, h("button", {
+			class: "primary",
+			type: "submit"
+		}, t("connect")), h("a", {
+			class: "global-quiet-link",
+			href: setupGuide()
+		}, t("global_setup_guide"))), disclosure({
+			label: t("global_details"),
+			body: h("p", {}, t("token_help"))
+		}), info)
 	});
 	main.append(root);
-	mountTailscale(footer, {
-		h,
-		t,
-		presentation: "note"
-	});
 }
 function viewSettings(main) {
 	if (state.caps?.managed_installation) return viewManagedSettings(main);
@@ -54485,15 +55028,22 @@ async function viewManagedSettings(main) {
 	};
 	const guard = () => assertView(connection);
 	const status = h("div", { role: "status" });
-	const frame = openSettings(main, { exclusive: !nativeDesktop });
-	const local = h("section", { class: "panel" }, h("h2", {}, t("managed_browser_connected")), connectionFacts(), h("p", {}, t("connected_as", {
-		actor: state.caps.actor,
-		scopes: state.caps.scopes.join(", ")
-	})), disclosure({
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("global_refresh"),
+		onClick: () => setup.reload()
+	});
+	const frame = openSettings(main, {
+		exclusive: !nativeDesktop,
+		refreshButton
+	});
+	const local = h("section", {
+		class: "panel",
+		"data-connection-card": ""
+	}, h("h2", {}, t("managed_browser_connected")), connectionFacts(), disclosure({
 		label: t("global_details"),
-		body: h("p", {}, t("managed_background_help"))
-	}), h("details", { "data-managed-locations": "" }, h("summary", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))), status);
-	frame.panel("connection").append(local);
+		body: h("div", {}, connectionIdentity(), h("p", {}, t("managed_background_help")), !nativeDesktop ? h("p", {}, t("managed_browser_help")) : null, h("div", { "data-managed-locations": "" }, h("h3", {}, t("managed_locations")), h("p", { class: "muted" }, t("managed_locations_central")), h("p", { class: "muted" }, t("managed_locations_work"))))
+	}), status);
 	const setup = managedSetupPanel({
 		h,
 		t,
@@ -54501,7 +55051,7 @@ async function viewManagedSettings(main) {
 		guard,
 		namespace: state.namespace,
 		errorBox,
-		opStatus,
+		refreshButton,
 		caps: () => state.caps,
 		onConfigured: async () => {
 			const caps = await api("GET", "/capabilities");
@@ -54509,7 +55059,7 @@ async function viewManagedSettings(main) {
 			state.caps = caps;
 		}
 	});
-	frame.panel("connection").append(setup.box);
+	frame.panel("connection").append(...!state.caps.hosts?.length ? [setup.box, local] : [local, setup.box]);
 	await setup.load();
 	try {
 		guard();
@@ -54626,27 +55176,15 @@ async function viewManagedSettings(main) {
 			h,
 			t
 		});
-		disposeTailscale = mountTailscale(fleetRoot, {
-			h,
-			t
-		});
+		disposeTailscale = await fleetTailscale(fleetRoot, guard);
 	} else {
-		const footer = h("div", { class: "global-card-footer" });
-		local.append(disclosure({
-			label: t("global_details"),
-			body: h("p", {}, t("managed_browser_help"))
-		}), h("button", {
+		local.append(h("button", {
 			class: "danger",
 			onclick: () => {
 				disconnect();
 				route();
 			}
-		}, t("disconnect")), footer);
-		disposeTailscale = mountTailscale(footer, {
-			h,
-			t,
-			presentation: "note"
-		});
+		}, t("disconnect")));
 		fleetRoot.append(fleetEmpty());
 	}
 	return () => {
@@ -54766,10 +55304,8 @@ async function viewNativeSettings(main) {
 	frame.panel("updates").append(updateRoot);
 	const showInfo = () => {
 		info.replaceChildren();
-		if (state.caps) info.append(h("p", {}, t("connected_as", {
-			actor: state.caps.actor,
-			scopes: state.caps.scopes.join(", ")
-		})));
+		technicalDetails.replaceChildren();
+		if (state.caps) technicalDetails.append(connectionIdentity());
 		if (state.connectionNotice) info.append(h("p", {}, state.connectionNotice));
 		if (state.connectionError) info.append(errorBox(state.connectionError));
 		if (state.nativeBusy) info.append(h("p", {}, t("desktop_connecting")));
@@ -54844,10 +55380,11 @@ async function viewNativeSettings(main) {
 			connectionDetails.append(h("div", { class: "actions" }, reload));
 		}
 		row("desktop_endpoint", status.endpoint || t("desktop_config_needed"));
-		row("desktop_expected_actor", status.expected_actor);
+		if (status.expected_actor) technicalDetails.append(h("dt", {}, t("desktop_expected_actor")), h("dd", {}, status.expected_actor));
 		if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
-		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error)));
+		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
+		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), { summary: t("desktop_status_error") }));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
 		platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help") : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";
 		connect.disabled = state.nativeBusy || !!status.error || !status.credential_available;
@@ -54883,9 +55420,8 @@ async function viewNativeSettings(main) {
 		disposeUpdates?.();
 		return;
 	}
-	const disposeTailscale = mountTailscale(fleetRoot, {
-		h,
-		t
+	const disposeTailscale = await fleetTailscale(fleetRoot, () => {
+		if (mine !== generation || !main.isConnected) throw new Error("VIEW_CHANGED");
 	});
 	frame.show("fleet");
 	return () => {

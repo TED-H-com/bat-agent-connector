@@ -921,3 +921,71 @@ the pause. Parent authorization remains checked while the projection is paused.
 
 Lifecycle and delivery detail summaries use the shared action and operation-status
 labels. PM writer states reuse nativeRunState; step names remain identifiers.
+
+## Setup glossary
+
+Use these terms in setup, Settings and Connection. Product, provider and protocol
+names stay BAT, Connector, GitHub, Git, SSH, Tailscale, Codex and Claude. Keep Agent for an AI
+worker; call the project manager PM. Platform labels are macOS / Linux
+(「macOS／Linux」) and Windows, with protocol values kept out of ordinary labels.
+BAT's own labels may be quoted exactly in field hints, including 「連線 Token」
+and “Certificate fingerprint (SHA-256)”.
+
+| English | zh-TW |
+| --- | --- |
+| profile | 連線設定檔 |
+| token | 權杖（BAT 連線權杖、API 權杖） |
+| fingerprint | 憑證指紋 |
+| endpoint | 連線位址 |
+| remote | 遠端 |
+| managed | 受管 |
+| session | 工作階段 |
+| worktree | 獨立工作目錄（Git worktree 可留在詳細資料） |
+| checkpoint | 檢查點 |
+| commit | 提交 |
+| workspace | 工作區 |
+| clone | 複本 |
+| metadata | 中繼資料 |
+
+First use opens 1. Connect BAT with a masked connection URL and Host ID. Individual
+connection fields and managed-work permissions stay in collapsed disclosures.
+Fields stack label, input, hint and error, with a 4px hint gap and 12px between
+fields. Settings has one Refresh in the shared page header, whose mobile actions
+remain below the title. It reloads setup status in place, preserving the draft,
+password field and page-only staged references; read failures retain their gates.
+Pasting parses locally, clears the URL and stores only non-secret drafts. A muted
+check-mark line confirms the host/port, abbreviated fingerprint and credential
+readiness without exposing the credential or raw URL. Manual endpoint/fingerprint
+edits or another paste clear it; a valid later paste replaces it. Submit
+validates before credential staging. Typing parses silently; paste, change, blur
+and submit report an invalid URL. Unreadable BAT profiles have a muted note beside
+the profile control; an empty profile list without an error hides the control.
+A loopback endpoint can suggest `local` when
+no hosts exist, without proving a shared machine or choosing an execution mode.
+
+Only central `admission_refused: true` releases an unacknowledged setup intent.
+Other responses keep its exact request/key; Check request can read a known receipt
+or replay that same request. Old code-only refusal drafts follow this conservative
+path too. A principal/kind-bound staged credential reference may stay in page memory
+for one hour; raw credentials never enter drafts or return to the DOM after staging.
+A fresh editable draft after reload explains that another credential paste is needed.
+Successful configuration offers View sessions as the primary next action and
+collapses 1. Connect BAT. Change settings or expanding the disclosure opens it
+again; later visits with a configured host start collapsed. The two actions share
+a wrapping row with an 8px gap. Collapsed setup steps have even spacing; 16px
+separates an action row from the next step, and the
+localized operation link/status lives in Details. English configured counts use
+singular/plural host and repository labels.
+
+Connection access is a row in the facts list and uses human labels, with actor/scopes and storage facts in one
+Details disclosure. Tailscale guidance belongs with an actual Fleet connection.
+Errors prefer a caller summary, then a known code's translation, then an explicitly
+localized API message or plain client Error message. Unknown server codes and
+programming errors use the generic summary; transport messages use their explicit
+NETWORK_ERROR or TIMEOUT code. Details appears only for additional technical facts,
+without an empty code or repeated summary. Refresh-cycle read-error gates remain
+unchanged.
+`errorBox(error, {summary})` lets a caller supply its own sentence without duplicating
+it. Rendering an error still records the same refresh-cycle failure, so failed reads
+cannot acknowledge event checkpoints or enable mutations. IME Escape leaves menus,
+inspectors and the mobile drawer open; ordinary Escape retains focus restoration.

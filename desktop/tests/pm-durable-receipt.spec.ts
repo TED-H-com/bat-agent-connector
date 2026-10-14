@@ -164,7 +164,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
     await page.clock.install();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     const form=await submit(page),saved=await draft(page);
     await page.clock.runFor(1000);await expect.poll(()=>f.state.gets.length).toBe(1);
-    await expect(form).toContainText(failure==='mismatch'?'The receipt does not match':failure==='403'?'Your token lacks this scope':'Original receipt unavailable');
+    await expect(form).toContainText(failure==='mismatch'?'The receipt does not match':failure==='403'?'Your account does not have the required scope':'Original receipt unavailable');
     await page.clock.runFor(30000);expect(f.state.gets).toHaveLength(1);
     expect((await draft(page)).value.intent).toEqual(saved.value.intent);
     f.state.getError=0;f.state.mismatch=false;f.state.complete=true;

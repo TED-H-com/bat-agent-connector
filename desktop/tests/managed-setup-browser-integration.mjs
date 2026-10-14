@@ -98,11 +98,9 @@ try {
   const rejected = await call("POST", "/managed/setup/secrets", {kind: "bat", value: bat.token}, null, "wrong-csrf");
   assert.equal(rejected.status, 403);
   // Exercise the real shared host form, secret staging and durable operation receipt.
-  await form.getByLabel("Host name", {exact: true}).fill("fixture");
-  await form.getByLabel("BAT endpoint", {exact: true}).fill(bat.url);
-  await form.getByLabel("Host certificate SHA-256 fingerprint", {exact: true}).fill(bat.fingerprint);
-  await form.getByLabel("Workspace profile ID", {exact: true}).fill("default");
-  await form.getByLabel("BAT connection token (optional with a profile)", {exact: true}).fill(bat.token);
+  await form.getByLabel("Paste BAT connection URL", {exact: true}).fill(`${bat.url}?token=${encodeURIComponent(bat.token)}&fp=${encodeURIComponent(bat.fingerprint)}`);
+  await expect(form.getByLabel("Paste BAT connection URL", {exact: true})).toHaveValue("");
+  await form.getByLabel("Host ID", {exact: true}).fill("fixture");
   await form.getByRole("button", {name: "Verify and save host", exact: true}).click();
   await expect.poll(async () => (await call("GET", "/managed/setup")).body.hosts.length, {timeout: 20000}).toBe(1);
   const configured = (await call("GET", "/managed/setup")).body;
