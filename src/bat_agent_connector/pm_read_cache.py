@@ -31,6 +31,7 @@ class _Scope:
     values: dict = field(default_factory=dict)
     active: bool = True
     disabled: bool = False
+    guard_depth: int = 0
 
     def __post_init__(self):
         self.changes = self.db.total_changes
@@ -98,14 +99,42 @@ def guarded():
 
     Answers computed inside a guard can assume that an in-progress back edge is
     visible, or refuse because a traversal budget ran out. Neither is the
-    request-wide answer, so nothing loaded while any guard is active is stored.
-    Entries stored outside every guard may still be served.
+    request-wide answer, so guarded loads cannot populate the request memo.
+    Entries stored outside every guard may still be served. An isolated
+    guarded_scope may store answers relative to its own unchanged guard only.
     """
     token = _GUARDS.set(_GUARDS.get() + 1)
     try:
         yield
     finally:
         _GUARDS.reset(token)
+
+
+@contextmanager
+def guarded_scope(db, principal):
+    """Fresh snapshot memo private to one active traversal guard.
+
+    Back-edge assumptions stay fixed for this guard's lifetime. Never join an
+    outer memo or export these conditional answers to it. Nested guards still
+    cannot store answers in this scope; copied tasks/threads and writes retain
+    the usual owner and snapshot barriers.
+    """
+    depth = _GUARDS.get()
+    if depth == 0:
+        raise RuntimeError('A guarded memo requires an active traversal guard')
+    parent = frame = _CURRENT.get()
+    while frame is not None and frame.scope.db is not db:
+        frame = frame.parent
+    current = _Scope(db, guard_depth=depth)
+    if frame is not None and not frame.scope.usable():
+        current.disabled = True  # A fresh private scope cannot revive an invalid owner/snapshot.
+    token = _CURRENT.set(_Frame(current, _key(principal), parent))
+    try:
+        yield
+    finally:
+        current.active = False
+        current.values.clear()
+        _CURRENT.reset(token)
 
 
 def remember(kind, key, load):
@@ -123,7 +152,7 @@ def remember(kind, key, load):
     except TypeError:
         return load()
     if identity not in current.values:
-        if _GUARDS.get() > 0:
+        if _GUARDS.get() > current.guard_depth:
             return load()
         from .operations import OperationError
         try:

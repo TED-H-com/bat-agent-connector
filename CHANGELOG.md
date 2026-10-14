@@ -135,6 +135,11 @@
 - Keep release registration focus and keyboard input when source previews arrive
   during rationale entry, so Web and Tauri submit the reviewed request once.
 
+- Reuse source validation within one fixed maintenance-repair read traversal so
+  delivery does not exhaust its budget repeatedly checking the same graph.
+  Each new frame still checks current sources; uncertain dispatches retain their
+  original keys and receipts and are never sent again.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.

@@ -389,6 +389,146 @@ def test_guarded_loads_are_served_from_stored_entries_but_never_stored(db):
     assert calls == ['outside', 'assumed', 'fresh']
 
 
+def test_guarded_scope_reuses_only_its_own_assumptions_and_discards_them(db):
+    calls = []
+
+    def load(value):
+        calls.append(value)
+        return {'value': value}
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert pm_read_cache.remember('source', 'id', lambda: load('proven')) == {'value': 'proven'}
+        outer = pm_read_cache._CURRENT.get().scope
+        for assumed in ('first', 'second'):
+            with pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+                private = pm_read_cache._CURRENT.get().scope
+                assert private is not outer
+                assert pm_read_cache.remember('source', 'id', lambda: load(assumed)) == {'value': assumed}
+                assert pm_read_cache.remember('source', 'id', lambda: load('duplicate')) == {'value': assumed}
+                with pm_read_cache.guarded():
+                    # A deeper cycle/budget refusal cannot escape that guard.
+                    assert pm_read_cache.remember('nested', 'id', lambda: load('refused')) == {'value': 'refused'}
+                assert pm_read_cache.remember('nested', 'id', lambda: load('fresh')) == {'value': 'fresh'}
+            assert not private.active and private.values == {}
+            assert pm_read_cache._CURRENT.get().scope is outer
+            assert pm_read_cache.remember('source', 'id', lambda: load('duplicate')) == {'value': 'proven'}
+    assert calls == ['proven', 'first', 'refused', 'fresh', 'second', 'refused', 'fresh']
+
+
+def test_guarded_scope_requires_a_guard_and_an_unchanged_snapshot(db, reader):
+    read, calls = reader
+    with pytest.raises(RuntimeError, match='active traversal guard'):
+        with pm_read_cache.guarded_scope(db, OWNER):
+            pass
+    with pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+        read(db)
+        read(db)
+    assert len(calls) == 2  # Outside a snapshot, no memo can grant reuse.
+    with _snapshot(db), pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+        read(db)
+        read(db)
+        assert len(calls) == 3
+        db.execute("UPDATE records SET value='changed'")
+        assert read(db)['rows'] == ['changed']
+        assert read(db)['rows'] == ['changed']
+        assert pm_read_cache._CURRENT.get().scope.values == {}
+        assert len(calls) == 5
+
+
+def test_guarded_scope_cannot_revive_an_outer_scope_invalidated_by_writes(db, reader):
+    read, calls = reader
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        read(db)
+        db.execute("UPDATE records SET value='changed'")
+        with pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+            assert read(db)['rows'] == ['changed']
+            assert read(db)['rows'] == ['changed']
+            assert pm_read_cache._CURRENT.get().scope.disabled
+        assert read(db)['rows'] == ['changed']
+        assert len(calls) == 4
+
+
+async def test_guarded_scope_cannot_be_shared_with_inherited_tasks_or_threads(db, reader):
+    read, calls = reader
+
+    def child():
+        with pm_read_cache.scope(db, OWNER):
+            read(db)
+            read(db)
+        with pm_read_cache.guarded_scope(db, OWNER):
+            read(db)
+            read(db)
+
+    async def task():
+        child()
+
+    with _snapshot(db), pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+        expected = read(db)
+        await asyncio.create_task(task())
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            executor.submit(copy_context().run, child).result()
+        assert read(db) == expected
+        assert len(calls) == 9
+
+
+@pytest.mark.parametrize('difference', [
+    {'actor': 'other-reader'}, {'scopes': frozenset({'manage'})},
+    {'admin': True}, {'credential_id': 'credential-two'},
+])
+def test_guarded_scope_retains_full_principal_identity(db, difference):
+    calls = []
+
+    def load():
+        calls.append(True)
+        return len(calls)
+
+    with _snapshot(db), pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+        assert pm_read_cache.remember('visibility', 'id', load) == 1
+        with pm_read_cache.scope(db, replace(OWNER, **difference)):
+            assert pm_read_cache.remember('visibility', 'id', load) == 2
+            assert pm_read_cache.remember('visibility', 'id', load) == 2
+        assert pm_read_cache.remember('visibility', 'id', load) == 1
+    assert len(calls) == 2
+
+
+def test_repair_repeated_back_edges_are_bounded_without_exporting_partial_access(db, monkeypatch):
+    from types import SimpleNamespace
+
+    from bat_agent_connector import pm_maintenance_repair_delivery as delivery
+    from bat_agent_connector import pm_maintenance_repair_evidence as evidence
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    ops, parent, calls = SimpleNamespace(db=db), {'operation_id': 'repair'}, []
+
+    @pm_read_cache.memoized
+    def leaf(connection, principal):
+        calls.append(bool(repairs._READING.get()))
+        try:
+            repairs._full_access(ops, principal, parent)
+        except OperationError:
+            return False
+        return True
+
+    def sources(*args):
+        for _ in range(20):
+            assert leaf(db, OWNER) is True  # The current repair back edge is assumed.
+
+    def withdrawn(*args):
+        raise OperationError('NOT_FOUND', 'Another original source was withdrawn', 404)
+
+    monkeypatch.setattr(repairs, '_access', sources)
+    monkeypatch.setattr(evidence, 'require_evidence_sources', sources)
+    monkeypatch.setattr(delivery, 'require_sources', withdrawn)
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        with pytest.raises(OperationError, match='withdrawn'):
+            repairs._full_access(ops, OWNER, parent)
+        assert calls == [True]  # Forty repeated references need one traversal.
+        assert pm_read_cache._CURRENT.get().scope.values == {}
+        assert leaf(db, OWNER) is False  # The conditional True never escapes.
+        assert leaf(db, OWNER) is False
+        assert calls == [True, False, True]
+
+
 def _cycle_world(guard):
     """B is memoized; its loader re-enters A's traversal, which refuses the cycle.
 
