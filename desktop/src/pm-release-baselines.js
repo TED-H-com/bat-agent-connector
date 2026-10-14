@@ -1,4 +1,4 @@
-import {emptyState, iconButton} from './ui/components.js';
+import {button, disclosure, iconButton, inlineError, statusPill} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 // Release selection records a fixed source. It does not publish or authorize Maintain.
 export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace}) {
@@ -26,23 +26,25 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
   const bindingKey=(row,name)=>JSON.stringify([row.project_binding_id,name]);
   const selectedBinding=()=>bindings.flatMap(row=>row.repositories.map(name=>({row,name,key:bindingKey(row,name)}))).find(item=>item.key===repository.value);
   const selection=()=>JSON.stringify([repository.value,kind.value,selectedKey,branch.value]);
-  const choose=h('button',{type:'button',class:'secondary',onclick:()=>void readChoices(false)},t('prb_load_sources'));
-  const moreBindings=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void readBindings(true)},t('prb_more_bindings'));
-  const readPreview=h('button',{type:'button',class:'secondary',onclick:()=>void readProof()},t('prb_preview'));
-  const usePreview=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{
+  const choose=button({variant:'secondary',label:t('prb_load_sources'),onClick:()=>void readChoices(false)});
+  const moreBindings=button({variant:'secondary',label:t('prb_more_bindings'),onClick:()=>void readBindings(true)});
+  moreBindings.hidden=true;
+  const readPreview=button({variant:'secondary',label:t('prb_preview'),onClick:()=>void readProof()});
+  const usePreview=button({variant:'secondary',label:t('prb_use_preview'),onClick:()=>{
     if(!currentEditor||currentEditor.locked()||!preview||!allowed())return;
     currentEditor.set('registration',JSON.stringify(preview.registration));currentEditor.update();
-  }},t('prb_use_preview'));
-  const historyDetails=h('details',{},h('summary',{},t('prb_history')),history);
+  }});
+  usePreview.hidden=true;
+  const historyDetails=disclosure({element:h('details',{},h('summary',{},t('prb_history')),history)});
   historyDetails.addEventListener('toggle',()=>{if(historyDetails.open&&!historyLoaded&&ready)void readHistory(false);});
-  const editorDetails=h('details',{'data-release-register':''},h('summary',{},t('prb_register')),
+  const editorDetails=disclosure({element:h('details',{'data-release-register':''},h('summary',{},t('prb_register')),
     h('p',{class:'muted'},t('prb_source_help')),h('div',{class:'pm-fields'},labelled('prb_repository',repository),moreBindings,labelled('prb_kind',kind)),
     choose,sourceStatus,sourceView,labelled('prb_branch',branch),h('p',{class:'muted'},t('prb_branch_help')),
-    readPreview,previewView,usePreview,editorView);
+    readPreview,previewView,usePreview,editorView)});
   const permission=h('p',{class:'muted'},t('prb_owner'));
+  const headingState=h('div',{class:'pm-answer'},h('h3',{},t('prb_title')));
   const element=h('section',{class:'pm-brief','data-pm-release-baselines':''},h('header',{class:'pm-heading'},
-    h('div',{},h('h2',{},t('prb_title')),h('p',{class:'muted'},t('prb_intro'))),
-    iconButton({icon:'refresh-cw', label:t('prb_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,view,historyDetails,permission,editorDetails);
+    headingState,iconButton({icon:'refresh-cw', label:t('prb_refresh'), ...{type:'button',onclick:()=>void refresh()}})),status,view,historyDetails,editorDetails);
   function controls(){
     const can=ready&&allowed();
     for(const field of [repository,kind,branch])field.disabled=!can||reading;
@@ -55,9 +57,9 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
   function withdraw(){
     epoch++;selectionEpoch++;ready=false;head=null;reading=false;historyLoaded=false;historyCursor=null;
     bindings=[];bindingCursor=null;repository.replaceChildren(h('option',{value:''},t('prb_choose_repository')));moreBindings.hidden=true;
-    view.replaceChildren();history.replaceChildren();sourceStatus.replaceChildren();resetSources();controls();
+    view.replaceChildren();history.replaceChildren();sourceStatus.replaceChildren();resetSources();headingState.replaceChildren(h('h3',{},t('prb_title')));controls();
   }
-  function failure(error){withdraw();status.replaceChildren(h('p',{class:'muted'},t('prb_unavailable')),errorBox(error));}
+  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('prb_unavailable')}),errorBox(error));}
   const editorApi=async(...args)=>{
     const ticket=epoch;
     try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;}
@@ -66,33 +68,50 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
     const details=h('details',{},h('summary',{},t('prb_sources')));
     const source=proof?.source||{};
     for(const [label,value] of [[t('prb_commit'),document.commit_sha],[t('prb_observed'),stamp(proof?.observed_at)],
-      [t('prb_published'),source.published_at?stamp(source.published_at):null],['Repository',document.repository],['Baseline',metadata?.baseline_id],
-      ['SHA-256',metadata?.document_digest],['Source',source.kind],['Release ID',source.release_id],['Deployment',source.deployment_id]]) {
+      [t('prb_published'),source.published_at?stamp(source.published_at):null],[t('prb_fact_repository'),document.repository],[t('prb_fact_baseline'),metadata?.baseline_id],
+      [t('prb_fact_digest'),metadata?.document_digest],[t('prb_fact_source'),source.kind],[t('prb_fact_release'),source.release_id],[t('prb_fact_deployment'),source.deployment_id]]) {
       if(value!==null&&value!==undefined)details.append(h('p',{},h('strong',{},`${label}: `),h('span',{class:'mono'},String(value))));
     }
     if(metadata?.operation_id)details.append(h('a',{href:`#/op/${encodeURIComponent(metadata.operation_id)}`},t('pm_operation')));
     const maintenance=proof?.maintenance_branch;
     details.append(h('p',{class:'muted'},t(maintenance?.status==='verified_at_observation'?'prb_branch_verified':'prb_branch_none')));
     if(maintenance?.ref)details.append(h('p',{class:'mono'},maintenance.ref),h('p',{class:'mono'},maintenance.head_sha));
+    disclosure({element:details});
     return details;
   }
+  const fact=(label,tone)=>h('span',{class:'pm-baseline-fact'},h('span',{},t(label)),statusPill(tone));
   function baselineRow(row,current=false){
     if(row.workspace_id!==workspaceId||row.document?.workspace_id!==workspaceId)throw Error(t('prb_invalid'));
     const doc=row.document,delivery=doc.delivery_status||{};
+    const details=fixedDetails(doc,doc.proof,row);
+    details.append(h('p',{},t(delivery.github_release==='published'?'prb_gh_published':'prb_gh_unknown')),
+      h('p',{},t('prb_registry')),h('p',{},t(delivery.deployment==='verified'?'prb_dep_verified':'prb_dep_unknown')));
+    if(delivery.deployment==='verified')details.append(h('p',{class:'muted'},t('prb_not_live')));
+    details.append(h('p',{class:'muted'},t('prb_quality')));
+    const facts=()=>h('div',{class:'pm-baseline-facts'},
+      fact('prb_github_release',delivery.github_release==='published'?'adopted':'not_assessed'),
+      fact('prb_registry_short','not_assessed'),
+      fact('prb_dep_name',delivery.deployment==='verified'?'deployed':'not_assessed'),
+      fact('prb_acceptance','not_assessed'));
+    // Quality stays unassessed until acceptance is verified. Channel receipts do not promote the selection.
+    const overall=doc.quality?.functional_acceptance_verified===true?'accepted':doc.quality?.status==='unassessed'||doc.quality?.status==='not_assessed'?'not_assessed':'unknown';
+    if(current){details.append(h('p',{class:'muted'},t('prb_intro')),permission);
+      headingState.replaceChildren(h('h3',{},t('prb_current')),statusPill(overall));}
     return h('article',{'data-release-baseline':row.baseline_id},
-      h('h3',{},current?t('prb_current'):`${t('prb_version')} ${row.version}`),
+      current?null:h('div',{class:'pm-answer'},h('h3',{},`${t('prb_version')} ${row.version}`)),
+      current?facts():null,
       h('p',{},h('strong',{},doc.release_version?.value||doc.commit_sha),' · ',doc.repository,' · ',doc.channel),
       h('p',{class:'muted'},t('prb_version'), ' ', row.version, ' · ', stamp(row.created_at)),
-      h('ul',{},h('li',{},t(delivery.github_release==='published'?'prb_gh_published':'prb_gh_unknown')),
-        h('li',{},t('prb_registry')),h('li',{},t(delivery.deployment==='verified'?'prb_dep_verified':'prb_dep_unknown'))),
-      delivery.deployment==='verified'?h('p',{class:'muted'},t('prb_not_live')):null,
-      h('p',{class:'muted'},t('prb_quality')),
+      current?null:facts(),
       doc.intent?.rationale?h('p',{},doc.intent.rationale):null,
-      ...(doc.quality?.known_limitations||[]).map(item=>h('p',{},`${t('prb_limit_claim')}: ${item.text}`)),fixedDetails(doc,doc.proof,row));
+      ...(doc.quality?.known_limitations||[]).map(item=>h('p',{},`${t('prb_limit_claim')}: ${item.text}`)),details);
   }
   function renderCurrent(data){
     check(data);if(!Number.isSafeInteger(data.head?.version))throw Error(t('prb_invalid'));
-    head=data.head;view.replaceChildren(data.baseline?baselineRow(data.baseline,true):emptyState({title:t(data.visibility_filtered||head.version>0?'prb_hidden':'prb_empty')}));
+    head=data.head;
+    if(data.baseline)view.replaceChildren(baselineRow(data.baseline,true));
+    else{const details=disclosure({element:h('details',{},h('summary',{},t('prb_note')),h('p',{class:'muted'},t('prb_intro')),permission)});
+      view.replaceChildren(details);headingState.replaceChildren(h('h3',{},t(data.visibility_filtered||head.version>0?'prb_hidden':'prb_empty')));}
   }
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;
@@ -103,9 +122,9 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
       historyLoaded=true;historyCursor=page.next_cursor;historyFiltered ||= page.visibility_filtered;
       history.append(...rows);history.querySelector('[data-release-coverage]')?.remove();
       history.append(h('p',{'data-release-coverage':'',class:'muted'},t(historyFiltered?'prb_filtered':'prb_partial')));
-      if(historyCursor!==null&&historyCursor!==undefined)history.append(h('button',{'data-release-more':'',type:'button',class:'secondary',onclick:event=>{
+      if(historyCursor!==null&&historyCursor!==undefined)history.append(button({'data-release-more':'',variant:'secondary',label:t('prb_more'),onClick:event=>{
         event.currentTarget.disabled=true;void readHistory(true);
-      }},t('prb_more')));
+      }}));
     }catch(error){if(valid(ticket))failure(error);}
   }
   function bindEditor(){
@@ -179,7 +198,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
       if(choicesFiltered)sourceView.append(h('p',{class:'muted'},t('prb_filtered')));
       if(choicesIneligible)sourceView.append(h('p',{class:'muted'},t('prb_ineligible')));
       if(page.coverage?.page_bound_reached)sourceView.append(h('p',{class:'muted'},t('prb_page_bound')));
-      if(choiceCursor!==null&&choiceCursor!==undefined)sourceView.append(h('button',{type:'button',class:'secondary',onclick:()=>void readChoices(true)},t('prb_more_sources')));
+      if(choiceCursor!==null&&choiceCursor!==undefined)sourceView.append(button({variant:'secondary',label:t('prb_more_sources'),onClick:()=>void readChoices(true)}));
     }catch(error){if(valid(ticket)&&selected===selectionEpoch)failure(error);}finally{if(ticket===epoch){reading=false;controls();}}
   }
   async function readProof(){

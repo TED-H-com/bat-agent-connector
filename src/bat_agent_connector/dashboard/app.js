@@ -1423,15 +1423,22 @@ var pmMaintenanceRepairsStrings = {
 		pmr_rule: "Adopted repair rule",
 		pmr_history: "Saved repair",
 		pmr_issue: "Issue",
-		pmr_start: "Start selected repair",
+		pmr_start: "Start repair",
 		pmr_none: "None",
+		pmr_new: "New repair",
+		pmr_evidence_open: "Evidence",
+		pmr_details: "Details",
+		pmr_h: "h",
+		pmr_min: "min",
+		pmr_sec: "s",
 		pmr_stale: "The policy, release, observation or stage changed. This draft still uses its original versions.",
-		pmr_rebase: "Use these reviewed repair versions",
+		pmr_rebase: "Use current versions",
 		pmr_owner: "A current owner with management access must select repair work and evidence.",
 		pmr_stopped: "New repair investment is stopped or unavailable. Original requests and evidence remain readable with current source access.",
 		pmr_no_rules: "Adopt a repair rule with an existing reviewed handoff before starting a repair.",
 		pmr_budget: "Adopted resource limits",
 		pmr_parallel: "parallel",
+		pmr_period_budget: "{runs} per {period}",
 		pmr_cost: "Model and provider charges are unmeasured. These limits do not prove a hard cost ceiling.",
 		pmr_reserved: "This repair still holds its capacity reservation.",
 		pmr_released: "This repair no longer holds a capacity reservation.",
@@ -1461,12 +1468,12 @@ var pmMaintenanceRepairsStrings = {
 		pmr_deadline_block: "The original investment deadline has passed. Existing receipts can still be read.",
 		pmr_budget_block: "The adopted run or concurrency budget currently blocks new work.",
 		pmr_quality_needed: "Select an original qualified acceptance and review assessment.",
-		pmr_verify_needed: "Record the configured verification of this exact owned implementation result.",
-		pmr_gate: "The central has not permitted the next step. Read the original operation for details.",
+		pmr_verify_needed: "Next: verify this repair's result.",
+		pmr_gate: "The next step is not permitted. Read the original operation for details.",
 		pmr_evidence: "Original result evidence",
 		pmr_evidence_help: "Choose an exact saved result for this implementation. Recording evidence does not replace it with a newer result or approve a release.",
-		pmr_record: "Record selected evidence",
-		pmr_evidence_rebase: "Use current repair evidence revision",
+		pmr_record: "Record evidence",
+		pmr_evidence_rebase: "Use current versions",
 		pmr_revision: "Revision",
 		pmr_kind_verification: "Observed verification",
 		pmr_kind_quality: "Qualified assessment",
@@ -1482,7 +1489,7 @@ var pmMaintenanceRepairsStrings = {
 		pmr_rule_paths: "Narrow repair paths (one per line)",
 		pmr_rule_command: "Configured verification command",
 		pmr_command_help: "Enter the exact configured command text you reviewed. The saved rule fixes its digest; it does not configure a new command on the host.",
-		pmr_add_rule: "Add reviewed handoff as a rule",
+		pmr_add_rule: "Add as rule",
 		pmr_remove_rule: "Remove this rule",
 		pmr_rule_original: "Fixed handoff and release references",
 		pmr_rule_invalid: "Use a unique lowercase rule key, required labels, exact relative paths, an existing reviewed handoff and a verification command.",
@@ -1519,26 +1526,33 @@ var pmMaintenanceRepairsStrings = {
 		pmr_status_blocked: "受阻",
 		pmr_status_unknown: "未知",
 		pmr_title: "維護修復",
-		pmr_intro: "依已採用的規則與固定實作交接，審閱一筆觀察到的 Issue。",
+		pmr_intro: "依已採用的規則與固定實作交接，審閱一筆觀察到的議題。",
 		pmr_refresh: "重新讀取修復",
 		pmr_loading: "正在讀取原始修復來源…",
 		pmr_unavailable: "原始修復來源目前無法讀取。已保存的請求仍保留，可查回原始收據。",
 		pmr_invalid: "修復回應與原始專案或來源版本不符。",
 		pmr_limit: "來源集合超出選擇器上限，請先縮小來源工作範圍。",
 		pmr_choose: "選擇原始紀錄",
-		pmr_finding: "觀察到的 Issue",
+		pmr_finding: "觀察到的議題",
 		pmr_rule: "已採用的修復規則",
 		pmr_history: "已保存的修復",
-		pmr_issue: "Issue",
-		pmr_start: "啟動選定修復",
+		pmr_issue: "議題",
+		pmr_start: "開始修復",
 		pmr_none: "無",
+		pmr_new: "新增修復",
+		pmr_evidence_open: "證據",
+		pmr_details: "詳細資訊",
+		pmr_h: "小時",
+		pmr_min: "分鐘",
+		pmr_sec: "秒",
 		pmr_stale: "政策、發布基準、觀察或階段已變更。草稿仍使用原始版本。",
-		pmr_rebase: "使用這次審閱的修復版本",
-		pmr_owner: "須由目前具管理權限的擁有者選定修復與證據。",
+		pmr_rebase: "使用目前版本",
+		pmr_owner: "須由目前具管理權限的負責人選定修復與證據。",
 		pmr_stopped: "目前已停止或無法新增修復投入。具來源權限時仍可讀取原始請求與證據。",
 		pmr_no_rules: "請先以既有且已審閱的交接內容採用修復規則。",
 		pmr_budget: "已採用的資源上限",
 		pmr_parallel: "同時工作",
+		pmr_period_budget: "每 {period}最多 {runs} 次",
 		pmr_cost: "模型與供應商費用尚未量測；這些上限不代表已確保費用不超支。",
 		pmr_reserved: "此修復仍保留工作容量。",
 		pmr_released: "此修復已釋放工作容量。",
@@ -1568,12 +1582,12 @@ var pmMaintenanceRepairsStrings = {
 		pmr_deadline_block: "原始投入期限已過，仍可讀取既有收據。",
 		pmr_budget_block: "已採用的執行或同時工作額度目前阻擋新增工作。",
 		pmr_quality_needed: "請選擇原始且合格的驗收與審查評估。",
-		pmr_verify_needed: "請登記此固定受管實作結果的設定驗證。",
-		pmr_gate: "中央尚未允許下一步，請查看原始操作的詳細紀錄。",
+		pmr_verify_needed: "下一步：驗證這次修復的結果。",
+		pmr_gate: "下一步尚未允許。請查看原始操作的詳細紀錄。",
 		pmr_evidence: "原始結果證據",
 		pmr_evidence_help: "選擇此實作的確切已保存結果。登記證據不會改用較新結果，也不代表同意發布。",
-		pmr_record: "登記選定證據",
-		pmr_evidence_rebase: "使用目前的修復證據版本",
+		pmr_record: "記錄證據",
+		pmr_evidence_rebase: "使用目前版本",
 		pmr_revision: "版本",
 		pmr_kind_verification: "已觀察驗證",
 		pmr_kind_quality: "合格評估",
@@ -1589,7 +1603,7 @@ var pmMaintenanceRepairsStrings = {
 		pmr_rule_paths: "修復的較窄路徑（每行一個）",
 		pmr_rule_command: "已設定的驗證命令",
 		pmr_command_help: "輸入審閱過的已設定命令原文。規則保存其摘要，不會在主機新增命令設定。",
-		pmr_add_rule: "將已審閱交接加入規則",
+		pmr_add_rule: "加入為規則",
 		pmr_remove_rule: "移除此規則",
 		pmr_rule_original: "固定交接與發布參照",
 		pmr_rule_invalid: "請使用唯一的小寫規則代號、必要標籤、確切相對路徑、已審閱交接及驗證命令。",
@@ -1606,7 +1620,8 @@ var pmMaintenanceRepairsStrings = {
 var pmQualityReviewsStrings = {
 	en: {
 		pmq_verify_heading: "Verify an original implementation",
-		pmq_verify_help: "Run the trusted project verifier for the selected original implementation. The candidate and command come from the central.",
+		pmq_verify_help: "Run the trusted project verifier for the selected original implementation. The candidate and command are its saved settings.",
+		pmq_details: "Details",
 		pmq_verify_execution: "Implementation to verify",
 		pmq_verify_refresh: "Refresh verifier source",
 		pmq_verify_loading: "Reading the original verifier and clean candidate…",
@@ -1614,9 +1629,9 @@ var pmQualityReviewsStrings = {
 		pmq_verify_tree: "Candidate tree",
 		pmq_verify_no_candidate: "A clean fixed candidate is unavailable. Verification cannot start.",
 		pmq_verify_unconfigured: "The original project has no available trusted verifier.",
-		pmq_verify_use_config: "Use this current verifier context",
+		pmq_verify_use_config: "Use current versions",
 		pmq_verify_changed: "The saved candidate or verifier context differs. Review the current source before starting a new verification.",
-		pmq_verify_run: "Verify this fixed result",
+		pmq_verify_run: "Verify result",
 		pmq_verify_effect: "This runs the existing configured command. An unresolved original process is recovered by its original key; it is never resent as a new process.",
 		pmq_configured: "configured verifier",
 		pmq_work: "Work item for review",
@@ -1647,7 +1662,7 @@ var pmQualityReviewsStrings = {
 		pmq_use_version: "Use current review version",
 		pmq_create: "Appoint this review",
 		pmq_owner_help: "The workspace owner appoints the reviewer and fixes the proof policy for every original criterion.",
-		pmq_candidate_help: "Use the full commit from the original engineering result. The central verifies its relation to the selected implementation and proof.",
+		pmq_candidate_help: "Use the full commit from the original engineering result. Its relation to the selected implementation and proof stays with that saved result.",
 		pmq_dod_help: "A package’s fixed DoD is preserved. Otherwise, choose a saved DoD from the same scope. Without a DoD, this review cannot qualify the work.",
 		pmq_empty: "Choose a saved review to read its conclusions.",
 		pmq_result: "Original review and current applicability",
@@ -1698,7 +1713,8 @@ var pmQualityReviewsStrings = {
 	},
 	"zh-TW": {
 		pmq_verify_heading: "驗證原始實作",
-		pmq_verify_help: "為選定原始實作執行專案的受信任驗證器。候選結果與命令由中央服務提供。",
+		pmq_verify_help: "為選定的原始實作執行專案的受信任驗證器。候選結果與命令來自已保存的設定。",
+		pmq_details: "詳細資訊",
 		pmq_verify_execution: "要驗證的實作",
 		pmq_verify_refresh: "更新驗證來源",
 		pmq_verify_loading: "正在讀取原始驗證器與乾淨候選結果…",
@@ -1706,9 +1722,9 @@ var pmQualityReviewsStrings = {
 		pmq_verify_tree: "候選檔案樹",
 		pmq_verify_no_candidate: "目前沒有乾淨且固定的候選結果，無法開始驗證。",
 		pmq_verify_unconfigured: "原始專案目前沒有可用的受信任驗證器。",
-		pmq_verify_use_config: "使用目前驗證內容",
+		pmq_verify_use_config: "使用目前版本",
 		pmq_verify_changed: "已保存候選結果或驗證器內容不同。請先核對目前來源，再開始新的驗證。",
-		pmq_verify_run: "驗證這個固定結果",
+		pmq_verify_run: "驗證結果",
 		pmq_verify_effect: "這會執行既有設定的命令。結果未明的原始程序只能使用原始請求鍵復原，不會以新程序重送。",
 		pmq_configured: "已設定驗證器",
 		pmq_work: "審查工作項目",
@@ -1739,7 +1755,7 @@ var pmQualityReviewsStrings = {
 		pmq_use_version: "使用目前審查版本",
 		pmq_create: "指定這份審查",
 		pmq_owner_help: "工作空間擁有者指定負責審查者，並固定每項原始條件的證據政策。",
-		pmq_candidate_help: "請使用原始工程結果的完整提交。中央服務會核對其與選定實作及證據的關係。",
+		pmq_candidate_help: "請使用原始工程結果的完整提交。它與選定實作及證據的關係留在該筆已保存結果中。",
 		pmq_dod_help: "保留工程套件固定的完成定義；否則可選擇相同範疇中已保存的完成定義。未指定完成定義時，這份審查不能判定工作合格。",
 		pmq_empty: "請選擇已保存的審查以讀取結論。",
 		pmq_result: "原始審查與目前適用性",
@@ -2353,22 +2369,22 @@ var findingNameStrings = {
 //#endregion
 //#region src/pm-maintenance-review-strings.js
 var rows$1 = {
-	add_to_idea: ["Add to Idea discussion", "加入 Idea 討論"],
-	idea_choose: ["Choose an existing Idea discussion", "選擇既有 Idea 討論"],
-	idea_help: ["Select an existing Idea and topic. The original candidate is saved as unresolved; confirming a direction and adopting a plan remain separate actions.", "選擇既有 Idea 與主題。原候選會保存為待確認；確認方向與採用計畫仍是後續各自的操作。"],
-	idea_refresh: ["Refresh Idea discussions", "重新讀取 Idea 討論"],
+	add_to_idea: ["Add to discussion", "加入討論"],
+	idea_choose: ["Choose an existing Idea discussion", "選擇既有構想討論"],
+	idea_help: ["Select an existing Idea and topic. The original candidate is saved as unresolved; confirming a direction and adopting a plan remain separate actions.", "選擇既有構想與主題。原候選會保存為待確認；確認方向與採用計畫仍是後續各自的操作。"],
+	idea_refresh: ["Refresh Idea discussions", "重新讀取構想討論"],
 	idea_more: ["More discussions", "更多討論"],
 	idea_saved: ["Previously selected discussion", "先前選定的討論"],
 	idea_topic: ["Topic for this candidate", "這個候選的主題"],
-	idea_empty: ["Create an Idea discussion in this PM workspace first, then return to select it.", "請先在此 PM workspace 建立 Idea 討論，再回來選擇。"],
+	idea_empty: ["Create an Idea discussion in this PM workspace first, then return to select it.", "請先在此專案工作區建立構想討論，再回來選擇。"],
 	idea_stale: ["The discussion changed. Review its current version before adding a new input.", "討論已變更。加入新輸入前，請先檢視目前版本。"],
-	idea_use_version: ["Use this discussion version", "使用目前討論版本"],
-	idea_only: ["This discussion is no longer in Idea. The original request can still be checked.", "此討論已不在 Idea 階段，仍可查回原請求。"],
+	idea_use_version: ["Use this version", "使用此版本"],
+	idea_only: ["This discussion is no longer in Idea. The original request can still be checked.", "此討論已不在構想階段，仍可查回原請求。"],
 	idea_saved_input: ["Original candidate saved as unresolved. No plan was adopted.", "原候選已保存為待確認，尚未採用計畫。"],
 	idea_open: ["Open selected discussion", "開啟選定討論"],
 	candidate_unavailable: ["The original candidate or selected discussion is unavailable.", "無法讀取原候選或選定討論。"],
 	idea_original: ["Original maintenance candidate", "原維護候選"],
-	idea_original_help: ["This fixed proposal retains its original wording, disposition and sources. The input’s confirmation does not rewrite the original Review.", "這份固定提案保留原文字、處置與來源；輸入的確認不會改寫原 Review。"],
+	idea_original_help: ["This fixed proposal retains its original wording, disposition and sources. The input’s confirmation does not rewrite the original Review.", "這份固定提案保留原文字、處置與來源；輸入的確認不會改寫原維護審閱。"],
 	source_repairs: ["Maintenance repair outcomes", "維護修復成果"],
 	ref_maintenance_repair: ["Original maintenance repair", "原維護修復工作"],
 	repair_outcome: ["Saved repair outcome", "已保存修復結果"],
@@ -2410,7 +2426,7 @@ var rows$1 = {
 	weekly_capacity: ["The adopted policy’s concurrent or period run allowance is in use.", "已採用政策的同時執行或期間次數額度已用盡。"],
 	weekly_stage: ["The workspace stage does not permit scheduled maintenance.", "目前工作區階段不允許排程維護。"],
 	weekly_disabled: ["The adopted maintenance policy is disabled.", "已採用的維護政策已停用。"],
-	weekly_authority: ["The original policy owner’s current authority is unavailable.", "原政策 owner 的目前權限無法使用。"],
+	weekly_authority: ["The original policy owner’s current authority is unavailable.", "原政策負責人的目前權限無法使用。"],
 	weekly_sources: ["The original policy sources or supported observation profile are unavailable.", "原政策來源或支援的觀察範圍無法使用。"],
 	previous_context: ["Previous discussion context", "前次討論脈絡"],
 	sample_count: ["Saved samples", "已保存取樣數"],
@@ -2418,7 +2434,7 @@ var rows$1 = {
 	source_samples: ["Original saved samples", "原始保存取樣"],
 	sample_at: ["Observed at", "觀察時間"],
 	open_prs: ["Observed open PRs", "觀察到的開放 PR"],
-	active_actions: ["Observed unfinished Actions", "觀察到尚未結束的 Actions"],
+	active_actions: ["Observed unfinished Actions", "觀察到尚未結束的 GitHub Actions"],
 	check_outcome: ["Saved check outcome", "已保存檢查結果"],
 	check_complete: ["Complete sampled coverage", "本次取樣涵蓋完整"],
 	check_incomplete: ["Incomplete sampled coverage", "本次取樣涵蓋不完整"],
@@ -2432,11 +2448,14 @@ var rows$1 = {
 	focus_verify_reported_results: ["Verify reported results against their original evidence.", "依原始證據驗證回報結果。"],
 	previous_truncated: ["The saved previous discussion context was bounded; its full history remains in that report.", "保存的前次討論脈絡有範圍上限，完整歷史仍留在原報告中。"],
 	source_digest: ["Original source digest", "原始來源摘要值"],
-	title: ["Maintenance Review", "維護 Review"],
-	intro: ["Prepare a fixed report, discuss it, then record the owner’s decision.", "先準備固定報告、進行討論，再記錄 owner 的決定。"],
-	refresh: ["Refresh maintenance Review", "重新讀取維護 Review"],
+	title: ["Maintenance review", "維護審閱"],
+	intro: ["Prepare a fixed report, discuss it, then record the owner’s decision.", "先準備固定報告、進行討論，再記錄負責人的決定。"],
+	details: ["Details", "詳細資訊"],
+	shown: ["Shown as", "顯示為"],
+	more: ["More actions", "其他操作"],
+	refresh: ["Refresh maintenance Review", "重新讀取維護審閱"],
 	invalid: ["The original maintenance report could not be verified.", "無法核對原始維護報告。"],
-	unavailable: ["This Review or one of its original sources is unavailable.", "這份 Review 或其原始來源目前無法讀取。"],
+	unavailable: ["This Review or one of its original sources is unavailable.", "這份維護審閱或其原始來源目前無法讀取。"],
 	unknown: ["Unknown", "未知"],
 	none: ["None in this saved selection.", "本次已保存選取沒有項目。"],
 	empty: ["No maintenance report has been prepared.", "尚未準備維護報告。"],
@@ -2450,9 +2469,9 @@ var rows$1 = {
 	release: ["Original release baseline", "原發布基準"],
 	coverage: ["Source coverage", "來源涵蓋"],
 	source_github: ["GitHub PRs and Actions", "GitHub PR 與 Actions"],
-	source_workload: ["Central workload", "中央工作量"],
+	source_workload: ["Workload", "工作量"],
 	source_checks: ["Maintenance checks", "維護檢查"],
-	source_issues: ["Issue contents", "Issue 內容"],
+	source_issues: ["Issue contents", "議題內容"],
 	source_dependencies: ["Dependency contents", "依賴內容"],
 	source_research: ["Research", "研究"],
 	source_quality: ["Quality assessment", "品質判斷"],
@@ -2480,7 +2499,7 @@ var rows$1 = {
 	blocker_help: ["These reasons describe one saved workload point, not a fresh complete diagnosis.", "這些原因只描述一次已保存的工作量觀察，並非新的完整診斷。"],
 	finished_checks: ["Finished checks", "已結束檢查"],
 	pending_checks: ["Pending checks", "尚未結束檢查"],
-	effort_unknown: ["Check counts do not measure engineering work. Engineering effort and provider charges are unknown.", "檢查次數不代表工程工作量；工程投入與 provider 費用仍未知。"],
+	effort_unknown: ["Check counts do not measure engineering work. Engineering effort and provider charges are unknown.", "檢查次數不代表工程工作量；工程投入與供應商費用仍未知。"],
 	proof: ["Original sources and operations", "原始來源與操作"],
 	snapshot: ["Fixed snapshot", "固定快照"],
 	as_of: ["Report assembled at", "報告彙整時間"],
@@ -2500,8 +2519,8 @@ var rows$1 = {
 	direction: ["Proposed direction", "提議方向"],
 	direction_continue_maintenance: ["Continue maintenance", "繼續維護"],
 	direction_bounded_repair_proposal: ["Propose a bounded repair", "提議有界修復"],
-	direction_explore_idea: ["Explore an Idea", "探索 Idea"],
-	direction_request_planning: ["Request Planning", "要求進入 Planning"],
+	direction_explore_idea: ["Explore an Idea", "探索構想"],
+	direction_request_planning: ["Request Planning", "要求進入規劃"],
 	direction_revise_policy: ["Propose a policy revision", "提議修改政策"],
 	direction_pause_proposal: ["Propose a pause", "提議暫停"],
 	direction_close_proposal: ["Propose closing", "提議關閉"],
@@ -2518,16 +2537,16 @@ var rows$1 = {
 	followup_reported_done: ["Reported done · unassessed", "回報完成 · 尚未評估"],
 	not_completed: ["No completed discussion has been recorded. A prepared report is not an attended meeting.", "尚未記錄已完成的討論；報告準備完成不代表已開會。"],
 	prepare: ["Prepare report", "準備報告"],
-	prepare_help: ["Summarize saved evidence for a past period of up to 31 days. This makes no provider or model request.", "彙整最多 31 天過去期間的已保存證據；不向 provider 或模型發出請求。"],
+	prepare_help: ["Summarize saved evidence for a past period of up to 31 days. This makes no provider or model request.", "彙整最多 31 天過去期間的已保存證據；不向供應商或模型發出請求。"],
 	report_title: ["Report title", "報告標題"],
 	start: ["Period start", "期間起點"],
 	end: ["Period end", "期間終點"],
 	previous: ["Previous report to compare", "要比較的前次報告"],
 	no_previous: ["No comparison selected", "未選取比較報告"],
 	context_missing: ["A readable current policy and release baseline are required.", "需要可讀的目前政策與發布基準。"],
-	write_scope: ["A workspace owner or contributor with observe and manage can record this Review.", "具觀察與管理權限的 workspace owner 或 contributor 可記錄 Review。"],
+	write_scope: ["A workspace owner or contributor with observe and manage can record this Review.", "具觀察與管理權限的工作空間負責人或協作者可記錄這份維護審閱。"],
 	stale: ["The source version changed. Your draft and original request are retained.", "來源版本已改變；保留你的草稿與原請求。"],
-	use_versions: ["Use the displayed versions for this draft", "以畫面版本更新此草稿依據"],
+	use_versions: ["Update baseline", "更新基準"],
 	history: ["Report history", "報告歷史"],
 	more_reports: ["More reports", "更多報告"],
 	choose: ["Select a report", "選取報告"],
@@ -2535,12 +2554,12 @@ var rows$1 = {
 	source_refs: ["Original report sources", "原報告來源"],
 	source_help: ["Select the original evidence supporting this record.", "選取支持這份紀錄的原始證據。"],
 	reason: ["Reason for this record", "記錄理由"],
-	note: ["Save discussion note", "保存討論紀錄"],
+	note: ["Save note", "儲存筆記"],
 	note_content: ["Discussion note", "討論內容"],
-	candidate: ["Save improvement candidate", "保存改善候選"],
+	candidate: ["Save candidate", "儲存候選"],
 	candidate_title: ["Candidate title", "候選標題"],
-	complete: ["Record completed discussion", "記錄已完成討論"],
-	complete_owner: ["Only a current workspace owner can record the discussion outcome.", "只有目前 workspace owner 可記錄討論結果。"],
+	complete: ["Complete review", "完成檢視"],
+	complete_owner: ["Only a current workspace owner can record the discussion outcome.", "只有目前的工作空間負責人可記錄討論結果。"],
 	acknowledged_notes: ["Saved notes discussed", "已討論的保存紀錄"],
 	acknowledge: ["I acknowledge this saved discussion took place.", "我確認已進行這段保存的討論。"],
 	summary: ["Discussion summary", "討論摘要"],
@@ -2549,7 +2568,7 @@ var rows$1 = {
 	remove: ["Remove from draft", "從草稿移除"],
 	followup_text: ["Follow-up", "後續追蹤事項"],
 	result: ["Reported result", "回報結果"],
-	save_followup: ["Save follow-up result", "保存追蹤結果"],
+	save_followup: ["Save result", "儲存結果"],
 	select_followup: ["Assigned follow-up", "已安排追蹤事項"],
 	more_events: ["More discussion history", "更多討論歷史"],
 	history_partial: ["This is the loaded history; more records may remain.", "此處為已載入歷史，可能還有其他紀錄。"],
@@ -2892,8 +2911,9 @@ var pmMaintenancePolicyStrings = {
 		pmp_more: "Load more policies",
 		pmp_partial: "Only loaded policy records are shown.",
 		pmp_filtered: "Some original sources are outside your access; this is a partial history.",
-		pmp_edit: "Review and adopt a policy",
+		pmp_edit: "Review policy",
 		pmp_owner: "Only a current workspace owner with management access can adopt a policy.",
+		pmp_note: "Details",
 		pmp_baseline: "Current release for this decision",
 		pmp_no_baseline: "Select a readable current release baseline before adopting a policy.",
 		pmp_baseline_hidden: "The current release baseline is outside your access. It has not been cleared.",
@@ -2901,7 +2921,7 @@ var pmMaintenancePolicyStrings = {
 		pmp_no_branch: "No verified maintenance branch. Observation-only policies remain available.",
 		pmp_stopped: "New policy decisions are paused or closed. An earlier request can still be checked.",
 		pmp_stale: "The policy, release baseline or project stage changed. Your draft still uses its original versions.",
-		pmp_use_versions: "Use these reviewed versions",
+		pmp_use_versions: "Use current versions",
 		pmp_versions: "Fixed decision versions",
 		pmp_lifecycle: "Project stage revision",
 		pmp_save: "Adopt maintenance policy",
@@ -2945,7 +2965,7 @@ var pmMaintenancePolicyStrings = {
 		pmp_profile_choose: "Choose the coverage to adopt",
 		pmp_profile_github: "Open PR heads and GitHub Actions",
 		pmp_profile_help: "Includes open PRs with checks and statuses at their exact heads, and nonterminal GitHub Actions. Excludes other CI, issues and work outside GitHub. Selecting this profile does not run a check.",
-		pmp_profile_unavailable: "This central does not yet provide a selectable GitHub observation profile. Repository-wide coverage remains unknown.",
+		pmp_profile_unavailable: "A selectable GitHub observation profile is not available yet. Repository-wide coverage remains unknown.",
 		pmp_profile_legacy: "Repository-wide coverage (not established)",
 		pmp_profile_legacy_help: "The original policy requested repository-wide coverage. A narrower observation cannot establish it; adopt an explicit profile to change this scope.",
 		pmp_profile_required: "Choose the available GitHub workload coverage before adopting this policy.",
@@ -2998,8 +3018,9 @@ var pmMaintenancePolicyStrings = {
 		pmp_more: "載入更多政策",
 		pmp_partial: "此處只顯示已載入的政策紀錄。",
 		pmp_filtered: "部分原始來源無法讀取，這不是完整歷史。",
-		pmp_edit: "檢視並採用政策",
-		pmp_owner: "只有具管理權限的現任工作區 owner 可以採用政策。",
+		pmp_edit: "審閱政策",
+		pmp_owner: "只有具管理權限的現任工作區負責人可以採用政策。",
+		pmp_note: "詳細資訊",
 		pmp_baseline: "這次決策使用的目前發布版本",
 		pmp_no_baseline: "請先選定可讀取的目前發布基準，再採用政策。",
 		pmp_baseline_hidden: "目前發布基準不在你的權限內，並未被清除。",
@@ -3007,7 +3028,7 @@ var pmMaintenancePolicyStrings = {
 		pmp_no_branch: "尚無已驗證的維護分支，仍可採用只觀察、不修復的政策。",
 		pmp_stopped: "專案已暫停或關閉，不能採用新政策；仍可查回先前的請求。",
 		pmp_stale: "政策、發布基準或專案階段已變動。草稿仍保留原先的版本。",
-		pmp_use_versions: "使用這組已檢視版本",
+		pmp_use_versions: "使用目前版本",
 		pmp_versions: "固定決策版本",
 		pmp_lifecycle: "專案階段版本",
 		pmp_save: "採用維護政策",
@@ -3022,7 +3043,7 @@ var pmMaintenancePolicyStrings = {
 		pmp_scope: "來源、工種與交付",
 		pmp_sources: "可檢查的來源",
 		pmp_sources_help: "勾選的是可檢查範圍，不代表已經完成檢查。",
-		pmp_issues: "Issues",
+		pmp_issues: "議題",
 		pmp_pull_requests: "Pull requests",
 		pmp_dependencies: "依賴與上游",
 		pmp_documentation: "文件",
@@ -3049,9 +3070,9 @@ var pmMaintenancePolicyStrings = {
 		pmp_acceptance_help: "說明修復必須提供哪些證據；登記政策不代表修復已通過驗證。",
 		pmp_github_profile: "GitHub 工作觀察範圍",
 		pmp_profile_choose: "選擇這次採用的觀察範圍",
-		pmp_profile_github: "開啟中的 PR 固定 head 與 GitHub Actions",
-		pmp_profile_help: "涵蓋開啟中的 PR、其固定 head 的 checks 與 statuses，以及尚未結束的 GitHub Actions。不涵蓋其他 CI、Issues 或 GitHub 以外的工作；選定範圍不會立即執行檢查。",
-		pmp_profile_unavailable: "目前中央尚未提供可選的 GitHub 觀察範圍；整個儲存庫的涵蓋情況仍未知。",
+		pmp_profile_github: "開啟中的 PR 最新提交與 GitHub Actions",
+		pmp_profile_help: "涵蓋開啟中的 PR、其最新提交上的檢查與狀態，以及尚未結束的 GitHub Actions。不涵蓋其他 CI、議題，或 GitHub 以外的工作；選定範圍不會立即執行檢查。",
+		pmp_profile_unavailable: "目前尚未提供可選的 GitHub 觀察範圍；整個儲存庫的涵蓋情況仍未知。",
 		pmp_profile_legacy: "整個儲存庫（尚未取得完整觀察）",
 		pmp_profile_legacy_help: "原政策要求整個儲存庫的完整觀察，較窄的觀察範圍不能代替。若要變更，請明確選定範圍並採用新政策。",
 		pmp_profile_required: "採用政策前，請明確選定目前支援的 GitHub 工作觀察範圍。",
@@ -3094,7 +3115,7 @@ var pmMaintenancePolicyStrings = {
 //#region src/pm-release-baseline-strings.js
 var pmReleaseBaselineStrings = {
 	en: {
-		prb_discovery_unavailable: "This central does not provide source selection previews yet.",
+		prb_discovery_unavailable: "This service does not provide source selection previews yet.",
 		prb_ineligible: "Some deployment records do not meet the fixed source requirements and are omitted.",
 		prb_page_bound: "The source browsing limit has been reached. This is a partial list.",
 		prb_title: "Release baseline",
@@ -3107,7 +3128,7 @@ var pmReleaseBaselineStrings = {
 		prb_more: "Load more selections",
 		prb_filtered: "Some original sources are outside your current access. This is a partial history.",
 		prb_partial: "Only the loaded selections are shown.",
-		prb_register: "Select a release baseline",
+		prb_register: "Record baseline",
 		prb_repository: "Bound project and repository",
 		prb_choose_repository: "Choose a repository",
 		prb_more_bindings: "Load more repositories",
@@ -3116,6 +3137,16 @@ var pmReleaseBaselineStrings = {
 		prb_deployment: "Verified deployment",
 		prb_load_sources: "Read published sources",
 		prb_more_sources: "Read more sources",
+		prb_note: "Details",
+		prb_registry_short: "Package registry",
+		prb_dep_name: "Deployment",
+		prb_acceptance: "Acceptance",
+		prb_fact_repository: "Repository",
+		prb_fact_baseline: "Baseline",
+		prb_fact_digest: "SHA-256",
+		prb_fact_source: "Source",
+		prb_fact_release: "Release ID",
+		prb_fact_deployment: "Deployment",
 		prb_source_help: "Published source reads begin only when you request them. Choose an existing release or verified deployment; package registries are not supported yet.",
 		prb_no_sources: "No readable published sources on this page.",
 		prb_branch: "Maintenance branch (optional)",
@@ -3151,7 +3182,7 @@ var pmReleaseBaselineStrings = {
 		prb_limit_claim: "Owner claim"
 	},
 	"zh-TW": {
-		prb_discovery_unavailable: "此中央服務尚未提供來源選擇預覽。",
+		prb_discovery_unavailable: "此服務尚未提供來源選擇預覽。",
 		prb_ineligible: "部分部署紀錄未符合固定來源要求，因此未列入。",
 		prb_page_bound: "已達來源瀏覽上限；這裡是部分清單。",
 		prb_title: "發布基準",
@@ -3164,16 +3195,26 @@ var pmReleaseBaselineStrings = {
 		prb_more: "載入更多版本",
 		prb_filtered: "部分原始來源不在你目前的權限內；這裡是部分歷史。",
 		prb_partial: "只顯示已載入的選定紀錄。",
-		prb_register: "選定發布基準",
+		prb_register: "登記基準",
 		prb_repository: "已關聯的專案與儲存庫",
 		prb_choose_repository: "選取儲存庫",
 		prb_more_bindings: "載入更多儲存庫",
 		prb_kind: "已發布來源",
-		prb_github_release: "GitHub Release",
+		prb_github_release: "GitHub 版本發布",
 		prb_deployment: "已驗證部署",
 		prb_load_sources: "讀取已發布來源",
 		prb_more_sources: "讀取更多來源",
-		prb_source_help: "按下讀取後才會查詢已發布來源。選取既有 release 或已驗證部署；目前尚不支援套件 registry。",
+		prb_note: "詳細資訊",
+		prb_registry_short: "套件登錄處",
+		prb_dep_name: "部署",
+		prb_acceptance: "驗收",
+		prb_fact_repository: "儲存庫",
+		prb_fact_baseline: "基準",
+		prb_fact_digest: "SHA-256",
+		prb_fact_source: "來源",
+		prb_fact_release: "版本發布識別碼",
+		prb_fact_deployment: "部署",
+		prb_source_help: "按下讀取後才會查詢已發布來源。選取既有版本發布或已驗證部署；目前尚不支援套件登錄處。",
 		prb_no_sources: "這一頁沒有可讀的已發布來源。",
 		prb_branch: "維護分支（可留空）",
 		prb_branch_help: "填入分支名稱，例如 release/1.x；留空表示尚未設定。",
@@ -3190,10 +3231,10 @@ var pmReleaseBaselineStrings = {
 		prb_loading: "讀取發布證據…",
 		prb_unavailable: "無法核對來源權限，已移除先前顯示的發布事實；本地草稿仍保留。",
 		prb_invalid: "發布證據與固定的工作區、來源或版本不符。",
-		prb_quality: "功能驗收與品質仍未評估，也尚未授權 Maintain。",
-		prb_registry: "套件 registry 發布：未評估",
-		prb_gh_published: "GitHub Release：已發布",
-		prb_gh_unknown: "GitHub Release：未評估",
+		prb_quality: "功能驗收與品質仍未評估，也尚未授權維護。",
+		prb_registry: "套件登錄處發布：未評估",
+		prb_gh_published: "GitHub 版本發布：已發布",
+		prb_gh_unknown: "GitHub 版本發布：未評估",
 		prb_dep_verified: "部署：固定版本已驗證",
 		prb_dep_unknown: "部署：未評估",
 		prb_not_live: "這是原始部署回執，尚未重新確認環境目前運行的版本。",
@@ -27985,14 +28026,24 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		const value = localStorage.getItem(navigation);
 		if (operation$1.test(value || "")) selected = value;
 	} catch {}
-	const picker = h("select", { "aria-label": t("pmq_verify_execution") }), status = h("div", { role: "status" }), facts = h("div"), holder = h("div");
+	const picker = h("select", { "aria-label": t("pmq_verify_execution") }), status = h("div", { role: "status" }), factBody = h("div"), holder = h("div"), notes = h("div");
+	const facts = h("details", {}, h("summary", {}, t("pmq_details")), factBody);
+	disclosure({ element: facts });
 	const element = h("details", { "data-pm-execution-verification": "" }, h("summary", {}, t("pmq_verify_heading")), h("p", { class: "muted" }, t("pmq_verify_help")), labelled("pmq_verify_execution", picker), h("div", { class: "actions" }, iconButton({
 		icon: "refresh-cw",
 		label: t("pmq_verify_refresh"),
 		type: "button",
-		class: "secondary",
 		onclick: () => void load()
-	})), status, facts, holder);
+	})), status, notes, facts, holder);
+	const stampOf = (row) => [
+		"created_at",
+		"updated_at",
+		"finished_at"
+	].map((key) => row?.[key]).find((value) => Number.isFinite(value));
+	const optionLabel = (row) => {
+		const at = stampOf(row);
+		return at === void 0 ? String(row.actor || "") : `${row.actor} · ${timeText(at)}`;
+	};
 	const valid = (ticket) => {
 		try {
 			alive();
@@ -28009,7 +28060,8 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		configuration = null;
 		editor?.dispose();
 		editor = null;
-		facts.replaceChildren();
+		factBody.replaceChildren();
+		notes.replaceChildren();
 		holder.replaceChildren();
 		onConfiguration(null);
 	}
@@ -28033,11 +28085,11 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 			ready = true;
 			status.replaceChildren();
 			onConfiguration(value);
-			facts.append(line("pmq_execution", selected));
-			if (value.command_digest) facts.append(line("pmq_verify_command", value.command_digest));
-			if (value.candidate_commit && value.tree_hash) facts.append(line("pmq_candidate", value.candidate_commit), line("pmq_verify_tree", value.tree_hash));
-			else facts.append(h("p", { class: "muted" }, t("pmq_verify_no_candidate")));
-			if (!value.available) facts.append(h("p", { class: "muted" }, t("pmq_verify_unconfigured")));
+			factBody.append(line("pmq_execution", selected));
+			if (value.command_digest) factBody.append(line("pmq_verify_command", value.command_digest));
+			if (value.candidate_commit && value.tree_hash) factBody.append(line("pmq_candidate", value.candidate_commit), line("pmq_verify_tree", value.tree_hash));
+			else notes.append(h("p", { class: "muted" }, t("pmq_verify_no_candidate")));
+			if (!value.available) notes.append(h("p", { class: "muted" }, t("pmq_verify_unconfigured")));
 			const fields = Object.fromEntries([
 				"candidate_commit",
 				"tree_hash",
@@ -28049,16 +28101,16 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 			})]));
 			const matches = () => configuration && Object.entries(fields).every(([key, field]) => field.value === configuration[key]);
 			const admissible = () => writer() && configuration?.available && sha$3.test(configuration.candidate_commit) && sha$3.test(configuration.tree_hash) && matches();
-			const rebase = h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: () => {
+			const rebase = button({
+				variant: "secondary",
+				label: t("pmq_verify_use_config"),
+				onClick: () => {
 					if (editor && !editor.locked() && configuration) {
 						for (const key of Object.keys(fields)) editor.set(key, configuration[key] || "");
 						editor.update();
 					}
 				}
-			}, t("pmq_verify_use_config"));
+			});
 			editor = form({
 				namespace: `${namespace}.verification`,
 				api,
@@ -28106,7 +28158,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		generation++;
 		clear();
 		sources = rows;
-		picker.replaceChildren(h("option", { value: "" }, t("pmq_choose")), ...rows.map((row) => h("option", { value: row.operation_id }, `${row.actor} · ${row.operation_id}`)));
+		picker.replaceChildren(h("option", { value: "" }, t("pmq_choose")), ...rows.map((row) => h("option", { value: row.operation_id }, optionLabel(row))));
 		if (selected && !sources.some((row) => row.operation_id === selected)) selected = "";
 		picker.value = selected;
 		element.hidden = !enabled();
@@ -32251,7 +32303,7 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 		github_prs: ["github_open_pull_requests"],
 		github_actions: ["github_nonterminal_actions"]
 	};
-	const overview = h("section", { "data-review-report": "" }, h("h3", {}, review.title), text(t(review.status === "completed" ? "pmrv_completed" : "pmrv_prepared")), line("pmrv_period", h("span", {}, stamp(report.period.start), " — ", stamp(report.period.end))), text(t("pmrv_period_help")), text(t("pmrv_fixed_help")), text(t("pmrv_samples")), line("pmrv_release", `${release.repository} · ${release.channel} · ${release.release_version.value}`), line("pmp_revision", report.policy.version));
+	const overview = h("section", { "data-review-report": "" }, line("pmrv_period", h("span", {}, stamp(report.period.start), " — ", stamp(report.period.end))), line("pmrv_release", `${release.repository} · ${release.channel} · ${release.release_version.value}`), line("pmp_revision", report.policy.version));
 	if (report.previous_context?.status === "omitted_source_limit") overview.append(text(t("pmrv_continuity_gap")));
 	if (report.schedule) overview.append(fold("pmrv_schedule", line("pmc_due", stamp(report.schedule.scheduled_at)), line("pmrv_missed_weeks", report.schedule.coalesced_windows), text(t("pmrv_missed_help"))));
 	const sources = h("section", {}, h("h4", {}, t("pmrv_coverage")));
@@ -32268,7 +32320,13 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 	]) {
 		const value = coverage[kind], state = typeof value === "string" ? value : value.status;
 		sources.append(line(`pmrv_source_${kind}`, label("pmrv_coverage", state)));
-		if (Number.isSafeInteger(value.samples)) sources.append(h("p", { class: "muted pm-review-count" }, `${t("pmrv_sample_count")}: ${value.samples}`));
+		if (value && typeof value === "object" && Object.hasOwn(value, "samples")) {
+			const count = h("p", {
+				class: "muted pm-review-count",
+				"data-review-count": kind
+			}, h("strong", {}, `${t("pmrv_sample_count")}: `), state === "observed" && Number.isSafeInteger(value.samples) ? String(value.samples) : statusPill("unknown"));
+			sources.append(count);
+		}
 	}
 	const compared = h("section", {}, h("h4", {}, t("pmrv_changes")), text(label("pmrv_changes", changes.status)));
 	if (changes.scope_changed) compared.append(text(t("pmrv_scope_changed")));
@@ -32297,11 +32355,17 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 		compared.append(findings);
 	}
 	overview.append(h("div", { class: "pm-review-columns" }, sources, compared));
-	const blockers = h("div");
+	const blockers = h("div", { "data-review-blockers": "" });
 	for (const item of report.current_blockers) if (typeof item === "string") blockers.append(text(item));
 	else blockers.append(text(t("pmo_reason_" + (Object.keys(reasonGroups).find((key) => reasonGroups[key].includes(item.code)) || "unknown"))));
-	if (!report.current_blockers.length) blockers.append(text(t("pmrv_none")));
-	overview.append(fold("pmrv_blockers", text(t("pmrv_blocker_help")), blockers), line("pmrv_finished_checks", report.effort.completed_checks), line("pmrv_pending_checks", report.effort.pending_checks), text(t("pmrv_effort_unknown")), fold("pmrv_proof", line("pmrv_snapshot", snapshot.snapshot_id), line("pmrv_release", release.baseline_id), text(release.commit_sha), line("pmrv_as_of", stamp(report.as_of)), text(snapshot.snapshot_digest), sourceProof(report.sources.map((row) => row.source_id)), op(review.operation_id)));
+	const workloadState = typeof coverage.workload === "string" ? coverage.workload : coverage.workload?.status;
+	if (!report.current_blockers.length) blockers.append(workloadState === "observed" ? text(t("pmrv_none")) : statusPill("unknown"));
+	const checksState = typeof coverage.checks === "string" ? coverage.checks : coverage.checks?.status;
+	const effortLine = (key, name, value) => {
+		const honest = checksState === "observed" && Number.isSafeInteger(value);
+		return h("p", { "data-review-effort": name }, h("strong", {}, `${t(key)}: `), honest ? String(value) : statusPill("unknown"));
+	};
+	overview.append(fold("pmrv_blockers", text(t("pmrv_blocker_help")), blockers), effortLine("pmrv_finished_checks", "finished", report.effort.completed_checks), effortLine("pmrv_pending_checks", "pending", report.effort.pending_checks), fold("pmrv_proof", line("pmrv_snapshot", snapshot.snapshot_id), line("pmrv_release", release.baseline_id), text(release.commit_sha), line("pmrv_as_of", stamp(report.as_of)), text(snapshot.snapshot_digest), sourceProof(report.sources.map((row) => row.source_id)), op(review.operation_id)));
 	const samples = h("div");
 	for (const row of report.observations || []) {
 		const sample = h("article", { class: "pm-fact" }, line("pmrv_sample_at", stamp(row.observed_at)), line("pmrv_open_prs", row.observed_open_pulls), line("pmrv_active_actions", row.observed_nonterminal_actions), fold("pmrv_proof", sourceProof([row.source_id])));
@@ -32408,7 +32472,6 @@ function maintenanceReviewView({ h, t, api, alive, workspaceId, caps, readable, 
 		overview.append(history);
 	}
 	if (completion) discussion.append(eventView(completion));
-	else discussion.append(text(t("pmrv_not_completed")));
 	for (const event of events) if (event.event_id !== completion?.event_id) discussion.append(eventView(event));
 	return {
 		element: h("div", {}, overview, discussion),
@@ -32445,7 +32508,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 		class: "secondary",
 		onclick: () => void load()
 	});
-	const element = h("details", { "data-review-candidate-import": event.event_id }, h("summary", {}, t("pmrv_add_to_idea")), h("p", { class: "muted" }, t("pmrv_idea_help")), labelled("pmrv_idea_choose", chooser), h("div", { class: "actions" }, refresh, pages), status, body);
+	const element = h("details", { "data-review-candidate-import": event.event_id }, h("summary", { class: "ui-button secondary ui-sm" }, t("pmrv_add_to_idea")), h("p", { class: "muted" }, t("pmrv_idea_help")), labelled("pmrv_idea_choose", chooser), h("div", { class: "actions" }, refresh, pages), status, body);
 	function controls() {
 		chooser.disabled = reading || Boolean(request?.locked()) || !can();
 		refresh.disabled = reading || Boolean(request?.locked());
@@ -32459,11 +32522,12 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 		if (selected && ![...chooser.options].some((row) => row.value === selected)) chooser.append(h("option", { value: selected }, t("pmrv_idea_saved")));
 		chooser.value = selected;
 		pages.replaceChildren();
-		if (next) pages.append(h("button", {
-			type: "button",
-			class: "secondary",
-			onclick: () => void load(true)
-		}, t("pmrv_idea_more")));
+		if (next) pages.append(button({
+			variant: "secondary",
+			size: "sm",
+			label: t("pmrv_idea_more"),
+			onClick: () => void load(true)
+		}));
 		controls();
 	}
 	async function choose() {
@@ -32500,10 +32564,10 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			version.dataset.pmDefault = version.value;
 			const stale = () => Number(version.value) !== thread?.thread.version;
 			const warning = h("p", { class: "muted" }, t("pmrv_idea_stale"));
-			const rebase = h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: () => {
+			const rebase = button({
+				variant: "secondary",
+				label: t("pmrv_idea_use_version"),
+				onClick: () => {
 					guard();
 					if (request && !request.locked() && can()) {
 						request.set("version", String(thread.thread.version));
@@ -32511,7 +32575,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 						request.update();
 					}
 				}
-			}, t("pmrv_idea_use_version"));
+			});
 			const sync = () => {
 				warning.hidden = rebase.hidden = !stale();
 				rebase.disabled = !can() || Boolean(request?.locked());
@@ -32673,24 +32737,122 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			refresh(true);
 		}
 	});
-	const rebase = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
+	const rebase = button({
+		variant: "secondary",
+		label: t("pmrv_use_versions"),
+		onClick: () => {
 			if (ready) renderEditors(true);
 		}
-	}, t("pmrv_use_versions"));
+	});
+	rebase.hidden = true;
+	const about = h("details", {}, h("summary", {}, t("pmrv_details")), text("pmrv_intro"));
+	disclosure({ element: about });
+	const headingState = h("div", { class: "pm-answer" }, h("h3", {}, t("pmrv_title")));
+	const chooseLabel = labelled("pmrv_choose", choose);
+	chooseLabel.hidden = true;
+	const actionHost = h("div", { class: "pm-review-actions" }), formHost = h("div", { class: "pm-review-forms" });
+	const actionBoxes = new Map();
+	let shown = null, actionSig = "";
+	const actionLabel = (key) => t({
+		note: "pmrv_note",
+		"candidate.record": "pmrv_candidate",
+		complete: "pmrv_complete",
+		"follow_up.record": "pmrv_save_followup",
+		prepare: "pmrv_prepare"
+	}[key]);
+	function registerForm(key, editor) {
+		const node = h("div", { "data-review-form": key }, editor.box);
+		node.hidden = true;
+		actionBoxes.set(key, {
+			editor,
+			node
+		});
+		formHost.append(node);
+		if (editor.locked()) shown = key;
+	}
+	function visibleKeys() {
+		const reviewStatus = model?.detail?.review.status, locked = (key) => Boolean(actionBoxes.get(key)?.editor.locked()), keys = [];
+		if (reviewStatus === "prepared" || locked("note")) keys.push("note");
+		if (reviewStatus === "prepared" || locked("candidate.record")) keys.push("candidate.record");
+		if (reviewStatus === "prepared" || locked("complete")) keys.push("complete");
+		if (reviewStatus === "completed" && model?.detail?.completion?.document.follow_ups?.length || locked("follow_up.record")) keys.push("follow_up.record");
+		if (actionBoxes.has("prepare")) keys.push("prepare");
+		return keys;
+	}
+	function primaryOf(keys) {
+		const reviewStatus = model?.detail?.review.status;
+		if (reviewStatus === "prepared" && owner() && keys.includes("complete")) return "complete";
+		if (reviewStatus === "prepared" && keys.includes("note")) return "note";
+		if (reviewStatus === "completed" && keys.includes("follow_up.record")) return "follow_up.record";
+		return keys.includes("prepare") ? "prepare" : keys[0] || null;
+	}
+	function paintActions() {
+		const lockedKey = [...actionBoxes].find(([, box]) => box.editor.locked())?.[0] || null;
+		if (lockedKey) shown = lockedKey;
+		const keys = ready ? visibleKeys() : [];
+		if (ready && shown && !keys.includes(shown)) shown = null;
+		if (shown && !actionBoxes.has(shown)) shown = null;
+		const primary = keys.length ? primaryOf(keys) : null, sig = JSON.stringify([
+			primary,
+			keys,
+			shown,
+			lockedKey,
+			ready
+		]);
+		if (sig !== actionSig) {
+			actionSig = sig;
+			actionHost.replaceChildren();
+			if (primary) {
+				const open = (key) => {
+					if (lockedKey && key !== lockedKey) return;
+					shown = key;
+					paintActions();
+				};
+				const nodes = [button({
+					variant: "primary",
+					label: actionLabel(primary),
+					"data-review-open": primary,
+					onClick: () => open(primary)
+				})];
+				const rest = keys.filter((key) => key !== primary);
+				if (rest.length) nodes.push(menu({
+					button: button({
+						variant: "secondary",
+						label: t("pmrv_more"),
+						"data-review-more": "",
+						icon: "chevron-down",
+						iconPosition: "end"
+					}),
+					items: rest.map((key) => ({
+						key,
+						label: actionLabel(key),
+						onSelect: () => open(key)
+					}))
+				}));
+				actionHost.replaceChildren(...nodes);
+			}
+		}
+		actionHost.hidden = !primary;
+		for (const [key, box] of actionBoxes) box.node.hidden = key !== shown || !ready && !box.editor.locked();
+		if (lockedKey) actionBoxes.get(lockedKey).node.hidden = false;
+		if (!ready) editors.hidden = !lockedKey;
+	}
+	function paintHeading() {
+		const review = model?.detail?.review;
+		headingState.replaceChildren();
+		if (review) headingState.append(h("h3", {}, review.title), statusPill(review.status === "completed" ? "done" : "in_review"));
+		else headingState.append(h("h3", {}, t(ready && model ? model.current.visibility_filtered ? "pmrv_hidden" : "pmrv_empty" : "pmrv_title")));
+	}
+	editors.append(actionHost, formHost);
 	const element = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-maintenance-review": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmrv_title")), text("pmrv_intro")), iconButton({
+	}, h("header", { class: "pm-heading" }, headingState, iconButton({
 		icon: "refresh-cw",
 		label: t("pmrv_refresh"),
 		type: "button",
-		class: "secondary",
 		onclick: () => void refresh()
-	})), labelled("pmrv_choose", choose), status, warning, rebase, scheduleView, view, editors);
+	})), chooseLabel, status, warning, rebase, editors, scheduleView, view, about);
 	const hidden = (value) => {
 		const field = h("input", {
 			type: "hidden",
@@ -32716,7 +32878,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	});
 	const pre = () => ({ expected_version: model.detail.review.version });
 	const sourceRows = () => model?.detail?.snapshot.maintenance.report.sources || [];
-	const sourceLabel = (row) => `${t("pmrv_ref_" + row.kind)} · ${row.id}`;
+	const sourceLabel = (row) => row.title || t("pmrv_ref_" + row.kind);
 	const known = (field, choices) => {
 		return JSON.parse(field.value || "[]").every((id) => choices.some((row) => row.id === id));
 	};
@@ -32743,8 +32905,10 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		warning.hidden = rebase.hidden = !stale;
 		rebase.disabled = !ready;
 		choose.disabled = !ready;
+		chooseLabel.hidden = !ready;
 		output?.update();
 		imports.forEach((item) => item.update());
+		paintActions();
 	}
 	function withdraw() {
 		ticket++;
@@ -32762,7 +32926,8 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(text("pmrv_unavailable"), errorBox(error));
+		status.replaceChildren(inlineError({ error: t("pmrv_unavailable") }), errorBox(error));
+		paintHeading();
 	}
 	function localForm(config) {
 		const expected = () => JSON.stringify({
@@ -32827,7 +32992,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			const available = getChoices(), chosen = JSON.parse(field.value || "[]"), rows = [...available];
 			for (const id of chosen) if (!rows.some((row) => row.id === id)) rows.push({
 				id,
-				label: `${t("pmrv_source_missing")} · ${id}`,
+				label: t("pmrv_source_missing"),
 				unavailable: true
 			});
 			const signature = JSON.stringify(rows);
@@ -32850,7 +33015,14 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 						dirty = true;
 						update();
 					});
-					holder.append(h("label", {}, node, h("span", {}, row.label)));
+					const line = h("div", { class: "pm-review-source" }, h("label", {}, node, h("span", {}, row.label)));
+					const shown = row.detail || row.id;
+					if (shown) {
+						const detail = h("details", {}, h("summary", {}, t("pmrv_details")), h("p", { class: "mono" }, shown));
+						disclosure({ element: detail });
+						line.append(detail);
+					}
+					holder.append(line);
 					controls.push({
 						node,
 						row
@@ -32878,7 +33050,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			if (signature !== next) {
 				signature = next;
 				node.replaceChildren(...choices.map(([id, label]) => h("option", { value: id }, label)));
-				if (value && !choices.some(([id]) => id === value)) node.append(h("option", { value }, t("pmrv_source_missing") + " · " + value));
+				if (value && !choices.some(([id]) => id === value)) node.append(h("option", { value }, t("pmrv_source_missing")));
 				node.value = value;
 			}
 		};
@@ -32888,14 +33060,15 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	function sourceChoices(field, getEditor) {
 		return choices(field, getEditor, () => sourceRows().map((row) => ({
 			id: row.source_id,
-			label: sourceLabel(row)
+			label: sourceLabel(row),
+			detail: row.id
 		})), "pmrv_source_refs");
 	}
 	function collection(field, getEditor, definitions, key, limit = 10) {
-		const holder = h("div"), rows = h("div"), add = h("button", {
-			type: "button",
-			class: "secondary"
-		}, t("pmrv_" + key));
+		const holder = h("div"), rows = h("div"), add = button({
+			variant: "secondary",
+			label: t("pmrv_" + key)
+		});
 		let controls = [];
 		const change = (values) => {
 			if (!getEditor() || getEditor().locked() || !can()) return;
@@ -32916,7 +33089,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 						value
 					});
 					if (def.type) node.type = def.type;
-					if (choices && value && !choices.some(([id]) => id === value)) node.append(h("option", { value }, `${t("pmrv_source_missing")} · ${value}`));
+					if (choices && value && !choices.some(([id]) => id === value)) node.append(h("option", { value }, t("pmrv_source_missing")));
 					node.value = value;
 					node.addEventListener("input", () => {
 						const values = JSON.parse(field.value || "[]"), current = values.find((row) => row.id === item.id);
@@ -32926,17 +33099,17 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 						}
 					});
 					controls.push(node);
-					return labelled(def.label, node);
+					return def.type === "datetime-local" ? timeChoice(def.label, node) : labelled(def.label, node);
 				});
-				const remove = h("button", {
-					type: "button",
-					class: "secondary",
-					onclick: () => {
+				const remove = button({
+					variant: "secondary",
+					label: t("pmrv_remove"),
+					onClick: () => {
 						change(JSON.parse(field.value || "[]").filter((row) => row.id !== item.id));
 						render();
 						sync();
 					}
-				}, t("pmrv_remove"));
+				});
 				controls.push(remove);
 				rows.append(h("div", { class: "pm-review-assignment pm-fields" }, ...fields, remove));
 			}
@@ -32968,7 +33141,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		return widget;
 	}
 	function mutationEditors() {
-		const detail = model.detail, holder = h("div"), snapshotId = detail.snapshot.snapshot_id;
+		model.detail;
 		const context = () => model?.detail?.snapshot.snapshot_id ?? null;
 		const prepared = () => can() && model?.detail?.review.status === "prepared";
 		const content = input("pmrv_note_content", {
@@ -32996,9 +33169,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			}),
 			extra: h("div", { class: "pm-fields" }, labelled("pmrv_note_content", content), labelled("pmrv_reason", noteReason), noteSources.element)
 		});
-		const noteBox = fold("pmrv_note", noteEditor.box, noteEditor.locked());
-		noteBox.hidden = detail.review.status === "completed" && !noteEditor.locked();
-		holder.append(noteBox);
+		registerForm("note", noteEditor);
 		const candidateFields = {};
 		for (const [key, label, max] of [
 			[
@@ -33090,9 +33261,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			}[key] || key), node)), candidateSources.element, fold("pmrv_public_sources", h("div", {}, text("pmrv_attributed_source"), publicSources.element)))
 		});
 		publicSources.mount();
-		const candidateBox = fold("pmrv_candidate", candidateEditor.box, candidateEditor.locked());
-		candidateBox.hidden = detail.review.status === "completed" && !candidateEditor.locked();
-		holder.append(candidateBox);
+		registerForm("candidate.record", candidateEditor);
 		const notes = hidden([]), candidates = hidden([]), ack = hidden(false), summary = input("pmrv_summary", {
 			multiline: true,
 			max: 8e3
@@ -33187,9 +33356,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			extra: h("div", { class: "pm-fields" }, text("pmrv_completion_help"), !owner() ? text("pmrv_complete_owner") : "", noteChoices.element, h("label", { class: "pm-review-ack" }, checkAck, t("pmrv_acknowledge")), labelled("pmrv_summary", summary), labelled("pmrv_direction", direction), labelled("pmrv_direction_reason", directionReason), candidateChoices.element, fold("pmrv_followups", assignments.element), labelled("pmrv_next_focus", focus), labelled("pmrv_reason", completeReason))
 		});
 		assignments.mount();
-		const completeBox = fold("pmrv_complete", completeEditor.box, completeEditor.locked());
-		completeBox.hidden = detail.review.status === "completed" && !completeEditor.locked();
-		holder.append(completeBox);
+		registerForm("complete", completeEditor);
 		const allowedAssignments = () => model?.detail?.completion?.document.follow_ups?.filter((item) => owner() || item.owner_actor === caps()?.actor) || [];
 		const assigned = sourceSelect("pmrv_select_followup", () => allowedAssignments().map((item) => [item.id, `${item.text} · ${item.owner_actor}`]), allowedAssignments()[0]?.id || ""), reported = select("pmrv_followup_status", [
 			"open",
@@ -33199,7 +33366,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			multiline: true,
 			max: 8e3
 		}), followReason = reason(), snapshot = sourceSelect("pmrv_result_snapshot", () => [["", t("pmrv_same_snapshot")], ...(model?.snapshots || []).map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`])]);
-		const followEditor = localForm({
+		registerForm("follow_up.record", localForm({
 			action: prefix + "follow_up.record",
 			target: target(),
 			fields: {
@@ -33219,17 +33386,23 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 				...snapshot_id ? { snapshot_id } : {}
 			}),
 			extra: h("div", { class: "pm-fields" }, text("pmrv_unassessed"), labelled("pmrv_select_followup", assigned), labelled("pmrv_followup_status", reported), labelled("pmrv_result", result), labelled("pmrv_result_snapshot", snapshot), labelled("pmrv_reason", followReason))
-		});
-		const followBox = fold("pmrv_save_followup", followEditor.box, followEditor.locked());
-		followBox.hidden = !detail.completion?.document.follow_ups?.length && !followEditor.locked();
-		holder.append(followBox);
-		holder.dataset.snapshotId = snapshotId;
-		return holder;
+		}));
 	}
 	const localTime = (value) => {
 		const date = new Date(value);
 		return new Date(date.getTime() - date.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
 	};
+	function timeChoice(key, field) {
+		const preview = h("span");
+		const paint = () => {
+			const ms = new Date(field.value).getTime();
+			preview.replaceChildren(Number.isFinite(ms) ? timeStamp(ms / 1e3) : t("pmrv_unknown"));
+		};
+		field.addEventListener("input", paint);
+		field.addEventListener("change", paint);
+		paint();
+		return h("div", { class: "pm-time-field" }, labelled(key, field), h("p", { class: "muted pm-time-shown" }, t("pmrv_shown"), " ", preview));
+	}
 	function prepareEditor() {
 		const title = input("pmrv_report_title", { max: 200 }), start = input("pmrv_start", { value: localTime(Date.now() - 6048e5) }), end = input("pmrv_end", { value: localTime(Date.now()) });
 		start.type = end.type = "datetime-local";
@@ -33248,7 +33421,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			const a = new Date(start.value).getTime(), b = new Date(end.value).getTime();
 			return Number.isFinite(a) && Number.isFinite(b) && b > a && b <= Date.now() && b - a <= 26784e5;
 		};
-		const editor = localForm({
+		registerForm("prepare", localForm({
 			action: prefix + "prepare",
 			target: { workspace_id: workspaceId },
 			fields: {
@@ -33267,22 +33440,23 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 				period_end: new Date(values.period_end).getTime() / 1e3,
 				...values.previous_review_id ? { previous_review_id: values.previous_review_id } : {}
 			}),
-			extra: h("div", { class: "pm-fields" }, text("pmrv_prepare_help"), !model.policy || !model.baseline ? text("pmrv_context_missing") : "", labelled("pmrv_report_title", title), h("div", { class: "capture-fields" }, labelled("pmrv_start", start), labelled("pmrv_end", end)), text("pmrv_period_help"), labelled("pmrv_previous", previous))
-		});
-		return fold("pmrv_prepare", editor.box, !model.detail || editor.locked());
+			extra: h("div", { class: "pm-fields" }, text("pmrv_prepare_help"), !model.policy || !model.baseline ? text("pmrv_context_missing") : "", labelled("pmrv_report_title", title), h("div", { class: "capture-fields" }, timeChoice("pmrv_start", start), timeChoice("pmrv_end", end)), text("pmrv_period_help"), labelled("pmrv_previous", previous))
+		}));
 	}
 	function renderEditors(rebase = false) {
 		const id = model.detail?.review.review_id ?? null;
-		const expanded = editorId === id ? new Set([...editors.querySelectorAll("[data-review-fold][open]")].map((node) => node.dataset.reviewFold)) : new Set();
 		forms.forEach((entry) => entry.editor.dispose?.());
 		forms = [];
 		widgets = [];
 		dirty = false;
-		editors.replaceChildren();
-		if (model.detail) editors.append(mutationEditors());
-		editors.append(prepareEditor());
+		actionBoxes.clear();
+		actionSig = "";
+		shown = null;
+		formHost.replaceChildren();
+		editors.replaceChildren(actionHost, formHost);
+		if (model.detail) mutationEditors();
+		prepareEditor();
 		if (rebase) forms.forEach((entry) => entry.rebase());
-		for (const node of editors.querySelectorAll("[data-review-fold]")) if (expanded.has(node.dataset.reviewFold)) node.open = true;
 		editorId = id;
 		update();
 	}
@@ -33297,15 +33471,22 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 		}
 		return data;
 	}
+	function syncAbout() {
+		const summary = about.querySelector(":scope > summary");
+		about.replaceChildren(summary, text("pmrv_intro"));
+		if (!model?.detail) return;
+		about.append(text("pmrv_period_help"), text("pmrv_fixed_help"), text("pmrv_samples"), text("pmrv_effort_unknown"));
+		if (!model.detail.completion) about.append(text("pmrv_not_completed"));
+		if (model.detail.review?.status) about.append(text(model.detail.review.status === "completed" ? "pmrv_completed" : "pmrv_prepared"));
+	}
 	function renderView() {
 		imports.forEach((item) => item.dispose());
 		imports = [];
 		view.replaceChildren();
 		output = null;
-		if (!model.detail) {
-			view.append(text(model.current.visibility_filtered ? "pmrv_hidden" : "pmrv_empty"));
-			return;
-		}
+		syncAbout();
+		paintHeading();
+		if (!model.detail) return;
 		const candidateInput = (event) => {
 			const entry = reviewCandidateToIdea({
 				h,
@@ -33338,15 +33519,16 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			candidateInput
 		});
 		view.append(output.element);
+		syncAbout();
 		const detail = model.detail;
 		if (detail.visibility_filtered) view.append(text("pmrv_history_filtered"));
 		if (detail.next_cursor !== null) {
 			view.append(text("pmrv_history_partial"));
 			const after = detail.next_cursor, epoch = ticket, rid = detail.review.review_id;
-			const more = h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: async () => {
+			const more = button({
+				variant: "secondary",
+				label: t("pmrv_more_events"),
+				onClick: async () => {
 					more.disabled = true;
 					try {
 						const page = await api("GET", `${base}/maintenance-reviews/${rid}/events?after=${after}&limit=20`);
@@ -33363,7 +33545,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 						more.disabled = false;
 					}
 				}
-			}, t("pmrv_more_events"));
+			});
 			view.append(more);
 		}
 	}
@@ -33389,7 +33571,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 			PM_MAINTENANCE_CONTROLLER_CHANGED: "authority",
 			PM_MAINTENANCE_SOURCES_UNAVAILABLE: "sources",
 			PM_MAINTENANCE_REVIEW_SOURCE_UNAVAILABLE: "sources"
-		}[weekly.blocked_reason] || "blocked") : "pmrv_weekly_ready"), weekly.pending_report ? text("pmrv_weekly_pending") : "", text("pmrv_not_completed"))));
+		}[weekly.blocked_reason] || "blocked") : "pmrv_weekly_ready"), weekly.pending_report ? text("pmrv_weekly_pending") : "")));
 	}
 	async function pages(suffix, property, epoch) {
 		let after = 0, records = [], filtered = false;
@@ -33519,8 +33701,28 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	};
 	const select = (label) => h("select", { "aria-label": t(label) }), finding = select("pmr_finding"), rule = select("pmr_rule"), history = select("pmr_history"), evidence = select("pmr_evidence");
 	finding.dataset.pmRepairFinding = "";
-	let pendingFinding = "";
+	let pendingFinding = "", pendingRepair = "", focusEvidence = false, startFold, evidenceFold;
 	const line = (label, value) => h("p", { class: "pm-source" }, h("strong", {}, t(label) + ": "), value ?? t("pmr_none")), text = (label) => h("p", { class: "muted" }, t(label));
+	const tones = {
+		accepted: "accepted",
+		queued: "waiting",
+		pending: "waiting",
+		running: "running",
+		succeeded: "done",
+		failed: "failed",
+		cancelled: "stopped",
+		needs_attention: "needs_you",
+		not_admitted: "not_started",
+		passed: "accepted",
+		blocked: "blocked"
+	};
+	const pill = (value) => statusPill(tones[value] || "unknown");
+	const duration = (seconds) => {
+		if (!Number.isSafeInteger(seconds) || seconds < 0) return t("pmr_status_unknown");
+		if (seconds % 3600 === 0 && seconds >= 3600) return `${seconds / 3600} ${t("pmr_h")}`;
+		if (seconds % 60 === 0 && seconds >= 60) return `${seconds / 60} ${t("pmr_min")}`;
+		return `${seconds} ${t("pmr_sec")}`;
+	};
 	const state = (value) => t("pmr_status_" + ([
 		"accepted",
 		"queued",
@@ -33579,15 +33781,15 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 			finding_id: value.finding_ref.finding_id
 		}) && eligible(issueRows().find((row) => row.finding_id === value.finding_ref.finding_id), rules().find((row) => row.key === value.rule_key));
 	};
-	const stale = text("pmr_stale"), rebase = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => {
+	const stale = text("pmr_stale"), rebase = button({
+		variant: "secondary",
+		label: t("pmr_rebase"),
+		onClick: () => {
 			if (!ready || start.locked()) return;
 			start.set("context", JSON.stringify(pre()));
 			update();
 		}
-	}, t("pmr_rebase"));
+	});
 	const request = async (...args) => {
 		const ticket = epoch;
 		try {
@@ -33634,10 +33836,16 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		finding.disabled = rule.disabled = !ready || !owner() || Boolean(start?.locked());
 		history.disabled = !ready;
 		evidence.disabled = !proofReady || !owner() || Boolean(proof?.locked());
+		historyLabel.hidden = !ready;
+		startFold.style.display = ready || start?.locked() ? "" : "none";
+		evidenceFold.hidden = !ready && !proof?.locked();
+		tools.hidden = historyLabel.hidden && startFold.style.display === "none";
 		stale.hidden = rebase.hidden = !ready || !start || start.locked() || !startFields.context.value || same$4(parse(startFields.context), pre());
 		rebase.disabled = !active();
 		startView.hidden = !ready && !start?.locked();
 		proofView.hidden = !ready && !proof?.locked();
+		if (start?.locked()) startFold.open = true;
+		if (proof?.locked()) evidenceFold.open = true;
 		if (proof && !proof.locked()) proof.box.querySelector("button[type=submit]").disabled = !proofValid();
 	}
 	start = form({
@@ -33677,7 +33885,15 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		if (!startFields.context.value) start.set("context", JSON.stringify(pre()));
 		update();
 	}
-	finding.addEventListener("change", changed);
+	function onFinding() {
+		if (!ready || start.locked()) return;
+		const row = issueRows().find((v) => v.finding_id === finding.value);
+		const matches = rules().filter((item) => eligible(row, item));
+		if (matches.length === 1) rule.value = matches[0].key;
+		else if (!matches.some((item) => item.key === rule.value)) rule.value = "";
+		changed();
+	}
+	finding.addEventListener("change", onFinding);
 	rule.addEventListener("change", changed);
 	history.addEventListener("change", () => {
 		selected = history.value;
@@ -33706,16 +33922,21 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		onSaved: () => refresh(),
 		onUnavailable: (error) => failure(error)
 	});
+	startFold = h("details", { "data-repair-start": "" }, h("summary", { class: "ui-button secondary ui-md" }, t("pmr_new")), startView);
+	evidenceFold = h("details", { "data-repair-evidence": "" }, h("summary", {}, t("pmr_evidence_open")), proofView);
+	disclosure({ element: startFold });
+	disclosure({ element: evidenceFold });
+	const headingState = h("div", { class: "pm-answer" }, h("h3", {}, t("pmr_title")));
+	const historyLabel = labelled("pmr_history", history), tools = h("div", { class: "pm-repair-tools" }, historyLabel, startFold);
 	const element = h("section", {
 		class: "panel pm-maintenance-repairs",
 		"data-pm-maintenance-repairs": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmr_title")), text("pmr_intro")), iconButton({
+	}, h("div", { class: "pm-heading" }, headingState, iconButton({
 		icon: "refresh-cw",
 		label: t("pmr_refresh"),
 		type: "button",
-		class: "secondary",
 		onclick: () => void refresh()
-	})), status, startView, labelled("pmr_history", history), facts, verifier.element, proofView);
+	})), status, budget, tools, facts, verifier.element, evidenceFold);
 	function options(field, rows, value = "") {
 		field.replaceChildren(h("option", { value: "" }, t("pmr_choose")), ...rows.map(([id, label]) => h("option", { value: id }, label)));
 		field.value = rows.some(([id]) => id === value) ? value : "";
@@ -33753,36 +33974,44 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		if (row?.workspace_id !== workspaceId || !/^pmrp_[0-9a-f]{32}$/.test(row.repair_id) || !op.test(row.operation_id) || !Number.isSafeInteger(row.version) || !row.context?.rule || !row.context.finding_ref || !Array.isArray(row.evidence)) throw invalid();
 		return row;
 	}
+	function paintHeading(row) {
+		const title = row ? h("h3", {}, `${t("pmr_issue")} #${row.context.finding.native.number}`) : h("h3", {}, t(ready ? "pmr_choose" : "pmr_title"));
+		headingState.replaceChildren(...row ? [title, pill(row.operation_status || row.child?.status || "unknown")] : [title]);
+	}
 	function render(row) {
-		const c = row.context, p = row.progress || {}, box = h("article", { "data-repair": row.repair_id }, h("h3", {}, `${t("pmr_issue")} #${c.finding.native.number}`), line("pmr_rule", c.rule.key), line("pmr_dispatch", state(row.child?.status || "not_admitted")), text(row.capacity_held === false ? "pmr_released" : "pmr_reserved"), line("pmr_verification", p.verification ? state(p.verification.status) : t("pmr_unproven")), line("pmr_quality", p.quality?.length ? t("pmr_recorded") : t("pmr_unproven")), line("pmr_publication", row.publication_child ? state(row.publication_child.status) : t("pmr_unproven")), line("pmr_ci", p.required_ci_receipts?.length ? t("pmr_recorded") : t("pmr_unproven")), text("pmr_not_fixed"));
+		const c = row.context, p = row.progress || {};
+		paintHeading(row);
+		const box = h("article", { "data-repair": row.repair_id });
 		if ([
 			"published_for_review",
 			"merged",
 			"deployed"
-		].includes(row.outcome)) box.prepend(line("pmr_outcome", t("pmr_" + row.outcome)));
+		].includes(row.outcome)) box.append(line("pmr_outcome", t("pmr_" + row.outcome)));
+		if (p.new_investment_blocked_reason || p.blocked_reason) box.append(h("p", { class: "muted" }, reason(p.new_investment_blocked_reason || p.blocked_reason)));
+		const detail = h("details", {}, h("summary", {}, t("pmr_details")), line("pmr_rule", c.rule.key), line("pmr_dispatch", state(row.child?.status || "not_admitted")), text(row.capacity_held === false ? "pmr_released" : "pmr_reserved"), line("pmr_verification", p.verification ? state(p.verification.status) : t("pmr_unproven")), line("pmr_quality", p.quality?.length ? t("pmr_recorded") : t("pmr_unproven")), line("pmr_publication", row.publication_child ? state(row.publication_child.status) : t("pmr_unproven")), line("pmr_ci", p.required_ci_receipts?.length ? t("pmr_recorded") : t("pmr_unproven")), text("pmr_not_fixed"));
 		const completed = row.runtime_completion, baselineUpdate = row.baseline_update;
 		if (completed?.schema === "pm_repair_runtime_completion_v1" && completed.parent_operation_id === row.operation_id && completed.execution_operation_id === row.child?.operation_id && completed.runtime_status === "original_turn_completed") {
-			box.append(line("pmr_runtime", t("pmr_turn_completed")));
-			if (op.test(completed.observation_operation_id)) box.append(h("p", {}, t("pmr_completion_receipt"), " · ", link(completed.observation_operation_id)));
-		} else if (row.runtime_observer) box.append(line("pmr_runtime", t("pmr_unproven")), h("p", {}, t("pmr_completion_receipt"), " · ", link(row.runtime_observer.operation_id)));
-		if (row.delivery_child) box.append(line("pmr_delivery", state(row.delivery_child.status)), h("p", {}, t("pmr_original_delivery"), " · ", link(row.delivery_child.operation_id)));
-		if (baselineUpdate?.status === "updated" && row.baseline_child?.result?.baseline_id === baselineUpdate.baseline_id && row.baseline_child.operation_id === baselineUpdate.operation_id) box.append(line("pmr_baseline_update", t("pmr_baseline_updated")), h("p", {}, t("pmr_baseline_receipt"), " · ", link(baselineUpdate.operation_id)));
-		else if (baselineUpdate?.status === "not_updated") box.append(line("pmr_baseline_update", t("pmr_baseline_not_updated")));
-		else if (row.baseline_child) box.append(line("pmr_baseline_update", state(row.baseline_child.status)), h("p", {}, t("pmr_baseline_receipt"), " · ", link(row.baseline_child.operation_id)));
-		if (row.child) box.append(h("p", {}, t("pmr_child"), " · ", link(row.child.operation_id)));
+			detail.append(line("pmr_runtime", t("pmr_turn_completed")));
+			if (op.test(completed.observation_operation_id)) detail.append(h("p", {}, t("pmr_completion_receipt"), " · ", link(completed.observation_operation_id)));
+		} else if (row.runtime_observer) detail.append(line("pmr_runtime", t("pmr_unproven")), h("p", {}, t("pmr_completion_receipt"), " · ", link(row.runtime_observer.operation_id)));
+		if (row.delivery_child) detail.append(line("pmr_delivery", state(row.delivery_child.status)), h("p", {}, t("pmr_original_delivery"), " · ", link(row.delivery_child.operation_id)));
+		if (baselineUpdate?.status === "updated" && row.baseline_child?.result?.baseline_id === baselineUpdate.baseline_id && row.baseline_child.operation_id === baselineUpdate.operation_id) detail.append(line("pmr_baseline_update", t("pmr_baseline_updated")), h("p", {}, t("pmr_baseline_receipt"), " · ", link(baselineUpdate.operation_id)));
+		else if (baselineUpdate?.status === "not_updated") detail.append(line("pmr_baseline_update", t("pmr_baseline_not_updated")));
+		else if (row.baseline_child) detail.append(line("pmr_baseline_update", state(row.baseline_child.status)), h("p", {}, t("pmr_baseline_receipt"), " · ", link(row.baseline_child.operation_id)));
+		if (row.child) detail.append(h("p", {}, t("pmr_child"), " · ", link(row.child.operation_id)));
 		if (row.publication_child) {
-			box.append(h("p", {}, t("pmr_original_publication"), " · ", link(row.publication_child.operation_id)));
+			detail.append(h("p", {}, t("pmr_original_publication"), " · ", link(row.publication_child.operation_id)));
 			const receipt = row.publication_child.result?.creation_receipt;
-			if (receipt) box.append(line("pmr_native_pr", receipt.native_pr_id), line("pmr_candidate", receipt.candidate_sha));
-			if (row.publication_child.status === "needs_attention" || row.publication_child.error_code?.includes("UNKNOWN")) box.append(text("pmr_unknown"));
+			if (receipt) detail.append(line("pmr_native_pr", receipt.native_pr_id), line("pmr_candidate", receipt.candidate_sha));
+			if (row.publication_child.status === "needs_attention" || row.publication_child.error_code?.includes("UNKNOWN")) detail.append(text("pmr_unknown"));
 		}
-		if (p.new_investment_blocked_reason || p.blocked_reason) box.append(h("p", { class: "muted" }, reason(p.new_investment_blocked_reason || p.blocked_reason)));
-		const detail = h("details", {}, h("summary", {}, t("pmr_original")), line("pmr_work", row.work_item_id), line("pmr_policy", row.policy_id), line("pmr_observation", c.finding_ref.observation_id), line("pmr_digest", c.finding_ref.document_digest), line("pmr_deadline", timeStamp(row.deadline_at)), line("pmr_retry", row.retries_used), text("pmr_cost"), link(row.operation_id));
+		detail.append(text("pmr_original"), line("pmr_work", row.work_item_id), line("pmr_policy", row.policy_id), line("pmr_observation", c.finding_ref.observation_id), line("pmr_digest", c.finding_ref.document_digest), line("pmr_deadline", timeStamp(row.deadline_at)), line("pmr_retry", row.retries_used), text("pmr_cost"), link(row.operation_id));
 		for (const item of row.evidence) {
 			const proof = item.evidence;
 			detail.append(h("p", {}, t("pmr_kind_" + item.selection.kind), " · ", link(item.operation_id)));
 			for (const [name, value] of Object.entries(proof.reference || item.selection.reference || {})) detail.append(h("p", { class: "pm-source" }, name + ": " + value));
 		}
+		disclosure({ element: detail });
 		box.append(detail);
 		return box;
 	}
@@ -33813,16 +34042,16 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 			const fields = {
 				selection: hidden(),
 				version: hidden()
-			}, use = h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: () => {
+			}, use = button({
+				variant: "secondary",
+				label: t("pmr_evidence_rebase"),
+				onClick: () => {
 					if (ready && !editor.locked()) {
 						editor.set("version", String(repair.version));
 						update();
 					}
 				}
-			}, t("pmr_evidence_rebase"));
+			});
 			editor = form({
 				action: RECORD,
 				target: {
@@ -33943,12 +34172,13 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 		facts.replaceChildren();
 		budget.replaceChildren();
 		status.replaceChildren();
+		paintHeading(null);
 		for (const editor of [start, ...editors.values()]) editor?.box.querySelector(".pm-receipt")?.replaceChildren();
 		update();
 	}
 	function failure(error) {
 		withdraw();
-		status.append(text("pmr_unavailable"), errorBox(error));
+		status.append(inlineError({ error: t("pmr_unavailable") }), errorBox(error));
 	}
 	async function refresh() {
 		withdraw();
@@ -33978,10 +34208,19 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 			}
 			ready = true;
 			const saved = parse(startFields.selection);
-			options(finding, issueRows().map((row) => [row.finding_id, `${t("pmr_issue")} #${row.native.number} · ${(row.facts.labels || []).join(" · ")}`]), pendingFinding || saved?.finding_ref?.finding_id);
+			if (pendingRepair) {
+				selected = pendingRepair;
+				pendingRepair = "";
+			}
+			const wanted = pendingFinding;
+			options(finding, issueRows().map((row) => [row.finding_id, `${t("pmr_issue")} #${row.native.number} · ${(row.facts.labels || []).join(" · ")}`]), wanted || saved?.finding_ref?.finding_id);
 			pendingFinding = "";
 			options(rule, rules().map((row) => [row.key, `${row.key} · ${t("pmp_" + row.work_kind)}`]), saved?.rule_key);
-			options(history, rows.map((row) => [row.repair_id, `${t("pmr_issue")} #${row.context.finding.native.number} · ${row.context.rule.key} · ${state(row.operation_status)}`]), selected);
+			const ruleTitle = (row) => {
+				const kind = row.context?.rule?.work_kind, title = kind ? t("pmp_" + kind) : "";
+				return title && title !== "pmp_" + kind ? title : t("pmr_rule");
+			};
+			options(history, rows.map((row) => [row.repair_id, `${t("pmr_issue")} #${row.context.finding.native.number} · ${ruleTitle(row)} · ${state(row.operation_status)}`]), selected);
 			if (selected) {
 				const data = check(await api("GET", `${base}/maintenance-repairs/${encodeURIComponent(selected)}`));
 				if (!valid(ticket)) return;
@@ -33992,14 +34231,30 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 			} else {
 				proof = null;
 				proofView.replaceChildren();
+				paintHeading(null);
 			}
 			if (!valid(ticket)) return;
 			const limits = policy?.document.policy.limits;
-			if (limits) budget.append(line("pmr_budget", `${limits.max_parallel} ${t("pmr_parallel")} · ${limits.period_runs} / ${limits.period_seconds}s · ${limits.run_seconds}s`), text("pmr_cost"));
+			if (limits) {
+				const runs = limits.period_runs, period = duration(limits.period_seconds);
+				budget.append(line("pmr_budget", `${limits.max_parallel} ${t("pmr_parallel")} · ${t("pmr_period_budget", {
+					runs,
+					period
+				}).replaceAll("{runs}", String(runs)).replaceAll("{period}", period)} · ${duration(limits.run_seconds)}`));
+			}
 			if (!owner()) status.append(text("pmr_owner"));
 			else if (!active()) status.append(text("pmr_stopped"));
 			else if (!rules().length) status.append(text("pmr_no_rules"));
+			if (wanted && finding.value === wanted && !start.locked()) {
+				finding.dispatchEvent(new Event("change"));
+				startFold.open = true;
+			}
 			update();
+			if (focusEvidence) {
+				evidenceFold.open = true;
+				if (evidence.isConnected && !evidence.disabled) evidence.focus();
+				focusEvidence = false;
+			}
 		} catch (error) {
 			if (valid(ticket)) failure(error);
 		}
@@ -34007,15 +34262,32 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	function focusFinding(ref) {
 		const id = typeof ref?.finding_id === "string" ? ref.finding_id : "";
 		if (!id) return;
-		pendingFinding = id;
-		if ([...finding.options].some((option) => option.value === id)) finding.value = id;
+		startFold.open = true;
+		if (start?.locked()) return;
+		if ([...finding.options].some((option) => option.value === id)) {
+			pendingFinding = "";
+			finding.value = id;
+			finding.dispatchEvent(new Event("change"));
+		} else pendingFinding = id;
+	}
+	function focusRepair(repairId) {
+		if (typeof repairId !== "string" || !/^pmrp_[0-9a-f]{32}$/.test(repairId)) return;
+		pendingRepair = repairId;
+		focusEvidence = true;
+		selected = repairId;
+		try {
+			localStorage.setItem(key, selected);
+		} catch {}
+		evidenceFold.open = true;
+		refresh();
 	}
 	update();
 	return {
 		element,
 		refresh,
 		withdraw,
-		focusFinding
+		focusFinding,
+		focusRepair
 	};
 }
 //#endregion
@@ -34067,11 +34339,11 @@ function maintenanceRepairPolicyControls({ h, t, input, labelled, available, ciA
 		}
 	};
 	const lines = (value) => value.split("\n").map((v) => v.trim()).filter(Boolean);
-	const add = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void addRule()
-	}, t("pmr_add_rule"));
+	const add = button({
+		variant: "secondary",
+		label: t("pmr_add_rule"),
+		onClick: () => void addRule()
+	});
 	const element = h("details", { "data-policy-group": "pmr_rules" }, h("summary", {}, t("pmr_rules")), h("p", { class: "muted" }, t("pmr_rules_help")), rows, h("div", { class: "pm-fields" }, labelled("pmr_rule_key", fields.repair_key), labelled("pmr_work_kind", fields.repair_kind)), labelled("pmr_rule_labels", fields.repair_labels), labelled("pmr_rule_paths", fields.repair_paths), labelled("pmr_rule_command", fields.repair_command), h("p", { class: "muted" }, t("pmr_command_help")), add, status, labelled("pmr_ci_profile", fields.repair_ci), h("p", { class: "muted" }, t("pmr_ci_help")));
 	async function addRule() {
 		if (!visible || !editable() || busy || !available()) return;
@@ -34127,18 +34399,18 @@ function maintenanceRepairPolicyControls({ h, t, input, labelled, available, ciA
 			status.textContent = "";
 			return;
 		}
-		for (const rule of read()) rows.append(h("article", { class: "pm-repair-rule" }, h("h4", {}, rule.key), h("p", {}, t("pmp_" + rule.work_kind), " · ", rule.labels_all.join(" · ")), h("p", { class: "pm-source" }, rule.paths.join(" · ")), h("details", {}, h("summary", {}, t("pmr_rule_original")), h("p", { class: "pm-source" }, rule.handoff.params.pm_package_ref.package_id), h("p", { class: "pm-source" }, rule.release.baseline_id), h("p", { class: "pm-source" }, rule.verification.command_digest)), h("button", {
-			type: "button",
-			class: "secondary",
-			disabled: !editable(),
-			onclick: () => {
+		for (const rule of read()) rows.append(h("article", { class: "pm-repair-rule" }, h("h4", {}, rule.key), h("p", {}, t("pmp_" + rule.work_kind), " · ", rule.labels_all.join(" · ")), h("p", { class: "pm-source" }, rule.paths.join(" · ")), h("details", {}, h("summary", {}, t("pmr_rule_original")), h("p", { class: "pm-source" }, rule.handoff.params.pm_package_ref.package_id), h("p", { class: "pm-source" }, rule.release.baseline_id), h("p", { class: "pm-source" }, rule.verification.command_digest)), button({
+			variant: "secondary",
+			label: t("pmr_remove_rule"),
+			disabled: !editable() || null,
+			onClick: () => {
 				if (!editable()) return;
 				fields.repair_rules.value = JSON.stringify(read().filter((r) => r.key !== rule.key));
 				fields.repair_rules_set.value = "1";
 				changed();
 				update();
 			}
-		}, t("pmr_remove_rule"))));
+		})));
 	}
 	function initialize(policy) {
 		return {
@@ -34884,24 +35156,24 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	const profileLabel = labelled("pmp_github_profile", fields.profile);
 	const profileHelp = h("p", { class: "muted" }, t(profileAvailable() ? "pmp_profile_help" : "pmp_profile_unavailable"));
 	const envLabel = labelled("pmp_environment", fields.environment);
-	const group = (name, ...nodes) => h("details", { "data-policy-group": name }, h("summary", {}, t(name)), ...nodes);
+	const group = (name, ...nodes) => disclosure({ element: h("details", { "data-policy-group": name }, h("summary", {}, t(name)), ...nodes) });
 	const grid = (...names) => h("div", { class: "pm-fields" }, ...names.map(([key, label]) => labelled(label, fields[key])));
 	const stale = h("p", {
 		class: "muted",
 		hidden: true
 	}, t("pmp_stale"));
-	const useVersions = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
+	const useVersions = button({
+		variant: "secondary",
+		label: t("pmp_use_versions"),
+		onClick: () => {
 			if (!ready || !allowed() || stopped() || editor.locked() || !context()) return;
 			if (!fields.original_policy.value) Object.entries(repairControls.initialize(current.policy?.document?.policy || {})).forEach(([key, value]) => editor.set(key, value));
 			editor.set("original_policy", JSON.stringify(current.policy?.document?.policy || {}));
 			editor.set("context", JSON.stringify(context()));
 			editor.update();
 		}
-	}, t("pmp_use_versions"));
+	});
+	useVersions.hidden = true;
 	const eligibility = h("p", { class: "muted" });
 	const extra = h("div", {}, source, stale, useVersions, grid(["enabled", "pmp_enabled"], ["after", "pmp_after"]), group("pmp_scope", choices(fields.sources, sourceKinds, "pmp_sources"), h("p", { class: "muted" }, t("pmp_sources_help")), choices(fields.works, workKinds, "pmp_work"), h("p", { class: "muted" }, t("pmp_work_help")), labelled("pmp_paths", fields.paths), h("p", { class: "muted" }, t("pmp_paths_help")), grid(["delivery", "pmp_delivery"]), envLabel, h("p", { class: "muted" }, t("pmp_delivery_help"))), group("pmp_verification", grid(["ci", "pmp_ci"], ["review", "pmp_review"]), labelled("pmp_acceptance", fields.acceptance), h("p", { class: "muted" }, t("pmp_acceptance_help"))), findingControls.element, repairControls.element, group("pmp_schedule", profileLabel, profileHelp, grid(["timezone", "pmp_timezone"], ["interval", "pmp_interval"], ["weekday", "pmp_weekday"], ["time", "pmp_time"], ["age", "pmp_max_age"], ["stable", "pmp_stable"])), group("pmp_limits", grid(["parallel", "pmp_parallel"], ["run", "pmp_run_seconds"], ["period", "pmp_period_seconds"], ["runs", "pmp_period_runs"], ["cost", "pmp_cost"], ["retries", "pmp_retries"])), labelled("pmp_rationale", fields.rationale), eligibility);
 	function context() {
@@ -34980,8 +35252,8 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		}
 	};
 	fields.delivery.addEventListener("change", () => editor.update());
-	const editorDetails = h("details", { "data-maintenance-editor": "" }, h("summary", {}, t("pmp_edit")), editor.box);
-	const historyDetails = h("details", {}, h("summary", {}, t("pmp_history")), history);
+	const editorDetails = disclosure({ element: h("details", { "data-maintenance-editor": "" }, h("summary", {}, t("pmp_edit")), editor.box) });
+	const historyDetails = disclosure({ element: h("details", {}, h("summary", {}, t("pmp_history")), history) });
 	historyDetails.addEventListener("toggle", () => {
 		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
 	});
@@ -35010,16 +35282,23 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		form,
 		errorBox
 	}) : null;
+	const headingState = h("div", { class: "pm-answer" }, h("h3", {}, t("pmp_title")));
+	const runtimeText = () => t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1 ? "pmr_policy_runtime" : maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime");
+	function paintPolicyHeading(tone) {
+		headingState.replaceChildren();
+		if (tone) headingState.append(h("h3", {}, t("pmp_current")), statusPill(tone));
+		else if (ready && current) headingState.append(h("h3", {}, t(current.visibility_filtered || current.head?.revision ? "pmp_hidden" : "pmp_empty")));
+		else headingState.append(h("h3", {}, t("pmp_title")));
+	}
 	const element = h("section", {
 		class: "pm-brief pm-maintenance-policy",
 		"data-pm-maintenance-policy": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmp_title")), h("p", { class: "muted" }, t("pmp_intro"))), iconButton({
+	}, h("header", { class: "pm-heading" }, headingState, iconButton({
 		icon: "refresh-cw",
 		label: t("pmp_refresh"),
 		type: "button",
-		class: "secondary",
 		onclick: () => void refresh()
-	})), status, view, h("p", { class: "muted" }, t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version === 1 ? "pmr_policy_runtime" : maintenanceRuns ? "pmc_runtime_available" : "pmp_runtime")), historyDetails, permission, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
+	})), status, view, historyDetails, editorDetails, ...maintenanceRuns ? [maintenanceRuns.element] : [], ...observations ? [observations.element] : []);
 	function controls() {
 		editorDetails.hidden = !owner() && !(editor.locked() && recover());
 		permission.hidden = owner();
@@ -35205,7 +35484,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	const line = (label, value) => h("p", {}, h("strong", {}, `${t(label)}: `), value ?? t("pmp_none"));
 	function record(row, isCurrent = false) {
 		fixed(row);
-		const doc = row.document, p = doc.policy, s = doc.scope, details = h("details", {}, h("summary", {}, t("pmp_details")));
+		const doc = row.document, p = doc.policy, s = doc.scope, details = h("details", {}, h("summary", {}, t("pmp_note")));
 		const names = (values) => values.length ? values.map((value) => t(`pmp_${value}`)).join(" · ") : t("pmp_none");
 		details.append(line("pmp_after", t(`pmp_${p.after_release_policy}`)), line("pmp_sources", names(p.sources)), h("p", { class: "muted" }, t("pmp_sources_help")), line("pmp_work", names(p.allowed_work_kinds)), line("pmp_paths", p.allowed_paths.join(" · ")), line("pmp_delivery", t(`pmp_${p.delivery.maximum}`)), ...p.delivery.environment ? [line("pmp_environment", p.delivery.environment)] : [], line("pmp_ci", t(p.verification.required_ci ? "pmp_yes" : "pmp_no")), line("pmp_review", t(p.verification.review_required ? "pmp_yes" : "pmp_no")), h("p", {}, h("strong", {}, t("pmp_acceptance"))), h("ul", {}, ...p.verification.acceptance_evidence.map((text) => h("li", {}, text))), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), h("p", { class: "muted" }, t(s.github_scope === githubProfile ? "pmp_profile_help" : "pmp_profile_legacy_help")), line("pmp_timezone", p.schedule.timezone), line("pmp_interval", p.schedule.check_interval_seconds), line("pmp_weekday", t(`pmp_day_${p.schedule.review_weekday}`)), line("pmp_time", p.schedule.review_local_time), line("pmp_max_age", p.observation.max_age_seconds), line("pmp_stable", p.observation.stable_for_seconds), ...[
 			["parallel", "max_parallel"],
@@ -35226,7 +35505,16 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			config: p.observation.maintenance_sources
 		});
 		if (findingPolicy) details.append(findingPolicy);
-		return h("article", { "data-maintenance-policy": row.policy_id }, h("h3", {}, isCurrent ? t("pmp_current") : `${t("pmp_revision")} ${row.revision}`), h("p", {}, h("strong", {}, `${t("pmp_revision")} ${row.revision}`), " · ", s.repository, " · ", s.channel), h("p", {}, t(p.enabled ? "pmp_permitted" : "pmp_disabled"), " · ", t(`pmp_${p.delivery.maximum}`)), h("p", { class: "muted" }, p.allowed_work_kinds.length ? names(p.allowed_work_kinds) : t("pmp_observation")), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), details);
+		details.append(h("p", {}, t(p.enabled ? "pmp_permitted" : "pmp_disabled"), " · ", t(`pmp_${p.delivery.maximum}`)), h("p", { class: "muted" }, p.allowed_work_kinds.length ? names(p.allowed_work_kinds) : t("pmp_observation")));
+		if (isCurrent) {
+			details.append(h("p", { class: "muted" }, t("pmp_intro")), h("p", { class: "muted" }, runtimeText()), permission);
+			const branch = baseline?.baseline?.document?.proof?.maintenance_branch;
+			if (baseline?.baseline) details.append(h("p", { class: "muted" }, branch?.status === "verified_at_observation" ? `${t("pmp_branch")}: ${branch.ref}` : t("pmp_no_branch")));
+		}
+		disclosure({ element: details });
+		const tone = !p.enabled ? "stopped" : p.allowed_work_kinds.length ? "adopted" : "read_only";
+		if (isCurrent) paintPolicyHeading(tone);
+		return h("article", { "data-maintenance-policy": row.policy_id }, isCurrent ? null : h("div", { class: "pm-answer" }, h("h3", {}, `${t("pmp_revision")} ${row.revision}`), statusPill(tone)), h("p", {}, h("strong", {}, `${t("pmp_revision")} ${row.revision}`), " · ", s.repository, " · ", s.channel), line("pmp_github_profile", t(s.github_scope === githubProfile ? "pmp_profile_github" : "pmp_profile_legacy")), details);
 	}
 	function withdraw() {
 		repairSourcesReady = false;
@@ -35243,11 +35531,12 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 		view.replaceChildren();
 		source.replaceChildren();
 		history.replaceChildren();
+		paintPolicyHeading(null);
 		controls();
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(h("p", { class: "muted" }, t("pmp_unavailable")), errorBox(error));
+		status.replaceChildren(inlineError({ error: t("pmp_unavailable") }), errorBox(error));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? historyCursor : 0;
@@ -35269,15 +35558,15 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 				"data-policy-coverage": "",
 				class: "muted"
 			}, t(historyFiltered ? "pmp_filtered" : "pmp_partial")));
-			if (historyCursor !== null) history.append(h("button", {
+			if (historyCursor !== null) history.append(button({
 				"data-policy-more": "",
-				type: "button",
-				class: "secondary",
-				onclick: (event) => {
+				variant: "secondary",
+				label: t("pmp_more"),
+				onClick: (event) => {
 					event.currentTarget.disabled = true;
 					readHistory(true);
 				}
-			}, t("pmp_more")));
+			}));
 		} catch (error) {
 			if (valid(ticket)) failure(error);
 		}
@@ -35300,10 +35589,15 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 			baseline = b;
 			lifecycle = l.lifecycle;
 			ready = true;
-			view.replaceChildren(p.policy ? record(p.policy, true) : emptyState({ title: t(p.visibility_filtered || p.head.revision ? "pmp_hidden" : "pmp_empty") }));
+			if (p.policy) view.replaceChildren(record(p.policy, true));
+			else {
+				const details = disclosure({ element: h("details", {}, h("summary", {}, t("pmp_note")), h("p", { class: "muted" }, t("pmp_intro")), h("p", { class: "muted" }, runtimeText()), permission) });
+				view.replaceChildren(details);
+				paintPolicyHeading(null);
+			}
 			if (b.baseline) {
-				const row = b.baseline, doc = row.document;
-				source.append(h("h3", {}, t("pmp_baseline")), h("p", {}, doc.release_version.value, " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, doc.proof.maintenance_branch.status === "verified_at_observation" ? `${t("pmp_branch")}: ${doc.proof.maintenance_branch.ref}` : t("pmp_no_branch")), h("details", {}, h("summary", {}, t("pmp_versions")), line("pmp_revision", p.head.revision), line("pmp_lifecycle", l.lifecycle.revision), line("pmp_original_baseline", row.baseline_id), h("p", { class: "mono" }, row.document_digest)));
+				const doc = b.baseline.document;
+				source.append(h("p", {}, t("pmp_baseline"), ": ", doc.release_version.value, " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, doc.proof.maintenance_branch.status === "verified_at_observation" ? `${t("pmp_branch")}: ${doc.proof.maintenance_branch.ref}` : t("pmp_no_branch")));
 			}
 			controls();
 			if (!p.visibility_filtered && !b.visibility_filtered) {
@@ -35401,48 +35695,48 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 		selectedKey,
 		branch.value
 	]);
-	const choose = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void readChoices(false)
-	}, t("prb_load_sources"));
-	const moreBindings = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => void readBindings(true)
-	}, t("prb_more_bindings"));
-	const readPreview = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void readProof()
-	}, t("prb_preview"));
-	const usePreview = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
+	const choose = button({
+		variant: "secondary",
+		label: t("prb_load_sources"),
+		onClick: () => void readChoices(false)
+	});
+	const moreBindings = button({
+		variant: "secondary",
+		label: t("prb_more_bindings"),
+		onClick: () => void readBindings(true)
+	});
+	moreBindings.hidden = true;
+	const readPreview = button({
+		variant: "secondary",
+		label: t("prb_preview"),
+		onClick: () => void readProof()
+	});
+	const usePreview = button({
+		variant: "secondary",
+		label: t("prb_use_preview"),
+		onClick: () => {
 			if (!currentEditor || currentEditor.locked() || !preview || !allowed()) return;
 			currentEditor.set("registration", JSON.stringify(preview.registration));
 			currentEditor.update();
 		}
-	}, t("prb_use_preview"));
-	const historyDetails = h("details", {}, h("summary", {}, t("prb_history")), history);
+	});
+	usePreview.hidden = true;
+	const historyDetails = disclosure({ element: h("details", {}, h("summary", {}, t("prb_history")), history) });
 	historyDetails.addEventListener("toggle", () => {
 		if (historyDetails.open && !historyLoaded && ready) readHistory(false);
 	});
-	const editorDetails = h("details", { "data-release-register": "" }, h("summary", {}, t("prb_register")), h("p", { class: "muted" }, t("prb_source_help")), h("div", { class: "pm-fields" }, labelled("prb_repository", repository), moreBindings, labelled("prb_kind", kind)), choose, sourceStatus, sourceView, labelled("prb_branch", branch), h("p", { class: "muted" }, t("prb_branch_help")), readPreview, previewView, usePreview, editorView);
+	const editorDetails = disclosure({ element: h("details", { "data-release-register": "" }, h("summary", {}, t("prb_register")), h("p", { class: "muted" }, t("prb_source_help")), h("div", { class: "pm-fields" }, labelled("prb_repository", repository), moreBindings, labelled("prb_kind", kind)), choose, sourceStatus, sourceView, labelled("prb_branch", branch), h("p", { class: "muted" }, t("prb_branch_help")), readPreview, previewView, usePreview, editorView) });
 	const permission = h("p", { class: "muted" }, t("prb_owner"));
+	const headingState = h("div", { class: "pm-answer" }, h("h3", {}, t("prb_title")));
 	const element = h("section", {
 		class: "pm-brief",
 		"data-pm-release-baselines": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("prb_title")), h("p", { class: "muted" }, t("prb_intro"))), iconButton({
+	}, h("header", { class: "pm-heading" }, headingState, iconButton({
 		icon: "refresh-cw",
 		label: t("prb_refresh"),
 		type: "button",
-		class: "secondary",
 		onclick: () => void refresh()
-	})), status, view, historyDetails, permission, editorDetails);
+	})), status, view, historyDetails, editorDetails);
 	function controls() {
 		const can = ready && allowed();
 		for (const field of [
@@ -35486,11 +35780,12 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 		history.replaceChildren();
 		sourceStatus.replaceChildren();
 		resetSources();
+		headingState.replaceChildren(h("h3", {}, t("prb_title")));
 		controls();
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(h("p", { class: "muted" }, t("prb_unavailable")), errorBox(error));
+		status.replaceChildren(inlineError({ error: t("prb_unavailable") }), errorBox(error));
 	}
 	const editorApi = async (...args) => {
 		const ticket = epoch;
@@ -35512,29 +35807,46 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 			[t("prb_commit"), document.commit_sha],
 			[t("prb_observed"), stamp(proof?.observed_at)],
 			[t("prb_published"), source.published_at ? stamp(source.published_at) : null],
-			["Repository", document.repository],
-			["Baseline", metadata?.baseline_id],
-			["SHA-256", metadata?.document_digest],
-			["Source", source.kind],
-			["Release ID", source.release_id],
-			["Deployment", source.deployment_id]
+			[t("prb_fact_repository"), document.repository],
+			[t("prb_fact_baseline"), metadata?.baseline_id],
+			[t("prb_fact_digest"), metadata?.document_digest],
+			[t("prb_fact_source"), source.kind],
+			[t("prb_fact_release"), source.release_id],
+			[t("prb_fact_deployment"), source.deployment_id]
 		]) if (value !== null && value !== void 0) details.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value))));
 		if (metadata?.operation_id) details.append(h("a", { href: `#/op/${encodeURIComponent(metadata.operation_id)}` }, t("pm_operation")));
 		const maintenance = proof?.maintenance_branch;
 		details.append(h("p", { class: "muted" }, t(maintenance?.status === "verified_at_observation" ? "prb_branch_verified" : "prb_branch_none")));
 		if (maintenance?.ref) details.append(h("p", { class: "mono" }, maintenance.ref), h("p", { class: "mono" }, maintenance.head_sha));
+		disclosure({ element: details });
 		return details;
 	}
+	const fact = (label, tone) => h("span", { class: "pm-baseline-fact" }, h("span", {}, t(label)), statusPill(tone));
 	function baselineRow(row, current = false) {
 		if (row.workspace_id !== workspaceId || row.document?.workspace_id !== workspaceId) throw Error(t("prb_invalid"));
 		const doc = row.document, delivery = doc.delivery_status || {};
-		return h("article", { "data-release-baseline": row.baseline_id }, h("h3", {}, current ? t("prb_current") : `${t("prb_version")} ${row.version}`), h("p", {}, h("strong", {}, doc.release_version?.value || doc.commit_sha), " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, t("prb_version"), " ", row.version, " · ", stamp(row.created_at)), h("ul", {}, h("li", {}, t(delivery.github_release === "published" ? "prb_gh_published" : "prb_gh_unknown")), h("li", {}, t("prb_registry")), h("li", {}, t(delivery.deployment === "verified" ? "prb_dep_verified" : "prb_dep_unknown"))), delivery.deployment === "verified" ? h("p", { class: "muted" }, t("prb_not_live")) : null, h("p", { class: "muted" }, t("prb_quality")), doc.intent?.rationale ? h("p", {}, doc.intent.rationale) : null, ...(doc.quality?.known_limitations || []).map((item) => h("p", {}, `${t("prb_limit_claim")}: ${item.text}`)), fixedDetails(doc, doc.proof, row));
+		const details = fixedDetails(doc, doc.proof, row);
+		details.append(h("p", {}, t(delivery.github_release === "published" ? "prb_gh_published" : "prb_gh_unknown")), h("p", {}, t("prb_registry")), h("p", {}, t(delivery.deployment === "verified" ? "prb_dep_verified" : "prb_dep_unknown")));
+		if (delivery.deployment === "verified") details.append(h("p", { class: "muted" }, t("prb_not_live")));
+		details.append(h("p", { class: "muted" }, t("prb_quality")));
+		const facts = () => h("div", { class: "pm-baseline-facts" }, fact("prb_github_release", delivery.github_release === "published" ? "adopted" : "not_assessed"), fact("prb_registry_short", "not_assessed"), fact("prb_dep_name", delivery.deployment === "verified" ? "deployed" : "not_assessed"), fact("prb_acceptance", "not_assessed"));
+		const overall = doc.quality?.functional_acceptance_verified === true ? "accepted" : doc.quality?.status === "unassessed" || doc.quality?.status === "not_assessed" ? "not_assessed" : "unknown";
+		if (current) {
+			details.append(h("p", { class: "muted" }, t("prb_intro")), permission);
+			headingState.replaceChildren(h("h3", {}, t("prb_current")), statusPill(overall));
+		}
+		return h("article", { "data-release-baseline": row.baseline_id }, current ? null : h("div", { class: "pm-answer" }, h("h3", {}, `${t("prb_version")} ${row.version}`)), current ? facts() : null, h("p", {}, h("strong", {}, doc.release_version?.value || doc.commit_sha), " · ", doc.repository, " · ", doc.channel), h("p", { class: "muted" }, t("prb_version"), " ", row.version, " · ", stamp(row.created_at)), current ? null : facts(), doc.intent?.rationale ? h("p", {}, doc.intent.rationale) : null, ...(doc.quality?.known_limitations || []).map((item) => h("p", {}, `${t("prb_limit_claim")}: ${item.text}`)), details);
 	}
 	function renderCurrent(data) {
 		check(data);
 		if (!Number.isSafeInteger(data.head?.version)) throw Error(t("prb_invalid"));
 		head = data.head;
-		view.replaceChildren(data.baseline ? baselineRow(data.baseline, true) : emptyState({ title: t(data.visibility_filtered || head.version > 0 ? "prb_hidden" : "prb_empty") }));
+		if (data.baseline) view.replaceChildren(baselineRow(data.baseline, true));
+		else {
+			const details = disclosure({ element: h("details", {}, h("summary", {}, t("prb_note")), h("p", { class: "muted" }, t("prb_intro")), permission) });
+			view.replaceChildren(details);
+			headingState.replaceChildren(h("h3", {}, t(data.visibility_filtered || head.version > 0 ? "prb_hidden" : "prb_empty")));
+		}
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? historyCursor : 0;
@@ -35558,15 +35870,15 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 				"data-release-coverage": "",
 				class: "muted"
 			}, t(historyFiltered ? "prb_filtered" : "prb_partial")));
-			if (historyCursor !== null && historyCursor !== void 0) history.append(h("button", {
+			if (historyCursor !== null && historyCursor !== void 0) history.append(button({
 				"data-release-more": "",
-				type: "button",
-				class: "secondary",
-				onclick: (event) => {
+				variant: "secondary",
+				label: t("prb_more"),
+				onClick: (event) => {
 					event.currentTarget.disabled = true;
 					readHistory(true);
 				}
-			}, t("prb_more")));
+			}));
 		} catch (error) {
 			if (valid(ticket)) failure(error);
 		}
@@ -35746,11 +36058,11 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 			if (choicesFiltered) sourceView.append(h("p", { class: "muted" }, t("prb_filtered")));
 			if (choicesIneligible) sourceView.append(h("p", { class: "muted" }, t("prb_ineligible")));
 			if (page.coverage?.page_bound_reached) sourceView.append(h("p", { class: "muted" }, t("prb_page_bound")));
-			if (choiceCursor !== null && choiceCursor !== void 0) sourceView.append(h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: () => void readChoices(true)
-			}, t("prb_more_sources")));
+			if (choiceCursor !== null && choiceCursor !== void 0) sourceView.append(button({
+				variant: "secondary",
+				label: t("prb_more_sources"),
+				onClick: () => void readChoices(true)
+			}));
 		} catch (error) {
 			if (valid(ticket) && selected === selectionEpoch) failure(error);
 		} finally {
@@ -37266,7 +37578,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const routeRegisterAction = (action) => {
 		const name = action?.action || "";
 		if (name.startsWith("pm.maintenance_review.")) openRegisterForm("issues", "ui_maintenance_review");
-		else if (name.startsWith("pm.maintenance.repair")) {
+		else if (name === "pm.maintenance.repair.evidence.record") {
+			maintenanceRepairs?.focusRepair?.(action?.target?.repair_id);
+			openRegisterForm("issues", "ui_repairs");
+		} else if (name.startsWith("pm.maintenance.repair")) {
 			maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref);
 			openRegisterForm("issues", "ui_repairs");
 		} else if (name.startsWith("pm.governance.")) openRegisterForm("issues", "ui_governance");
@@ -37303,6 +37618,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (viewId && workspaceId) {
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${viewId}`;
 			workbench?.select(viewId);
+		}
+		const region = host.closest("[data-pm-region]");
+		if (region) for (const sibling of region.querySelectorAll(":scope > [data-pm-section]")) {
+			if (sibling === host) continue;
+			const other = sibling.querySelector(":scope > details");
+			if (other instanceof HTMLDetailsElement) other.open = false;
 		}
 		const fold = host.querySelector(":scope > details");
 		const focusForm = (root) => {

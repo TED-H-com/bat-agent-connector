@@ -82,6 +82,18 @@
   removes the row and the identity together.
   See the [register contract](docs/design/pm-register.md).
 
+- Maintenance repairs, maintenance review, maintenance policy and release baselines
+  open on the current state, in English and zh-TW. Status uses a shared pill.
+  Record identifiers, digests and the limit note stay in Details, and each durable
+  form stays behind one action. "Turn into work" binds the finding and its matching
+  rule. "Record evidence" selects that saved repair. Nothing is written until submit,
+  and an unknown result still recovers with the original operation key.
+  The state sits beside Refresh. A repair limit reads as "4 per 24 h". Counts from
+  a source that was not observed stay Unknown. Each panel has one Details disclosure,
+  and review keeps one primary action with the rest under More actions.
+  Policy and release baselines keep that state on the Refresh row, with one divider.
+  A baseline's channel pills sit on the next line, under the selection.
+
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
   dates, including unscheduled work and execution attempts for a future schedule view.
   Partial pages never claim totals; withdrawn sources lose rows and derived dates together,

@@ -1,3 +1,4 @@
+import {button} from './ui/components.js';
 // Repair rules retain the exact reviewed handoff; editing a preview never replaces a saved rule.
 export function maintenanceRepairPolicyControls({h,t,input,labelled,available,ciAvailable,reviewedHandoff,baseline,editable,changed}) {
   const hidden=()=>h('input',{type:'hidden'}),fields={repair_rules:hidden(),repair_rules_set:hidden(),repair_key:input('pmr_rule_key',{required:false,max:48}),
@@ -9,7 +10,7 @@ export function maintenanceRepairPolicyControls({h,t,input,labelled,available,ci
   const read=()=>{const value=fields.repair_rules.value?JSON.parse(fields.repair_rules.value):[];if(!Array.isArray(value)||value.length>16)throw Error(t('pmr_invalid'));return value;};
   const selected=()=>{try{return reviewedHandoff();}catch{return null;}};
   const lines=value=>value.split('\n').map(v=>v.trim()).filter(Boolean);
-  const add=h('button',{type:'button',class:'secondary',onclick:()=>void addRule()},t('pmr_add_rule'));
+  const add=button({variant:'secondary',label:t('pmr_add_rule'),onClick:()=>void addRule()});
   const element=h('details',{'data-policy-group':'pmr_rules'},h('summary',{},t('pmr_rules')),h('p',{class:'muted'},t('pmr_rules_help')),rows,
     h('div',{class:'pm-fields'},labelled('pmr_rule_key',fields.repair_key),labelled('pmr_work_kind',fields.repair_kind)),
     labelled('pmr_rule_labels',fields.repair_labels),labelled('pmr_rule_paths',fields.repair_paths),labelled('pmr_rule_command',fields.repair_command),
@@ -39,7 +40,7 @@ export function maintenanceRepairPolicyControls({h,t,input,labelled,available,ci
     for(const rule of read())rows.append(h('article',{class:'pm-repair-rule'},h('h4',{},rule.key),h('p',{},t('pmp_'+rule.work_kind),' · ',rule.labels_all.join(' · ')),
       h('p',{class:'pm-source'},rule.paths.join(' · ')),h('details',{},h('summary',{},t('pmr_rule_original')),
         h('p',{class:'pm-source'},rule.handoff.params.pm_package_ref.package_id),h('p',{class:'pm-source'},rule.release.baseline_id),h('p',{class:'pm-source'},rule.verification.command_digest)),
-      h('button',{type:'button',class:'secondary',disabled:!editable(),onclick:()=>{if(!editable())return;fields.repair_rules.value=JSON.stringify(read().filter(r=>r.key!==rule.key));fields.repair_rules_set.value='1';changed();update();}},t('pmr_remove_rule'))));
+      button({variant:'secondary',label:t('pmr_remove_rule'),disabled:!editable()||null,onClick:()=>{if(!editable())return;fields.repair_rules.value=JSON.stringify(read().filter(r=>r.key!==rule.key));fields.repair_rules_set.value='1';changed();update();}})));
   }
   function initialize(policy){return {repair_rules:JSON.stringify(policy.repair_rules||[]),repair_rules_set:Object.hasOwn(policy,'repair_rules')?'1':'',repair_ci:policy.observation?.required_ci_profile||''};}
   function build(values){const result={};if(values.repair_rules_set){

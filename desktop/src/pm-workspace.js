@@ -539,6 +539,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const routeRegisterAction = action => {
     const name = action?.action || '';
     if (name.startsWith('pm.maintenance_review.')) openRegisterForm('issues', 'ui_maintenance_review');
+    else if (name === 'pm.maintenance.repair.evidence.record') {maintenanceRepairs?.focusRepair?.(action?.target?.repair_id); openRegisterForm('issues', 'ui_repairs');}
     else if (name.startsWith('pm.maintenance.repair')) {maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref); openRegisterForm('issues', 'ui_repairs');}
     else if (name.startsWith('pm.governance.')) openRegisterForm('issues', 'ui_governance');
     else if (name.startsWith('pm.issue.')) openRegisterForm('requirements', 'ui_publication');
@@ -567,6 +568,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (viewId && workspaceId) {
       location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${viewId}`;
       workbench?.select(viewId);
+    }
+    const region = host.closest('[data-pm-region]');
+    if (region) for (const sibling of region.querySelectorAll(':scope > [data-pm-section]')) {
+      if (sibling === host) continue;
+      const other = sibling.querySelector(':scope > details');
+      if (other instanceof HTMLDetailsElement) other.open = false;
     }
     const fold = host.querySelector(':scope > details');
     const focusForm = root => {
