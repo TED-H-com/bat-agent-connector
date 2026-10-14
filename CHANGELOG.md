@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Keep Requirements acceptance labels within their columns with the CI font, and verify background preservation after the initial detail read settles.
+
 - Preserve shared search and chip sizes against legacy view styles, with invisible mobile chip touch targets.
 
 - Keep the workspace switcher's disclosure chevron after its label on desktop and mobile.

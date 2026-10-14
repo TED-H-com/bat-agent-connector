@@ -121,6 +121,8 @@ for(const native of [false,true])test.describe(native?'native workbench':'web wo
     await rtm(page).getByRole('button',{name:'Expand Members can sign in',exact:true}).click();
     await rtm(page).getByRole('button',{name:'Member login',exact:true}).click();
     const heading=rtm(page).locator('[data-rtm-detail] > header > .ui-icon-button');await expect(heading).toBeFocused();
+    await expect(rtm(page).locator('[data-rtm-detail] pre')).toContainText('"number": 41');
+    await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
     await heading.evaluate(element=>element.setAttribute('data-reading-marker','detail'));
     await rtm(page).locator('[data-rtm-requirement="membership.login"]').evaluate(element=>element.setAttribute('data-reading-marker','row'));
     const reads=f.state.reads.filter(path=>path.includes('/deliveries?')).length;
