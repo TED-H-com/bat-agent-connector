@@ -12,8 +12,8 @@ import {DEMO_NOW} from '../desktop/tests/demo/project.ts';
 import {mountConversation} from '../desktop/tests/conversation-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-// Merged main after #133 and #145. Documentation-only commits may recapture this tree.
-const source = 'aba02180e872f798ea54aa003b267b14eb7f5018';
+// Merged main through #161. Documentation-only commits may recapture this tree.
+const source = 'ab960ed23f734944470b982bd2f66b0c30300151';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = new Date(DEMO_NOW).toISOString();
@@ -184,9 +184,11 @@ try {
   for (const fixture of fixtures) await include(fixture);
   for (const [language, locale] of [['en', 'en-US'], ['zh', 'zh-TW']]) for (const scenario of [...scenes, ...(review ? reviewScenes : [])]) {
     const responsive = [];
+    // The work inspector scrolls independently; give its delivery/attempts room.
+    const sceneViewport = {...viewport, height: scenario === 'requirements' ? 1600 : viewport.height};
     let scene;
     for (const width of [390, 768, 1440]) {
-      const context = await browser.newContext({locale, viewport: {width, height: viewport.height}, timezoneId: 'UTC', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block'});
+      const context = await browser.newContext({locale, viewport: {...sceneViewport, width}, timezoneId: 'UTC', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block'});
       try {
         const blocked = [], errors = [];
         await context.route('**/*', route => {
@@ -209,8 +211,10 @@ try {
         assert.doesNotMatch(await page.locator('#main').innerText(), /\b(?:undefined|null|NaN)\b/);
         assert.deepEqual(errors, [], 'Browser errors'); assert.deepEqual(blocked, [], 'Unexpected external requests');
         responsive.push({...dimensions, horizontal_overflow: false});
-        if (review) await page.screenshot({path: path.join(review, `${scenario}-${language}-${width}.png`), animations: 'disabled', caret: 'hide'});
-        if (scenes.includes(scenario) && width === viewport.width) await page.screenshot({path: path.join(output, `${scenario}-${language}.png`), animations: 'disabled', caret: 'hide'});
+        // Include the whole page so the charter and delivery details are not cut mid-line.
+        // This uses browser capture, without changing the app's DOM or styles.
+        if (review) await page.screenshot({path: path.join(review, `${scenario}-${language}-${width}.png`), fullPage: true, animations: 'disabled', caret: 'hide'});
+        if (scenes.includes(scenario) && width === viewport.width) await page.screenshot({path: path.join(output, `${scenario}-${language}.png`), fullPage: true, animations: 'disabled', caret: 'hide'});
       } finally {await context.close();}
     }
     if (!scenes.includes(scenario)) {
@@ -218,7 +222,8 @@ try {
       continue;
     }
     const file = `${scenario}-${language}.png`;
-    images.push({file, sha256: sha256(await readFile(path.join(output, file))), scenario, locale, viewport, theme: 'light',
+    const png = await readFile(path.join(output, file));
+    images.push({file, sha256: sha256(png), scenario, locale, viewport: sceneViewport, image_size: {width: png.readUInt32BE(16), height: png.readUInt32BE(20)}, full_page: true, theme: 'light',
       route: scene.route, fixture_sources: fixtures, composition: scene.composition, responsive_checks: responsive});
     process.stdout.write(`Captured ${file}; 390/768/1440: no horizontal overflow\n`);
   }

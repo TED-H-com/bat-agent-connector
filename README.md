@@ -14,9 +14,10 @@ Review the proposed update and explicitly adopt it; requirements, work and deliv
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** The screenshots come from merged `main` at `aba02180`.
-> Backend #132 merged on October 13, 2026; #134 merged on October 14. Frontend #133 merged
-> afterward on October 14 as `cb7e9f42`. Nothing is installed or live-tested.
+> **Development preview.** The screenshots pin merged `main` at
+> `ab960ed23f734944470b982bd2f66b0c30300151`, through #161 on October 14, 2026.
+> They include the merged discussion, register, Board, secondary tools, setup and evidence-view updates.
+> This documentation refresh provides no installation or live acceptance evidence.
 > The [progress report](docs/product/progress-2026-10-14.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
 
@@ -25,17 +26,20 @@ The **Web and Tauri desktop apps share one interface and one Python backend**. Y
 | Your question | View and workflow |
 | --- | --- |
 | Where does the project stand? | **Overview** shows the live goal, accepted requirements, blockers, open decisions and Recently decided history. Unread sources stay Unknown; complete empty lists say None recorded. Saved reports retain their fixed snapshots. |
-| What needs a decision? | Open a record and **Discuss with PM**. **Discussions** carries its context chip and automatic title into a reviewable proposal and explicit adoption. An adopted discussion can offer an authorized, editable Resolve issue step; reported resolution remains unassessed. |
-| What is this work meant to satisfy? | **Requirements** traces the adopted requirements through work, criteria, PRs and delivery in the RTM and inspector. |
+| What needs a decision? | Open a record and **Discuss with PM**. **Discussions** opens with its context chip and automatic title. Search threads, save a note, and review a proposed update. Context, Inputs and Plan open in **Discussion info**. An adopted discussion can offer an authorized, editable Resolve issue step; reported resolution remains unassessed. |
+| What is this work meant to satisfy? | **Requirements** shows adopted requirements with work, PR, Acceptance and Deploy columns. Expand a row for criteria and work; open the inspector for evidence. Unchanged refreshes keep rows and focus stable. |
 | What is still unresolved? | **Issues & changes** keeps risks, issues, actions, changes and decisions in a filterable register with original timelines and named maintenance findings. |
 | Which dates changed? | **Schedule** compares recorded baseline, forecast and actual dates on a labelled axis. Missing dates stay unknown. |
 | What could a dependency change affect? | **Dependencies** shows pinned inventories, evidence and bounded impact in a matrix or graph. |
 | What are the agents using? | **Agents** keeps sourced usage, rows and daily trends on one consistent read, with reported quota windows. Unavailable data stays unknown. |
-| What should happen next? | **Board** follows work by stage. Content approval, requirement acceptance, merge and deployment remain separate. |
+| What should happen next? | **Board** offers search, requirement and agent filters, plus the shared work inspector. Content approval, requirement acceptance, merge and deployment remain separate. |
+| What needs a recorded response? | Open **Governance** or **Follow-ups** from **Issues & changes**. Meeting threads have a **Meeting** tab in Discussion info. Saved outcomes keep their original sources. |
+| What may maintenance do? | **Dependencies** holds **Release baselines** and **Maintenance policy**. Preview a release source before registration; policy adoption and enabled repair limits remain explicit. |
+| Where are the work tools? | **Requirements → More actions** opens quality, evidence, specification, package, handoff and issue publication tools; **Board → More actions** opens **Work batches**. |
 | What happened in that session? | **Session** keeps the conversation and results together. Authorized managed controls are available; manual BAT sessions remain read-only. |
 
 These are views of the same project, with secondary tools available on demand.
-The [current scope](#current-scope-and-limits) distinguishes the merged workspace from the full PM v1.2 backlog.
+The [current scope](#current-scope-and-limits) distinguishes the merged workspace from the full PM v1.2 backlog. The [progress report](docs/product/progress-2026-10-14.md) lists work still in review.
 
 ## Try one small project
 
@@ -55,10 +59,10 @@ Policy-bounded delivery and maintenance remain available through the project's s
 
 | More views from the same synthetic project | Screenshot |
 | --- | --- |
-| Issues & changes | [Register](site/images/issues-en.png) |
+| Issues & changes | [All nine loaded records and filters](site/images/issues-en.png) |
 | Schedule | [Baseline, forecast and actual](site/images/schedule-en.png) |
 | Dependencies | [Pinned partial inventory graph](site/images/dependencies-en.png) |
-| Board | [Work by stage](site/images/board-en.png) |
+| Board | [Search, filters and five work lanes](site/images/board-en.png) |
 | Session | [Read-only manual BAT session](site/images/session-en.png) |
 
 ## Install and connect
@@ -72,7 +76,11 @@ Use the [desktop workflow on main](https://github.com/teddashh/bat-agent-connect
 | Linux | `desktop-Linux-unsigned`: Debian package and bundled central | External-central native credentials remain memory-only; persistent native vault is excluded. |
 | Browser | Open the central's `/dashboard/`, or use the desktop's browser entry | Same project data and UI; no browser-native Fleet or credential vault. |
 
-The desktop package prepares a matching Python runtime, private background central, data and personal identity. Complete the guided BAT trust, repository binding and verification setup. **Joining an existing central is an explicit advanced option.** A failed connection never creates a replacement project database. Closing the Dashboard window does not stop central work.
+The desktop package prepares a matching Python runtime, private background central, data and personal identity.
+
+First use opens **Get ready to work → 1. Connect BAT**. Paste BAT’s connection URL, check the **Host ID**, then **Verify and save host**. After success, choose **View sessions**. Repository binding and verification commands are optional collapsed steps; configure them when the work needs them.
+
+**Joining an existing central is an explicit advanced option.** A failed connection never creates a replacement project database. Closing the Dashboard window does not stop central work.
 
 **PM analysis has separate runtime requirements.** The current bounded analysis paths run on a configured Linux central or eligible Linux BAT host, using the pinned PM Codex runtime and confinement described in the guide. A Windows or Mac client can use those remote capabilities; its local desktop installation does not provide native Windows/Mac PM execution. PM analysis support is distinct from a general coding CLI adapter.
 
@@ -107,9 +115,7 @@ flowchart TB
 | Status | Scope |
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
-| Merged workspace | Live Overview, source-bound Discussions and adoption, Requirements inspector, register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough and rounds 5b/6, merged as `cb7e9f42` on October 14, 2026. It is not installed or live-tested. |
-| M4 candidate | Joined Idea → delivery → maintenance → Review → new Idea flow; original runtime completion, manual single-input activity observation, Roadmap quality and Brief deviations. Candidate checks and failures are recorded separately. |
-| M5 local candidate | Persistent workspace analysis-adapter choice and read-only observation of serial manual inputs. Focused checks passed; full candidate/platform validation remains. |
+| Merged workspace | `ab960ed2` includes the October 14 discussion, register/Board, governance/meeting/follow-up, maintenance, work-tool, Overview/report/Requirements and first-run updates. Worktree/execution details and stable requirement rows are merged; release-source preview preserves rationale focus. Installation and live acceptance remain separate. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
 
 Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.
@@ -133,7 +139,7 @@ A lost reply does not prove an action failed. Recover the original operation and
 | --- | --- |
 | Use the product | [First use](docs/getting-started.md) · [Windows Fleet](docs/windows.md) |
 | Understand progress | [Progress report](docs/product/progress-2026-10-14.md) · [PM status](docs/product/pm-v1.2-status.md) · [Implementation history](docs/product/implementation-status.md) |
-| Continue development | [Sprint handoff](docs/handoff/2026-10-12-pm-v1.2.md) · [Adopted plan](docs/product/pm-v1.2-plan.md) · [Architecture decisions](docs/product/realignment-v2.md) |
+| Continue development | [Documentation handoff](docs/handoff/2026-10-14-docs-ux-v2.md) · [Adopted plan](docs/product/pm-v1.2-plan.md) · [Architecture decisions](docs/product/realignment-v2.md) |
 | Integrate an agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | Follow results | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |
 
