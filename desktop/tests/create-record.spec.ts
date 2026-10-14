@@ -43,10 +43,11 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`wor
     const page = await context.newPage(), f = fixture(); await mountConversation(page, false, f.dispatch);
     await page.goto('/dashboard/#/project/' + pid);
     const form = page.locator('[data-create-record="work_item"]');
+    const open = page.locator('[data-project-work-create]'); await expect(open).toBeVisible();
     const folder = process.env.BATC_POLISH_SHOTS;
     if (folder) {mkdirSync(folder, {recursive: true}); await page.screenshot({path: `${folder}/work-items-closed-${locale}-${width}.png`});}
     await expect(form).toBeHidden();
-    const open = page.locator('[data-project-work-create]'); await open.click();
+    await open.click();
     const title = form.getByLabel(locale === 'en' ? 'New work item' : '新工作項目', {exact: true});
     await expect(title).toBeFocused(); await title.fill('Retained draft');
     if (folder) await page.screenshot({path: `${folder}/work-items-open-${locale}-${width}.png`});
@@ -155,7 +156,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await page.reload(); await expect(form).toBeVisible();
     await expect(page.locator('[data-project-work-create]')).toBeHidden();
     await expect(form.getByLabel('New work item', {exact: true})).toHaveValue('Recover this creation');
-    await form.getByRole('button', {name: 'Check original request', exact: true}).click();
+    await form.getByRole('button', {name: 'Check original creation request', exact: true}).click();
     await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.writes[1]).toEqual(f.state.writes[0]); await expect(form).toBeHidden();
   });

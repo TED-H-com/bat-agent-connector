@@ -3390,16 +3390,17 @@ async function viewProject(main, pid) {
   let createOpen = create.pending();
   const createToggle = button({variant: 'primary', label: t('new_item_title'), 'data-project-work-create': '',
     onClick: () => {
-      createOpen = true; create.box.hidden = false; createToggle.hidden = true;
+      createOpen = true; create.box.hidden = false; createToggle.hidden = createActions.hidden = true;
       create.box.querySelector('input')?.focus();
     }});
   createClose = button({variant: 'secondary', label: t('cancel'), onClick: () => {
     if (create.pending()) return;
-    createOpen = false; create.box.hidden = true; createToggle.hidden = false; createToggle.focus();
+    createOpen = false; create.box.hidden = true; createToggle.hidden = createActions.hidden = false; createToggle.focus();
   }});
+  const createActions = h('div', {class: 'actions'}, createToggle);
   create.box.querySelector('.actions').append(createClose);
   const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
-  const itemCard = sectionCard({title: t("work_items"), actions: [filter, createToggle], body: h("div", {class: "or-item-list"}, create.box, items, archived)});
+  const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, createActions, create.box, items, archived)});
   itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
   const note = manageNote(); if (note) note.hidden = true;
   main.append(note || "", out, head, work, itemCard);
@@ -3451,7 +3452,7 @@ async function viewProject(main, pid) {
     const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed !== false;
     createOpen ||= create.pending();
     create.box.hidden = !mayCreate || !createOpen;
-    createToggle.hidden = !mayCreate || createOpen;
+    createToggle.hidden = createActions.hidden = !mayCreate || createOpen;
     createClose.hidden = create.pending();
     create.setContext({rows: data.work_items, name: p.name, active: !p.archived});
     work.hidden = !Array.isArray(data.work);

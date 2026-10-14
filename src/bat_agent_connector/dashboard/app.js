@@ -46172,7 +46172,7 @@ var admissionRefusals$3 = {
 	WORK_ITEM_ARCHIVED: 409,
 	WRONG_PROJECT: 409
 };
-function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, errorBox, opStatus }) {
+function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, onStateChange = () => {}, errorBox, opStatus }) {
 	const project = kind === "project", action = project ? "project.create" : "work_item.create";
 	const target = project ? {} : { project_id: projectId }, key = `batc.create.${namespace}.${kind}.${projectId || "root"}`;
 	const primary = project ? "name" : "title", fields = new Map(), choices = new Map();
@@ -46389,6 +46389,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		create.textContent = t(saved.intent ? "create_check_original" : project ? "add_project" : "add_item");
 		review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal$7(operation) && operation.status !== "succeeded");
 		review.disabled = busy || !allowed || !permitted();
+		onStateChange();
 	}
 	if (damaged) status.replaceChildren(h("p", { class: "error" }, t("create_invalid_draft")));
 	update();
@@ -57513,6 +57514,7 @@ async function viewProject(main, pid) {
 	const out = h("div", {});
 	const archived = h("div", {});
 	const showArchived = h("input", { type: "checkbox" });
+	let createClose;
 	const create = createRecordForm({
 		h,
 		t,
@@ -57525,9 +57527,13 @@ async function viewProject(main, pid) {
 		showScope: false,
 		errorBox,
 		opStatus,
+		onStateChange: () => {
+			if (createClose) createClose.hidden = create.pending();
+		},
 		onCreated: async () => {
 			createOpen = false;
 			await render();
+			if (!createToggle.hidden) createToggle.focus();
 		}
 	});
 	let createOpen = create.pending();
@@ -57538,27 +57544,28 @@ async function viewProject(main, pid) {
 		onClick: () => {
 			createOpen = true;
 			create.box.hidden = false;
-			createToggle.hidden = true;
+			createToggle.hidden = createActions.hidden = true;
 			create.box.querySelector("input")?.focus();
 		}
 	});
-	const createClose = button({
+	createClose = button({
 		variant: "secondary",
 		label: t("cancel"),
 		onClick: () => {
 			if (create.pending()) return;
 			createOpen = false;
 			create.box.hidden = true;
-			createToggle.hidden = false;
+			createToggle.hidden = createActions.hidden = false;
 			createToggle.focus();
 		}
 	});
+	const createActions = h("div", { class: "actions" }, createToggle);
 	create.box.querySelector(".actions").append(createClose);
 	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
 	const itemCard = sectionCard({
 		title: t("work_items"),
-		actions: [filter, createToggle],
-		body: h("div", { class: "or-item-list" }, create.box, items, archived)
+		actions: [filter],
+		body: h("div", { class: "or-item-list" }, createActions, create.box, items, archived)
 	});
 	itemCard.dataset.projectItemCard = "";
 	itemCard.hidden = true;
@@ -57642,7 +57649,7 @@ async function viewProject(main, pid) {
 		const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed !== false;
 		createOpen ||= create.pending();
 		create.box.hidden = !mayCreate || !createOpen;
-		createToggle.hidden = !mayCreate || createOpen;
+		createToggle.hidden = createActions.hidden = !mayCreate || createOpen;
 		createClose.hidden = create.pending();
 		create.setContext({
 			rows: data.work_items,
