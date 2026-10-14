@@ -128,8 +128,8 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
     }catch(error){if(valid(ticket))failure(error);}
   }
   function bindEditor(){
-    const chosen=selectedBinding();currentEditor=null;editorView.replaceChildren();
-    if(!chosen)return;
+    const chosen=selectedBinding();
+    if(!chosen){currentEditor=null;editorView.replaceChildren();return;}
     const repositoryName=chosen.name;
     if(!editors.has(repositoryName)){
       const registration=h('input',{type:'hidden'}),rationale=input('prb_rationale',{multiline:true,max:4000}),limitations=input('prb_limits',{multiline:true,required:false,max:80040});
@@ -159,7 +159,11 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
       }finally{syncing=false;}};
       editors.set(repositoryName,editor);
     }
-    currentEditor=editors.get(repositoryName);editorView.append(currentEditor.box);currentEditor.update();
+    currentEditor=editors.get(repositoryName);
+    // Preview may arrive between focusing the rationale and entering text.
+    // Keep this repository's form connected so that keyboard input retains its target.
+    if(currentEditor.box.parentElement!==editorView)editorView.replaceChildren(currentEditor.box);
+    currentEditor.update();
   }
   async function readBindings(append){
     const ticket=epoch;reading=true;controls();

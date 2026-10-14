@@ -252,6 +252,11 @@ direction, keeps those fixed fields, and then uses normal operation submission.
 Changing source or branch invalidates the old preview. Leaving the branch absent
 means unconfigured; do not include an empty query or `refs/heads/` prefix.
 
+For the same repository, a returning preview updates the mounted registration
+form without detaching it. Owners may type their rationale while preview is pending;
+the response preserves keyboard focus, text and the existing durable form. It does
+not enable registration before the fixed evidence and current CAS match.
+
 Preview does not save a receipt, create an operation/PM run, take a writer, start
 maintenance, or authorize a later action. A reader may inspect it; selection still
 requires the actual owner. Registration does not accept a caller-supplied proof or

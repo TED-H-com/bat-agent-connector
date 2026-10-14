@@ -37608,9 +37608,11 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 	}
 	function bindEditor() {
 		const chosen = selectedBinding();
-		currentEditor = null;
-		editorView.replaceChildren();
-		if (!chosen) return;
+		if (!chosen) {
+			currentEditor = null;
+			editorView.replaceChildren();
+			return;
+		}
 		const repositoryName = chosen.name;
 		if (!editors.has(repositoryName)) {
 			const registration = h("input", { type: "hidden" }), rationale = input("prb_rationale", {
@@ -37688,7 +37690,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 			editors.set(repositoryName, editor);
 		}
 		currentEditor = editors.get(repositoryName);
-		editorView.append(currentEditor.box);
+		if (currentEditor.box.parentElement !== editorView) editorView.replaceChildren(currentEditor.box);
 		currentEditor.update();
 	}
 	async function readBindings(append) {
