@@ -163,15 +163,15 @@ body.pm-mode #main { padding: 0; }
 
 /* Fixed nested docks reserve space; panels in their own grid column do not. */
 @media (min-width: 1200px) {
-  main:not(:has(> .ui-inspector)) .pm-main:has(:is(.reg-layout, .pm-agents-layout, .schedule-layout, .pm-work-layout) > .ui-inspector[role=complementary]) {
+  main:not(:has(> .ui-inspector)) .pm-main:has(:is(.reg-layout, .pm-overview, .pm-agents-layout, .schedule-layout, .pm-work-layout) > .ui-inspector[role=complementary]) {
     padding-right: calc(var(--space-6) + 400px + var(--space-4));
   }
   .pm-main .reg-layout:has(> .ui-inspector),
   .pm-main .pm-agents-layout:has(> .ui-inspector),
   .pm-main .schedule-layout:has(> .ui-inspector),
   .pm-main .pm-work-layout:has(> .pm-work-inspector) { grid-template-columns: minmax(0, 1fr); }
-  main:has(:is(.reg-layout, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .ui-page-header,
-  main:has(:is(.reg-layout, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .workspace-session-heading {
+  main:has(:is(.reg-layout, .pm-overview, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .ui-page-header,
+  main:has(:is(.reg-layout, .pm-overview, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .workspace-session-heading {
     max-width: calc(100% - 400px - var(--space-4));
   }
 }

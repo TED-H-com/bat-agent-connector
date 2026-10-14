@@ -107,9 +107,10 @@ always overlay, so its thread and detail columns keep their width. List views ke
 docking at ≥1200px. Every section in the main column shares one right edge beside
 a docked inspector, including the header and collapsed secondary tools. A docked
 surface extends from the 48px topbar to the viewport bottom; its body scrolls
-independently of the fixed header. Only fixed docks in the register, Agents, Schedule
-and Work layouts reserve main-column space. Discussions' static 300px panel owns its
-grid column and scrolls through that column, without a second inspector-body scroller.
+independently of the fixed header. Only fixed docks in the register, Overview, Agents,
+Schedule and Work layouts reserve main-column space. Discussions' static 300px panel
+owns its grid column and scrolls through that column, without a second inspector-body
+scroller.
 Overlay mode traps focus and makes background content inert. `returnFocus` accepts an element or a callback
 resolved at close. It focuses a connected, rendered target outside hidden/inert
 ancestors, falling back to the creation-time opener under the same checks.
