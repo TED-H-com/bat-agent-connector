@@ -86,7 +86,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
     if(editor)editor.update();onReviewChange();
   }
   function withdraw(){serial++;reading=false;broken=false;active=null;prepared=null;qualityCatalog=[];for(const value of editors.values())value.qualityBox?.replaceChildren();facts.replaceChildren();status.replaceChildren();outcome.replaceChildren();editorView.replaceChildren();editor=null;useReview.hidden=true;update();}
-  function fail(error){if(error.message?.startsWith('PM_SPEC_')||error.code==='PM_REQUIREMENT_QUALITY_INVALID')error=Error(t('ph_invalid'));const auth=[401,403,404].includes(error.status);if(auth){withdraw();onSourceFailure();broken=true;}prepared=null;facts.replaceChildren();outcome.replaceChildren();status.replaceChildren(errorBox(error),...(error.code==='PM_HANDOFF_BLOCKED'?[]:[h('p',{class:'muted'},t('ph_unavailable'))]));update();}
+  function fail(error){const auth=[401,403,404].includes(error.status);if(auth){withdraw();onSourceFailure();broken=true;}prepared=null;facts.replaceChildren();outcome.replaceChildren();status.replaceChildren(errorBox(error,error.code==='PM_HANDOFF_BLOCKED'?{}:{summary:t('ph_unavailable')}));update();}
   function bindEditor(row){
     if(!editors.has(row.package_id)){
       const quality=h('input',{type:'hidden',value:'{}'});quality.dataset.pmDefault='{}';

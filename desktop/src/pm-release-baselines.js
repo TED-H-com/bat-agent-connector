@@ -1,4 +1,4 @@
-import {button, disclosure, iconButton, inlineError, statusPill} from './ui/components.js';
+import {button, disclosure, iconButton, statusPill} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 // Release selection records a fixed source. It does not publish or authorize Maintain.
 export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,caps,permitted,form,input,labelled,errorBox,namespace}) {
@@ -59,7 +59,7 @@ export function workspaceReleaseBaselines({h,t,api,alive,workspaceId,workspace,c
     bindings=[];bindingCursor=null;repository.replaceChildren(h('option',{value:''},t('prb_choose_repository')));moreBindings.hidden=true;
     view.replaceChildren();history.replaceChildren();sourceStatus.replaceChildren();resetSources();headingState.replaceChildren(h('h3',{},t('prb_title')));controls();
   }
-  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('prb_unavailable')}),errorBox(error));}
+  function failure(error){withdraw();status.replaceChildren(errorBox(error,{summary:t('prb_unavailable')}));}
   const editorApi=async(...args)=>{
     const ticket=epoch;
     try{return await api(...args);}catch(error){if(valid(ticket)&&[401,403,404].includes(error.status))failure(error);throw error;}

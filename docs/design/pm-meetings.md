@@ -15,6 +15,11 @@ meeting context, draft and explicit completion.
 
 ## A fixed basis for each discussion
 
+The shared Meetings card keeps its title and Refresh on the first row. A successful
+read with no meetings shows one short sentence in that card, in English or zh-TW,
+without a nested empty-state card. A failed read retains the existing error, source
+withdrawal and write gates; it never becomes an empty list.
+
 Creating a meeting requires an explicit Sprint ID, its expected current version
 and a saved snapshot ID in the same workspace. The context freezes:
 

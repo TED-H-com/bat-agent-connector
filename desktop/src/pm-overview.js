@@ -67,7 +67,9 @@ export function workspaceOverview(options) {
     if (event === 'selected') {mode = preference.mode = 'saved'; saved = null; closeReader(); signature = '';}
     if (event === 'updated') saved = value;
     if (event === 'withdrawn') {saved = null; closeReader(); signature = '';}
-    if (event === 'error') status.replaceChildren(options.errorBox(error));
+    // Charter already rendered and recorded this failed read. Move its message
+    // into the visible overview without a second error in the report tools.
+    if (event === 'error') status.replaceChildren(...reportTools.querySelector('[data-report-status]').childNodes);
     // Construction does not notify; callbacks run after the controls are mounted.
     if (mode === 'saved') render();
   }

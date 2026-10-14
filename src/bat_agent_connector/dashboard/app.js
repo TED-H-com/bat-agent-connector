@@ -6352,8 +6352,6 @@ var pmMeetingStrings = {
 		pm_meeting_choose: "Meeting",
 		pm_meeting_refresh: "Refresh meetings",
 		pm_meeting_empty: "No meeting has been recorded.",
-		pm_meeting_empty_title: "No meetings yet",
-		pm_meeting_empty_help: "Meeting records will appear here.",
 		pm_meeting_stale: "The source version changed. Your draft and any original request are preserved. Review the updated baseline before a new submission.",
 		pm_meeting_rebase: "Update baseline",
 		pm_meeting_unknown: "Unknown",
@@ -6463,8 +6461,6 @@ var pmMeetingStrings = {
 		pm_meeting_choose: "會議",
 		pm_meeting_refresh: "更新會議資料",
 		pm_meeting_empty: "尚未建立會議紀錄。",
-		pm_meeting_empty_title: "尚無會議",
-		pm_meeting_empty_help: "會議紀錄會顯示在這裡。",
 		pm_meeting_stale: "來源版本已變更。草稿與原操作請求均已保留；送出新操作前，請檢視更新後的基準。",
 		pm_meeting_rebase: "檢視更新後的會議基準",
 		pm_meeting_unknown: "未知",
@@ -16240,7 +16236,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 		} catch (error) {
 			if (box.isConnected && ticket === request) {
 				result.replaceChildren();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, text("pm_diff_failure")));
+				status.replaceChildren(errorBox(error, { summary: text("pm_diff_failure") }));
 			}
 		} finally {
 			if (ticket === request) {
@@ -17342,7 +17338,7 @@ function workspaceOverview(options) {
 			closeReader();
 			signature = "";
 		}
-		if (event === "error") status.replaceChildren(options.errorBox(error));
+		if (event === "error") status.replaceChildren(...reportTools.querySelector("[data-report-status]").childNodes);
 		if (mode === "saved") render();
 	}
 	function attentionTitle(row) {
@@ -18990,11 +18986,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					404
 				].includes(error.status)) {
 					withdraw();
-					statusBox.replaceChildren(inlineError({
-						error,
-						retry: () => {
-							refresh();
-						}
+					statusBox.replaceChildren(readError(error, () => {
+						refresh();
 					}));
 					return;
 				}
@@ -19128,12 +19121,9 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			if (edges.length) affected.append(...edges.map(dependencyRow));
 			else affected.append(h("p", {}, Number(data.omitted_edges) > 0 ? t("dep_edges_omitted") : t("dep_none_recorded")));
 		} else if (!impact || impact.dependency !== selectedKey()) affected.append(skeleton(2));
-		else if (impact.error) affected.append(inlineError({
-			error: impact.error,
-			retry: () => {
-				impactKey = "";
-				syncImpact();
-			}
+		else if (impact.error) affected.append(readError(impact.error, () => {
+			impactKey = "";
+			syncImpact();
 		}));
 		else {
 			const reasons = [];
@@ -19614,6 +19604,14 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			}
 		}
 	}
+	function readError(error, retry) {
+		return h("div", {}, errorBox(error), button({
+			size: "sm",
+			variant: "ghost",
+			label: t("ui_retry"),
+			onClick: retry
+		}));
+	}
 	async function refresh() {
 		if (!active) return;
 		const ticket = ++serial;
@@ -19651,11 +19649,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				404
 			].includes(error.status)) withdraw();
 			else clearData();
-			statusBox.replaceChildren(inlineError({
-				error,
-				retry: () => {
-					refresh();
-				}
+			statusBox.replaceChildren(readError(error, () => {
+				refresh();
 			}));
 		}
 	}
@@ -20942,12 +20937,8 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		} catch (error) {
 			if (valid(ticket)) {
 				item.catalog = null;
-				item.catalogBox.replaceChildren(h("p", { class: "muted" }, t("ahp_selection_unavailable")));
-				status.replaceChildren([
-					401,
-					403,
-					404
-				].includes(error?.status) ? inlineError({ error: { message: t("ahp_unavailable") } }) : errorBox(error));
+				item.catalogBox.replaceChildren();
+				status.replaceChildren(errorBox(error, { summary: t("ahp_selection_unavailable") }));
 				for (const f of item.forms) f.update();
 			}
 		}
@@ -20982,12 +20973,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		withdraw();
 		adapterFields.hidden = true;
 		historyDetails.hidden = true;
-		const withdrawn = [
-			401,
-			403,
-			404
-		].includes(error?.status);
-		status.append(inlineError({ error: { message: withdrawn ? t("ahp_unavailable") : error?.message || t("ahp_unavailable") } }));
+		status.append(errorBox(error, { summary: t("ahp_unavailable") }));
 	}
 	async function refresh() {
 		const prior = selected;
@@ -22394,7 +22380,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			cursor = null;
 			facts.replaceChildren();
 			status.replaceChildren();
-			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error), h("p", { class: "muted" }, t("wd_unavailable"))), refreshButton);
+			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error, { summary: t("wd_unavailable") })), refreshButton);
 		} finally {
 			if (ticket === sequence) {
 				busy = false;
@@ -22548,7 +22534,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 	}
 	function fail(error) {
 		clear();
-		status.replaceChildren(text("psm_unavailable"), errorBox(error.message?.startsWith("PM_SPEC_") ? Error(t("psm_invalid")) : error));
+		status.replaceChildren(errorBox(error, { summary: t("psm_unavailable") }));
 		if ([
 			401,
 			403,
@@ -22994,7 +22980,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		facts.hidden = true;
 		proofView.hidden = true;
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, text("pmb_unavailable"), errorBox(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? error() : err)), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, { summary: t("pmb_unavailable") })), refreshButton));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -25883,7 +25869,6 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		update();
 	}
 	function fail(error) {
-		if (error.message?.startsWith("PM_SPEC_") || error.code === "PM_REQUIREMENT_QUALITY_INVALID") error = Error(t("ph_invalid"));
 		if ([
 			401,
 			403,
@@ -25896,7 +25881,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		prepared = null;
 		facts.replaceChildren();
 		outcome.replaceChildren();
-		status.replaceChildren(errorBox(error), ...error.code === "PM_HANDOFF_BLOCKED" ? [] : [h("p", { class: "muted" }, t("ph_unavailable"))]);
+		status.replaceChildren(errorBox(error, error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t("ph_unavailable") }));
 		update();
 	}
 	function bindEditor(row) {
@@ -27218,7 +27203,7 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}
 		packageRow = null;
 		withdraw();
-		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pmi_unavailable")));
+		status.replaceChildren(errorBox(error, { summary: t("pmi_unavailable") }));
 		refreshButton.disabled = false;
 	}
 	async function selectMapping(mid) {
@@ -28765,7 +28750,7 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		onSelection(null);
 		picker.replaceChildren();
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error), paragraph(t("wp_unavailable"))), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, { summary: t("wp_unavailable") })), refreshButton));
 	}
 	async function select(id) {
 		if (busy || !idPattern.test(id)) return;
@@ -30005,7 +29990,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		clear();
 		purge();
 		workChoice.replaceChildren();
-		status.replaceChildren(text("pmq_unavailable"), errorBox(err));
+		status.replaceChildren(errorBox(err, { summary: t("pmq_unavailable") }));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -31387,7 +31372,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		"aria-expanded": "false",
 		onClick: () => reveal("pm.meeting.create")
 	});
-	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, readOnly, iconButton({
+	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, h("h3", {}, t("pm_meeting_title")), launch, readOnly, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_meeting_refresh"),
 		onClick: () => void refresh()
@@ -31678,12 +31663,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		view.replaceChildren();
 		const detail = model.detail;
 		if (!detail) {
-			const empty = emptyState({
-				title: t("pm_meeting_empty_title"),
-				text: t("pm_meeting_empty_help")
-			});
-			empty.querySelector("p").classList.add("muted");
-			view.append(empty);
+			view.append(note("pm_meeting_empty"));
 			return;
 		}
 		const context = detail.context.document;
@@ -32133,7 +32113,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	function creationEditor() {
 		if (!model.sprints.length) {
 			createBox = null;
-			return entryPoint(note("pm_meeting_sprint_required"), can);
+			return h("div");
 		}
 		const initial = model.sprints.some((row) => row.sprint_id === navigation.sprint_id) ? navigation.sprint_id : model.sprints.find((row) => row.status === "active")?.sprint_id || model.sprints[0]?.sprint_id || "";
 		const holder = h("div", { class: "pm-fields" }), sprint = options("pm_meeting_sprint", model.sprints.map((row) => [row.sprint_id, row.definition.title]), initial), slot = h("div");
@@ -34616,7 +34596,7 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(inlineError({ error: t("pmrv_unavailable") }), errorBox(error));
+		status.replaceChildren(errorBox(error, { summary: t("pmrv_unavailable") }));
 		paintHeading();
 	}
 	function localForm(config) {
@@ -35868,7 +35848,7 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	}
 	function failure(error) {
 		withdraw();
-		status.append(inlineError({ error: t("pmr_unavailable") }), errorBox(error));
+		status.append(errorBox(error, { summary: t("pmr_unavailable") }));
 	}
 	async function refresh() {
 		withdraw();
@@ -36331,7 +36311,7 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 	}
 	function failure(error) {
 		withdraw();
-		status.append(h("p", { class: "muted" }, t("pmc_unavailable")), errorBox(error));
+		status.append(errorBox(error, { summary: t("pmc_unavailable") }));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? cursor : 0;
@@ -36631,7 +36611,7 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 	}
 	function failure(error) {
 		withdraw();
-		status.append(h("p", { class: "muted" }, t("pmo_unavailable")), errorBox(error));
+		status.append(errorBox(error, { summary: t("pmo_unavailable") }));
 	}
 	async function refresh() {
 		withdraw();
@@ -37226,7 +37206,7 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(inlineError({ error: t("pmp_unavailable") }), errorBox(error));
+		status.replaceChildren(errorBox(error, { summary: t("pmp_unavailable") }));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? historyCursor : 0;
@@ -37475,7 +37455,7 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(inlineError({ error: t("prb_unavailable") }), errorBox(error));
+		status.replaceChildren(errorBox(error, { summary: t("prb_unavailable") }));
 	}
 	const editorApi = async (...args) => {
 		const ticket = epoch;

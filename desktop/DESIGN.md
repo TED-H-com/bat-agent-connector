@@ -1057,3 +1057,10 @@ unchanged.
 it. Rendering an error still records the same refresh-cycle failure, so failed reads
 cannot acknowledge event checkpoints or enable mutations. IME Escape leaves menus,
 inspectors and the mobile drawer open; ordinary Escape retains focus restoration.
+
+PM panels with their own failure sentence pass that sentence as the error summary.
+The original error reaches the renderer unchanged, so its code and server message
+remain in one Details disclosure and the refresh gate retains the failure. Retry
+stays adjacent. Saved-report reads reuse the rendered Charter error in Overview;
+they do not add another error in Versions. Meetings uses one plain empty sentence
+inside its own card, with its title and Refresh on the first row.
