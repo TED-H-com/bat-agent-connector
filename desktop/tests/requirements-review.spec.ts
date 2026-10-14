@@ -147,15 +147,25 @@ test('B2 S3 requirement inspector shows criteria, work, review, decisions and de
 });
 
 for (const view of ['requirements', 'board']) test(`S4 ${view} work details clicks through the existing item route`, async ({page}) => {
-  const f = reviewFixture();
-  f.overrides.push((url, r) => url.pathname === '/work-items/' + f.ids.work.email ? {status: 200, data: {project: {project_id: f.ids.projectId, name: 'Member sign-in', archived: false}, work_item: {work_item_id: f.ids.work.email, project_id: f.ids.projectId, title: 'Email sign-in', state: 'done', version: 1, archived: false}, children: [], links: [], steps: [], history: [], breadcrumbs: []}} : r);
+  const f = reviewFixture(), errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  f.overrides.push((url, r) => url.pathname === '/work-items/' + f.ids.work.email ? {status: 200, data: {
+    project: {project_id: f.ids.projectId, name: 'Member sign-in', archived: false},
+    work_item: {work_item_id: f.ids.work.email, project_id: f.ids.projectId, title: 'Email sign-in', state: 'done', version: 1, archived: false,
+      goal: '', request: '', acceptance: '', steps: [], attachments: [],
+      completion: {fingerprint: 'reviewed-email', approved: true, pending: false, display_state: 'done'}},
+    children: [], links: [], path: [], derived: [], events: [],
+  }} : r);
   await f.mount(page, view, f.ids.work.email);
   if (view === 'board') await page.locator(`[data-board-open="${f.ids.work.email}"]`).click();
   await page.locator('[data-work-inspector]').getByRole('link', {name: 'Open work details'}).click();
   await expect(page).toHaveURL(new RegExp('#/item/' + f.ids.work.email));
-  await expect(page.getByRole('heading', {name: 'Email sign-in', exact: true}).first()).toBeVisible();
+  // The outgoing inspector has the same title. Require the destination's h1.
+  await expect(page.locator('[data-work-inspector]')).toHaveCount(0);
+  await expect(page.getByRole('main').getByRole('heading', {level: 1, name: 'Email sign-in', exact: true})).toBeVisible();
   await expect.poll(() => f.reads.includes('/work-items/' + f.ids.work.email)).toBe(true);
   expect(f.reads).not.toContain('/projects/' + f.ids.work.email);
+  expect(f.writes).toEqual([]); expect(errors).toEqual([]);
 });
 
 for (const view of ['requirements', 'board']) test(`S5 M7 ${view} changes opener, persists selection and restores it on return`, async ({page}) => {

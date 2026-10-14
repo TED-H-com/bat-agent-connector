@@ -327,9 +327,11 @@ test('rename remains reviewable when the fixed discussion exceeds the latest mes
 });
 
 test('inline rename cancels without writing and recovers an unknown save with the original key', async ({page}) => {
-  const f = demoFixture({discussions: true}); let loseReply = true;
+  const f = demoFixture({discussions: true}); let loseReply = true, restoring = false;
+  let releaseRestore!: () => void; const restoreGate = new Promise<void>(resolve => {releaseRestore = resolve;});
   await mountConversation(page, false, async input => {
     const value = await f.dispatch(input);
+    if (restoring && input.path.includes('/conversation-proposals?')) await restoreGate;
     if (input.body?.action === 'pm.thread.rename' && loseReply) {
       loseReply = false; return {status: 503, data: {error: {code: 'LOST_REPLY', message: 'Original reply unavailable'}}};
     }
@@ -342,9 +344,12 @@ test('inline rename cancels without writing and recovers an unknown save with th
   await expect(input).toBeHidden(); await rename.press('Enter'); await expect(input).toBeFocused();
   await input.fill('Discard this title'); await input.press('Escape');
   await expect(rename).toBeFocused(); await expect(title).toHaveText(original!); expect(f.discussion.writes).toHaveLength(0);
-  await rename.press('Enter'); await input.fill('Retained rename draft'); await page.reload();
+  await rename.press('Enter'); await input.fill('Retained rename draft'); restoring = true; await page.reload();
   await expect(input).toHaveValue('Retained rename draft'); expect(f.discussion.writes).toHaveLength(0);
-  await input.press('Enter');
+  await expect(input).toBeDisabled();
+  restoring = false; releaseRestore();
+  // Restoring a draft precedes the complete snapshot's send admission.
+  await expect(input).toBeEnabled(); await input.press('Enter');
   const form = page.locator('[data-pm-action="pm.thread.rename"]');
   await expect(form).toContainText('Original reply unavailable');
   await page.reload(); await form.getByRole('button', {name: 'Check original request', exact: true}).click();
