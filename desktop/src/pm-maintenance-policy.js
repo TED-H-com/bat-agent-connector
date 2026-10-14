@@ -1,4 +1,4 @@
-import {emptyState, iconButton} from './ui/components.js';
+import {button, disclosure, emptyState, iconButton, inlineError, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {maintenanceRepairPolicyControls,maintenanceRepairPolicyView} from './pm-maintenance-repair-policy.js';
 import {findingPolicyControls,findingPolicyView} from './pm-maintenance-findings.js';
@@ -52,14 +52,15 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
   const profileLabel=labelled('pmp_github_profile',fields.profile);
   const profileHelp=h('p',{class:'muted'},t(profileAvailable()?'pmp_profile_help':'pmp_profile_unavailable'));
   const envLabel=labelled('pmp_environment',fields.environment);
-  const group=(name,...nodes)=>h('details',{'data-policy-group':name},h('summary',{},t(name)),...nodes);
+  const group=(name,...nodes)=>disclosure({element:h('details',{'data-policy-group':name},h('summary',{},t(name)),...nodes)});
   const grid=(...names)=>h('div',{class:'pm-fields'},...names.map(([key,label])=>labelled(label,fields[key])));
   const stale=h('p',{class:'muted',hidden:true},t('pmp_stale'));
-  const useVersions=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{
+  const useVersions=button({variant:'secondary',label:t('pmp_use_versions'),onClick:()=>{
     if(!ready||!allowed()||stopped()||editor.locked()||!context())return;
     if(!fields.original_policy.value)Object.entries(repairControls.initialize(current.policy?.document?.policy||{})).forEach(([key,value])=>editor.set(key,value));
     editor.set('original_policy',JSON.stringify(current.policy?.document?.policy||{}));editor.set('context',JSON.stringify(context()));editor.update();
-  }},t('pmp_use_versions'));
+  }});
+  useVersions.hidden=true;
   const eligibility=h('p',{class:'muted'});
   const extra=h('div',{},source,stale,useVersions,grid(['enabled','pmp_enabled'],['after','pmp_after']),
     group('pmp_scope',choices(fields.sources,sourceKinds,'pmp_sources'),h('p',{class:'muted'},t('pmp_sources_help')),
@@ -104,17 +105,19 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
     eligibility.textContent=!allowed()?t('pmp_owner'):!ready?'':stopped()?t('pmp_stopped'):!baseline?.baseline?t(baseline?.visibility_filtered?'pmp_baseline_hidden':'pmp_no_baseline'):current?.visibility_filtered?t('pmp_hidden'):'';
   }finally{syncing=false;}};
   fields.delivery.addEventListener('change',()=>editor.update());
-  const editorDetails=h('details',{'data-maintenance-editor':''},h('summary',{},t('pmp_edit')),editor.box);
-  const historyDetails=h('details',{},h('summary',{},t('pmp_history')),history);
+  const editorDetails=disclosure({element:h('details',{'data-maintenance-editor':''},h('summary',{},t('pmp_edit')),editor.box)});
+  const historyDetails=disclosure({element:h('details',{},h('summary',{},t('pmp_history')),history)});
   historyDetails.addEventListener('toggle',()=>{if(historyDetails.open&&!historyLoaded&&ready)void readHistory(false);});
   const permission=h('p',{class:'muted'},t('pmp_owner'));
   const maintenanceRuns=caps()?.features?.pm_workspaces?.maintenance_checks?.version===1
     ?maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}):null;
   const observations=caps()?.features?.pm_workspaces?.workload?.version===1
     ?maintenanceObservations({h,t,api,alive,workspaceId,workspace,caps,permitted,form,errorBox}):null;
+  const note=disclosure({element:h('details',{},h('summary',{},t('pmp_note')),h('p',{class:'muted'},t('pmp_intro')),
+    h('p',{class:'muted'},t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version===1?'pmr_policy_runtime':maintenanceRuns?'pmc_runtime_available':'pmp_runtime')),permission)});
   const element=h('section',{class:'pm-brief pm-maintenance-policy','data-pm-maintenance-policy':''},h('header',{class:'pm-heading'},
-    h('div',{},h('h2',{},t('pmp_title')),h('p',{class:'muted'},t('pmp_intro'))),iconButton({icon:'refresh-cw', label:t('pmp_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),
-    status,view,h('p',{class:'muted'},t(caps()?.features?.pm_workspaces?.maintenance_repairs?.version===1?'pmr_policy_runtime':maintenanceRuns?'pmc_runtime_available':'pmp_runtime')),historyDetails,permission,editorDetails,...(maintenanceRuns?[maintenanceRuns.element]:[]),...(observations?[observations.element]:[]));
+    iconButton({icon:'refresh-cw', label:t('pmp_refresh'), ...{type:'button',onclick:()=>void refresh()}})),
+    status,view,note,historyDetails,editorDetails,...(maintenanceRuns?[maintenanceRuns.element]:[]),...(observations?[observations.element]:[]));
   function controls(){editorDetails.hidden=!owner()&&!(editor.locked()&&recover());permission.hidden=owner();editor.update();}
   function initialize(){
     const p=current.policy?.document?.policy||{enabled:false,after_release_policy:'manual',sources:['issues','pull_requests'],allowed_work_kinds:[],allowed_paths:['.'],
@@ -176,14 +179,17 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       h('p',{class:'mono'},row.document_digest),h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('pm_operation')));
     const repairPolicy=maintenanceRepairPolicyView({h,t,policy:p});if(repairPolicy)details.append(repairPolicy);
     const findingPolicy=findingPolicyView({h,t,config:p.observation.maintenance_sources});if(findingPolicy)details.append(findingPolicy);
-    return h('article',{'data-maintenance-policy':row.policy_id},h('h3',{},isCurrent?t('pmp_current'):`${t('pmp_revision')} ${row.revision}`),
+    details.append(h('p',{},t(p.enabled?'pmp_permitted':'pmp_disabled'),' · ',t(`pmp_${p.delivery.maximum}`)),
+      h('p',{class:'muted'},p.allowed_work_kinds.length?names(p.allowed_work_kinds):t('pmp_observation')));
+    disclosure({element:details});
+    const tone=!p.enabled?'stopped':p.allowed_work_kinds.length?'adopted':'read_only';
+    return h('article',{'data-maintenance-policy':row.policy_id},
+      h('div',{class:'pm-answer'},h('h3',{},isCurrent?t('pmp_current'):`${t('pmp_revision')} ${row.revision}`),statusPill(tone)),
       h('p',{},h('strong',{},`${t('pmp_revision')} ${row.revision}`),' · ',s.repository,' · ',s.channel),
-      h('p',{},t(p.enabled?'pmp_permitted':'pmp_disabled'),' · ',t(`pmp_${p.delivery.maximum}`)),
-      h('p',{class:'muted'},p.allowed_work_kinds.length?names(p.allowed_work_kinds):t('pmp_observation')),
       line('pmp_github_profile',t(s.github_scope===githubProfile?'pmp_profile_github':'pmp_profile_legacy')),details);
   }
   function withdraw(){repairSourcesReady=false;maintenanceRuns?.withdraw();observations?.withdraw();epoch++;ready=false;current=null;baseline=null;lifecycle=null;historyLoaded=false;historyCursor=null;historyFiltered=false;view.replaceChildren();source.replaceChildren();history.replaceChildren();controls();}
-  function failure(error){withdraw();status.replaceChildren(h('p',{class:'muted'},t('pmp_unavailable')),errorBox(error));}
+  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('pmp_unavailable')}),errorBox(error));}
   async function readHistory(append){
     const ticket=epoch,after=append?historyCursor:0;
     try{
@@ -192,7 +198,7 @@ export function workspaceMaintenancePolicy({h,t,api,alive,workspaceId,workspace,
       const rows=data.policies.map(row=>record(row));if(!append){history.replaceChildren();historyFiltered=false;}else history.querySelector('[data-policy-more]')?.remove();
       historyLoaded=true;historyCursor=data.next_cursor;historyFiltered ||= data.visibility_filtered;history.append(...rows);history.querySelector('[data-policy-coverage]')?.remove();
       history.append(h('p',{'data-policy-coverage':'',class:'muted'},t(historyFiltered?'pmp_filtered':'pmp_partial')));
-      if(historyCursor!==null)history.append(h('button',{'data-policy-more':'',type:'button',class:'secondary',onclick:event=>{event.currentTarget.disabled=true;void readHistory(true);}},t('pmp_more')));
+      if(historyCursor!==null)history.append(button({'data-policy-more':'',variant:'secondary',label:t('pmp_more'),onClick:event=>{event.currentTarget.disabled=true;void readHistory(true);}}));
     }catch(error){if(valid(ticket))failure(error);}
   }
   async function refresh(){

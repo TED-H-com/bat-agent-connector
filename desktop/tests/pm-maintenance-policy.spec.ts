@@ -49,7 +49,7 @@ for(const native of [false,true])test.describe(native?'Native policy':'Web polic
     await page.getByRole('button',{name:'Refresh maintenance policy',exact:true}).click();
     await expect(save(page)).toBeDisabled();await expect(form(page).getByLabel('Reason for this policy',{exact:true})).toHaveValue('Keep the supported release observable');
     await expect(form(page)).toContainText('Your draft still uses its original versions');
-    await page.getByRole('button',{name:'Use these reviewed versions',exact:true}).click();await save(page).click();
+    await section(page).getByRole('button',{name:'Use current versions',exact:true}).click();await save(page).click();
     await expect.poll(()=>f.state.writes.length).toBe(1);
     const pre=f.state.writes[0].body.preconditions;
     expect(pre.expected_baseline_id).toBe(f.release.state.baselines.at(-1)!.baseline_id);
@@ -162,7 +162,7 @@ for(const language of ['en','zh-TW'])for(const width of [390,768,1440])test(`${l
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await mountConversation(page,false,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');await openEditor(page);
   await page.locator('[data-policy-group="pmp_scope"] > summary').click();await page.locator('[data-policy-group="pmp_schedule"] > summary').click();
-  await expect(section(page)).toContainText(language==='en'?'Open PR heads and GitHub Actions':'開啟中的 PR 固定 head 與 GitHub Actions');
+  await expect(section(page)).toContainText(language==='en'?'Open PR heads and GitHub Actions':'開啟中的 PR 最新提交與 GitHub Actions');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);
   const folder=process.env.PM_SCREENSHOTS||testInfo.outputPath('screenshots');mkdirSync(folder,{recursive:true});
   await section(page).screenshot({path:`${folder}/policy-${language}-${width}.png`,style:'.top { position: static !important; }'});await context.close();
