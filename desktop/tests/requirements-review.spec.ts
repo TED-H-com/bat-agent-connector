@@ -368,8 +368,10 @@ for (const view of ['requirements', 'board']) test(`S1 ${view} snapshot conflict
   await f.mount(page, view); await expect(page.locator(view === 'board' ? '[data-pm-kanban-work]' : '[data-rtm-requirement]')).toHaveCount(view === 'board' ? 12 : 8);
   failed = true; await page.locator('[data-pm-refresh]').click();
   const status = page.locator(view === 'board' ? '[data-pm-kanban] > [role=status]' : '[data-pm-rtm] > [role=status]');
-  await expect(status.locator('p').first()).not.toContainText('SNAPSHOT_CHANGED');
-  await expect(status.locator('p').first()).not.toContainText('Private raw');
+  const summary = view === 'board' ? status.getByRole('alert') : status.locator('p').first();
+  await expect(summary).toContainText('The plan changed while reading');
+  await expect(summary).not.toContainText('SNAPSHOT_CHANGED');
+  await expect(summary).not.toContainText('Private raw');
   await expect(status.locator('details')).toContainText('SNAPSHOT_CHANGED');
   failed = false; await status.getByRole('button', {name: /^Retry/}).click();
   await expect(page.locator(view === 'board' ? '[data-pm-kanban-work]' : '[data-rtm-requirement]')).toHaveCount(view === 'board' ? 12 : 8);

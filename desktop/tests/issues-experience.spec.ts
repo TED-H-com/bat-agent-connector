@@ -539,6 +539,21 @@ for (const locale of locales) test(`issues read errors are localized and recover
   await context.close();
 });
 
+for (const locale of locales) test(`issues mobile related chips keep the full touch target (${locale})`, async ({browser, baseURL}) => {
+  const {page, context, copy} = await boot(browser, baseURL, locale, 390);
+  await openView(page, 'issues');
+  await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+  const chip = page.locator('[data-reg-inspector] [data-reg-requirement]').first();
+  await expect(chip).toBeVisible();
+  const box = (await chip.boundingBox())!;
+  // A tap inside the shared 44px target, above the visible 24px chip, must open its requirement.
+  await page.mouse.click(box.x + box.width / 2, box.y - 6);
+  await expect(page).toHaveURL(new RegExp(`/requirements\\?select=${copy.project.ids.requirements.email}`));
+  await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-region="requirements"]')).toBeVisible();
+  await context.close();
+});
+
 test('a late register page does not restore withdrawn rows', async ({browser, baseURL}) => {
   test.setTimeout(60_000);
   const {page, context, errors, gate, copy} = await boot(browser, baseURL, 'en', 1440, {gate: true});
