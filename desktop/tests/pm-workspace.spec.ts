@@ -1,4 +1,4 @@
-import {openThreadTab} from './pm-navigation.ts';
+import {openThreadTab, openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
@@ -68,11 +68,14 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     if(original){f.state.lost=true;await form.getByRole('button',{name:'Start discussion',exact:true}).click();await expect(form).toContainText('Reply unavailable');}
     const expectedWrites=original?1:0,label=original?'Check original request':'Start discussion';
     const saved=()=>page.evaluate(()=>Object.entries(localStorage).filter(([key])=>key.includes('.pm.thread.create.')).map(([,value])=>JSON.parse(value)));
+    // The snapshot belongs to Overview. Keep the discussion draft, then hold
+    // the visible Overview read on reload instead of relying on a hidden read.
+    await openPmSection(page,'overview');
     const before=await saved();hold=true;await page.reload();
     try {
       await expect.poll(()=>held).toBe(true);
       await expect(field).toHaveValue('Retain the original discussion draft');
-      await expect(form.getByRole('button',{name:label,exact:true})).toBeDisabled();
+      await expect(form.getByRole('button',{name:label,exact:true,includeHidden:true})).toBeDisabled();
       await expect(field).toBeDisabled();
       // Even an explicit form event while the initial read is pending must not
       // freeze an unsent operation or consume a new original key.
@@ -80,8 +83,9 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
       expect(f.state.writes).toHaveLength(expectedWrites);
       expect(await saved()).toEqual(before);
     } finally {release();}
-    await expect(form.getByRole('button',{name:label,exact:true})).toBeEnabled();
+    await expect(form.getByRole('button',{name:label,exact:true,includeHidden:true})).toBeEnabled();
     await expect(field).toHaveValue('Retain the original discussion draft');
+    await openPmSection(page,'discussions');
     await form.getByRole('button',{name:label,exact:true}).click();
     await expect(page).toHaveURL(new RegExp('#/pm/'+workspaceId+'/discussions/'+threadId+'$'));
     expect(f.state.writes).toHaveLength(expectedWrites+1);

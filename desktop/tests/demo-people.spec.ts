@@ -69,7 +69,14 @@ test('demo governance history and repair lifecycle remain readable', async ({pag
   await expect(detail).toContainText('mei.lin');
   await screenshot(page, 'governance-history-en-1440');
   await openPmSection(page, 'issues', 'ui_repairs');
-  await expect(page.locator('[data-pm-maintenance-repairs]')).toContainText('Operation completed');
+  const repairs = page.locator('[data-pm-maintenance-repairs]');
+  await expect(repairs).toContainText('Operation completed');
+  await repairs.getByRole('combobox', {name: 'Saved repair', exact: true}).selectOption('pmrp_00000000000000000000000000000001');
+  const saved = repairs.locator('[data-repair]');
+  await expect(saved).toBeVisible();
+  await saved.locator(':scope > details > summary').click();
+  await expect(saved).toContainText('Operation completed');
+  await expect(saved).toContainText('Not proven');
   const lifecycle = await f.dispatch({path: root + '/lifecycle'});
   expect(lifecycle.data.lifecycle).toMatchObject({stage: 'development', status: 'active'});
   await screenshot(page, 'maintenance-repairs-en-1440');

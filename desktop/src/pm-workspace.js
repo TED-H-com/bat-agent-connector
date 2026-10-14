@@ -491,6 +491,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         if (!ref) return;
         const destination = ['requirement', 'work_item'].includes(ref.kind) ? 'requirements' : ref.kind === 'milestone' && !row.kind ? 'schedule' : 'issues';
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
+        await refreshStaleVisible();
+        if (disposed || !loaded || workbench?.selected() !== destination) return;
         if (destination === 'requirements') await traceability?.openRef?.(ref);
         else if (ref.kind === 'governance' || ref.kind === 'plan_revision' && register) {
           if (register) await register.openRef(ref);
@@ -544,12 +546,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const routeRegisterAction = action => {
     const name = action?.action || '';
     if (name.startsWith('pm.maintenance_review.')) openRegisterForm('issues', 'ui_maintenance_review');
-    else if (name === 'pm.maintenance.repair.evidence.record') {maintenanceRepairs?.focusRepair?.(action?.target?.repair_id); openRegisterForm('issues', 'ui_repairs');}
-    else if (name.startsWith('pm.maintenance.repair')) {maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref); openRegisterForm('issues', 'ui_repairs');}
-    else if (name.startsWith('pm.governance.')) {openRegisterForm('issues', 'ui_governance'); void governance?.openRef({kind: 'governance', id: action.target?.record_id}, {form: name.slice('pm.governance.'.length)});}
+    else if (name === 'pm.maintenance.repair.evidence.record') {openRegisterForm('issues', 'ui_repairs'); void openVisibleSource(maintenanceRepairs, () => maintenanceRepairs?.focusRepair?.(action?.target?.repair_id));}
+    else if (name.startsWith('pm.maintenance.repair')) {openRegisterForm('issues', 'ui_repairs'); void openVisibleSource(maintenanceRepairs, () => maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref));}
+    else if (name.startsWith('pm.governance.')) {openRegisterForm('issues', 'ui_governance'); void openVisibleSource(governance, () => governance?.openRef({kind: 'governance', id: action.target?.record_id}, {form: name.slice('pm.governance.'.length)}));}
     else if (name.startsWith('pm.issue.')) openRegisterForm('requirements', 'ui_publication');
-    else if (name.startsWith('pm.meeting.')) {openRegisterForm('discussions', 'ui_meetings'); void meetings?.openRef({...action.target, follow_up_id: action.target?.follow_up_id || action.required?.follow_up_id}, {form: name.slice('pm.meeting.'.length)});}
-    else if (name.includes('follow_up.record')) {openRegisterForm('issues', 'ui_follow_up'); void followUp?.openRef(action.target, {form: 'record'});}
+    else if (name.startsWith('pm.meeting.')) {
+      openRegisterForm('discussions', 'ui_meetings');
+      void openVisibleSource(meetings, () => meetings?.openRef({...action.target, follow_up_id: action.target?.follow_up_id || action.required?.follow_up_id}, {form: name.slice('pm.meeting.'.length)}));
+    }
+    else if (name.includes('follow_up.record')) {openRegisterForm('issues', 'ui_follow_up'); void openVisibleSource(followUp, () => followUp?.openRef(action.target, {form: 'record'}));}
   };
   const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1
     ? workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta: setHeaderMeta,
@@ -557,12 +562,12 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         // Select the mounted Requirements view before restoring its record focus.
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
         workbench?.select('requirements');
-        void traceability?.focusWork?.(id);
+        void openVisibleSource(traceability, () => traceability?.focusWork?.(id));
       },
       onOpenRequirement: id => {
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
         workbench?.select('requirements');
-        void traceability?.focusRequirement?.(id);
+        void openVisibleSource(traceability, () => traceability?.focusRequirement?.(id));
       },
       onAction: routeRegisterAction,
       nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === 'work_item' ? kanban?.titleFor?.(id) : '') || ''}) : null;
@@ -868,7 +873,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   // Lifecycle is an admission source for every durable form, including forms
   // outside its drawer. Its central read cannot wait for that drawer to open.
-  const sectionRequired = section => section === lifecycle || sectionVisible(section);
+  const sectionRequired = section => section === lifecycle || sectionVisible(section)
+    // These visible readers consume the selected immutable package. Its shared
+    // source restores that selection after a parent refresh withdraws it.
+    || section === engineering && [materialization, handoff, issues].some(sectionVisible);
   function activateSection(section, value) {
     if (!section) return;
     activationReads.delete(section);
@@ -909,7 +917,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   function refreshStaleVisible() {
     if (!loaded) return Promise.resolve();
     const reads = [];
-    for (const section of staleSections) if (sectionVisible(section)) {
+    for (const section of staleSections) if (sectionRequired(section)) {
       maskSource(section);
       // View activation and disclosure toggles can arrive in the same turn.
       // Share their opening read; event reads still require a post-event read.
@@ -919,8 +927,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     return settleRefreshes(reads);
   }
   const openingReads = new Map();
+  async function openVisibleSource(section, open) {
+    // A first read can apply a pending selection while its stale content is
+    // masked. Wait for reveal before handing off the explicit record and focus.
+    await refreshStaleVisible();
+    if (!disposed && loaded && sectionVisible(section)) return open();
+  }
   function invalidateSections() {
-    for (const section of sectionModules()) if (!sectionVisible(section)) {staleSections.add(section); maskSource(section);}
+    for (const section of sectionModules()) if (!sectionRequired(section)) {staleSections.add(section); maskSource(section);}
   }
   const openedSource = event => {if (event.target instanceof HTMLDetailsElement && event.target.open && loaded && ![...lazyThreadSections.values()].includes(event.target)) void refreshStaleVisible();};
   main.addEventListener('toggle', openedSource, true);

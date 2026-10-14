@@ -102,7 +102,7 @@ for(const native of [false,true])test.describe(native?'native engineering packag
 });
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`engineering layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=section(page).getByLabel(/^(Package|工作包)$/);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=section(page).getByLabel(/^(Package|工作包)$/);await expect(picker.locator('option').filter({hasText:/Restore member access/})).toHaveCount(1);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});
   await expect(detail(page).locator('[data-pm-wp-readiness]')).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.PM_WORK_PACKAGE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}

@@ -39306,6 +39306,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			const destination = ["requirement", "work_item"].includes(ref.kind) ? "requirements" : ref.kind === "milestone" && !row.kind ? "schedule" : "issues";
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`;
 			workbench?.select(destination);
+			await refreshStaleVisible();
+			if (disposed || !loaded || workbench?.selected() !== destination) return;
 			if (destination === "requirements") await traceability?.openRef?.(ref);
 			else if (ref.kind === "governance" || ref.kind === "plan_revision" && register) {
 				if (register) await register.openRef(ref);
@@ -39517,27 +39519,27 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const name = action?.action || "";
 		if (name.startsWith("pm.maintenance_review.")) openRegisterForm("issues", "ui_maintenance_review");
 		else if (name === "pm.maintenance.repair.evidence.record") {
-			maintenanceRepairs?.focusRepair?.(action?.target?.repair_id);
 			openRegisterForm("issues", "ui_repairs");
+			openVisibleSource(maintenanceRepairs, () => maintenanceRepairs?.focusRepair?.(action?.target?.repair_id));
 		} else if (name.startsWith("pm.maintenance.repair")) {
-			maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref);
 			openRegisterForm("issues", "ui_repairs");
+			openVisibleSource(maintenanceRepairs, () => maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref));
 		} else if (name.startsWith("pm.governance.")) {
 			openRegisterForm("issues", "ui_governance");
-			governance?.openRef({
+			openVisibleSource(governance, () => governance?.openRef({
 				kind: "governance",
 				id: action.target?.record_id
-			}, { form: name.slice(14) });
+			}, { form: name.slice(14) }));
 		} else if (name.startsWith("pm.issue.")) openRegisterForm("requirements", "ui_publication");
 		else if (name.startsWith("pm.meeting.")) {
 			openRegisterForm("discussions", "ui_meetings");
-			meetings?.openRef({
+			openVisibleSource(meetings, () => meetings?.openRef({
 				...action.target,
 				follow_up_id: action.target?.follow_up_id || action.required?.follow_up_id
-			}, { form: name.slice(11) });
+			}, { form: name.slice(11) }));
 		} else if (name.includes("follow_up.record")) {
 			openRegisterForm("issues", "ui_follow_up");
-			followUp?.openRef(action.target, { form: "record" });
+			openVisibleSource(followUp, () => followUp?.openRef(action.target, { form: "record" }));
 		}
 	};
 	const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1 ? workspaceRegister({
@@ -39552,12 +39554,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		onOpenWork: (id) => {
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
 			workbench?.select("requirements");
-			traceability?.focusWork?.(id);
+			openVisibleSource(traceability, () => traceability?.focusWork?.(id));
 		},
 		onOpenRequirement: (id) => {
 			location.hash = `#/pm/${encodeURIComponent(workspaceId)}/requirements`;
 			workbench?.select("requirements");
-			traceability?.focusRequirement?.(id);
+			openVisibleSource(traceability, () => traceability?.focusRequirement?.(id));
 		},
 		onAction: routeRegisterAction,
 		nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || (kind === "work_item" ? kanban?.titleFor?.(id) : "") || ""
@@ -40288,7 +40290,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (section === brief && main.querySelector("[data-overview-related]")) return true;
 		return node?.isConnected && !node.closest("[hidden], details:not([open])");
 	};
-	const sectionRequired = (section) => section === lifecycle || sectionVisible(section);
+	const sectionRequired = (section) => section === lifecycle || sectionVisible(section) || section === engineering && [
+		materialization,
+		handoff,
+		issues
+	].some(sectionVisible);
 	function activateSection(section, value) {
 		if (!section) return;
 		activationReads.delete(section);
@@ -40333,7 +40339,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	function refreshStaleVisible() {
 		if (!loaded) return Promise.resolve();
 		const reads = [];
-		for (const section of staleSections) if (sectionVisible(section)) {
+		for (const section of staleSections) if (sectionRequired(section)) {
 			maskSource(section);
 			if (!openingReads.has(section)) openingReads.set(section, refreshSection(section, true).finally(() => openingReads.delete(section)));
 			reads.push(openingReads.get(section));
@@ -40341,8 +40347,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return settleRefreshes(reads);
 	}
 	const openingReads = new Map();
+	async function openVisibleSource(section, open) {
+		await refreshStaleVisible();
+		if (!disposed && loaded && sectionVisible(section)) return open();
+	}
 	function invalidateSections() {
-		for (const section of sectionModules()) if (!sectionVisible(section)) {
+		for (const section of sectionModules()) if (!sectionRequired(section)) {
 			staleSections.add(section);
 			maskSource(section);
 		}

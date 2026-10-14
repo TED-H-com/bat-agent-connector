@@ -16,6 +16,8 @@ Never substitute zero for missing data or count a loaded page as a complete inve
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
+Links from Overview or the Register wait for the destination's first read and
+loading mask to finish before focusing its selected record.
 Events coalesce reads for the visible view and tools mounted in its drawer. Hidden
 sections become stale and stay masked until a fresh read settles when shown. A held
 projection read can still be superseded by a newer withdrawal read. PM record events
@@ -34,7 +36,9 @@ only the selected view and its open secondary tools read their projections. Unop
 sections remain stale and load through the existing view/disclosure path. Opening
 toggles share a pending opening read, while event reads still require a post-event
 read before acknowledgment. Shared shell/workspace reads and lifecycle admission
-remain available independently of the selected view. Workspace withdrawal clears
+remain available independently of the selected view. Visible package consumers
+also retain the shared immutable package source across a parent refresh.
+Workspace withdrawal clears
 all modules, including unopened ones, before any later reply can reveal data.
 
 ## Tokens and type
