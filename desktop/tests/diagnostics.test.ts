@@ -40,7 +40,7 @@ test('serialized scrubber removes tokens, fingerprints, URLs, IPs, paths and ema
  for(const value of planted)assert.ok(!result.includes(value),value);
 });
 test('final scrubber rejects every review probe as a whole string value',()=>{
- const probes=['C:\\Users\\John Smith\\AppData\\x.log','/home/John Smith/p','~jane/work','devbox.corp.internal',
+ const probes=['C:\\Users\\Example Person\\AppData\\x.log','/home/Example Person/p','~jane/work','devbox.corp.internal',
   'host.example.com:7777?token=synthetic','wss%3A%2F%2Fhost.example.com%3Ftoken%3Dsynthetic',
   'fp=synthetic','Authorization: Basic c3ludGhldGlj','api_key=synthetic','passwd=synthetic','user@devbox',
   'unrecognized free text','malformed%escape wss%3A%2F%2Fhost.example.com'];
