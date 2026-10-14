@@ -12,7 +12,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 *實際共用介面 · 合成展示資料 · 主線預覽 · [截圖來源](site/images/README.md)。*
 
-**Web 與 Tauri 桌面版共用介面及 Python 後端。**你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
+**Web 與 Tauri 桌面版共用介面及 Python 後端。** 你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
 
 > **開發預覽。** 截圖來自已合併主線 `main` 的 `aba02180`。
 > 後端 #132 於 2026 年 10 月 13 日合併，#134 於 10 月 14 日合併；前端 #133 隨後於
@@ -72,9 +72,9 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 | Linux | `desktop-Linux-unsigned`：Debian 套件及打包中央 | 連外部中央的原生憑證仍只留在記憶體；持久原生 vault 已排除。 |
 | 瀏覽器 | 開中央的 `/dashboard/`，或從桌面開啟瀏覽器入口 | 共用資料及介面；沒有瀏覽器原生 Fleet 或 credential vault。 |
 
-桌面包會準備相符 Python runtime、私人背景中央、資料與個人身分。接著依引導完成 BAT 信任、repository 綁定及驗證設定。**加入既有中央是明確選擇的進階路徑。**連線失敗不會另外建立專案資料庫，關閉 Dashboard 視窗也不會停止中央工作。
+桌面包會準備相符 Python runtime、私人背景中央、資料與個人身分。接著依引導完成 BAT 信任、repository 綁定及驗證設定。**加入既有中央是明確選擇的進階路徑。** 連線失敗不會另外建立專案資料庫，關閉 Dashboard 視窗也不會停止中央工作。
 
-**PM 分析另有 runtime 前提。**目前有界分析在已配置的 Linux 中央，或合格的 Linux BAT 主機執行，需要指南指定的 PM Codex runtime 及隔離環境。Windows／Mac client 可以使用這些遠端能力，但桌面安裝本身不提供原生 Windows／Mac PM 執行。PM 分析與一般 coding CLI adapter 是不同能力。
+**PM 分析另有 runtime 前提。** 目前有界分析在已配置的 Linux 中央，或合格的 Linux BAT 主機執行，需要指南指定的 PM Codex runtime 及隔離環境。Windows／Mac client 可以使用這些遠端能力，但桌面安裝本身不提供原生 Windows／Mac PM 執行。PM 分析與一般 coding CLI adapter 是不同能力。
 
 [安裝與首次使用](docs/getting-started.zh-TW.md) · [Windows 使用與資源](docs/windows.zh-TW.md) · [恢復及升級](docs/design/managed-installation.md)
 
