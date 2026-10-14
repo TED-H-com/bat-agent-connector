@@ -45,7 +45,8 @@ try {
   await expect(receipt).toBeVisible({timeout: 30000});
   const href = await receipt.getAttribute("href");
   await receipt.click();
-  await expect(page.getByRole("heading", {name: "cleanup.apply", exact: true})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Apply cleanup", exact: true})).toBeVisible();
+  await expect(page.locator("dt").filter({hasText: /^Action ID$/}).locator("+ dd code")).toHaveText("cleanup.apply");
   await expect(page.getByRole("heading", {name: "View item receipts", exact: true})).toBeVisible({timeout: 30000});
   const response = await page.request.get(origin + "/api/v1/operations/" + href.split("/").at(-1),
     {headers: {Authorization: "Bearer " + fixture.token}});
@@ -54,6 +55,12 @@ try {
   assert.ok(op.cleanup_receipts.some(r => ["succeeded", "already_absent"].includes(r.status)));
   assert.equal(writes.length, 1);
   assert.equal(writes[0].action, "cleanup.apply");
+  // The same receipt has a localized title; its technical action ID stays exact.
+  await page.addInitScript(() => Object.defineProperty(navigator, "language", {value: "zh-TW"}));
+  await page.reload();
+  await expect(page.getByRole("heading", {name: "套用清理", exact: true})).toBeVisible();
+  await expect(page.locator("dt").filter({hasText: /^動作 ID$/}).locator("+ dd code")).toHaveText("cleanup.apply");
+  assert.equal(writes.length, 1);
   assert.deepEqual(errors, []);
   await page.screenshot({path: "test-results/cleanup-real-central.png", fullPage: true});
   console.log("Real central cleanup: signed preview, reviewed operation, Git reclamation and per-item receipts passed");
