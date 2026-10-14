@@ -407,13 +407,14 @@ def test_guarded_scope_reuses_only_its_own_assumptions_and_discards_them(db):
                 assert pm_read_cache.remember('source', 'id', lambda: load(assumed)) == {'value': assumed}
                 assert pm_read_cache.remember('source', 'id', lambda: load('duplicate')) == {'value': assumed}
                 with pm_read_cache.guarded():
+                    assert pm_read_cache.remember('source', 'id', lambda: load('deeper')) == {'value': 'deeper'}
                     # A deeper cycle/budget refusal cannot escape that guard.
                     assert pm_read_cache.remember('nested', 'id', lambda: load('refused')) == {'value': 'refused'}
                 assert pm_read_cache.remember('nested', 'id', lambda: load('fresh')) == {'value': 'fresh'}
             assert not private.active and private.values == {}
             assert pm_read_cache._CURRENT.get().scope is outer
             assert pm_read_cache.remember('source', 'id', lambda: load('duplicate')) == {'value': 'proven'}
-    assert calls == ['proven', 'first', 'refused', 'fresh', 'second', 'refused', 'fresh']
+    assert calls == ['proven', 'first', 'deeper', 'refused', 'fresh', 'second', 'deeper', 'refused', 'fresh']
 
 
 def test_guarded_scope_requires_a_guard_and_an_unchanged_snapshot(db, reader):

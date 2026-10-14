@@ -131,8 +131,8 @@ merge or deployment.
 Source validation uses a fresh memo within one synchronous, immutable database
 snapshot and one fixed repair traversal guard. Its back-edge assumptions remain
 unchanged for that traversal only. Conditional answers never enter the outer
-request memo; nested guards cannot populate the parent memo. The private memo is
-discarded before leaving the guard, and writes, transaction changes, different
+request memo; nested guards cannot reuse or populate the parent memo. The private
+memo is discarded before leaving the guard, and writes, transaction changes, different
 principals and inherited tasks/threads retain the shared read-cache barriers.
 No memo spans an await or a new provider frame. Those frames still recheck the
 complete current original source chain, owner, scopes, policy and deadline.
