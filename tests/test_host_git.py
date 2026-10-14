@@ -197,7 +197,8 @@ async def test_new_admission_and_step_bind_location_and_replay_completed_receipt
     # A persisted completed step remains readable without invoking a new runner.
     from bat_agent_connector.operations import OpContext
     ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {})
-    assert await handler(OpContext(ops, ops._row(op["operation_id"]))) == {"evidence": "fixed-evidence"}
+    with host_git.execution(ops, op["operation_id"]):
+        assert await handler(OpContext(ops, ops._row(op["operation_id"]))) == {"evidence": "fixed-evidence"}
     assert len(calls) == 1
 
 
@@ -282,3 +283,70 @@ def test_execution_binding_does_not_copy_secret_bearing_standalone_url():
         assert secret not in serialized
     cfg.host("fixture").url = "wss://fixture.example.invalid:9876/"
     assert not runner.available("fixture")  # exact endpoint remains frozen
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_unresolved_location_drift_precedes_domain_availability_refusal(operations, monkeypatch, legacy):
+    from bat_agent_connector.operations import OperationError
+
+    ops = operations
+    calls = []
+    async def run(argv, timeout_s):
+        calls.append(argv)
+        raise AmbiguousOutcome("fixture lost effect receipt")
+    monkeypatch.setattr(checkpoints, "_run", run)
+    async def handler(ctx):
+        runner = ops.context["git_runner"]
+        # Existing consumers can reject readiness before reaching runner.run.
+        if not runner.available("fixture"):
+            raise OperationError("GIT_RUNNER_UNAVAILABLE", "fixture domain refusal", 409)
+        async def effect():
+            return {"evidence": await runner.run("fixture", "fixed-script")}
+        return await ctx.step("git-effect", effect)
+    op = create(ops, handler)
+    await ops._execute(op["operation_id"])
+    assert ops.get(op["operation_id"])["status"] == "uncertain"
+    if legacy:
+        refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
+        del refs["admission_binding"]["git_execution"]
+        with ops.journal.tx():
+            ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
+    ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {"fixture": "fixture-bat"})
+    await ops._execute(op["operation_id"])
+    result = ops.get(op["operation_id"])
+    assert result["status"] == "needs_attention" and result["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
+    assert result["steps"][0]["status"] == "uncertain"
+    assert result["idempotency_key"] == "original-key" and len(calls) == 1
+
+
+async def test_legacy_ssh_recovery_ignores_unrelated_local_declaration(operations, monkeypatch):
+    ops = operations
+    calls = []
+    async def run(argv, timeout_s):
+        calls.append(argv)
+        if len(calls) == 1:
+            raise AmbiguousOutcome("fixture lost reply")
+        return "fixed-receipt"
+    monkeypatch.setattr(checkpoints, "_run", run)
+    async def handler(ctx):
+        async def effect():
+            return {"evidence": await ops.context["git_runner"].run("fixture", "fixed-effect")}
+        async def reconcile(request):
+            return {"evidence": await ops.context["git_runner"].run("fixture", "fixed-readback")}
+        return await ctx.step("git-effect", effect, reconcile=reconcile)
+    op = create(ops, handler)
+    await ops._execute(op["operation_id"])
+    refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
+    del refs["admission_binding"]["git_execution"]
+    with ops.journal.tx():
+        ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
+    cfg = config()
+    from dataclasses import replace
+    cfg.hosts["unrelated"] = replace(cfg.host("fixture"), name="unrelated", git="local")
+    ops.context["git_runner"] = host_git.HostGitRunner(cfg, {"fixture": "fixture-bat", "unrelated": "unused"})
+    await ops._execute(op["operation_id"])
+    result = ops.get(op["operation_id"])
+    assert result["status"] == "succeeded" and result["result"] == {"evidence": "fixed-receipt"}
+    assert len(calls) == 2 and all(argv[3] == "fixture-bat" for argv in calls)
+    assert "fixed-effect" in calls[0][-1] and "fixed-readback" in calls[1][-1]
+    assert result["idempotency_key"] == "original-key"

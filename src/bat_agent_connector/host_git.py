@@ -136,10 +136,7 @@ class HostGitRunner:
         return await self._ssh.run_account_check(host, command, timeout_s, ssh_alias=trusted)
 
 
-def admission_bindings(ops, action, target, params, binding):
-    runner = ops.context.get("git_runner")
-    if action.startswith("setup.") or not isinstance(runner, HostGitRunner):
-        return binding
+def _host_names(*values):
     hosts = set()
     def collect(value):
         if isinstance(value, dict):
@@ -150,8 +147,16 @@ def admission_bindings(ops, action, target, params, binding):
         elif isinstance(value, (list, tuple)):
             for item in value:
                 collect(item)
-    for value in (target, params, binding):
+    for value in values:
         collect(value)
+    return hosts
+
+
+def admission_bindings(ops, action, target, params, binding):
+    runner = ops.context.get("git_runner")
+    if action.startswith("setup.") or not isinstance(runner, HostGitRunner):
+        return binding
+    hosts = _host_names(target, params, binding)
     # Indirect workspace/repository actions resolve carriers later. Freeze the
     # configured inventory at admission so that resolution cannot choose a new
     # execution location. Unknown hosts are never authorized by this binding.
@@ -165,6 +170,14 @@ def admission_bindings(ops, action, target, params, binding):
 def execution(ops, operation_id):
     token = _EXECUTION.set((ops, operation_id))
     try:
+        # Domain readers may check available() before run(). Do not let that
+        # definitive refusal terminalize an old effect whose outcome is still
+        # unknown on its original location. Fully recorded receipts remain
+        # readable; new effects have their own step/frame/proceed fences.
+        if (isinstance(ops.context.get("git_runner"), HostGitRunner)
+                and ops.db.execute("SELECT 1 FROM operation_steps WHERE operation_id=? "
+                                   "AND status IN ('started','uncertain') LIMIT 1", (operation_id,)).fetchone()):
+            require_execution()
         yield
     finally:
         _EXECUTION.reset(token)
@@ -185,7 +198,8 @@ def require_execution(host=None):
     if locations is None:
         # Legacy unresolved operations predate opt-in. They may read/reconcile
         # on SSH; an explicit local declaration never redirects their effects.
-        names = [host] if host else list(runner._hosts)
+        names = [host] if host else (_host_names(op["target"], op["params"],
+            (op.get("external_refs") or {}).get("admission_binding")) or list(runner._hosts))
         if any(runner._require_current(name) is None or runner.execution_binding(name)["transport"] != "ssh"
                for name in names):
             raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Legacy operation requires its original SSH location")

@@ -24,7 +24,9 @@ managed-root/SSH-alias configuration digest, central server ID, and installation
 ID when available. The central server ID is not a BAT incarnation ID; the upstream
 identity limitation below still applies. A changed binding needs attention and
 cannot redirect an old SSH intent to local execution. Completed step receipts
-remain replayable. Indirect workspace/repository operations that do not yet name
+remain replayable. Unresolved steps are fenced before domain readiness checks,
+so an unavailable transport cannot terminalize an uncertain effect. Indirect
+workspace/repository operations that do not yet name
 a host conservatively freeze the configured host inventory at admission; changing
 one of those locations blocks new effects until the original binding is restored.
 No operation key, existing payload or journal schema version is rewritten.
