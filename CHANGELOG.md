@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
+  build once after detaching only this job's leftover `/Volumes` images.
+
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 
