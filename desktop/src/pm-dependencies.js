@@ -1,6 +1,6 @@
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {searchField, discussLink, button, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {searchField, discussLink, button, disclosure, emptyState, inspector, segmented, skeleton, statusPill} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {discussHref} from './pm-discuss-link.js';
 import {boundGraph, layoutGraph, limitColumns} from './pm-dependencies-layout.js';
@@ -418,7 +418,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
         impact = result; renderInspector();
       } catch (error) {
         try {alive(); if (ticket !== impactTicket) return;} catch {return;}
-        if ([401, 403, 404].includes(error.status)) {withdraw(); statusBox.replaceChildren(inlineError({error, retry: () => {void refresh();}})); return;}
+        if ([401, 403, 404].includes(error.status)) {withdraw(); statusBox.replaceChildren(readError(error, () => {void refresh();})); return;}
         impact = {dependency: key, error}; renderInspector();
       }
     })();
@@ -520,7 +520,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       if (edges.length) affected.append(...edges.map(dependencyRow));
       else affected.append(h('p', {}, Number(data.omitted_edges) > 0 ? t('dep_edges_omitted') : t('dep_none_recorded')));
     } else if (!impact || impact.dependency !== selectedKey()) affected.append(skeleton(2));
-    else if (impact.error) affected.append(inlineError({error: impact.error, retry: () => {impactKey = ''; syncImpact();}}));
+    else if (impact.error) affected.append(readError(impact.error, () => {impactKey = ''; syncImpact();}));
     else {
       const reasons = [];
       for (const code of [impact.reason, impact.cross_repository?.reason, ...(impact.selection_reasons || []), ...(impact.cross_repository?.selection_reasons || [])]) {
@@ -786,6 +786,9 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       }
     }
   }
+  function readError(error, retry) {
+    return h('div', {}, errorBox(error), button({size: 'sm', variant: 'ghost', label: t('ui_retry'), onClick: retry}));
+  }
   async function refresh() {
     if (!active) return;
     const ticket = ++serial;
@@ -805,7 +808,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       try {alive(); if (ticket !== serial) return;} catch {return;}
       if ([401, 403, 404].includes(error.status)) withdraw();
       else clearData();
-      statusBox.replaceChildren(inlineError({error, retry: () => {void refresh();}}));
+      statusBox.replaceChildren(readError(error, () => {void refresh();}));
     }
   }
   function clearData() {

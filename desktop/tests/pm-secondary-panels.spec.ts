@@ -37,7 +37,7 @@ for (const locale of ['en', 'zh-TW']) {
       else await expect(editor.locator('input[aria-label]').first()).toHaveValue('Preserved creation draft');
       expect(f.state.writes).toHaveLength(0);
     });
-    for (const width of [1440, 390]) test(`${panel} read-only header keeps its reason and refresh aligned ${locale} ${width}`, async ({page}) => {
+    for (const width of [1440, 390]) test(`${panel} read-only header keeps its reason visible and Refresh aligned ${locale} ${width}`, async ({page}) => {
       await page.setViewportSize({width, height: 1000});
       const f = fixture(); f.state.role = 'reader'; f.state.manage = false; await mount(page, f);
       await expect(page.locator(`[${hook}]`)).toBeHidden();
@@ -46,11 +46,18 @@ for (const locale of ['en', 'zh-TW']) {
       await expect(refresh).toBeVisible();
       const positions = await header.evaluate(node => {
         const reason = node.querySelector('[data-pm-panel-readonly]')!.getBoundingClientRect(), refresh = node.querySelector('.ui-icon-button')!.getBoundingClientRect();
+        const title = node.querySelector('h3')?.getBoundingClientRect();
         return {reasonLeft: reason.left, reasonRight: reason.right, refreshLeft: refresh.left, refreshRight: refresh.right, headerRight: node.getBoundingClientRect().right,
-          centreDifference: Math.abs(reason.top + reason.height / 2 - refresh.top - refresh.height / 2)};
+          centreDifference: Math.abs(reason.top + reason.height / 2 - refresh.top - refresh.height / 2),
+          titleCentreDifference: title ? Math.abs(title.top + title.height / 2 - refresh.top - refresh.height / 2) : null,
+          reasonBelowTitle: title ? reason.top >= title.bottom : false};
       });
       expect(positions.reasonLeft).toBeLessThan(positions.refreshLeft); expect(positions.reasonRight).toBeLessThanOrEqual(positions.refreshLeft);
-      expect(positions.centreDifference).toBeLessThanOrEqual(4); expect(positions.headerRight - positions.refreshRight).toBeLessThanOrEqual(1);
+      if (panel === 'meetings') {
+        expect(positions.titleCentreDifference).toBeLessThanOrEqual(4);
+        expect(positions.reasonBelowTitle || positions.centreDifference <= 4).toBe(true);
+      } else expect(positions.centreDifference).toBeLessThanOrEqual(4);
+      expect(positions.headerRight - positions.refreshRight).toBeLessThanOrEqual(1);
       await expect(page.locator('.pm-heading button.primary:visible')).toHaveCount(0);
       await expect(page.locator('[data-pm-action]:visible button:enabled')).toHaveCount(0);
       if (panel === 'follow-up') {

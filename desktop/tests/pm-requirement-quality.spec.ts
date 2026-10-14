@@ -108,7 +108,14 @@ test('withdrawn prerequisite sources clear handoff selectors before any code pre
 });
 
 test('quality catalog cursor must advance before proof options become available',async({page})=>{
-  const f=fixture();f.saved();f.quality.badCursor=true;await mountBatch(page,f);await expect(panel(page)).toContainText('Original batch sources are unavailable');await expect(proof(page)).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+  const f=fixture();f.saved();f.quality.badCursor=true;await mountBatch(page,f);
+  await expect(panel(page).locator('[data-error-summary]')).toHaveCount(1);
+  await expect(panel(page).locator('[data-error-summary]')).toHaveText('The response does not match the original batch or source.');
+  await expect(panel(page).locator('.error:visible, .ui-inline-error:visible')).toHaveCount(1);
+  await expect(panel(page).locator('[data-error-details]')).toBeHidden();
+  await panel(page).locator('[data-api-error] summary').click();
+  await expect(panel(page).locator('[data-error-details] code')).toHaveText('PM_REQUIREMENT_QUALITY_INVALID');
+  await expect(proof(page)).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
 });
 
 test('whole UTF-8 prerequisite map bound counts JSON wire spacing',async({page})=>{
