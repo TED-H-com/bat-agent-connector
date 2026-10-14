@@ -41,6 +41,11 @@ test('serialized scrubber removes tokens, fingerprints, URLs, IPs, paths and ema
 });
 test('missing sources and unreported metrics stay unknown; reasons are optional',()=>{
  const out=buildDiagnostics({});assert.equal(out.sessions.loaded,null);assert.equal(out.operations,null);assert.deepEqual(out.hosts,[]);assert.equal(out.sources.hosts,'not_available');
+ const locations=buildDiagnostics({os:'windows'}).log_locations;
+ assert.equal(locations.basis,'default_templates_only');assert.deepEqual(Object.keys(locations.state_database.managed_desktop),['linux','macos','windows']);
+ assert.equal(locations.state_database.managed_desktop.linux,'~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3');
+ assert.equal(locations.state_database.managed_desktop.windows,'%LOCALAPPDATA%\\io.betteragent.dashboard\\central\\state\\tasks.sqlite3');
+ assert.equal(locations.state_database.standalone.macos,'~/.local/state/bat-agent-connector/tasks.sqlite3');
  assert.equal(buildDiagnostics({sessions:[{}]}).sessions.loaded,null);assert.equal(buildDiagnostics({sessions:[{}]}).sessions.history_reasons,null);assert.equal(buildDiagnostics({sessions:[{}]}).sessions.pending,null);assert.equal(buildDiagnostics({sessions:[{stale:false,fields_stale:true}]}).sessions.stale,1);assert.equal(buildDiagnostics({sessions:[{}]}).sessions.unreported.loaded,1);
 });
 test('identity shows known and unknown commits in both languages',()=>{

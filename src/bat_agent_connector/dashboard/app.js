@@ -138,6 +138,11 @@ function logLocations(os, managed) {
 		location: "default_template_only"
 	};
 }
+var databaseTemplates = (managed) => Object.fromEntries([
+	"linux",
+	"macos",
+	"windows"
+].map((os) => [os, logLocations(os, managed).state_database]));
 function scrubDiagnostics(text) {
 	const safeLogs = new Set([
 		"linux",
@@ -270,7 +275,17 @@ function buildDiagnostics(input) {
 			admissionRefused: e.admission_refused,
 			operation: { operation_id: e.operation_id }
 		})),
-		log_locations: logLocations(input.os, input.managed === true)
+		log_locations: {
+			basis: "default_templates_only",
+			state_database: {
+				managed_desktop: databaseTemplates(true),
+				standalone: databaseTemplates(false)
+			},
+			runtime_stderr: {
+				managed_desktop: "not_persisted_by_desktop",
+				standalone: "external_service_configuration"
+			}
+		}
 	};
 	return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
 }
@@ -49892,7 +49907,6 @@ async function openDiagnostics() {
 			return buildDiagnostics({
 				...diagnosticsClient(caps),
 				exportedAt: new Date().toISOString(),
-				managed: !!caps?.managed_installation,
 				hosts: hosts?.hosts,
 				operations: operations?.operations,
 				setup,

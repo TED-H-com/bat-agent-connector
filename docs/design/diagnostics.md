@@ -6,6 +6,8 @@ client-read session counts, optional history reason counts, failed/uncertain
 operations from one page, a 50-entry memory-only failure ring, source availability
 and static log/state location templates. No server endpoint, journal/schema step,
 telemetry, credentials fallback or central mutation is introduced.
+All OS templates for managed desktop and standalone installations are included;
+the client's OS does not establish the Connector's OS or actual state directory.
 
 The report referenced an observation status endpoint and host `bat`/`policy`
 fields that this base does not supply. This branch has no `/v1/observation/status`;

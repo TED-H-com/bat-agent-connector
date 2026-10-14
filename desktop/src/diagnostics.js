@@ -56,6 +56,7 @@ export function logLocations(os, managed) {
   return {state_database: root ? root + (os === 'windows' ? '\\' : '/') + (managed ? (os === 'windows' ? 'state\\' : 'state/') : '') + 'tasks.sqlite3' : null,
     runtime_stderr: managed ? 'not_persisted_by_desktop' : 'external_service_configuration', location: 'default_template_only'};
 }
+const databaseTemplates = managed => Object.fromEntries(['linux','macos','windows'].map(os => [os,logLocations(os,managed).state_database]));
 export function scrubDiagnostics(text) {
   // Scrub JSON string values, preserving valid JSON escapes. Only generated route/log
   // templates are exempt from path detection; they contain no caller supplied parts.
@@ -111,6 +112,7 @@ export function buildDiagnostics(input) {
       status:op.status, error_code:code(op.error_code ?? op.error?.code), created_at:time(op.created_at), updated_at:time(op.updated_at)})) : null,
     coverage: {complete:bool(input.observation?.coverage?.complete), reasons:Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null},
     operations_basis:'loaded_page', recent_errors:(input.recentErrors || []).slice(-50).map(e => failedCall({at:e.at,method:e.method,path:e.path_template,status:e.status,code:e.code,admissionRefused:e.admission_refused,operation:{operation_id:e.operation_id}})),
-    log_locations:logLocations(input.os, input.managed === true)};
+    log_locations:{basis:'default_templates_only', state_database:{managed_desktop:databaseTemplates(true),standalone:databaseTemplates(false)},
+      runtime_stderr:{managed_desktop:'not_persisted_by_desktop',standalone:'external_service_configuration'}}};
   return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
 }

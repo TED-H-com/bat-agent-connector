@@ -89,7 +89,7 @@ async function openDiagnostics() {
       caps?.managed_installation?read('/managed/setup','manage'):null]);
     if(epoch!==state.epoch)throw Error('Connection changed');
     if(revision!==diagnosticRevision)hosts=operations=setup=null;
-    return buildDiagnostics({...diagnosticsClient(caps), exportedAt:new Date().toISOString(), managed:!!caps?.managed_installation,
+    return buildDiagnostics({...diagnosticsClient(caps), exportedAt:new Date().toISOString(),
       hosts:hosts?.hosts, operations:operations?.operations, setup,
       sessions:hosts && caps?.scopes?.includes('observe') && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
       recentErrors:recentErrors.entries(), sources:{capabilities:caps?'available':'not_available',hosts:hosts?'available':'not_available',operations:operations?'available':'not_available',managed_setup:setup?'available':'not_available'}});
