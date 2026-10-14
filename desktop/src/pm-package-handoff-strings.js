@@ -25,7 +25,7 @@ export const pmPackageHandoffStrings={en:{
   ph_select:'先在上方選取工程工作包，再準備實作。',ph_review:'核對固定實作基底',ph_reviewed:'已核對實作基底',
   ph_base:'程式起始版本',ph_spec:'規格版本',ph_separate:'程式與規格可以來自不同 commit。選定此基底不代表已證明相容，也不會略過其餘就緒檢查。',
   ph_boundary:'工作包準備完成不等於已授權執行。這個操作只開始實作，不代表品質驗證、合併或部署完成。',
-  ph_rationale:'為何使用這個實作基底？',ph_prompt:'這次實作的指示',ph_agent:'BAT agent',ph_agent_help:'選擇 Claude 或 Codex；中央服務仍會核對實際啟動條件，選單本身不代表 runtime 已就緒。',
+  ph_rationale:'為何使用這個實作基底？',ph_prompt:'這次實作的指示',ph_agent:'BAT 代理',ph_agent_help:'選擇 Claude 或 Codex；中央服務仍會核對實際啟動條件，選單本身不代表執行環境已就緒。',
   ph_options:'選填 session 標題與模型',ph_start:'開始實作',ph_sources:'固定版本與原始來源',ph_use_review:'使用這個已核對的專案版本',
   ph_stale:'草稿仍保留先前的專案版本。請重新核對目前來源，再明確使用這個專案版本開始新請求。',
   ph_blocked:'除了實作基底決定外，工作包仍有未解決的檢查；請查看上方工作包詳情。',

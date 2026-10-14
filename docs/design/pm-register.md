@@ -146,6 +146,35 @@ Finding 的直接讀取仍會掃描 repair，以便知道哪些 finding 已被�
 同一列裡的需求 id 與 PR `{repository, number}` 只保留一次。Finding 的既有 PR 若只有 number、沒有
 repository 全名，不放進 `related.prs`。不把 GitHub issue 的 number 當成 PR。
 
+## Finding 身分
+
+維護 finding 的 `title` 維持 `null`，`unknowns.title` 是 `not_recorded`。伺服器不組英文名稱。
+`pm_register_list` 與 `pm_register_get` 的 finding 列另附 `finding`，讓客戶端自己寫本地化名稱。
+其他列沒有這個鍵。這是讀取時從既有觀察投影的物件，不入庫，也不新增 schema 或 `user_version`。
+
+只複製觀察裡已經驗證過的事實。缺欄位或明確的 null 省略，並在列的 `unknowns` 寫
+`finding.<field> = not_recorded`。有值但不符合當初的觀察檢查時整筆省略，原因是 `unproven`。
+不截斷、不挑出清單裡合法的一部分、不把別的型別轉成字串或數字。`source` 無法證明時，
+不列出該種類的專屬欄位，也不用外層來源名稱補上種類。
+
+| 欄位 | 條件 |
+| --- | --- |
+| `source` | `native.kind`，只會是 `issues`、`dependabot_pull_requests`、`dependabot_alerts` |
+| `number` | `native.number`，大於 0 且小於 2⁶³ 的整數 |
+| `labels` | 僅 issues。最多 100 個、各最多 100 字、不重複的標籤。空清單若已存下則保留 |
+| `manifests` | 僅 Dependabot pull request。最多 100 條已驗證的相對路徑 |
+| `package` | 僅 Dependabot alert。非空字串，最多 512 字 |
+| `ecosystem`、`ghsa_id` | 僅 Dependabot alert。非空字串，最多 100 字 |
+| `severity` | 僅 Dependabot alert。只會是 `low`、`medium`、`high`、`critical` |
+
+`base_branch`、`manifest_path`、`first_patched_version` 留在觀察裡，不複製進 `finding`。
+列上的 `impact` 仍是 `facts.severity` 的原字串（有存下任何字串時），`priority` 仍是
+`facts.priority` 的原字串。它們不是 `finding` 的欄位，也不代表那份值已通過 alert 檢查。
+
+看不到的觀察（403／404，或 `visibility_filtered`）不回傳該列，也不回傳 `finding`。
+過濾後的 payload 即使仍列出 finding，下一次讀取也不會把身分補回來。血緣上隱藏的 finding
+在清單裡整筆略過；單筆讀取在時間線的來源邊界回 404。其餘可讀列與它們的形狀不變。
+
 ## 可用動作
 
 `available_actions` 只列出已經註冊、而且這列確實適用的動作：`action`、`target`、`required`。

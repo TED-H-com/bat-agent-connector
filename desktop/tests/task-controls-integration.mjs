@@ -50,10 +50,11 @@ try {
   await control({action:'verify',operation_id:await id(),expected_action:'task.resume',version:6,paused:false,aborts:1,operations:4,steps:['task_resume']});
   const history=await control({action:'history'});
   await page.goto(`http://127.0.0.1:${fixture.port}/dashboard/#/operations`);
-  await expect(page.locator('[data-operation-count]')).toContainText('100 operations loaded');
+  await expect(page.locator('[data-operation-count]')).toContainText('100 shown');
   await page.getByRole('button',{name:'Load earlier operations'}).click();
-  await expect(page.locator('[data-operation-count]')).toContainText(`${history.count} operations loaded`);
+  await expect(page.locator('[data-operation-count]')).toHaveText(`${history.count} operations`);
   await expect(page.getByRole('button',{name:'Load earlier operations'})).toBeHidden();
+  await expect(page.locator('[data-operation-list] [data-row-key]')).toHaveCount(history.count);
   assert.deepEqual(errors,[]);
   console.log('Real central task controls: lost reply/reload, fixed version replay, resume, single optional abort receipt, admission race and 109-row history passed.');
 } finally {

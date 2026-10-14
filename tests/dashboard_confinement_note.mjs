@@ -7,7 +7,11 @@ import vm from "node:vm";
 // Browser assets are generated bundles; exercise the shared canonical source directly.
 const root = new URL("../desktop/src/", import.meta.url);
 const app = readFileSync(new URL("app.js", root), "utf8")
-  .replace(/^import .*;\n/gm, "").replace(/\nstart\(\);\s*$/, "\n");
+  .replace(/^import .*;\n/gm, "").replace(/^startTimeTicker\(\);\n/gm, "")
+  .replace(/\nstart\(\);\s*$/, "\n");
+const dom = readFileSync(new URL("ui/dom.js", root), "utf8")
+  // Evaluate all shared helpers in the VM; app.js imports h as dom.
+  .replace(/^export /gm, "").replace("function h(", "function dom(");
 const i18nSource = readFileSync(new URL("i18n.js", root), "utf8");
 // Load the actual named translation imports, including newly added PM panels.
 // The fixture still executes the canonical translator and start-note behavior.
@@ -21,11 +25,13 @@ for (const [, names, path] of i18nSource.matchAll(/^import\s+\{([^}]+)\}\s+from\
   }
 }
 const i18n = i18nSource
-  .replace(/^import .*;\n/gm, "").replace("export function t", "function t");
+  .replace(/^import .*;\n/gm, "").replace(/^export (?=const locale\b)/gm, "")
+  .replace("export function t", "function t");
 
 class FixtureNode {
   constructor() { this.textContent = ""; this.events = {}; }
   setAttribute() {}
+  matches() { return false; } // The start note is a paragraph, never a chip.
   append() {}
   addEventListener(name, callback) { this.events[name] = callback; }
 }
@@ -35,7 +41,7 @@ function render(language, effect, agent, declared = true) {
     navigator: { language }, Node: FixtureNode, nativeDesktop: false, ...translations,
     document: { createElement: () => new FixtureNode(), createTextNode: () => new FixtureNode(), addEventListener() {} },
   });
-  vm.runInContext(i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
+  vm.runInContext(dom + "\n" + i18n + "\n" + app + "\nglobalThis.fixture = { state, confinementNote, t };", context);
   const { state, confinementNote, t } = context.fixture;
   const reason = "fixture_check_reason"; // no JS copy of the server's supported-reason list
   // Contradict the status to prove that routing uses only the server's start_effect.
@@ -56,7 +62,7 @@ for (const language of ["en", "zh-TW"]) {
         const codex = t("confinement_codex_note");
         if (agent === "codex") {
           assert.equal(note.textContent, effect === "refused" ? blocked + " " + codex : codex);
-          assert.ok(!note.textContent.includes("acceptEdits"));
+          assert.ok(!note.textContent.includes(language === "en" ? "acceptEdits" : "自動接受編輯"));
         } else {
           const expected = {
             verified: t("confinement_account_note"),
@@ -66,14 +72,15 @@ for (const language of ["en", "zh-TW"]) {
           };
           assert.equal(note.textContent, expected[effect]);
           if (effect === "recheck") {
-            assert.ok(note.textContent.includes("acceptEdits") && note.textContent.includes("default"));
+            assert.ok(note.textContent.includes(language === "en" ? "acceptEdits" : "自動接受編輯")
+              && note.textContent.includes(language === "en" ? "default" : "一般權限模式"));
             assert.ok(note.textContent.includes(language === "en" ? "checked again" : "重新查核"));
             assert.ok(note.textContent.includes(language === "en" ? "refuse the start" : "拒絕啟動"));
           }
           if (effect === "fallback_default") {
             assert.ok(note.textContent.includes(reason));
-            assert.ok(note.textContent.includes(language === "en" ? "without acceptEdits" : "不啟用 acceptEdits"));
-            assert.ok(note.textContent.includes(language === "en" ? "no OS write isolation" : "沒有 OS 寫入隔離"));
+            assert.ok(note.textContent.includes(language === "en" ? "without acceptEdits" : "不啟用自動接受編輯"));
+            assert.ok(note.textContent.includes(language === "en" ? "no OS write isolation" : "沒有作業系統的寫入隔離"));
           }
         }
         assert.ok(!/null|undefined|\[object/.test(note.textContent));

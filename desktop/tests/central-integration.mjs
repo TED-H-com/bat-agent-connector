@@ -43,7 +43,7 @@ try {
   await expect(draft).toHaveValue("Keep the actual central fixture draft");
   await draft.press("Tab");
   await expect(draft).toHaveValue("Keep the actual central fixture draft");
-  await expect(page.locator("#live")).toContainText("connected");
+  await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
   assert.equal((await readCheckpoint()).cursor, appended.cursor);
   assert.deepEqual(errors, []);
   console.log("Actual central + shared frontend: signed checkpoint replay, retention reset, and draft recovery passed");

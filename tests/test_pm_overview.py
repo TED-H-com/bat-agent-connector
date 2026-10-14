@@ -345,6 +345,78 @@ async def test_stopped_findings_are_not_applicable(reviewed, monkeypatch):
     assert out['attention_counts']['risk'] == 0 and not out['attention_truncated']
 
 
+async def test_finding_attention_uses_the_structured_identity(reviewed, monkeypatch):
+    import json
+
+    from bat_agent_connector import pm_maintenance_findings, pm_maintenance_policy
+    w, service = reviewed, reviewed['d'].ops
+    sentinel = 'lodash-secret'
+    observation = {'observation_id': 'pmobs_' + 'b' * 27, 'document_digest': 'e' * 64}
+    issue = {'finding_id': 'pmfn_' + '1' * 32, 'resolved': False, 'state': 'observed_open',
+             'native': {'kind': 'issues', 'number': 87}, 'facts': {'labels': ['bug', 'ci']}}
+    pull = {'finding_id': 'pmfn_' + '2' * 32, 'resolved': False, 'state': 'observed_open',
+            'native': {'kind': 'dependabot_pull_requests', 'number': 7},
+            'facts': {'manifests': ['package.json'], 'base_branch': 'main'}}
+    alert = {'finding_id': 'pmfn_' + '3' * 32, 'resolved': False, 'state': 'observed_open',
+             'native': {'kind': 'dependabot_alerts', 'number': 9},
+             'facts': {'package': sentinel, 'ecosystem': 'npm', 'ghsa_id': 'GHSA-aaaa-bbbb-cccc',
+                       'severity': 'high', 'manifest_path': 'package.json', 'first_patched_version': '4.17.21'}}
+    urgent = {'finding_id': 'pmfn_' + '4' * 32, 'resolved': False, 'state': 'observed_open',
+              'native': {'kind': 'dependabot_alerts', 'number': 11},
+              'facts': {'package': 'left-pad', 'ecosystem': 'npm', 'ghsa_id': 'GHSA-cccc-dddd-eeee', 'severity': 'urgent'}}
+    page = {'visibility_filtered': False, 'observation_ref': observation, 'sources': {
+        'issues': {'status': 'complete', 'findings': [issue]},
+        'dependabot_pull_requests': {'status': 'complete', 'findings': [pull]},
+        'dependabot_alerts': {'status': 'complete', 'findings': [alert, urgent]}}}
+    state = {'page': page}
+    monkeypatch.setattr(pm_maintenance_policy, 'head', lambda *a: {'policy_id': 'fixture-policy'})
+    monkeypatch.setattr(pm_maintenance_findings, 'current_findings', lambda *a: state['page'])
+
+    def shown():
+        result = pm_overview.read(service, quality.OWNER, w['workspace_id'])
+        return result, {item['ref']['id']: item for item in result['attention'] if item['ref']['kind'] == 'finding'}
+
+    out, items = shown()
+    assert set(items) == {issue['finding_id'], pull['finding_id'], alert['finding_id'], urgent['finding_id']}
+    assert items[issue['finding_id']]['title'] == '87'
+    assert items[issue['finding_id']]['finding'] == {'source': 'issues', 'number': 87, 'labels': ['bug', 'ci']}
+    assert 'unknowns' not in items[issue['finding_id']]
+    assert items[issue['finding_id']]['severity'] == 'low'
+    assert items[pull['finding_id']]['title'] == '7'
+    assert items[pull['finding_id']]['finding'] == {'source': 'dependabot_pull_requests', 'number': 7,
+                                                    'manifests': ['package.json']}
+    assert items[alert['finding_id']]['title'] == '9' and items[alert['finding_id']]['severity'] == 'high'
+    assert items[alert['finding_id']]['finding'] == {'source': 'dependabot_alerts', 'number': 9, 'package': sentinel,
+                                                     'ecosystem': 'npm', 'ghsa_id': 'GHSA-aaaa-bbbb-cccc',
+                                                     'severity': 'high'}
+    assert items[urgent['finding_id']]['severity'] == 'low' and items[urgent['finding_id']]['title'] == '11'
+    assert items[urgent['finding_id']]['finding'] == {'source': 'dependabot_alerts', 'number': 11, 'package': 'left-pad',
+                                                      'ecosystem': 'npm', 'ghsa_id': 'GHSA-cccc-dddd-eeee'}
+    assert items[urgent['finding_id']]['unknowns'] == {'finding.severity': 'unproven'}
+    assert all('finding' not in item for item in out['attention'] if item['ref']['kind'] != 'finding')
+    state['page'] = {**page, 'visibility_filtered': True}
+    hidden, hidden_items = shown()
+    assert hidden_items == {}
+    assert sentinel not in json.dumps(hidden)
+    assert hidden['attention_counts']['risk'] is None
+    assert {'field': 'findings', 'reason': 'source_unavailable'} in hidden['unknown']
+    state['page'] = page
+    restored, restored_items = shown()
+    assert restored_items[alert['finding_id']]['finding']['package'] == sentinel
+    state['page'] = {**page, 'visibility_filtered': True}
+    late, late_items = shown()
+    assert late_items == {} and sentinel not in json.dumps(late)
+
+    def denied(*_args, **_kwargs):
+        raise OperationError('FORBIDDEN', 'withdrawn observation', 403)
+
+    monkeypatch.setattr(pm_maintenance_findings, 'current_findings', denied)
+    blocked, blocked_items = shown()
+    assert blocked_items == {}
+    assert sentinel not in json.dumps(blocked) and 'withdrawn observation' not in json.dumps(blocked)
+    assert blocked['attention_counts']['risk'] is None
+
+
 @pytest.mark.parametrize('kind,field', [('work_item', 'work'), ('milestone', 'roadmap')])
 @pytest.mark.parametrize('status', [409, 413])
 async def test_oversized_work_and_milestones_mark_partial_sources(ops, monkeypatch, kind, field, status):  # noqa: F811

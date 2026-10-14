@@ -1,8 +1,10 @@
+import {place} from './ui/dom.js';
+import {iconButton, emptyState, skeleton} from './ui/components.js';
 // Read only saved central receipts for the selected, explicitly associated work.
 export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
   let workId=null, sequence=0, busy=false, cursor=null, rows=[], packages=[];
   const status=h('div',{role:'status'}), facts=h('div',{});
-  const refreshButton=h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('wd_refresh'));
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('wd_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void read(true)},t('wd_more'));
   const element=h('details',{'data-pm-work-deliveries':'',class:'pm-spec-card',hidden:true},h('summary',{},t('wd_title')),
     h('p',{class:'muted'},t('wd_boundary')),h('div',{class:'actions'},refreshButton,more),status,facts);
@@ -11,20 +13,21 @@ export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
   const fact=(name,value)=>h('p',{},h('strong',{},t(name)+': '),value===null||value===undefined?t('wd_unknown'):String(value));
   const boolean=value=>value===true?t('wd_yes'):value===false?t('wd_no'):t('wd_unknown');
   const code=value=>h('p',{class:'pm-source'},String(value??''));
+  const namedStatus=status=>{const key='wd_status_'+status,label=t(key);return label===key?String(status??''):label;};
   function render() {
-    facts.replaceChildren(h('p',{class:'muted'},t('wd_packages')),
+    place(facts,'replaceChildren',h('p',{class:'muted'},t('wd_packages')),
       ...packages.map(ref=>h('div',{},code(ref.package_id),code(ref.document_digest),h('a',{href:`#/op/${encodeURIComponent(ref.operation_id)}`},t('wd_original')))),
       ...rows.map(row=>h('article',{class:'pm-spec-card'},h('h5',{},t('wd_action_'+row.action)),
         fact('wd_status',t('wd_status_'+row.status)),
         h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('wd_operation')),code(row.target?.repository),
         row.target?.pull_number?fact('wd_pull',row.target.pull_number):null,
         row.integration?h('div',{},fact('wd_pushed',boolean(row.integration.pushed)),code(row.integration.new_head),
-          ...(row.integration.sources||[]).map(source=>h('p',{class:'pm-source'},source.pinned_sha+' · '+source.status))):null,
+          ...(row.integration.sources||[]).map(source=>h('p',{class:'pm-source'},source.pinned_sha+' · '+namedStatus(source.status)))):null,
         row.merge?h('div',{},fact('wd_merged',boolean(row.merge.merged)),fact('wd_merge_verified',boolean(row.merge.verified)),code(row.merge.merged_sha)):null,
         row.deployment?h('div',{},fact('wd_environment',row.deployment.environment),fact('wd_deploy_state',row.deployment.state),
           fact('wd_deploy_verified',boolean(row.deployment.verified)),fact('wd_current',boolean(row.deployment.is_current)),
           code(row.deployment.source_sha),fact('wd_run',row.deployment.run_id)):null)),
-      !rows.length?h('p',{class:'muted'},t('wd_empty')):null);
+      !rows.length?emptyState({title:t('wd_empty')}):null);
   }
   function check(data,id) {
     if(data?.workspace_id!==workspaceId||data.work_item_id!==id||data.contract!=='pm-engineering-delivery/v1'
@@ -41,7 +44,7 @@ export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
     const id=workId,after=append?cursor:0,ticket=++sequence;
     if(append&&after===null)return;
     busy=true;if(!append){rows=[];packages=[];cursor=null;facts.replaceChildren();}
-    controls();status.replaceChildren(h('p',{class:'muted'},t('wd_loading')));
+    controls();status.replaceChildren(skeleton(2));
     try {
       const data=check(await api('GET',`/pm/workspaces/${encodeURIComponent(workspaceId)}/work/${encodeURIComponent(id)}/deliveries?after=${after}&limit=20`),id);
       if(!valid(ticket)||workId!==id)return;

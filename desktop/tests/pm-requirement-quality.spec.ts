@@ -1,4 +1,7 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect,type Page} from '@playwright/test';
+import {futureLocalTime} from './local-time.ts';
+test.use({timezoneId: 'America/New_York'});
 import {mountConversation} from './conversation-fixture.ts';
 import {mkdir} from 'node:fs/promises';
 import {batchFixture,mountBatch,panel,start,proof,handoff,workspaceId} from './pm-work-batches-fixture.ts';
@@ -124,7 +127,7 @@ test('changed upstream condition requires explicit prerequisite reselection',asy
 test('batch fresh-start preflight rechecks original prerequisite assessment sources',async({page})=>{
   const f=fixture(),row=f.downstream();await mountBatch(page,f);await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);
   await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await handoff(page).getByLabel('Accepted prerequisite recovery',{exact:true}).selectOption({index:1});await reviewed(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();
-  await start(page).getByLabel('Reason for this request',{exact:true}).fill('Exact reviewed selection');const deadline=new Date(Date.now()+3600000);await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(new Date(deadline.getTime()-deadline.getTimezoneOffset()*60000).toISOString().slice(0,16));
+  await start(page).getByLabel('Reason for this request',{exact:true}).fill('Exact reviewed selection');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(await futureLocalTime(page));
   f.quality.deny=true;await start(page).locator('button[type=submit]').click();await expect(panel(page)).toContainText('Original batch sources are unavailable');expect(f.state.writes).toHaveLength(0);
 });
 
@@ -164,7 +167,7 @@ test('declared unmet prerequisites can wait in explicit batch but never enable s
   const f=fixture();await mountBatch(page,f);await reviewed(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await start(page).getByLabel('Result condition',{exact:true}).selectOption(PROFILE);
   const row=f.downstream();await page.evaluate(id=>(window as any).batchSelect(id),row.package_id);await reviewed(page);await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();
   await expect(handoff(page)).toContainText('waits for the declared prerequisites');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();const rows=start(page).locator('.pm-batch-entry');await rows.nth(1).getByText('Prerequisites in this selection',{exact:true}).click();await rows.nth(1).getByRole('checkbox').check();
-  await start(page).getByLabel('Reason for this request',{exact:true}).fill('Await original upstream acceptance before downstream starts');const deadline=new Date(Date.now()+3600000);await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(new Date(deadline.getTime()-deadline.getTimezoneOffset()*60000).toISOString().slice(0,16));
+  await start(page).getByLabel('Reason for this request',{exact:true}).fill('Await original upstream acceptance before downstream starts');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(await futureLocalTime(page));
   await start(page).getByLabel('Maximum starts',{exact:true}).fill('2');await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);
   const entries=f.state.writes[0].body.params.entries;expect(entries[1].depends_on).toEqual([{entry_key:entries[0].key,condition:f.condition}]);expect(entries[1].handoff.params.pm_requirement_quality_refs).toBeUndefined();expect(f.base.state.writes).toHaveLength(0);
 });
@@ -175,11 +178,11 @@ test('batch preparation never bypasses unrelated original source readiness check
 });
 
 for(const native of [false,true])test(`mounted ${native?'native':'browser'} batch preserves unmet declared prerequisites without single dispatch`,async({page})=>{
-  const f=fixture();f.reviews.length=0;await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);
-  await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();await handoff(page).locator('details>summary').first().click();await reviewed(page);
-  await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await start(page).getByLabel('Result condition',{exact:true}).selectOption(PROFILE);
-  f.downstream();await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Downstream implementation · Preparation 2',exact:true}).click();await reviewed(page);
-  await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();const entries=start(page).locator('.pm-batch-entry');await entries.nth(1).getByText('Prerequisites in this selection',{exact:true}).click();await entries.nth(1).getByRole('checkbox').check();
-  await start(page).getByLabel('Maximum starts',{exact:true}).fill('2');await start(page).getByLabel('Reason for this request',{exact:true}).fill('Bounded dependency admission');const deadline=new Date(Date.now()+3600000);await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(new Date(deadline.getTime()-deadline.getTimezoneOffset()*60000).toISOString().slice(0,16));
+  const f=fixture();f.reviews.length=0;await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);await openPmSection(page,'requirements','ui_packages');
+  await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();await openPmSection(page,'requirements','ui_handoff');await handoff(page).locator('details>summary').first().click();await reviewed(page);
+  await openPmSection(page,'board','ui_batches');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await start(page).getByLabel('Result condition',{exact:true}).selectOption(PROFILE);
+  f.downstream();await openPmSection(page,'requirements','ui_packages');await page.getByRole('button',{name:'Refresh work packages',exact:true}).click();await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Downstream implementation · Preparation 2',exact:true}).click();await openPmSection(page,'requirements','ui_handoff');await reviewed(page);
+  await expect(handoff(page).getByRole('button',{name:'Start implementation',exact:true})).toBeDisabled();await openPmSection(page,'board','ui_batches');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();const entries=start(page).locator('.pm-batch-entry');await entries.nth(1).getByText('Prerequisites in this selection',{exact:true}).click();await entries.nth(1).getByRole('checkbox').check();
+  await start(page).getByLabel('Maximum starts',{exact:true}).fill('2');await start(page).getByLabel('Reason for this request',{exact:true}).fill('Bounded dependency admission');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(await futureLocalTime(page));
   await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.entries[1].depends_on[0].condition).toEqual(f.condition);expect(f.base.state.writes).toHaveLength(0);
 });

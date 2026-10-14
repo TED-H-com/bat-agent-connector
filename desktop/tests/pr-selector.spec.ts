@@ -113,7 +113,7 @@ for (const native of [false, true]) {
     await expect(nextBtn).toBeDisabled();
 
     failList = true;
-    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await page.getByRole('button',{name:'Refresh this page of PRs',exact:true}).click();
     await expect(prList).toContainText('Provider unavailable');
     await expect(prList.getByRole('button',{name:'#3 Third PR'})).toBeDisabled();
     await searchInput.fill('Third');
@@ -123,7 +123,7 @@ for (const native of [false, true]) {
     
     // Test Stale Race: Type a repo that delays, then quickly type another
     await repoInput.fill("delay/repo");
-    const refreshBtn = page.getByRole("button", {name: "Refresh"});
+    const refreshBtn = page.getByRole("button", {name: "Refresh this page of PRs", exact: true});
     await refreshBtn.click(); // Fires request 1
     await repoInput.fill("owner/repo");
     await refreshBtn.click(); // Fires request 2

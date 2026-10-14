@@ -203,11 +203,13 @@ export function demoProject(localeInput?: string, now = DEMO_NOW) {
       '客服要先確認哪個鎖定門檻，稽核紀錄才能繼續？'),
     proposalWhy: t('The audit log is blocked on that security decision.', '稽核紀錄正卡在這項資安決定。'),
     manualTitle: t('Reset notes from BAT', '在 BAT 記下的重設密碼筆記'),
+    failedTitle: t('Failed delivery run', '失敗的交付'),
     manualNote: t(
       'These notes were written in BAT while watching the reset flow. The connector does not send instructions to this session.',
       '這些筆記是在 BAT 裡看重設密碼流程時寫下的。Connector 不會對這個工作階段下指令。'),
     sessionImplement: t('Implement email sign-in', '實作電子郵件登入'),
     sessionReview: t('Review the rate-limit policy', '審查速率限制政策'),
+    approvalAsk: t('Run the rate-limit tests.', '執行速率限制測試。'),
     snapshotV2: t('Scope agreed', '範圍已合意'),
     snapshotV3: t('Delivery progress', '交付進度'),
     deliveryMerged: t('Pull request #87 is merged and is not deployed yet.', '合併請求 #87 已合併，但尚未部署。'),

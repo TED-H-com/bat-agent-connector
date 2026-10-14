@@ -1,3 +1,5 @@
+import {iconButton, skeleton} from './ui/components.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
 // Every choice is an original server record. A refresh may withdraw it, never silently replace it.
 const START='pm.maintenance.repair',RECORD='pm.maintenance.repair.evidence.record';
@@ -9,7 +11,9 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   const editors=new Map(),choices=new Map(),status=h('div',{role:'status'}),facts=h('div'),budget=h('div'),startView=h('div'),proofView=h('div');
   const hidden=()=>h('input',{type:'hidden'}),startFields={selection:hidden(),context:hidden()};
   const select=label=>h('select',{'aria-label':t(label)}),finding=select('pmr_finding'),rule=select('pmr_rule'),history=select('pmr_history'),evidence=select('pmr_evidence');
-  const line=(label,value)=>h('p',{class:'pm-source'},h('strong',{},t(label)+': '),String(value??t('pmr_none'))),text=label=>h('p',{class:'muted'},t(label));
+  finding.dataset.pmRepairFinding='';
+  let pendingFinding='';
+  const line=(label,value)=>h('p',{class:'pm-source'},h('strong',{},t(label)+': '),value??t('pmr_none')),text=label=>h('p',{class:'muted'},t(label));
   const state=value=>t('pmr_status_'+(['accepted','queued','pending','running','succeeded','failed','cancelled','needs_attention','not_admitted','passed','blocked'].includes(value)?value:'unknown'));
   const link=id=>h('a',{href:`#/op/${encodeURIComponent(id)}`},t('pm_operation'));
   const valid=ticket=>{try{alive();return ticket===epoch;}catch{return false;}};
@@ -61,7 +65,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   const verifier=workspaceExecutionVerification({h,t,api:request,alive,workspaceId,workspace,caps,form,labelled,errorBox,
     namespace:`${namespace}.repair`,onSaved:()=>refresh(),onUnavailable:error=>failure(error)});
   const element=h('section',{class:'panel pm-maintenance-repairs','data-pm-maintenance-repairs':''},h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmr_title')),text('pmr_intro')),
-    h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmr_refresh'))),status,startView,labelled('pmr_history',history),facts,verifier.element,proofView);
+    iconButton({icon:'refresh-cw', label:t('pmr_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,startView,labelled('pmr_history',history),facts,verifier.element,proofView);
   function options(field,rows,value=''){field.replaceChildren(h('option',{value:''},t('pmr_choose')),...rows.map(([id,label])=>h('option',{value:id},label)));field.value=rows.some(([id])=>id===value)?value:'';}
   async function pages(path,list,cursor,ticket){const result=[];let after=0;
     for(let page=0;page<20;page++){const data=check(await api('GET',`${base}/${path}${path.includes('?')?'&':'?'}after=${after}&limit=50`));if(!valid(ticket))return null;
@@ -100,7 +104,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       if(row.publication_child.status==='needs_attention'||row.publication_child.error_code?.includes('UNKNOWN'))box.append(text('pmr_unknown'));}
     if(p.new_investment_blocked_reason||p.blocked_reason)box.append(h('p',{class:'muted'},reason(p.new_investment_blocked_reason||p.blocked_reason)));
     const detail=h('details',{},h('summary',{},t('pmr_original')),line('pmr_work',row.work_item_id),line('pmr_policy',row.policy_id),
-      line('pmr_observation',c.finding_ref.observation_id),line('pmr_digest',c.finding_ref.document_digest),line('pmr_deadline',new Date(row.deadline_at*1000).toLocaleString()),
+      line('pmr_observation',c.finding_ref.observation_id),line('pmr_digest',c.finding_ref.document_digest),line('pmr_deadline',timeStamp(row.deadline_at)),
       line('pmr_retry',row.retries_used),text('pmr_cost'),link(row.operation_id));
     for(const item of row.evidence){const proof=item.evidence;detail.append(h('p',{},t('pmr_kind_'+item.selection.kind),' · ',link(item.operation_id)));
       for(const [name,value]of Object.entries(proof.reference||item.selection.reference||{}))detail.append(h('p',{class:'pm-source'},name+': '+value));}
@@ -143,7 +147,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
           ||!ci.pulls?.some(p=>p.native_pr_id===receipt.native_pr_id&&p.head_sha===receipt.candidate_sha))continue;
         const ref={observation_id:item.observation_id,document_digest:item.document_digest,native_pr_id:receipt.native_pr_id};
         if(!/^pmgh_[0-9a-f]{32}$/.test(ref.observation_id)||!digest.test(ref.document_digest))throw invalid();
-        choices.set('required_ci:'+ref.observation_id,{selection:{kind:'required_ci',reference:ref},label:`${t('pmr_kind_required_ci')} · #${receipt.pull_number} · ${new Date(item.created_at*1000).toLocaleString()}`});}
+        choices.set('required_ci:'+ref.observation_id,{selection:{kind:'required_ci',reference:ref},label:`${t('pmr_kind_required_ci')} · #${receipt.pull_number} · ${timeText(item.created_at)}`});}
     }
     if(!valid(ticket))return;if(filtered&&!status.querySelector('[data-repair-filtered]')){const notice=text('pmr_filtered');notice.dataset.repairFiltered='';status.append(notice);}proofReady=true;const saved=parse(editor.fields.selection),value=[...choices].find(([,v])=>same(v.selection,saved))?.[0]||'';
     options(evidence,[...choices].map(([id,value])=>[id,value.label]),value);editor.rebase.hidden=Number(editor.fields.version.value)===row.version||editor.locked();update();
@@ -151,7 +155,7 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
   function withdraw(){epoch++;verifier.withdraw();verifier.element.hidden=true;filtered=false;ready=false;policy=baseline=lifecycle=findings=repair=null;proofReady=false;choices.clear();for(const field of [finding,rule,history,evidence])field.replaceChildren();facts.replaceChildren();budget.replaceChildren();status.replaceChildren();
     for(const editor of [start,...editors.values()])editor?.box.querySelector('.pm-receipt')?.replaceChildren();update();}
   function failure(error){withdraw();status.append(text('pmr_unavailable'),errorBox(error));}
-  async function refresh(){withdraw();const ticket=epoch;status.append(text('pmr_loading'));
+  async function refresh(){withdraw();const ticket=epoch;status.append(skeleton(2, {label:t('pmr_loading')}));
     try{const [p,b,l,f]=(await Promise.all(['maintenance-policies/current','release-baselines/current','lifecycle','maintenance-findings/current'].map(path=>api('GET',`${base}/${path}`)))).map(check);if(!valid(ticket))return;
       if(!Number.isSafeInteger(l.lifecycle?.revision)||p.policy&&(p.policy.workspace_id!==workspaceId||p.policy.document?.workspace_id!==workspaceId||p.policy.revision!==p.head?.revision)
         ||p.policy&&(p.policy.policy_id!==p.head.policy_id||p.policy.document.policy_id!==p.policy.policy_id||p.policy.document.revision!==p.policy.revision)
@@ -160,7 +164,8 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       policy=p.policy;baseline=b.baseline;lifecycle=l.lifecycle;findings=f;
       const rows=await pages('maintenance-repairs','repairs','next_after',ticket);if(!valid(ticket)||!rows)return;rows.forEach(validate);
       status.replaceChildren();if(filtered){const notice=text('pmr_filtered');notice.dataset.repairFiltered='';status.append(notice);}ready=true;const saved=parse(startFields.selection);
-      options(finding,issueRows().map(row=>[row.finding_id,`${t('pmr_issue')} #${row.native.number} · ${(row.facts.labels||[]).join(' · ')}`]),saved?.finding_ref?.finding_id);
+      options(finding,issueRows().map(row=>[row.finding_id,`${t('pmr_issue')} #${row.native.number} · ${(row.facts.labels||[]).join(' · ')}`]),pendingFinding||saved?.finding_ref?.finding_id);
+      pendingFinding='';
       options(rule,rules().map(row=>[row.key,`${row.key} · ${t('pmp_'+row.work_kind)}`]),saved?.rule_key);
       options(history,rows.map(row=>[row.repair_id,`${t('pmr_issue')} #${row.context.finding.native.number} · ${row.context.rule.key} · ${state(row.operation_status)}`]),selected);
       if(selected){const data=check(await api('GET',`${base}/maintenance-repairs/${encodeURIComponent(selected)}`));if(!valid(ticket))return;repair=validate(data.repair);if(repair.repair_id!==selected)throw invalid();facts.append(render(repair));await loadProof(ticket);}else{proof=null;proofView.replaceChildren();}
@@ -169,5 +174,6 @@ export function workspaceMaintenanceRepairs({h,t,api,alive,workspaceId,workspace
       if(!owner())status.append(text('pmr_owner'));else if(!active())status.append(text('pmr_stopped'));else if(!rules().length)status.append(text('pmr_no_rules'));
       update();
     }catch(error){if(valid(ticket))failure(error);}}
-  update();return {element,refresh,withdraw};
+  function focusFinding(ref){const id=typeof ref?.finding_id==='string'?ref.finding_id:'';if(!id)return;pendingFinding=id;if([...finding.options].some(option=>option.value===id))finding.value=id;}
+  update();return {element,refresh,withdraw,focusFinding};
 }

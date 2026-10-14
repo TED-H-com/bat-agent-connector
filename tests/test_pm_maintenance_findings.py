@@ -328,3 +328,88 @@ async def test_exact_finding_lookup_rejects_digest_or_id_substitution(ops, monke
         findings.get_finding(*args, 'a' * 64, item['finding_id'])
     with pytest.raises(OperationError, match='Original finding unavailable'):
         findings.get_finding(*args, op['result']['document_digest'], 'pmfn_' + 'a' * 32)
+
+
+def _item(kind, number, facts):
+    return {'native': {'kind': kind, 'number': number}, 'facts': facts}
+
+
+def test_display_identity_copies_only_validated_facts_for_each_kind():
+    issue, issue_gaps = findings.display_identity(_item('issues', 87, {'labels': ['bug', 'ci'], 'priority': 'untriaged'}))
+    pull, pull_gaps = findings.display_identity(_item('dependabot_pull_requests', 7, {
+        'manifests': ['package.json'], 'base_branch': 'main'}))
+    alert, alert_gaps = findings.display_identity(_item('dependabot_alerts', 9, {
+        'package': 'lodash', 'ecosystem': 'npm', 'ghsa_id': 'GHSA-aaaa-bbbb-cccc', 'severity': 'high',
+        'manifest_path': 'package.json', 'first_patched_version': '4.17.21'}))
+    assert issue_gaps == pull_gaps == alert_gaps == {}
+    assert list(issue) == ['source', 'number', 'labels'] and issue == {
+        'source': 'issues', 'number': 87, 'labels': ['bug', 'ci']}
+    assert list(pull) == ['source', 'number', 'manifests'] and pull == {
+        'source': 'dependabot_pull_requests', 'number': 7, 'manifests': ['package.json']}
+    assert list(alert) == ['source', 'number', 'package', 'ecosystem', 'ghsa_id', 'severity']
+    assert alert == {'source': 'dependabot_alerts', 'number': 9, 'package': 'lodash', 'ecosystem': 'npm',
+                     'ghsa_id': 'GHSA-aaaa-bbbb-cccc', 'severity': 'high'}
+    stored = _item('issues', 87, {'labels': ['bug']})
+    copied, _ = findings.display_identity(stored)
+    copied['labels'].append('forged')
+    assert stored['facts']['labels'] == ['bug']
+    empty, empty_gaps = findings.display_identity(_item('issues', 1, {'labels': []}))
+    assert empty['labels'] == [] and empty_gaps == {}
+    from bat_agent_connector.pm_source_lineage import references
+    assert references({'source': 'issues', 'number': 87, 'labels': ['bug'], 'package': 'lodash',
+                       'manifests': ['package.json']}) == set()
+
+
+def test_display_identity_omits_missing_and_unproven_facts():
+    missing, missing_gaps = findings.display_identity({'native': {'kind': 'issues', 'number': 4}, 'facts': {}})
+    assert missing == {'source': 'issues', 'number': 4}
+    assert missing_gaps == {'finding.labels': 'not_recorded'}
+    explicit, explicit_gaps = findings.display_identity(
+        {'native': {'kind': 'issues', 'number': None}, 'facts': {'labels': None}})
+    assert explicit == {'source': 'issues'}
+    assert explicit_gaps == {'finding.number': 'not_recorded', 'finding.labels': 'not_recorded'}
+    blank, blank_gaps = findings.display_identity({'native': {}, 'facts': {'labels': ['bug']}})
+    assert blank == {} and blank_gaps == {'finding.source': 'not_recorded', 'finding.number': 'not_recorded'}
+    assert 'finding.labels' not in blank_gaps
+    mismatched, mismatched_gaps = findings.display_identity(
+        _item('issues', 87, {'labels': ['bug']}), source_kind='dependabot_alerts')
+    assert mismatched == {'number': 87}
+    assert mismatched_gaps == {'finding.source': 'unproven'}
+    invalid_kind, invalid_gaps = findings.display_identity(_item('pull_request', True, {'labels': ['bug']}))
+    assert invalid_kind == {}
+    assert invalid_gaps == {'finding.source': 'unproven', 'finding.number': 'unproven'}
+    bad_number, bad_gaps = findings.display_identity(
+        {'native': {'kind': 'issues', 'number': '87'}, 'facts': {'labels': ['bug']}})
+    assert bad_number == {'source': 'issues', 'labels': ['bug']}
+    assert bad_gaps == {'finding.number': 'unproven'}
+    assert findings.display_identity(_item('issues', 2**63 - 1, {'labels': ['ok']}))[0]['number'] == 2**63 - 1
+    assert findings.display_identity(_item('issues', 2**63, {'labels': ['ok']}))[1]['finding.number'] == 'unproven'
+    assert findings.display_identity(_item('issues', 0, {'labels': ['ok']}))[1]['finding.number'] == 'unproven'
+    long_label = 'x' * 101
+    proven, _ = findings.display_identity(_item('issues', 3, {'labels': ['x' * 100]}))
+    assert proven['labels'] == ['x' * 100]
+    over, over_gaps = findings.display_identity(_item('issues', 3, {'labels': ['bug'] * 1 + [long_label]}))
+    assert 'labels' not in over and over_gaps['finding.labels'] == 'unproven'
+    many = [f'l{index}' for index in range(100)]
+    assert findings.display_identity(_item('issues', 3, {'labels': many}))[0]['labels'] == many
+    too_many, too_many_gaps = findings.display_identity(_item('issues', 3, {'labels': many + ['extra']}))
+    assert 'labels' not in too_many and too_many_gaps['finding.labels'] == 'unproven'
+    assert too_many_gaps['finding.labels'] == 'unproven'
+    for labels in (['bug', 'bug'], ['bug', ''], ['bug', 'a\nb'], ['bug', 1], 'bug'):
+        identity, gaps = findings.display_identity(_item('issues', 3, {'labels': labels}))
+        assert 'labels' not in identity and gaps['finding.labels'] == 'unproven'
+    bad_package, package_gaps = findings.display_identity(_item('dependabot_alerts', 9, {
+        'package': 'y' * 513, 'ecosystem': 'npm', 'ghsa_id': 'GHSA-aaaa-bbbb-cccc', 'severity': 'urgent'}))
+    assert set(bad_package) == {'source', 'number', 'ecosystem', 'ghsa_id'}
+    assert package_gaps == {'finding.package': 'unproven', 'finding.severity': 'unproven'}
+    exact_package, _ = findings.display_identity(_item('dependabot_alerts', 9, {
+        'package': 'y' * 512, 'ecosystem': 'n' * 100, 'ghsa_id': 'g' * 100, 'severity': 'critical'}))
+    assert exact_package['package'] == 'y' * 512 and exact_package['severity'] == 'critical'
+    bad_path, path_gaps = findings.display_identity(_item('dependabot_pull_requests', 7, {
+        'manifests': ['package.json', '../package.json']}))
+    assert 'manifests' not in bad_path and path_gaps['finding.manifests'] == 'unproven'
+    paths = [f'dir{index}/package.json' for index in range(100)]
+    assert findings.display_identity(_item('dependabot_pull_requests', 7, {'manifests': paths}))[0]['manifests'] == paths
+    overflow, overflow_gaps = findings.display_identity(_item('dependabot_pull_requests', 7, {
+        'manifests': paths + ['extra.json']}))
+    assert 'manifests' not in overflow and overflow_gaps['finding.manifests'] == 'unproven'

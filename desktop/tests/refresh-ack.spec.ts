@@ -62,6 +62,7 @@ for (const native of [false, true]) for (const refresh of ["messages", "preview"
     const draft = page.locator("textarea").first();
     await draft.fill("Keep this exact draft and original operation key");
     if (refresh === "preview") {
+      await page.getByRole("button", {name: "Record this version", exact: true}).click();
       await page.getByRole("combobox", {name: "Commit"}).selectOption("b".repeat(40));
       await page.locator("textarea").nth(1).fill("Keep this checkpoint note");
     }
@@ -74,18 +75,20 @@ for (const native of [false, true]) for (const refresh of ["messages", "preview"
     await expect.poll(() => messageReads).toBe(2);
     expect(await saved()).toEqual(checkpoint(0));
     release();
-    await expect(page.getByText("UNAVAILABLE View refresh unavailable")).toBeVisible();
+    await expect(page.locator('[data-session-error=UNAVAILABLE] .session-error-line')).toContainText('Server error');
+    await expect(page.locator('[data-session-error=UNAVAILABLE] details')).toContainText('View refresh unavailable');
     expect(await saved()).toEqual(checkpoint(0));
     if (refresh === "preview") {
       expect(listReads).toBeGreaterThanOrEqual(2);
-      await expect(page.getByRole("button", {name: "Record this version"})).toBeDisabled();
+      await expect(page.getByRole("button", {name: "Record", exact: true})).toBeDisabled();
       await expect(page.getByRole("combobox", {name: "Commit"})).toHaveValue("b".repeat(40));
     }
     if (refresh === "messages") {
       await expect(page.getByRole("button", {name: "Send", exact: true})).toBeDisabled();
     } else {
       await page.getByRole("button", {name: "Send", exact: true}).click();
-      await expect(page.getByText("CENTRAL_OFFLINE Central offline · actions paused")).toBeVisible();
+      await expect(page.locator('[data-session-error=CENTRAL_OFFLINE] .session-error-line')).toContainText('Central offline');
+      await expect(page.locator('[data-session-error=CENTRAL_OFFLINE] details')).toContainText('CENTRAL_OFFLINE');
     }
     expect(writes).toHaveLength(1);
     await expect(draft).toHaveValue("Keep this exact draft and original operation key");
@@ -98,7 +101,7 @@ for (const native of [false, true]) for (const refresh of ["messages", "preview"
     if (refresh === "preview") {
       await expect(page.getByRole("combobox", {name: "Commit"})).toHaveValue("b".repeat(40));
       await expect(page.locator("textarea").nth(1)).toHaveValue("Keep this checkpoint note");
-      await page.getByRole("button", {name: "Record this version"}).click();
+      await page.getByRole("button", {name: "Record", exact: true}).click();
       await expect.poll(() => writes.length).toBe(3);
       expect(writes[2].body.params).toEqual({last_n: 20, commit: "b".repeat(40), note: "Keep this checkpoint note"});
     }
@@ -163,7 +166,7 @@ for (const native of [false, true]) {
     await expect.poll(saved).toEqual(checkpoint(0));
     changed = true;
     await expect.poll(() => delivered).toBe(true);
-    await expect(page.locator("#live")).toContainText("Waiting to refresh");
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     expect(await saved()).toEqual(checkpoint(0));
     const readsBefore = reads;
     await page.getByRole("button", {name: "Save", exact: true}).click();

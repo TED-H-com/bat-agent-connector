@@ -1,3 +1,4 @@
+import {searchField, iconButton, emptyState, skeleton} from './ui/components.js';
 // PRs come only from the authenticated central's configured GitHub repository.
 export function prSelector({api, h, t, guard, repoInput, numInput, onSelect}) {
   let page = 1, serial = 0, cached = [], scope = "", nextPage = null, busy = false, stale = false, error = "";
@@ -5,19 +6,19 @@ export function prSelector({api, h, t, guard, repoInput, numInput, onSelect}) {
   const filter = h("select", {"aria-label": t("state"), onchange: () => loadList()},
     ...["open", "closed", "all"].map(value => h("option", {value}, t("pr_state_" + value))));
   const search = h("input", {type: "search", "aria-label": t("delivery_search_prs"), placeholder: t("delivery_search_prs"), oninput: () => render()});
-  const refresh = h("button", {type: "button", class: "secondary", onclick: () => loadList()}, t("delivery_refresh_prs"));
+  const refresh = iconButton({icon:"refresh-cw", label:t("delivery_refresh_prs"), onClick:() => loadList()});
   const list = h("div", {class: "pr-list", "aria-live": "polite"});
-  const container = h("div", {class: "pr-selector"}, h("div", {class: "filters"}, search, filter, refresh), list);
+  const container = h("div", {class: "pr-selector"}, h("div", {class: "filters"}, searchField(search), filter, refresh), list);
   function render() {
     if (!alive()) return;
     list.replaceChildren(); refresh.disabled = busy;
-    if (busy) list.append(h("p", {class: "muted"}, t("loading")));
+    if (busy) list.append(skeleton(2));
     if (error) list.append(h("p", {class: "note warn"}, error));
     if (scope) list.append(h("p", {class: "muted"}, `${scope} · ${t("delivery_pr_page", {page})}`));
     if (stale && cached.length) list.append(h("p", {class: "note warn"}, t("delivery_pr_stale")));
     const query = search.value.trim().toLocaleLowerCase();
     const rows = cached.filter(pr => pr.title.toLocaleLowerCase().includes(query) || String(pr.number).includes(query));
-    if (!rows.length && !busy) list.append(h("p", {class: "muted"}, t("delivery_no_prs")));
+    if (!rows.length && !busy) list.append(emptyState({icon:"git-pull-request", title:t("delivery_no_prs")}));
     for (const pr of rows) {
       const loaded = scope, revision = serial;
       const select = h("button", {type: "button", class: "secondary", disabled: busy || stale,

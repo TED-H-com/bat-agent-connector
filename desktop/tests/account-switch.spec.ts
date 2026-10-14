@@ -42,12 +42,13 @@ for (const pause of ["digest", "lookup"]) {
     const send = page.getByRole("button", {name: "Send", exact: true});
     if (pause === "lookup") {
       await send.click();
+      await page.locator(".session-send-record summary").click();
       await expect(page.getByText("op_" + "c".repeat(32), {exact: true})).toBeVisible();
     } else await page.evaluate(() => { (window as any).__pauseDigest = true; });
     await send.click();
     if (pause === "lookup") await expect.poll(() => lookupPending).toBe(true);
     else await expect.poll(() => page.evaluate(() => !!(window as any).__digestPending)).toBe(true);
-    await page.getByRole("link", {name: "Connection", exact: true}).click();
+    await page.locator("#live").click();
     await page.getByRole("button", {name: "Disconnect", exact: true}).click();
     await page.locator('input[type="password"]').fill("second-fixture-token");
     await page.getByRole("button", {name: "Connect", exact: true}).click();

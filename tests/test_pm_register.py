@@ -910,6 +910,10 @@ async def test_lineage_hidden_repair_does_not_remove_the_finding_action(ops, mon
     visible = pm_register.list_register(ops, OWNER, data["wid"])
     assert repair["repair_id"] in {row["source"]["id"] for row in visible["rows"]}
     assert offered(visible) == []
+    stored = next(item for item in visible["rows"] if item["source"] == {"kind": "finding", "id": finding_id})
+    assert stored["title"] is None and stored["unknowns"]["title"] == "not_recorded"
+    assert stored["finding"] == {"source": "issues", "labels": ["bug", "ci"]}
+    assert stored["unknowns"]["finding.number"] == "not_recorded"
     _ensure_lineage(ops)
     ops.db.execute("INSERT INTO pm_source_lineage VALUES(?,?,?,?)",
                    ("work_item", work_item, "op_" + uuid.uuid4().hex, "op_" + "f" * 32))
@@ -1615,3 +1619,138 @@ async def test_register_source_memo_keys_principal_and_workspace(ops, monkeypatc
         assert calls[-1][0] is other and calls[-1][1] == workspace_id
         assert read(ops, OWNER, data["wid"], identity) == expected
         assert len(calls) == 2
+
+
+_OBS_REF = {"observation_id": "pmobs_" + "a" * 27, "document_digest": "d" * 64}
+_ISSUE_ID = "pmfn_" + "1" * 32
+_PULL_ID = "pmfn_" + "2" * 32
+_ALERT_ID = "pmfn_" + "3" * 32
+_SENTINEL = "lodash-secret"
+_ISSUE_FINDING = {"source": "issues", "number": 87, "labels": ["bug", "ci"]}
+_PULL_FINDING = {"source": "dependabot_pull_requests", "number": 7, "manifests": ["package.json"]}
+_ALERT_FINDING = {"source": "dependabot_alerts", "number": 9, "package": _SENTINEL,
+                  "ecosystem": "npm", "ghsa_id": "GHSA-aaaa-bbbb-cccc", "severity": "high"}
+
+
+def _identity_findings():
+    return {
+        "issues": [_stored_finding(_ISSUE_ID, "issues", 87, {"labels": ["bug", "ci"], "priority": "untriaged",
+                                                              "reproduction": "unknown"})],
+        "dependabot_pull_requests": [_stored_finding(
+            _PULL_ID, "dependabot_pull_requests", 7,
+            {"manifests": ["package.json"], "base_branch": "main", "changed_files": [{"path": "package.json"}]},
+            existing_pull_request={"number": 7})],
+        "dependabot_alerts": [_stored_finding(
+            _ALERT_ID, "dependabot_alerts", 9,
+            {"package": _SENTINEL, "ecosystem": "npm", "ghsa_id": "GHSA-aaaa-bbbb-cccc", "severity": "high",
+             "manifest_path": "package.json", "first_patched_version": "4.17.21"})],
+    }
+
+
+def _stored_finding(finding_id, kind, number, facts, **extra):
+    item = {"finding_id": finding_id, "state": "observed_open", "resolved": False,
+            "native": {"kind": kind, "number": number}, "facts": facts}
+    item.update(extra)
+    return item
+
+
+def _findings_page(sources, *, filtered=False):
+    return {"visibility_filtered": filtered, "observation_ref": dict(_OBS_REF),
+            "sources": {name: {"status": "complete", "findings": items} for name, items in sources.items()}}
+
+
+def _stub_findings(monkeypatch, page):
+    _force_table(monkeypatch, "pm_maintenance_policies")
+    monkeypatch.setattr(pm_maintenance_policy, "head", lambda db, wid: {"policy_id": "pmmp_" + "a" * 32, "revision": 1})
+    monkeypatch.setattr(pm_maintenance_findings, "current_findings", lambda *args, **kwargs: page())
+
+
+def _finding_rows(view):
+    return {row["source"]["id"]: row for row in view["rows"] if row["source"]["kind"] == "finding"}
+
+
+async def test_finding_rows_expose_only_validated_identity_facts(ops, monkeypatch):
+    data = await prepared(ops)
+    state = {"filtered": False}
+    sources = _identity_findings()
+    _stub_findings(monkeypatch, lambda: _findings_page(sources, filtered=state["filtered"]))
+    listed = pm_register.list_register(ops, OWNER, data["wid"])
+    rows = _finding_rows(listed)
+    assert set(rows) == {_ISSUE_ID, _PULL_ID, _ALERT_ID}
+    assert list(rows[_ISSUE_ID]["finding"]) == list(_ISSUE_FINDING)
+    assert rows[_ISSUE_ID]["finding"] == _ISSUE_FINDING
+    assert rows[_PULL_ID]["finding"] == _PULL_FINDING
+    assert rows[_ALERT_ID]["finding"] == _ALERT_FINDING
+    for ident, expected in ((_ISSUE_ID, _ISSUE_FINDING), (_PULL_ID, _PULL_FINDING), (_ALERT_ID, _ALERT_FINDING)):
+        detail = pm_register.get_register(ops, OWNER, data["wid"], "finding." + ident)
+        assert detail["row"]["finding"] == expected
+        assert detail["row"]["title"] is None
+        assert detail["row"]["unknowns"]["title"] == "not_recorded"
+    issue = rows[_ISSUE_ID]
+    assert issue["priority"] == "untriaged" and issue["impact"] is None
+    assert "priority" not in issue["finding"] and "reproduction" not in issue["finding"]
+    assert "finding.labels" not in issue["unknowns"]
+    pull = rows[_PULL_ID]
+    assert pull["related"]["prs"] == []
+    assert pull["unknowns"]["pull_requests"] == "repository_name_not_stored"
+    assert "base_branch" not in pull["finding"] and "changed_files" not in pull["finding"]
+    alert = rows[_ALERT_ID]
+    assert alert["impact"] == "high"
+    assert "manifest_path" not in alert["finding"] and "first_patched_version" not in alert["finding"]
+    other = next(row for row in listed["rows"] if row["source"]["kind"] != "finding")
+    assert "finding" not in other
+    for row in rows.values():
+        assert set(row) == set(other) | {"finding"}
+    _walk(listed)
+    state["filtered"] = True
+    hidden = pm_register.list_register(ops, OWNER, data["wid"])
+    assert _finding_rows(hidden) == {}
+    body = json.dumps(hidden)
+    assert _SENTINEL not in body and _ISSUE_ID not in body
+    assert any(row["source"]["kind"] != "finding" for row in hidden["rows"])
+    for ident in (_ISSUE_ID, _PULL_ID, _ALERT_ID):
+        with pytest.raises(OperationError) as missing:
+            pm_register.get_register(ops, OWNER, data["wid"], "finding." + ident)
+        assert missing.value.status == 404
+        assert _SENTINEL not in str(missing.value)
+    state["filtered"] = False
+    restored = pm_register.list_register(ops, OWNER, data["wid"])
+    assert _finding_rows(restored)[_ALERT_ID]["finding"] == _ALERT_FINDING
+    state["filtered"] = True
+    again = pm_register.list_register(ops, OWNER, data["wid"])
+    assert _finding_rows(again) == {} and _SENTINEL not in json.dumps(again)
+
+    def denied(*_args, **_kwargs):
+        raise OperationError("FORBIDDEN", "observation withdrawn", 403)
+
+    monkeypatch.setattr(pm_maintenance_findings, "current_findings", denied)
+    refused = pm_register.list_register(ops, OWNER, data["wid"])
+    assert _finding_rows(refused) == {}
+    assert _SENTINEL not in json.dumps(refused) and "observation withdrawn" not in json.dumps(refused)
+    assert any(row["source"]["kind"] != "finding" for row in refused["rows"])
+    with pytest.raises(OperationError) as hidden_get:
+        pm_register.get_register(ops, OWNER, data["wid"], "finding." + _ALERT_ID)
+    assert hidden_get.value.status == 404 and _SENTINEL not in str(hidden_get.value)
+
+
+async def test_lineage_hidden_finding_removes_the_row_and_its_identity(ops, monkeypatch):
+    data = await prepared(ops)
+    work_item = "wi_" + "e" * 20
+    sources = _identity_findings()
+    sources["dependabot_alerts"][0]["existing_work"] = [{"work_item_id": work_item}]
+    _stub_findings(monkeypatch, lambda: _findings_page(sources))
+    visible = pm_register.list_register(ops, OWNER, data["wid"])
+    assert _finding_rows(visible)[_ALERT_ID]["finding"]["package"] == _SENTINEL
+    _ensure_lineage(ops)
+    ops.db.execute("INSERT INTO pm_source_lineage VALUES(?,?,?,?)",
+                   ("work_item", work_item, "op_" + uuid.uuid4().hex, "op_" + "f" * 32))
+    hidden = pm_register.list_register(ops, OWNER, data["wid"])
+    assert _ALERT_ID not in _finding_rows(hidden)
+    assert _finding_rows(hidden)[_ISSUE_ID]["finding"] == _ISSUE_FINDING
+    assert _SENTINEL not in json.dumps(hidden)
+    assert any(row["source"]["kind"] != "finding" for row in hidden["rows"])
+    with pytest.raises(OperationError) as missing:
+        pm_register.get_register(ops, OWNER, data["wid"], "finding." + _ALERT_ID)
+    assert missing.value.status == 404 and _SENTINEL not in str(missing.value)
+    kept = pm_register.get_register(ops, OWNER, data["wid"], "finding." + _ISSUE_ID)
+    assert kept["row"]["finding"] == _ISSUE_FINDING

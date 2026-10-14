@@ -28,6 +28,7 @@ async function setup(page: any, options: any = {}) {
     }}});
   }, {options});
   await page.goto("/dashboard/#/settings");
+  await page.getByRole("link", {name: /^(Updates|更新)$/}).click();
 }
 
 test("unsigned package exposes its version without checking a feed", async ({page}) => {

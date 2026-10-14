@@ -96,6 +96,12 @@ async def test_finding_and_repair_context_require_original_source_scopes(repair_
     ctx = pm_discussions.context(ops, OWNER, **target)
     assert len(ctx['bound_context']) == 2 and all(c['available'] for c in ctx['bound_context'])
     assert all(c['summary'] for c in ctx['bound_context'])
+    chip = ctx['bound_context'][0]
+    assert chip['kind'] == 'finding'
+    assert chip['finding'] == {'source': 'issues', 'number': 50, 'labels': ['bug', 'release-1.4']}
+    assert chip['label'] == chip['bound_label'] == '50'
+    assert 'unknowns' not in chip
+    assert 'finding' not in ctx['bound_context'][1]
     assert pm_thread_contexts.frozen_visible(ops.db, OWNER, w['workspace_id'], ctx)
     limited = Principal(OWNER.actor, frozenset({'observe', 'manage'}))
     # Scope reduction alone retains observe-authorized facts. Withdrawing the

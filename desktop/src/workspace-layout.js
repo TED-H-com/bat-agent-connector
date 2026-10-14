@@ -1,8 +1,10 @@
+import {icon} from "./ui/icons.js";
+
 // Shared workspace layout controls: adjustable project sidebar and mobile conversation layout.
 // Upstream references: Project Hub PR #2 (sidebar-resize.js) and mobile.js.
 // Strictly maintains central authority, DOM structure, local drafts, focus, and bounded layout constraints.
 
-export const DEFAULT_SIDEBAR_WIDTH = 260;
+export const DEFAULT_SIDEBAR_WIDTH = 248;
 export const MIN_SIDEBAR_WIDTH = 200;
 export const MAX_SIDEBAR_WIDTH = 500;
 export const MIN_MAIN_WIDTH = 360;
@@ -13,7 +15,7 @@ export const KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
 
 function isMobileLayout() {
   if (typeof window === "undefined") return false;
-  return (window.innerWidth || document.documentElement?.clientWidth || 0) <= 800;
+  return (window.innerWidth || document.documentElement?.clientWidth || 0) < 1000;
 }
 
 export function calcSidebarBounds(windowWidth = window.innerWidth) {
@@ -25,13 +27,13 @@ export function calcSidebarBounds(windowWidth = window.innerWidth) {
 export function setupSidebarResizer({ aside, workspace, t }) {
   if (!aside || !workspace) return { dispose() {} };
 
-  let savedWidth = DEFAULT_SIDEBAR_WIDTH;
+  let savedWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH, customWidth = false;
   try {
     const raw = localStorage.getItem(KEY_SIDEBAR_WIDTH);
     if (raw !== null) {
       const parsed = parseInt(raw, 10);
       if (!Number.isNaN(parsed) && parsed >= MIN_SIDEBAR_WIDTH) {
-        savedWidth = parsed;
+        savedWidth = parsed; customWidth = true;
       }
     }
   } catch {
@@ -58,6 +60,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
     resizer.setAttribute("aria-valuemin", String(minAllowed));
     resizer.setAttribute("aria-valuemax", String(maxAllowed));
     if (persist) {
+      customWidth = true;
       try {
         localStorage.setItem(KEY_SIDEBAR_WIDTH, String(clamped));
       } catch {
@@ -189,6 +192,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
   };
 
   const onWindowResize = () => {
+    if (!customWidth) currentWidth = window.innerWidth < 1200 ? 232 : DEFAULT_SIDEBAR_WIDTH;
     if (isMobileLayout()) cancelDrag();
     if (!isMobileLayout()) {
       currentWidth = applyWidth(currentWidth, false);
@@ -228,7 +232,7 @@ export function setupSidebarResizer({ aside, workspace, t }) {
   };
 }
 
-export function setupMobileSessionLayout({ head, composer, textarea, t, guard }) {
+export function setupMobileSessionLayout({ head, composer, textarea, t, guard, infoRow = null, composerRow = null }) {
   if (!head || !composer) return { updateInfo() {}, updateDraft() {}, dispose() {} };
 
   let isDisposed = false;
@@ -260,7 +264,7 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
     infoToggle.setAttribute("aria-expanded", String(!isInfoCollapsed));
     const label = t(isInfoCollapsed ? "mobile_info_expand" : "mobile_info_collapse");
     infoToggle.setAttribute("aria-label", label);
-    infoToggle.textContent = (isInfoCollapsed ? "▸ " : "▾ ") + label;
+    infoToggle.replaceChildren(icon("info"));
   };
 
   infoToggle.addEventListener("click", () => {
@@ -276,12 +280,9 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
 
   const updateInfo = () => {
     if (!alive()) return;
-    const titleRow = head.querySelector(":scope > div:first-child");
-    if (titleRow && !titleRow.contains(infoToggle)) {
-      titleRow.appendChild(infoToggle);
-    } else if (!head.contains(infoToggle)) {
-      head.appendChild(infoToggle);
-    }
+    if (infoRow) {
+      if (!infoRow.contains(infoToggle)) infoRow.append(infoToggle);
+    } else if (!head.contains(infoToggle)) head.append(infoToggle);
     renderInfoToggle();
   };
 
@@ -305,11 +306,9 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
     composer.classList.toggle("workspace-composer-collapsed", isComposerCollapsed);
     composerToggle.setAttribute("aria-expanded", String(!isComposerCollapsed));
 
-    const baseText = isComposerCollapsed
-      ? t("mobile_compose_open")
-      : `▾ ${t("mobile_compose_close")}`;
+    const baseText = t(isComposerCollapsed ? "mobile_compose_open" : "mobile_compose_close");
     const draftSuffix = hasDraft ? ` · ${t("mobile_draft_indicator")}` : "";
-    composerToggle.textContent = baseText + draftSuffix;
+    composerToggle.replaceChildren(icon("pencil"));
     composerToggle.setAttribute("aria-label", baseText + draftSuffix);
     composerToggle.classList.toggle("has-draft", hasDraft);
   };
@@ -337,9 +336,9 @@ export function setupMobileSessionLayout({ head, composer, textarea, t, guard })
   textarea?.addEventListener("input", onTextareaInput);
   textarea?.addEventListener("change", onTextareaInput);
 
-  if (!composer.contains(composerToggle)) {
-    composer.prepend(composerToggle);
-  }
+  if (composerRow) {
+    if (!composerRow.contains(composerToggle)) composerRow.append(composerToggle);
+  } else if (!composer.contains(composerToggle)) composer.prepend(composerToggle);
 
   // 3. visualViewport keyboard adaptation (ignoring pinch-zoom)
   const updateViewport = () => {

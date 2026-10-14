@@ -1,17 +1,20 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
+import {futureLocalTime} from './local-time.ts';
+test.use({timezoneId: 'Asia/Taipei'});
 import {mountConversation} from './conversation-fixture.ts';
 import {mkdir} from 'node:fs/promises';
 import {batchFixture,mountBatch,bootBatch,panel,start,proof,handoff,workspaceId,START,RECORD} from './pm-work-batches-fixture.ts';
 const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();
   await handoff(page).getByLabel('Why use this implementation base?',{exact:true}).fill('Implement this original reviewed base');await handoff(page).getByLabel('Instructions for this implementation',{exact:true}).fill('Preserve source identity and verify fixed result.');};
 const add=async(page:any)=>{await review(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await expect(start(page).locator('.pm-batch-entry')).toHaveCount(1);};
-const fill=async(page:any)=>{await start(page).getByLabel('Reason for this request',{exact:true}).fill('Run the selected bounded work');const value=new Date(Date.now()+3600000);value.setMinutes(value.getMinutes()-value.getTimezoneOffset());await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(value.toISOString().slice(0,16));};
+const fill=async(page:any)=>{await start(page).getByLabel('Reason for this request',{exact:true}).fill('Run the selected bounded work');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(await futureLocalTime(page));};
 const evidence=async(page:any,f:any)=>{await proof(page).getByLabel('Original batch entry',{exact:true}).selectOption('first');await proof(page).getByLabel('Delivered integration receipt',{exact:true}).selectOption(f.state.deliveries[0].operation_id+':1');await proof(page).getByLabel('Saved GitHub observation',{exact:true}).selectOption(f.state.observations[0].observation_id);await proof(page).getByLabel('Reason for this request',{exact:true}).fill('Match the original delivered revision');};
 
 for(const native of [false,true])test(`mounted ${native?'native':'browser'} workspace selects and starts one fixed batch`,async({page})=>{
-  const f=batchFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);
+  const f=batchFixture();await mountConversation(page,native,f.dispatch);await page.goto('/dashboard/#/pm/'+workspaceId);await openPmSection(page,'requirements','ui_packages');
   await page.locator('[data-pm-work-packages]').getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
-  await handoff(page).locator('details>summary').first().click();await add(page);await fill(page);await start(page).locator('button[type=submit]').click();
+  await openPmSection(page,'requirements','ui_handoff');await handoff(page).locator('details>summary').first().click();await review(page);await openPmSection(page,'board','ui_batches');await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await expect(start(page).locator('.pm-batch-entry')).toHaveCount(1);await fill(page);await start(page).locator('button[type=submit]').click();
   await expect(panel(page).getByRole('heading',{name:'Original batch and result evidence',exact:true})).toBeVisible();
   expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.action).toBe(START);expect(f.base.state.writes).toHaveLength(0);
   f.state.historyDeny=true;f.base.fixture.base.state.cursor++;
@@ -36,7 +39,7 @@ test('draft stable entry and exact source survive reload',async({page})=>{
 test('new-start preflight refuses changed CAS without sending or rewriting the frozen request',async({page})=>{
   const f=batchFixture();await mountBatch(page,f);await add(page);await fill(page);f.state.version=3;f.state.revision=2;await start(page).locator('button[type=submit]').click();await expect(start(page)).toContainText('Workspace or lifecycle version changed');expect(f.state.writes).toHaveLength(0);
   const stored=await page.evaluate(()=>Object.values(localStorage).map(value=>{try{return JSON.parse(value);}catch{return null;}}).find(value=>value?.intent?.request.action==='pm.work_batch.start'));expect(stored.intent.request.preconditions).toEqual({expected_workspace_version:2,expected_lifecycle_revision:0});
-  await start(page).getByRole('button',{name:'Edit a new request',exact:true}).click();await panel(page).getByRole('button',{name:'Use current workspace versions',exact:true}).click();await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.preconditions).toEqual({expected_workspace_version:3,expected_lifecycle_revision:2});
+  await start(page).getByRole('button',{name:'New request',exact:true}).click();await panel(page).getByRole('button',{name:'Use current workspace versions',exact:true}).click();await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.preconditions).toEqual({expected_workspace_version:3,expected_lifecycle_revision:2});
 });
 test('lost start reply recovers original key after pause and lifecycle epoch change',async({page})=>{
   const f=batchFixture();await mountBatch(page,f);await add(page);await fill(page);f.state.lost=true;await start(page).locator('button[type=submit]').click();await expect(start(page)).toContainText('Reply unavailable');const original=structuredClone(f.state.writes[0]);f.state.version=4;f.state.revision=7;f.base.fixture.state.stage='paused';await page.reload();await bootBatch(page);await start(page).getByRole('button',{name:'Check original request',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(2);expect(f.state.writes[1]).toEqual(original);expect(f.state.ops.size).toBe(1);

@@ -1,3 +1,4 @@
+import {iconButton} from './ui/components.js';
 // Guided configuration of the owned central. Secrets stay in input memory until staged.
 // Durable operations retain their exact request/key; reopening never starts a new intent.
 export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStatus, onConfigured, caps}) {
@@ -127,7 +128,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, opStat
     saved.verification_base = null; seedVerificationBase();
     try {persist(); unsaved.hidden = false; update();} catch (error) {showError(error);}
   }
-  const refreshButton = h("button", {class: "secondary", onclick: () => refresh().catch(showError)}, t("setup_refresh"));
+  const refreshButton = iconButton({icon:'refresh-cw', label:t('setup_refresh'), ...{class: "secondary", onclick: () => refresh().catch(showError)}});
   const retry = h("button", {class: "secondary", hidden: true, onclick: () => recover().catch(showError)}, t("setup_recover"));
   const next = h("button", {class: "secondary", hidden: true, onclick: () => {
     if (!alive() || damaged || !terminal() && !saved.intent?.refused) return;

@@ -1,8 +1,10 @@
+import {iconButton} from './ui/components.js';
+import {timeStamp, timeLabel} from './ui/stamps.js';
 // Catalogs and subscription observations come only from the selected BAT host.
 const fields = ['initial_agent', 'initial_model', 'last_agent', 'last_model', 'hidden', 'order'];
 const modelKey = model => `${model.agent}:${model.id}`;
 const copyPreferences = prefs => Object.fromEntries(fields.map(key => [key, Array.isArray(prefs[key]) ? [...prefs[key]] : prefs[key] ?? null]));
-const date = value => typeof value === 'number' && Number.isFinite(value) ? new Date(value * 1000).toLocaleString() : '—';
+const date = value => timeStamp(value);
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const validPreferences = value => value && typeof value === 'object' && fields.every(key => key in value)
   && ['initial_agent', 'last_agent'].every(key => value[key] === null || ['claude', 'codex'].includes(value[key]))
@@ -102,7 +104,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     agent.addEventListener('change', modified); model.addEventListener('input', modified);
     form.append(h('label', {}, t(`models_${role}_agent`), agent), h('label', {}, t(`models_${role}_model`), model));
   }
-  const refresh = h('button', {class: 'secondary', type: 'button', onclick: () => load(true)}, t('models_refresh'));
+  const refresh = iconButton({icon:'refresh-cw', label:t('models_refresh'), ...{class: 'secondary', type: 'button', onclick: () => load(true)}});
   const reset = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (!draft || busy || intent || doc?.host !== host.value) return;
     draft.params.hidden = []; draft.params.order = [];
@@ -179,17 +181,17 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     [...rows.querySelectorAll('[data-model-control]')].find(node => node.dataset.modelControl === focused)?.focus({preventScroll: true});
   }
   function showUsage(value) {
-    usage.replaceChildren(h('p', {class: 'muted'}, t('models_source', {source: value.source || 'bat_host', time: date(value.observed_at)})));
+    usage.replaceChildren(h('p', {class: 'muted'}, timeLabel(t, 'models_source', {source: value.source || 'bat_host', time: date(value.observed_at)})));
     if (value.status !== 'available') usage.append(h('p', {class: 'note'}, t('models_usage_unavailable', {reason: value.reason || value.status})));
     for (const provider of value.providers || []) {
       const row = h('section', {class: 'panel'}, h('strong', {}, provider.provider),
         h('p', {class: 'muted'}, t('models_host_account', {account: provider.account_email || t('obs_unknown')})),
-        h('p', {class: 'muted'}, [provider.plan_type, date(provider.fetched_at)].filter(Boolean).join(' · ')));
+        h('p', {class: 'muted'}, provider.plan_type, provider.plan_type ? ' · ' : '', date(provider.fetched_at)));
       if (provider.stale) row.append(h('p', {class: 'note warn'}, t('models_usage_stale', {reason: provider.reason || 'unknown'})));
       for (const [key, label] of [['five_hour', 'models_five_hour'], ['seven_day', 'models_seven_day']]) {
         const window = provider[key], known = typeof window?.utilization === 'number' && window.utilization >= 0 && window.utilization <= 1;
         row.append(h('p', {}, t(label), ': ', known ? `${Math.round(window.utilization * 100)}%` : t('obs_unknown'),
-          ' · ', t('models_resets', {time: date(window?.resets_at)})));
+          ' · ', timeLabel(t, 'models_resets', {time: date(window?.resets_at)})));
       }
       usage.append(row);
     }
@@ -210,7 +212,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
         loadedHost = selected;
         for (const [key, input] of Object.entries(inputs)) input.value = draft.params[key] || '';
       }
-      evidence.replaceChildren(...[h('p', {class: 'muted'}, t('models_source', {source: next.model_catalog.source || 'bat_host', time: date(next.model_catalog.observed_at)})),
+      evidence.replaceChildren(...[h('p', {class: 'muted'}, timeLabel(t, 'models_source', {source: next.model_catalog.source || 'bat_host', time: date(next.model_catalog.observed_at)})),
         next.model_catalog.stale ? h('p', {class: 'note warn'}, t('models_catalog_stale', {host: selected})) : null,
         ...(next.unknown_models || []).map(model => h('p', {class: 'note'}, t('models_unknown_current', {model: `${model.agent}:${model.id}`})))].filter(Boolean));
       if (draft.revision !== next.model_preferences.revision) status.textContent = t('models_conflict');

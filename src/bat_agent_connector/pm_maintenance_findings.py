@@ -165,6 +165,94 @@ def initial(config):
         'permission': PERMISSIONS[kind], 'findings': []} for kind in KINDS}
 
 
+# Display identity uses the same ceilings project() and validate() already proved.
+_LABEL_COUNT = 100
+_LABEL_CHARS = 100
+_MANIFEST_COUNT = 100
+_SHORT_TEXT = 100
+_SEVERITY = ('low', 'medium', 'high', 'critical')
+_DISPLAY_FACTS = {
+    'issues': ('labels',),
+    'dependabot_pull_requests': ('manifests',),
+    'dependabot_alerts': ('package', 'ecosystem', 'ghsa_id', 'severity'),
+}
+
+
+def _proven(value, check):
+    try:
+        return check(value)
+    except github.Incomplete:
+        return None
+
+
+def _unique_texts(values, count, check):
+    """Return a copy, or None when any item fails the observation check."""
+    if not isinstance(values, list) or len(values) > count:
+        return None
+    result = []
+    for value in values:
+        proven = _proven(value, check)
+        if proven is None or proven in result:
+            return None
+        result.append(proven)
+    return result
+
+
+def _display_value(field, value):
+    if field == 'labels':
+        return _unique_texts(value, _LABEL_COUNT, lambda item: _text(item, _LABEL_CHARS))
+    if field == 'manifests':
+        return _unique_texts(value, _MANIFEST_COUNT, _path)
+    if field == 'package':
+        return _proven(value, _text)
+    if field in ('ecosystem', 'ghsa_id'):
+        return _proven(value, lambda item: _text(item, _SHORT_TEXT))
+    if field == 'severity':
+        return _proven(value, lambda item: github._state(item, _SEVERITY))
+    return None
+
+
+def display_identity(item, source_kind=None):
+    """Facts a client can name, copied from the stored finding.
+
+    A missing fact or an explicit null is omitted with ``not_recorded``. A stored
+    value that fails the observation check is omitted with ``unproven``. Nothing
+    is truncated, coerced, or filled in. ``base_branch``, ``manifest_path`` and
+    ``first_patched_version`` stay on the observation; this object does not copy them.
+    """
+    record = item if isinstance(item, dict) else {}
+    native = record.get('native') if isinstance(record.get('native'), dict) else None
+    facts = record.get('facts') if isinstance(record.get('facts'), dict) else {}
+    identity, unknown = {}, {}
+    kind = native.get('kind') if native is not None and 'kind' in native else None
+    if native is None or 'kind' not in native or kind is None:
+        unknown['finding.source'] = 'not_recorded'
+    elif kind not in KINDS or (source_kind is not None and source_kind != kind):
+        unknown['finding.source'] = 'unproven'
+    else:
+        identity['source'] = kind
+    if native is None or 'number' not in native or native.get('number') is None:
+        unknown['finding.number'] = 'not_recorded'
+    else:
+        number = _proven(native.get('number'), github._id)
+        if number is None:
+            unknown['finding.number'] = 'unproven'
+        else:
+            identity['number'] = number
+    if 'source' not in identity:
+        return identity, unknown
+    for field in _DISPLAY_FACTS[identity['source']]:
+        if field not in facts or facts[field] is None:
+            unknown['finding.' + field] = 'not_recorded'
+            continue
+        value = _display_value(field, facts[field])
+        if value is None:
+            unknown['finding.' + field] = 'unproven'
+        else:
+            identity[field] = value
+    return identity, unknown
+
+
 def finding(traversal, kind, row, **facts):
     scope = traversal.scope
     native = {'provider_digest': scope['provider_digest'], 'repository_id': scope['repository_id'],

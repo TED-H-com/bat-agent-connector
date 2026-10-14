@@ -1,6 +1,6 @@
 [data-pm-release-baselines] {overflow-wrap:anywhere;}
 [data-pm-release-baselines] article {padding:.65rem 0; border-top:1px solid var(--line);}
-[data-pm-release-baselines] article h3 {font-size:.95rem; margin:.25rem 0;}
+[data-pm-release-baselines] article h3 {font-size: var(--fs-read); margin:.25rem 0;}
 [data-pm-release-baselines] summary {cursor:pointer; padding:.45rem 0;}
 [data-pm-release-baselines] [data-release-register] {margin-top:.75rem;}
 [data-pm-release-baselines] [data-release-choice] {display:flex; align-items:baseline; gap:.5rem; padding:.45rem 0;}

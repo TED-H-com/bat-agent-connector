@@ -1,3 +1,4 @@
+import {timeStamp} from './ui/stamps.js';
 // Assessments quote one immutable intake. A valid response format is not verified advice.
 export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onAccessFailure=()=>{},pageSize=20}) {
   const actor=caps()?.actor, endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/follow-up-assessments`;
@@ -11,7 +12,7 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
   const fold=(key,...children)=>h('details',{},h('summary',{},t(key)),...children);
   const current=ticket=>{alive();if(actor!==caps()?.actor){retired=true;throw Error(t('pm_fa_actor_changed'));}return !retired&&ticket===serial;};
   const check=data=>{if(data?.workspace_id!==workspaceId)throw Error(t('pm_fa_mismatch'));return data;};
-  const date=value=>{const d=typeof value==='number'?new Date(value*1000):null;return d&&Number.isFinite(d.getTime())?d.toISOString().replace('T',' ').replace(/\.\d+Z$/,' UTC'):'—';};
+  const date=value=>timeStamp(value);
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pm_fa_more'));
   const element=h('section',{'data-pm-follow-up-assessments':'',class:'pm-fu-assessments'},
     h('h3',{},t('pm_fa_title')),note('pm_fa_boundary'),status,list,more,detail);
@@ -41,7 +42,7 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
   function navigation() {
     list.replaceChildren(...rows.map(row=>h('p',{},h('button',{type:'button',class:'secondary','aria-pressed':selected===row.assessment_id,
       onclick:()=>{selected=row.assessment_id;selections.set(intake.intake_id,selected);navigation();void read(selected);}},
-      t('pm_fa_record',{sequence:row.sequence})+' · '+date(row.created_at)),h('span',{class:'muted'},' · ',t('pm_fa_'+row.validation.status)))));
+      t('pm_fa_record',{sequence:row.sequence}), ' · ', date(row.created_at)),h('span',{class:'muted'},' · ',t('pm_fa_'+row.validation.status)))));
     more.hidden=next==null;more.disabled=reading;
     if(!rows.length)list.append(note(next==null?'pm_fa_empty':'pm_fa_filtered_page'));
   }

@@ -20,6 +20,9 @@ try {
   page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(token => sessionStorage.setItem("batc.dashboard.token", token), fixture.token);
   await page.goto(origin + "/dashboard/#/session/h1/" + fixture.session_id);
+  // Session panels mount before the route's initial reads finish. The preview is
+  // a POST, so wait for the existing admission gate rather than racing startup.
+  await expect(page.locator('#live')).toHaveAttribute('data-connection', 'connected');
   let box = page.locator('[data-capture]');
   await box.locator("summary").click();
   await expect(box.locator("select")).toHaveValue("h1");

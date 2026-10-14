@@ -27,13 +27,15 @@ try {
       contentType: file.endsWith("html") ? "text/html" : file.endsWith("css") ? "text/css" : "text/javascript"});
   });
   await page.goto(origin + "/dashboard/#/session/h1/" + fixture.session_id);
-  await page.getByRole("button", {name: "Start agent work from this version", exact: true}).click();
+  await page.getByRole("button", {name: "Start from here", exact: true}).click();
   const bytes = Buffer.from([0, 255, 128, 13, 10, 60, 38, 34, 195, 169]);
   await page.locator('input[type="file"]').setInputFiles({name: "fixture-input.dat", mimeType: "application/octet-stream", buffer: bytes});
   await expect(page.locator(".attachment-list")).toContainText("art_", {timeout: 30000});
   await page.getByPlaceholder("What should the agent do next…").fill("Use the verified fixture attachment.");
   await page.getByRole("button", {name: "Start agent work", exact: true}).click();
-  const link = page.locator(".panel").filter({has: page.getByRole("heading", {name: "Checkpoints", exact: true})}).locator('a[href^="#/op/"]');
+  const receipt = page.locator(".session-checkpoint-result");
+  await receipt.getByText("Operation details", {exact: true}).click();
+  const link = receipt.locator('a[href^="#/op/"]');
   await expect(link).toBeVisible({timeout: 30000});
   const opId = (await link.getAttribute("href")).split("/").at(-1);
   let operation;
