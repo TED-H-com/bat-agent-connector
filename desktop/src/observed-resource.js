@@ -23,9 +23,9 @@ function ownerKind(resource) {
 function actionLink(h, href, label, variant) {
   return h('a', {class: `ui-button ${variant} ui-sm`, href}, label);
 }
-export function unavailableProject({h, error, collection = false, retry}) {
+export function unavailableProject({h, error, collection = false, transportFailed = false, retry}) {
   const denied = [401, 403].includes(error?.status), missing = error?.status === 404;
-  const recoverable = error?.status === 503 || error?.status === 0 || error?.name === 'TypeError';
+  const recoverable = error?.status === 503 || error?.status === 0 || transportFailed;
   const reason = denied ? 'or_project_denied' : missing ? (collection ? 'or_projects_missing' : 'or_project_missing') : 'or_connector_unavailable';
   const actions = [];
   if (!collection) actions.push(actionLink(h, '#/projects', say('or_back_projects'), 'secondary'));

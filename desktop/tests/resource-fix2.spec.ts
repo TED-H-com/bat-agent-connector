@@ -77,6 +77,22 @@ for (const locale of ['en-US', 'zh-TW']) {
     expect(state.posts).toEqual([]);
   });
 
+  test(`fix2 1: malformed project data does not offer a network retry ${locale}`, async ({page}) => {
+    const state = fresh({manage: true, project: {project_id: projectId, name: 'Login', children: null}});
+    await mount(page, locale, state);
+    for (const width of widths) {
+      await page.setViewportSize({width, height: 900}); await page.goto('/dashboard/#/projects');
+      const unavailable = page.locator('[data-project-unavailable="list"]');
+      await expect(unavailable.getByRole('heading')).toHaveText(zh ? '無法取得專案' : 'Projects unavailable');
+      await expect(unavailable.locator('p')).toHaveText(reason(0));
+      await expect(unavailable.getByRole('button', {name: zh ? '重試' : 'Retry', exact: true})).toHaveCount(0);
+      await expect(page.locator('[data-create-record="project"]')).toBeHidden();
+      await expect(page.locator('#main .row.tree, #main .drawer, #main [data-project-count]')).toHaveCount(0);
+      expect(await unavailable.innerText()).not.toMatch(/null|TypeError|forEach/);
+    }
+    expect(state.posts).toEqual([]);
+  });
+
   test(`fix2 2: readers see paused status and reason without execution controls ${locale}`, async ({page}) => {
     await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
     const pauseReason = zh ? '先完成成果審閱。' : 'Finish the result review first.';

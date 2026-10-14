@@ -49923,9 +49923,9 @@ function actionLink(h, href, label, variant) {
 		href
 	}, label);
 }
-function unavailableProject({ h, error, collection = false, retry }) {
+function unavailableProject({ h, error, collection = false, transportFailed = false, retry }) {
 	const denied = [401, 403].includes(error?.status), missing = error?.status === 404;
-	const recoverable = error?.status === 503 || error?.status === 0 || error?.name === "TypeError";
+	const recoverable = error?.status === 503 || error?.status === 0 || transportFailed;
 	const reason = denied ? "or_project_denied" : missing ? collection ? "or_projects_missing" : "or_project_missing" : "or_connector_unavailable";
 	const actions = [];
 	if (!collection) actions.push(actionLink(h, "#/projects", say("or_back_projects"), "secondary"));
@@ -55263,8 +55263,10 @@ async function viewProjects(main) {
 	}), manageNote() || "", create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived) }));
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens, mine = ++request;
+		let received = false;
 		try {
 			const data = await api("GET", `/projects${showArchived.checked ? "?include_archived=true" : ""}`);
+			received = true;
 			assertView(connection);
 			if (!tree.isConnected || mine !== request) return;
 			if (!Array.isArray(data.projects)) throw new Error(observedText(t, "or_projects_unknown"));
@@ -55370,6 +55372,7 @@ async function viewProjects(main) {
 				h,
 				error,
 				collection: true,
+				transportFailed: !received && error?.status === void 0,
 				retry: () => render().catch(() => {})
 			}));
 		}
@@ -55433,7 +55436,7 @@ async function viewProject(main, pid) {
 			branch: editor.branch.value
 		});
 	};
-	const withdraw = (error) => {
+	const withdraw = (error, transportFailed) => {
 		rememberEditors();
 		workEditors.clear();
 		currentEditor = null;
@@ -55454,21 +55457,24 @@ async function viewProject(main, pid) {
 		fill(head, unavailableProject({
 			h,
 			error,
+			transportFailed,
 			retry: () => render().catch(() => {})
 		}));
 		freshPage();
 	};
 	const readProject = async () => {
 		const mine = ++request;
+		let received = false;
 		try {
 			const data = await api("GET", `/projects/${encodeURIComponent(pid)}${showArchived.checked ? "?include_archived=true" : ""}`);
+			received = true;
 			assertView(connection);
 			if (mine !== request) return null;
 			if (data.project?.project_id !== pid) throw new Error(t("workspace_work_missing"));
 			return data;
 		} catch (error) {
 			if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request) return null;
-			withdraw(error);
+			withdraw(error, !received && error?.status === void 0);
 			throw error;
 		}
 	};
