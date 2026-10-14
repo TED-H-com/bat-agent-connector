@@ -122,7 +122,7 @@ export function discussionPanel({t, namespace, workspaceId, threadId = 'new', pa
   const state = viewState(namespace, workspaceId, 'discussion-panel.' + threadId);
   if (!Object.hasOwn(panes, state.tab)) state.tab = 'context';
   const home = h('aside', {class: 'pd-panel-home', hidden: true}), body = h('div', {class: 'pd-panel', 'data-discussion-panel': ''});
-  let overlay = null, opener = null, disposed = false;
+  let overlay = null, opener = null, panelFocus = null, disposed = false;
   const media = matchMedia('(min-width: 1200px)');
   const select = key => {
     if (!Object.hasOwn(panes, key)) return;
@@ -136,7 +136,15 @@ export function discussionPanel({t, namespace, workspaceId, threadId = 'new', pa
   const trigger = iconButton({icon: 'panel-right', label: t('pd_tab_context'), 'data-discussion-panel-toggle': '',
     'aria-expanded': 'false', onClick: () => overlay ? close(true) : open('context', {explicit: true, returnFocus: trigger})});
   trigger.classList.add('pd-panel-toggle');
-  function locate() {if (overlay) (media.matches ? home : document.getElementById('main')).append(overlay);}
+  function locate() {
+    if (!overlay) return;
+    // Responsive CSS can hide the old dock before the media event runs.
+    // Remember focus while it is inside the panel, before that layout change.
+    const focused = overlay.contains(document.activeElement) ? document.activeElement : panelFocus;
+    const panel = overlay;
+    (media.matches ? home : document.getElementById('main')).append(overlay);
+    requestAnimationFrame(() => {if (overlay === panel && panel.contains(focused)) focused.focus({preventScroll: true});});
+  }
   function close(explicit = false) {
     if (explicit) {state.explicit = true; state.open = false;}
     overlay?.close();
@@ -154,6 +162,7 @@ export function discussionPanel({t, namespace, workspaceId, threadId = 'new', pa
         if (!disposed) {state.open = false; state.explicit = true;}
         onSelect(null);
       }});
+      overlay.addEventListener('focusin', event => {panelFocus = event.target;});
       overlay.classList.add('pd-panel-overlay'); overlay.body.append(body); locate();
       if (!focus && media.matches) {const previous = document.activeElement; queueMicrotask(() => {if (previous?.isConnected && !previous.closest('[hidden], [inert]')) previous.focus({preventScroll: true});});}
       trigger.setAttribute('aria-expanded', 'true');

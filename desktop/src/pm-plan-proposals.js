@@ -67,7 +67,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   const more=actionButton({type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
   const reload=iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()});
   const prepareBox=h('details',{open:true,'data-proposal-prepare':''},h('summary',{},t('pcp_prepare')),prepare.box);
-  const box=sectionCard({body:[h('h3',{},t(conversation?'pd_proposed':'pcp_title')),conversation?'':note('pcp_help'),prepareBox,
+  const box=sectionCard({body:[conversation?'':h('h3',{},t('pcp_title')),conversation?'':note('pcp_help'),prepareBox,
     h('div',{class:'pm-fields'},labelled('pcp_saved',picker),h('div',{class:'actions'},reload,more)),notice,detail]});
   box.classList.add('pm-plans');box.dataset.pmPlanProposals='';
   const pendingPill=statusPill('in_progress');pendingPill.hidden=true;box.append(pendingPill);
@@ -112,7 +112,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   }
   function validReview(value){return reviewIssue(value)===null;}
   function sourceQuotes(refs){return h('details',{class:'pm-source'},h('summary',{},t('pcp_sources')),...refs.map(key=>{
-    const row=active.context.source_references[key];return h('div',{},h('blockquote',{class:'pm-note-text'},row.quote),h('small',{},row.kind,' · ',row.id));}));}
+    const row=active.context.source_references[key],label=t('pd_source_'+row.kind);return h('div',{},h('blockquote',{class:'pm-note-text'},row.quote),h('small',{},label==='pd_source_'+row.kind?t('pd_source_record'):label,' · ',h('code',{class:'mono'},row.id)));}));}
   function updateControls(){
     if(!ready)return;
     if(conversation){
@@ -180,7 +180,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       ...[...new Set(p.document.candidates.map(row=>row.kind))].map(kind=>{const pill=statusPill({proposal:'in_review',assumption:'unconfirmed',unknown:'unknown',conflict:'blocked',excluded:'read_only'}[kind]);pill.textContent=t('pcp_'+kind);return pill;})));
     const before=h('details',{},h('summary',{},t('pcp_before')),
       accepted?h('div',{},h('strong',{},accepted.title||''),h('p',{class:'pm-note-text'},accepted.markdown||''),h('ul',{},...(accepted.requirements||[]).map(row=>h('li',{},row.id,' · ',row.text))),h('small',{class:'pm-source'},t('pcp_baseline'),' · ',p.context.plan_head.accepted_revision_id)):note('pcp_first'));
-    const technical=h('details',{'data-proposal-details':''},h('summary',{},t('pd_details')),labelled('pcp_name',title),h('code',{},p.proposal_id),h('code',{'data-proposal-adoptable-reason':''},p.adoptable_reason||''),before);
+    const technical=h('details',{'data-proposal-details':''},h('summary',{},t('pd_details')),labelled('pcp_name',title),h('code',{class:'mono'},p.proposal_id),h('code',{class:'mono','data-proposal-adoptable-reason':''},p.adoptable_reason||''),before);
     if(!conversation)content.append(h('p',{class:'pm-note-text'},p.document.summary),before,labelled('pcp_name',title));
     content.append(h('h4',{},t('pcp_candidates')));
     title.addEventListener('input',()=>saveEditor(title));
@@ -278,7 +278,6 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     clock=setInterval(()=>{if(composerNode.isConnected&&prepare.checking()&&['running','accepted','queued','pending'].includes(prepare.operation()?.status))updateControls();},1000);
     updateControls();return composerNode;
   }
-  if(conversation)box.querySelector(':scope > h3').remove();
   ready=true;updateControls();
   return {box,tools,composer,refresh,withdraw,recheck:()=>prepare.recheck(),update(value={}){
     if(value.capabilities){

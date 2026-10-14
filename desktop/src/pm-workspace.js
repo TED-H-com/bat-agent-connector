@@ -1020,7 +1020,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane,
         ...(meetings ? {meeting: h('section', {'data-discussion-tab': 'meeting'}, meetings.element)} : {})}, onSelect: key => {
           revisions?.setActive(key === 'plan');
-          if (['context', 'meeting'].includes(key) && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open) void refreshSection(section);
+          if (key === 'meeting' && initialReadComplete) void refreshSection(meetings);
+          if (key === 'context' && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open && !details.closest('[data-discussion-tab]')?.hidden) void refreshSection(section);
         }});
       column.querySelector('.pd-header-main').append(discussionTools.trigger);
       const composer = discussionComposer({t, form: noteForm, details: threadDetails,
@@ -1323,7 +1324,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         }
       }
       if (threadId === 'new' && draftRefs && boundContext) {
-        boundContext.replaceChildren(...discussionContext(t, draftRefs, {limit: 1, title: launch.title, onMore: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-more-context]')}), onOpen: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-context]')})}));
+        boundContext.replaceChildren(...discussionContext(t, draftRefs, {limit: 1, title: launch.title, onMore: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-more-context]')}), onOpen: () => discussionTools.open('context', {returnFocus: () => boundContext.querySelector('[data-discussion-context], [data-discussion-context-title]')})}));
         panelContext.replaceChildren(...discussionContext(t, draftRefs, {title: launch.title}));
       }
       if (!workspaceList.isConnected) content.prepend(workspaceList);
@@ -1340,7 +1341,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       worktreeChoice?.update();
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         const lazy = lazyThreadSections.get(section);
-        if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)) {
+        if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)
+          && (!threadId || section !== meetings || sectionVisible(section))) {
           // The initial view activation already started its projection read.
           // Reuse that read rather than replacing its just-rendered status.
           const activation = !initialReadComplete && activationReads.get(section);

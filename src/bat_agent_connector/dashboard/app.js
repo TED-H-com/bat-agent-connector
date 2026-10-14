@@ -13339,7 +13339,7 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 		class: "pd-panel",
 		"data-discussion-panel": ""
 	});
-	let overlay = null, opener = null, disposed = false;
+	let overlay = null, opener = null, panelFocus = null, disposed = false;
 	const media = matchMedia("(min-width: 1200px)");
 	const select = (key) => {
 		if (!Object.hasOwn(panes, key)) return;
@@ -13375,7 +13375,13 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 	});
 	trigger.classList.add("pd-panel-toggle");
 	function locate() {
-		if (overlay) (media.matches ? home : document.getElementById("main")).append(overlay);
+		if (!overlay) return;
+		const focused = overlay.contains(document.activeElement) ? document.activeElement : panelFocus;
+		const panel = overlay;
+		(media.matches ? home : document.getElementById("main")).append(overlay);
+		requestAnimationFrame(() => {
+			if (overlay === panel && panel.contains(focused)) focused.focus({ preventScroll: true });
+		});
 	}
 	function close(explicit = false) {
 		if (explicit) {
@@ -13407,6 +13413,9 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 					}
 					onSelect(null);
 				}
+			});
+			overlay.addEventListener("focusin", (event) => {
+				panelFocus = event.target;
 			});
 			overlay.classList.add("pd-panel-overlay");
 			overlay.body.append(body);
@@ -20939,7 +20948,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		"data-proposal-prepare": ""
 	}, h("summary", {}, t("pcp_prepare")), prepare.box);
 	const box = sectionCard({ body: [
-		h("h3", {}, t(conversation ? "pd_proposed" : "pcp_title")),
+		conversation ? "" : h("h3", {}, t("pcp_title")),
 		conversation ? "" : note("pcp_help"),
 		prepareBox,
 		h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)),
@@ -21015,8 +21024,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	}
 	function sourceQuotes(refs) {
 		return h("details", { class: "pm-source" }, h("summary", {}, t("pcp_sources")), ...refs.map((key) => {
-			const row = active.context.source_references[key];
-			return h("div", {}, h("blockquote", { class: "pm-note-text" }, row.quote), h("small", {}, row.kind, " · ", row.id));
+			const row = active.context.source_references[key], label = t("pd_source_" + row.kind);
+			return h("div", {}, h("blockquote", { class: "pm-note-text" }, row.quote), h("small", {}, label === "pd_source_" + row.kind ? t("pd_source_record") : label, " · ", h("code", { class: "mono" }, row.id)));
 		}));
 	}
 	function updateControls() {
@@ -21206,7 +21215,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			return pill;
 		})));
 		const before = h("details", {}, h("summary", {}, t("pcp_before")), accepted ? h("div", {}, h("strong", {}, accepted.title || ""), h("p", { class: "pm-note-text" }, accepted.markdown || ""), h("ul", {}, ...(accepted.requirements || []).map((row) => h("li", {}, row.id, " · ", row.text))), h("small", { class: "pm-source" }, t("pcp_baseline"), " · ", p.context.plan_head.accepted_revision_id)) : note("pcp_first"));
-		const technical = h("details", { "data-proposal-details": "" }, h("summary", {}, t("pd_details")), labelled("pcp_name", title), h("code", {}, p.proposal_id), h("code", { "data-proposal-adoptable-reason": "" }, p.adoptable_reason || ""), before);
+		const technical = h("details", { "data-proposal-details": "" }, h("summary", {}, t("pd_details")), labelled("pcp_name", title), h("code", { class: "mono" }, p.proposal_id), h("code", {
+			class: "mono",
+			"data-proposal-adoptable-reason": ""
+		}, p.adoptable_reason || ""), before);
 		if (!conversation) content.append(h("p", { class: "pm-note-text" }, p.document.summary), before, labelled("pcp_name", title));
 		content.append(h("h4", {}, t("pcp_candidates")));
 		title.addEventListener("input", () => saveEditor(title));
@@ -21589,7 +21601,6 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		updateControls();
 		return composerNode;
 	}
-	if (conversation) box.querySelector(":scope > h3").remove();
 	ready = true;
 	updateControls();
 	return {
@@ -38663,8 +38674,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				},
 				onSelect: (key) => {
 					revisions?.setActive(key === "plan");
-					if (["context", "meeting"].includes(key) && initialReadComplete) {
-						for (const [section, details] of lazyThreadSections) if (details.open) refreshSection(section);
+					if (key === "meeting" && initialReadComplete) refreshSection(meetings);
+					if (key === "context" && initialReadComplete) {
+						for (const [section, details] of lazyThreadSections) if (details.open && !details.closest("[data-discussion-tab]")?.hidden) refreshSection(section);
 					}
 				}
 			});
@@ -39175,7 +39187,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					limit: 1,
 					title: launch.title,
 					onMore: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-more-context]") }),
-					onOpen: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-context]") })
+					onOpen: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-context], [data-discussion-context-title]") })
 				}));
 				panelContext.replaceChildren(...discussionContext(t, draftRefs, { title: launch.title }));
 			}
@@ -39222,7 +39234,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				traceability
 			]) {
 				const lazy = lazyThreadSections.get(section);
-				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden)) {
+				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden) && (!threadId || section !== meetings || sectionVisible(section))) {
 					const activation = !initialReadComplete && activationReads.get(section);
 					activationReads.delete(section);
 					await (activation || section.refresh());
