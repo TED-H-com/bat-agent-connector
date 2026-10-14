@@ -231,7 +231,7 @@ test('Follow-ups has one populated mount in Issues and a thread handoff', async 
   await expect(page.locator('[data-pm-follow-up]')).toHaveCount(0); const handoff = page.locator('[data-discussion-follow-up]'); await expect(handoff).toHaveText('Follow-ups');
   await handoff.click(); await expect(page).toHaveURL(/\/issues$/);
   await page.locator('[data-pm-overflow]').click(); await page.locator('[data-menu-key=follow]').click();
-  const card = page.locator('[data-pm-follow-up]'); await expect(card).toBeVisible(); await expect(card.locator('h2')).toHaveText('Follow-up preparation');
+  const card = page.locator('[data-pm-follow-up]'); await expect(card).toBeVisible(); await expect(card.getByRole('heading', {name: 'No saved preparation', exact: true})).toBeVisible();
   await expect(card.locator('[data-pm-action="pm.follow_up.prepare"]')).toHaveCount(1); expect(f.discussion.writes).toEqual([]);
 });
 
