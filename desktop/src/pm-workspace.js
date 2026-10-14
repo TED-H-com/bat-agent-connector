@@ -1113,8 +1113,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const adoptionRef = typeof run.purpose === 'string' && run.purpose.match(/^Adopt plan (pmrev_[0-9a-f]{32})$/);
       const caption = h('span', {'data-pm-run-purpose': ''}, adoptionRef ? t('pcp_plan_context') : run.purpose);
       const detail = h('div'), item = h('details', {'data-pm-run': run.run_id},
-        h('summary', {}, caption, ' · ', time(run.created_at),
-          run.adapter === 'codex-native-linux' ? ' · ' + nativeRunState(t, run) : ''), detail);
+        h('summary', {}, h('span', {}, caption, ' · ', time(run.created_at),
+          run.adapter === 'codex-native-linux' ? ' · ' + nativeRunState(t, run) : '')), detail);
       if (adoptionRef) void (async () => {
         try {
           const value = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/${adoptionRef[1]}`);

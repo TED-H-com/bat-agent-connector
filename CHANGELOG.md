@@ -110,7 +110,8 @@
   every discussion context from central records in draft and saved threads, retaining
   identity-only request params and the source's actual kind (including Issue / 問題).
   Keep chips on one line with complete labels, use 決策 for decision records, retain
-  local drafts and prevent sending when a source becomes unavailable.
+  local drafts and prevent sending when a source becomes unavailable. Keep saved-context
+  captions, ages and analysis status in one readable text flow in the thread panel.
 - Show acceptance, PR merge and deployment evidence for each requirement in a shared work inspector,
   with list rows on narrow screens and readable columns beside the docked inspector. Board adds
   filters, keyboard navigation, one-line cards and mobile lanes, and keeps existing PM tools in

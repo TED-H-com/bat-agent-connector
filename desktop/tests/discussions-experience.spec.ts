@@ -1,9 +1,50 @@
-import {recoverOriginalAdoption} from './pm-navigation.ts';
+import {openThreadTab, recoverOriginalAdoption} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {discussHref, parseDiscussRefs} from '../src/pm-discuss-link.js';
+
+for (const locale of ['en', 'zh-TW']) test(`saved context keeps its caption, age and analysis status readable ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: 1200, height: 900}});
+  const page = await context.newPage(), f = demoFixture({locale, discussions: true});
+  const runId = 'pmrun_' + '7'.repeat(32), zh = locale === 'zh-TW';
+  await mountConversation(page, false, async input => {
+    if (new URL(input.path, 'http://fixture').pathname === `/pm/workspaces/${f.ids.workspaceId}/runs`) return {status: 200,
+      data: {workspace_id: f.ids.workspaceId, runs: [{run_id: runId, created_at: Date.now() / 1000 - 20,
+        purpose: zh ? '確認重設連結效期為 15 分鐘；保留登入與密碼重設，推薦獎勵不在本輪範圍。'
+          : 'Agree a 15-minute reset-link expiry; keep sign-in and recovery, and exclude referral rewards.',
+        adapter: 'codex-native-linux', state: 'completed'}], next_cursor: null}};
+    const result = await f.dispatch(input);
+    const caps = input.path === '/bootstrap' ? result.data.capabilities : input.path === '/capabilities' ? result.data : null;
+    if (caps) caps.features.pm_workspaces.context_packages = true;
+    return result;
+  });
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadFollow}`);
+  for (const width of [1200, 1440, 390]) {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    await openThreadTab(page, 'context');
+    const summary = page.locator(`[data-pm-run="${runId}"] > summary`);
+    await expect(summary).toContainText(zh ? '分析已完成' : 'Analysis completed');
+    await expect(summary.locator('time')).toBeVisible();
+    // Words may move to the next line; a narrow flex column must not split
+    // their letters over several lines beside the saved purpose.
+    expect(await summary.evaluate(node => {
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT), split: string[] = [];
+      for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+        for (const match of text.textContent!.matchAll(/[A-Za-z]{3,}/g)) {
+          const range = document.createRange(); range.setStart(text, match.index!); range.setEnd(text, match.index! + match[0].length);
+          if (range.getClientRects().length > 1) split.push(match[0]);
+        }
+      }
+      return split;
+    }), `${locale} at ${width}`).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    if (width < 1200) await page.keyboard.press('Escape');
+  }
+  expect(f.discussion.writes).toEqual([]);
+  await context.close();
+});
 
 for (const locale of ['en', 'zh-TW']) test(`new discussion stays focused when central exposes all thread tools ${locale}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});

@@ -352,6 +352,8 @@ The composer has one status/actions row with Send and Ask PM kept together. Fail
 and pending note explanations stay visible. Search shares the list header with an
 icon-only New discussion button. A list-opened thread returns to Discussions.
 
+Saved context disclosure captions, compact ages and analysis status share one text flow
+so the side panel wraps words instead of squeezing metadata into separate flex columns.
 The shared `/discussions/new` link opens an editable draft and focuses the composer.
 Before a central thread exists, it mounts only the local discussion draft and
 list, deferring meetings, follow-ups, evidence and specification tools until Send.
