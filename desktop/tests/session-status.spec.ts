@@ -76,6 +76,8 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW'] as cons
       const search = page.getByRole('searchbox', {name: zh ? '搜尋已載入的工作階段' : 'Search loaded sessions'});
       await search.fill('session-1'); await expect(page.locator('[data-resource-id]')).toHaveCount(1);
       await search.fill(''); await expect(page.locator('[data-resource-id]')).toHaveCount(5);
+      for (const summary of await page.locator('.session-row-details[open] > summary').all()) await summary.click();
+      await expect(page.locator('.session-row-details[open]')).toHaveCount(0);
       const suffix = `${zh ? 'zh' : 'en'}-${width}`;
       await capture(page, !native, `01-sessions-list-${suffix}`);
       const rail = page.locator('.workspace-session-tree');
@@ -104,6 +106,8 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW'] as cons
       ] as const) {
         f.data.reasons = reasons ? [...reasons] : undefined; f.data.cursor++;
         await expect(progress).toHaveText(line);
+        await expect(page.locator('[data-session-reading-detail]')).toHaveText(detail);
+        if (!detail) await expect(page.locator('[data-session-reading-detail]')).toHaveAttribute('hidden', '');
         await progress.scrollIntoViewIfNeeded();
         await capture(page, !native, `${name}-conversation-${suffix}`);
         if (width === 390) await page.getByRole('button', {name: zh ? '成果' : 'Results', exact: true}).click();
