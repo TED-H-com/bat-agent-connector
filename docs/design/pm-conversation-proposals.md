@@ -142,7 +142,12 @@ Existing authorized evidence/snapshot projections use immutable JSON envelopes
 in the read memo and parse a fresh copy for each caller. Raw SQLite scalar
 columns need only a copied envelope. These copy strategies preserve unknown
 values, integer precision and caller isolation; they do not change authorization
-or enable storing projections inside a traversal guard.
+or enable storing projections in the ordinary request memo inside a traversal
+guard. Maintenance repair validation additionally uses a fresh private memo at
+one exact guard depth. It cannot read or populate the outer memo, nested guards
+cannot read or populate it, and its values disappear on exit. Independent raw
+metadata follows the same private boundary. Refusal generations prevent saving
+any enclosing load's value or error, even with `guard_independent=True`.
 Completed operation visibility can return from the existing read memo without
 opening another source savepoint. It first validates any borrowed source scope,
 including loop-turn, owner, mutation and nested-scope depth checks. Active

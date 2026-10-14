@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Reconcile M4 completed PM reads with main's private maintenance-repair memo:
+  preserve one validation per repair frame, isolate nested guards and recalls,
+  and never cache loads affected by cycle or budget refusals, including raw metadata.
+
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.

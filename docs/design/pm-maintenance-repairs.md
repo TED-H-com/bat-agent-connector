@@ -154,6 +154,13 @@ memo is discarded before leaving the guard, and writes, transaction changes, dif
 principals and inherited tasks/threads retain the shared read-cache barriers.
 No memo spans an await or a new provider frame. Those frames still recheck the
 complete current original source chain, owner, scopes, policy and deadline.
+The M4 completed-source reader retains its bounded DAG tracking around this
+private memo. Raw `guard_independent` metadata loaded here is stored only in the
+private scope at its exact guard depth, discarded on exit and inaccessible to
+nested guards; it is never exported to the outer request memo. Both `remember`
+and `recall` enforce that boundary. A cycle or budget refusal during a load
+prevents storing either its value or error in any memo, including independent
+metadata; a refusal during freezing also prevents storage.
 
 Only an original succeeded delivery child with its verified merge/deployment
 receipts yields the parent outcome `merged` or `deployed`. These are distinct
