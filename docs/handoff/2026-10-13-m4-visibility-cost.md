@@ -12,11 +12,126 @@ collection identifies the error as
 `tests/test_pm_quality_reviews.py::test_invalid_reviewer_types_never_reach_sql_or_create_an_operation[reviewer2]`
 and the failure as
 `tests/test_pm_repair_observer_source_reads.py::test_original_observer_frame_bounds_repeated_sources_and_rechecks_authority`.
-Their tracebacks and head/base comparisons remain pending at this checkpoint.
+The continuation below records their head/base comparisons and the separately
+captured failures from the completed rerun.
 
 The exact [129-file test inventory](2026-10-13-m4-visibility-cost-tests.txt)
 is preserved with this note. The affected runs select its 127 files other than
 the joined lifecycle and operation helpers, which are measured separately.
+
+## Continuation: identifying the interrupted failures
+
+The first complete continuation run used that same ordered 127-file affected
+selection on Python 3.14.5, without stopping at the first failure. It records
+**2,165 passed / 4 failed / 3 errors in 10,668.96 seconds**, exit 1.
+`resume1-affected-py314.log` and `.xml` retain every fresh traceback. Both cases
+from the interrupted run **passed** in this complete rerun. Their original
+tracebacks were never emitted and cannot be recovered from the incomplete log.
+
+Each original case was also run alone on the candidate and on an export of
+`2d9a2deb`, made with `git archive` rather than another worktree. Each invocation
+used `heavy pytest-disktmp`, `-rfE` and its own JUnit file. Both environments
+used Python **3.14.5**, pytest **9.1.1** and pytest-asyncio **1.4.0**; imports
+were verified to come from their respective source trees. Neither original test
+file differs from `2d9a2deb`.
+
+| Original case | Candidate | `2d9a2deb` |
+| --- | ---: | ---: |
+| `tests/test_pm_quality_reviews.py::test_invalid_reviewer_types_never_reach_sql_or_create_an_operation[reviewer2]` | 1 passed, 2.70 s | 1 passed, 3.06 s |
+| `tests/test_pm_repair_observer_source_reads.py::test_original_observer_frame_bounds_repeated_sources_and_rechecks_authority` | 1 passed, 33.54 s | 1 passed, 54.73 s |
+
+The interrupted run's surviving journals were inspected read-only, without
+replaying operations. Neither had a pending WAL file. The invalid-reviewer
+fixture had not reached reviewer validation: its original `pm.plan.adopt` was
+still running with `pm.revision.commit` started and no receipt. The observer
+case had not reached the observer frame assertions: the original work batch
+was waiting on its recovery `repository.continue`, whose `send` step was started
+without a receipt. Its preceding session start had taken 24.63 seconds.
+
+My assessment is that neither is a reproduced branch regression. The retained
+stages and the completed comparisons support transient fixture/worker stalls,
+rather than an invalid-reviewer SQL defect or a failed observer query ratio.
+The exact exceptions and individual triggering delays in the interrupted run
+remain unknown; journal stages do not reconstruct a lost traceback.
+
+The completed rerun preserves the observer test's unchanged strict comparisons:
+the original/scoped frame uses **3,618 / 1,554 SELECTs**, and the original/scoped
+policy read uses **742 / 212 SELECTs**. Withdrawal, credential, deadline and zero
+write assertions also pass in that test.
+
+### New failures in the complete rerun
+
+The complete rerun's seven problems are different cases. Their tracebacks
+identify preparation failures before their target assertions:
+
+| Case | Captured failure or setup error |
+| --- | --- |
+| `tests/test_pm_maintenance_repair_baseline.py::test_private_baseline_uses_bounded_http_and_current_token[True]` | `finish_deployment` finds no private delivery child. The original observation is incomplete with `observation_time_limit` after five pages; the parent correctly waits for the adopted observation interval. |
+| `tests/test_pm_maintenance_repair_retries.py::test_same_transition_is_idempotent_and_later_restart_consumes_next_slot` | Preparing the original transition finds an incomplete observation with `observation_time_limit`, after eleven pages. It does not reach retry reservation assertions. |
+| `tests/test_pm_plan_operations.py::test_owner_revoked_during_reuse_read_records_proof_without_new_decision` | The unchanged 60-second settle expires during `pm.plan.adopt`, at `pm.revision.verify` while its authority guard awaits the workspace response. |
+| `tests/test_pm_publication_source_reads.py::test_saved_publication_reuses_original_verifier_sources_without_losing_privacy` | The unchanged settle expires during original engineering, at `pm.execution.runtime.observe` awaiting runtime synchronization, before publication comparisons. |
+| `tests/test_pm_maintenance_repair_runtime.py::test_actual_original_cursor_native_completion_and_quality_release` | Fixture setup exceeds the unchanged settle bound in `pm.fixture.prepare`, at repository fetch awaiting host capture. |
+| `tests/test_pm_maintenance_repair_runtime.py::test_idle_abort_gap_later_input_or_changed_identity_never_release[idle]` | Fixture setup exceeds the unchanged settle bound in the original `repository.continue` send while awaiting runtime synchronization. |
+| `tests/test_pm_maintenance_repair_workload.py::test_queued_input_counter_keeps_original_capacity` | Fixture setup exceeds the unchanged settle bound in `pm.fixture.prepare`, at snapshot context while its guard awaits the workspace response. |
+
+Each of these seven cases was then run alone on both source trees, in sequence:
+
+| Case, in the order above | Candidate | `2d9a2deb` |
+| --- | ---: | ---: |
+| Private baseline | 1 passed, 8.13 s | 1 passed, 11.64 s |
+| Retry transition | 1 passed, 3.02 s | 1 passed, 3.06 s |
+| Revoked plan owner | 1 passed, 1.34 s | 1 passed, 1.35 s |
+| Saved publication | 1 passed, 34.25 s | 1 passed, 60.42 s |
+| Native completion | 1 passed, 4.06 s | 1 passed, 5.16 s |
+| Idle runtime | 1 passed, 3.98 s | 1 passed, 5.18 s |
+| Queued input | 1 passed, 4.04 s | 1 passed, 5.12 s |
+
+Together with the originals, this is **18 separate invocations, 18 passed,
+zero failures/errors/skips**. All nine head/base pairs have separate
+`resume-isolate-N-{head,base}-py314.log` and `.xml` files. No product source,
+test assertion, timeout, settle bound or provider simulation changed between
+the broad failure and these comparisons.
+
+The long broad run also supplied direct storage-wait evidence. At 131 minutes
+elapsed its pytest process had used less than ten minutes of CPU and was
+observed in `jbd2_log_wait_commit`; other samples showed `submit_bio_wait`.
+One device sample reported approximately 559 ms average write await. These
+observations support storage contention as a contributor, without proving the
+individual cause of every timeout. No unrelated process or shared lock was
+stopped or modified. Task-owned heavy commands were sequential, including
+temporary-directory cleanup.
+
+### Fresh joined measurements
+
+The product source remains identical to the profiled implementation at
+`9449be4a`; the earlier profile therefore still describes this implementation.
+Fresh unprofiled runs used the same scratch timing plugin, forwarding every
+settle argument unchanged. The joined lifecycle and helper selection passed
+once on each interpreter:
+
+| Measurement | Python 3.14.5 | Python 3.10.20 |
+| --- | ---: | ---: |
+| Pytest result | 8 passed, 84.68 s | 8 passed, 102.55 s |
+| Session wall / CPU | 84.74 / 76.13 s | 102.67 / 94.44 s |
+| Joined body wall / CPU | 82.12 / 75.31 s | 99.27 / 93.34 s |
+| Measured settles, all passed | 110 | 109 |
+| Slowest settle wall / CPU | 9.70 / 9.22 s | 11.87 / 11.38 s |
+
+Both slowest settles are in `reconnect_and_replan`. Every measured settle in
+these fresh runs is well below 60 seconds. Against the original unprofiled
+post-merge body (**195.97 s wall / 187.74 s CPU**), the fresh Python 3.14 body is
+**2.39 times faster in wall time** and uses **2.49 times less CPU**. These are
+the measured reductions; a larger several-fold improvement is not established.
+The earlier 53.56-second successful settle and all failed runs remain recorded
+below, rather than being replaced by the quieter run's measurements.
+
+Artifacts are `resume-joined-{py314,py310}.log` / `.xml` and
+`resume-native-{py314,py310}-timing.json`, under `$TMPDIR/visibility-cost/`.
+
+At this checkpoint the complete Python 3.10 affected selection is running.
+A single additional Python 3.14 run of the same ordered selection is planned
+afterward to check for reproducible order dependence. The first failed run will
+remain part of the final validation record.
 
 ## Backend merge
 
@@ -132,7 +247,7 @@ Raw native SQLite columns use independent copied envelopes; their scalar values
 are immutable. The general cache still deep-copies other value types. Guard,
 owner, principal and write invalidation rules apply to every representation.
 
-## Measurements
+## Original-session measurements
 
 The before profile used the exact merged source at `35822681`; the after profile
 used the final product implementation at `9449be4a`. Both used Python 3.14.5 and cProfile
@@ -155,7 +270,7 @@ The unprofiled joined body is **1.29 times faster in wall time** and uses
 **2.34 times less CPU**. Profiled session CPU falls **2.23 times**. The profiled
 slowest settle is 20.14 seconds, but the native selection includes one successful
 53.56-second settle in `test_pm_conversation_proposals.proposed` with only
-0.21 seconds CPU. Consequently the requested several-fold wall reduction and
+0.21 seconds CPU. At that checkpoint the requested several-fold wall reduction and
 every-settle-far-below-60 target are **not fully demonstrated** on this host.
 The final successful profile still spends 64.29 seconds in SQLite execute and
 substantial time waiting for subprocesses. All settle bounds remain 60 seconds;
