@@ -14,7 +14,7 @@ const metric = (page: Page, key: string) => root(page).locator(`[data-overview-m
 function fixture(locale = 'en') {
   const base = demoFixture({locale}), data: any = overview(demoProject(locale));
   Object.assign(data, {recent_decisions: [], recent_decisions_count: 0, recent_decisions_complete: true, recent_decisions_truncated: false});
-  const state = {data, overviewCap: true, cursor: 0, events: [] as any[], reportPatch: null as null | ((snapshot: any) => void), heldReport: null as Promise<void> | null, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
+  const state = {data, overviewCap: true, cursor: 0, events: [] as any[], planPatch: null as null | ((plan: any) => void), reportPatch: null as null | ((snapshot: any) => void), heldReport: null as Promise<void> | null, extraStatements: false, reportPageSize: 100, denied: false, held: null as Promise<void> | null, reads: [] as string[], writes: [] as unknown[], reportDenied: false};
   return {...base, state, dispatch: async (input: any) => {
     state.reads.push(input.path); if (input.method !== 'GET') state.writes.push(input);
     const url = new URL(input.path, 'http://fixture');
@@ -31,6 +31,7 @@ function fixture(locale = 'en') {
     if (state.reportDenied && /\/snapshots\//.test(input.path)) return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'Report withdrawn'}}};
     if (url.pathname.endsWith('/snapshots')) url.searchParams.set('limit', String(state.reportPageSize));
     const response = await base.dispatch({...input, path: url.pathname + url.search});
+    if (response.data?.plan && state.planPatch) state.planPatch(response.data.plan);
     if (state.extraStatements && url.pathname.endsWith('/plans/' + base.ids.planV3)) {
       const rows = response.data.plan.document.sections.governance.statements;
       rows.push({...rows[0], value: 'A fourth explicit purpose statement', input_id: 'extra-purpose'});
@@ -62,6 +63,146 @@ function decided(f: ReturnType<typeof fixture>) {
   Object.assign(f.state.data, {recent_decisions: [row], recent_decisions_count: 1, recent_decisions_complete: true, recent_decisions_truncated: false});
   return row;
 }
+
+async function burst(page: Page, f: ReturnType<typeof fixture>) {
+  const types = ['session', 'task', 'operation', 'pm_workspace', 'pm_governance'];
+  f.state.events = Array.from({length: 10}, (_, i) => ({seq: f.state.cursor + i + 1,
+    resource_type: types[i % types.length], resource_id: f.ids.workspaceId, kind: 'fixture.updated'}));
+  f.state.cursor += 10;
+  await expect.poll(() => f.state.reads.some(path => path.startsWith(`/events?after=${f.state.cursor}&`))).toBe(true);
+}
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`empty overview sources distinguish unknown from recorded absence ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
+  const page = await context.newPage(), f = fixture(locale);
+  Object.assign(f.state.data, {milestones: [], next_milestone: null, recent_deliveries: [], recent_deliveries_complete: false});
+  f.state.data.coverage.sources.roadmap.complete = f.state.data.coverage.complete = false;
+  f.state.data.coverage.sources.work.complete = false;
+  f.state.data.unknown = [{field: 'milestones', reason: 'source_unavailable'}, {field: 'work', reason: 'source_incomplete'}];
+  await boot(page, f); await page.evaluate(() => document.fonts.ready);
+  if (process.env.BATC_OVERVIEW_SHOTS) {
+    const dir = `${process.env.TMPDIR}/shots`; mkdirSync(dir, {recursive: true});
+    await page.screenshot({path: `${dir}/${process.env.BATC_OVERVIEW_SHOTS}-${locale}-${width}-unknown.png`, fullPage: true, animations: 'disabled'});
+  }
+  const milestones = root(page).getByRole('heading', {name: locale === 'en' ? 'Milestones' : '里程碑', exact: true}).locator('..').locator('..');
+  const deliveries = root(page).locator('.pm-overview-side > section').last();
+  const empty = locale === 'en' ? 'None recorded' : '尚無紀錄';
+  for (const [card, reason] of [[milestones, locale === 'en' ? 'Source unavailable' : '無法取得來源'],
+    [deliveries, locale === 'en' ? 'Source is incomplete' : '來源不完整']] as const) {
+    await expect(card.locator('[data-status=unknown]')).toBeVisible();
+    await expect(card).toContainText(reason); await expect(card).not.toContainText(empty);
+  }
+  // Coverage alone can change while the arrays remain empty.
+  f.state.data.coverage.sources.roadmap.complete = true; f.state.data.recent_deliveries_complete = true;
+  f.state.data.unknown = [{field: 'next_milestone', reason: 'no_roadmap_baseline'}];
+  await refresh(page);
+  for (const card of [milestones, deliveries]) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]')).toHaveCount(0);}
+  delete f.state.data.coverage.sources.roadmap;
+  await refresh(page); await expect(milestones.locator('[data-status=unknown]')).toBeVisible(); await expect(milestones).not.toContainText(empty);
+  f.state.data.plan = null; f.state.data.coverage.sources.plan.complete = false;
+  f.state.data.unknown = [{field: 'plan', reason: 'source_unavailable'}];
+  await refresh(page);
+  for (const key of ['definition', 'scope', 'schedule', 'resources', 'risks']) {
+    const card = root(page).locator(`[data-charter-section="${key}"]`);
+    await expect(card.locator('[data-status=unknown]')).toBeVisible();
+    await expect(card).toContainText(locale === 'en' ? 'Source unavailable' : '無法取得來源'); await expect(card).not.toContainText(empty);
+  }
+  expect(f.state.writes).toEqual([]); await context.close();
+});
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (const reading of ['focused', 'hovered', 'visible']) test(`changed event burst holds the ${reading} attention row ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
+  const page = await context.newPage(), f = fixture(locale);
+  // Enough authorized rows to scroll the second row to the top in either locale.
+  const risk = f.state.data.attention.at(-1);
+  f.state.data.attention.push(...Array.from({length: 4}, (_, i) => ({...risk, key: `risk:governance:extra-${i}`,
+    ref: {kind: 'governance', id: 'pmgov_' + (100 + i).toString(16).padStart(32, '0')}})));
+  f.state.data.attention_counts.risk += 4;
+  await boot(page, f); await page.evaluate(() => document.fonts.ready);
+  const key = f.state.data.attention[1].key, row = root(page).locator(`[data-overview-row="${key}"]`), link = row.locator('[data-overview-open]');
+  await row.evaluate((node, reading) => {
+    document.activeElement instanceof HTMLElement && document.activeElement.blur();
+    window.scrollBy(0, node.getBoundingClientRect().top - (reading === 'visible' ? -10 : 200));
+  }, reading);
+  await page.mouse.move(0, 0);
+  if (reading === 'focused') await link.focus();
+  if (reading === 'hovered') await link.hover();
+  if (reading === 'visible') {
+    expect(await root(page).locator('[data-overview-row]').evaluateAll(nodes => nodes.find(node => node.getBoundingClientRect().bottom > 0 && node.getBoundingClientRect().top < innerHeight)?.getAttribute('data-overview-row'))).toBe(key);
+  }
+  // Select the text being read as well as checking keyboard focus.
+  const selected = await row.locator('strong').evaluate(node => {
+    const selection = getSelection()!, range = document.createRange(); range.selectNodeContents(node);
+    selection.removeAllRanges(); selection.addRange(range); return selection.toString();
+  });
+  const top = (await row.boundingBox())!.y;
+  f.state.data.attention[0].title = (locale === 'en' ? 'A revised dependency blocker needs a longer maintenance assessment and remediation description. ' : '相依套件阻礙已更新，需要更詳細的維護評估與修正說明。').repeat(5);
+  f.state.data.attention.reverse(); f.state.data.progress.accepted = 2; f.state.data.progress.in_review = 2;
+  await burst(page, f);
+  await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '2 of 8 accepted' : '8 項中 2 項已驗收');
+  expect(Math.abs((await row.boundingBox())!.y - top)).toBeLessThanOrEqual(1);
+  if (reading === 'focused') await expect(link).toBeFocused();
+  expect(await page.evaluate(() => getSelection()?.toString())).toBe(selected);
+  expect(f.state.writes).toEqual([]); await context.close();
+});
+
+for (const width of [1440, 390]) test(`changed event burst compensates the attention scroll container ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900}); const f = fixture(); await boot(page, f); await page.evaluate(() => document.fonts.ready);
+  await page.locator('.pm-main').evaluate(node => {const scroller = node as HTMLElement; scroller.style.height = '600px'; scroller.style.overflowY = 'auto';});
+  const key = f.state.data.attention[1].key, row = root(page).locator(`[data-overview-row="${key}"]`), link = row.locator('[data-overview-open]');
+  await link.focus();
+  const top = (await row.boundingBox())!.y, windowScroll = await page.evaluate(() => scrollY);
+  f.state.data.attention[0].title = 'A longer assessment of this recorded dependency blocker. '.repeat(6);
+  f.state.data.attention.reverse(); await burst(page, f);
+  expect(Math.abs((await row.boundingBox())!.y - top)).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(() => scrollY)).toBe(windowScroll); await expect(link).toBeFocused(); expect(f.state.writes).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`Progress Details keeps focus and its open state through a count burst ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
+  const page = await context.newPage(), f = fixture(locale); await boot(page, f);
+  const details = metric(page, 'progress').locator('details'), summary = details.locator('summary');
+  await summary.click(); await expect(details).toHaveAttribute('open', ''); await summary.focus();
+  f.state.data.progress.accepted = 2; f.state.data.progress.in_review = 2; await burst(page, f);
+  await expect(summary).toBeFocused(); await expect(details).toHaveAttribute('open', '');
+  await expect(details.locator('li').first()).toHaveText(locale === 'en' ? 'Accepted 2' : '已驗收 2');
+  expect(f.state.writes).toEqual([]); await context.close();
+});
+
+for (const width of [1440, 390]) test(`withdrawing the attention anchor removes its row and count ${width}`, async ({page}) => {
+  await page.setViewportSize({width, height: 900}); const f = fixture(), errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message)); await boot(page, f);
+  const anchor = f.state.data.attention[0], row = root(page).locator(`[data-overview-row="${anchor.key}"]`);
+  await row.locator('[data-overview-open]').focus();
+  f.state.data.attention = f.state.data.attention.filter((item: any) => item.key !== anchor.key); f.state.data.attention_counts.blocker = 0;
+  await burst(page, f); await expect(row).toHaveCount(0);
+  await expect(metric(page, 'blocker').locator('.ui-metric-value')).toHaveText('0');
+  await expect(metric(page, 'blocker')).not.toContainText(anchor.title);
+  expect(errors).toEqual([]); expect(f.state.writes).toEqual([]);
+});
+
+for (const locale of ['en', 'zh-TW']) test(`charter empty states require readable complete sources ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, colorScheme}), page = await context.newPage(), f = fixture(locale);
+  const clearStatements = (plan: any) => {for (const section of Object.values(plan.document.sections) as any[]) section.statements = [];};
+  f.state.planPatch = clearStatements;
+  f.state.data.attention = f.state.data.attention.filter((row: any) => row.kind !== 'decision'); f.state.data.attention_counts.decision = 0;
+  await boot(page, f); const cards = root(page).locator('[data-charter-section]'), empty = locale === 'en' ? 'None recorded' : '尚無紀錄';
+  for (const card of await cards.all()) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]')).toHaveCount(0);}
+  f.state.data.attention_counts.decision = null;
+  f.state.data.unknown = [{field: 'attention_counts.decision', reason: 'source_unavailable'}];
+  await refresh(page); const decisions = root(page).locator('[data-charter-section=decisions]');
+  await expect(decisions.locator('[data-status=unknown]')).toBeVisible(); await expect(decisions).not.toContainText(empty);
+  delete f.state.data.coverage.sources.plan;
+  await refresh(page);
+  for (const card of (await cards.all()).slice(0, 5)) {await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText(empty);}
+  f.state.reportPatch = snapshot => {
+    clearStatements(snapshot.baseline); for (const section of Object.values(snapshot.brief) as any[]) section.items = [];
+    snapshot.visibility.restricted = true;
+  };
+  await report(page, f.ids.snap1);
+  for (const card of await cards.all()) {await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText(empty);}
+  expect(f.state.writes).toEqual([]); await context.close();
+});
 
 for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
   test(`progress leaves not-started track empty at true proportions ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}, testInfo) => {

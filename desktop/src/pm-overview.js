@@ -91,7 +91,11 @@ export function workspaceOverview(options) {
         next ? h('div', {class: 'pm-overview-next'}, next.title, h('div', {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: next.delta_days})) : null)) : null),
       bar: complete ? classes.map((key, i) => ({tone: tones[i], value: p[key]})) : null});
     progress.dataset.overviewMetric = 'progress';
-    if (complete) progress.append(disclosure({label: t('ov_details'), key: `${namespace}:${workspaceId}:progress`, body: h('ul', {}, ...classes.map(key => h('li', {}, statusPill(key), ` ${p[key]}`)))}));
+    if (complete) {
+      const counts = disclosure({label: t('ov_details'), key: `${namespace}:${workspaceId}:progress`, body: h('ul', {}, ...classes.map(key => h('li', {}, statusPill(key), ` ${p[key]}`)))});
+      counts.querySelector('summary').dataset.overviewLink = 'status:progress:details';
+      progress.append(counts);
+    }
     const metrics = ['blocker', 'decision'].map(kind => {
       const first = data?.attention?.find(row => row.kind === kind);
       const node = metric({label: t(kind === 'blocker' ? 'ov_blockers' : 'ov_decisions'), value: data?.attention_counts?.[kind] ?? null,
@@ -125,9 +129,9 @@ export function workspaceOverview(options) {
     const labels = ids.map(id => plan?.document?.requirements?.find(req => req.id === id)?.text).filter(Boolean);
     return labels.join(' · ') || (ids.length ? t('ov_context_requirement', {n: ids.length}) : c.work_item_id ? t('ov_context_work') : c.milestone_id ? t('ov_context_milestone') : '');
   }
-  function attention(data) {
+  function attention(data, anchor) {
     if (!attentionList) {attentionList = h('div', {class: 'pm-overview-attention', 'data-overview-attention': ''}); attentionCard = sectionCard({title: t('ov_attention'), body: attentionList});}
-    const rows = attentionList, reading = rows.contains(document.activeElement) || Boolean(rows.querySelector('[data-overview-row]:hover'));
+    const rows = attentionList, reading = Boolean(anchor) || rows.contains(document.activeElement) || Boolean(rows.querySelector('[data-overview-row]:hover'));
     const keys = new Set(data.attention.map(row => row.key));
     for (const [key, entry] of attentionNodes) if (!keys.has(key)) {entry.node.remove(); attentionNodes.delete(key);}
     rows.querySelector('.pm-overview-footer')?.remove(); rows.querySelector('.ui-empty')?.remove();
@@ -160,14 +164,22 @@ export function workspaceOverview(options) {
       h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ov_view_all'))));
     return attentionCard;
   }
+  function emptyField(data, field, complete, sources = []) {
+    if (complete) return h('span', {class: 'ui-meta'}, t('ov_no_items'));
+    const unknown = data?.unknown || [];
+    const reason = unknown.find(row => row.field === field)?.reason
+      || unknown.find(row => sources.some(key => row.field === key || row.field.startsWith(key + '.')))?.reason
+      || sources.map(key => data?.coverage?.sources?.[key]?.status).find(Boolean) || 'incomplete_sources';
+    return h('span', {class: 'ui-meta'}, statusPill('unknown'), ' ', reasonLabel(t, reason));
+  }
   function sidebar(data) {
     const milestones = sectionCard({title: t('ov_milestones'), body: h('div', {}, ...data.milestones.map(row => h('div', {class: 'pm-overview-milestone', 'data-overview-milestone': row.milestone_id},
-      h('div', {}, itemLink(row, 'milestones'), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null,
+      h('div', {}, itemLink(row, 'milestones'), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? emptyField(data, 'milestones', data.coverage?.sources?.roadmap?.complete === true, ['roadmap']) : null,
       data.milestones_truncated ? h('div', {class: 'ui-meta'}, t('ov_showing', {n: data.milestones.length})) : null)});
     const deliveries = sectionCard({title: t(data.recent_deliveries_complete ? 'ov_deliveries' : 'ov_deliveries_loaded'), body: h('div', {},
       ...data.recent_deliveries.map(row => h('div', {class: 'pm-overview-delivery', 'data-overview-delivery': row.work_item_id},
         itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}, 'deliveries'), statusPill(row.state))),
-      !data.recent_deliveries.length ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null)});
+      !data.recent_deliveries.length ? emptyField(data, 'recent_deliveries', data.recent_deliveries_complete === true, ['work', 'quality', 'deliveries']) : null)});
     return h('div', {class: 'pm-overview-side'}, milestones, deliveries);
   }
   function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}
@@ -202,8 +214,11 @@ export function workspaceOverview(options) {
       sources.querySelector('summary').title = t('ov_sources'); sources.querySelector('summary').dataset.overviewLink = `charter:${key}:sources`;
       const decisions = key === 'decisions' && Object.hasOwn(source, 'decision_count');
       const count = source?.decision_count;
-      const card = sectionCard({title: t('wb_' + key), body: h('div', {}, rows.length ? list : decisions && count !== 0 ? null : h('span', {class: 'ui-meta'}, t('ov_no_items')),
-        decisions && count === null ? statusPill('unknown') : null,
+      const complete = decisions ? count === 0 && !source.attention_truncated
+        : Boolean(document) && (Object.hasOwn(source, 'plan_complete') ? source.plan_complete : !savedPartial());
+      const card = sectionCard({title: t('wb_' + key), body: h('div', {}, rows.length ? list : decisions && count > 0 ? null
+        : emptyField(source, decisions ? 'attention_counts.decision' : 'plan', complete, decisions ? ['governance', 'plan_candidate', 'proposals', 'lifecycle_inflight'] : ['plan']),
+        decisions && rows.length && count === null ? statusPill('unknown') : null,
         decisions && source.attention_truncated ? statusPill('partial') : null,
         decisions && count > rows.length ? h('a', {class: 'ui-button ghost ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ov_more', {n: count - rows.length})) : null, sources)});
       card.dataset.charterSection = key;
@@ -265,7 +280,28 @@ export function workspaceOverview(options) {
     });
   }
   function resetContent(...nodes) {parts.clear(); content.replaceChildren(...nodes);}
-  function render() {
+  function readingAnchor() {
+    if (!active || !attentionList?.isConnected) return null;
+    const rows = [...attentionList.querySelectorAll('[data-overview-row]')];
+    let scroller = attentionList.parentElement;
+    while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll|overlay/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+    scroller ||= document.scrollingElement;
+    if (!scroller) return null;
+    const bounds = scroller === document.scrollingElement ? {top: 0, bottom: innerHeight} : scroller.getBoundingClientRect();
+    const row = rows.find(node => node.contains(document.activeElement)) || rows.find(node => node.matches(':hover'))
+      || rows.find(node => {const rect = node.getBoundingClientRect(); return rect.bottom > Math.max(0, bounds.top) && rect.top < Math.min(innerHeight, bounds.bottom);});
+    return row ? {key: row.dataset.overviewRow, top: row.getBoundingClientRect().top, scroller} : null;
+  }
+  function restoreAnchor(anchor) {
+    const row = anchor && attentionNodes.get(anchor.key)?.node;
+    // Withdrawal takes precedence over holding an obsolete reading position.
+    if (!row?.isConnected || !box.contains(row) || !anchor.scroller.isConnected) return;
+    anchor.scroller.scrollTop += row.getBoundingClientRect().top - anchor.top;
+  }
+  function render(anchor = mode === 'live' ? readingAnchor() : null) {
+    try {renderContent(anchor);} finally {restoreAnchor(anchor);}
+  }
+  function renderContent(anchor) {
     header(); savedBar.hidden = mode !== 'saved'; box.dataset.overviewMode = mode;
     if (mode === 'saved') {
       reportPartial.hidden = !savedPartial();
@@ -290,17 +326,18 @@ export function workspaceOverview(options) {
     const next = JSON.stringify([{...projection, as_of: null}, plan]);
     if (signature === `live:${next}`) return;
     signature = `live:${next}`;
-    const source = {baseline: {document: plan?.document}, brief: {}, decision_count: projection.attention_counts.decision, attention_truncated: projection.attention_truncated};
+    const source = {baseline: {document: plan?.document}, brief: {}, plan_complete: projection.coverage?.sources?.plan?.complete === true,
+      coverage: projection.coverage, unknown: projection.unknown, decision_count: projection.attention_counts.decision, attention_truncated: projection.attention_truncated};
     // Live decisions come from the projection, never from a previous snapshot.
     source.brief.decisions = {items: projection.attention.filter(row => row.kind === 'decision').map(row => ({text: row.title, source: row.ref}))};
     const focused = content.contains(document.activeElement) ? document.activeElement : null;
     const focusId = focused?.getAttribute('data-overview-link'), focusPart = focused?.closest('[data-overview-part]')?.dataset.overviewPart;
     if (reader && (relatedSelection ? !projection.attention.some(row => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
-    const main = attention(projection);
+    const main = attention(projection, anchor);
     commitParts([
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown,
         projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated], render: () => statusStrip(projection)},
-      {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete], render: () => {
+      {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete, projection.coverage, projection.unknown], render: () => {
         const columns = parts.get('columns')?.node;
         if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}
         return h('div', {class: 'pm-overview-columns'}, main, sidebar(projection));
@@ -322,7 +359,8 @@ export function workspaceOverview(options) {
         if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== data.plan.revision_id) throw Error(t('pm_scope_mismatch'));
         adopted = value.plan;
       }
-      projection = data; plan = adopted; loading = false; status.replaceChildren(); render();
+      const anchor = mode === 'live' ? readingAnchor() : null;
+      projection = data; plan = adopted; loading = false; status.replaceChildren(); render(anchor);
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
       projection = null; plan = null; loading = false; signature = ''; closeReader(); render(); status.replaceChildren(options.errorBox(error));

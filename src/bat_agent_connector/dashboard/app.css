@@ -1860,7 +1860,8 @@ body.pm-mode #main { padding: 0; }
 @media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace::before { width: var(--workspace-sidebar-width, 232px); } }
 .workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
 .workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }
-.pm-overview { display: grid; gap: var(--space-4); min-width: 0; }
+/* Overview compensates its reading anchor explicitly, including in WebKit. */
+.pm-overview { display: grid; gap: var(--space-4); min-width: 0; overflow-anchor: none; }
 .pm-overview > div:empty { display: none; }
 .pm-overview [hidden] { display: none !important; }
 .pm-overview-status { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }

@@ -276,6 +276,12 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
+Empty milestone and delivery lists say None recorded / 尚無紀錄 only with complete
+roadmap or recent-delivery coverage. Otherwise they show Unknown and the recorded
+localized reason. Empty charter cards require a readable complete plan (or an
+unrestricted complete saved report); open decisions require a complete known zero.
+Missing coverage never establishes absence.
+
 The Open decisions card (待決事項) retains the central pending count and adds Recently decided:
 up to five visible completed decisions, with their title, relative time and actor.
 Each row opens the exact Issues & changes register inspector. Missing history is
@@ -303,7 +309,12 @@ before selection; withdrawn or late record reads cannot reopen an inspector.
 
 Attention retains the central severity/age ordering, with exact context identities
 passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
-by identity within their own part. Cached ages advance with the projection timestamp.
+by identity within their own part, including the Progress Details summary and its open state.
+Before updating any Overview region, the focused attention row, hovered row, or first
+visible row anchors the viewport. Overview preserves its order and compensates its
+actual scrolling container after layout, with native CSS anchoring disabled so
+Chromium and WebKit have the same behavior. A withdrawn anchor is removed immediately
+and receives no scroll compensation. Cached ages advance with the projection timestamp.
 Overview records its scroll position before a view switch hides it and restores it after
 the destination header has finished laying out. Repeated selection
 of the active view does not scroll. Related inspectors return focus to the destination
