@@ -20218,7 +20218,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 				workIncomplete,
 				cursors,
 				milestones,
-				[...sources].map(([id, source]) => [
+				[...sources].sort(([left], [right]) => left.localeCompare(right)).map(([id, source]) => [
 					id,
 					source.deliveries,
 					source.available,
@@ -30798,7 +30798,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			select.value = current;
 		};
 		fill(requirementFilter, "wv_all_requirements", [...rows.values()].flatMap(({ card }) => (card.binding.requirement_ids || []).map((id) => [id, firstLabel(requirements(card).find((req) => req.id === id)?.text, t("wv_earlier_plan"))])), preference.requirement);
-		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, cliName(agent)])), preference.agent);
+		fill(agentFilter, "wv_all_agents", [...sources].sort(([left], [right]) => left.localeCompare(right)).flatMap(([, source]) => workAgents(source).map((agent) => [agent, cliName(agent)])), preference.agent);
 	}
 	const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
 	const partialRead = () => partialWorkPage() || [...sources.values()].some((source) => deliveryCoverage(source) !== "complete");
