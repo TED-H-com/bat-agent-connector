@@ -727,10 +727,11 @@ there are no issues or changes yet and has no reset action. An
 incomplete read says Records incomplete instead of implying there are no matches.
 Read errors use one shared inline error with an adjacent small secondary Retry.
 
-The inspector shows the processing timeline in the order the server sent. The row
-uses the shared status group. The precise recorded wording, including an operation
-accepted for processing, stays in Details and does not use the inspected-result
-word “Accepted”. An unrecognised status uses Other in the table, and the raw code
+The inspector shows the processing timeline in the order the server sent. Rows,
+inspector facts and timeline entries use the exact recorded status label in the
+shared group's tone; grouping changes filtering only. An operation says “Accepted
+for processing”, distinct from the inspected-result word “Accepted”. An
+unrecognised status uses Other in the table, and the raw code
 is only in Details. A row with no title is named from its source: a finding keeps
 its finding name, and any other record uses a known name, then its kind and number,
 then its kind. It does not use “Not recorded” as the title. Discuss and Propose change use the shared discussion link. A

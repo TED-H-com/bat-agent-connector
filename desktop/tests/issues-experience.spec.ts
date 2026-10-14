@@ -150,8 +150,9 @@ for (const locale of locales) {
     await expect(table).toHaveCount(3);
     await expect(page.locator('[data-reg-footer]')).not.toContainText(copy.shown(3));
     await expect(page.locator('[data-reg-trends] > summary')).toBeHidden();
-    const optionText = await statusOptions.allTextContents();
-    for (const pill of await page.locator('[data-pm-register] tbody .ui-pill').allTextContents()) expect(optionText).toContain(pill);
+    const optionGroups = await statusOptions.evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value));
+    for (const pill of await page.locator('[data-pm-register] tbody .ui-pill').all()) expect(optionGroups).toContain(await pill.getAttribute('data-status'));
+    await expect(table.first().locator('.ui-pill')).toHaveText(copy.zh ? '已觀察' : 'Observed');
     await expect(table.first()).toContainText(copy.zh ? '問題' : 'Issue');
     await expect(page.locator('[data-pm-register] thead')).not.toContainText(copy.zh ? '來源' : 'Source');
     await expect(table.first().locator('.reg-chip-more')).toHaveText(copy.zh ? '+1 項' : '+1 more');

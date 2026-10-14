@@ -117,6 +117,10 @@
   the tallest content height. Both panels keep Retry beside the read error, with
   Board error Details inside the full-width banner. Empty filtered register results
   hide trends until cleared, omit zero type counts and say None shown.
+  Register rows, inspector facts and timelines retain exact decision and operation
+  statuses such as Adopted and Reported done; status groups only filter rows.
+  Board cards and work inspectors retain Content approved without implying Done
+  or a passing completion definition.
 
 - Add a read-only issues, actions and changes register via `pm_register_list` and
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.

@@ -12782,6 +12782,12 @@ var workStatus = (card) => ({
 	accepted: "done",
 	archived: "historical"
 })[typeof card?.column === "string" ? card.column : ""] || "unknown";
+var workStatusLabel = (t, card) => card?.column === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus(card));
+function workStatusPill(t, card) {
+	const pill = statusPill(workStatus(card));
+	pill.textContent = workStatusLabel(t, card);
+	return pill;
+}
 var blockedWork = (card) => card?.flow?.blocked === true || card?.execution?.tasks?.some((task) => task.state === "blocked") === true;
 var blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason) : blockedWork(card) ? t("wv_task_blocked") : t("wv_blocker_unknown");
 var workAgents = (source) => [...new Set((source?.sessions || []).map((row) => labelSegment(row.agent_kind)).filter(Boolean))];
@@ -13011,7 +13017,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		if (from === "requirements" && card) state.append(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(card.work_item_id)}` }, t("wv_show_board")));
 		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
 		if (card) {
-			state.append(h$1("div", { class: "pm-work-inline" }, statusPill(workStatus(card)), ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
+			state.append(h$1("div", { class: "pm-work-inline" }, workStatusPill(t, card), ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
 			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref({
 				host: session.host,
 				sessionId: session.session_id,
@@ -13076,7 +13082,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				variant: "ghost",
 				label: work.work.title,
 				onClick: () => data.onWork?.(work.work_item_id)
-			}), " ", statusPill(workStatus(work))));
+			}), " ", workStatusPill(t, work)));
 			if (!data.work?.length) state.append(paragraph(t(data.workIncomplete ? "wv_work_unknown" : "wb_no_work")));
 			if (data.workIncomplete) state.append(statusPill("partial"));
 			for (const row of data.milestones || []) state.append(paragraph(h$1("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}` }, row.title)));
@@ -23979,11 +23985,15 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	function statusNode(status) {
 		if (!labelSegment(status)) return statusPill("unknown");
 		const group = groupOf(status);
-		if (Object.hasOwn(statusVocabulary, group)) return statusPill(group);
-		return h("span", {
+		const label = known(t, "reg_status_" + status) || known(t, "ui_status_" + status) || groupLabel(group);
+		const pill = Object.hasOwn(statusVocabulary, group) ? statusPill(group) : h("span", {
 			class: `ui-pill tone-${GROUP_TONE[group] || "neutral"}`,
 			"data-status": group
-		}, groupLabel(group));
+		});
+		pill.textContent = label;
+		pill.dataset.recordStatus = status;
+		pill.title = label;
+		return pill;
 	}
 	function preciseStatus(status) {
 		if (!labelSegment(status)) return "";
@@ -30194,7 +30204,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}, title)), h$1("div", {
 			id: metaId,
 			class: "pm-board-facts"
-		}, h$1("span", { class: "sr-only" }, t("ui_status_" + workStatus(card))), h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => {
+		}, h$1("span", { class: "sr-only" }, workStatusLabel(t, card)), h$1("div", { class: "pm-board-requirements" }, ...reqs.length ? reqs.map((req) => {
 			const text = firstLabel(req.text, t("wv_earlier_plan"));
 			return earlier ? chip(joinLabel([t("wv_earlier_plan"), text])) : h$1("a", {
 				class: "ui-context-chip",
@@ -30216,8 +30226,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			"aria-label": blockerText(t, card)
 		}, icon("circle-alert"), h$1("span", { class: "pm-board-blocker-label" }, t("ui_status_blocked"))) : null, group.value !== "status" ? h$1("span", {
 			class: "pm-board-state",
-			title: t("ui_status_" + workStatus(card))
-		}, statusPill(workStatus(card))) : null, age ? h$1("span", {
+			title: workStatusLabel(t, card)
+		}, workStatusPill(t, card)) : null, age ? h$1("span", {
 			class: "pm-board-age",
 			title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
 		}, age) : null), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];
@@ -30279,7 +30289,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		const currentLanes = new Map([...list.children].map((node) => [node.dataset.pmKanbanColumn, node]));
 		for (const { card } of rows.values()) if (!groupKeys.includes(laneKey(card))) groupKeys.push(laneKey(card));
 		for (const key of groupKeys) if (!currentLanes.has(key)) {
-			const name = group.value === "milestone" ? firstLabel(milestones.find((row) => row.milestone_id === key)?.title, t("wb_unassigned")) : key === "accepted" ? t("wv_content_approved") : t("ui_status_" + workStatus({ column: key }));
+			const name = group.value === "milestone" ? firstLabel(milestones.find((row) => row.milestone_id === key)?.title, t("wb_unassigned")) : workStatusLabel(t, { column: key });
 			const holder = h$1("div", {
 				class: "pm-kanban-cards",
 				role: "list",

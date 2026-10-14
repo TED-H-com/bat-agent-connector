@@ -4,7 +4,7 @@ import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {cliName} from './pm-agents-trend.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
-import {workInspector, workStatus, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
+import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
@@ -134,7 +134,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     const age = elapsed(t, card.completion?.approved ? card.flow?.cycle_seconds : card.flow?.age_seconds);
     const title = firstLabel(card.work.title, t('ui_work_item')), metaId = `board-facts-${card.work_item_id}`;
     return [h('h3', {title}, h('button', {type: 'button', class: 'pm-board-open', 'data-board-open': card.work_item_id, 'aria-describedby': metaId}, title)),
-      h('div', {id: metaId, class: 'pm-board-facts'}, h('span', {class: 'sr-only'}, t('ui_status_' + workStatus(card))),
+      h('div', {id: metaId, class: 'pm-board-facts'}, h('span', {class: 'sr-only'}, workStatusLabel(t, card)),
       h('div', {class: 'pm-board-requirements'}, ...(reqs.length ? reqs.map(req => {const text = firstLabel(req.text, t('wv_earlier_plan'));
           return earlier ? chip(joinLabel([t('wv_earlier_plan'), text])) : h('a', {class: 'ui-context-chip', title: text, href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?select=${encodeURIComponent(req.id)}`}, text);})
         : [chip(card.binding.requirement_ids?.length ? t('wv_earlier_plan') : t('wv_no_requirement'))])),
@@ -142,7 +142,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         ...prGroups(source?.deliveries).map(({target, rows}) => {const node = contextChip({text: `PR #${target.pull_number}`});
           node.title = joinLabel([node.textContent, target.repository, t(rows.some(row => row.merge?.merged === true) ? 'ui_status_merged' : 'ui_status_unknown')]);
           node.setAttribute('aria-label', node.title); return node;}), coverageState !== 'complete' ? statusPill(coverageState) : null, blockedWork(card) ? h('span', {class: 'pm-board-blocker', title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), h('span', {class: 'pm-board-blocker-label'}, t('ui_status_blocked'))) : null,
-        group.value !== 'status' ? h('span', {class: 'pm-board-state', title: t('ui_status_' + workStatus(card))}, statusPill(workStatus(card))) : null,
+        group.value !== 'status' ? h('span', {class: 'pm-board-state', title: workStatusLabel(t, card)}, workStatusPill(t, card)) : null,
         age ? h('span', {class: 'pm-board-age', title: t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age')}, age) : null),
       coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h('span', {class: 'ui-meta'}, t('pm_kanban_partial_sources')) : null)];
   }
@@ -182,7 +182,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     const currentLanes = new Map([...list.children].map(node => [node.dataset.pmKanbanColumn, node]));
     for (const {card} of rows.values()) if (!groupKeys.includes(laneKey(card))) groupKeys.push(laneKey(card));
     for (const key of groupKeys) if (!currentLanes.has(key)) {
-      const name = group.value === 'milestone' ? firstLabel(milestones.find(row => row.milestone_id === key)?.title, t('wb_unassigned')) : key === 'accepted' ? t('wv_content_approved') : t('ui_status_' + workStatus({column: key}));
+      const name = group.value === 'milestone' ? firstLabel(milestones.find(row => row.milestone_id === key)?.title, t('wb_unassigned')) : workStatusLabel(t, {column: key});
       const holder = h('div', {class: 'pm-kanban-cards', role: 'list', 'aria-label': name}), collapsed = preference.collapsed?.includes(key) === true;
       const toggle = h('button', {type: 'button', class: 'pm-board-lane-toggle', 'aria-expanded': String(!collapsed), onclick: () => {
         holder.hidden = !holder.hidden; toggle.setAttribute('aria-expanded', String(!holder.hidden));

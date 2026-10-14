@@ -117,8 +117,11 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   function statusNode(status) {
     if (!labelSegment(status)) return statusPill('unknown');
     const group = groupOf(status);
-    if (Object.hasOwn(statusVocabulary, group)) return statusPill(group);
-    return h('span', {class: `ui-pill tone-${GROUP_TONE[group] || 'neutral'}`, 'data-status': group}, groupLabel(group));
+    const label = known(t, 'reg_status_' + status) || known(t, 'ui_status_' + status) || groupLabel(group);
+    const pill = Object.hasOwn(statusVocabulary, group) ? statusPill(group)
+      : h('span', {class: `ui-pill tone-${GROUP_TONE[group] || 'neutral'}`, 'data-status': group});
+    pill.textContent = label; pill.dataset.recordStatus = status; pill.title = label;
+    return pill;
   }
   function preciseStatus(status) {
     if (!labelSegment(status)) return '';

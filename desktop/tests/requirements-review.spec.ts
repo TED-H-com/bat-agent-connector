@@ -296,7 +296,8 @@ for (const locale of ['en', 'zh-TW']) test(`V1 V2 V3 V4 V5 M9 inspector concise 
   await expect(inspector.locator('[data-work-section=blocker] a')).toHaveCount(0);
   await expect(inspector.locator('[data-work-attempt]').first()).toContainText(locale === 'en' ? 'Send not confirmed' : '受理情況未知');
   await expect(inspector.locator('[data-work-section=result]')).toContainText(locale === 'en' ? 'Definition of done not assessed' : '完成定義尚未評估');
-  await expect(inspector.locator('[data-work-section=status]')).not.toContainText(locale === 'en' ? 'Content approved' : '內容已核准');
+  await expect(inspector.locator('[data-work-section=status] .pm-work-inline > .ui-pill')).toHaveText(locale === 'en' ? 'Content approved' : '內容已核准');
+  await expect(inspector.locator('[data-work-section=status] .pm-work-inline > .ui-pill')).not.toHaveText(locale === 'en' ? 'Done' : '完成');
   await expect(page.locator('[data-pm-rtm] > .ui-disclosure')).not.toContainText(locale === 'en' ? 'requirement acceptance' : '需求已通過驗收');
   await expect(page.locator(`[data-rtm-work="${f.ids.work.unlock}"]`)).not.toContainText('×0');
   await page.keyboard.press('Escape');

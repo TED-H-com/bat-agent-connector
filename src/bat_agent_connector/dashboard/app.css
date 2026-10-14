@@ -1856,6 +1856,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-secondary] { display: table-cell; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=type] { width: 7rem; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=status] { width: 7.5rem; }
+.pm-shell [data-pm-register] .ui-data-table td[data-column=status] .ui-pill { max-width: 100%; white-space: normal; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=priority],
 .pm-shell [data-pm-register] .ui-data-table th[data-column=impact] { width: 4.5rem; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=owner],
