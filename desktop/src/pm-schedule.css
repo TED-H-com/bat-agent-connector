@@ -81,7 +81,7 @@
   .schedule-indent { width: 12px; }
   .schedule-tree-cell > .ui-pill { font-size: var(--fs-caption); }
   .schedule-date-range { display: block; font-size: var(--fs-caption); color: var(--text-3); line-height: 1.5; }
-  .schedule-lane { overflow-x: auto; max-width: 100%; }
+  .schedule-lane { overflow: hidden; max-width: 100%; }
   .schedule-track { height: 56px; border-bottom: 0; }
   .schedule-meta { align-items: center; }
   .schedule-answer { flex-basis: 100%; }
@@ -100,3 +100,15 @@
 }
 .schedule-head, .schedule-head > .schedule-tree-cell, .schedule-axis { height: 40px; min-height: 40px; }
 .schedule-date-range { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.schedule-axis-caption { display: none; margin: 0; }
+@media (max-width: 799px) {
+  .schedule-axis-caption:not(:empty) {
+    display: flex; align-items: center; min-height: 28px; margin: 0;
+    padding: var(--space-1) var(--space-3); background: var(--surface-2);
+    border-bottom: 1px solid var(--line); color: var(--text-2);
+    font-size: var(--fs-caption); font-variant-numeric: tabular-nums;
+  }
+  .schedule-lane, .schedule-track { overflow: hidden; }
+  .schedule-bar-label, .schedule-track > .schedule-delta { display: none; }
+  .schedule-date-range { white-space: normal; overflow: visible; text-overflow: unset; }
+}

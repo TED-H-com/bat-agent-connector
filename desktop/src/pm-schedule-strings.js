@@ -13,6 +13,7 @@ export const scheduleStrings = {
     sched_too_large: 'Schedule exceeds the size limit.',
     sched_changed: 'Schedule changed during loading. Refresh to read it again.', sched_dates: 'Recorded dates',
     sched_partial: 'Some schedule data is partial.', sched_as_of: 'As of {date}', sched_view: 'Schedule',
+    sched_axis_range: '{start} – {end}',
   },
   'zh-TW': {
     sched_day: '日', sched_week: '週', sched_month: '月', sched_zoom: '時間刻度', sched_today: '今天',
@@ -28,5 +29,6 @@ export const scheduleStrings = {
     sched_too_large: '時程資料超過大小上限。',
     sched_changed: '載入期間時程已變更，請重新整理。', sched_dates: '已記錄日期',
     sched_partial: '部分時程資料尚不完整。', sched_as_of: '資料時間：{date}', sched_view: '時程',
+    sched_axis_range: '{start}至{end}',
   },
 };
