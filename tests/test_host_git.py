@@ -160,6 +160,59 @@ async def test_locked_gate_rechecks_config_after_await(monkeypatch):
         checkpoints._LOCKED_CHECK.reset(token)
 
 
+@pytest.mark.parametrize("field", ["installation_id", "server_id"])
+async def test_locked_gate_rechecks_current_identity_after_await(monkeypatch, field):
+    identity = {"installation_id": "fixture-install", "server_id": "fixture-server"}
+    runner = host_git.HostGitRunner(config(), {"fixture": "fixture-bat"}, **identity,
+                                   current_identity=lambda: dict(identity))
+    original = runner.execution_binding("fixture")
+    async def check():
+        identity[field] = "different-identity"
+    async def run(argv, timeout_s):
+        await checkpoints._LOCKED_CHECK.get()()
+        raise AssertionError("proceed must be denied after identity changes")
+    monkeypatch.setattr(checkpoints, "_run", run)
+    token = checkpoints._LOCKED_CHECK.set(check)
+    try:
+        with pytest.raises(NeedsAttention) as error:
+            await runner.run("fixture", "fixed-locked-script", 25)
+        assert error.value.code == "GIT_EXECUTION_LOCATION_CHANGED"
+        assert runner.execution_binding("fixture") == original
+        assert not runner.available("fixture")
+    finally:
+        checkpoints._LOCKED_CHECK.reset(token)
+
+
+@pytest.mark.parametrize("change", ["installation_id", "server_id", "server_withdrawn"])
+async def test_daemon_runner_rechecks_central_identity_without_reactivation(tmp_path, monkeypatch, change):
+    from bat_agent_connector.task_daemon import TaskDaemon
+
+    daemon = TaskDaemon(config(), tmp_path / "tasks.sqlite3")
+    runner = daemon.ops.context["git_runner"]
+    async def spawn(*args, **kwargs):
+        raise AssertionError("identity drift must refuse before a subprocess")
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+    try:
+        if change == "installation_id":
+            daemon.managed_installation = {"installation_id": "different-installation"}
+        else:
+            with daemon.journal.tx():
+                if change == "server_id":
+                    daemon.journal.db.execute("UPDATE api_sync_metadata SET server_id='different-server'")
+                else:
+                    daemon.journal.db.execute("DELETE FROM api_sync_metadata")
+        with pytest.raises(NeedsAttention) as error:
+            await runner.run("fixture", "fixed-script")
+        assert error.value.code == "GIT_EXECUTION_LOCATION_CHANGED"
+        assert runner.status("fixture")["reason"] == "git_execution_location_changed"
+        assert not runner.available("fixture")
+    finally:
+        await daemon.ops.drain()
+        await daemon.fleet.close()
+        await daemon.inventory.close()
+        daemon.journal.close()
+
+
 @pytest.fixture
 async def operations(tmp_path):
     journal = Journal(tmp_path / "journal" / "operations.sqlite3")

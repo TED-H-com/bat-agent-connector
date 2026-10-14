@@ -278,7 +278,8 @@ async def test_frames_never_contain_token_after_auth(mock):
 
 
 @pytest.mark.parametrize("reload", [False, True])
-async def test_git_location_is_rechecked_after_connect_before_bat_write(mock, client_send_grant, controller_context, reload):
+@pytest.mark.parametrize("change", ["git", "installation_id", "server_id"])
+async def test_git_location_is_rechecked_after_connect_before_bat_write(mock, client_send_grant, controller_context, reload, change):
     from types import SimpleNamespace
 
     from bat_agent_connector import api_auth, host_git
@@ -287,7 +288,9 @@ async def test_git_location_is_rechecked_after_connect_before_bat_write(mock, cl
     client = client_for(mock, writes=True)
     config = SimpleNamespace(hosts={"h1": client.host})
     ops = OperationService(controller_context[0])
-    ops.context["git_runner"] = host_git.HostGitRunner(config, {"h1": "fixture-bat"})
+    identity = {"installation_id": "fixture-install", "server_id": "fixture-server"}
+    ops.context["git_runner"] = host_git.HostGitRunner(config, {"h1": "fixture-bat"}, **identity,
+                                                    current_identity=lambda: dict(identity))
     async def unused(ctx):
         raise AssertionError("this test only exercises the final frame gate")
     ops.register(ActionDef("fixture.frame", "manage", "Fixture frame", unused))
@@ -305,9 +308,13 @@ async def test_git_location_is_rechecked_after_connect_before_bat_write(mock, cl
             send = asyncio.create_task(client.invoke("claude:send-message",
                 {"sessionId": "sess-claude-0001", "prompt": "fixture"}, grant=client_send_grant))
             await asyncio.wait_for(entered.wait(), 2)
-            client.host.git = "local"
+            if change == "git":
+                client.host.git = "local"
+            else:
+                identity[change] = "different-identity"
             if reload:
-                ops.context["git_runner"] = host_git.HostGitRunner(config, {"h1": "fixture-bat"})
+                ops.context["git_runner"] = host_git.HostGitRunner(config, {"h1": "fixture-bat"}, **identity,
+                                                                current_identity=lambda: dict(identity))
             release.set()
             with pytest.raises(host_git.NeedsAttention) as error:
                 await asyncio.wait_for(send, 5)

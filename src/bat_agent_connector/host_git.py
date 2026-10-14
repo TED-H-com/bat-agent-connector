@@ -42,12 +42,14 @@ def _readiness(hosts, aliases, platform):
 
 
 class HostGitRunner:
-    def __init__(self, config, aliases, *, installation_id=None, server_id=None, current_config=None):
+    def __init__(self, config, aliases, *, installation_id=None, server_id=None, current_config=None,
+                 current_identity=None):
         self._hosts = copy.deepcopy(config.hosts)
         self._ssh = SshGitRunner(aliases)
         self._installation_id = installation_id
         self._server_id = server_id
         self._current_config = current_config or (lambda: config)
+        self._current_identity = current_identity
         with ThreadPoolExecutor(max_workers=1) as pool:
             self._status = pool.submit(_readiness, self._hosts, self._ssh.aliases, sys.platform).result()
 
@@ -82,8 +84,11 @@ class HostGitRunner:
 
     def _require_current(self, host):
         binding = self.execution_binding(host)
-        if binding is not None and binding != self._binding(host, self._current_config()):
-            raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git execution location changed")
+        if binding is not None:
+            identity = {"installation_id": self._installation_id, "server_id": self._server_id}
+            if (binding != self._binding(host, self._current_config())
+                    or self._current_identity is not None and identity != self._current_identity()):
+                raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git execution location changed")
         return binding
 
     def available(self, host):

@@ -267,9 +267,17 @@ class TaskDaemon:
     def _git_runner(self, config, aliases):
         from . import dashboard_sync
         from .host_git import HostGitRunner
-        installation = getattr(self, "managed_installation", None) or {}
-        return HostGitRunner(config, aliases, installation_id=installation.get("installation_id"),
-                             server_id=dashboard_sync._metadata(self.journal)["server_id"],
+        from .operations import NeedsAttention
+
+        def identity():
+            installation = getattr(self, "managed_installation", None) or {}
+            try:
+                server_id = dashboard_sync._metadata(self.journal)["server_id"]
+            except dashboard_sync.ResetRequired:
+                raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git server identity is unavailable") from None
+            return {"installation_id": installation.get("installation_id"), "server_id": server_id}
+
+        return HostGitRunner(config, aliases, **identity(), current_identity=identity,
                              current_config=lambda: self.fleet.config)
 
     @staticmethod

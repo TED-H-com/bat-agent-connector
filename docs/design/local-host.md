@@ -22,7 +22,8 @@ or live acceptance is included. PR 3 remains required before local Git executes.
 The binding records the logical host's name, endpoint digest, pin and profile, transport,
 managed-root/SSH-alias configuration digest, central server ID, and installation
 ID when available. The central server ID is not a BAT incarnation ID; the upstream
-identity limitation below still applies. A changed binding needs attention and
+identity limitation below still applies. Final gates compare those frozen IDs
+with current central metadata as well as the current configuration. A changed binding needs attention and
 cannot redirect an old SSH intent to local execution. Completed step receipts
 remain replayable. Unresolved steps are fenced before domain readiness checks,
 so an unavailable transport cannot terminalize an uncertain effect. Indirect
