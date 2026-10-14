@@ -19,6 +19,24 @@ npm run test:central
 
 `npm run build` generates packaged assets in `desktop/dist`. `npm run build:browser` generates the original four permitted `/dashboard/` files, including a compatibility `i18n.js` stub; translations are bundled from `desktop/src/i18n.js`. The Python server keeps its same-origin authorization, file allowlist and CSP. CI rebuilds browser assets and rejects drift. `package-lock.json` and `src-tauri/Cargo.lock` pin dependency resolution; the initial build uses Node 24.21.0 and Rust 1.98.1, Tauri 2.12.1, Vite 8.3.4, TypeScript 7.0.2.
 
+Pull requests run what the change can affect; workflows triggered on `main` run
+at full coverage. Desktop CI keeps its existing PR/push path filters. Its scope
+checkout uses `fetch-depth: 2` and compares the PR merge commit to its first parent
+with `git diff --no-renames --name-only HEAD^1 HEAD`, excluding unrelated changes
+made only on `main`. The shared [`ci_scope.py`](../../scripts/ci_scope.py) selects
+native level `none` for allowlisted paths, `linux` for those paths plus generated
+dashboard assets, and `all` for anything else, non-PR events or fallback cases.
+All TypeScript under `desktop/tests/`, including demo and browser helpers, is
+allowlisted; `.mjs`, `.py`, `.swift`, `.ps1`, JSON and other fixture data are not.
+The native dependency guard parses build steps and follows relative imports,
+requiring removal of the TypeScript allowlist if native steps start loading it.
+Linux retains its packaged managed-setup and deb fixtures; Windows/macOS only copy
+the generated browser assets. One checked-in build list supplies an include-only
+JSON matrix with explicit OS/bundle/artifact job names. Frontend, browser UI,
+central UI and Windows endpoint jobs remain independent of scope on triggered
+runs. See [the CI policy](../../CONTRIBUTING.md#continuous-integration) for the
+allowlist, separate workflow summaries and unchanged exact Python shard proof.
+
 ## Configure the native client
 
 The client loads `central.json` from the platform app configuration directory:

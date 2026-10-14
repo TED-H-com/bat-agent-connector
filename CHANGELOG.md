@@ -7,6 +7,13 @@
   provides installation-aware MCP guidance and a read-only PM eligibility check, with
   localized reasons and a return link to the originating discussion.
 
+- Pull requests select the Python matrix and no/Linux/all native builds from their
+  merge diff. Existing desktop path filters remain; workflows triggered on `main`
+  keep full coverage. Every selected Python version retains all five pytest shards
+  and the exact-partition check; each workflow summary explains its selection.
+  Frontend TypeScript test helpers are allowlisted, with a guard preventing native
+  build steps or their relative imports from depending on them.
+
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.
