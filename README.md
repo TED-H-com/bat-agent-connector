@@ -14,10 +14,8 @@ Review the proposed update and explicitly adopt it; requirements, work and deliv
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** The screenshots pin merged `main` at
-> `ab960ed23f734944470b982bd2f66b0c30300151`, through #161 on October 14, 2026.
-> They include the merged discussion, register, Board, secondary tools, setup and evidence-view updates.
-> This documentation refresh provides no installation or live acceptance evidence.
+> **Development preview.** The screenshots come from merged `main` at `ab960ed2` (October 14, 2026, through #161).
+> Nothing shown here is installed or live-tested.
 > The [progress report](docs/product/progress-2026-10-14.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
 
@@ -59,10 +57,10 @@ Policy-bounded delivery and maintenance remain available through the project's s
 
 | More views from the same synthetic project | Screenshot |
 | --- | --- |
-| Issues & changes | [All nine loaded records and filters](site/images/issues-en.png) |
+| Issues & changes | [Register with filters](site/images/issues-en.png) |
 | Schedule | [Baseline, forecast and actual](site/images/schedule-en.png) |
 | Dependencies | [Pinned partial inventory graph](site/images/dependencies-en.png) |
-| Board | [Search, filters and five work lanes](site/images/board-en.png) |
+| Board | [Work lanes with search and filters](site/images/board-en.png) |
 | Session | [Read-only manual BAT session](site/images/session-en.png) |
 
 ## Install and connect
@@ -115,7 +113,7 @@ flowchart TB
 | Status | Scope |
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
-| Merged workspace | `ab960ed2` includes the October 14 discussion, register/Board, governance/meeting/follow-up, maintenance, work-tool, Overview/report/Requirements and first-run updates. Worktree/execution details and stable requirement rows are merged; release-source preview preserves rationale focus. Installation and live acceptance remain separate. |
+| Merged workspace | Overview with saved reports; Discussions with Discussion info (Context, Inputs, Plan, Meeting); Requirements and its inspector; Issues & changes with Governance and Follow-ups; Schedule; Dependencies with Release baselines and Maintenance policy; Agents; Board; Session; first-run BAT setup from one Connection URL. Merged into `main` through #161 on October 14, 2026. Not installed or live-tested. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
 
 Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.
