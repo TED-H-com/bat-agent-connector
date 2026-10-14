@@ -74,10 +74,10 @@ test(`Settings ${state} has a short title and muted explanation ${locale} ${widt
     'no-projects':['No projects yet','No Connector projects are available.'],
     'no-work':['No work yet','This project has no active work items.'],
     'no-evidence':['No evidence yet','No evidence snapshot collected yet.'],
-    unavailable:['Projects unavailable','Could not read Connector data.']}
+    unavailable:['Projects unavailable','Your token lacks this permission.']}
     :{project:'Connector 專案','no-projects':['尚無專案','目前沒有可用的 Connector 專案。'],
       'no-work':['尚無工作','此專案目前沒有工作項目。'],'no-evidence':['尚無證據','尚未整理證據快照。'],
-      unavailable:['無法取得專案','無法讀取 Connector 專案紀錄。']};
+      unavailable:['無法取得專案','你的權杖沒有這個權限。']};
   await mountConversation(page,false,dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_workspace_settings');
   if(state!=='no-projects')await page.getByLabel(copy.project,{exact:true}).selectOption(pid);
   if(state==='no-evidence'||state==='unavailable')await openWork(page);

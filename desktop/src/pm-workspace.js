@@ -626,7 +626,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     detailPanel?.close(); schedule?.setActive(false); traceability?.hideInspector(); kanban?.hideInspector();
     const home = node.parentNode, next = node.nextSibling;
     toolPreference.open = node.dataset.pmTool || null;
-    detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
+    detailPanel = inspector({title: label, overlay: Boolean(threadId) || workbench?.selected() === 'discussions', onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
     if (refreshStale) void refreshStaleVisible();
   }
@@ -655,6 +655,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const reportKind = node => node.matches('[data-pm-brief-export]') ? 'export'
     : node.matches('.pm-charter-save, [data-pm-action="pm.snapshot.create"]') || node.querySelector('[data-pm-action="pm.snapshot.create"]') ? 'save'
     : node.matches('.pm-workbench-toolbar, details') ? 'versions' : 'compare';
+  const reportSave = reportTools.querySelector('[data-pm-action="pm.snapshot.create"] button[type="submit"]');
+  if (reportSave) reportSave.className = 'ui-button primary ui-md';
   const reportSlots = [...reportTools.children].map(node => {
     // Export owns its source-withdrawal visibility. Keep task visibility outside it.
     if (node.matches('[data-pm-brief-export]')) {

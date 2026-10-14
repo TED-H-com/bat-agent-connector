@@ -71,10 +71,10 @@ async function edit(page:any,kind:string){
 for(const locale of ['en','zh-TW'])for(const width of [1440,390])test(`phase empty and unavailable states explain their short titles ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
   const f=fixture();f.state.stage=null;f.state.status='unclassified';
-  const copy=locale==='en'?{phase:'Stage not yet selected',legacy:'Its previous work has not been reclassified.',
-    pending:'No pending work',scope:'Only readable records are shown.',
+  const copy=locale==='en'?{phase:'Phase not yet selected',legacy:'Existing work keeps its classification.',
+    pending:'No admitted work',scope:'Only readable records are shown.',
     unavailable:'Activity unavailable',reason:'Workspace state could not be read.'}
-    :{phase:'尚未指定管理階段',legacy:'既有工作保留原分類。',pending:'尚無待核對工作',scope:'僅顯示可讀取的管理紀錄。',
+    :{phase:'尚未指定管理階段',legacy:'既有工作保留原分類。',pending:'尚無已受理工作',scope:'僅顯示可讀取的管理紀錄。',
       unavailable:'無法取得狀態',reason:'無法讀取工作區狀態，暫時無法調整。'};
   await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
   const empty=(title:string)=>activity(page).locator('.ui-empty').filter({has:page.getByRole('heading',{name:title,exact:true})});
@@ -105,21 +105,22 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   test('a Development workspace does not submit Idea from a pristine phase form',async({page})=>{
     const f=fixture();f.state.stage='development';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
     await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Development');
-    const editor=await edit(page,'set_stage'),stage=editor.getByLabel('Management stage');
+    const editor=await edit(page,'set_stage'),stage=editor.getByLabel('Management phase');
     await expect(stage).toHaveValue('');
     await expect(stage.locator('option:checked')).toHaveText('Choose phase');
     await editor.getByLabel('Reason and retained context').fill('Keep the current delivery.');
-    await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeDisabled();
+    await expect(editor.getByRole('button',{name:'Record phase',exact:true})).toBeDisabled();
     await editor.evaluate((form:HTMLFormElement)=>form.requestSubmit());
     expect(f.state.writes).toHaveLength(0);
     await expect(stage).toBeEnabled();
     await expect(editor.getByLabel('Reason and retained context')).toBeEnabled();
     await stage.selectOption('planning');
-    await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeEnabled();
-    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await expect(editor.getByRole('button',{name:'Record phase',exact:true})).toBeEnabled();
+    const reads=f.state.reads.length;f.base.state.cursor++;
+    await expect.poll(()=>f.state.reads.length).toBeGreaterThan(reads);
     await expect(stage).toHaveValue('planning');
     await expect(editor.getByLabel('Reason and retained context')).toHaveValue('Keep the current delivery.');
-    f.state.lost=true;await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+    f.state.lost=true;await editor.getByRole('button',{name:'Record phase',exact:true}).click();
     await expect(editor).toContainText('Reply unavailable');
     const original=structuredClone(f.state.writes[0]);
     await page.reload();await openPmPanel(page,'ui_change_phase');await edit(page,'set_stage');
@@ -130,9 +131,9 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   test('Idea remains a readable stage without dispatching or changing its discussion',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Idea');await expect(activity(page)).toContainText('Discussions, Sprint commitments');
-    const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('planning');
+    const editor=await edit(page,'set_stage');await editor.getByLabel('Management phase').selectOption('planning');
     await editor.getByLabel('Reason and retained context').fill('Organize the selected direction; keep other ideas open.');
-    await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+    await editor.getByRole('button',{name:'Record phase',exact:true}).click();
     await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Planning');
     expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.preconditions).toEqual({expected_lifecycle_revision:0});
     expect(f.base.state.thread.mode).toBe('idea');expect(f.base.state.writes).toHaveLength(0);await expect(activity(page).getByRole('tab')).toHaveCount(0);await expect(page.locator('[data-discussion-panel]').getByRole('tab')).toHaveCount(3);
@@ -173,7 +174,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   });
   test('reopening explicitly selects a stage without replaying stopped requests',async({page})=>{
     const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
-    const editor=await edit(page,'reopen');await editor.getByLabel('Management stage').selectOption('development');
+    const editor=await edit(page,'reopen');await editor.getByLabel('Management phase').selectOption('development');
     await editor.getByLabel('Reason and retained context').fill('Resume selected development; review old work separately.');
     await editor.getByRole('button',{name:'Reopen workspace',exact:true}).click();await expect(activity(page).locator('.pm-lifecycle-stage')).toHaveText('Development');
     expect(f.state.writes.map(call=>call.body.action)).toEqual(['pm.lifecycle.reopen']);expect(f.base.state.writes).toHaveLength(0);
@@ -181,7 +182,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   });
   test('legacy and filtered states do not infer missing decisions or hide an effective stop',async({page})=>{
     const f=fixture();f.state.stage=null;f.state.status='unclassified';await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
-    await expect(activity(page)).toContainText('Its previous work has not been reclassified.');
+    await expect(activity(page)).toContainText('Existing work keeps its classification.');
     f.stop();f.state.filtered=true;f.base.state.cursor++;
     await expect(activity(page).locator('.pm-lifecycle-stage')).toContainText('Paused for new work',{timeout:10000});
     await expect(activity(page)).toContainText('Some records are outside your current source access');
@@ -234,9 +235,9 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`li
 for(const native of [false,true])test(`fixed Maintain evidence survives unknown reply ${native?'IPC':'browser'}`,async({page})=>{
   const f=fixture();f.state.stage='development';f.state.maintenance={policy_id:'pmmp_'+'1'.repeat(32),policy_version:1,baseline_id:'pmrb_'+'2'.repeat(32),snapshot_id:'pmwl_'+'3'.repeat(32),snapshot_digest:'4'.repeat(64)};
   await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
-  const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('maintain');
+  const editor=await edit(page,'set_stage');await editor.getByLabel('Management phase').selectOption('maintain');
   await editor.getByLabel('Reason and retained context').fill('Use the original complete workload');
-  f.state.lost=true;await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+  f.state.lost=true;await editor.getByRole('button',{name:'Record phase',exact:true}).click();
   await expect(editor).toContainText('Reply unavailable');const original=structuredClone(f.state.writes[0]);
   expect(original.body.params.maintenance_ref).toEqual(f.state.maintenance);
   f.state.maintenance.snapshot_digest='5'.repeat(64);f.state.stage='paused';f.state.revision++;
@@ -246,10 +247,10 @@ for(const native of [false,true])test(`fixed Maintain evidence survives unknown 
 test('a newer Maintain observation requires explicit review before a fresh decision',async({page})=>{
   const f=fixture();f.state.stage='development';f.state.maintenance={policy_id:'pmmp_'+'1'.repeat(32),policy_version:1,baseline_id:'pmrb_'+'2'.repeat(32),snapshot_id:'pmwl_'+'3'.repeat(32),snapshot_digest:'4'.repeat(64)};
   await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
-  const editor=await edit(page,'set_stage');await editor.getByLabel('Management stage').selectOption('maintain');await editor.getByLabel('Reason and retained context').fill('Review this observed idle state');
+  const editor=await edit(page,'set_stage');await editor.getByLabel('Management phase').selectOption('maintain');await editor.getByLabel('Reason and retained context').fill('Review this observed idle state');
   f.state.maintenance.snapshot_digest='6'.repeat(64);f.base.state.cursor++;
-  await expect(editor.getByRole('button',{name:'Record stage',exact:true})).toBeDisabled({timeout:10000});
-  await editor.getByRole('button',{name:'Review current activity state',exact:true}).click();await editor.getByRole('button',{name:'Record stage',exact:true}).click();
+  await expect(editor.getByRole('button',{name:'Record phase',exact:true})).toBeDisabled({timeout:10000});
+  await editor.getByRole('button',{name:'Review current activity state',exact:true}).click();await editor.getByRole('button',{name:'Record phase',exact:true}).click();
   expect(f.state.writes[0].body.params.maintenance_ref).toEqual(f.state.maintenance);
 });
 

@@ -53,7 +53,10 @@
   unavailable state when their projection is unsupported, with secondary tools
   collapsed below it. Empty and unavailable shell tasks use short titles with muted
   explanations; Settings distinguishes missing evidence from unreadable projects
-  and clears withdrawn project details. Native save receipts use localized punctuation.
+  and clears withdrawn project details. Native save receipts use localized punctuation. Discussion tools overlay without
+  narrowing the thread; docked inspectors fill the viewport with independent scrolling.
+  Lifecycle copy consistently says phase, Settings shows one access reason, report
+  controls fit their selected text, and breadcrumbs separate only existing crumbs.
 
 - Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
   decisions, deviations and recent deliveries, retaining confirmed goals and recent

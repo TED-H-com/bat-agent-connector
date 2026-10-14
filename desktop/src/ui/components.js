@@ -226,21 +226,22 @@ export function trapFocus(root, event) {
   else if (event.shiftKey && (document.activeElement === first || !root.contains(document.activeElement))) {event.preventDefault(); last.focus();}
   else if (!event.shiftKey && (document.activeElement === last || !root.contains(document.activeElement))) {event.preventDefault(); first.focus();}
 }
-export function inspector({title, onClose = () => {}, returnFocus, dock = false} = {}) {
+export function inspector({title, onClose = () => {}, returnFocus, dock = false, overlay = false} = {}) {
   const opener = document.activeElement, media = matchMedia('(min-width: 1200px)'), titleId = uid();
+  const wide = () => media.matches && !overlay;
   const body = h('div', {class: 'ui-inspector-body'});
   const closeButton = iconButton({icon: 'x', label: t('ui_close'), onClick: () => close()});
   const back = button({variant: 'ghost', icon: 'chevron-left', label: t('ui_back'), onClick: () => close(), class: 'ui-button ghost ui-inspector-back'});
-  const root = h('aside', {class: dock ? 'ui-inspector ui-inspector-dock' : 'ui-inspector', tabindex: -1, 'aria-labelledby': titleId},
+  const root = h('aside', {class: 'ui-inspector' + (dock ? ' ui-inspector-dock' : '') + (overlay ? ' ui-inspector-overlay' : ''), tabindex: -1, 'aria-labelledby': titleId},
     h('header', {}, back, h('h2', {id: titleId}, title), closeButton), body);
   const scrim = h('div', {class: 'ui-inspector-scrim', onclick: () => close()});
   const inerted = [];
   function release() {for (const node of inerted.splice(0)) node.inert = false;}
   function resize() {
     release();
-    if (dock && !media.matches && root.hidden) {scrim.remove(); root.removeAttribute('aria-modal'); return;}
-    root.setAttribute('role', media.matches ? 'complementary' : 'dialog');
-    if (media.matches || root.hidden) {root.removeAttribute('aria-modal'); scrim.remove();}
+    if (dock && !wide() && root.hidden) {scrim.remove(); root.removeAttribute('aria-modal'); return;}
+    root.setAttribute('role', wide() ? 'complementary' : 'dialog');
+    if (wide() || root.hidden) {root.removeAttribute('aria-modal'); scrim.remove();}
     else {root.setAttribute('aria-modal', 'true'); if (!scrim.isConnected) root.before(scrim);
       // Inert siblings up to the document; never inert the sheet's own ancestors.
       let node = root;
@@ -251,12 +252,12 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false}
     }
   }
   function keys(event) {
-    if (dock && (root.hidden || media.matches)) return;
+    if (dock && (root.hidden || wide())) return;
     if (event.key === 'Escape') {
       if (!root.contains(event.target) && event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable=false])')) return;
       event.preventDefault(); close();
     }
-    else if (!media.matches) trapFocus(root, event);
+    else if (!wide()) trapFocus(root, event);
   }
   let closed = false;
   function restoreFocus() {
@@ -272,12 +273,12 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false}
   }
   function close() {
     if (closed) return;
-    if (dock && !media.matches) {
+    if (dock && !wide()) {
       root.hidden = true; release(); scrim.remove(); root.removeAttribute('aria-modal');
       onClose(); restoreFocus();
       return;
     }
-    if (dock && media.matches) return;
+    if (dock && wide()) return;
     destroy(); onClose(); restoreFocus();
   }
   function open() {
@@ -286,13 +287,13 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false}
     (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
   }
   function onMedia() {
-    if (dock && !media.matches) root.hidden = true;
-    if (dock && media.matches) root.hidden = false;
+    if (dock && !wide()) root.hidden = true;
+    if (dock && wide()) root.hidden = false;
     resize();
   }
   queueMicrotask(() => {
     if (closed || !root.isConnected) return;
-    if (dock && !media.matches) root.hidden = true;
+    if (dock && !wide()) root.hidden = true;
     resize();
     if (!dock) (matchMedia('(max-width: 799px)').matches ? back : closeButton).focus();
     document.addEventListener('keydown', keys); media.addEventListener('change', onMedia);

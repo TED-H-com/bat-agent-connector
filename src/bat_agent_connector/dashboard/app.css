@@ -136,14 +136,16 @@ a { color: var(--accent); }
 .ui-menu-panel [role=menuitem]:focus, .ui-menu-panel [role=menuitem]:hover { background: var(--surface-2); }
 .ui-menu-group { display: grid; gap: var(--space-1); padding: 6px 10px; }
 .ui-menu-group select { max-width: 100%; font: inherit; }
-.ui-inspector { position: sticky; top: 64px; width: 400px; max-width: 100%; max-height: calc(100vh - 80px); overflow: auto; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
+.ui-inspector { position: fixed; top: 48px; right: 0; bottom: 0; width: 400px; max-width: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
 .ui-inspector[hidden] { display: none; }
 @media (min-width: 1200px) {
+  body.has-workspace .ui-inspector:not(.ui-inspector-overlay) { top: 48px; max-height: none; }
   .ui-inspector-dock > header > .ui-icon-button { display: none; }
 }
-.ui-inspector > header { display: flex; align-items: center; gap: var(--space-2); }
+.ui-inspector > header { flex: none; display: flex; align-items: center; gap: var(--space-2); }
 .ui-inspector h2 { flex: 1; font-size: var(--fs-section); margin: 0; }
-.ui-inspector-body { margin-top: var(--space-4); }
+.ui-inspector-body { margin-top: var(--space-4); flex: 1; min-height: 0; overflow: auto; }
+.ui-inspector-overlay { inset: 0 0 0 auto; z-index: 50; box-shadow: var(--shadow-overlay); }
 .ui-inspector-back { display: none; }
 .ui-inspector-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 49; }
 .ui-data-table { max-width: 100%; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
@@ -274,7 +276,7 @@ a { color: var(--accent); }
 .pm-charter-report > details { margin-top: var(--space-4); }
 .pm-charter-save { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-4); }
 .pm-charter-save form { max-width: var(--form-width); }
-.pm-charter-save button[type="submit"] { color: var(--text); background: var(--panel); border-color: var(--line); }
+.pm-charter-save button[type="submit"]:not(.ui-button) { color: var(--text); background: var(--panel); border-color: var(--line); }
 .pm-charter-comparison h4 { margin-bottom: var(--space-2); }
 .pm-rtm-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .pm-rtm-layout:has(.pm-rtm-detail:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(280px, 36%); }
@@ -1114,7 +1116,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-inspector .pm-brief .pm-heading {display:block;}
 .pm-inspector .pm-brief-row {grid-template-columns:minmax(0,1fr); gap:var(--space-1);}
 .pm-export-fields {display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-2) 0;}
-.pm-export-fields label {min-width:0;flex:1 1 100px;}
+.pm-export-fields label {min-width:0;flex:1 1 14rem;}
 .pm-export-fields select {display:block;max-width:100%;width:100%;}
 [data-pm-brief-export] {padding:var(--space-2) 0;}
 [data-pm-brief-export] summary {cursor:pointer;min-height:28px;}
@@ -1799,7 +1801,7 @@ body.pm-mode #main { padding: 0; }
 @media (max-width: 1199px) { .pm-charter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .pm-charter-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (min-width: 1200px) {
-  main:has(> .ui-inspector) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; }
+  main:has(> .ui-inspector:not(.ui-inspector-overlay)) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; }
   main > .ui-inspector { grid-column: 2; grid-row: 1; }
 }
 
@@ -1872,6 +1874,13 @@ body.pm-mode #main { padding: 0; }
 @media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace::before { width: var(--workspace-sidebar-width, 232px); } }
 .workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
 .workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }
+
+/* A nested dock also reserves space beside the view's header actions. */
+@media (min-width: 1200px) {
+  main:has(.ui-inspector[role=complementary]):not(:has(> .ui-inspector)) .ui-page-header {
+    max-width: calc(100% - 400px - var(--space-4));
+  }
+}
 /* Overview compensates its reading anchor explicitly, including in WebKit. */
 .pm-overview { display: grid; gap: var(--space-4); min-width: 0; overflow-anchor: none; }
 .pm-overview > div:empty { display: none; }

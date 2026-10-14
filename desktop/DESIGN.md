@@ -98,11 +98,14 @@ Icons come from `ui/icons.js`: locally vendored Lucide SVG geometry, 24×24 view
 | `contextChip` | `{icon,text,onRemove}`; optional named removal control |
 | `agentMark` | CLI name; local initials for Codex, Claude, Grok, Gemini, BAT, PM |
 | `menu` | `{button,items:[{label,icon,href,onSelect,disabled,key}]}`; arrows, Escape, outside click, focus return; dispose on unmount |
-| `inspector` | `{title,onClose,returnFocus,dock}`; append returned node, then append content to `.body`; `.close()` restores focus; ordinary panels dispose by closing; docked panels retain mounting on narrow close and destroy on dispose |
+| `inspector` | `{title,onClose,returnFocus,dock,overlay}`; append returned node, then append content to `.body`; `.close()` restores focus; ordinary panels dispose by closing; docked panels retain mounting on narrow close and destroy on dispose |
 | `dataTable` | `{columns:[{key,label,numeric,render}],rows,rowKey,selected,onSelect,expandable}`; sticky headers, 44px rows, keyboard row navigation and optional expansion |
 
 The inspector occupies 400px at ≥1200px, overlays from the right at 800–1199px,
-and becomes a full-screen sheet with Back below 800px. Overlay mode traps focus
+and becomes a full-screen sheet with Back below 800px. Tool drawers over Discussions
+always overlay, so its thread and detail columns keep their width. List views keep
+docking at ≥1200px. A docked surface extends from the 48px topbar to the viewport
+bottom; its body scrolls independently of the fixed header. Overlay mode traps focus
 and makes background content inert. `returnFocus` accepts an element or a callback
 resolved at close. It focuses a connected, rendered target outside hidden/inert
 ancestors, falling back to the creation-time opener under the same checks.

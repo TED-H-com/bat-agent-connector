@@ -20,8 +20,12 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     }
     void loadProject();
   }});
+  const projectField = labelled('pm_evidence_project', choose);
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-evidence': ''}, h('h2', {}, t('pm_evidence_title')),
-    h('p', {class: 'muted'}, t('pm_evidence_intro')), labelled('pm_evidence_project', choose), status, rows);
+    h('p', {class: 'muted'}, t('pm_evidence_intro')), projectField, status, rows);
+  const unavailableReason = error => t(error.status === 401 ? 'pm_evidence_invalid_token'
+    : error.status === 403 ? 'pm_evidence_no_permission' : error.status === 404 ? 'pm_evidence_not_found'
+    : error.status >= 500 || error instanceof TypeError ? 'pm_evidence_connector_unavailable' : 'pm_evidence_unavailable_help');
   const stateText = value => {const key = 'pm_evidence_state_' + value, translated = t(key); return translated === key ? String(value) : translated;};
   const sourceTime = value => timeStamp(value, {empty:t('pm_evidence_time_unknown')});
   const verify = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
@@ -248,6 +252,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
       if (ticket !== generation) return;
       if (!Array.isArray(catalog.projects)) throw Error(t('pm_scope_mismatch'));
       projects = flatten(catalog.projects); bindings = associated; workBindings = work;
+      projectField.hidden = false;
       choose.replaceChildren(h('option', {value: ''}, t('pm_evidence_choose')),
         ...projects.map(project => h('option', {value: project.project_id}, project.name)));
       choose.value = projects.some(project => project.project_id === selected) ? selected : '';
@@ -256,7 +261,8 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     } catch (error) {if (ticket === generation) {
       rows.replaceChildren(); active = null; projects = []; bindings = []; workBindings = [];
       choose.replaceChildren(h('option', {value: ''}, t('pm_evidence_choose')));
-      status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},t('pm_evidence_unavailable_help'))}),errorBox(error));
+      projectField.hidden = true;
+      status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},unavailableReason(error))}));
     }}
   }
   return {box, refresh};

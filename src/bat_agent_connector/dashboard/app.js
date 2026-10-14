@@ -4517,39 +4517,39 @@ var pmGovernanceStrings = {
 var pmLifecycleStrings = {
 	en: {
 		pm_lifecycle_title: "Project activity",
-		pm_lifecycle_loading: "Checking the current management stage…",
+		pm_lifecycle_loading: "Checking the current management phase…",
 		pm_lifecycle_idea: "Idea",
 		pm_lifecycle_planning: "Planning",
 		pm_lifecycle_development: "Development",
 		pm_lifecycle_maintain: "Maintain",
 		pm_lifecycle_paused: "Paused",
 		pm_lifecycle_closed: "Closed",
-		pm_lifecycle_unclassified: "Stage not yet selected",
+		pm_lifecycle_unclassified: "Phase not yet selected",
 		pm_lifecycle_pausing: "Paused for new work · existing work needs reconciliation",
 		pm_lifecycle_closing: "Closed to new work · existing work needs reconciliation",
-		pm_lifecycle_active_help: "This stage describes the workspace. Discussions, Sprint commitments and execution permissions keep their own records.",
+		pm_lifecycle_active_help: "This phase describes the workspace. Discussions, Sprint commitments and execution permissions keep their own records.",
 		pm_lifecycle_stopped_help: "New managed work is stopped. Existing results remain readable; other controllers’ sessions are preserved.",
-		pm_lifecycle_legacy_help: "Its previous work has not been reclassified.",
+		pm_lifecycle_legacy_help: "Existing work keeps its classification.",
 		pm_lifecycle_unavailable: "Activity unavailable",
 		pm_lifecycle_unknown: "Workspace state could not be read.",
 		pm_lifecycle_manage: "Manage project activity",
 		pm_lifecycle_action: "Change",
-		pm_lifecycle_stage: "Management stage",
+		pm_lifecycle_stage: "Management phase",
 		pm_lifecycle_choose: "Choose phase",
-		pm_lifecycle_set_stage: "Record stage",
+		pm_lifecycle_set_stage: "Record phase",
 		pm_lifecycle_pause: "Pause new work",
 		pm_lifecycle_close: "Close this management workspace",
 		pm_lifecycle_reopen: "Reopen workspace",
 		pm_lifecycle_reason: "Reason and retained context",
 		pm_lifecycle_review_version: "Review current activity state",
 		pm_lifecycle_stale: "The activity state changed. Your draft still uses the earlier version; review the current state before submitting it.",
-		pm_lifecycle_no_dispatch: "Selecting a stage does not dispatch work. Reopening leaves old queued requests stopped.",
+		pm_lifecycle_no_dispatch: "Selecting a phase does not dispatch work. Reopening leaves old queued requests stopped.",
 		pm_lifecycle_close_help: "Preserve the project history and stop new investment. In-flight work is listed below; closing does not archive the GitHub repository.",
 		pm_lifecycle_maintenance_unavailable: "Maintain requires a release baseline, an adopted policy and current complete idle-work evidence.",
 		pm_lifecycle_maintenance_ready: "Current original evidence permits Maintain. This decision keeps that exact observation and is checked again before it takes effect.",
-		pm_lifecycle_maintenance_active: "Maintenance uses the adopted policy. Its own repairs keep this stage; new development and unknown work remain visible.",
+		pm_lifecycle_maintenance_active: "Maintenance uses the adopted policy. Its own repairs keep this phase; new development and unknown work remain visible.",
 		pm_lifecycle_inflight: "Previously admitted work",
-		pm_lifecycle_inflight_empty: "No pending work",
+		pm_lifecycle_inflight_empty: "No admitted work",
 		pm_lifecycle_inflight_empty_help: "Only readable records are shown.",
 		pm_lifecycle_filtered: "Some records are outside your current source access. Visible rows are not a complete project total.",
 		pm_lifecycle_unresolved: "Needs reconciliation",
@@ -4557,15 +4557,15 @@ var pmLifecycleStrings = {
 		pm_lifecycle_settled: "Result reconciled",
 		pm_lifecycle_held: "Held",
 		pm_lifecycle_more: "Load more recorded work",
-		pm_lifecycle_more_history: "Load more stage history",
-		pm_lifecycle_history: "Stage history",
+		pm_lifecycle_more_history: "Load more phase history",
+		pm_lifecycle_history: "Phase history",
 		pm_lifecycle_retain: "Record retained work",
 		pm_lifecycle_retain_help: "Select the exact visible operations to retain, with a reason. This preserves their original unknown status and does not stop or restart them.",
 		pm_lifecycle_select_operation: "Retain this operation",
 		pm_lifecycle_retained_missing: "A selected operation is no longer in this readable view. Remove it explicitly before submitting.",
 		pm_lifecycle_trace: "Original transition record",
 		pm_lifecycle_writer: "Owned PM writer",
-		pm_lifecycle_reader: "Only the current workspace owner can change its management stage."
+		pm_lifecycle_reader: "Only the current workspace owner can change its management phase."
 	},
 	"zh-TW": {
 		pm_lifecycle_title: "專案投入狀態",
@@ -4601,7 +4601,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_maintenance_ready: "目前原始證據允許進入維護；這項決定會保存選定觀察，生效前再次核對。",
 		pm_lifecycle_maintenance_active: "維護沿用已採用政策；自身修復不反覆切換階段，新的開發與未知工作仍持續顯示。",
 		pm_lifecycle_inflight: "先前已受理的工作",
-		pm_lifecycle_inflight_empty: "尚無待核對工作",
+		pm_lifecycle_inflight_empty: "尚無已受理工作",
 		pm_lifecycle_inflight_empty_help: "僅顯示可讀取的管理紀錄。",
 		pm_lifecycle_filtered: "部分紀錄不在你目前的來源權限內；可見列數不是整個專案的總數。",
 		pm_lifecycle_unresolved: "待核對",
@@ -5872,7 +5872,7 @@ var pmKanbanStrings = {
 		pm_kanban_limits: "WIP limits, resource capacity and work dependencies are not configured here.",
 		pm_kanban_read_at: "Read at",
 		pm_kanban_page_at: "Page summary at",
-		pm_kanban_stage: "Management stage",
+		pm_kanban_stage: "Management phase",
 		pm_kanban_unknown: "Unknown",
 		pm_kanban_age: "Work age",
 		pm_kanban_cycle: "Management cycle",
@@ -6444,6 +6444,10 @@ var pmStrings = {
 		pm_evidence_no_projects_help: "No Connector projects are available.",
 		pm_evidence_unavailable: "Projects unavailable",
 		pm_evidence_unavailable_help: "Could not read Connector data.",
+		pm_evidence_invalid_token: "Token not accepted.",
+		pm_evidence_no_permission: "Your token lacks this permission.",
+		pm_evidence_not_found: "Project data was not found.",
+		pm_evidence_connector_unavailable: "Connector is unavailable.",
 		pm_evidence_open_work: "Open work and operations",
 		pm_evidence_no_plan: "No plan revision is associated with this work yet.",
 		pm_evidence_fixed_plan: "This work references a fixed adopted plan revision.",
@@ -6802,6 +6806,10 @@ var pmStrings = {
 		pm_evidence_no_projects_help: "目前沒有可用的 Connector 專案。",
 		pm_evidence_unavailable: "無法取得專案",
 		pm_evidence_unavailable_help: "無法讀取 Connector 專案紀錄。",
+		pm_evidence_invalid_token: "權杖無效。",
+		pm_evidence_no_permission: "你的權杖沒有這個權限。",
+		pm_evidence_not_found: "找不到專案資料。",
+		pm_evidence_connector_unavailable: "無法連線至 Connector。",
 		pm_evidence_open_work: "開啟工作與操作紀錄",
 		pm_evidence_no_plan: "這項工作尚未連結計畫版本。",
 		pm_evidence_fixed_plan: "這項工作引用固定的已採用計畫版本。",
@@ -10978,8 +10986,9 @@ function trapFocus(root, event) {
 		first.focus();
 	}
 }
-function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}) {
+function inspector({ title, onClose = () => {}, returnFocus, dock = false, overlay = false } = {}) {
 	const opener = document.activeElement, media = matchMedia("(min-width: 1200px)"), titleId = uid();
+	const wide = () => media.matches && !overlay;
 	const body = h$1("div", { class: "ui-inspector-body" });
 	const closeButton = iconButton({
 		icon: "x",
@@ -10994,7 +11003,7 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 		class: "ui-button ghost ui-inspector-back"
 	});
 	const root = h$1("aside", {
-		class: dock ? "ui-inspector ui-inspector-dock" : "ui-inspector",
+		class: "ui-inspector" + (dock ? " ui-inspector-dock" : "") + (overlay ? " ui-inspector-overlay" : ""),
 		tabindex: -1,
 		"aria-labelledby": titleId
 	}, h$1("header", {}, back, h$1("h2", { id: titleId }, title), closeButton), body);
@@ -11008,13 +11017,13 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 	}
 	function resize() {
 		release();
-		if (dock && !media.matches && root.hidden) {
+		if (dock && !wide() && root.hidden) {
 			scrim.remove();
 			root.removeAttribute("aria-modal");
 			return;
 		}
-		root.setAttribute("role", media.matches ? "complementary" : "dialog");
-		if (media.matches || root.hidden) {
+		root.setAttribute("role", wide() ? "complementary" : "dialog");
+		if (wide() || root.hidden) {
 			root.removeAttribute("aria-modal");
 			scrim.remove();
 		} else {
@@ -11031,12 +11040,12 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 		}
 	}
 	function keys(event) {
-		if (dock && (root.hidden || media.matches)) return;
+		if (dock && (root.hidden || wide())) return;
 		if (event.key === "Escape") {
 			if (!root.contains(event.target) && event.target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])")) return;
 			event.preventDefault();
 			close();
-		} else if (!media.matches) trapFocus(root, event);
+		} else if (!wide()) trapFocus(root, event);
 	}
 	let closed = false;
 	function restoreFocus() {
@@ -11061,7 +11070,7 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 	}
 	function close() {
 		if (closed) return;
-		if (dock && !media.matches) {
+		if (dock && !wide()) {
 			root.hidden = true;
 			release();
 			scrim.remove();
@@ -11070,7 +11079,7 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 			restoreFocus();
 			return;
 		}
-		if (dock && media.matches) return;
+		if (dock && wide()) return;
 		destroy();
 		onClose();
 		restoreFocus();
@@ -11082,13 +11091,13 @@ function inspector({ title, onClose = () => {}, returnFocus, dock = false } = {}
 		(matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
 	}
 	function onMedia() {
-		if (dock && !media.matches) root.hidden = true;
-		if (dock && media.matches) root.hidden = false;
+		if (dock && !wide()) root.hidden = true;
+		if (dock && wide()) root.hidden = false;
 		resize();
 	}
 	queueMicrotask(() => {
 		if (closed || !root.isConnected) return;
-		if (dock && !media.matches) root.hidden = true;
+		if (dock && !wide()) root.hidden = true;
 		resize();
 		if (!dock) (matchMedia("(max-width: 799px)").matches ? back : closeButton).focus();
 		document.addEventListener("keydown", keys);
@@ -11585,10 +11594,13 @@ function dashboardShell({ navigation, namespace, caps, api, guard, onEvents, err
 			class: "shell-breadcrumb-divider",
 			"aria-hidden": "true"
 		}, "/"), h$1("span", { class: "shell-crumb-view" }, t("ui_session")));
-		else if (routeTitle) crumb.append(h$1("span", {
-			class: "shell-breadcrumb-divider",
-			"aria-hidden": "true"
-		}, "/"), h$1("span", { class: "shell-crumb-view" }, routeTitle));
+		else if (routeTitle) {
+			if (workspace) crumb.append(h$1("span", {
+				class: "shell-breadcrumb-divider",
+				"aria-hidden": "true"
+			}, "/"));
+			crumb.append(h$1("span", { class: "shell-crumb-view" }, routeTitle));
+		}
 		crumb.append(h$1("button", {
 			type: "button",
 			class: "shell-mobile-name",
@@ -35909,10 +35921,12 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			loadProject();
 		}
 	});
+	const projectField = labelled("pm_evidence_project", choose);
 	const box = h("section", {
 		class: "panel pm-evidence",
 		"data-pm-evidence": ""
-	}, h("h2", {}, t("pm_evidence_title")), h("p", { class: "muted" }, t("pm_evidence_intro")), labelled("pm_evidence_project", choose), status, rows);
+	}, h("h2", {}, t("pm_evidence_title")), h("p", { class: "muted" }, t("pm_evidence_intro")), projectField, status, rows);
+	const unavailableReason = (error) => t(error.status === 401 ? "pm_evidence_invalid_token" : error.status === 403 ? "pm_evidence_no_permission" : error.status === 404 ? "pm_evidence_not_found" : error.status >= 500 || error instanceof TypeError ? "pm_evidence_connector_unavailable" : "pm_evidence_unavailable_help");
 	const stateText = (value) => {
 		const key = "pm_evidence_state_" + value, translated = t(key);
 		return translated === key ? String(value) : translated;
@@ -36294,6 +36308,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			projects = flatten(catalog.projects);
 			bindings = associated;
 			workBindings = work;
+			projectField.hidden = false;
 			choose.replaceChildren(h("option", { value: "" }, t("pm_evidence_choose")), ...projects.map((project) => h("option", { value: project.project_id }, project.name)));
 			choose.value = projects.some((project) => project.project_id === selected) ? selected : "";
 			selected = choose.value;
@@ -36306,10 +36321,11 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				bindings = [];
 				workBindings = [];
 				choose.replaceChildren(h("option", { value: "" }, t("pm_evidence_choose")));
+				projectField.hidden = true;
 				status.replaceChildren(emptyState({
 					title: t("pm_evidence_unavailable"),
-					text: h("span", { class: "muted" }, t("pm_evidence_unavailable_help"))
-				}), errorBox(error));
+					text: h("span", { class: "muted" }, unavailableReason(error))
+				}));
 			}
 		}
 	}
@@ -37665,6 +37681,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		toolPreference.open = node.dataset.pmTool || null;
 		detailPanel = inspector({
 			title: label,
+			overlay: Boolean(threadId) || workbench?.selected() === "discussions",
 			onClose: () => {
 				home.insertBefore(node, next?.parentNode === home ? next : null);
 				detailPanel = null;
@@ -37718,6 +37735,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const versionBar = reportTools.querySelector(".pm-workbench-toolbar");
 	if (historyMore && versionBar) for (const control of [...historyMore.querySelectorAll(":scope > button")]) versionBar.append(control);
 	const reportKind = (node) => node.matches("[data-pm-brief-export]") ? "export" : node.matches(".pm-charter-save, [data-pm-action=\"pm.snapshot.create\"]") || node.querySelector("[data-pm-action=\"pm.snapshot.create\"]") ? "save" : node.matches(".pm-workbench-toolbar, details") ? "versions" : "compare";
+	const reportSave = reportTools.querySelector("[data-pm-action=\"pm.snapshot.create\"] button[type=\"submit\"]");
+	if (reportSave) reportSave.className = "ui-button primary ui-md";
 	const reportSlots = [...reportTools.children].map((node) => {
 		if (node.matches("[data-pm-brief-export]")) {
 			const slot = h("div", { "data-pm-report-slot": "export" });
