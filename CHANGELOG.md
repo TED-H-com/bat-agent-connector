@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
+  build once after detaching only this job's leftover `/Volumes` images.
+
 - Refresh the English and Traditional Chinese README, PM first-use navigation and public
   website around the project-to-decision journey. Replace the gallery with eight bilingual
   scenes from one synthetic project, pinned to a labelled candidate with capture hashes.
