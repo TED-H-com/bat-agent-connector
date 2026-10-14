@@ -119,7 +119,7 @@ test('agents period, trend and unavailable source stay sourced', async ({browser
   const codexDetail = page.locator('[data-resource-detail]');
   await expect(codexDetail).toContainText('Cache read');
   await expect(codexDetail).toContainText('704');
-  await expect(codexDetail).toContainText('Not reported');
+  await expect(codexDetail).toContainText('Unknown');
   await expect(codexDetail).toContainText('Medium');
   await expect(codexDetail).toContainText('Model');
   await expect(codexDetail).toContainText('Tokens');
@@ -138,7 +138,7 @@ test('agents period, trend and unavailable source stay sourced', async ({browser
   await expect(quota).toContainText('Used 12%');
   expect(await quota.innerText()).not.toContain('pool_');
   const href = await page.locator('[data-resource-discuss]').getAttribute('href');
-  expect(parseDiscussRefs(new URL(href || '', 'http://x').hash.split('?')[1] || '')).toEqual({refs: [], title: 'codex-implementer', from: 'agents', report: ''});
+  expect(parseDiscussRefs(new URL(href || '', 'http://x').hash.split('?')[1] || '')).toEqual({refs: [], title: 'Codex · Implementer', from: 'agents', report: ''});
   const before = fixture.reads.length;
   await page.getByRole('radio', {name: '30d', exact: true}).click();
   await expect.poll(() => fixture.reads.length).toBe(before + 1);
@@ -198,7 +198,7 @@ test('filter, period and selection survive leaving the view', async ({browser, b
   const fixture = tracked('en');
   await boot(page, fixture.dispatch);
   await openAgents(page, 1280);
-  await page.locator('[data-resource-filter]').selectOption({label: 'Role · reviewer'});
+  await page.locator('[data-resource-filter]').selectOption({label: 'Role · Reviewer'});
   await expect(page.locator('[data-resource-row]')).toHaveCount(1);
   await expect(page.locator('[data-resource-metrics]')).toContainText('1,552');
   await expect(page.locator('[data-resource-chart]')).toBeVisible();
@@ -297,7 +297,7 @@ for (const width of [390, 768]) {
     await expect(rows.nth(2)).toBeFocused();
     await rows.nth(0).focus();
     await page.keyboard.press(' ');
-    await expect(page.locator('[data-resource-detail]')).toContainText('codex-implementer');
+    await expect(page.locator('[data-resource-detail]')).toContainText('Codex · Implementer');
     await context.close();
   });
 }
@@ -319,7 +319,7 @@ test('focus stays on the selected row, the disclosures and the period control', 
   await openAgents(page, 1440);
   await page.locator('[data-resource-row="codex-implementer"]').click();
   await page.locator('[data-resource-row="claude-reviewer"]').click();
-  await expect(page.locator('[data-resource-detail] h2')).toHaveText('claude-reviewer');
+  await expect(page.locator('[data-resource-detail] h2')).toHaveText('Claude · Reviewer');
   await page.keyboard.press('Escape');
   await expect(page.locator('[data-resource-row="claude-reviewer"]')).toBeFocused();
   await page.locator('[data-resource-row="codex-implementer"]').click();
@@ -342,7 +342,7 @@ test('focus stays on the selected row, the disclosures and the period control', 
   await expect(detail).toBeVisible();
   await expect.poll(() => fixture.reads.at(-1) || '').toContain('buckets=day');
   await expect(page.getByRole('radio', {name: '30d', exact: true})).toBeFocused();
-  await expect(detail.locator('h2')).toHaveText('codex-implementer');
+  await expect(detail.locator('h2')).toHaveText('Codex · Implementer');
   await context.close();
 });
 
@@ -540,3 +540,282 @@ for (const scheme of ['light', 'dark'] as const) {
     await context.close();
   });
 }
+
+async function goView(page: Page, view: string) {
+  const entry = page.locator(`[data-pm-view="${view}"]`);
+  if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+  await entry.click();
+}
+
+async function consistentUsage(page: Page, codex = 1006, claude = 546, range = /Oct 7.*Oct 13|10月7日.*10月13日/) {
+  await expect(page.locator('[data-resource-meta]')).toContainText(range);
+  await expect(page.locator('[data-resource-metrics] .ui-metric-value').first()).toContainText((codex + claude).toLocaleString());
+  const total = (cli: string) => page.locator(`[data-resource-chart] tbody [data-cli="${cli}"]`).evaluateAll(nodes =>
+    nodes.reduce((sum, node) => sum + (node.textContent === '—' ? 0 : Number(node.textContent?.replaceAll(',', ''))), 0));
+  await expect.poll(() => total('codex')).toBe(codex);
+  await expect.poll(() => total('claude')).toBe(claude);
+  await expect(page.locator('[data-resource-row="codex-implementer"]')).toContainText(codex.toLocaleString());
+  await expect(page.locator('[data-resource-row="claude-reviewer"]')).toContainText(claude.toLocaleString());
+  await expect(page.locator('tr[data-date="2026-10-09"] [data-cli="codex"]')).toHaveText('0');
+  await expect(page.locator('tr[data-date="2026-10-10"] [data-cli="codex"]')).toHaveText('—');
+}
+
+for (const locale of ['en', 'zh-TW'] as const) test(`returning and new usage keep one read, human names and unknown facts ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
+  const page = await context.newPage(), fixture = tracked(locale);
+  let extra = 0, release = () => {}, hold: Promise<void> | null = null;
+  const dispatch = async (input: {path: string, method?: string}) => {
+    const result = await fixture.dispatch(input) as {data?: {window: {since: string, until: string}, rows?: {source_id: string, metrics?: {total: {value: number, observed: number}}}[], buckets?: {series: {source_id: string, days: {tokens: {total: number | null}}[]}[]}}};
+    if (input.path.includes('/resources') && result.data) result.data.window.since = result.data.window.since.replace('Z', '+00:00');
+    if (input.path.includes('/resources') && extra && result.data) {
+      const row = result.data.rows?.find(row => row.source_id === 'codex-implementer');
+      if (row?.metrics) {row.metrics.total.value += extra; row.metrics.total.observed += extra;}
+      const last = result.data.buckets?.series.find(series => series.source_id === 'codex-implementer')?.days.at(-1);
+      if (last && last.tokens.total != null) last.tokens.total += extra;
+      if (result.data.buckets && hold) await hold;
+    }
+    return result;
+  };
+  await boot(page, dispatch);
+  await openAgents(page, 1440);
+  const name = locale === 'en' ? 'Codex · Implementer' : 'Codex · 實作';
+  const role = locale === 'en' ? 'Implementer' : '實作';
+  const detail = page.locator('[data-resource-detail]');
+  for (const width of [1440, 1000, 390]) {
+    if (width !== 1440) {
+      await goView(page, 'overview');
+      await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+      const before = fixture.reads.length;
+      await goView(page, 'agents');
+      await expect.poll(() => fixture.reads.length).toBe(before + 1);
+      expect(fixture.reads.at(-1)).not.toContain('buckets=');
+    }
+    await consistentUsage(page);
+    const row = page.locator('[data-resource-row="codex-implementer"]');
+    await expect(row).toContainText(name);
+    await expect(row).not.toContainText('codex-implementer');
+    await expect(page.locator('[data-resource-filter] option').filter({hasText: new RegExp(`^(?:Role|角色) · ${role}$`)})).toHaveText(locale === 'en' ? `Role · ${role}` : `角色 · ${role}`);
+    await row.click();
+    await expect(detail.locator('h2')).toHaveText(name);
+    for (const label of locale === 'en' ? ['Reported model', 'Cache write', 'Messages'] : ['回報模型', '快取寫入', '訊息數']) {
+      await expect(detail.locator('dt', {hasText: new RegExp(`^${label}$`)}).locator('+ dd [data-status="unknown"]')).toHaveText(locale === 'en' ? 'Unknown' : '未知');
+    }
+    const sourceId = detail.locator('details code.mono', {hasText: 'codex-implementer'});
+    const detailsToggle = detail.locator('details summary');
+    if (await detail.locator('details').getAttribute('open') != null) await detailsToggle.click();
+    await expect(detail.locator('details')).not.toHaveAttribute('open');
+    await expect(sourceId).toBeHidden();
+    await detail.getByText(locale === 'en' ? 'Details' : '詳細資料', {exact: true}).click();
+    await expect(sourceId).toBeVisible();
+    await detail.getByText(locale === 'en' ? 'Details' : '詳細資料', {exact: true}).click();
+    await expect(detail.locator('details')).not.toHaveAttribute('open');
+    await page.waitForTimeout(50);
+    if (locale === 'zh-TW') expect(await page.locator('[data-pm-resources]').innerText()).not.toMatch(/Tokens|CLI|implementer|reviewer|investigator/);
+    await page.keyboard.press('Escape');
+  }
+  // Hold the follow-up read: neither the fresh total nor its inspector may paint
+  // until the new daily values arrive. The chart remains mounted throughout.
+  await page.locator('[data-resource-row="codex-implementer"]').click();
+  await page.locator('[data-resource-chart]').evaluate(node => {node.setAttribute('data-consistent-pair', 'retained');});
+  extra = 80; hold = new Promise<void>(resolve => {release = resolve;});
+  const before = fixture.reads.length;
+  await page.clock.fastForward(61000);
+  await expect.poll(() => fixture.reads.length).toBe(before + 2);
+  expect(fixture.reads.at(-1)).toContain('buckets=day');
+  await consistentUsage(page);
+  await expect(detail).toContainText('1,006');
+  await expect(page.locator('[data-resource-chart]')).toHaveAttribute('data-consistent-pair', 'retained');
+  release(); hold = null;
+  await consistentUsage(page, 1086);
+  await expect(detail).toContainText('1,086');
+  await page.locator('[data-resource-discuss]').click();
+  await expect(page.locator('[data-discussion-title]')).toHaveText(name);
+  await expect(page.locator('.pd-thread-meta .ui-pill').filter({hasText: locale === 'en' ? /^Draft$/ : /^草稿$/})).toHaveText(locale === 'en' ? 'Draft' : '草稿');
+  await context.close();
+});
+
+for (const status of [403, 404]) test(`a ${status} withdraws the consistent pair and rejects a late bucket response`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale: 'en-US', viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
+  const page = await context.newPage(), fixture = tracked('en');
+  let extra = 0, deny = false, holding = false, release = () => {};
+  const dispatch = async (input: {path: string, method?: string}) => {
+    const result = await fixture.dispatch(input) as {data?: {rows?: {metrics?: {total?: {value: number}}}[]}};
+    if (input.path.includes('/resources')) {
+      if (deny) return {status, data: {error: {code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'Source withdrawn'}}};
+      const total = result.data?.rows?.[0].metrics?.total;
+      if (total) total.value += extra;
+      if (extra && input.path.includes('buckets=day')) {holding = true; await new Promise<void>(resolve => {release = resolve;});}
+    }
+    return result;
+  };
+  await boot(page, dispatch); await openAgents(page, 1440);
+  await page.locator('[data-resource-row="codex-implementer"]').click();
+  extra = 10; await page.clock.fastForward(61000);
+  await expect.poll(() => holding).toBe(true);
+  deny = true; await goView(page, 'overview'); await goView(page, 'agents');
+  const withdrawn = async () => {
+    await expect(page.locator('[data-resource-row], [data-resource-metrics], [data-resource-chart], [data-resource-quota]')).toHaveCount(0);
+    await expect(page.locator('[data-resource-detail]')).toBeHidden();
+    await expect(page.locator('[data-resource-meta]')).toBeHidden();
+  };
+  await withdrawn(); release(); await page.waitForTimeout(200); await withdrawn();
+  await context.close();
+});
+
+test('withdrawn source facts disappear while replacement buckets are still pending', async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale: 'en-US', viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
+  const page = await context.newPage(), fixture = tracked('en');
+  let drop = false, holding = false, release = () => {};
+  const dispatch = async (input: {path: string, method?: string}) => {
+    const result = await fixture.dispatch(input) as {data?: {rows: {source_id: string}[], buckets?: {series: {source_id: string}[]}, quota_pools: {sources: string[]}[]}};
+    if (drop && input.path.includes('/resources') && result.data) {
+      result.data.rows = result.data.rows.filter(row => row.source_id !== 'codex-implementer');
+      result.data.quota_pools = result.data.quota_pools.filter(pool => !pool.sources.includes('codex-implementer'));
+      if (result.data.buckets) {
+        result.data.buckets.series = result.data.buckets.series.filter(series => series.source_id !== 'codex-implementer');
+        holding = true; await new Promise<void>(resolve => {release = resolve;});
+      }
+    }
+    return result;
+  };
+  await boot(page, dispatch); await openAgents(page, 1440);
+  await page.locator('[data-resource-row="codex-implementer"]').click();
+  drop = true; await page.clock.fastForward(61000); await expect.poll(() => holding).toBe(true);
+  const withdrawn = async () => {
+    await expect(page.locator('[data-resource-row]')).toHaveCount(2);
+    await expect(page.locator('[data-resource-row="codex-implementer"]')).toHaveCount(0);
+    await expect(page.locator('[data-resource-metrics]')).toContainText('1 / 2');
+    await expect(page.locator('[data-resource-metrics] .ui-metric-value').first()).toContainText('546');
+    await expect(page.locator('.bar.cli-codex, .tick.cli-codex, [data-resource-chart] [data-cli="codex"]')).toHaveCount(0);
+    await expect(page.locator('[data-resource-detail]')).toBeHidden();
+    await expect(page.locator('[data-resource-quota]')).not.toContainText('40%');
+  };
+  await withdrawn(); release(); await page.waitForTimeout(200); await withdrawn();
+  await context.close();
+});
+
+test('two rejected zones stop buckets until the view is reopened', async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale: 'en-US', viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
+  const page = await context.newPage(), fixture = tracked('en');
+  const dispatch = async (input: {path: string, method?: string}) => {
+    const result = await fixture.dispatch(input);
+    if (input.path.includes('/resources') && input.path.includes('buckets=day')) return {status: 422, data: {error: {code: 'INVALID_PARAMS', message: 'invalid_timezone'}}};
+    return result;
+  };
+  await boot(page, dispatch); await openAgents(page, 1440);
+  expect(fixture.reads).toHaveLength(3);
+  await expect(page.locator('[data-resource-meta] [data-tz]')).toHaveText('UTC');
+  await expect(page.locator('[data-resource-chart]')).toHaveCount(0);
+  await page.clock.fastForward(61000); await expect.poll(() => fixture.reads.length).toBe(4);
+  expect(fixture.reads.at(-1)).not.toMatch(/buckets=|tz=/);
+  await goView(page, 'overview'); await goView(page, 'agents');
+  await expect.poll(() => fixture.reads.length).toBe(7);
+  await expect(page.locator('[data-resource-chart]')).toHaveCount(0);
+  await context.close();
+});
+
+type CacheRead = {
+  as_of: string, window: {until: string},
+  rows: {source_id: string, metrics: Record<string, {value: number | null, observed: number | null, covered: number}> | null,
+    observations: number | null, calls: number | null, first_at: string | null, last_at: string | null}[],
+  buckets?: {series: {source_id: string, days: {date: string, complete: boolean, tokens: Record<string, number | null>}[]}[]},
+};
+
+for (const locale of ['en', 'zh-TW'] as const) test(`idle and partial sources retain their trend until sample facts change ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
+  const page = await context.newPage(), fixture = tracked(locale);
+  let bucketReads = 0, idleSample = false, missingSample = false;
+  let release = () => {}, hold: Promise<void> | null = null;
+  const dispatch = async (input: {path: string, method?: string}) => {
+    const url = new URL(input.path, 'http://fixture');
+    const bucketRequest = url.pathname.endsWith('/resources') && url.searchParams.get('buckets') === 'day';
+    if (bucketRequest) bucketReads++;
+    const result = await fixture.dispatch(input) as {data?: CacheRead};
+    if (!url.pathname.endsWith('/resources') || !result.data) return result;
+    const read = result.data;
+    read.as_of = read.window.until;
+    const partial = read.rows.find(row => row.source_id === 'codex-implementer')!;
+    const idle = read.rows.find(row => row.source_id === 'claude-reviewer')!;
+    for (const key of Object.keys(partial.metrics!)) partial.metrics![key] = {value: null, observed: null, covered: 0};
+    partial.metrics!.total = {value: null, observed: 120, covered: 2};
+    partial.metrics!.input = {value: null, observed: 120, covered: 2};
+    partial.metrics!.output = {value: null, observed: 0, covered: 2};
+    partial.observations = missingSample ? 4 : 3;
+    partial.first_at = '2026-10-08T01:00:00.000Z';
+    partial.last_at = '2026-10-13T08:59:00.000Z';
+    for (const key of Object.keys(idle.metrics!)) idle.metrics![key] = {value: null, observed: null, covered: 0};
+    idle.observations = idleSample ? 1 : 0; idle.calls = idleSample ? 1 : 0;
+    idle.first_at = idle.last_at = idleSample ? '2026-10-13T09:03:04.000Z' : null;
+    if (idleSample) {
+      idle.metrics!.total = idle.metrics!.input = {value: 42, observed: 42, covered: 1};
+      idle.metrics!.output = {value: 0, observed: 0, covered: 1};
+    }
+    // Reordering rows and a newer collection time do not change the sample facts.
+    if (fixture.reads.length % 2 === 0) read.rows.reverse();
+    for (const series of read.buckets?.series || []) for (const day of series.days) {
+      day.complete = day.date < '2026-10-12';
+      const isPartial = series.source_id === partial.source_id;
+      let total: number | null = day.complete ? 0 : null;
+      if (isPartial && day.date === '2026-10-08') total = missingSample ? null : 60;
+      if (!isPartial && idleSample && day.date === '2026-10-13') total = 42;
+      day.tokens = {input: total, cache_read: null, cache_write: null, output: total == null ? null : 0, reasoning: null, total};
+    }
+    if (bucketRequest && hold) await hold;
+    return result;
+  };
+  await boot(page, dispatch); await openAgents(page, 1440);
+  const chart = page.locator('[data-resource-chart]');
+  const row = page.locator('[data-resource-row="claude-reviewer"]');
+  const metric = page.locator('[data-resource-metrics] .ui-metric-value').first();
+  const dayValue = (date: string, cli: string) => chart.locator(`tr[data-date="${date}"] [data-cli="${cli}"]`);
+  const idleFacts = async (sample: boolean) => {
+    await expect(page.locator('[data-resource-meta]')).toContainText(/Oct 7.*Oct 13|10月7日.*10月13日/);
+    await expect(page.locator('[data-resource-meta] [data-tz]')).toHaveText('Asia/Taipei');
+    await expect(metric).toHaveText(new RegExp(`^${sample ? '162' : '120'}\\s*(Partial|部分)$`));
+    await expect(page.locator('[data-resource-metrics] [data-status="partial"]')).toBeVisible();
+    await expect(row.locator('[data-column="tokens"]')).toHaveText(sample ? '42' : '—');
+    await expect(page.locator('[data-resource-row="codex-implementer"] [data-column="tokens"]')).toHaveText(/120\s*(Partial|部分)/);
+    await expect(page.locator('[data-resource-row="codex-implementer"] [data-status="partial"]')).toBeVisible();
+    for (const date of ['2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']) await expect(dayValue(date, 'claude')).toHaveText('0');
+    await expect(dayValue('2026-10-12', 'claude')).toHaveText('—');
+    await expect(dayValue('2026-10-13', 'claude')).toHaveText(sample ? '42' : '—');
+    await expect(dayValue('2026-10-08', 'codex')).toHaveText('60');
+    await expect(dayValue('2026-10-13', 'codex')).toHaveText('—');
+  };
+  await idleFacts(false); expect(bucketReads).toBe(1);
+  await row.click();
+  const inspectorTotal = page.locator('[data-resource-detail] dt', {hasText: locale === 'en' ? /^Total$/ : /^總計$/}).locator('+ dd');
+  await expect(inspectorTotal).toHaveText('—');
+  await chart.evaluate(node => node.setAttribute('data-consistent-pair', 'retained'));
+  for (let tick = 0; tick < 3; tick++) {
+    const before = fixture.reads.length;
+    await page.clock.fastForward(61000);
+    await expect.poll(() => fixture.reads.length).toBe(before + 1);
+    await idleFacts(false);
+    expect(bucketReads).toBe(1);
+    await expect(chart).toHaveAttribute('data-consistent-pair', 'retained');
+    await expect(inspectorTotal).toHaveText('—');
+  }
+  idleSample = true; hold = new Promise<void>(resolve => {release = resolve;});
+  const before = fixture.reads.length;
+  await page.clock.fastForward(61000);
+  await expect.poll(() => fixture.reads.length).toBe(before + 2);
+  expect(bucketReads).toBe(2);
+  await idleFacts(false); await expect(inspectorTotal).toHaveText('—');
+  await expect(chart).toHaveAttribute('data-consistent-pair', 'retained');
+  release(); hold = null;
+  await idleFacts(true); await expect(inspectorTotal).toHaveText('42');
+  // A late sample without a total makes a formerly known day unknown, while
+  // the observed subtotal and last sample time remain unchanged.
+  missingSample = true; hold = new Promise<void>(resolve => {release = resolve;});
+  const beforePartial = fixture.reads.length;
+  await page.clock.fastForward(61000);
+  await expect.poll(() => fixture.reads.length).toBe(beforePartial + 2);
+  expect(bucketReads).toBe(3);
+  await idleFacts(true);
+  release(); hold = null;
+  await expect(dayValue('2026-10-08', 'codex')).toHaveText('—');
+  await expect(metric).toHaveText(/^162\s*(Partial|部分)$/); await expect(inspectorTotal).toHaveText('42');
+  await expect(page.locator('[data-resource-row="codex-implementer"] [data-column="tokens"]')).toHaveText(/120\s*(Partial|部分)/);
+  await context.close();
+});

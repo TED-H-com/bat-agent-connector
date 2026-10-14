@@ -4,14 +4,14 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.5
 license: MIT
 metadata:
-  workflow_version: "2026-10-13.1"
+  workflow_version: "2026-10-13.2"
   api_version: "1"
   contract_version: "2026-10-08"
   generated_by: "scripts/generate_agent_skills.py"
   generator_version: "1"
   adapter: "hermes"
   canonical_source: "skills/bat-agent-connector/SKILL.md"
-  canonical_sha256: "0ef254d8b7c2f140a6258feea736cd7a0a2fc0cfbebff1970414ddda9ae8ef62"
+  canonical_sha256: "a93f04da5601e7fdf922e7957f9c4ee23124f81b800d4fee753376a60efb3673"
   hermes:
     tags: [bat, better-agent-terminal, claude-code, codex, mcp, supervision, worktree, orchestration]
     category: autonomous-ai-agents
@@ -1669,6 +1669,14 @@ when coverage is complete. A meeting still listed but no longer readable makes i
 partial. One hidden record does not fail the page. `coverage.blocked_without_reason` counts
 blocked rows without a stored reason only when coverage is complete; otherwise it is null.
 Do not invent links the timeline does not return.
+Finding rows keep `title` null (`unknowns.title` is `not_recorded`) and add a
+structured `finding` object: `source`, `number`, and only the stored validated
+kind facts (`labels`, `manifests`, or `package`/`ecosystem`/`ghsa_id`/`severity`).
+A missing fact is omitted and named in `unknowns` as `not_recorded` or `unproven`.
+Do not invent an English name. Other row types have no `finding` key. The same
+object is on current finding attention items and on available discussion chips;
+the chip label stays the provider number. A withdrawn source removes the row,
+attention item or chip contents together with `finding`.
 See `docs/design/pm-register.md` for the record mapping.
 
 ### Live overview and discussion origins

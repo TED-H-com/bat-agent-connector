@@ -276,6 +276,13 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
+Empty milestone and delivery lists say None recorded / 尚無紀錄 only with complete
+roadmap or recent-delivery coverage, including any delivery output-reference limit.
+Otherwise they show Unknown and the recorded localized reason. Empty charter cards
+require a readable complete plan (or an unrestricted complete saved report); open
+decisions require a complete known zero.
+Missing coverage never establishes absence.
+
 The Open decisions card (待決事項) retains the central pending count and adds Recently decided:
 up to five visible completed decisions, with their title, relative time and actor.
 Each row opens the exact Issues & changes register inspector. Missing history is
@@ -306,7 +313,19 @@ passed to `discussHref`. A maintenance finding shows the shared finding name
 instead of the provider number, and a severity word when `finding.severity` is
 present. Its Discuss link uses that same name. A server that omits `finding`
 keeps the provider number and does not invent a severity word. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
-by identity within their own part. Cached ages advance with the projection timestamp.
+by identity within their own part, including the Progress Details summary and its open state.
+Before updating any Overview region, a focused or hovered attention row anchors
+the viewport. Next in priority is the row containing a non-collapsed selection's
+focus node, falling back to its anchor node. Without interaction, the first
+visible row anchors only after the list's top has scrolled above its scroller's
+visible area; while the list's top is in view, new rows push the rest down without
+compensating scroll. Focus, hover or a non-collapsed text selection
+inside the attention list preserves its existing order and appends new rows. Passive
+visibility uses Central's severity/age order; returning to Overview re-sorts even
+unchanged data. Overview compensates its actual scrolling container after layout,
+with native CSS anchoring disabled so Chromium and WebKit have the same behavior.
+A withdrawn anchor is removed immediately
+and receives no scroll compensation. Cached ages advance with the projection timestamp.
 Overview records its scroll position before a view switch hides it and restores it after
 the destination header has finished laying out. Repeated selection
 of the active view does not scroll. Related inspectors return focus to the destination
@@ -634,7 +653,9 @@ until that row's own detail read says it is gone. Overlapping refreshes of the
 same filters share one trailing list read. A changed filter starts its own read
 and drops the one still in flight. The open row is read again when its list row
 changed or it was kept beyond the loaded pages. At 1200px and above, returning
-to the view restores the side panel and reads that row. Below 1200px a refresh
+to the view reserves the side panel immediately, then reads that row into its
+loading body. The table must not first expose related chips and hide them when
+the delayed inspector arrives. Below 1200px a refresh
 or a return keeps the selection and leaves the sheet closed until the row is
 opened again, and a return moves focus to that row. A detail read in that case
 still drops the row when it is gone, without opening the sheet. Leaving the view cancels register reads that are
@@ -682,6 +703,11 @@ source-reported models from requested model context, and observed tokens from cu
 quota windows. Missing counters stay unknown. Source failures withdraw numbers, chart
 contributions and model details together. The source filter sits with the list and
 narrows that list only; metrics, the chart and quota keep describing every row.
+Rows, filters, inspector titles and Discuss drafts use the CLI's human name and
+translated role. An inaccessible or CLI-less source uses its translated role;
+missing identity uses Unnamed source. The source ID stays in inspector Details as
+mono. Missing models, token parts and counters use the shared Unknown pill;
+observed subtotals keep Partial and an unobserved total stays an em dash.
 Below 800px each source is a tabbable button in a list, marked with `aria-current`.
 The toolbar can pause view updates without stopping collection. While paused the meta
 line shows the absolute collection time ("Paused · data from 5:00 PM") and the button
@@ -703,10 +729,22 @@ with a hatch and the in-progress or settling marker. An incomplete day shows its
 window is "Partial day", never Settling. A null total is a dashed stub in that CLI's
 stack position. A covered zero is a baseline tick.
 
-A tick asks for buckets again only when the capability is on and the trend is missing,
-the readable sources changed, the local date moved past the trend, or the trend is
-older than 15 minutes. Until that read returns, the chart draws only series that are
-still readable. A tick waits out a user-initiated read. The Partial pill follows
+The heading, usage metric, rows, inspector and chart show one consistent read.
+A cached trend is reusable only for the same since instant, until day, zone and
+period, when each readable source has the same fingerprint as in the bucket read:
+source ID, status, observation count, total value/observed/covered and last sample
+time. Idle row totals stay unknown even when complete days have covered zeros;
+partial row subtotals can include samples in a day whose total is unknown. These
+differences alone do not invalidate the cache. A totals-only read that differs
+requests buckets immediately and keeps the previous consistent pair until they
+arrive, without flashing the chart away. Source withdrawal still removes that
+source's numbers, chart contributions and inspector facts immediately. The
+heading uses the window and request zone of the read being shown.
+
+A tick asks for buckets again when the capability is on and the trend is missing,
+the readable row fingerprints or window changed, or the trend is older than
+15 minutes. Until that read returns, the chart draws only series that are still readable.
+A tick waits out a user-initiated read. The Partial pill follows
 unreadable, pending, catching-up, stale or binding-changed rows, and totals that are
 null or observed-only. Today's open bar does not turn the pill on by itself. Quota is
 one block per pool and window, titled by the CLI or source and the window length, as
@@ -740,6 +778,10 @@ facts. Visually hidden status text stays inside the card’s bounds; blocker fla
 visible partial marker; an empty Board hides the lanes and shows one empty state.
 Opening the inspector reveals the selected card after docking. Closing restores
 focus to the latest selection, falling back to the view heading after withdrawal.
+An unchanged read failure keeps its status, Details and Retry nodes, including
+keyboard focus, while another read is pending and when the same error returns.
+Initial activation and the workspace load share that first projection read;
+later events still start their own reads and invalidate older responses.
 Selections use `?select=` in both views and reopen after returning from another
 view. Current requirement chips link to Requirements; earlier-plan text is read
 from its bound revision and never replaced by a raw ID in a chip or filter.

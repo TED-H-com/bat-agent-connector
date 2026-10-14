@@ -376,6 +376,42 @@ for (const view of ['requirements', 'board']) test(`S1 ${view} snapshot conflict
   expect(f.writes).toEqual([]);
 });
 
+for (const locale of ['en', 'zh-TW']) test(`S1 Board keeps Retry focus and status nodes across the same conflict (${locale})`, async ({page}) => {
+  const f = reviewFixture(locale); let failed = true, reads = 0, release: (() => void) | null = null, hold = false;
+  f.overrides.push(async (url, result) => {
+    if (!url.pathname.endsWith('/kanban')) return result;
+    reads++;
+    if (hold) await new Promise<void>(resolve => {release = resolve;});
+    return failed ? {status: 409, data: {error: {code: 'SNAPSHOT_CHANGED', message: 'Private raw journal error'}}} : result;
+  });
+  try {
+    await f.mount(page, 'board');
+    const status = page.locator('[data-pm-kanban] > [role=status]');
+    const retry = status.getByRole('button', {name: locale === 'en' ? 'Retry work flow' : '重試工作流', exact: true});
+    await expect(retry).toBeVisible();
+    await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
+    expect(reads).toBe(1); // Activation and the initial workspace read share one request.
+    await retry.focus();
+    const original = await retry.elementHandle();
+    const details = await status.locator('details').elementHandle();
+    hold = true;
+    // A background/header refresh must not take focus from the recovery action.
+    await page.locator('[data-pm-refresh]').evaluate((node: HTMLButtonElement) => node.click());
+    await expect.poll(() => Boolean(release)).toBe(true);
+    await expect(retry).toBeFocused();
+    expect(await original!.evaluate(node => node.isConnected)).toBe(true);
+    release!(); hold = false;
+    await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
+    await expect(retry).toBeFocused();
+    expect(await original!.evaluate(node => node.isConnected)).toBe(true);
+    expect(await details!.evaluate(node => node.isConnected)).toBe(true);
+    expect(reads).toBe(2);
+    failed = false; await retry.click();
+    await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(12);
+    expect(reads).toBe(3); expect(f.writes).toEqual([]);
+  } finally {release?.();}
+});
+
 test('S3 saved evidence remains visible without a qualifying review', async ({page}) => {
   const f = reviewFixture(); f.overrides.push((url, r) => {if (url.pathname.endsWith('/quality-reviews')) r.data.reviews = []; return r;});
   await f.mount(page, 'requirements', f.ids.requirements.email);

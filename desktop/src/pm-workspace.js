@@ -1304,7 +1304,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       worktreeChoice?.update();
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         const lazy = lazyThreadSections.get(section);
-        if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)) {await section.refresh(); if (sectionRequired(section)) revealSource(section);}
+        if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)) {
+          // The initial view activation already started its projection read.
+          // Reuse that read rather than replacing its just-rendered status.
+          const activation = !initialReadComplete && activationReads.get(section);
+          activationReads.delete(section);
+          await (activation || section.refresh());
+          if (sectionRequired(section)) revealSource(section);
+        }
         alive(); if (ticket !== sequence) return;
       }
       nativeAnalysis?.update(runs?.runs || []);

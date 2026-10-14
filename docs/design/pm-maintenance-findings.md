@@ -36,7 +36,10 @@ remain immutable. Disappearing findings never become resolved implicitly.
 
 Findings live inside the existing immutable observation, with stable IDs derived
 from workspace, provider configuration digest, native repository ID, source kind
-and provider-native Issue/PR/alert ID. Each occurrence binds the exact policy and
+and provider-native Issue/PR/alert ID. Register, overview and discussion reads
+project a locale-neutral `finding` identity from those stored facts at read time.
+The object is not stored and does not add a schema or `user_version`. See the
+[register contract](pm-register.md#finding-身分). Each occurrence binds the exact policy and
 release baseline. W46 must consume an exact observation ID, document digest and
 finding ID; a stable ID alone grants no execution authority. Existing native PR
 identity is retained for deduplication, and exact existing Connector Issue/work
