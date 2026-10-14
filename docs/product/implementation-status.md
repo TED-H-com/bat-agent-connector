@@ -1,117 +1,39 @@
 # Better Agent Dashboard／Connector 實作狀態
 
-本頁保留底座與整合歷史。最新 PM v1.2 範圍以 [採用計畫](pm-v1.2-plan.md)及
-[PM 狀態](pm-v1.2-status.md)為準；本輪見 [10 月 14 日進度報告](progress-2026-10-14.md)。
-2026-10-12 的證據與阻擋保留在[前次進度](progress-2026-10-12.md)，
-當時接手步驟見 [交接](../handoff/2026-10-12-pm-v1.2.md)。
-M4 本機合併主線、原 Python 3.10 失敗及後續修正另見
-[2026-10-13 候選驗證紀錄](../handoff/2026-10-13-m4-refresh.md)；以下固定來源的歷史證據不覆寫。
-
-## M4 整合前的歷史快照
-
-以下保留 `755f126` 的原紀錄；當時的「目前」與「尚未」不是本次主線狀態。
-
-2026-10-12 15:14 UTC：主線為 `c0027daa`。M4 #116 的遠端 `15752e1` 已通過全部
-desktop jobs，Linux 共享 UI 2,013 項通過／3 項跳過，八份安裝／升級 fixture 已核對。
-但 Python 3.11／3.12／3.13 完整 CI 各有一項晚段 PM 接續提案超時，阻擋合併；3.10 仍在執行。
-本機同步來源重用修正已通過真實 Review 圖、不同來源讀取順序及雙版範圍／憑證回歸，
-正接續原完整流程驗證。修正保留目前權限、原來源與最終送出檢查，
-未放寬等待或 deadline。舊來源的單例成功與平台 artifacts 不替代新候選完整驗證。
-
-M5 workspace PM 選擇與人工序列輸入唯讀觀察仍是獨立本機候選；80 項整合檢查通過，
-人工觀察相關模組在兩個 Python 版本各 155 項通過，完整 M5 驗證尚未完成。
-跨 CLI 用量／效率仍在 W30 規劃，未實作用量 collector 或變更模型政策。
-版本、來源與各項驗證界線見 [PM 開發狀態](pm-v1.2-status.md)。未宣稱 owner 安裝或 live 驗收。
-
-以下保留前次固定來源紀錄；目前狀態以上述快照與 PM 開發狀態為準。
-
-2026-10-12 13:27 UTC：[M4 整合 PR #116](https://github.com/teddashh/bat-agent-connector/pull/116)
-尚未合併。`64c848a` 的四個 Python CI 均為 5,770 項通過、3 項失敗、51 項跳過：
-兩項公開版本 API 讀取失敗，以及完整流程的維修 GitHub 觀察超時。
-Windows、Mac Intel、Apple Silicon 與 Windows endpoint jobs 通過；Linux 共享 UI 為
-2,012 項通過、1 項失敗、3 項跳過，未執行後續 Linux 套件驗證。三平台的新版安裝及
-0.2.5 → 0.2.6 升級回執已核對，不能當成四平台均通過。修正與最終候選驗證仍在進行。
-
-本次接續候選已整合公開版本 API 修正、原 key 恢復 UI 測試的請求等待，以及同步歷史來源
-重用。API／來源回歸於 Python 3.12／3.10 各 74 項通過；相關 UI 16 項通過。
-真實維護帳本的 observation child 啟動查核由 8,705 次 SELECT 降為 4,449 次，
-撤權、取消、期限與來源撤回回歸通過；此數字不是整次觀察耗時或完整流程通過的證據。
-原完整流程與新候選 CI 仍待核對，未放寬原 60 秒 wave 時限。
-
-較早 M4 候選 `c31a54a` 曾通過同帳本完整流程，
-Python 3.12 為 1 項通過、296.86 秒。流程涵蓋討論與計畫採用、相依需求驗收、共用品質視圖、
-發布、自動 Maintain、自有維護修復、兩次 Review、暫停重開，以及中央重啟後使用原操作
-接續 PM 對話並明確採用新計畫；原工作、Sprint、快照與人工資源保持原樣。
-
-本次候選補上一般批次的原回合完成證據、人工單次輸入的唯讀活動查核、Roadmap 品質與
-Brief 偏差投影。歷史品質查核只讀原固定計畫版本，避免目前草稿的附帶顯示形成來源循環；
-同步來源重用保留每次新效果的權限檢查，未知回覆仍查回原操作，不重送。
-早期失敗與各固定來源的分段檢查保留於 [PM 開發狀態](pm-v1.2-status.md)，
-單次完整流程的通過不代替上列失敗的修正、最終候選完整 CI 或桌面安裝證據。
-
-截至本次查核，[#115](https://github.com/teddashh/bat-agent-connector/pull/115) 已合併為
-`c0027daa`。其精確來源 `2b0211e` 及合併後四個 Python 完整 CI 均各 5,684 項通過、
-51 項跳過，desktop 五個 jobs 與 Pages 均通過；原四平台 0.2.4 → 0.2.5 升級回執已核對。
-本次 M4 候選為 core `0.2.6`／desktop `0.1.2`，須按本次 PR 的精確來源核對完整
-Python 3.10–3.13、全部 desktop jobs，以及固定 `50dbb7e`／core `0.2.5` 起始的四平台
-實包升級回執；既有 #114／#115 結果不能代替新版本驗證。
-
-獨立 M5 workspace 分析選擇 `736b2a2` 有兩個 Python 版本各 19 項、UI 97 項與 Node
-34 項通過，尚未合併，不屬於本次 M4 候選，也不代表完整 M5／M6 已完成。
-本批未安裝到使用者環境、未發布穩定版，沒有新增 live 模型／主機驗收宣稱。
-逐項來源、限制與 W01–W52 狀態見 [PM v1.2 開發狀態](pm-v1.2-status.md)。
-
-查核日期：2026-10-10。依 [共用產品與 Tauri 方向](realignment-v2.md)；兩份計畫是同一產品的 UI 修訂，共用一份功能 backlog。歷史交接見
-[`2026-10-08-dispatch.md`](../handoff/2026-10-08-dispatch.md)。此表以 source evidence
-追蹤，不以測試數或 PR 數代替產品驗收。開工時 main 為 `224bc7e`（#41 已合併）；
-本輪已依序合併 #36（`873dfa1`）、#35（`58d58a8`）、#37（`305cb6e`）及 #38（`98931f7`）。下面的接手基線保留歷史，
-已合併證據以「本輪收斂結果」為準，續作以「目前續作」為準。
-
+本頁保留底座與整合歷史。最新 PM 範圍以[採用計畫](pm-v1.2-plan.md)及
+[PM 狀態](pm-v1.2-status.md)為準；本輪 PR 與證據見[10 月 14 日進度](progress-2026-10-14.md)。
+前次原始測試及阻擋保留在[10 月 12 日報告](progress-2026-10-12.md)與[歷史交接](../handoff/2026-10-12-pm-v1.2.md)。
+M4 #116 的候選合併與驗證紀錄見[2026-10-13 候選驗證紀錄](../handoff/2026-10-13-m4-refresh.md)。
 
 ## 目前續作
 
-本輪以已合併主線 `aba02180` 為準：專案總覽 → 原紀錄 → PM 討論 → 審閱並採用 → 明確回報解決。
-Python Connector／Task Service 保持唯一中央權威；Web／Tauri 共用 `desktop/src`。
+固定產品來源：已合併主線 `ab960ed23f734944470b982bd2f66b0c30300151`（#161）。
+Python Connector／Task Service 是唯一中央權威；Web／Tauri 共用 `desktop/src`。
 
-| 項目 | 交付範圍 | 合併狀態 |
-| --- | --- | --- |
-| [#132 後端](https://github.com/teddashh/bat-agent-connector/pull/132) | 固定相依清冊／impact、唯讀時程、登記、每日資源桶、即時總覽、討論來源／改名及提案可採用性 | 2026-10-13 以 `0c354861` 合併；尚未安裝或實機驗收 |
-| [#134 決策流程後端](https://github.com/teddashh/bat-agent-connector/pull/134) | 採用後目標、近期決策、原需求 ID 阻礙比對及採用後問題解決回報 | 2026-10-14 以 `f25e1556` 合併；尚未安裝或實機驗收 |
-| [#139 發現身分](https://github.com/teddashh/bat-agent-connector/pull/139) | 中央登記表、總覽與討論來源的結構化 `finding`；`title` 仍為 null，撤回時移除身分 | 2026-10-14 以 `2b8c4add` 合併；`aba02180` 已包含實作，尚未安裝或實機驗收 |
-| [#133 前端](https://github.com/teddashh/bat-agent-connector/pull/133) | 共用管理檢視與 Session、[walkthrough](../../desktop/tests/pm-walkthrough.mjs)、第 5b／6 輪修整 | 2026-10-14 以 `cb7e9f42` 合併，晚於 #132／#134；尚未安裝或實機驗收 |
+| 主線增量 | 人現在可以看到或做什麼 |
+| --- | --- |
+| #132／#134／#139／#133 | 即時總覽、來源討論、採用、原問題解決回報、需求追溯、登記、時程、相依、資源、看板與唯讀人工工作階段。 |
+| #154／#157 | 搜尋討論、按需開啟討論資料；篩選登記與看板，開啟共用詳情。 |
+| #147／#150／#149 | 開啟治理、會議、後續追蹤、維護及工程工具；沿用原來源、草稿與操作恢復。 |
+| #151／#158 | 查看進度仍缺的驗收、比較固定報告、閱讀需求詳情；資料未變的刷新保留列位置與焦點。 |
+| #153 | 先貼 BAT 連線網址並驗證儲存，再查看工作階段；儲存庫與驗證命令依工作需要設定。 |
+| #156／#161 | 查看獨立工作目錄、檢查點、執行與驗證詳情；發布來源預覽保留理由欄文字與焦點。 |
 
-即時總覽與固定報告分開；近期決策不代替待決數量。採用後可明確回報問題已解決；這項回報仍標示為未評估。
-具名發現、可讀時程軸、Unknown／尚無紀錄與一致的 Agent 讀取已合併。
-來源撤回、草稿、人工唯讀與原操作 key 保留。
+即時總覽與固定報告分開。採用、內容核准、需求驗收、合併、部署與 runtime 完成各有證據。
+來源撤回移除相關列、計數與詳情；人工資源唯讀；結果未知沿用原請求與 key。
 
 | 層級 | 狀態 |
 | --- | --- |
-| 分支整合（branch） | #133 整合分支已合入主線；`ux/docs-r6` 是公開文件更新工作線。 |
-| 主線（merged） | `aba02180` 含 #132／#134／#139／#133；公開圖庫固定於此來源，以合成會員專案擷取。 |
-| 安裝／原生驗收（installed/native） | 本輪尚未安裝或原生驗收。 |
-| 實機驗收（live-tested） | 本輪尚未實機驗收；CI 與截圖不代替實際 BAT／provider／模型／部署回執。 |
+| 分支（branch） | `ux/docs-ux-v2` 是文件工作線；不包含產品程式變更。 |
+| 主線（merged） | 圖庫固定於 `ab960ed2`，已包含上述十項 UI PR。 |
+| 安裝／原生（installed/native） | 本輪沒有安裝或原生驗收回執。 |
+| 實機（live-tested） | 本輪沒有實際 BAT／provider／模型／部署驗收回執。CI 與截圖不是實機證據。 |
 
-[Walkthrough 合約](../design/pm-decision-walkthrough.md)已包含 Resolve 與 Return，沒有原候選的契約阻擋。
-腳本使用真中央及 mock 外部傳輸；本輪結果見[進度報告](progress-2026-10-14.md)，不是 native／live 驗收。
-
-剩餘視覺修整是 **第 7 輪**，由 [Issue #140](https://github.com/teddashh/bat-agent-connector/issues/140) 追蹤；尚未實作。
-
-- Discussions：討論列、來源脈絡與提案閱讀的收尾。
-- 登記表與 Board：列、卡片、篩選與詳情的層級修整。
-- 次要面板：按需展開工具的版面與文案。
-- Shell：導覽、工作樹與窄螢幕層級。
-- 載入：首次開啟、返回與更新時的安靜狀態及穩定版面。
-
-下一條工作線以 `aba02180` 的狀態為準：
-
-- [#141 本機首次使用](https://github.com/teddashh/bat-agent-connector/issues/141)：單次貼上 BAT 連線網址、易讀錯誤、安靜狀態、含建置識別的診斷，以及「這裡能做什麼」；仍待實作。
-- [#142 本機 BAT／本機 Git 設計](https://github.com/teddashh/bat-agent-connector/pull/142)：設計文件已合併，對應 #141；[本機主機合約](../design/local-host.md)尚未實作。
-- [#143 Overview 的 PM 重點判讀](https://github.com/teddashh/bat-agent-connector/issues/143)：[#144 設計文件](https://github.com/teddashh/bat-agent-connector/pull/144)已合併；[判讀合約](../design/pm-overview-assessment.md)尚未實作。
-
-安裝與實機驗收另行留證；遠端資源收集、交付效率歸因、一般 native coding、AHP 寫入、
-其餘文件／簡報與完整 PM v1.2 backlog 仍待完成。
-詳見[PM 狀態](pm-v1.2-status.md)與[管理工作台合約](../design/pm-project-control-center.md)。
-M4／M5 保留前次固定候選與歷史檢查，未由本輪文件或截圖重新驗證。
+第 7 輪已合併的部分不再列為待實作；審閱中的項目見[進度報告](progress-2026-10-14.md#審閱中與歷史候選)。
+本機連線網址已由 #153 提供；[本機 Git transport](../design/local-host.md)仍只有設計。
+[Overview PM 重點判讀](../design/pm-overview-assessment.md)也只有設計，不等於現有進度提示。
+一般 native coding、AHP 寫入、其餘文件／簡報、更多 CLI、遠端資源收集與交付效率歸因仍待做。
+完整工作表見[PM 狀態](pm-v1.2-status.md)；M4／M5 保留歷史候選及檢查，不由本輪重新驗證。
 
 以下為既有桌面／Connector 底座及前次固定來源紀錄，標示日期屬於當時，不能用來推定新的 PM 里程碑已完成。
 

@@ -1,4 +1,5 @@
 // Compact central record creation. Expanded fields never start an agent or select a filesystem path.
+import {button} from './ui/components.js';
 const equal = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && equal(a[key], b[key])));
@@ -9,7 +10,7 @@ const terminal = value => ['succeeded', 'failed', 'cancelled'].includes(value?.s
 const admissionRefusals = {INVALID_PARAMS: 422, INVALID_TARGET: 422, NAME_TAKEN: 409,
   PROJECT_NOT_FOUND: 404, WORK_ITEM_NOT_FOUND: 404, PROJECT_ARCHIVED: 409,
   WORK_ITEM_ARCHIVED: 409, WRONG_PROJECT: 409};
-export function createRecordForm({h, t, api, caps, guard, namespace, kind, projectId = null, onCreated, errorBox, opStatus}) {
+export function createRecordForm({h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, errorBox, opStatus}) {
   const project = kind === 'project', action = project ? 'project.create' : 'work_item.create';
   const target = project ? {} : {project_id: projectId}, key = `batc.create.${namespace}.${kind}.${projectId || 'root'}`;
   const primary = project ? 'name' : 'title', fields = new Map(), choices = new Map();
@@ -110,16 +111,16 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
         status.replaceChildren(errorBox(error));} catch { /* retired or storage unavailable */ }
     } finally {busy = false; try {guard(); update();} catch { /* retired */ }}
   };
-  const create = h('button', {class: 'primary', type: 'submit'}, t(project ? 'add_project' : 'add_item'));
-  const review = h('button', {class: 'secondary', type: 'button', hidden: true, onclick: () => {
+  const create = button({variant: 'primary', type: 'submit', label: t(project ? 'add_project' : 'add_item')});
+  const review = button({variant: 'secondary', hidden: true, label: t('create_edit_request'), onClick: () => {
     guard(); if (busy || !(terminal(operation) || saved.intent?.initialAdmissionRefused)) return;
     try {
       const next = {version: 1, values: saved.values}; localStorage.setItem(key, JSON.stringify(next)); saved = next; operation = null;
       receipt.replaceChildren(); status.replaceChildren(); update();
     } catch (error) {status.replaceChildren(errorBox(error));}
-  }}, t('create_edit_request'));
+  }});
   const form = h('form', {class: 'panel', 'data-create-record': kind, onsubmit: event => {event.preventDefault(); run();}},
-    scope, compact, advanced, h('div', {class: 'actions'}, create, review, unsaved), status, receipt);
+    showScope ? scope : null, compact, advanced, h('div', {class: 'actions'}, create, review, unsaved), status, receipt);
   function update() {
     for (const input of fields.values()) input.disabled = !allowed || !permitted() || busy || !!saved.intent || damaged;
     create.disabled = !allowed || !permitted() || busy || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal(operation);

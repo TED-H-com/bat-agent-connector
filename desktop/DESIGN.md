@@ -22,6 +22,12 @@ projection read can still be superseded by a newer withdrawal read. PM record ev
 follow the same visibility rule; workspace authority and lifecycle admission have
 their own scoped reads even while the Lifecycle drawer is closed. A newer event
 read must restore lifecycle gates withdrawn by a superseded manual Refresh.
+An unrelated background refresh retains the last centrally observed lifecycle
+policy until the new read settles, so it cannot disable a pressed Save button and
+lose the click. Manual Refresh and selected-workspace authority/lifecycle events
+withdraw admission before reading; a policy event in a coalesced page still closes
+the gates. Failed or withdrawn lifecycle reads clear the prior policy, and older
+responses cannot restore it.
 
 ## Tokens and type
 
@@ -525,6 +531,8 @@ catalogue withdrawal clears the view. Inspector actions retain their nodes acros
 age updates, and closing returns to the current selection.
 Milestone destinations apply once for the current route. Live refresh retains the
 reader's search and restores group-heading focus by central milestone identity.
+Unchanged delivery reads retain row nodes, position and focus regardless of response
+completion order; change fingerprints order sources by stable work-item ID.
 An authorized unassigned-work read can resolve a work destination without an adopted plan.
 
 Existing quality, evidence, specs, package, handoff and publication controls move
@@ -623,6 +631,10 @@ the workspace version, and the source binding digest. Capture again is the heade
 It is primary only when this member can run it. Otherwise it is a secondary button with the blocking reason below the header,
 where it wraps without displacing Refresh. Maintenance policy, release baselines, maintenance checks, and
 workload observations stay in the secondary cards.
+
+Release source previews update the existing repository editor in place. A preview
+arriving while the owner enters a rationale preserves textarea focus and keyboard
+input; registration still requires reviewed source evidence and the original CAS.
 
 The header names the capture commit and its UTC date. A Stale pill is shown only when
 the projection says `stale` is true. Unknown freshness stays out of the header and is
@@ -871,6 +883,8 @@ An unchanged read failure keeps its status, Details and Retry nodes, including
 keyboard focus, while another read is pending and when the same error returns.
 Initial activation and the workspace load share that first projection read;
 later events still start their own reads and invalidate older responses.
+Agent filter options use stable work-item order rather than source response order,
+so identical background reads retain the options and current keyboard focus.
 Selections use `?select=` in both views and reopen after returning from another
 view. Current requirement chips link to Requirements; earlier-plan text is read
 from its bound revision and never replaced by a raw ID in a chip or filter.
@@ -888,15 +902,20 @@ survive remounting; a changed native identity requires an explicit new selection
 ## Session workspace
 
 Opened from Work or a project tree. The page header shows the session title and agent
-mark, one status pill, and one quiet meta line: project, host, and a compact observed
+mark, an optional status pill, and one quiet meta line: project, host, and a compact observed
 time (relative within a day, otherwise a short local time with no seconds). Send stays
 the only primary action, on the composer's queue row. Interrupt is a danger button.
 Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the overflow
 menu. Below 600px the session caption and metadata keep the full header width, with
 actions on the following row. An absent title says Untitled session, and an
 unreported agent uses Unknown.
-A manual or unconfirmed session shows Read-only and has no send, answer, or
-interrupt control.
+List rows, the rail and the header show status only for pending requests, running,
+out-of-sync observations, and managed failure or attention states. Unloaded tabs
+stay quiet and say Not open in BAT / BAT 中未開啟 in Details; loaded tabs with no
+reported activity say BAT did not report activity / BAT 未回報活動狀態 there.
+A manual or unconfirmed session has one Read-only line and no send, answer, or
+interrupt control. Details label Session ID / 工作階段 ID and Workspace / 工作區
+and show each observed time once, formatted with the shared time stamp.
 On mobile, the Session title and metadata use the full header width, with actions
 on the next row. Wider fonts must not turn the title into a tall narrow column
 that squeezes the pending question scroller below a whole answer input.
@@ -912,6 +931,10 @@ while the reader is scrolled up show New messages and do not move the visible ro
 Scrolling up without new content shows Back to latest. Activating either restores
 transcript focus. A pinned reader follows layout changes and a successful own send.
 Tool disclosures preserve the reader's toggle until the tool changes state.
+An incomplete reading count stays a lower bound (N+ unread / N+ 則未讀), including
+beside the archive budget or unconfirmed-history note. Missing-ID and unconfirmed
+archive explanations stay in Details, including when both reasons apply. Complete
+counts keep Last observed; unknown counts remain unknown. These notes use muted text.
 Approval prompts sit above the composer and keep their original operation keys.
 Their preview is a wrapping block, separate from transcript rows. The composer
 occupies at most half the viewport; questions scroll inside it while Answer and
@@ -1067,3 +1090,15 @@ unchanged.
 it. Rendering an error still records the same refresh-cycle failure, so failed reads
 cannot acknowledge event checkpoints or enable mutations. IME Escape leaves menus,
 inspectors and the mobile drawer open; ordinary Escape retains focus restoration.
+
+PM panels with their own failure sentence pass that sentence as the error summary.
+The original error reaches the renderer unchanged, so its code and server message
+remain in one Details disclosure and the refresh gate retains the failure. Retry
+stays adjacent. Fixed-source mismatch failures keep the panel's mismatch sentence;
+other failures keep its unavailable sentence. Report reads reuse Charter's status
+element by reference in the live inspector or saved Overview, preserving its
+children and withdrawal/retry ownership without a second error in Versions.
+Meetings uses one plain empty sentence inside its own card: writers without a
+Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
+Its title and Refresh stay on the first row; the read-only reason wraps beneath
+the title when the inspector is narrow instead of being squeezed between them.

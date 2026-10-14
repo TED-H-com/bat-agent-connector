@@ -1,12 +1,14 @@
 // Reordering submits one complete sibling scope through the existing operation.
 // The in-memory drag source rejects foreign payloads and cross-parent drops.
+import {iconButton} from './ui/components.js';
 let drag = null;
 const ids = (rows, key) => rows.map(row => row[key]);
 const same = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
 export function treeInteractions({h, t, row, scope, siblings, index, key, run, open, guard, editing}) {
   const me = siblings[index];
-  const handle = h('button', {class: 'mini tree-drag-handle', type: 'button', draggable: 'true',
-    title: t('tree_drag_help'), 'aria-label': t('tree_drag', {name: me.name || me.title})}, '↕');
+  const handle = iconButton({icon: 'grip-vertical', label: t('tree_drag', {name: me.name || me.title}),
+    draggable: 'true', title: t('tree_drag_help')});
+  handle.classList.add('tree-drag-handle');
   const clear = () => {
     if (drag) {drag.editing(false); drag = null;}
     for (const target of document.querySelectorAll('.tree-drop-target')) target.classList.remove('tree-drop-target');

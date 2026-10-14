@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {openPmSection} from './pm-navigation.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {test,expect} from '@playwright/test';
@@ -50,7 +51,7 @@ test('withdrawal while a source list is pending cannot restore private facts',as
 });
 
 test('mismatched Git receipt blocks facts and new materialization',async({page})=>{
-  const f=specFixture();f.save();f.state.wrong=true;await mountSpec(page,f);await expect(panel(page)).toContainText('does not match the original specification');await expect(panel(page).getByRole('heading',{name:'Fixed specification saved',exact:true})).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+  const f=specFixture();f.save();f.state.wrong=true;await mountSpec(page,f);await expectErrorDetails(panel(page), 'PM_SPEC_RESPONSE_MISMATCH');await expect(panel(page).getByRole('heading',{name:'Fixed specification saved',exact:true})).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
 });
 
 test('selected attachment handoff freezes exact spec and artifact references',async({page})=>{

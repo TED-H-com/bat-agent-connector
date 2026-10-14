@@ -842,10 +842,11 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }
     if (id === 'issues' && staleSections.has(register)) setHeaderMeta('');
   }
-  async function refreshSection(section, activation = false) {
+  async function refreshSection(section, activation = false, event = false) {
     const read = activation ? activationReads.get(section) : null;
     activationReads.delete(section);
-    await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({event:true}) : section.refresh()));
+    await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({event:true})
+      : section === lifecycle ? section.refresh({event}) : section.refresh()));
     alive();
     if (sectionRequired(section)) revealSource(section);
   }
@@ -1354,7 +1355,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           // Reuse that read rather than replacing its just-rendered status.
           const activation = !initialReadComplete && activationReads.get(section);
           activationReads.delete(section);
-          await (activation || section.refresh());
+          await (activation || (section === lifecycle ? section.refresh({event}) : section.refresh()));
           if (sectionRequired(section)) revealSource(section);
         }
         alive(); if (ticket !== sequence) return;
@@ -1488,6 +1489,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const kind = event.resource_type;
     if (!pmEvent(kind) && !liveEvent(kind)) return;
     invalidateSections();
+    // Withdraw changed authority before coalescing: an earlier unrelated event in
+    // this page must not hide the selected workspace's lifecycle invalidation.
+    const lifecycleChanged = ['pm_workspace','pm_lifecycle'].includes(kind) && event.resource_id === workspaceId;
+    if (lifecycleChanged) lifecycle?.withdraw();
     // A thread refresh retains its own context, proposal and receipt readers, while
     // the rest of the workspace stays stale until its view or drawer is opened.
     if (threadId && pmEvent(kind)) return eventRead(load, () => load({event:true}));
@@ -1497,7 +1502,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const section of sectionModules()) if (sectionRequired(section)) {
       if (section === issues && kind !== 'pm_workspace' && !kind.startsWith('pm_issue')) continue;
       if (section === dependencies && !pmEvent(kind) && !['project','integration'].includes(kind)) continue;
-      reads.push(eventRead(section, () => refreshSection(section)));
+      reads.push(eventRead(section, () => refreshSection(section, false, !lifecycleChanged)));
     }
     // Discussions has no primary projection object. Its own thread list is the read.
     if (!threadId && workbench?.selected() === 'discussions' && pmEvent(kind)) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));

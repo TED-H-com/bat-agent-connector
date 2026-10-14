@@ -258,6 +258,8 @@ export function railPresentation(state) {
   if (state.key === 'pending_ask_user') return {labelKey: 'rail_asking', loud: true, tone: state.tone || 'stale'};
   if (state.key === 'workspace_needs_you' || state.key === 'pending_permission' || state.key === 'wi_state_awaiting_approval')
     return {labelKey: 'rail_needs_you', loud: true, tone: state.tone || 'stale'};
+  if (state.key === 'sessions_stale' || state.key === 'sessions_not_seen')
+    return {labelKey: 'sessions_pill_stale', loud: true, tone: state.tone || 'stale'};
   if (state.key === 'op_failed' || state.key === 'task_state_failed' || state.key === 'wi_state_failed')
     return {labelKey: 'rail_failed', loud: true, tone: 'bad'};
   if (state.key === 'obs_value_streaming') return {labelKey: 'rail_running', loud: false, tone: state.tone || 'info'};

@@ -21,6 +21,7 @@ import "./shell.css";
 import "./pm-overview.css";
 import "./pm-discussions.css";
 import "./global-screens.css";
+import "./observed-resource.css";
 import "./pm-requirements.css";
 import "./pm-work-inspector.css";
 import "./pm-session.css";

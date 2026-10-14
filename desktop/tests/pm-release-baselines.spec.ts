@@ -176,3 +176,29 @@ for(const native of [false,true])test(`${native?'Native':'Web'} Chinese release 
   await register(page).getByRole('button',{name:'登記發布基準',exact:true}).click();await expect(section(page).locator('[data-release-current]')).toContainText('v1.4.0');
   expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body.params.rationale).toBe('先維持這個已發布版本');await context.close();
 });
+
+for(const language of ['en','zh-TW'])for(const native of [false,true])test(`${native?'Native':'Web'} ${language} preview arriving during rationale entry preserves keyboard input`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale:language,baseURL}),page=await context.newPage(),f=releaseFixture();
+  const chinese=language==='zh-TW',reason=chinese?'先維持這個已發布版本':'Keep the published version';
+  let release!:()=>void;
+  f.state.deferPreview=new Promise(resolve=>{release=resolve;});
+  try{
+    await mountConversation(page,native,f.dispatch);await page.goto(releaseRoute);await openPmSection(page,'dependencies','ui_baselines');
+    await page.locator('[data-release-register] > summary').click();
+    await page.getByLabel(chinese?'已關聯的專案與儲存庫':'Bound project and repository',{exact:true}).selectOption(JSON.stringify([bindingId,repositoryName]));
+    await page.getByRole('button',{name:chinese?'讀取已發布來源':'Read published sources',exact:true}).click();await page.locator('[data-release-choice] input').check();
+    await page.getByRole('button',{name:chinese?'讀取固定來源證據':'Read fixed source evidence',exact:true}).click();
+    await expect.poll(()=>f.state.reads.some(path=>path.includes('preview'))).toBe(true);
+    const rationale=register(page).getByLabel(chinese?'選定此基準的理由':'Reason for selecting this baseline',{exact:true});
+    const save=register(page).getByRole('button',{name:chinese?'登記發布基準':'Record release baseline',exact:true});
+    // A fill focuses the field before inserting text. Deliver the response at that boundary.
+    await expect(save).toBeDisabled();await rationale.focus();
+    release();await expect(section(page).getByRole('heading',{name:chinese?'已檢視來源':'Reviewed source',exact:true})).toBeVisible();
+    await expect(rationale).toBeFocused();
+    const original=f.registration();
+    await page.keyboard.insertText(reason);
+    await expect(rationale).toHaveValue(reason);expect(f.state.writes).toHaveLength(0);
+    await save.click();await expect(section(page).locator('[data-release-current]')).toContainText('v1.4.0');
+    expect(f.state.writes).toHaveLength(1);expect(f.state.writes[0].body).toEqual({...original,params:{...original.params,rationale:reason}});
+  }finally{release();await context.close();}
+});

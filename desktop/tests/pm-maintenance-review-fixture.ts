@@ -125,7 +125,8 @@ export async function boot(page:Page,locale='en'){
     const win=window as any;let config=await win.reviewFixtureConfig();
     const api=async(method:string,path:string,body:any,key:any)=>{const result=await win.reviewFixtureRequest({method,path,body,idempotency_key:key});
       if(result.status>=400)throw Object.assign(Error(result.data.error.message),{code:result.data.error.code,status:result.status});return result.data;};
-    const errorBox=(error:any)=>h('p',{class:'error'},error.message),input=(label:string,{multiline=false,max=4000,required=true,value=''}:any={})=>{
+    const {createErrorBox}=await import('/__review_src/test-error-box.js');
+    const errorBox=createErrorBox(h,t,locale),input=(label:string,{multiline=false,max=4000,required=true,value=''}:any={})=>{
       const field=h(multiline?'textarea':'input',{'aria-label':t(label),maxlength:max,required}) as HTMLInputElement;field.value=value;return field;
     },labelled=(key:string,field:any)=>h('label',{},t(key),field),caps=()=>config.caps,alive=()=>{};
     const form=(options:any)=>durableForm({h,t,api,caps,guard:alive,namespace:'review-ui.'+config.caps.actor,errorBox,...options});
