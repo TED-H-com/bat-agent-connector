@@ -119,6 +119,16 @@ export function usageChart({h, t, buckets, now = new Date(), exactKey, window: b
       left = Math.max(0, Math.min(left, Math.max(0, width - textWidth)));
       span.style.left = left + 'px';
     });
+    // Localized dates and edge clamping can exceed the nominal tick spacing.
+    // Keep the final date and admit earlier labels only when their text fits.
+    const gap = 8, finalLeft = nodes.at(-1).offsetLeft;
+    let previousRight = -gap;
+    for (const span of nodes.slice(0, -1)) {
+      if (span.hidden) continue;
+      const left = span.offsetLeft, right = left + span.offsetWidth;
+      if (left < previousRight + gap || right + gap > finalLeft) span.hidden = true;
+      else previousRight = right;
+    }
     days.forEach((day, index) => {
       const x0 = index * slot;
       const x = x0 + (slot - barW) / 2;

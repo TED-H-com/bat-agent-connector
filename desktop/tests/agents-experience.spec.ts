@@ -373,17 +373,18 @@ test('the drawer scrim survives a tick at 1000px', async ({browser, baseURL}) =>
   await context.close();
 });
 
-test('x labels and the in-progress marker stay inside the plot', async ({browser, baseURL}) => {
-  const context = await browser.newContext({baseURL, locale: 'en-US', viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
+for (const locale of ['en', 'zh-TW'] as const) test(`x labels and the in-progress marker stay inside the plot without collisions ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}, timezoneId: 'Asia/Taipei', reducedMotion: 'reduce'});
   const page = await context.newPage();
-  const fixture = tracked('en');
+  const fixture = tracked(locale);
+  const periodName = (period: string) => locale === 'en' ? period : period.replace('d', ' 天');
   await boot(page, fixture.dispatch);
   await openAgents(page, 1440);
   for (const width of [390, 768, 1440]) {
     await page.setViewportSize({width, height: width === 390 ? 844 : 900});
     for (const period of ['7d', '30d', '90d']) {
       const before = fixture.reads.length;
-      await page.getByRole('radio', {name: period, exact: true}).click();
+      await page.getByRole('radio', {name: periodName(period), exact: true}).click();
       await expect.poll(() => fixture.reads.length).toBeGreaterThan(before);
       await expect(page.locator('[data-resource-chart] g.day')).toHaveCount(Number(period.slice(0, -1)));
       await expect.poll(async () => page.locator('.pm-agents-xlabels span', {hasText: /\d/}).count()).toBeGreaterThan(0);
@@ -392,12 +393,18 @@ test('x labels and the in-progress marker stay inside the plot', async ({browser
         const plot = box.getBoundingClientRect();
         return label.width > 0 && (label.left < plot.left - 1 || label.right > plot.right + 1) ? [node.textContent] : [];
       })), {message: `${period} at ${width}`}).toEqual([]);
+      await expect.poll(() => page.locator('.pm-agents-xlabels').evaluate(box => {
+        const labels = [...box.querySelectorAll('span')].filter(node => node.textContent && !node.hidden)
+          .map(node => ({text: node.textContent, box: node.getBoundingClientRect()})).filter(label => label.box.width > 0);
+        return labels.slice(1).flatMap((label, index) => labels[index].box.right + 4 > label.box.left
+          ? [`${labels[index].text} / ${label.text}`] : []);
+      }), {message: `${locale} ${period} at ${width}: adjacent dates need a readable gap`}).toEqual([]);
     }
   }
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.locator('.pm-agents-list')).toBeVisible();
   const markerReads = fixture.reads.length;
-  await page.getByRole('radio', {name: '7d', exact: true}).click();
+  await page.getByRole('radio', {name: periodName('7d'), exact: true}).click();
   await expect.poll(() => fixture.reads.length).toBeGreaterThan(markerReads);
   await expect(page.locator('g.day')).toHaveCount(7);
   await expect.poll(async () => page.locator('[data-resource-chart] g[data-incomplete="in_progress"] .marker').evaluate(node => {

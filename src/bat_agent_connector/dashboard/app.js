@@ -13376,6 +13376,14 @@ function usageChart({ h, t, buckets, now = new Date(), exactKey, window: bounds,
 			left = Math.max(0, Math.min(left, Math.max(0, width - textWidth)));
 			span.style.left = left + "px";
 		});
+		const gap = 8, finalLeft = nodes.at(-1).offsetLeft;
+		let previousRight = -8;
+		for (const span of nodes.slice(0, -1)) {
+			if (span.hidden) continue;
+			const left = span.offsetLeft, right = left + span.offsetWidth;
+			if (left < previousRight + gap || right + gap > finalLeft) span.hidden = true;
+			else previousRight = right;
+		}
 		days.forEach((day, index) => {
 			const x0 = index * slot;
 			const x = x0 + (slot - barW) / 2;

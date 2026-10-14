@@ -162,7 +162,8 @@
 - Show sourced token totals, a daily usage trend per CLI aligned to local days, and quota per pool
   and window in Agents. The trend is requested only when the server offers daily buckets, and an
   unavailable or withdrawn source leaves the totals, chart and inspector together.
-  Paused source snapshots remain fixed during event refreshes.
+  Paused source snapshots remain fixed during event refreshes. Localized chart dates
+  keep a measured gap on narrow screens without dropping daily observations.
 - Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
   shared page header, inbox groups, operations table and inspector. Pending opens each operation
   from its inspector and reports a failed read instead of an empty inbox, and every registered
