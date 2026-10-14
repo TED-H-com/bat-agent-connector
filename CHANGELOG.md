@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- PM background updates no longer disable a pressed Save button and lose a plan
+  revision submission. Explicit refreshes, lifecycle changes and source withdrawal
+  still close admission gates, with late-response protection preserved.
+
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
 

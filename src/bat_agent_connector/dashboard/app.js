@@ -25929,10 +25929,12 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		withdraw();
 		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_lifecycle_unknown")));
 	}
-	async function refresh() {
-		withdraw();
+	async function refresh({ event = false } = {}) {
+		if (!event || !ready || !current) {
+			withdraw();
+			status.replaceChildren(skeleton(2));
+		} else ++serial;
 		const ticket = serial;
-		status.replaceChildren(skeleton(2));
 		try {
 			const value = checkScope(await api("GET", endpoint));
 			alive();
@@ -39234,10 +39236,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 		if (id === "issues" && staleSections.has(register)) setHeaderMeta("");
 	}
-	async function refreshSection(section, activation = false) {
+	async function refreshSection(section, activation = false, event = false) {
 		const read = activation ? activationReads.get(section) : null;
 		activationReads.delete(section);
-		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section.refresh()));
+		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section === lifecycle ? section.refresh({ event }) : section.refresh()));
 		alive();
 		if (sectionRequired(section)) revealSource(section);
 	}
@@ -40172,7 +40174,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden)) {
 					const activation = !initialReadComplete && activationReads.get(section);
 					activationReads.delete(section);
-					await (activation || section.refresh());
+					await (activation || (section === lifecycle ? section.refresh({ event }) : section.refresh()));
 					if (sectionRequired(section)) revealSource(section);
 				}
 				alive();
@@ -40429,6 +40431,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const kind = event.resource_type;
 		if (!pmEvent(kind) && !liveEvent(kind)) return;
 		invalidateSections();
+		const lifecycleChanged = ["pm_workspace", "pm_lifecycle"].includes(kind) && event.resource_id === workspaceId;
+		if (lifecycleChanged) lifecycle?.withdraw();
 		if (threadId && pmEvent(kind)) return eventRead(load, () => load({ event: true }));
 		const reads = [];
 		if (!pmEvent(kind) && (threadId || workbench?.selected() === "discussions")) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
@@ -40436,7 +40440,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		for (const section of sectionModules()) if (sectionRequired(section)) {
 			if (section === issues && kind !== "pm_workspace" && !kind.startsWith("pm_issue")) continue;
 			if (section === dependencies && !pmEvent(kind) && !["project", "integration"].includes(kind)) continue;
-			reads.push(eventRead(section, () => refreshSection(section)));
+			reads.push(eventRead(section, () => refreshSection(section, false, !lifecycleChanged)));
 		}
 		if (!threadId && workbench?.selected() === "discussions" && pmEvent(kind)) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
 		return settleRefreshes(reads);

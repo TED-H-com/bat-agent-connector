@@ -22,6 +22,12 @@ projection read can still be superseded by a newer withdrawal read. PM record ev
 follow the same visibility rule; workspace authority and lifecycle admission have
 their own scoped reads even while the Lifecycle drawer is closed. A newer event
 read must restore lifecycle gates withdrawn by a superseded manual Refresh.
+An unrelated background refresh retains the last centrally observed lifecycle
+policy until the new read settles, so it cannot disable a pressed Save button and
+lose the click. Manual Refresh and selected-workspace authority/lifecycle events
+withdraw admission before reading; a policy event in a coalesced page still closes
+the gates. Failed or withdrawn lifecycle reads clear the prior policy, and older
+responses cannot restore it.
 
 ## Tokens and type
 
