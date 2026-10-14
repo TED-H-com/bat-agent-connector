@@ -474,9 +474,10 @@ test('Requirements links keep their return query; Discuss returns to the exact S
   const back = page.locator('[data-discussion-back]');
   await expect(back).toHaveAttribute('href', href);
   await expect(back).toHaveText('Back to Session');
-  await expect(page.locator('[data-discussion-context=work_item]')).toHaveText('Work · Email sign-in');
+  await expect(page.locator('.pd-thread-header [data-discussion-context=work_item]')).toHaveText('Work · Email sign-in');
   await page.reload();
   await expect(back).toHaveAttribute('href', href);
+  await page.setViewportSize({width: 390, height: 844});
   await back.click();
   await expect(page.locator('[data-session-back=requirements]')).toBeVisible();
   await s.context.close();

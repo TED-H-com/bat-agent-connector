@@ -41,7 +41,7 @@ for(const native of [false,true]){
   await panel.getByRole('textbox').fill('Fixed');await panel.getByRole('button',{name:'Save labels',exact:true}).click();
   await expect(panel).toContainText('does not match');
   state.refuse='FORBIDDEN';await panel.getByRole('button',{name:'Retry original request'}).click();
-  await expect(panel).toContainText('Your token lacks this scope');await expect(panel.getByRole('button',{name:'Review current version and prepare change'})).toBeHidden();
+  await expect(panel).toContainText('Your account does not have the required scope');await expect(panel.getByRole('button',{name:'Review current version and prepare change'})).toBeHidden();
   await expect(panel.getByRole('textbox')).toBeDisabled();expect(state.posts[1]).toEqual(state.posts[0]);
   state.badKey=false;state.refuse=null;await panel.getByRole('button',{name:'Retry original request'}).click();
   await expect(panel).toContainText('This label change was saved');expect(state.posts[2]).toEqual(state.posts[0]);

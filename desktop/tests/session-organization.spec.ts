@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 
@@ -105,7 +106,7 @@ for (const native of [false, true]) {
     await expect(row.locator('details').first()).toHaveAttribute('open', '');
     expect(Math.abs(await row.evaluate(el => el.getBoundingClientRect().top) - top)).toBeLessThan(3);
     data.fail = true; data.cursor = 2;
-    await expect(page.locator('#main').getByText('UNAVAILABLE Inventory unavailable')).toBeVisible();
+    await expectErrorDetails(page.locator('#main'), 'Inventory unavailable', 'UNAVAILABLE');
     expect(await saved(page)).toEqual(cp(1));
     data.fail = false;
     await expect.poll(() => saved(page), {timeout: 10000}).toEqual(cp(2));
@@ -128,7 +129,7 @@ for (const native of [false, true]) {
     await expect.poll(() => held).toBe(true);
     await page.getByRole('combobox', {name: 'Host', exact: true}).selectOption('build-west');
     data.fail = true; release();
-    await expect(page.locator('#main').getByText('UNAVAILABLE Inventory unavailable')).toBeVisible();
+    await expectErrorDetails(page.locator('#main'), 'Inventory unavailable', 'UNAVAILABLE');
     expect(await saved(page)).not.toEqual(cp(1));
     data.fail = false;
     await expect.poll(() => saved(page), {timeout: 10000}).toEqual(cp(1));

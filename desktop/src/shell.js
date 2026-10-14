@@ -37,9 +37,11 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
   }
   toggle.onclick = () => scrim.hidden ? openDrawer() : closeDrawer();
   function keydown(event) {if (scrim.hidden) return;
-    if (event.key === 'Escape') {event.preventDefault(); closeDrawer();} else trapFocus(aside, event);}
+    // Capture composing Escape before the legacy navigation's bubbling listener.
+    if (event.key === 'Escape' && (event.isComposing || event.keyCode === 229)) {event.stopPropagation(); return;}
+    if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {event.preventDefault(); closeDrawer();} else trapFocus(aside, event);}
   function resize() {if (media.matches) closeDrawer(false);}
-  document.addEventListener('keydown', keydown); media.addEventListener('change', resize);
+  document.addEventListener('keydown', keydown, true); media.addEventListener('change', resize);
   aside.addEventListener('click', event => {if (event.target.closest('a, [data-pm-view]') && !scrim.hidden) {closeDrawer(false); main.focus({preventScroll: true});}});
   const countBadge = () => h('span', {class: 'shell-count', hidden: true, 'data-pending-count': ''});
   const pendingCounts = [countBadge(), countBadge()];
@@ -140,7 +142,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     }},
     withdraw() {serial++; update({workspace: null, workspaces: [], threadCount: null, phase: null});},
     dispose() {disposed = true; serial++; off(); menus.forEach(control => control.dispose()); tools.dispose(); closeDrawer(false);
-      document.removeEventListener('keydown', keydown); media.removeEventListener('change', resize); scrim.remove();
+      document.removeEventListener('keydown', keydown, true); media.removeEventListener('change', resize); scrim.remove();
       // The static connection control belongs to the application, not this namespace.
       top.append(document.getElementById('live')); right.remove(); creator = null;},
   };
