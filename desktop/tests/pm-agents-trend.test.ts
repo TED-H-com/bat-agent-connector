@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {resources} from './demo/resources.ts';
+import {demoProject} from './demo/project.ts';
 import {isBucketPayload, niceCeiling, periodWindow, stackDailyBuckets} from '../src/pm-agents-trend.js';
 
 const now = new Date('2026-10-13T09:01:00.000Z');
@@ -82,4 +84,22 @@ test('the y ceiling is one nice step above every magnitude', () => {
   assert.equal(niceCeiling(2500), 5000);
   assert.equal(niceCeiling(1234567), 2e6);
   assert.equal(niceCeiling(25345678), 5e7);
+});
+
+test('demo totals count absolute observations with and without zoned buckets', () => {
+  const project = demoProject('en');
+  const window = periodWindow(new Date(project.now), 7, 'Asia/Taipei');
+  const query = new URLSearchParams(window);
+  const totalRows = resources(project, new URL(`http://fixture/resources?${query}`)).rows;
+  for (const zone of ['Asia/Taipei', 'UTC', 'America/New_York']) {
+    query.set('buckets', 'day'); query.set('tz', zone);
+    const read = resources(project, new URL(`http://fixture/resources?${query}`));
+    assert.deepEqual(read.rows, totalRows);
+    const series = (read.buckets as {series: {source_id: string, days: {tokens: {total: number | null}}[]}[]}).series;
+    for (const row of read.rows as {source_id: string, metrics: {total: {value: number}} | null}[]) {
+      if (!row.metrics) continue;
+      const days = series.find(item => item.source_id === row.source_id)!.days;
+      assert.equal(days.reduce((sum, day) => sum + (day.tokens.total ?? 0), 0), row.metrics.total.value);
+    }
+  }
 });

@@ -31,11 +31,11 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await expect(page.locator('[data-pm-charter]')).toBeVisible();expect(f.state.reads).toHaveLength(0);
     await page.locator('[data-pm-view="agents"]').click();await expect(resources(page)).toContainText('1,000');
     await resources(page).locator('[data-resource-row="Implementation"]').click();const detail=resources(page).locator('[data-resource-detail]');
-    await expect(detail).toBeVisible();await expect(detail).toContainText('Requested model');await expect(detail).toContainText('Not provided');
+    await expect(detail).toBeVisible();await expect(detail).toContainText('Requested model');await expect(detail).toContainText('Unknown');
     await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
     await expect(resources(page).locator('[data-resource-chart]')).toHaveCount(0);
     expect(f.state.reads[0]).not.toContain('buckets='); expect(f.state.reads[0]).not.toContain('tz=');
-    await resources(page).locator('[data-resource-filter]').selectOption({label:'Role · reviewer'});
+    await resources(page).locator('[data-resource-filter]').selectOption({label:'Role · Reviewer'});
     await expect(resources(page).locator('[data-resource-row]')).toHaveCount(1);
     await expect(resources(page).locator('[data-resource-quota]')).toContainText('25%');
     await expect(resources(page).locator('[data-resource-metrics]')).toContainText('1,650');
@@ -82,4 +82,28 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`resou
   expect(await resources(page).innerText()).not.toMatch(/\b(?:undefined|null|res_\w+)\b/);
   const out=process.env.BATC_RESOURCE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/resources-${locale}-${width}.png`,fullPage:true});}
   expect(errors).toEqual([]);await context.close();
+});
+
+for(const locale of ['en','zh-TW']) test(`CLI-less names, observed subtotals, zero and unknown counters ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width:1440,height:900}}),page=await context.newPage(),f=fixture();
+  const row=f.state.data.rows[0]; row.adapter=''; row.role='reviewer'; row.calls=0; row.observations=null as any;
+  row.metrics.total={value:null,observed:120,covered:2} as any;
+  row.metrics.input={value:null,observed:0,covered:1} as any;
+  f.state.data.rows[2].adapter=''; f.state.data.rows[2].role='';
+  await open(page,false,f);
+  const name=locale==='en'?'Reviewer':'審閱';
+  await expect(resources(page).locator('[data-resource-row="Implementation"]')).toContainText(name);
+  await expect(resources(page).locator('[data-resource-row="Investigation"]')).toContainText(locale==='en'?'Unnamed source':'未命名來源');
+  await expect(resources(page).locator('[data-resource-metrics] .ui-metric-value').first()).toContainText('770');
+  await resources(page).locator('[data-resource-row="Implementation"]').click();
+  const detail=resources(page).locator('[data-resource-detail]'); await expect(detail.locator('h2')).toHaveText(name);
+  const fact=(en:string,zh:string)=>detail.locator('dt',{hasText:new RegExp(`^${locale==='en'?en:zh}$`)}).locator('+ dd');
+  await expect(fact('Total','總計')).toContainText('120');
+  await expect(fact('Total','總計').locator('[data-status="partial"]')).toBeVisible();
+  await expect(fact('Input','輸入')).toContainText('0');
+  await expect(fact('Input','輸入').locator('[data-status="partial"]')).toBeVisible();
+  await expect(fact('Messages','訊息數')).toHaveText('0');
+  await expect(fact('Messages','訊息數').locator('[data-status="unknown"]')).toHaveCount(0);
+  await expect(fact('Usage observations','用量觀測筆數').locator('[data-status="unknown"]')).toBeVisible();
+  await context.close();
 });

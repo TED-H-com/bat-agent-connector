@@ -1,4 +1,5 @@
 import {hexId, iso, unix, type DemoProject} from './project.ts';
+import {zonedMidnight} from '../../src/pm-agents-trend.js';
 
 function metric(value: number | null, observed: number | null, covered: number) {
   return {value, observed, covered};
@@ -90,11 +91,27 @@ export function resources(project: DemoProject, url: URL) {
   const since = url.searchParams.get('since') || iso(project.now, -7);
   const until = url.searchParams.get('until') || iso(project.now);
   const tz = url.searchParams.get('tz') || 'UTC';
-  const today = localDate(new Date(Date.parse(until)), tz);
   const dates = localDates(since, until, tz);
-  const plans = dates.map(date => ({date, ...planDay(date, today)}));
-  const sum = (key: 'codex' | 'claude') => plans.reduce((total, day) => total + (typeof day[key] === 'number' ? day[key] : 0), 0);
   const sinceMs = Date.parse(since), untilMs = Date.parse(until);
+  // The synthetic observations have absolute timestamps. A totals-only read
+  // counts the same samples as a bucket read, regardless of its grouping zone.
+  const sampleZone = 'Asia/Taipei';
+  const today = localDate(new Date(project.now), sampleZone);
+  const samples = localDates(since, until, sampleZone).map(date => ({
+    at: zonedMidnight(date, sampleZone).getTime() + 9 * 60 * 60 * 1000,
+    ...planDay(date, today),
+  })).filter(sample => sample.at >= sinceMs && sample.at < untilMs);
+  const sum = (key: 'codex' | 'claude') => samples.reduce((total, sample) => total + (typeof sample[key] === 'number' ? sample[key] : 0), 0);
+  const plans = dates.map(date => {
+    const daySamples = samples.filter(sample => localDate(new Date(sample.at), tz) === date);
+    const value = (key: 'codex' | 'claude') => daySamples.some(sample => sample[key] == null) ? null
+      : daySamples.reduce((total, sample) => total + (sample[key] || 0), 0);
+    const covered = date < localDate(new Date(project.now - 86400000), tz);
+    return {date, codex: daySamples.length || covered ? value('codex') : null,
+      claude: daySamples.length || covered ? value('claude') : null,
+      codexComplete: covered && daySamples.every(sample => sample.codexComplete),
+      claudeComplete: covered && daySamples.every(sample => sample.claudeComplete)};
+  });
   const firstAt = new Date(Number.isFinite(sinceMs) ? sinceMs + 60 * 60 * 1000 : project.now).toISOString();
   const lastAt = new Date(Number.isFinite(untilMs) ? untilMs - 60 * 1000 : project.now).toISOString();
   const codex = usable(project, project.ids.sources.codex, 'codex-rollout-v1', 'implementer', project.ids.poolId, codexMetrics(sum('codex')), 4, null,
