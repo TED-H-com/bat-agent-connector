@@ -2,6 +2,19 @@
 
 ## Next release (unreleased)
 
+- Sessions show a status pill in the list, rail and header only when they need
+  attention or are active (`Waiting for you` / `等待處理`, `Running` / `執行中`,
+  `Out of sync` / `未同步`, or managed failure/attention). Unloaded tabs with
+  unknown activity stay quiet in the list and note "Not open in BAT" /
+  "BAT 中未開啟" in Details; loaded tabs without a reported streaming flag note
+  "BAT did not report activity" / "BAT 未回報活動狀態" in Details.
+  `GET /api/v1/sessions/{host}/{id}/messages` adds `reading.incomplete_reasons`
+  (`archive_unconfirmed`, `archive_budget`, `message_ids`) and optional
+  `reading.unindexed_count`, and the conversation header replaces the generic
+  "Partial history" warning with reason-specific quiet notes and `N+` unread
+  lower bounds. Session details show the formatted observed time once without a
+  duplicate raw ISO code tag.
+
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 

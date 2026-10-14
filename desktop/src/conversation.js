@@ -11,6 +11,31 @@ export function messageDuration(t, ms) {
   return s ? t("message_minutes", {m, s}) : t("message_minutes_even", {m});
 }
 
+export function readingSummary(t, reading) {
+  if (!reading || reading.unread_count == null) return {line: t("conversation_unknown"), detail: ""};
+  if (reading.complete) return {line: t("conversation_unread", {count: reading.unread_count}), detail: ""};
+  const reasons = Array.isArray(reading.incomplete_reasons) ? reading.incomplete_reasons : [];
+  if (reasons.includes("archive_budget")) {
+    return {
+      line: t("conversation_archive_budget"),
+      detail: reasons.includes("message_ids") ? t("conversation_message_ids_detail") : "",
+    };
+  }
+  if (reasons.includes("archive_unconfirmed")) {
+    return {
+      line: t("conversation_archive_unconfirmed"),
+      detail: t("conversation_archive_unconfirmed_detail"),
+    };
+  }
+  if (reasons.includes("message_ids")) {
+    return {
+      line: t("conversation_unread_lower_bound", {count: reading.unread_count}),
+      detail: t("conversation_message_ids_detail"),
+    };
+  }
+  return {line: t("conversation_partial", {count: reading.unread_count}), detail: ""};
+}
+
 // Scrolling never marks messages read. Personal receipts require an explicit action.
 export function conversationPanel({h, t, when, guard, readingActions = null, memory = null}) {
   const viewport = h("div", {class: "conversation-scroll", tabindex: "0", role: "region", "aria-label": t("messages")});
@@ -244,9 +269,9 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
       older.textContent = t("message_load_earlier");
       if (more) caption.replaceChildren(t("message_window_latest", {count: next.size}) + "\u00a0· ", older);
       else {if (older.parentElement === caption) readingBar?.append(older); caption.textContent = countCaption(next.size, false);}
-      progress.textContent = reading?.unread_count == null ? t("conversation_unknown")
-        : t(reading.complete ? "conversation_unread" : "conversation_partial", {count: reading.unread_count});
-      progress.title = t("conversation_count_note");
+      const summary = readingSummary(t, reading);
+      progress.textContent = summary.line;
+      progress.title = [summary.detail, t("conversation_count_note")].filter(Boolean).join(" ");
     } else caption.textContent = countCaption(next.size, more);
     if (!initialized || followNow || savedScroll || state?.latest || state?.restore) pinned = atBottom() || followNow;
     initialized = true; indicator();

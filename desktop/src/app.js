@@ -22,7 +22,7 @@ import {attentionView} from "./attention.js";
 import {parsePullRequest} from "./delivery-input.js";
 import {sessionLabelsPanel, validLabels} from "./session-labels.js";
 import {readArtifactContent} from "./transport/artifact-content.ts";
-import {conversationPanel} from "./conversation.js";
+import {conversationPanel, readingSummary} from "./conversation.js";
 import {composerShortcut} from "./composer-shortcut.js";
 import {treeInteractions} from "./tree-interactions.js";
 import {modelPreferencesPanel} from "./model-preferences.js";
@@ -41,7 +41,7 @@ import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
 import { mountTailscale } from "./tailscale.js";
 import { mountUpdates } from "./updates.js";
-import { groupedSessions, matchesSession, runtimeStale, sessionActivity, sessionStatus } from "./state/sessions.js";
+import { groupedSessions, matchesSession, runtimeStale, sessionActivity, sessionPill, sessionStatus } from "./state/sessions.js";
 import { capturePanel } from "./capture.js";
 import { taskControlsPanel } from "./task-controls.js";
 import { operationList } from "./operation-list.js";
@@ -909,15 +909,17 @@ async function viewSessions(main) {
     sessionStorage.setItem(storageKey, values.toString());
   };
   const row = session => {
-    const id = `${session.host}/${session.session_id}`, activity = sessionActivity(session);
+    const id = `${session.host}/${session.session_id}`, activity = sessionActivity(session), pill = sessionPill(session);
     const origin = session.provenance === "manual" ? "sessions_manual" : session.provenance === "connector_managed"
       ? "sessions_connector" : "sessions_origin_unknown";
     const access = session.api_access === "managed" ? "managed" : session.api_access === "read_only" ? "read_only" : "sessions_access_unknown";
+    const outOfSync = session.gone_at || ["gone", "missing"].includes(session.state?.enumeration);
     const evidence = () => [
       h("dl", {class: "kv"}, h("dt", {}, t("sessions_label")), h("dd", {}, session.title || session.session_id),
         h("dt", {}, t("sessions_workspace")), h("dd", {}, session.workspace || t("sessions_workspace_unknown")),
         h("dt", {}, t("sessions_workspace_id")), h("dd", {}, h("code", {}, session.workspace_id || t("obs_unknown"))),
         h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, session.session_id)),
+        h("dt", {}, t("obs_axis_activity")), h("dd", {}, t(activity.key)),
         h("dt", {}, t("activity")), h("dd", {}, observationTime(session.last_activity_at)),
         h("dt", {}, t("observed")), h("dd", {}, observationTime(session.observed_at))),
       h("p", {class: "muted"}, confinementLabel(session)), confinementDetails(session), observationState(session)];
@@ -932,12 +934,13 @@ async function viewSessions(main) {
     return h("article", {class: "session-entry", "data-resource-id": id},
       h("div", {class: "session-entry-heading"},
         h("a", {class: "title", title: session.title || session.session_id, href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`}, session.title || session.session_id),
-        chip(t(activity.key), activity.tone)),
+        pill ? chip(t(pill.key), pill.tone) : null),
       h("div", {class: "session-entry-meta"},
         h("span", {class: session.api_access === "managed" ? "" : "session-readonly"}, session.provenance === "connector_managed" && session.api_access === "managed" ? t(access) : `${t(origin)} · ${t(access)}`),
         h("span", {}, [cliName(session.agent_kind), session.worktree_branch].filter(Boolean).join(" · "))),
       runtimeStale(session) ? h("p", {class: "session-stale muted"}, t("sessions_stale"), " · ",
-        session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale")) : null,
+        session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale"))
+        : outOfSync ? h("p", {class: "session-stale muted"}, t("sessions_not_seen")) : null,
       validLabels(session.connector_metadata?.labels) && session.connector_metadata.labels.length ? h("div", {class: "actions session-entry-meta", "aria-label": t("labels_title")},
         ...session.connector_metadata.labels.slice(0, 2).map(v => chip(v)),
         session.connector_metadata.labels.length > 2 ? h("span", {class: "muted", title: session.connector_metadata.labels.join(" · ")}, `+${session.connector_metadata.labels.length - 2}`) : null) : null,
@@ -1057,7 +1060,11 @@ function observationState(row) {
     h("p", {class: "muted"}, t("obs_lifecycle_note")),
     h("dl", {class: "kv"}, ...axes.flatMap(axis => {
       const evidence = row.state?.evidence?.[axis];
-      return [h("dt", {}, t("obs_axis_" + axis)), h("dd", {}, t("obs_value_" + (row.state?.[axis] || "unknown")),
+      const raw = row.state?.[axis] || "unknown";
+      const label = axis === "activity" && raw === "unknown"
+        ? t(sessionActivity(row).key)
+        : t("obs_value_" + raw);
+      return [h("dt", {}, t("obs_axis_" + axis)), h("dd", {}, label,
         evidence?.stale ? [" · ", chip(t("stale"), "stale")] : null,
         h("div", {class: "muted"}, observationTime(evidence?.observed_at), " · ", evidence?.source_ref || t("obs_unknown")))];
     })));
@@ -1238,8 +1245,11 @@ async function viewObservedResource(main, type, id) {
               : observationLink(resource.intent_type === "task" ? "execution" : "operation", resource.intent_id))),
           h("h2", {}, t("delivery_worktree_sessions")),
           h("p", {class: "muted"}, t("delivery_worktree_recorded")),
-          ...sessions.map(s => h("div", {class: "row"}, observationLink("session", `${s.host}/${s.session_id}`),
-            chip(t(sessionActivity(s.observation || {}).key), sessionActivity(s.observation || {}).tone))),
+          ...sessions.map(s => {
+            const pill = sessionPill(s.observation || {});
+            return h("div", {class: "row"}, observationLink("session", `${s.host}/${s.session_id}`),
+              pill ? chip(t(pill.key), pill.tone) : null);
+          }),
           !sessions.length ? h("p", {class: "muted"}, t("none")) : null,
           ...(resource.work || []).map(item => deliveryWork(item)),
           h("p", {class: "note"}, t("delivery_worktree_cleanup")),
@@ -1653,6 +1663,14 @@ async function viewSession(main, host, sid, context = null) {
     for (const control of pending.querySelectorAll("[data-answer-action]"))
       control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
   };
+  let lastReading = null;
+  const readingDetail = h("p", {class: "muted note", "data-session-reading-detail": "", hidden: true});
+  const paintReadingDetail = readingData => {
+    if (readingData !== undefined) lastReading = readingData;
+    const summary = readingSummary(t, lastReading || row?.reading);
+    readingDetail.textContent = summary.detail;
+    readingDetail.hidden = !summary.detail;
+  };
   const applyObservation = data => {
     row = data.session || (data.cleanup?.length ? {host, session_id: sid, provenance: "unknown", api_access: "read_only"} : null);
     if (!row) throw new Error(t("obs_unknown"));
@@ -1664,7 +1682,11 @@ async function viewSession(main, host, sid, context = null) {
     // Unknown stays unknown: no ID as a title and no BAT mark for an unreported agent.
     titleNode.textContent = row.title || t("session_untitled");
     markSlot.replaceChildren(agentMark(row.agent_kind));
-    pillSlot.replaceChildren(statusPill(sessionStatus(row)));
+    const headerPill = sessionPill(row);
+    const pillTone = headerPill?.tone === "stale" ? "warn" : headerPill?.tone || "neutral";
+    pillSlot.replaceChildren(...(headerPill ? [
+      h("span", {class: `ui-pill tone-${pillTone}`, "data-status": headerPill.status}, t(headerPill.key))
+    ] : []));
     const metaBits = [];
     if (context?.project?.name) metaBits.push({kind: "link", href: `#/project/${encodeURIComponent(context.project.project_id)}`, text: context.project.name});
     else if (row.workspace) metaBits.push({kind: "text", text: row.workspace});
@@ -1681,14 +1703,16 @@ async function viewSession(main, host, sid, context = null) {
     }));
     paintOrigin();
     mobileLayout?.updateInfo();
+    paintReadingDetail();
     metadata.replaceChildren(h("div", {class: "actions"}, ...sessionBadges(row)),
       h("dl", { class: "kv" },
         h("dt", {}, t("host")), h("dd", {}, h("a", {href: `#/host/${encodeURIComponent(host)}`}, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""),
         h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
         h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
-        h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, {empty:t("obs_unknown")}),
-          row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
+        h("dt", {}, t("obs_axis_activity")), h("dd", {}, t(sessionActivity(row).key)),
+        h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, {empty:t("obs_unknown")}))),
+      readingDetail, observationState(row), confinementDetails(row));
     if (!batHandoff) batHandoff = sessionBatPanel({h, t, guard: () => assertView(connection), session: () => row,
       storageKey: `batc.session-bat.${connection.namespace}.${JSON.stringify([host, sid])}`});
     batSlot.append(batHandoff.box); batHandoff.update();
@@ -1795,6 +1819,7 @@ async function viewSession(main, host, sid, context = null) {
         if (request !== messageRequest) return;
       }
       messageOffset = offset; nextMessageOffset = read.next_offset; firstMessages = false;
+      paintReadingDetail(readingSupported ? read.reading : null);
       conversation.update(read.messages, readingSupported ? {...read, restore, latest, olderWindow: offset > 0} : {next_offset: read.next_offset});
     } catch (error) {
       if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
@@ -2153,7 +2178,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 }
 
 function deliveryWork(item, repositories = [], compact = false) {
-  const activity = sessionActivity(item.session || {});
+  const pill = sessionPill(item.session || {});
   const repo = item.repository || (repositories.length === 1 ? repositories[0] : "");
   const links = [];
   if (item.operation_id) links.push(h("a", {href: `#/op/${encodeURIComponent(item.operation_id)}`}, t("permissions_details")));
@@ -2163,7 +2188,8 @@ function deliveryWork(item, repositories = [], compact = false) {
   if (item.eligible && state.caps?.features?.execution_delivery?.version === 1) links.push(h("a", {
     href: `#/delivery/${[item.host, item.kind, item.id, repo].map(encodeURIComponent).join("/")}`}, t("delivery_review_result")));
   return h("div", {class: "row", "data-project-work": item.id}, h("div", {class: "grow"},
-    compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)],
+    compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)),
+    !compact && pill ? [" ", chip(t(pill.key), pill.tone)] : null,
     h("p", {class: "muted"}, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)),
     h("p", {class: "muted"}, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded"
       ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status),

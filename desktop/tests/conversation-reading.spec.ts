@@ -4,7 +4,12 @@ import {conversationFixture, mountConversation} from './conversation-fixture.ts'
 
 function fixture() {
   const base = conversationFixture(), receipts = new Set<string>();
-  const data = Object.assign(base.data, {position: null as any, complete: true});
+  const data = Object.assign(base.data, {
+    position: null as any,
+    complete: true,
+    incomplete_reasons: undefined as string[] | undefined,
+    unindexed_count: undefined as number | undefined,
+  });
   data.messages = Array.from({length: 60}, (_, i) => ({id: `message-${i}`, role: 'assistant',
     ts: '2026-10-10T12:00:00Z', text: `Reading note ${i}\n${'Visible content is a personal reading choice. '.repeat(8)}`}));
   const revision = (message: any) => createHash('sha256').update(message.text).digest('hex');
@@ -28,6 +33,8 @@ function fixture() {
         offset, next_offset: end > 30 ? offset + 30 : null,
         reading: {unread_count: data.messages.filter(message => !receipts.has(key(message))).length,
           known_count: data.messages.length, complete: data.complete, observed_at: 1,
+          ...(data.incomplete_reasons !== undefined ? {incomplete_reasons: data.incomplete_reasons} : {}),
+          ...(data.unindexed_count !== undefined ? {unindexed_count: data.unindexed_count} : {}),
           position: data.position ? {...data.position, page_offset: data.messages.length - 1 - data.messages.findIndex(message => message.id === data.position.message_id)} : null}}};
     }
     const result = await base.dispatch(input);
@@ -57,8 +64,18 @@ for (const native of [false, true]) {
     data.messages.at(-1)!.text += ' A new version.'; data.cursor++;
     await expect(page.locator('[data-conversation-reading]')).toHaveText(`Last observed: ${61 - marked.length} unread`);
     expect(data.writes).toHaveLength(1);
-    data.complete = false; data.cursor++;
-    await expect(page.locator('[data-conversation-reading]')).toContainText('Partial history:');
+    const remaining = 61 - marked.length;
+    data.complete = false; data.incomplete_reasons = ['message_ids']; data.unindexed_count = 2; data.cursor++;
+    await expect(page.locator('[data-conversation-reading]')).toHaveText(`${remaining}+ unread`);
+    await expect(page.locator('[data-session-reading-detail]')).toHaveText('Some messages have no ID and are not counted.');
+    data.incomplete_reasons = ['archive_budget']; data.unindexed_count = undefined; data.cursor++;
+    await expect(page.locator('[data-conversation-reading]')).toHaveText('Showing the latest 3,000 messages');
+    data.incomplete_reasons = ['archive_unconfirmed']; data.cursor++;
+    await expect(page.locator('[data-conversation-reading]')).toHaveText('Earlier messages may not be loaded');
+    await expect(page.locator('[data-session-reading-detail]')).toHaveText('BAT did not confirm the end of the history.');
+    data.incomplete_reasons = undefined; data.cursor++;
+    await expect(page.locator('[data-conversation-reading]')).toHaveText(`${remaining}+ unread · earlier messages may not be loaded`);
+    await expect(page.locator('[data-conversation-reading]')).not.toContainText('Partial history');
     expect(data.writes).toHaveLength(1);
   });
 

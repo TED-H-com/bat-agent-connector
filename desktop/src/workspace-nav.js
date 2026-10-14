@@ -38,7 +38,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     const unread = unreadCount ? t('conversation_badge', {count: reading.unread_count}) + (reading.complete === false ? '+' : '') : '';
     const full = joinLabel([label, statusText, unread]);
     let glyph = null;
-    if (presented?.labelKey === 'rail_needs_you' || presented?.labelKey === 'rail_asking') {
+    if (presented?.labelKey === 'rail_needs_you' || presented?.labelKey === 'rail_asking' || presented?.labelKey === 'sessions_pill_stale') {
       glyph = icon('circle-alert', {size: 14});
       glyph.classList.add('workspace-rail-alert');
     } else if (presented?.labelKey === 'rail_failed') {
