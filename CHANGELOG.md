@@ -60,6 +60,13 @@
   are omitted from rows and aggregates together, while other readable records remain.
   See the [register contract](docs/design/pm-register.md).
 
+- Maintenance repairs, maintenance review, maintenance policy and release baselines
+  open on the current state, in English and zh-TW. Status uses a shared pill.
+  Record identifiers, digests and the limit note stay in Details, and each durable
+  form stays behind one action. "Turn into work" binds the finding and its matching
+  rule. "Record evidence" selects that saved repair. Nothing is written until submit,
+  and an unknown result still recovers with the original operation key.
+
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
   dates, including unscheduled work and execution attempts for a future schedule view.
   Partial pages never claim totals; withdrawn sources lose rows and derived dates together,
