@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Schedule at phone width fits every bar to the shared date range, with a range
+  caption and the Today line, and does not offer Day zoom there. Week ticks label
+  week starts only, so a partial opening week is not crowded under the sticky column.
+  Open ends stay Open in English and zh-TW.
+
 - Reviewed handoff facts no longer print empty placeholders. The issues register
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited
   sources only; conclusions stay unaccepted). zh-TW operation, agent and provider
