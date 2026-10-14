@@ -92,6 +92,20 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   }
   function filteredEdges() {return allEdges().filter(matchesFilters);}
   function filteredCrossEdges() {return (data?.cross_repository_edges || []).filter(matchesFilters);}
+  const externalById = id => (data?.external_components || []).find(row => row?.component_id === id) || null;
+  const otherRepositoryLabel = row => {const name = typeof row?.repository === 'string' ? row.repository.trim() : ''; return name || t('dep_other_repository');};
+  function peerCaption(dependencyKey, componentId = '') {
+    const labels = [], seen = new Set();
+    for (const link of filteredCrossEdges()) {
+      if (link?.dependency_key !== dependencyKey) continue;
+      if (componentId && link.component_id !== componentId && link.target_component_id !== componentId) continue;
+      const row = externalById(link.target_component_id) || externalById(link.component_id);
+      if (!row || seen.has(row.component_id)) continue;
+      seen.add(row.component_id);
+      labels.push(joinLabel([row.name, otherRepositoryLabel(row)]));
+    }
+    return labels.join(' · ');
+  }
   const selectedKey = () => selection?.type === 'dependency' || selection?.type === 'edge' ? selection.dependencyKey : '';
   const selectionEdges = () => allEdges().filter(edge => selection?.type === 'component' ? edge.component_id === selection.componentId
     : selection?.type === 'edge' ? edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey
@@ -341,23 +355,38 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     const version = versionLabel(edge);
     return h('span', {class: `dep-mark dep-rel-${edge.relation} evidence-${level}`, title: version || dependencyName(edge.dependency_key)}, LETTERS[edge.relation]);
   }
+  function versionFieldLabel(edge) {
+    const kind = edge?.kind || dependencyByKey().get(edge?.dependency_key)?.kinds?.[0] || '';
+    if (edge?.relation === 'contract' || (edge?.relation !== 'reference' && kind === 'api_schema')) return t('dep_version_contract');
+    if (edge?.relation === 'reference') return t('dep_version_reference');
+    if (kind === 'external_service') return t('dep_version_service');
+    return t('dep_range');
+  }
   function versionLabel(edge) {
-    const pinned = typeof edge.resolved === 'string' ? edge.resolved : '';
-    const range = typeof edge.version === 'string' ? edge.version : '';
-    return joinLabel([pinned, range]);
+    const pinned = typeof edge?.resolved === 'string' ? edge.resolved : '';
+    const range = edge?.version == null || edge.version === '' ? '' : String(edge.version);
+    const bare = value => /^\d+(?:\.\d+)*$/.test(value);
+    const rangeText = range ? (bare(range) ? `${versionFieldLabel(edge)} ${range}` : range) : '';
+    const pinnedText = pinned && bare(pinned) && !range ? `${t('dep_pinned')} ${pinned}` : pinned;
+    return joinLabel([pinnedText, rangeText]);
+  }
+  function requirementValue(edge) {
+    return edge?.version == null || edge.version === '' ? '' : String(edge.version);
   }
   function edgeLabel(edge) {
-    return joinLabel([dependencyName(edge.dependency_key), t('dep_' + edge.relation), versionLabel(edge), levelText(edge.evidence_level)]);
+    return joinLabel([dependencyName(edge.dependency_key), t('dep_' + edge.relation), versionLabel(edge), levelText(edge.evidence_level), peerCaption(edge.dependency_key, edge.component_id)]);
   }
   function paintLegend() {
     const swatch = (relation, level, text) => h('span', {class: `dep-mark dep-rel-${relation} evidence-${level}`, 'aria-hidden': 'true'}, text);
     const item = (mark, label) => h('span', {class: 'dep-legend-item'}, mark, label);
+    const peers = filteredCrossEdges().length ? item(h('span', {class: 'dep-legend-external', 'data-dep-legend-external': '', 'aria-hidden': 'true'}), t('dep_other_repository')) : null;
     legend.replaceChildren(
       ...RELATIONS.map(relation => item(swatch(relation, 'verified', LETTERS[relation]), t('dep_' + relation))),
       h('span', {class: 'dep-legend-gap', 'aria-hidden': 'true'}),
       item(swatch('runtime', 'verified', '\u00a0'), t('dep_legend_verified')),
       item(swatch('runtime', 'declared', '\u00a0'), t('dep_legend_declared')),
-      item(swatch('runtime', 'inferred', '\u00a0'), t('dep_legend_inferred')));
+      item(swatch('runtime', 'inferred', '\u00a0'), t('dep_legend_inferred')),
+      ...(peers ? [peers] : []));
   }
   function syncChrome() {
     if (header?.meta) {header.meta.hidden = true; header.meta.textContent = '';}
@@ -423,11 +452,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   }
   function inspectorTitle() {
     if (selection?.type === 'component') return componentName(selection.componentId) || t('dep_component');
-    const name = dependencyName(selectedKey());
-    if (!impact || impact.dependency !== selectedKey() || impact.error) return name || t('ui_dependencies');
-    if (MISS.has(impact.reason)) return joinLabel([name, reasonText(t, impact.reason)]);
-    if (impact.counts?.basis === 'returned_components' && Number.isFinite(impact.counts.components) && (impact.counts.components > 0 || !partialImpact())) return joinLabel([name, t('dep_loaded_count', {n: impact.counts.components})]);
-    return name || t('ui_dependencies');
+    return dependencyName(selectedKey()) || t('ui_dependencies');
   }
   function openInspector() {
     if (!selection || !data) return;
@@ -447,7 +472,7 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
   function dependencyRow(edge) {
     const refs = (edge.evidence_refs || (edge.source_ref ? [edge.source_ref] : [])).map(evidenceLine).filter(Boolean);
     return h('section', {'data-dep-dependency-row': edge.dependency_key}, h('h4', {}, dependencyName(edge.dependency_key)),
-      h('p', {}, joinLabel([t('dep_' + edge.relation), versionLabel(edge) || t('dep_dash'), levelText(edge.evidence_level)])),
+      h('p', {}, joinLabel([t('dep_' + edge.relation), versionLabel(edge) || t('dep_dash'), levelText(edge.evidence_level), peerCaption(edge.dependency_key, edge.component_id)])),
       refs.length ? h('dl', {class: 'dep-facts'}, h('dt', {}, t('dep_source')), h('dd', {}, refs.join(' · '))) : '');
   }
   function renderInspector() {
@@ -472,7 +497,8 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     } else for (const edge of edges) {
       add(t('dep_component'), componentName(edge.component_id) || t('dep_dash'));
       add(t('dep_pinned'), edge.resolved || t('dep_dash'), edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : '');
-      add(t('dep_range'), edge.version || t('dep_dash'), !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : '');
+      const requirement = requirementValue(edge);
+      add(versionFieldLabel(edge), requirement || t('dep_dash'), !requirement && edge.version_reason ? reasonText(t, edge.version_reason) : '');
       add(t('dep_level'), levelText(edge.evidence_level));
       if (edge.basis) add(t('dep_why'), reasonText(t, edge.basis));
       const refs = (edge.evidence_refs || []).map(evidenceLine).filter(Boolean);
@@ -481,8 +507,13 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     add(t('dep_owner'), owner.actor || t('dep_dash'), owner.reason ? reasonText(t, owner.reason) : '');
     const tests = h('div', {'data-dep-tests': ''}, h('h3', {}, t('dep_tests')));
     const jobs = hintRows();
-    if (jobs.length) for (const hint of jobs) tests.append(h('p', {}, joinLabel([hint.job_id, hint.command])));
-    else tests.append(h('p', {}, Number(data.omitted_hints) > 0 ? t('dep_tests_omitted') : t('dep_none_recorded')));
+    const hintsOmitted = Number(data?.omitted_hints);
+    const hintsDropped = [...(data?.projection_omitted_collections || []), ...(impact?.projection_omitted_collections || [])].includes('verification_hints');
+    // omitted_hints counts observed hints left out of this capture. It is not a repository total.
+    const moreOmitted = hintsDropped || (Number.isFinite(hintsOmitted) && hintsOmitted > 0);
+    for (const hint of jobs) tests.append(h('p', {}, joinLabel([hint.job_id, hint.command])));
+    if (!jobs.length) tests.append(h('p', {'data-dep-tests-note': moreOmitted ? 'possible' : 'none'}, moreOmitted ? t('dep_tests_none_listed') : t('dep_none_recorded')));
+    else if (moreOmitted) tests.append(h('p', {'data-dep-tests-note': 'omitted'}, t('dep_tests_more_omitted')));
     const affected = h('div', {'data-dep-affected': ''}, h('h3', {}, t(selectedKey() ? 'dep_affected' : 'ui_dependencies')));
     if (!selectedKey()) {
       if (edges.length) affected.append(...edges.map(dependencyRow));
@@ -490,9 +521,17 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     } else if (!impact || impact.dependency !== selectedKey()) affected.append(skeleton(2));
     else if (impact.error) affected.append(inlineError({error: impact.error, retry: () => {impactKey = ''; syncImpact();}}));
     else {
-      if (partialImpact()) affected.append(statusPill('partial'));
-      const reasons = new Set([impact.reason, impact.cross_repository?.reason, ...(impact.selection_reasons || []), ...(impact.cross_repository?.selection_reasons || [])].filter(Boolean));
-      for (const code of reasons) affected.append(h('p', {class: 'dep-note', 'data-dep-impact-reason': code}, reasonText(t, code)));
+      const reasons = [];
+      for (const code of [impact.reason, impact.cross_repository?.reason, ...(impact.selection_reasons || []), ...(impact.cross_repository?.selection_reasons || [])]) {
+        if (typeof code === 'string' && code && !reasons.includes(code)) reasons.push(code);
+      }
+      if (partialImpact()) {
+        affected.append(statusPill('partial'));
+        const clauses = (reasons.length ? reasons : ['partial']).map(code => {const key = 'dep_clause_' + code; const text = t(key); return text === key ? reasonText(t, code) : text;});
+        const detail = clauses.length === 1 ? clauses[0] : clauses.length === 2 ? t('dep_impact_pair', {first: clauses[0], second: clauses[1]}) : t('dep_impact_many', {first: clauses[0], rest: clauses.slice(1, -1).join(t('dep_impact_sep')), last: clauses.at(-1)});
+        affected.append(h('p', {class: 'dep-impact-summary', 'data-dep-impact-summary': ''}, t('dep_impact_partial', {detail})));
+        if (reasons.length) affected.append(disclosure({label: t('dep_impact_reasons'), body: h('div', {'data-dep-impact-reasons': ''}, ...reasons.map(code => h('p', {'data-dep-impact-reason': code}, reasonText(t, code)))), key: JSON.stringify([namespace, workspaceId, 'dep-impact', selectedKey()])}));
+      } else for (const code of reasons) affected.append(h('p', {class: 'dep-note', 'data-dep-impact-reason': code}, reasonText(t, code)));
       for (const row of impact.components || []) affected.append(h('p', {}, joinLabel([row.name, Number.isFinite(row.distance) ? t('dep_distance', {n: row.distance}) : ''])));
       for (const row of impact.declared || []) affected.append(h('section', {'data-dep-impact-declaration': row.declaration_id},
         h('p', {}, joinLabel([componentName(row.component_id), row.dependency?.name, t('dep_' + row.relation), versionLabel(row) || t('dep_dash'), levelText(row.evidence_level)])),
@@ -519,8 +558,13 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
     for (const link of filteredCrossEdges()) {
       const source = componentName(link.component_id), target = componentName(link.target_component_id);
       if (!source || !target) continue;
-      nodes.set('c:' + link.component_id, {id: 'c:' + link.component_id, name: source});
-      nodes.set('c:' + link.target_component_id, {id: 'c:' + link.target_component_id, name: target});
+      const describe = (id, name) => {
+        const row = externalById(id);
+        const external = Boolean(row) && !(data?.components || []).some(item => item.component_id === id);
+        return {id: 'c:' + id, name, external, repository: external ? otherRepositoryLabel(row) : ''};
+      };
+      nodes.set('c:' + link.component_id, describe(link.component_id, source));
+      nodes.set('c:' + link.target_component_id, describe(link.target_component_id, target));
       cross.push(link);
     }
     const fullLinks = [...edges.map(edge => ({from: 'd:' + edge.dependency_key, to: 'c:' + edge.component_id, relation: edge.relation, level: edge.evidence_level})),
@@ -573,8 +617,9 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       const x1 = PAD + from.x * strideX + NODE_W, y1 = PAD + from.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
       const x2 = PAD + to.x * strideX, y2 = PAD + to.y * (nodeHeight + GAP_Y) + nodeHeight / 2;
       const mid = (x1 + x2) / 2;
-      const path = svg('path', {d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`, 'data-dep-edge': '', class: `dep-edge dep-rel-${link.relation}${link.level === 'inferred' ? ' evidence-inferred' : ''}`});
-      path.dataset.depMark = markOf(link.from) === 'dim' && markOf(link.to) === 'dim' ? 'dim' : '';
+      const path = svg('path', {d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`, 'data-dep-edge': '', 'data-dep-from': link.from, 'data-dep-to': link.to, class: `dep-edge dep-rel-${link.relation}${link.level === 'inferred' ? ' evidence-inferred' : ''}`});
+      // Dim an edge when either end is outside the selected path. Keyboard focus does not select.
+      if (selectedIds.size && (markOf(link.from) === 'dim' || markOf(link.to) === 'dim')) path.dataset.depMark = 'dim';
       picture.append(path);
     });
     const visualOrder = [...nodes].sort(([a], [b]) => placed.get(a).x - placed.get(b).x || placed.get(a).y - placed.get(b).y);
@@ -582,8 +627,12 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
       const position = placed.get(id);
       if (!position) continue;
       const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
-      const group = svg('g', {class: 'dep-node', tabindex: '-1', role: 'button', 'aria-label': node.name, 'aria-pressed': String(selectedIds.has(id)), 'data-dep-node': id, 'data-dep-focus': id.startsWith('d:') ? `col:${id.slice(2)}` : `row:${id.slice(2)}`, 'data-dep-mark': markOf(id)});
-      group.append(svg('title', {}, node.name), svg('rect', {x: left, y: top, width: NODE_W, height: nodeHeight, rx: 6, class: 'dep-node-shape'}), svg('text', {x: left + 10, y: top + nodeHeight / 2 + 5}, abbreviate(node.name)));
+      const repo = node.external ? node.repository : '';
+      const accessible = repo ? `${node.name}, ${repo}` : node.name;
+      const group = svg('g', {class: node.external ? 'dep-node dep-node-external' : 'dep-node', tabindex: '-1', role: 'button', 'aria-label': accessible, 'aria-pressed': String(selectedIds.has(id)), 'data-dep-node': id, 'data-dep-external': node.external ? 'true' : null, 'data-dep-focus': id.startsWith('d:') ? `col:${id.slice(2)}` : `row:${id.slice(2)}`, 'data-dep-mark': markOf(id)});
+      const nameY = top + (repo ? Math.round(nodeHeight * 0.42) : nodeHeight / 2 + 5);
+      const shownRepo = repo && repo.length > 22 ? repo.slice(0, 21) + '…' : repo;
+      group.append(svg('title', {}, accessible), svg('rect', {x: left, y: top, width: NODE_W, height: nodeHeight, rx: 6, class: 'dep-node-shape'}), svg('text', {x: left + 10, y: nameY, class: 'dep-node-name'}, abbreviate(node.name)), repo ? svg('text', {x: left + 10, y: top + Math.round(nodeHeight * 0.82), class: 'dep-node-repo'}, shownRepo) : null);
       picture.append(group);
     }
     const focusNode = picture.querySelector(`[data-dep-node="${CSS.escape(selectedId)}"]`) || picture.querySelector('[data-dep-node]');
@@ -660,7 +709,9 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
         for (const dep of deps) {
           colOf.set(dep.key, col);
           const selectedCol = selection?.type === 'dependency' && selection.dependencyKey === dep.key;
-          headName.append(h('th', {scope: 'col', title: dep.name}, h('button', {type: 'button', title: dep.name, 'aria-label': dep.name, 'data-dep-focus': `col:${dep.key}`, 'data-row': '-1', 'data-col': String(col), tabindex: '-1', 'aria-pressed': String(selectedCol), onclick: () => choose({type: 'dependency', dependencyKey: dep.key}, true)}, abbreviate(dep.name))));
+          const peer = peerCaption(dep.key);
+          const columnLabel = joinLabel([dep.name, peer]);
+          headName.append(h('th', {scope: 'col', title: columnLabel}, h('button', {type: 'button', title: columnLabel, 'aria-label': columnLabel, 'data-dep-focus': `col:${dep.key}`, 'data-row': '-1', 'data-col': String(col), tabindex: '-1', 'aria-pressed': String(selectedCol), onclick: () => choose({type: 'dependency', dependencyKey: dep.key}, true)}, abbreviate(dep.name), peer ? h('span', {class: 'dep-peer', 'data-dep-peer': ''}, peer) : null)));
           col += 1;
         }
       }
@@ -686,8 +737,9 @@ export function workspaceDependencies({h, t, api, alive, namespace, workspaceId,
         const own = edges.filter(edge => edge.component_id === component.component_id);
         return h('section', {class: 'dep-group'}, h('h2', {}, component.name), ...own.map(edge => {
           const selectedPick = selection?.type === 'edge' && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
+          const peer = peerCaption(edge.dependency_key, edge.component_id);
           return h('button', {type: 'button', class: 'dep-pick', 'data-dep-pick': `${edge.component_id}|${edge.dependency_key}`, 'data-dep-focus': `pick:${edge.component_id}|${edge.dependency_key}`, tabindex: selectedPick ? '0' : '-1', 'aria-pressed': String(selectedPick), 'aria-label': edgeLabel(edge), onclick: () => choose({type: 'edge', componentId: edge.component_id, dependencyKey: edge.dependency_key}, true)},
-            h('span', {}, dependencyName(edge.dependency_key)), h('span', {class: 'dep-pick-meta'}, mark(edge), versionLabel(edge)));
+            h('span', {class: 'dep-pick-main'}, h('span', {}, dependencyName(edge.dependency_key)), peer ? h('span', {class: 'dep-peer', 'data-dep-peer': ''}, peer) : null), h('span', {class: 'dep-pick-meta'}, mark(edge), versionLabel(edge)));
         }));
       }));
       const picks = [...listHost.querySelectorAll('[data-dep-pick]')];

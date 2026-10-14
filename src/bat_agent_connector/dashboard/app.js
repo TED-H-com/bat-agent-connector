@@ -3083,6 +3083,7 @@ var dependencyStrings = {
 		dep_legend_verified: "Solid verified",
 		dep_legend_declared: "Outline declared",
 		dep_legend_inferred: "Dashed inferred",
+		dep_other_repository: "Other repository",
 		dep_capture_manage: "Capture needs manage access.",
 		dep_capture_no_source: "This capture has no repository to read.",
 		dep_capture_not_ready: "This projection is not ready to capture again.",
@@ -3102,6 +3103,9 @@ var dependencyStrings = {
 		dep_record: "Record a relation",
 		dep_pinned: "Pinned version",
 		dep_range: "Allowed range",
+		dep_version_contract: "Contract version",
+		dep_version_reference: "Reference version",
+		dep_version_service: "Service version",
 		dep_owner: "Maintenance owner",
 		dep_level: "Evidence",
 		dep_why: "Basis",
@@ -3111,6 +3115,8 @@ var dependencyStrings = {
 		dep_omitted: "{n} omitted",
 		dep_none_recorded: "None recorded in this capture",
 		dep_tests_omitted: "More tests were omitted from this capture",
+		dep_tests_none_listed: "None listed in this capture. More may exist.",
+		dep_tests_more_omitted: "More were omitted.",
 		dep_not_captured: "Not captured yet",
 		dep_no_match: "No matching relations",
 		dep_empty: "No components in this capture",
@@ -3154,6 +3160,25 @@ var dependencyStrings = {
 		dep_reason_unsupported_tree_entry: "Unsupported tree entry",
 		dep_reason_selection_budget: "Peer selection stopped early",
 		dep_reason_unreadable_manifest: "Manifest unreadable",
+		dep_impact_reasons: "Reasons",
+		dep_impact_partial: "Partial: {detail}.",
+		dep_impact_pair: "{first}, and {second}",
+		dep_impact_many: "{first}; {rest}, and {last}",
+		dep_impact_sep: ", ",
+		dep_clause_partial: "this result covers only what was returned",
+		dep_clause_bounded_captured_graph: "only the loaded graph was checked",
+		dep_clause_selection_budget: "peer selection stopped early",
+		dep_clause_unreadable_manifest: "one manifest could not be read",
+		dep_clause_projection_byte_budget: "the projection was cut short",
+		dep_clause_capture_budget: "capture stopped early",
+		dep_clause_peer_scan_limit: "peer scanning stopped at its limit",
+		dep_clause_peer_byte_budget: "peer selection ran out of room",
+		dep_clause_selection_byte_budget: "peer selection ran out of room",
+		dep_clause_selection_wire_budget: "peer selection ran out of room",
+		dep_clause_dependency_omitted: "this dependency was left out of the returned view",
+		dep_clause_dependency_not_observed: "this dependency is not in the capture",
+		dep_clause_source_unavailable: "the source is no longer available",
+		dep_clause_not_captured: "nothing has been captured yet",
 		dep_choose: "Choose",
 		dep_dash: "—"
 	},
@@ -3185,6 +3210,7 @@ var dependencyStrings = {
 		dep_legend_verified: "實線為已核對",
 		dep_legend_declared: "外框為已宣告",
 		dep_legend_inferred: "虛線為推測",
+		dep_other_repository: "其他儲存庫",
 		dep_capture_manage: "再次擷取需要管理權限。",
 		dep_capture_no_source: "這次擷取沒有可讀的儲存庫。",
 		dep_capture_not_ready: "這份投影還不能再次擷取。",
@@ -3204,6 +3230,9 @@ var dependencyStrings = {
 		dep_record: "登錄關係",
 		dep_pinned: "鎖定版本",
 		dep_range: "允許範圍",
+		dep_version_contract: "契約版本",
+		dep_version_reference: "參考版本",
+		dep_version_service: "服務版本",
 		dep_owner: "維護負責人",
 		dep_level: "證據",
 		dep_why: "依據",
@@ -3213,6 +3242,8 @@ var dependencyStrings = {
 		dep_omitted: "未列入 {n}",
 		dep_none_recorded: "這次擷取沒有記錄",
 		dep_tests_omitted: "這次擷取還有未列入的測試",
+		dep_tests_none_listed: "這次擷取沒有列出。可能還有其他。",
+		dep_tests_more_omitted: "還有未列入的。",
 		dep_not_captured: "尚未擷取",
 		dep_no_match: "沒有符合的關係",
 		dep_empty: "這次擷取沒有元件",
@@ -3256,6 +3287,25 @@ var dependencyStrings = {
 		dep_reason_unsupported_tree_entry: "不支援的目錄項目",
 		dep_reason_selection_budget: "跨儲存庫選取提前結束",
 		dep_reason_unreadable_manifest: "無法讀取清單檔",
+		dep_impact_reasons: "原因",
+		dep_impact_partial: "部分：{detail}。",
+		dep_impact_pair: "{first}，而且{second}",
+		dep_impact_many: "{first}；{rest}，而且{last}",
+		dep_impact_sep: "、",
+		dep_clause_partial: "這份結果只涵蓋已回傳的內容",
+		dep_clause_bounded_captured_graph: "只檢查了已載入的關係圖",
+		dep_clause_selection_budget: "跨儲存庫選取提前結束",
+		dep_clause_unreadable_manifest: "有一份清單檔無法讀取",
+		dep_clause_projection_byte_budget: "投影因大小被截斷",
+		dep_clause_capture_budget: "擷取提前結束",
+		dep_clause_peer_scan_limit: "跨儲存庫掃描達到上限",
+		dep_clause_peer_byte_budget: "跨儲存庫選取超出大小",
+		dep_clause_selection_byte_budget: "跨儲存庫選取超出大小",
+		dep_clause_selection_wire_budget: "跨儲存庫選取超出傳輸大小",
+		dep_clause_dependency_omitted: "這筆相依未列入這次畫面",
+		dep_clause_dependency_not_observed: "這次擷取沒有這筆相依",
+		dep_clause_source_unavailable: "來源已經無法取得",
+		dep_clause_not_captured: "尚未擷取",
 		dep_choose: "請選擇",
 		dep_dash: "—"
 	}
@@ -17085,6 +17135,22 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	function filteredCrossEdges() {
 		return (data?.cross_repository_edges || []).filter(matchesFilters);
 	}
+	const externalById = (id) => (data?.external_components || []).find((row) => row?.component_id === id) || null;
+	const otherRepositoryLabel = (row) => {
+		return (typeof row?.repository === "string" ? row.repository.trim() : "") || t("dep_other_repository");
+	};
+	function peerCaption(dependencyKey, componentId = "") {
+		const labels = [], seen = new Set();
+		for (const link of filteredCrossEdges()) {
+			if (link?.dependency_key !== dependencyKey) continue;
+			if (componentId && link.component_id !== componentId && link.target_component_id !== componentId) continue;
+			const row = externalById(link.target_component_id) || externalById(link.component_id);
+			if (!row || seen.has(row.component_id)) continue;
+			seen.add(row.component_id);
+			labels.push(joinLabel([row.name, otherRepositoryLabel(row)]));
+		}
+		return labels.join(" · ");
+	}
 	const selectedKey = () => selection?.type === "dependency" || selection?.type === "edge" ? selection.dependencyKey : "";
 	const selectionEdges = () => allEdges().filter((edge) => selection?.type === "component" ? edge.component_id === selection.componentId : selection?.type === "edge" ? edge.component_id === selection.componentId && edge.dependency_key === selection.dependencyKey : edge.dependency_key === selection?.dependencyKey);
 	function selectionAlive() {
@@ -17564,15 +17630,30 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			title: version || dependencyName(edge.dependency_key)
 		}, LETTERS[edge.relation]);
 	}
+	function versionFieldLabel(edge) {
+		const kind = edge?.kind || dependencyByKey().get(edge?.dependency_key)?.kinds?.[0] || "";
+		if (edge?.relation === "contract" || edge?.relation !== "reference" && kind === "api_schema") return t("dep_version_contract");
+		if (edge?.relation === "reference") return t("dep_version_reference");
+		if (kind === "external_service") return t("dep_version_service");
+		return t("dep_range");
+	}
 	function versionLabel(edge) {
-		return joinLabel([typeof edge.resolved === "string" ? edge.resolved : "", typeof edge.version === "string" ? edge.version : ""]);
+		const pinned = typeof edge?.resolved === "string" ? edge.resolved : "";
+		const range = edge?.version == null || edge.version === "" ? "" : String(edge.version);
+		const bare = (value) => /^\d+(?:\.\d+)*$/.test(value);
+		const rangeText = range ? bare(range) ? `${versionFieldLabel(edge)} ${range}` : range : "";
+		return joinLabel([pinned && bare(pinned) && !range ? `${t("dep_pinned")} ${pinned}` : pinned, rangeText]);
+	}
+	function requirementValue(edge) {
+		return edge?.version == null || edge.version === "" ? "" : String(edge.version);
 	}
 	function edgeLabel(edge) {
 		return joinLabel([
 			dependencyName(edge.dependency_key),
 			t("dep_" + edge.relation),
 			versionLabel(edge),
-			levelText(edge.evidence_level)
+			levelText(edge.evidence_level),
+			peerCaption(edge.dependency_key, edge.component_id)
 		]);
 	}
 	function paintLegend() {
@@ -17581,10 +17662,15 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			"aria-hidden": "true"
 		}, text);
 		const item = (mark, label) => h("span", { class: "dep-legend-item" }, mark, label);
+		const peers = filteredCrossEdges().length ? item(h("span", {
+			class: "dep-legend-external",
+			"data-dep-legend-external": "",
+			"aria-hidden": "true"
+		}), t("dep_other_repository")) : null;
 		legend.replaceChildren(...RELATIONS.map((relation) => item(swatch(relation, "verified", LETTERS[relation]), t("dep_" + relation))), h("span", {
 			class: "dep-legend-gap",
 			"aria-hidden": "true"
-		}), item(swatch("runtime", "verified", "\xA0"), t("dep_legend_verified")), item(swatch("runtime", "declared", "\xA0"), t("dep_legend_declared")), item(swatch("runtime", "inferred", "\xA0"), t("dep_legend_inferred")));
+		}), item(swatch("runtime", "verified", "\xA0"), t("dep_legend_verified")), item(swatch("runtime", "declared", "\xA0"), t("dep_legend_declared")), item(swatch("runtime", "inferred", "\xA0"), t("dep_legend_inferred")), ...peers ? [peers] : []);
 	}
 	function syncChrome() {
 		if (header?.meta) {
@@ -17700,11 +17786,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function inspectorTitle() {
 		if (selection?.type === "component") return componentName(selection.componentId) || t("dep_component");
-		const name = dependencyName(selectedKey());
-		if (!impact || impact.dependency !== selectedKey() || impact.error) return name || t("ui_dependencies");
-		if (MISS.has(impact.reason)) return joinLabel([name, reasonText(t, impact.reason)]);
-		if (impact.counts?.basis === "returned_components" && Number.isFinite(impact.counts.components) && (impact.counts.components > 0 || !partialImpact())) return joinLabel([name, t("dep_loaded_count", { n: impact.counts.components })]);
-		return name || t("ui_dependencies");
+		return dependencyName(selectedKey()) || t("ui_dependencies");
 	}
 	function openInspector() {
 		if (!selection || !data) return;
@@ -17733,7 +17815,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		return h("section", { "data-dep-dependency-row": edge.dependency_key }, h("h4", {}, dependencyName(edge.dependency_key)), h("p", {}, joinLabel([
 			t("dep_" + edge.relation),
 			versionLabel(edge) || t("dep_dash"),
-			levelText(edge.evidence_level)
+			levelText(edge.evidence_level),
+			peerCaption(edge.dependency_key, edge.component_id)
 		])), refs.length ? h("dl", { class: "dep-facts" }, h("dt", {}, t("dep_source")), h("dd", {}, refs.join(" · "))) : "");
 	}
 	function renderInspector() {
@@ -17765,7 +17848,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		} else for (const edge of edges) {
 			add(t("dep_component"), componentName(edge.component_id) || t("dep_dash"));
 			add(t("dep_pinned"), edge.resolved || t("dep_dash"), edge.resolved == null && edge.resolution_reason ? reasonText(t, edge.resolution_reason) : "");
-			add(t("dep_range"), edge.version || t("dep_dash"), !edge.version && edge.version_reason ? reasonText(t, edge.version_reason) : "");
+			const requirement = requirementValue(edge);
+			add(versionFieldLabel(edge), requirement || t("dep_dash"), !requirement && edge.version_reason ? reasonText(t, edge.version_reason) : "");
 			add(t("dep_level"), levelText(edge.evidence_level));
 			if (edge.basis) add(t("dep_why"), reasonText(t, edge.basis));
 			const refs = (edge.evidence_refs || []).map(evidenceLine).filter(Boolean);
@@ -17774,8 +17858,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		add(t("dep_owner"), owner.actor || t("dep_dash"), owner.reason ? reasonText(t, owner.reason) : "");
 		const tests = h("div", { "data-dep-tests": "" }, h("h3", {}, t("dep_tests")));
 		const jobs = hintRows();
-		if (jobs.length) for (const hint of jobs) tests.append(h("p", {}, joinLabel([hint.job_id, hint.command])));
-		else tests.append(h("p", {}, Number(data.omitted_hints) > 0 ? t("dep_tests_omitted") : t("dep_none_recorded")));
+		const hintsOmitted = Number(data?.omitted_hints);
+		const moreOmitted = [...data?.projection_omitted_collections || [], ...impact?.projection_omitted_collections || []].includes("verification_hints") || Number.isFinite(hintsOmitted) && hintsOmitted > 0;
+		for (const hint of jobs) tests.append(h("p", {}, joinLabel([hint.job_id, hint.command])));
+		if (!jobs.length) tests.append(h("p", { "data-dep-tests-note": moreOmitted ? "possible" : "none" }, moreOmitted ? t("dep_tests_none_listed") : t("dep_none_recorded")));
+		else if (moreOmitted) tests.append(h("p", { "data-dep-tests-note": "omitted" }, t("dep_tests_more_omitted")));
 		const affected = h("div", { "data-dep-affected": "" }, h("h3", {}, t(selectedKey() ? "dep_affected" : "ui_dependencies")));
 		if (!selectedKey()) {
 			if (edges.length) affected.append(...edges.map(dependencyRow));
@@ -17789,14 +17876,43 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			}
 		}));
 		else {
-			if (partialImpact()) affected.append(statusPill("partial"));
-			const reasons = new Set([
+			const reasons = [];
+			for (const code of [
 				impact.reason,
 				impact.cross_repository?.reason,
 				...impact.selection_reasons || [],
 				...impact.cross_repository?.selection_reasons || []
-			].filter(Boolean));
-			for (const code of reasons) affected.append(h("p", {
+			]) if (typeof code === "string" && code && !reasons.includes(code)) reasons.push(code);
+			if (partialImpact()) {
+				affected.append(statusPill("partial"));
+				const clauses = (reasons.length ? reasons : ["partial"]).map((code) => {
+					const key = "dep_clause_" + code;
+					const text = t(key);
+					return text === key ? reasonText(t, code) : text;
+				});
+				const detail = clauses.length === 1 ? clauses[0] : clauses.length === 2 ? t("dep_impact_pair", {
+					first: clauses[0],
+					second: clauses[1]
+				}) : t("dep_impact_many", {
+					first: clauses[0],
+					rest: clauses.slice(1, -1).join(t("dep_impact_sep")),
+					last: clauses.at(-1)
+				});
+				affected.append(h("p", {
+					class: "dep-impact-summary",
+					"data-dep-impact-summary": ""
+				}, t("dep_impact_partial", { detail })));
+				if (reasons.length) affected.append(disclosure({
+					label: t("dep_impact_reasons"),
+					body: h("div", { "data-dep-impact-reasons": "" }, ...reasons.map((code) => h("p", { "data-dep-impact-reason": code }, reasonText(t, code)))),
+					key: JSON.stringify([
+						namespace,
+						workspaceId,
+						"dep-impact",
+						selectedKey()
+					])
+				}));
+			} else for (const code of reasons) affected.append(h("p", {
 				class: "dep-note",
 				"data-dep-impact-reason": code
 			}, reasonText(t, code)));
@@ -17845,14 +17961,18 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		for (const link of filteredCrossEdges()) {
 			const source = componentName(link.component_id), target = componentName(link.target_component_id);
 			if (!source || !target) continue;
-			nodes.set("c:" + link.component_id, {
-				id: "c:" + link.component_id,
-				name: source
-			});
-			nodes.set("c:" + link.target_component_id, {
-				id: "c:" + link.target_component_id,
-				name: target
-			});
+			const describe = (id, name) => {
+				const row = externalById(id);
+				const external = Boolean(row) && !(data?.components || []).some((item) => item.component_id === id);
+				return {
+					id: "c:" + id,
+					name,
+					external,
+					repository: external ? otherRepositoryLabel(row) : ""
+				};
+			};
+			nodes.set("c:" + link.component_id, describe(link.component_id, source));
+			nodes.set("c:" + link.target_component_id, describe(link.target_component_id, target));
 			cross.push(link);
 		}
 		const fullLinks = [...edges.map((edge) => ({
@@ -17940,9 +18060,11 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			const path = svg("path", {
 				d: `M${x1} ${y1}C${mid} ${y1 + bow} ${mid} ${y2 + bow} ${x2} ${y2}`,
 				"data-dep-edge": "",
+				"data-dep-from": link.from,
+				"data-dep-to": link.to,
 				class: `dep-edge dep-rel-${link.relation}${link.level === "inferred" ? " evidence-inferred" : ""}`
 			});
-			path.dataset.depMark = markOf(link.from) === "dim" && markOf(link.to) === "dim" ? "dim" : "";
+			if (selectedIds.size && (markOf(link.from) === "dim" || markOf(link.to) === "dim")) path.dataset.depMark = "dim";
 			picture.append(path);
 		});
 		const visualOrder = [...nodes].sort(([a], [b]) => placed.get(a).x - placed.get(b).x || placed.get(a).y - placed.get(b).y);
@@ -17950,17 +18072,22 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			const position = placed.get(id);
 			if (!position) continue;
 			const left = PAD + position.x * strideX, top = PAD + position.y * (nodeHeight + GAP_Y);
+			const repo = node.external ? node.repository : "";
+			const accessible = repo ? `${node.name}, ${repo}` : node.name;
 			const group = svg("g", {
-				class: "dep-node",
+				class: node.external ? "dep-node dep-node-external" : "dep-node",
 				tabindex: "-1",
 				role: "button",
-				"aria-label": node.name,
+				"aria-label": accessible,
 				"aria-pressed": String(selectedIds.has(id)),
 				"data-dep-node": id,
+				"data-dep-external": node.external ? "true" : null,
 				"data-dep-focus": id.startsWith("d:") ? `col:${id.slice(2)}` : `row:${id.slice(2)}`,
 				"data-dep-mark": markOf(id)
 			});
-			group.append(svg("title", {}, node.name), svg("rect", {
+			const nameY = top + (repo ? Math.round(nodeHeight * .42) : nodeHeight / 2 + 5);
+			const shownRepo = repo && repo.length > 22 ? repo.slice(0, 21) + "…" : repo;
+			group.append(svg("title", {}, accessible), svg("rect", {
 				x: left,
 				y: top,
 				width: NODE_W,
@@ -17969,8 +18096,13 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				class: "dep-node-shape"
 			}), svg("text", {
 				x: left + 10,
-				y: top + nodeHeight / 2 + 5
-			}, abbreviate(node.name)));
+				y: nameY,
+				class: "dep-node-name"
+			}, abbreviate(node.name)), repo ? svg("text", {
+				x: left + 10,
+				y: top + Math.round(nodeHeight * .82),
+				class: "dep-node-repo"
+			}, shownRepo) : null);
 			picture.append(group);
 		}
 		const focusNode = picture.querySelector(`[data-dep-node="${CSS.escape(selectedId)}"]`) || picture.querySelector("[data-dep-node]");
@@ -18069,13 +18201,15 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				for (const dep of deps) {
 					colOf.set(dep.key, col);
 					const selectedCol = selection?.type === "dependency" && selection.dependencyKey === dep.key;
+					const peer = peerCaption(dep.key);
+					const columnLabel = joinLabel([dep.name, peer]);
 					headName.append(h("th", {
 						scope: "col",
-						title: dep.name
+						title: columnLabel
 					}, h("button", {
 						type: "button",
-						title: dep.name,
-						"aria-label": dep.name,
+						title: columnLabel,
+						"aria-label": columnLabel,
 						"data-dep-focus": `col:${dep.key}`,
 						"data-row": "-1",
 						"data-col": String(col),
@@ -18085,7 +18219,10 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 							type: "dependency",
 							dependencyKey: dep.key
 						}, true)
-					}, abbreviate(dep.name))));
+					}, abbreviate(dep.name), peer ? h("span", {
+						class: "dep-peer",
+						"data-dep-peer": ""
+					}, peer) : null)));
 					col += 1;
 				}
 			}
@@ -18139,6 +18276,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 				const own = edges.filter((edge) => edge.component_id === component.component_id);
 				return h("section", { class: "dep-group" }, h("h2", {}, component.name), ...own.map((edge) => {
 					const selectedPick = selection?.type === "edge" && selection.componentId === edge.component_id && selection.dependencyKey === edge.dependency_key;
+					const peer = peerCaption(edge.dependency_key, edge.component_id);
 					return h("button", {
 						type: "button",
 						class: "dep-pick",
@@ -18152,7 +18290,10 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 							componentId: edge.component_id,
 							dependencyKey: edge.dependency_key
 						}, true)
-					}, h("span", {}, dependencyName(edge.dependency_key)), h("span", { class: "dep-pick-meta" }, mark(edge), versionLabel(edge)));
+					}, h("span", { class: "dep-pick-main" }, h("span", {}, dependencyName(edge.dependency_key)), peer ? h("span", {
+						class: "dep-peer",
+						"data-dep-peer": ""
+					}, peer) : null), h("span", { class: "dep-pick-meta" }, mark(edge), versionLabel(edge)));
 				}));
 			}));
 			const picks = [...listHost.querySelectorAll("[data-dep-pick]")];

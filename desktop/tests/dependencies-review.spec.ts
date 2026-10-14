@@ -456,6 +456,153 @@ test('M3: dark selected chips use the readable text token and meet 4.5 to 1', as
 });
 
 
+test('P1: selection dims unrelated edges and keyboard focus does not', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page);
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  const pytest = page.locator(`[data-dep-node="d:${ids.keys.pytest}"]`);
+  await pytest.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator('[data-dep-mark=dim]')).toHaveCount(0);
+  await expect(page.locator('[data-dep-inspector]')).toHaveCount(0);
+  await page.locator(`[data-dep-node="d:${ids.keys.contract}"]`).click();
+  const own = page.locator(`[data-dep-from="d:${ids.keys.contract}"][data-dep-to="c:${ids.api}"]`);
+  const other = page.locator(`[data-dep-from="d:${ids.keys.pytest}"][data-dep-to="c:${ids.api}"]`);
+  const external = page.locator(`[data-dep-from="c:${ids.billing}"][data-dep-to="c:${ids.api}"]`);
+  await expect(own).toHaveCount(1);
+  await expect(own).not.toHaveAttribute('data-dep-mark', 'dim');
+  await expect(other).toHaveAttribute('data-dep-mark', 'dim');
+  await expect(external).toHaveAttribute('data-dep-mark', 'dim');
+  await expect(page.locator(`[data-dep-node="c:${ids.api}"]`)).not.toHaveAttribute('data-dep-mark', 'dim');
+  await expect(pytest).toHaveAttribute('data-dep-mark', 'dim');
+  const opacity = await other.evaluate(node => Number(getComputedStyle(node).opacity));
+  const ownOpacity = await own.evaluate(node => Number(getComputedStyle(node).opacity));
+  expect(opacity).toBeLessThan(0.5);
+  expect(ownOpacity).toBeGreaterThan(0.9);
+  expect(opacity).toBeCloseTo(await pytest.locator('.dep-node-shape').evaluate(node => Number(getComputedStyle(node).opacity)), 2);
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), theme);
+    const ratio = await pytest.locator('.dep-node-name').evaluate(node => {
+      const rgb = (value: string) => value.match(/[\d.]+/g)!.map(Number);
+      const text = rgb(getComputedStyle(node).fill);
+      const shape = getComputedStyle(node.parentElement!.querySelector('.dep-node-shape')!);
+      const fill = rgb(shape.fill);
+      const alpha = Number(shape.opacity);
+      let host: Element | null = node.ownerSVGElement;
+      let canvas = [241, 243, 246];
+      while (host) {
+        const color = getComputedStyle(host).backgroundColor;
+        const parsed = color.match(/[\d.]+/g)?.map(Number);
+        if (parsed && parsed.length >= 3 && color !== 'rgba(0, 0, 0, 0)') {canvas = parsed; break;}
+        host = host.parentElement;
+      }
+      const blend = fill.slice(0, 3).map((channel, index) => channel * alpha + canvas[index] * (1 - alpha));
+      const linear = (channel: number) => {const value = channel / 255; return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;};
+      const luminance = (color: number[]) => 0.2126 * linear(color[0]) + 0.7152 * linear(color[1]) + 0.0722 * linear(color[2]);
+      const left = luminance(text), right = luminance(blend);
+      return (Math.max(left, right) + 0.05) / (Math.min(left, right) + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  }
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator(`[data-dep-node="d:${ids.keys.contract}"]`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(other).toHaveAttribute('data-dep-mark', 'dim');
+});
+
+test('P2: another repository keeps its own node, legend and counts', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page);
+  await expect(page.locator('[data-dep-relation=contract]')).toHaveText('Contract 1');
+  await expect(page.locator(`[data-dep-focus="col:${ids.keys.contract}"] [data-dep-peer]`)).toContainText('billing-api');
+  await expect(page.locator(`[data-dep-focus="col:${ids.keys.contract}"] [data-dep-peer]`)).toContainText('example/billing');
+  await expect(page.locator('[data-dep-legend]')).toContainText('Other repository');
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  const node = page.locator(`[data-dep-node="c:${ids.billing}"]`);
+  await expect(node).toHaveAttribute('data-dep-external', 'true');
+  await expect(node).toHaveAttribute('aria-label', 'billing-api, example/billing');
+  await expect(node.locator('.dep-node-repo')).toHaveText('example/billing');
+  const fills = await page.locator('.dep-node-shape').evaluateAll(nodes => nodes.map(item => getComputedStyle(item).fill));
+  expect(new Set(fills).size).toBeGreaterThan(1);
+  expect(await node.locator('.dep-node-shape').evaluate(item => getComputedStyle(item).strokeDasharray)).not.toBe('none');
+  await page.locator('[data-dep-relation=contract]').click();
+  await expect(node).toHaveCount(0);
+  await expect(page.locator('[data-dep-legend-external]')).toHaveCount(0);
+  await expect(page.locator('[data-dep-relation=contract]')).toHaveText('Contract 1');
+  await expect(page.locator('[data-dep-peer]')).toHaveCount(0);
+});
+
+test('P2: a peer without a repository name says it is another repository', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await mount(page, {projection: doc => ({...doc, external_components: doc.external_components.map(row => ({...row, repository: ''}))})});
+  await page.getByRole('radio', {name: 'Graph', exact: true}).click();
+  await expect(page.locator(`[data-dep-node="c:${ids.billing}"]`)).toHaveAttribute('aria-label', 'billing-api, Other repository');
+  await expect(page.locator(`[data-dep-node="c:${ids.billing}"] .dep-node-repo`)).toHaveText('Other repository');
+});
+
+for (const locale of ['en', 'zh-TW'] as const) test.describe(`dependency clarity ${locale}`, () => {
+  test.use({locale: locale === 'zh-TW' ? 'zh-TW' : 'en-US'});
+  const copy = locale === 'en'
+    ? {partial: 'Partial: only the loaded graph was checked; peer selection stopped early, and one manifest could not be read.', none: 'None listed in this capture. More may exist.', omitted: 'More were omitted.', recorded: 'None recorded in this capture', contract: 'Contract version', reference: 'Reference version', service: 'Service version', range: 'Allowed range', other: 'Other repository'}
+    : {partial: '部分：只檢查了已載入的關係圖；跨儲存庫選取提前結束，而且有一份清單檔無法讀取。', none: '這次擷取沒有列出。可能還有其他。', omitted: '還有未列入的。', recorded: '這次擷取沒有記錄', contract: '契約版本', reference: '參考版本', service: '服務版本', range: '允許範圍', other: '其他儲存庫'};
+
+  test('P2 legend names the other repository', async ({page}) => {
+    await mount(page, {locale});
+    await expect(page.locator('[data-dep-legend]')).toContainText(locale === 'en' ? 'Other repository' : copy.other);
+  });
+
+  test('P3 to P6: title, partial sentence, tests and kind labels', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    await mount(page, {locale, projection: doc => ({...doc, edges: doc.edges.map(edge => edge.dependency_key === ids.keys.smtp ? {...edge, version: '2'} : edge)})});
+    await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.contract}"]`).click();
+    const panel = page.locator('[data-dep-inspector]');
+    await expect(panel.locator('h2')).toHaveText('billing-contract');
+    await expect(panel.locator('h2')).not.toContainText(locale === 'en' ? 'loaded' : '已載入');
+    await expect(panel.locator('[data-dep-affected]')).toContainText(locale === 'en' ? '1 loaded' : '已載入 1');
+    await expect(panel.locator('[data-dep-impact-summary]')).toHaveText(copy.partial);
+    await expect(panel.locator('[data-dep-affected] [data-status=partial]')).toBeVisible();
+    const reasons = panel.locator('[data-dep-impact-reasons]');
+    await expect(reasons).toBeHidden();
+    await panel.locator('[data-dep-affected] summary').click();
+    await expect(reasons).toBeVisible();
+    await expect(panel.locator('[data-dep-impact-reason=selection_budget]')).toBeVisible();
+    await expect(panel.locator('[data-dep-impact-reason=unreadable_manifest]')).toBeVisible();
+    await expect(panel.locator('[data-dep-impact-summary]')).not.toContainText(/selection_budget|unreadable_manifest/);
+    await expect(panel.locator('[data-dep-tests]')).toHaveText(new RegExp(copy.none.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    await expect(panel.locator('dt', {hasText: copy.contract})).toBeVisible();
+    await expect(panel.locator('.dep-facts')).toContainText('1');
+    await expect(panel.locator('.dep-facts')).not.toContainText(copy.range);
+    await page.keyboard.press('Escape');
+    await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.legacy}"]`).click();
+    await expect(panel.locator('h2')).toHaveText('legacy-mailer');
+    await expect(panel.locator('dt', {hasText: copy.reference})).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.smtp}"]`).click();
+    await expect(panel.locator('dt', {hasText: copy.service})).toBeVisible();
+    await expect(panel.locator('.dep-facts dd').filter({hasText: /^2$/})).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.pytest}"]`).click();
+    await expect(panel.locator('dt', {hasText: copy.range})).toBeVisible();
+    await expect(panel.locator('[data-dep-tests]')).toContainText('pytest');
+    await expect(panel.locator('[data-dep-tests-note=omitted]')).toHaveText(copy.omitted);
+  });
+
+  test('P5: a complete capture with no matching hint says none were recorded', async ({page}) => {
+    await mount(page, {locale, projection: doc => ({...doc, omitted_hints: 0, projection_omitted_collections: []})});
+    await page.locator(`[data-dep-cell="${ids.api}|${ids.keys.contract}"]`).click();
+    await expect(page.locator('[data-dep-tests-note=none]')).toHaveText(copy.recorded);
+    await expect(page.locator('[data-dep-tests]')).not.toContainText(copy.none);
+  });
+
+  test('P6: the narrow list labels a bare contract version and the same peer', async ({page}) => {
+    await page.setViewportSize({width: 390, height: 844});
+    await mount(page, {locale});
+    const row = page.locator(`[data-dep-pick="${ids.api}|${ids.keys.contract}"]`);
+    await expect(row).toContainText(`${copy.contract} 1`);
+    await expect(row.locator('[data-dep-peer]')).toContainText('example/billing');
+    await expect(row.locator('.dep-pick-meta')).not.toHaveText(/^\s*1\s*$/);
+  });
+});
+
 if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as const) {
   for (const variant of [{width: 1440, dark: false}, {width: 1000, dark: false}, {width: 768, dark: false}, {width: 390, dark: false}, {width: 1440, dark: true}]) {
     test(`screenshots: ${locale} ${variant.width} ${variant.dark ? 'dark' : 'light'}`, async ({browser, baseURL}) => {
@@ -486,7 +633,7 @@ if (process.env.BATC_DEP_SHOTS === '1') for (const locale of ['en', 'zh-TW'] as 
       await shot('component');
       await page.keyboard.press('Escape');
       await page.locator(`[data-dep-node="d:${ids.keys.contract}"]`).click();
-      await expect(page.locator('[data-dep-impact-reason=selection_budget]')).toBeVisible();
+      await expect(page.locator('[data-dep-impact-summary]')).toBeVisible();
       await page.locator('[data-dep-affected]').scrollIntoViewIfNeeded();
       await shot('partial-impact');
       await page.keyboard.press('Escape');
