@@ -29,7 +29,7 @@ export const pmLifecycleStrings={en:{
   pm_lifecycle_paused:'已暫停',pm_lifecycle_closed:'已結案',pm_lifecycle_unclassified:'尚未指定管理階段',
   pm_lifecycle_pausing:'已停止新投入，既有工作待核對',pm_lifecycle_closing:'已停止新投入，結案工作待核對',
   pm_lifecycle_active_help:'這是整個工作區的管理階段；各討論、Sprint 承諾與執行授權仍各自保留。',
-  pm_lifecycle_stopped_help:'已停止受理新的受管理工作。既有結果仍可查回，其他控制者的 session 保持原狀。',
+  pm_lifecycle_stopped_help:'已停止受理新的受管理工作。既有結果仍可查回，其他控制者的工作階段保持原狀。',
   pm_lifecycle_legacy_help:'這個工作區尚未記錄管理階段，系統未重新歸類原有工作。',
   pm_lifecycle_unknown:'目前無法讀取工作區狀態，重新取得資料後才能調整投入。',
   pm_lifecycle_manage:'調整專案投入',pm_lifecycle_action:'調整方式',pm_lifecycle_stage:'管理階段',

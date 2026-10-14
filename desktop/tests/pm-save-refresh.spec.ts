@@ -100,6 +100,9 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (c
         await screenshot('policy-change-pending');
       } finally {release();}
       await expect(page.locator('[data-pm-lifecycle] .pm-lifecycle-stage')).toHaveText(zh ? '已暫停' : 'Paused');
+      await expect(page.locator('[data-pm-lifecycle]')).toContainText(zh
+        ? '已停止受理新的受管理工作。既有結果仍可查回，其他控制者的工作階段保持原狀。'
+        : 'New managed work is stopped. Existing results remain readable; other controllers’ sessions are preserved.');
       await expect(submit).toBeDisabled();
       expect(f.state.writes).toHaveLength(2);
       await screenshot('policy-paused');
