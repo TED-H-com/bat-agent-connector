@@ -1,4 +1,4 @@
-import {iconButton} from './ui/components.js';
+import {button, disclosure, iconButton, inlineError, menu, statusPill} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {maintenanceReviewView} from './pm-maintenance-review-view.js';
 import {reviewCandidateToIdea} from './pm-review-candidate.js';
@@ -21,11 +21,49 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
   const date=value=>timeStamp(value, {empty:t('pmrv_unknown')});
   const remember=()=>{try{localStorage.setItem(navigationKey,JSON.stringify({review_id:selected}));}catch{}};
   const choose=h('select',{'aria-label':t('pmrv_choose'),onchange:()=>{selected=choose.value;remember();void refresh(true);}});
-  const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(ready)renderEditors(true);}},t('pmrv_use_versions'));
+  const rebase=button({variant:'secondary',label:t('pmrv_use_versions'),onClick:()=>{if(ready)renderEditors(true);}});
+  rebase.hidden=true;
+  const about=h('details',{},h('summary',{},t('pmrv_details')),text('pmrv_intro'));
+  disclosure({element:about});
+  const headingState=h('div',{class:'pm-answer'},h('h3',{},t('pmrv_title')));
+  const chooseLabel=labelled('pmrv_choose',choose);chooseLabel.hidden=true;
+  const actionHost=h('div',{class:'pm-review-actions'}),formHost=h('div',{class:'pm-review-forms'});
+  const actionBoxes=new Map();let shown=null,actionSig='';
+  const actionLabel=key=>t({note:'pmrv_note','candidate.record':'pmrv_candidate',complete:'pmrv_complete','follow_up.record':'pmrv_save_followup',prepare:'pmrv_prepare'}[key]);
+  function registerForm(key,editor){const node=h('div',{'data-review-form':key},editor.box);node.hidden=true;actionBoxes.set(key,{editor,node});formHost.append(node);if(editor.locked())shown=key;}
+  function visibleKeys(){const reviewStatus=model?.detail?.review.status,locked=key=>Boolean(actionBoxes.get(key)?.editor.locked()),keys=[];
+    if(reviewStatus==='prepared'||locked('note'))keys.push('note');
+    if(reviewStatus==='prepared'||locked('candidate.record'))keys.push('candidate.record');
+    if(reviewStatus==='prepared'||locked('complete'))keys.push('complete');
+    if((reviewStatus==='completed'&&model?.detail?.completion?.document.follow_ups?.length)||locked('follow_up.record'))keys.push('follow_up.record');
+    if(actionBoxes.has('prepare'))keys.push('prepare');return keys;}
+  function primaryOf(keys){const reviewStatus=model?.detail?.review.status;
+    if(reviewStatus==='prepared'&&owner()&&keys.includes('complete'))return 'complete';
+    if(reviewStatus==='prepared'&&keys.includes('note'))return 'note';
+    if(reviewStatus==='completed'&&keys.includes('follow_up.record'))return 'follow_up.record';
+    return keys.includes('prepare')?'prepare':keys[0]||null;}
+  function paintActions(){const lockedKey=[...actionBoxes].find(([,box])=>box.editor.locked())?.[0]||null;if(lockedKey)shown=lockedKey;
+    const keys=ready?visibleKeys():[];
+    if(ready&&shown&&!keys.includes(shown))shown=null;
+    if(shown&&!actionBoxes.has(shown))shown=null;
+    const primary=keys.length?primaryOf(keys):null,sig=JSON.stringify([primary,keys,shown,lockedKey,ready]);
+    if(sig!==actionSig){actionSig=sig;actionHost.replaceChildren();
+      if(primary){const open=key=>{if(lockedKey&&key!==lockedKey)return;shown=key;paintActions();};
+        const nodes=[button({variant:'primary',label:actionLabel(primary),'data-review-open':primary,onClick:()=>open(primary)})];
+        const rest=keys.filter(key=>key!==primary);
+        if(rest.length)nodes.push(menu({button:button({variant:'secondary',label:t('pmrv_more'),'data-review-more':'',icon:'chevron-down',iconPosition:'end'}),items:rest.map(key=>({key,label:actionLabel(key),onSelect:()=>open(key)}))}));
+        actionHost.replaceChildren(...nodes);}}
+    actionHost.hidden=!primary;
+    for(const [key,box] of actionBoxes)box.node.hidden=key!==shown||(!ready&&!box.editor.locked());
+    if(lockedKey)actionBoxes.get(lockedKey).node.hidden=false;
+    if(!ready)editors.hidden=!lockedKey;}
+  function paintHeading(){const review=model?.detail?.review;headingState.replaceChildren();
+    if(review)headingState.append(h('h3',{},review.title),statusPill(review.status==='completed'?'done':'in_review'));
+    else headingState.append(h('h3',{},t(ready&&model?(model.current.visibility_filtered?'pmrv_hidden':'pmrv_empty'):'pmrv_title')));}
+  editors.append(actionHost,formHost);
   const element=h('section',{class:'panel pm-evidence','data-pm-maintenance-review':''},
-    h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmrv_title')),text('pmrv_intro')),
-      iconButton({icon:'refresh-cw', label:t('pmrv_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),
-    labelled('pmrv_choose',choose),status,warning,rebase,scheduleView,view,editors);
+    h('header',{class:'pm-heading'},headingState,iconButton({icon:'refresh-cw', label:t('pmrv_refresh'), ...{type:'button',onclick:()=>void refresh()}})),
+    chooseLabel,status,warning,rebase,editors,scheduleView,view,about);
   const hidden=value=>{const field=h('input',{type:'hidden',value:JSON.stringify(value)});field.dataset.pmDefault=field.value;return field;};
   const lines=value=>value.split('\n').map(value=>value.trim()).filter(Boolean);
   const select=(key,entries,value='')=>{const node=h('select',{'aria-label':t(key)},...entries.map(([id,label])=>h('option',{value:id},label)));node.value=value;node.dataset.pmDefault=value;return node;};
@@ -33,19 +71,20 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
   const target=()=>({workspace_id:workspaceId,review_id:model.detail.review.review_id});
   const pre=()=>({expected_version:model.detail.review.version});
   const sourceRows=()=>model?.detail?.snapshot.maintenance.report.sources||[];
-  const sourceLabel=row=>`${t('pmrv_ref_'+row.kind)} · ${row.id}`;
+  const sourceLabel=row=>row.title||t('pmrv_ref_'+row.kind);
   const known=(field,choices)=>{const selected=JSON.parse(field.value||'[]');return selected.every(id=>choices.some(row=>row.id===id));};
   const request=async(...args)=>{const current=ticket;try{return await api(...args);}catch(error){
     if(valid(current)&&([401,403,404].includes(error.status)||['FORBIDDEN','NOT_FOUND'].includes(error.code)))failure(error);throw error;
   }};
   function update(){
     let stale=false;for(const entry of forms){stale ||= !entry.editor.locked()&&entry.stale();entry.editor.update();}
-    widgets.forEach(widget=>widget.sync());warning.hidden=rebase.hidden=!stale;rebase.disabled=!ready;choose.disabled=!ready;
+    widgets.forEach(widget=>widget.sync());warning.hidden=rebase.hidden=!stale;rebase.disabled=!ready;choose.disabled=!ready;chooseLabel.hidden=!ready;
     output?.update();
     imports.forEach(item=>item.update());
+    paintActions();
   }
   function withdraw(){ticket++;ready=false;model=null;imports.forEach(item=>item.dispose());imports=[];view.replaceChildren();scheduleView.replaceChildren();choose.replaceChildren();editors.hidden=true;status.replaceChildren();output=null;update();}
-  function failure(error){withdraw();status.replaceChildren(text('pmrv_unavailable'),errorBox(error));}
+  function failure(error){withdraw();status.replaceChildren(inlineError({error:t('pmrv_unavailable')}),errorBox(error));paintHeading();}
   function localForm(config){
     const expected=()=>JSON.stringify({preconditions:config.preconditions(),context:config.context?.()??null});
     const baseline=h('input',{type:'hidden',value:expected()});baseline.dataset.pmDefault=baseline.value;
@@ -66,7 +105,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     const holder=h('div',{class:'pm-review-checks'});let previous='',controls=[];
     const sync=()=>{
       const available=getChoices(),chosen=JSON.parse(field.value||'[]'),rows=[...available];
-      for(const id of chosen)if(!rows.some(row=>row.id===id))rows.push({id,label:`${t('pmrv_source_missing')} · ${id}`,unavailable:true});
+      for(const id of chosen)if(!rows.some(row=>row.id===id))rows.push({id,label:t('pmrv_source_missing'),unavailable:true});
       const signature=JSON.stringify(rows);
       if(signature!==previous){
         previous=signature;controls=[];holder.replaceChildren();
@@ -74,7 +113,10 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
           node.addEventListener('input',()=>{const editor=getEditor();if(!editor||editor.locked()||!can()||node.disabled)return;
             const values=JSON.parse(field.value||'[]').filter(value=>value!==row.id);if(node.checked)values.push(row.id);
             field.value=JSON.stringify(values);editor.changed();dirty=true;update();});
-          holder.append(h('label',{},node,h('span',{},row.label)));controls.push({node,row});
+          const line=h('div',{class:'pm-review-source'},h('label',{},node,h('span',{},row.label)));
+          const shown=row.detail||row.id;
+          if(shown){const detail=h('details',{},h('summary',{},t('pmrv_details')),h('p',{class:'mono'},shown));disclosure({element:detail});line.append(detail);}
+          holder.append(line);controls.push({node,row});
         }
         if(!rows.length)holder.append(text('pmrv_none'));
       }
@@ -86,13 +128,13 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     const node=select(key,entries(),initial);let signature='';
     const sync=()=>{const choices=ready?entries():[],value=node.value,next=JSON.stringify(choices);
       if(signature!==next){signature=next;node.replaceChildren(...choices.map(([id,label])=>h('option',{value:id},label)));
-        if(value&&!choices.some(([id])=>id===value))node.append(h('option',{value},t('pmrv_source_missing')+' · '+value));node.value=value;}
+        if(value&&!choices.some(([id])=>id===value))node.append(h('option',{value},t('pmrv_source_missing')));node.value=value;}
     };
     widgets.push({sync});return node;
   }
-  function sourceChoices(field,getEditor){return choices(field,getEditor,()=>sourceRows().map(row=>({id:row.source_id,label:sourceLabel(row)})),'pmrv_source_refs');}
+  function sourceChoices(field,getEditor){return choices(field,getEditor,()=>sourceRows().map(row=>({id:row.source_id,label:sourceLabel(row),detail:row.id})),'pmrv_source_refs');}
   function collection(field,getEditor,definitions,key,limit=10){
-    const holder=h('div'),rows=h('div'),add=h('button',{type:'button',class:'secondary'},t('pmrv_'+key));let controls=[];
+    const holder=h('div'),rows=h('div'),add=button({variant:'secondary',label:t('pmrv_'+key)});let controls=[];
     const change=values=>{if(!getEditor()||getEditor().locked()||!can())return;field.value=JSON.stringify(values);getEditor().changed();dirty=true;update();};
     const render=()=>{
       rows.replaceChildren();controls=[];
@@ -101,12 +143,12 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
           const choices=def.choices?.(),value=item[def.name]??'';
           const node=choices?select(def.label,choices,value):input(def.label,{multiline:!def.type,max:def.max||4000,value});
           if(def.type)node.type=def.type;
-          if(choices&&value&&!choices.some(([id])=>id===value))node.append(h('option',{value},`${t('pmrv_source_missing')} · ${value}`));
+          if(choices&&value&&!choices.some(([id])=>id===value))node.append(h('option',{value},t('pmrv_source_missing')));
           node.value=value;
           node.addEventListener('input',()=>{const values=JSON.parse(field.value||'[]'),current=values.find(row=>row.id===item.id);if(current){current[def.name]=node.value;change(values);}});
-          controls.push(node);return labelled(def.label,node);
+          controls.push(node);return def.type==='datetime-local'?timeChoice(def.label,node):labelled(def.label,node);
         });
-        const remove=h('button',{type:'button',class:'secondary',onclick:()=>{change(JSON.parse(field.value||'[]').filter(row=>row.id!==item.id));render();sync();}},t('pmrv_remove'));
+        const remove=button({variant:'secondary',label:t('pmrv_remove'),onClick:()=>{change(JSON.parse(field.value||'[]').filter(row=>row.id!==item.id));render();sync();}});
         controls.push(remove);rows.append(h('div',{class:'pm-review-assignment pm-fields'},...fields,remove));
       }
     };
@@ -116,7 +158,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     holder.append(rows,add);const widget={element:holder,sync,mount:render};widgets.push(widget);return widget;
   }
   function mutationEditors(){
-    const detail=model.detail,holder=h('div'),snapshotId=detail.snapshot.snapshot_id;
+    const detail=model.detail;
     const context=()=>model?.detail?.snapshot.snapshot_id??null;
     const prepared=()=>can()&&model?.detail?.review.status==='prepared';
     const content=input('pmrv_note_content',{multiline:true,max:8000}),noteReason=reason(),noteRefs=hidden([]);let noteEditor;
@@ -125,7 +167,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
       permitted:prepared,valid:()=>known(noteRefs,sourceRows().map(row=>({id:row.source_id}))),label:'pmrv_note',
       params:values=>({...values,source_refs:JSON.parse(values.source_refs)}),extra:h('div',{class:'pm-fields'},
         labelled('pmrv_note_content',content),labelled('pmrv_reason',noteReason),noteSources.element)});
-    const noteBox=fold('pmrv_note',noteEditor.box,noteEditor.locked());noteBox.hidden=detail.review.status==='completed'&&!noteEditor.locked();holder.append(noteBox);
+    registerForm('note',noteEditor);
     const candidateFields={};for(const[key,label,max]of [['title','candidate_title',200],['problem','problem',4000],['goal_relation','goal_relation',4000],
       ['expected_effect','expected_effect',4000],['options','options',20000],['hypotheses','hypotheses',20000]])candidateFields[key]=input('pmrv_'+label,{multiline:key!=='title',max,required:!['options','hypotheses'].includes(key)});
     candidateFields.rationale=reason();candidateFields.source_refs=hidden([]);candidateFields.public_sources=hidden([]);let candidateEditor;
@@ -139,7 +181,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
         public_sources:JSON.parse(values.public_sources).map(({id,...source})=>({...source,checked_at:new Date(source.checked_at).getTime()/1000}))}),
       extra:h('div',{class:'pm-fields'},text('pmrv_candidate_help'),...Object.entries(candidateFields).filter(([,node])=>node.type!=='hidden').map(([key,node])=>labelled('pmrv_'+({title:'candidate_title',rationale:'reason'}[key]||key),node)),
         candidateSources.element,fold('pmrv_public_sources',h('div',{},text('pmrv_attributed_source'),publicSources.element)))});
-    publicSources.mount();const candidateBox=fold('pmrv_candidate',candidateEditor.box,candidateEditor.locked());candidateBox.hidden=detail.review.status==='completed'&&!candidateEditor.locked();holder.append(candidateBox);
+    publicSources.mount();registerForm('candidate.record',candidateEditor);
     const notes=hidden([]),candidates=hidden([]),ack=hidden(false),summary=input('pmrv_summary',{multiline:true,max:8000}),direction=select('pmrv_direction',
       ['continue_maintenance','bounded_repair_proposal','explore_idea','request_planning','revise_policy','pause_proposal','close_proposal','defer'].map(value=>[value,t('pmrv_direction_'+value)]),'defer'),
       directionReason=input('pmrv_direction_reason',{multiline:true,max:4000}),followups=hidden([]),focus=input('pmrv_next_focus',{multiline:true,max:40000,required:false}),completeReason=reason();let completeEditor;
@@ -160,7 +202,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
         h('label',{class:'pm-review-ack'},checkAck,t('pmrv_acknowledge')),labelled('pmrv_summary',summary),labelled('pmrv_direction',direction),
         labelled('pmrv_direction_reason',directionReason),candidateChoices.element,fold('pmrv_followups',assignments.element),
         labelled('pmrv_next_focus',focus),labelled('pmrv_reason',completeReason))});
-    assignments.mount();const completeBox=fold('pmrv_complete',completeEditor.box,completeEditor.locked());completeBox.hidden=detail.review.status==='completed'&&!completeEditor.locked();holder.append(completeBox);
+    assignments.mount();registerForm('complete',completeEditor);
     // Always mount original action targets for lost completion/result receipt recovery.
     const allowedAssignments=()=>model?.detail?.completion?.document.follow_ups?.filter(item=>owner()||item.owner_actor===caps()?.actor)||[];
     const assigned=sourceSelect('pmrv_select_followup',()=>allowedAssignments().map(item=>[item.id,`${item.text} · ${item.owner_actor}`]),allowedAssignments()[0]?.id||''),
@@ -172,10 +214,12 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
       params:({snapshot_id,...values})=>({...values,...(snapshot_id?{snapshot_id}:{})}),extra:h('div',{class:'pm-fields'},text('pmrv_unassessed'),
         labelled('pmrv_select_followup',assigned),labelled('pmrv_followup_status',reported),labelled('pmrv_result',result),
         labelled('pmrv_result_snapshot',snapshot),labelled('pmrv_reason',followReason))});
-    const followBox=fold('pmrv_save_followup',followEditor.box,followEditor.locked());followBox.hidden=!detail.completion?.document.follow_ups?.length&&!followEditor.locked();holder.append(followBox);
-    holder.dataset.snapshotId=snapshotId;return holder;
+    registerForm('follow_up.record',followEditor);
   }
   const localTime=value=>{const date=new Date(value);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);};
+  function timeChoice(key,field){const preview=h('span');const paint=()=>{const ms=new Date(field.value).getTime();preview.replaceChildren(Number.isFinite(ms)?timeStamp(ms/1000):t('pmrv_unknown'));};
+    field.addEventListener('input',paint);field.addEventListener('change',paint);paint();
+    return h('div',{class:'pm-time-field'},labelled(key,field),h('p',{class:'muted pm-time-shown'},t('pmrv_shown'),' ',preview));}
   function prepareEditor(){
     const title=input('pmrv_report_title',{max:200}),start=input('pmrv_start',{value:localTime(Date.now()-7*86400000)}),end=input('pmrv_end',{value:localTime(Date.now())});
     start.type=end.type='datetime-local';start.dataset.pmDefault=start.value;end.dataset.pmDefault=end.value;
@@ -189,17 +233,16 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
       label:'pmrv_prepare',params:values=>({title:values.title,period_start:new Date(values.period_start).getTime()/1000,period_end:new Date(values.period_end).getTime()/1000,
         ...(values.previous_review_id?{previous_review_id:values.previous_review_id}:{})}),
       extra:h('div',{class:'pm-fields'},text('pmrv_prepare_help'),!model.policy||!model.baseline?text('pmrv_context_missing'):'',
-        labelled('pmrv_report_title',title),h('div',{class:'capture-fields'},labelled('pmrv_start',start),labelled('pmrv_end',end)),text('pmrv_period_help'),
+        labelled('pmrv_report_title',title),h('div',{class:'capture-fields'},timeChoice('pmrv_start',start),timeChoice('pmrv_end',end)),text('pmrv_period_help'),
         labelled('pmrv_previous',previous))});
-    return fold('pmrv_prepare',editor.box,!model.detail||editor.locked());
+    registerForm('prepare',editor);
   }
   function renderEditors(rebase=false){
     const id=model.detail?.review.review_id??null;
-    const expanded=editorId===id?new Set([...editors.querySelectorAll('[data-review-fold][open]')].map(node=>node.dataset.reviewFold)):new Set();
-    forms.forEach(entry=>entry.editor.dispose?.());forms=[];widgets=[];dirty=false;editors.replaceChildren();
-    if(model.detail)editors.append(mutationEditors());editors.append(prepareEditor());
+    forms.forEach(entry=>entry.editor.dispose?.());forms=[];widgets=[];dirty=false;
+    actionBoxes.clear();actionSig='';shown=null;formHost.replaceChildren();editors.replaceChildren(actionHost,formHost);
+    if(model.detail)mutationEditors();prepareEditor();
     if(rebase)forms.forEach(entry=>entry.rebase());
-    for(const node of editors.querySelectorAll('[data-review-fold]'))if(expanded.has(node.dataset.reviewFold))node.open=true;
     editorId=id;update();
   }
   function eventPage(data,after){
@@ -209,23 +252,29 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
     for(const row of data.events){check(row);if(row.review_id!==data.review_id||seen.has(row.event_id))throw Error(t('pmrv_invalid'));seen.add(row.event_id);}
     return data;
   }
+  function syncAbout(){const summary=about.querySelector(':scope > summary');about.replaceChildren(summary,text('pmrv_intro'));
+    if(!model?.detail)return;
+    about.append(text('pmrv_period_help'),text('pmrv_fixed_help'),text('pmrv_samples'),text('pmrv_effort_unknown'));
+    if(!model.detail.completion)about.append(text('pmrv_not_completed'));
+    if(model.detail.review?.status)about.append(text(model.detail.review.status==='completed'?'pmrv_completed':'pmrv_prepared'));}
   function renderView(){
     imports.forEach(item=>item.dispose());imports=[];view.replaceChildren();output=null;
-    if(!model.detail){view.append(text(model.current.visibility_filtered?'pmrv_hidden':'pmrv_empty'));return;}
+    syncAbout();paintHeading();
+    if(!model.detail)return;
     const candidateInput=event=>{const entry=reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,labelled,event,errorBox,namespace});imports.push(entry);return entry.element;};
-    output=maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable:failure,detail:model.detail,candidateInput});view.append(output.element);
+    output=maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,errorBox,onUnavailable:failure,detail:model.detail,candidateInput});view.append(output.element);syncAbout();
     const detail=model.detail;
     if(detail.visibility_filtered)view.append(text('pmrv_history_filtered'));
     if(detail.next_cursor!==null){
       view.append(text('pmrv_history_partial'));
       const after=detail.next_cursor,epoch=ticket,rid=detail.review.review_id;
-      const more=h('button',{type:'button',class:'secondary',onclick:async()=>{
+      const more=button({variant:'secondary',label:t('pmrv_more_events'),onClick:async()=>{
         more.disabled=true;try{
           const page=await api('GET',`${base}/maintenance-reviews/${rid}/events?after=${after}&limit=20`);if(!valid(epoch)||!more.isConnected)return;
           eventPage(page,after);model.detail.events.push(...page.events);model.detail.next_cursor=page.next_cursor;model.detail.visibility_filtered ||= page.visibility_filtered;
           renderView();update();
         }catch(error){if(valid(epoch))failure(error);}finally{more.disabled=false;}
-      }},t('pmrv_more_events'));view.append(more);
+      }});view.append(more);
     }
   }
   function renderSchedule(data){
@@ -240,7 +289,7 @@ export function workspaceMaintenanceReview({h,t,api,alive,workspaceId,workspace,
       PM_MAINTENANCE_SOURCES_UNAVAILABLE:'sources',PM_MAINTENANCE_REVIEW_SOURCE_UNAVAILABLE:'sources'};
     scheduleView.append(fold('pmrv_weekly',h('div',{},h('p',{},t('pmrv_weekly_next'),': ',date(weekly.next_due)),
       text(!weekly.execution_available?'pmrv_weekly_unavailable':weekly.blocked_reason?'pmrv_weekly_'+(reasons[weekly.blocked_reason]||'blocked'):'pmrv_weekly_ready'),
-      weekly.pending_report?text('pmrv_weekly_pending'):'',text('pmrv_not_completed'))));
+      weekly.pending_report?text('pmrv_weekly_pending'):'')));
   }
   async function pages(suffix,property,epoch){
     let after=0,records=[],filtered=false;const ids=new Set();

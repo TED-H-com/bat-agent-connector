@@ -60,7 +60,7 @@ for(const native of [false,true])test.describe(native?'native governance workspa
   test('a contributor cannot decide directions through the mounted application',async({page})=>{
     const f=fixture();f.base.state.role='contributor';f.governance.state.role='contributor';await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues');
     await page.locator(`[data-pm-governance-row="${f.governance.state.records[1].record.record_id}"]`).getByRole('button').click();
-    await openAction(page,'decide');await expect(action(page,'decide').locator('button[type=submit]')).toBeDisabled();
+    await expect(action(page,'decide')).toHaveCount(0);await expect(action(page,'adoption.link')).toHaveCount(0);
     expect(f.governance.state.writes).toHaveLength(0);
   });
 });

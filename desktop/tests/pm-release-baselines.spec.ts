@@ -145,6 +145,22 @@ for(const language of ['en','zh-TW'])for(const width of [390,768,1440])test(`${l
   const f=releaseFixture();f.addBaseline();
   await mountConversation(page,false,f.dispatch);await page.goto(releaseRoute);await openPmSection(page, 'dependencies' , 'ui_baselines');await expect(section(page).locator('[data-release-baseline]')).toBeVisible();
   await expect(section(page)).toContainText(language==='en'?'Functional acceptance and quality remain unassessed':'功能驗收與品質仍未評估');
+  await expect(section(page).locator('.pm-heading [data-status="not_assessed"]')).toHaveCount(1);
+  await expect(section(page).locator('.pm-heading')).not.toContainText(language==='en'?'GitHub Release':'GitHub 版本發布');
+  await expect(section(page).locator('[data-release-current] .pm-baseline-facts [data-status]')).toHaveCount(4);
+  const header=await section(page).locator('.pm-heading').evaluate(node=>{
+    const title=node.querySelector('h3').getBoundingClientRect(),button=node.querySelector('button').getBoundingClientRect();
+    const facts=node.parentElement.querySelector('[data-release-current] .pm-baseline-facts');
+    const version=node.parentElement.querySelector('[data-release-current] strong');
+    const tops=facts?[...facts.children].map(item=>item.getBoundingClientRect().top):[];
+    return {sameRow:button.top<title.bottom&&button.bottom>title.top&&button.left>title.left,
+      center:Math.abs((title.top+title.bottom)/2-(button.top+button.bottom)/2),
+      currentBorder:getComputedStyle(node.parentElement.querySelector('[data-release-current] > article')).borderTopWidth,
+      factsBeforeVersion:Boolean(facts&&version&&(facts.compareDocumentPosition(version)&Node.DOCUMENT_POSITION_FOLLOWING)),
+      factSpread:tops.length?Math.max(...tops)-Math.min(...tops):99};
+  });
+  expect(header.sameRow).toBe(true);expect(header.center).toBeLessThan(2);expect(header.currentBorder).toBe('0px');expect(header.factsBeforeVersion).toBe(true);
+  if(width===1440)expect(header.factSpread).toBeLessThan(4);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   const folder=process.env.PM_SCREENSHOTS||testInfo.outputPath('screenshots');mkdirSync(folder,{recursive:true});
   await section(page).screenshot({path:`${folder}/${language}-${width}.png`});await context.close();
