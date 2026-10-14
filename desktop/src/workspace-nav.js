@@ -190,7 +190,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         status.replaceChildren(); render();
       } catch (error) {
         if (version !== contextVersion || disposed) return;
-        alive(); if ([403, 404].includes(error.status)) {roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
+        alive(); if ([403, 404].includes(error.status)) {catalogRows = null; roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
         // Keep the exact error available on demand, including refresh-cycle reporting.
         const detail = errorBox(error), label = t(pmWorkspace && !globalTree ? 'ui_work_links_unavailable' : 'ui_work_unavailable');
         status.replaceChildren(h('div', {class: 'workspace-read-error', 'data-work-read-error': ''},

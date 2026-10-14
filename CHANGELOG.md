@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Preserve parent authorization withdrawal and draft recovery while coalescing visible PM sources; hidden Requirements and Board reopen behind a skeleton until their own reads settle.
+
 - Coalesce central reads for visible views and open tools; defer hidden sections without flashing withdrawn data, and stop sidebar catalog refreshes on ordinary work events.
 - Keep legacy Board chips within one line and translate action labels in work and capture links.
 

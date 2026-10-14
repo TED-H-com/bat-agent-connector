@@ -234,7 +234,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const uiState = viewState(namespace, workspaceId, 'discussions');
   const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
   const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
-  const threadEventTypes = new Set();
   let sendHandoff = null, firstMessagePending = false;
   try {sendHandoff = JSON.parse(localStorage.getItem(handoffKey));} catch { /* An invalid draft cannot authorize a write. */ }
   const staleSections = new Set(), activationReads = new Map(), maskedSources = new Map();
@@ -571,7 +570,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   body.append(drawersHome);
   let detailPanel = null;
   const toolPreference = viewState(namespace, workspaceId, 'work-tools');
-  function openPanel(label, node) {
+  function openPanel(label, node, refreshStale = true) {
     if (!node || !loaded) return;
     if (node === reportTools) void brief?.prepareReports?.();
     detailPanel?.close(); schedule?.setActive(false); traceability?.hideInspector(); kanban?.hideInspector();
@@ -579,7 +578,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     toolPreference.open = node.dataset.pmTool || null;
     detailPanel = inspector({title: label, onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
-    void refreshStaleVisible();
+    if (refreshStale) void refreshStaleVisible();
   }
   if (lifecycle) drawersHome.append(lifecycle.element);
   const dependencies = workspaceId && !threadId && caps()?.features?.pm_dependencies?.version === 1
@@ -688,7 +687,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const section = node === meetings?.element ? meetings : node === followUp?.element ? followUp : null;
     if (threadId && section) {
       lazyThreadSections.set(section, details);
-      details.addEventListener('toggle', () => {if (details.open && !details.closest('[data-discussion-tab]')?.hidden && loaded) void section.refresh();});
+      details.addEventListener('toggle', () => {if (details.open && !details.closest('[data-discussion-tab]')?.hidden && loaded) void refreshSection(section);});
     }
     card.dataset.pmSection = label; node.classList.add('pm-secondary-content'); return card;
   }
@@ -751,6 +750,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const sectionNode = section => section?.element || section?.box;
   const sectionVisible = section => {
     const node = sectionNode(section);
+    if (section === brief && main.querySelector('[data-overview-related]')) return true;
     return node?.isConnected && !node.closest('[hidden], details:not([open])');
   };
   function activateSection(section, value) {
@@ -760,7 +760,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (value && read?.then) activationReads.set(section, read);
   }
   function maskSource(section) {
-    if (maskedSources.has(section)) return;
+    if (maskedSources.get(section)?.isConnected) return;
+    maskedSources.delete(section);
     const node = sectionNode(section); if (!node) return;
     const placeholder = skeleton(3); placeholder.dataset.pmSourceLoading = '';
     node.dataset.pmSourcePending = ''; node.prepend(placeholder);
@@ -797,7 +798,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   function invalidateSections() {
     for (const section of sectionModules()) if (!sectionVisible(section)) {staleSections.add(section); maskSource(section);}
   }
-  const openedSource = event => {if (event.target instanceof HTMLDetailsElement && event.target.open && loaded) void refreshStaleVisible();};
+  const openedSource = event => {if (event.target instanceof HTMLDetailsElement && event.target.open && loaded && ![...lazyThreadSections.values()].includes(event.target)) void refreshStaleVisible();};
   main.addEventListener('toggle', openedSource, true);
   const noteCache = new Map();
   const selectedSourcesForm = () => threadData?.thread.mode === 'planning' && planningRevisionForm ? planningRevisionForm : planForm;
@@ -955,7 +956,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       discussionTools = discussionPanel({t, namespace, workspaceId, panes: {context: contextPane,
         inputs: h('section', {'data-discussion-tab': 'inputs'}, information), plan: planPane}, onSelect: key => {
           revisions?.setActive(key === 'plan');
-          if (key === 'context' && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open) void section.refresh();
+          if (key === 'context' && initialReadComplete) for (const [section, details] of lazyThreadSections) if (details.open) void refreshSection(section);
         }});
       column.querySelector('.pd-header-main').append(discussionTools.trigger);
       const composer = discussionComposer({t, form: noteForm, details: threadDetails,
@@ -1134,7 +1135,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     filterThreads();
   }
   async function load({event = false} = {}) {
-    const eventTypes = new Set(threadEventTypes); threadEventTypes.clear();
     const ticket = ++sequence; refreshing = true; refresh.disabled = true;
     if (!event) {lifecycle?.withdraw();engineering?.withdraw();materialization?.withdraw();handoff?.withdraw();workBatches?.withdraw();issues?.withdraw();
       ahp?.withdraw();releaseBaselines?.withdraw();maintenancePolicy?.withdraw();maintenanceRepairs?.withdraw();maintenanceReview?.withdraw();qualityReviews?.withdraw();qualitySelections.clear();}
@@ -1233,8 +1233,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       worktreeChoice?.update();
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         const lazy = lazyThreadSections.get(section);
-        const ownEvent = section === meetings && eventTypes.has('pm_meeting') || section === followUp && ['pm_follow_up', 'pm_follow_up_assessment'].some(type => eventTypes.has(type));
-        if (section && (!event || sectionVisible(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden || !event && ownEvent)) {await section.refresh(); if (sectionVisible(section)) revealSource(section);}
+        if (section && (!event || sectionVisible(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)) {await section.refresh(); if (sectionVisible(section)) revealSource(section);}
         alive(); if (ticket !== sequence) return;
       }
       nativeAnalysis?.update(runs?.runs || []);
@@ -1280,13 +1279,6 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const rememberedTool = viewTools[workbench?.selected()]?.find(([key]) => key === toolPreference.open);
   if (rememberedTool?.[1]) openPanel(t(rememberedTool[0]), rememberedTool[1]);
   if (openCreate || !workspaceId && !lastList.length) showCreate();
-  // Accumulate lazy thread-tool invalidations before the unchanged shared event
-  // coalescer schedules its read. One burst can invalidate both source families.
-  const subscribeEvents = onEvents;
-  onEvents = listener => subscribeEvents(event => {
-    if (threadId && ['pm_meeting', 'pm_follow_up', 'pm_follow_up_assessment'].includes(event.resource_type)) threadEventTypes.add(event.resource_type);
-    return listener(event);
-  });
   // Coalesce only reads that have not started. Every event's ACK waits for a
   // post-event read, while a held older read cannot block a newer withdrawal.
   const pendingReads = new Map();
@@ -1296,22 +1288,35 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }));
     return pendingReads.get(key);
   }
+  const authorityHidden = new Map();
+  let authorityTool = null;
   async function refreshAuthority() {
     const ticket = ++sequence;
     try {
       const detail = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`); alive();
       if (ticket !== sequence) return;
       if (detail.workspace?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
-      workspace = detail.workspace; loaded = true; publishContext(); updateForms();
+      workspace = detail.workspace; loaded = true;
+      if (authorityHidden.size) {
+        for (const [node,hidden] of authorityHidden) node.hidden = hidden;
+        authorityHidden.clear(); workbench?.apply();
+        const tool = authorityTool; authorityTool = null;
+        if (tool?.node && tool.view === workbench?.selected()) openPanel(tool.label,tool.node,false);
+        await refreshStaleVisible(); alive(); if (ticket !== sequence) return;
+      }
+      status.replaceChildren(); publishContext(); updateForms();
     } catch (error) {
       alive(); if (ticket !== sequence) return;
-      if ([403,404].includes(error.status)) {
-        loaded = false; workspace = null; threadData = null; forgetWorkspace(namespace,workspaceId);
-        for (const section of sectionModules()) section.withdraw?.();
-        for (const node of sourceSections()) node.hidden = true;
-        workspaceList.replaceChildren(); lastThreadList = null; phasePill.hidden = true;
-        detailPanel?.close(); discussionTools?.close(); publishContext(); updateForms();
+      loaded = false; workspace = null; threadData = null;
+      if ([403,404].includes(error.status)) forgetWorkspace(namespace,workspaceId);
+      if (!authorityHidden.size) {
+        for (const node of sourceSections()) authorityHidden.set(node,node.hidden);
+        authorityTool = detailPanel ? {node:detailPanel.body.firstElementChild,label:detailPanel.querySelector('h2').textContent,view:workbench?.selected()} : null;
       }
+      for (const section of sectionModules()) {section.withdraw?.(); staleSections.add(section); maskSource(section);}
+      for (const node of sourceSections()) node.hidden = true;
+      workspaceList.replaceChildren(); lastThreadList = null; phasePill.hidden = true;
+      detailPanel?.close(); discussionTools?.close(); publishContext(); updateForms();
       status.replaceChildren(errorBox(error));
       throw error;
     }
@@ -1365,8 +1370,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (threadId && pmEvent(kind)) return eventRead(load, () => load({event:true}));
     const reads = [];
     if (!pmEvent(kind) && (threadId || workbench?.selected() === 'discussions')) reads.push(eventRead(refreshDiscussionSources,refreshDiscussionSources));
-    if (kind === 'pm_workspace') reads.push(eventRead(refreshAuthority, refreshAuthority));
+    if (pmEvent(kind)) reads.push(eventRead(refreshAuthority, refreshAuthority));
     for (const section of sectionModules()) if (sectionVisible(section)) {
+      if (section === issues && kind !== 'pm_workspace' && !kind.startsWith('pm_issue')) continue;
       if (section === dependencies && !pmEvent(kind) && !['project','integration'].includes(kind)) continue;
       reads.push(eventRead(section, () => refreshSection(section)));
     }

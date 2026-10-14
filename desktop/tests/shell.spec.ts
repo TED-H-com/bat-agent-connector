@@ -255,7 +255,7 @@ test('successful poll stays Connected while a PM child read is held', async ({pa
     if(hold && input.path.split('?')[0]===`/pm/workspaces/${workspaceId}/threads`) {held=true;await gate;}
     return f.dispatch(input);
   });
-  await page.goto(route); await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
+  await page.goto(route + '/discussions'); await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');
   hold=true;f.publish('pm_workspace');await expect.poll(()=>held).toBe(true);
   await expect(page.locator('#live')).toHaveText('Connected');
   await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);

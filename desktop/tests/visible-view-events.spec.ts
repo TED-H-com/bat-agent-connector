@@ -42,25 +42,28 @@ for(const [view,budget] of Object.entries(budgets)) for(const size of [10,20]) t
   const previous=reads.length;cursor++;await expect.poll(()=>reads.length).toBeGreaterThan(previous);
 });
 
-test('a hidden withdrawn Board never paints old cards when reopened',async({page})=>{
+for(const view of ['board','requirements']) test(`a hidden withdrawn ${view} never paints old rows when reopened`,async({page})=>{
   const f=demoFixture(),wid=f.ids.workspaceId;let cursor=0,deny=false,held:(()=>void)|null=null,hold=false;
   const reads:string[]=[],writes:string[]=[];
+  const source = `/pm/workspaces/${wid}/${view === 'board' ? 'kanban' : 'plans/accepted'}`;
+  const rows = page.locator(view === 'board' ? '[data-board-open]' : '[data-rtm-requirement]');
   await mountConversation(page,false,async input=>{
     const path=new URL(input.path,'http://fixture').pathname;
     if(path==='/events')return {status:200,data:{events:Number(new URL(input.path,'http://fixture').searchParams.get('after'))<cursor?[{seq:cursor,resource_type:'pm_governance',resource_id:wid,kind:'pm_governance.updated'}]:[],next_cursor:cursor,head_cursor:cursor,has_more:false,sync:{checkpoint:{cursor,token:`hidden-${cursor}`}}}};
     if(input.method==='GET')reads.push(path);else writes.push(path);
-    if(path===`/pm/workspaces/${wid}/kanban`&&deny){if(hold)await new Promise<void>(resolve=>{held=resolve;});return {status:403,data:{error:{code:'FORBIDDEN_SCOPE',message:'Unavailable'}}};}
+    if(path===source&&deny){if(hold)await new Promise<void>(resolve=>{held=resolve;});return {status:403,data:{error:{code:'FORBIDDEN_SCOPE',message:'Unavailable'}}};}
     return f.dispatch(input);
   });
-  await page.goto(`/dashboard/#/pm/${wid}/board`);await expect(page.locator('[data-board-open]')).toHaveCount(12);
+  await page.goto(`/dashboard/#/pm/${wid}/${view}`);await expect(rows).toHaveCount(view === 'board' ? 12 : 8);
+  await rows.first().click();await expect(page.locator('[data-work-inspector]')).toBeVisible();
   await page.locator('[data-pm-view=overview]').click();await expect(page.locator('[data-pm-overview]')).toBeVisible();
   await page.waitForTimeout(1200);const before=reads.length;deny=true;hold=true;cursor++;
   await expect.poll(()=>page.evaluate(()=>Object.values(localStorage).some(value=>value.includes('hidden-1')))).toBe(true);
-  expect(reads.slice(before)).not.toContain(`/pm/workspaces/${wid}/kanban`);
-  await page.locator('[data-pm-view=board]').click();await expect.poll(()=>Boolean(held)).toBe(true);
-  await expect(page.locator('[data-board-open]:visible')).toHaveCount(0);
+  expect(reads.slice(before)).not.toContain(source);
+  await page.locator(`[data-pm-view=${view}]`).click();await expect.poll(()=>Boolean(held)).toBe(true);
+  await expect(rows.filter({visible:true})).toHaveCount(0);
   await expect(page.locator('[data-pm-source-loading]:visible')).not.toHaveCount(0);
-  held!();await expect(page.locator('[data-board-open]')).toHaveCount(0);
+  held!();await expect(rows).toHaveCount(0);
   await expect(page.locator('[data-work-inspector]')).toHaveCount(0);expect(writes).toEqual([]);
 });
 

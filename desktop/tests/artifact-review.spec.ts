@@ -89,14 +89,14 @@ for(const native of [false,true]){
  });
  test(`published-version execution is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'repository.continue'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'repository.continue'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Continue from published version'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`unproven published-version execution stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'repository.continue',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);expect(state.writes).toHaveLength(0);
  });
  test(`successful prompted start is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'session.start'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Start session'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`prompt-free or unknown start stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);

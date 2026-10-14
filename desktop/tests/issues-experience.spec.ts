@@ -43,7 +43,7 @@ function textFor(locale: Locale) {
     findingName: zh ? `發現 · ${registerLabels(project).impact}` : `Finding · ${registerLabels(project).impact}`,
     matching: (n: number) => zh ? `${n} 筆符合` : `${n} matching`,
     title: zh ? '問題與變更' : 'Issues & changes',
-    totals: (counts: number[]) => (zh ? ['風險', '問題', '行動', '變更', '決定'] : ['Risk', 'Issue', 'Action', 'Change', 'Decision'])
+    totals: (counts: number[]) => (zh ? ['風險', '問題', '行動', '變更', '決策'] : ['Risk', 'Issue', 'Action', 'Change', 'Decision'])
       .map((label, index) => `${label} ${counts[index]}`).join(' · '),
     shown: (n: number) => zh ? `顯示 ${n} 筆` : `${n} shown`,
     none: zh ? '目前沒有顯示' : 'None shown',
@@ -190,6 +190,11 @@ for (const locale of locales) {
     await expect(page.locator('[data-pm-repair-finding]')).toHaveValue(copy.rows.findingSource);
     await expect(page.locator('[data-reg-action="pm.maintenance.repair"]')).toHaveText(copy.repair);
     await page.keyboard.press('Escape');
+    // Escape in the repair's editable field leaves the other inspector alone.
+    if (await page.locator('[data-reg-inspector]').isVisible()) {
+      await page.locator('[data-reg-inspector] [data-reg-discuss]').focus();
+      await page.keyboard.press('Escape');
+    }
     await expect(finding).toBeFocused();
     await finding.press('Enter');
     await page.locator('[data-reg-inspector] [data-reg-step="work"] [data-reg-work]').click();

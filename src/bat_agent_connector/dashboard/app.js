@@ -35630,7 +35630,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const uiState = viewState(namespace, workspaceId, "discussions");
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
 	const originKey = `batc.pm.${namespace}.discussion-origin.${workspaceId}.`;
-	const threadEventTypes = new Set();
 	let sendHandoff = null, firstMessagePending = false;
 	try {
 		sendHandoff = JSON.parse(localStorage.getItem(handoffKey));
@@ -36459,7 +36458,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	body.append(drawersHome);
 	let detailPanel = null;
 	const toolPreference = viewState(namespace, workspaceId, "work-tools");
-	function openPanel(label, node) {
+	function openPanel(label, node, refreshStale = true) {
 		if (!node || !loaded) return;
 		if (node === reportTools) brief?.prepareReports?.();
 		detailPanel?.close();
@@ -36480,7 +36479,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		node.hidden = false;
 		detailPanel.body.append(node);
 		main.append(detailPanel);
-		refreshStaleVisible();
+		if (refreshStale) refreshStaleVisible();
 	}
 	if (lifecycle) drawersHome.append(lifecycle.element);
 	const dependencies = workspaceId && !threadId && caps()?.features?.pm_dependencies?.version === 1 ? workspaceDependencies({
@@ -36725,7 +36724,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (threadId && section) {
 			lazyThreadSections.set(section, details);
 			details.addEventListener("toggle", () => {
-				if (details.open && !details.closest("[data-discussion-tab]")?.hidden && loaded) section.refresh();
+				if (details.open && !details.closest("[data-discussion-tab]")?.hidden && loaded) refreshSection(section);
 			});
 		}
 		card.dataset.pmSection = label;
@@ -36904,6 +36903,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const sectionNode = (section) => section?.element || section?.box;
 	const sectionVisible = (section) => {
 		const node = sectionNode(section);
+		if (section === brief && main.querySelector("[data-overview-related]")) return true;
 		return node?.isConnected && !node.closest("[hidden], details:not([open])");
 	};
 	function activateSection(section, value) {
@@ -36913,7 +36913,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (value && read?.then) activationReads.set(section, read);
 	}
 	function maskSource(section) {
-		if (maskedSources.has(section)) return;
+		if (maskedSources.get(section)?.isConnected) return;
+		maskedSources.delete(section);
 		const node = sectionNode(section);
 		if (!node) return;
 		const placeholder = skeleton(3);
@@ -36962,7 +36963,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	}
 	const openedSource = (event) => {
-		if (event.target instanceof HTMLDetailsElement && event.target.open && loaded) refreshStaleVisible();
+		if (event.target instanceof HTMLDetailsElement && event.target.open && loaded && ![...lazyThreadSections.values()].includes(event.target)) refreshStaleVisible();
 	};
 	main.addEventListener("toggle", openedSource, true);
 	const noteCache = new Map();
@@ -37359,7 +37360,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				onSelect: (key) => {
 					revisions?.setActive(key === "plan");
 					if (key === "context" && initialReadComplete) {
-						for (const [section, details] of lazyThreadSections) if (details.open) section.refresh();
+						for (const [section, details] of lazyThreadSections) if (details.open) refreshSection(section);
 					}
 				}
 			});
@@ -37619,8 +37620,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		filterThreads();
 	}
 	async function load({ event = false } = {}) {
-		const eventTypes = new Set(threadEventTypes);
-		threadEventTypes.clear();
 		const ticket = ++sequence;
 		refreshing = true;
 		refresh.disabled = true;
@@ -37856,8 +37855,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				traceability
 			]) {
 				const lazy = lazyThreadSections.get(section);
-				const ownEvent = section === meetings && eventTypes.has("pm_meeting") || section === followUp && ["pm_follow_up", "pm_follow_up_assessment"].some((type) => eventTypes.has(type));
-				if (section && (!event || sectionVisible(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden || !event && ownEvent)) {
+				if (section && (!event || sectionVisible(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden)) {
 					await section.refresh();
 					if (sectionVisible(section)) revealSource(section);
 				}
@@ -37959,15 +37957,6 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const rememberedTool = viewTools[workbench?.selected()]?.find(([key]) => key === toolPreference.open);
 	if (rememberedTool?.[1]) openPanel(t(rememberedTool[0]), rememberedTool[1]);
 	if (openCreate || !workspaceId && !lastList.length) showCreate();
-	const subscribeEvents = onEvents;
-	onEvents = (listener) => subscribeEvents((event) => {
-		if (threadId && [
-			"pm_meeting",
-			"pm_follow_up",
-			"pm_follow_up_assessment"
-		].includes(event.resource_type)) threadEventTypes.add(event.resource_type);
-		return listener(event);
-	});
 	const pendingReads = new Map();
 	function eventRead(key, read) {
 		if (!pendingReads.has(key)) pendingReads.set(key, Promise.resolve().then(() => {
@@ -37977,6 +37966,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}));
 		return pendingReads.get(key);
 	}
+	const authorityHidden = new Map();
+	let authorityTool = null;
 	async function refreshAuthority() {
 		const ticket = ++sequence;
 		try {
@@ -37986,26 +37977,48 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			if (detail.workspace?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 			workspace = detail.workspace;
 			loaded = true;
+			if (authorityHidden.size) {
+				for (const [node, hidden] of authorityHidden) node.hidden = hidden;
+				authorityHidden.clear();
+				workbench?.apply();
+				const tool = authorityTool;
+				authorityTool = null;
+				if (tool?.node && tool.view === workbench?.selected()) openPanel(tool.label, tool.node, false);
+				await refreshStaleVisible();
+				alive();
+				if (ticket !== sequence) return;
+			}
+			status.replaceChildren();
 			publishContext();
 			updateForms();
 		} catch (error) {
 			alive();
 			if (ticket !== sequence) return;
-			if ([403, 404].includes(error.status)) {
-				loaded = false;
-				workspace = null;
-				threadData = null;
-				forgetWorkspace(namespace, workspaceId);
-				for (const section of sectionModules()) section.withdraw?.();
-				for (const node of sourceSections()) node.hidden = true;
-				workspaceList.replaceChildren();
-				lastThreadList = null;
-				phasePill.hidden = true;
-				detailPanel?.close();
-				discussionTools?.close();
-				publishContext();
-				updateForms();
+			loaded = false;
+			workspace = null;
+			threadData = null;
+			if ([403, 404].includes(error.status)) forgetWorkspace(namespace, workspaceId);
+			if (!authorityHidden.size) {
+				for (const node of sourceSections()) authorityHidden.set(node, node.hidden);
+				authorityTool = detailPanel ? {
+					node: detailPanel.body.firstElementChild,
+					label: detailPanel.querySelector("h2").textContent,
+					view: workbench?.selected()
+				} : null;
 			}
+			for (const section of sectionModules()) {
+				section.withdraw?.();
+				staleSections.add(section);
+				maskSource(section);
+			}
+			for (const node of sourceSections()) node.hidden = true;
+			workspaceList.replaceChildren();
+			lastThreadList = null;
+			phasePill.hidden = true;
+			detailPanel?.close();
+			discussionTools?.close();
+			publishContext();
+			updateForms();
 			status.replaceChildren(errorBox(error));
 			throw error;
 		}
@@ -38103,8 +38116,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (threadId && pmEvent(kind)) return eventRead(load, () => load({ event: true }));
 		const reads = [];
 		if (!pmEvent(kind) && (threadId || workbench?.selected() === "discussions")) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
-		if (kind === "pm_workspace") reads.push(eventRead(refreshAuthority, refreshAuthority));
+		if (pmEvent(kind)) reads.push(eventRead(refreshAuthority, refreshAuthority));
 		for (const section of sectionModules()) if (sectionVisible(section)) {
+			if (section === issues && kind !== "pm_workspace" && !kind.startsWith("pm_issue")) continue;
 			if (section === dependencies && !pmEvent(kind) && !["project", "integration"].includes(kind)) continue;
 			reads.push(eventRead(section, () => refreshSection(section)));
 		}
@@ -38500,6 +38514,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				if (version !== contextVersion || disposed) return;
 				alive();
 				if ([403, 404].includes(error.status)) {
+					catalogRows = null;
 					roots = [];
 					bindingKnown = false;
 					bindingPartial = false;
