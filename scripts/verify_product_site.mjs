@@ -26,6 +26,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const base = origin + '/bat-agent-connector/';
 const views = ['overview', 'discussions', 'requirements', 'issues', 'schedule', 'dependencies', 'board', 'session'];
+const manifest = JSON.parse(await readFile(resolve(root, 'images/manifest.json'), 'utf8'));
 const browser = await chromium.launch({args: ['--disable-dev-shm-usage']});
 const results = [];
 try {
@@ -41,6 +42,11 @@ try {
     assert.equal(await page.locator('html').getAttribute('lang'), lang === 'en' ? 'en' : 'zh-Hant');
     assert.equal(await page.locator('h1:visible').count(), 1);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    const firstUse = await page.locator('#start .lang-' + (lang === 'en' ? 'en' : 'zh')).allTextContents();
+    assert.ok(firstUse.join(' ').includes(lang === 'en' ? '1. Connect BAT' : '1. 連線至 BAT'));
+    assert.ok(firstUse.join(' ').includes(lang === 'en' ? 'View sessions' : '查看工作階段'));
+    assert.ok(firstUse.join(' ').includes(lang === 'en' ? 'collapsed until needed' : '需要時再展開'));
+    assert.ok((await page.locator('#product .release-note').innerText()).includes(manifest.frontend_source_commit));
     await page.screenshot({ path: resolve(output, `hero-${lang}-${width}.png`) });
     await page.locator('#product').scrollIntoViewIfNeeded();
     assert.equal(await page.locator('[data-view]').count(), views.length);
@@ -52,6 +58,11 @@ try {
       assert.equal(await page.locator('.product-shot:visible').count(), 1);
       assert.equal(await page.locator(`[data-view="${view}"]`).getAttribute('aria-pressed'), 'true');
       await page.locator(`#view-${view} img:visible`).evaluate(img => img.decode());
+      const entry = manifest.images.find(entry => entry.file === `${view}-${lang === 'en' ? 'en' : 'zh'}.png`);
+      const size = await page.locator(`#view-${view} img:visible`).evaluate(img => ({
+        width: img.naturalWidth, height: img.naturalHeight, declaredWidth: Number(img.getAttribute('width')), declaredHeight: Number(img.getAttribute('height')),
+      }));
+      assert.deepEqual(size, {...entry.image_size, declaredWidth: entry.image_size.width, declaredHeight: entry.image_size.height});
       assert.equal(await page.locator(`#view-${view} img:visible`).getAttribute('src'), `images/${view}-${lang === 'en' ? 'en' : 'zh'}.png`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.screenshot({ path: resolve(output, `${view}-${lang}-${width}.png`) });
@@ -59,7 +70,7 @@ try {
     await page.locator('[data-view="overview"]').click();
     await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
     await page.screenshot({ path: resolve(output, `page-${lang}-${width}.png`), fullPage: true });
-    for (const section of ['workflow', 'features', 'architecture', 'windows']) {
+    for (const section of ['workflow', 'features', 'architecture', 'windows', 'start', 'platforms', 'decisions', 'status', 'docs', 'faq']) {
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
       await page.screenshot({
         path: resolve(output, `${section}-${lang}-${width}.png`),

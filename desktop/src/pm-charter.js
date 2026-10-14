@@ -229,7 +229,7 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
           after: {snapshot_id: snapshot.snapshot_id, snapshot_digest: snapshot.snapshot_digest, view_digest: snapshot.view_digest, sections: right}}, null, 2))}));
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
-  controls(); return {box, primary, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
+  controls(); return {box, primary, status, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
     current: () => snapshot, controls: () => ({busy, previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null}),
     comparePrevious, history: () => history};
 }

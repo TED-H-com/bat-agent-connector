@@ -1552,6 +1552,11 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 :is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-fields {max-width:640px;}
 :is(.pm-governance,.pm-meetings) {min-width:0;}
 .pm-meetings .pm-meeting-work {display:flex;flex-wrap:wrap;gap:var(--space-2);margin:var(--space-3) 0;}
+.pm-meetings .pm-meeting-heading-text {display:flex;flex:1;flex-wrap:wrap;align-items:center;gap:var(--space-2);min-width:0;}
+.pm-meetings .pm-meeting-heading-text h3 {display:flex;align-items:center;min-height:var(--space-8);margin:0;}
+.pm-meetings .pm-heading .pm-meeting-heading-text [data-pm-panel-readonly] {flex:0 1 auto;}
+.pm-meetings .pm-heading > .ui-icon-button {align-self:flex-start;}
+@media(max-width:799px){.pm-meetings .pm-meeting-heading-text h3 {min-height:calc(var(--space-10) + var(--space-1));}}
 .pm-meetings .pm-meeting-work a {min-width:0;max-width:100%;}
 .pm-meetings .mono {display:block;white-space:nowrap;overflow-x:auto;overflow-wrap:normal;max-width:100%;}
 .pm-meetings :is(input,select,textarea) {max-width:100%;min-width:0;width:100%;}

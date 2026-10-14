@@ -1,4 +1,4 @@
-import {iconButton, button, sectionCard, statusPill, disclosure, contextChip, emptyState} from './ui/components.js';
+import {iconButton, button, sectionCard, statusPill, disclosure, contextChip} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {panelActorLabel} from './pm-governance-strings.js';
 // Meeting records share the existing durable command forms. A draft is not a completed discussion.
@@ -21,7 +21,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const rebase = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
   const readOnly = h('p', {class: 'ui-meta', hidden: true, 'data-pm-panel-readonly': ''}, t('pm_panel_read_only'));
   const launch = button({variant: 'primary', label: t('pm_meeting_new'), 'data-pm-meeting-create': '', 'aria-controls': createId, 'aria-expanded': 'false', onClick: () => reveal('pm.meeting.create')});
-  const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, launch, readOnly,
+  const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, h('div', {class: 'pm-meeting-heading-text'}, h('h3', {}, t('pm_meeting_title')), readOnly), launch,
     iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), onClick: () => void refresh()})),
     selection, status, warning, rebase, view, editors)});
   element.classList.add('pm-evidence', 'pm-meetings'); element.dataset.pmMeetings = '';
@@ -186,8 +186,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   function renderView() {
     view.replaceChildren(); const detail = model.detail;
     if (!detail) {
-      const empty = emptyState({title: t('pm_meeting_empty_title'), text: t('pm_meeting_empty_help')});
-      empty.querySelector('p').classList.add('muted'); view.append(empty); return;
+      view.append(note(can()&&!model.sprints.length?'pm_meeting_sprint_required':'pm_meeting_empty')); return;
     }
     const context = detail.context.document;
     const facts = h('div', {}, h('p', {}, context.sprint_definition.title),
@@ -353,7 +352,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     return holder;
   }
   function creationEditor() {
-    if (!model.sprints.length) {createBox = null; return entryPoint(note('pm_meeting_sprint_required'), can);}
+    if (!model.sprints.length) {createBox = null; return h('div');}
     const initial=model.sprints.some(row=>row.sprint_id===navigation.sprint_id)?navigation.sprint_id:model.sprints.find(row=>row.status==='active')?.sprint_id||model.sprints[0]?.sprint_id||'';
     const holder=h('div',{class:'pm-fields'}),sprint=options('pm_meeting_sprint',model.sprints.map(row=>[row.sprint_id,row.definition.title]),initial),slot=h('div');
     holder.append(labelled('pm_meeting_sprint',sprint),slot);let current;

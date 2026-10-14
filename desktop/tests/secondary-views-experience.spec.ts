@@ -2,6 +2,7 @@ import {test, expect} from '@playwright/test';
 import {reviewFixture} from './requirements-review-fixture.ts';
 import {openPmPanel, openPmSection, openReportTask} from './pm-navigation.ts';
 import {parseDiscussRefs} from '../src/pm-discuss-link.js';
+import {expectErrorDetails} from './api-error-assertions.ts';
 
 for (const locale of ['en', 'zh-TW']) {
   for (const width of [1440, 1000]) test(`Requirements header matches its rows ${locale} ${width}`, async ({page}) => {
@@ -69,7 +70,12 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(page.locator('[data-report-print]')).toBeDisabled();
     await page.keyboard.press('Escape'); state = 'error';
     await page.locator('[data-pm-refresh]').click(); await openPmPanel(page, 'ui_report');
-    await expect(tools.locator('[data-report-status]')).toContainText(locale === 'en' ? 'Record unavailable' : '無法取得紀錄');
+    await expect(tools.locator('[data-report-status] [data-error-summary]')).toHaveCount(1);
+    await expect(tools.locator('[data-error-summary]')).toHaveText(locale === 'en' ? 'This record is unavailable. Refresh the view.' : '找不到這筆資料，請重新整理。');
+    await expect(page.locator('[data-error-summary]:visible')).toHaveCount(1);
+    await expect(page.locator('[data-pm-overview] [data-error-summary]')).toHaveCount(0);
+    expect(await tools.innerText()).not.toContain(locale === 'en' ? 'Record unavailable' : '無法取得紀錄');
+    await expectErrorDetails(tools, locale === 'en' ? 'Record unavailable' : '無法取得紀錄', 'NOT_FOUND');
     await expect(tools.locator('[data-report-status]')).not.toContainText(locale === 'en' ? 'No saved reports' : '尚無已保存報告');
     await expect(page.locator('[data-report-compare]')).toBeDisabled();
     await expect(page.locator('[data-report-print]')).toBeDisabled();

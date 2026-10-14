@@ -166,7 +166,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
           || fixedCursor !== null && value.context.journal_cursor !== fixedCursor) throw Error(text('pm_diff_invalid'));
       render(value); cursor = value.context.journal_cursor;
       status.replaceChildren(h('p', {class: 'muted'}, text('pm_diff_fixed')));
-    } catch (error) {if (box.isConnected && ticket === request) {result.replaceChildren(); status.replaceChildren(errorBox(error), h('p', {class: 'muted'}, text('pm_diff_failure')));}}
+    } catch (error) {if (box.isConnected && ticket === request) {result.replaceChildren(); status.replaceChildren(errorBox(error, {summary: text('pm_diff_failure')}));}}
     finally {if (ticket === request) {busy = false; controls();}}
   }
   options();
