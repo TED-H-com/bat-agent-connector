@@ -575,6 +575,51 @@ def test_repair_repeated_back_edges_are_bounded_without_exporting_partial_access
         assert calls == [True, False, True]
 
 
+def test_repeated_repair_source_reads_leave_delivery_budget_for_each_provider_frame(db, monkeypatch):
+    from types import SimpleNamespace
+
+    from bat_agent_connector import pm_maintenance_repair_delivery as delivery
+    from bat_agent_connector import pm_maintenance_repair_evidence as evidence
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    ops = SimpleNamespace(db=db)
+    parent = {'operation_id': 'repair', 'action': repairs.ACTION}
+    clock, calls = [0], []
+
+    @pm_read_cache.memoized
+    def leaf(connection, principal):
+        # Model costly synchronous validation without sleeping or timer races.
+        clock[0] += 1
+        calls.append(True)
+        repairs._full_access(ops, principal, parent)
+        return True
+
+    def sources(*args):
+        for _ in range(20):
+            assert leaf(db, OWNER) is True
+
+    monkeypatch.setattr(repairs, '_access', sources)
+    monkeypatch.setattr(evidence, 'require_evidence_sources', sources)
+    monkeypatch.setattr(delivery, 'require_sources', lambda *args: None)
+    monkeypatch.setattr(repairs, '_operation', lambda service, oid: parent)
+    monkeypatch.setattr(repairs, '_guard', lambda service, op: repairs._full_access(service, OWNER, op))
+    monkeypatch.setattr(repairs, '_record_for', lambda service, op: {'deadline_at': 30})
+    monkeypatch.setattr(delivery, 'time', SimpleNamespace(time=lambda: clock[0]))
+    ctx = SimpleNamespace(service=ops, operation_id=parent['operation_id'])
+    token = delivery._HTTP_BUDGET.set(ctx)
+    try:
+        with _snapshot(db), pm_read_cache.scope(db, OWNER):
+            # Repeating the same chain forty times used to consume all 30s
+            # before the HTTP worker could send a request or receive a reply.
+            assert delivery.http_timeout('POST') == 29
+            assert calls == [True]
+            assert pm_read_cache._CURRENT.get().scope.values == {}
+            assert delivery.http_timeout('POST') == 28  # A new frame validates anew.
+            assert calls == [True, True]
+    finally:
+        delivery._HTTP_BUDGET.reset(token)
+
+
 def _cycle_world(guard):
     """B is memoized; its loader re-enters A's traversal, which refuses the cycle.
 
