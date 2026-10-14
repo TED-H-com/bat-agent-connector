@@ -66,9 +66,14 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`
   const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
   const page = await context.newPage(), f = fixture({locale}), original = structuredClone(f.finding.revision.document);
   await mountConversation(page, native, f.dispatch); await page.goto(f.route);
+  const chip = page.locator('[data-discussion-context="governance"]:visible').first();
+  await expect(chip).toContainText(locale === 'en' ? 'Issue ·' : '問題 ·');
+  await expect(chip).not.toContainText(locale === 'en' ? 'Decision ·' : '決策 ·');
+  await expect(chip).not.toContainText(/pmgov_|pmrev_/);
   await resolution(page).locator('[data-issue-resolve-open]').click();
   const reason = resolution(page).getByRole('textbox');
   await expect(reason).toHaveValue(new RegExp(locale === 'en' ? 'revision #' : '修訂 #'));
+  await expect(reason).not.toHaveValue(/pmgov_|pmrev_/);
   await reason.fill(locale === 'en' ? 'The reviewed decision removes the blocker.' : '已審閱的決策解除了阻礙。');
   await page.reload(); await expect(reason).toHaveValue(locale === 'en' ? 'The reviewed decision removes the blocker.' : '已審閱的決策解除了阻礙。');
   expect(f.state.writes).toHaveLength(0);

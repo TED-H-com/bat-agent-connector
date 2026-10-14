@@ -140,6 +140,8 @@ async function walkthrough(locale, width) {
     await expect(composer).toBeFocused();
     await expect(page.locator('[data-discussion-title]')).toHaveText(copy.issue);
     await expect(page.locator('[data-discussion-context="governance"]:visible')).toContainText(copy.issue);
+    await expect(page.locator('[data-discussion-context="governance"]:visible')).toContainText(locale === 'en' ? 'Issue ·' : '問題 ·');
+    await expect(page.locator('[data-discussion-context="governance"]:visible')).not.toContainText(/pmgov_|pmrev_/);
     assert.ok(!copy.issue.includes(fixture.issue_id));
     await composer.fill(l.message);
     await screenshot(3, 'discussion-draft');
@@ -149,11 +151,13 @@ async function walkthrough(locale, width) {
     await expect(composer).toBeEnabled();
     await expect(page.locator('[data-discussion-title]')).toHaveText(copy.issue);
     await expect(page.locator('[data-discussion-context="governance"]:visible')).toContainText(copy.issue);
+    await expect(page.locator('[data-discussion-context="governance"]:visible')).toContainText(locale === 'en' ? 'Issue ·' : '問題 ·');
     assert.equal(requests.length, 0, 'Opening and restoring the draft must create no operations');
     await screenshot(4, 'draft-reload');
     await page.getByRole('button', {name: l.send, exact: true}).click();
     await expect(page).toHaveURL(/\/discussions\/pmt_[a-f0-9]{32}$/);
     await expect(page.locator('.pm-notes')).toContainText(l.message);
+    await expect(page.locator('[data-discussion-context="governance"]:visible').first()).toContainText(locale === 'en' ? 'Issue ·' : '問題 ·');
     await expect(composer).toHaveValue('');
     await screenshot(5, 'message-sent');
 
