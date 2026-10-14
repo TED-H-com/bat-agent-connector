@@ -20,7 +20,7 @@ function validRequest(r) {
     ["model", "title", "prompt"].every(k => !(k in r.params) || text(r.params[k], k === "prompt" ? 20000 : 256)) &&
     object(r.preconditions) && Object.keys(r.preconditions).length === 0;
 }
-export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference}) {
+export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference, initialHost}) {
   let raw;
   try {raw = JSON.parse(localStorage.getItem(storageKey));} catch { /* no saved draft */ }
   let saved = Object.fromEntries(fields.map(k => [k, typeof raw?.[k] === "string" ? raw[k] : k === "agent" ? "claude" : ""]));
@@ -31,6 +31,10 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
       operation_id: operationId(raw.intent.operation_id) ? raw.intent.operation_id : null,
       refused: !raw.intent.operation_id && admissionRefusals.has(raw.intent.refused) ? raw.intent.refused : null};
     if (valid) Object.assign(saved, raw.intent.request.target, {model: "", title: "", prompt: ""}, raw.intent.request.params);
+  }
+  // A route hint can change an editable draft, never its original frozen operation.
+  if (!saved.intent && initialHost && caps()?.hosts?.some(x => x.host === initialHost) && saved.host !== initialHost) {
+    saved.host = initialHost; saved.workspace = "";
   }
   let operation = null, busy = false, submission = null, refreshing = null, readFailed = false;
   let workspaces = [], discovery = 0, discovering = false, discoveredHost = "";

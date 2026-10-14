@@ -71,6 +71,15 @@ SSH 別名由中央所在電腦的服務帳號解析。使用打包本機中央�
 
 設定變更會等待執行中的 operations／tasks。回覆遺失時使用「查回請求」及「詳細資料」中的「設定操作」，不要另送新請求猜結果。憑證失效、ownership 不符或啟動失敗需要恢復原安裝，不是另建資料庫的理由。
 
+<a id="pm-agent-setup"></a>
+
+## PM 代理設定
+
+開啟 **設定 → 代理**，檢查 Connector 主機的 PM 安裝狀態。**重新檢查**只讀取資格，
+不會啟動模型，也不讀取登入檔內容。**可用**表示可進入每次執行前的檢查，不代表已驗證模型執行。
+從討論進入時，也會讀取該工作空間既有的 BAT 分析設定與權限；沒有工作空間脈絡時，
+只檢查本機安裝。無法使用時，請依下方執行環境前提調整。人工工作階段維持唯讀。
+
 ## 試跑一條 PM 工作流程
 
 使用同一個已審閱 PM 候選版本的中央與 client。功能依中央回報的能力顯示，舊安裝版
@@ -267,7 +276,29 @@ sync = { remote_url = "git@github.com:example/project.git", bindings = [{ host =
 
 成果進 PR 前先看整合預覽。Merge／部署另需設定與 scopes；部署 recipe 還要有真實版本／健康驗證。[交付設定](design/delivery.md)。
 
+<a id="cli-and-agent-access"></a>
+
 ## CLI 與 Agent 存取
+
+**設定 → 代理**會為管理員安裝版（`uv tool install`）提供可複製的派工設定，
+權杖欄位只含預留值。桌面套件只附受管服務啟動器，不會在 PATH 提供
+`bat-agent-connector-mcp` 或 `batc`。使用桌面套件時，請先在預定的 Connector 主機
+依上方管理員安裝步驟設定，再連接 MCP 用戶端；不要複製桌面的個人權杖。
+
+管理員須對同一服務的設定與帳本簽發獨立權杖：
+
+```bash
+batc api-token issue --actor mcp-agent --scope observe --scope operate --scope start
+```
+
+將印出的權杖私下儲存為 MCP 程序的 `BATC_API_TOKEN`。只有需要變更專案或工作項目時，
+才授予 `manage`。保留 `--principal-only`；主機限制、權限與受管資源歸屬檢查仍適用。
+預定 Task Service 不是預設位址時，另設 `BATC_TASK_URL`。
+
+人工工作階段有三條路：在 BAT 回覆；檢視並擷取固定檢查點，再於新的受管工作階段繼續；
+或讓持有專屬權杖的 MCP 代理操作受管工作。檢查點路徑不會改動人工工作階段或原工作目錄。
+啟動與派工表單下的 **派工如何運作**說明工作樹、BAT 工作階段與成果追蹤。
+
 
 CLI 可讀取相同觀測與操作紀錄：
 

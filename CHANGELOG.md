@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
+  Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
+  provides installation-aware MCP guidance and a read-only PM eligibility check, with
+  localized reasons and a return link to the originating discussion.
+
+
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.

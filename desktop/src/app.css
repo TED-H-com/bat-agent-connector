@@ -708,3 +708,16 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 
 [data-pm-source-pending] { visibility: hidden; position: relative; }
 [data-pm-source-pending] > [data-pm-source-loading] { visibility: visible; position: absolute; inset: 0; }
+
+/* Work paths reuse the conversation lane and Settings surfaces. */
+.work-paths-card { padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.work-paths-card h2 { margin: 0; font-size: var(--fs-section); }
+.work-paths-card p { margin: var(--space-2) 0; }
+.work-paths-card .actions { margin: var(--space-3) 0; }
+.settings-agent-group { padding-top: var(--space-4); margin-top: var(--space-4); border-top: 1px solid var(--line); }
+.settings-agent-group h3 { margin: 0; font-size: var(--fs-section); }
+.settings-agent-group pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.settings-agents { max-width: 760px; }
+.work-paths-steps { padding-left: var(--space-6); color: var(--text-2); }
+.work-paths-steps li + li { margin-top: var(--space-2); }
+.settings-agent-heading { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }

@@ -44,6 +44,243 @@ function h$1(tag, attrs = {}, ...children) {
 	return el;
 }
 //#endregion
+//#region src/session-navigation.js
+var projectViews$2 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function sessionHref$1({ host, sessionId, from = "" }) {
+	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$2.has(from)) return "";
+		return sessionHref$1({
+			host,
+			sessionId,
+			from
+		});
+	} catch {
+		return "";
+	}
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : sessionOrigin(from),
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/work-paths-strings.js
+var workPathsStrings = {
+	en: {
+		paths_view_only: "View only",
+		paths_manual: "Reply in BAT. To hand this work to an agent, continue from a checkpoint in a new managed session",
+		paths_continue: "Continue from checkpoint",
+		paths_start: "Start new session",
+		paths_mcp: "Dispatch from an agent (MCP)",
+		paths_setup: "Set up",
+		paths_host_unavailable: "This host is not set up for managed work",
+		paths_start_required: "You need the start permission",
+		paths_checkpoint_required: "You need checkpoint permission",
+		paths_first: "Reply in BAT, continue from a checkpoint, or dispatch from an MCP agent",
+		paths_how: "How dispatch works",
+		paths_isolation: "Connector creates a new isolated worktree inside the allowed managed folders",
+		paths_bat: "Connector starts a BAT session there",
+		paths_tracking: "It sends the brief and tracks replies, results and evidence here",
+		agents_heading: "Agents",
+		agents_pm: "PM agent",
+		agents_mcp: "MCP agents",
+		agents_back: "Back to discussion",
+		agents_pm_help: "Reads the discussion’s frozen context and proposes updates; manual sessions stay read-only",
+		agents_ready: "Ready",
+		agents_unavailable: "Unavailable",
+		agents_unchecked: "Not checked",
+		agents_check: "Check again",
+		agents_preflight: "Installation checks passed; each run still checks permissions and runtime readiness",
+		agents_not_checked: "Eligibility is unknown; check again or follow PM setup",
+		agents_pm_docs: "PM setup",
+		agents_platform: "Local PM supports Linux; use a Linux Connector or configure BAT analysis",
+		agents_executable: "Codex or bwrap is missing; install both on the Connector host",
+		agents_auth: "Codex is not signed in; sign in on the Connector host",
+		agents_home: "Codex’s home is unavailable; configure its directory on the Connector host",
+		agents_policy: "Managed Codex configuration is unsupported; follow PM setup for a supported host",
+		agents_installation: "The installation could not be checked; review PM setup and check again",
+		agents_action: "PM analysis is unavailable in this Connector; install a compatible version",
+		agents_scope: "PM analysis needs observe, manage and start permissions; ask the operator",
+		agents_worktree: "BAT PM needs a configured PM worktree; prepare it in workspace settings",
+		agents_binding: "The repository binding changed; review the workspace’s PM worktree",
+		agents_tier: "This BAT host does not allow managed starts; ask the operator to enable them",
+		agents_start_worktree: "This host requires isolated worktrees; review its managed-work settings",
+		agents_bat_unknown: "BAT analysis is unavailable; review its workspace binding and host setup",
+		agents_mcp_can: "An MCP agent can start and drive managed sessions with its own scoped token",
+		agents_mcp_limits: "Manual sessions stay read-only; host gates and token scopes apply",
+		agents_operator: "For an operator install, add this config to your MCP client on the Connector host",
+		agents_bundle: "The desktop bundle has no MCP command; follow the operator-install instructions",
+		agents_token: "Ask the Connector operator for a separate token with observe, operate and start scopes",
+		agents_issue: "On the operator installation, issue a token once and store it privately in place of the placeholder",
+		agents_scopes: "Add manage only for project and work-item changes",
+		agents_copy: "Copy",
+		agents_copied: "Copied",
+		agents_copy_failed: "Copy failed; select and copy the config",
+		agents_mcp_docs: "MCP setup",
+		agents_skill_docs: "Agent guide",
+		agents_token_issue: "Issue token",
+		agents_bat: "BAT analysis",
+		agents_native: "Local analysis"
+	},
+	"zh-TW": {
+		paths_view_only: "僅供檢視",
+		paths_manual: "在 BAT 回覆這個工作階段；要讓代理接手，請從檢查點建立新的受管工作",
+		paths_continue: "從檢查點繼續",
+		paths_start: "開始新工作階段",
+		paths_mcp: "由代理派工（MCP）",
+		paths_setup: "設定",
+		paths_host_unavailable: "此主機尚未設定受管工作",
+		paths_start_required: "您需要啟動權限",
+		paths_checkpoint_required: "您需要建立檢查點的權限",
+		paths_first: "在 BAT 回覆、從檢查點繼續，或由 MCP 代理派工",
+		paths_how: "派工如何運作",
+		paths_isolation: "Connector 在允許的受管資料夾內建立新的獨立工作樹",
+		paths_bat: "Connector 在其中啟動 BAT 工作階段",
+		paths_tracking: "送出工作說明，並在這裡追蹤回覆、成果與證據",
+		agents_heading: "代理",
+		agents_pm: "PM 代理",
+		agents_mcp: "MCP 代理",
+		agents_back: "返回討論",
+		agents_pm_help: "讀取討論的固定脈絡並提出更新建議；人工工作階段維持唯讀",
+		agents_ready: "可用",
+		agents_unavailable: "無法使用",
+		agents_unchecked: "未檢查",
+		agents_check: "重新檢查",
+		agents_preflight: "安裝檢查已通過；每次執行仍會檢查權限與執行環境",
+		agents_not_checked: "尚無法確認資格；請重新檢查或參閱 PM 設定",
+		agents_pm_docs: "PM 設定",
+		agents_platform: "本機 PM 目前只支援 Linux；請使用 Linux Connector 或設定 BAT 分析",
+		agents_executable: "找不到 Codex 或 bwrap；請在 Connector 主機安裝兩者",
+		agents_auth: "Codex 尚未登入；請在 Connector 主機登入",
+		agents_home: "無法使用 Codex 目錄；請在 Connector 主機設定該目錄",
+		agents_policy: "尚不支援受管 Codex 設定；請依 PM 設定使用支援的主機",
+		agents_installation: "無法檢查安裝狀態；請確認 PM 設定後重新檢查",
+		agents_action: "此 Connector 未提供 PM 分析；請安裝相容版本",
+		agents_scope: "PM 分析需要檢視、管理與啟動權限；請洽管理員",
+		agents_worktree: "BAT PM 需要已設定的 PM 工作樹；請至工作空間設定準備",
+		agents_binding: "儲存庫綁定已變更；請重新檢視工作空間的 PM 工作樹",
+		agents_tier: "此 BAT 主機未允許受管啟動；請洽管理員啟用",
+		agents_start_worktree: "此主機要求獨立工作樹；請檢查受管工作設定",
+		agents_bat_unknown: "BAT 分析無法使用；請確認工作空間綁定與主機設定",
+		agents_mcp_can: "MCP 代理可使用自己的專屬權杖啟動並操作受管工作階段",
+		agents_mcp_limits: "人工工作階段維持唯讀；主機限制與權杖權限仍適用",
+		agents_operator: "使用管理員安裝版時，請在 Connector 主機的 MCP 用戶端加入此設定",
+		agents_bundle: "桌面套件未提供 MCP 指令；請依管理員安裝說明設定",
+		agents_token: "請向 Connector 管理員索取獨立權杖，授予檢視、操作與啟動權限",
+		agents_issue: "在管理員安裝環境簽發一次權杖，私下儲存並替換預留值",
+		agents_scopes: "只有需要變更專案與工作項目時，才加上管理權限",
+		agents_copy: "複製",
+		agents_copied: "已複製",
+		agents_copy_failed: "複製失敗；請選取設定後複製",
+		agents_mcp_docs: "MCP 設定",
+		agents_skill_docs: "代理指南",
+		agents_token_issue: "簽發權杖",
+		agents_bat: "BAT 分析",
+		agents_native: "本機分析"
+	}
+};
+//#endregion
 //#region src/pm-overview-strings.js
 var overviewStrings = {
 	en: {
@@ -7374,6 +7611,7 @@ var STRINGS = {
 		...overviewStrings["zh-TW"],
 		...scheduleStrings["zh-TW"],
 		...globalStrings["zh-TW"],
+		...workPathsStrings["zh-TW"],
 		...workViewStrings["zh-TW"],
 		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
@@ -7922,9 +8160,9 @@ var STRINGS = {
 		start_choose_host: "選擇主機",
 		start_workspace: "工作區",
 		start_choose_workspace: "選擇工作區",
-		start_agent: "Agent",
+		start_agent: "代理",
 		start_model: "模型（選填）",
-		start_model_default: "使用主機或 agent 的預設模型",
+		start_model_default: "使用主機或代理的預設模型",
 		start_title: "標題（選填）",
 		start_prompt: "原始指示（選填）",
 		start_reload_workspaces: "重新讀取工作區",
@@ -7932,8 +8170,8 @@ var STRINGS = {
 		start_discovery_failed: "工作區清單尚未確認。請重新讀取後再選擇。",
 		start_no_workspaces: "此主機目前未傳回工作區。",
 		start_truncated: "只顯示前 200 個工作區；此清單不代表所有工作區。",
-		start_workspace_help: "使用中央傳回的固定工作區 ID；主機仍會檢查儲存庫與權限。",
-		start_isolation: "使用新 worktree。此操作不會接管既有人工或任務工作階段。",
+		start_workspace_help: "使用 Connector 傳回的固定工作區 ID；主機仍會檢查儲存庫與權限",
+		start_isolation: "使用新的工作樹；人工與任務工作階段維持原狀",
 		start_prompt_help: "原文會完整保留。留白只啟動工作階段，不會自動產生指示。",
 		start_apply: "開始工作階段",
 		start_new: "準備另一個工作階段",
@@ -8861,7 +9099,7 @@ var STRINGS = {
 		continue_placeholder: "要代理接著做什麼…",
 		start_agent_work: "開始代理工作",
 		open_new_session: "開啟新工作階段",
-		checkpoint_unavailable: "此主機缺少受管理目錄、SSH 連線別名或寫入與協調權限，無法從檢查點開工。",
+		checkpoint_unavailable: "此主機尚未設定受管工作",
 		needs_start_scope: "這個登入沒有開工權限，請使用具開工權限的憑證。",
 		confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
 		confinement_none: "無已證實的執行限制",
@@ -9006,6 +9244,7 @@ var STRINGS = {
 		...overviewStrings.en,
 		...scheduleStrings.en,
 		...globalStrings.en,
+		...workPathsStrings.en,
 		...workViewStrings.en,
 		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
@@ -10494,7 +10733,7 @@ var STRINGS = {
 		continue_placeholder: "What should the agent do next…",
 		start_agent_work: "Start agent work",
 		open_new_session: "Open the new session",
-		checkpoint_unavailable: "This host lacks managed_roots, an SSH alias or the write/orchestrate tiers, so work cannot start from a checkpoint here.",
+		checkpoint_unavailable: "This host is not set up for managed work",
 		needs_start_scope: "Your token lacks the start scope, so it cannot start agent work; issue one with --scope start.",
 		confined_note: "The working directory alone offers no protection. Limits come from start options and account evidence; individual approvals may permit outside writes.",
 		confinement_none: "No proven execution limit",
@@ -10637,127 +10876,6 @@ var STRINGS = {
 var locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
 function t(key, vars = {}) {
 	return (STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
-}
-//#endregion
-//#region src/session-navigation.js
-var projectViews$2 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function sessionHref$1({ host, sessionId, from = "" }) {
-	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
-}
-function sessionOrigin(value) {
-	if (typeof value !== "string" || value.length > 4096) return "";
-	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
-	if (!match) return "";
-	try {
-		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
-		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
-		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
-		const from = query.get("from") || "";
-		if (from && !projectViews$2.has(from)) return "";
-		return sessionHref$1({
-			host,
-			sessionId,
-			from
-		});
-	} catch {
-		return "";
-	}
-}
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews$1 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews$1.has(from) ? from : sessionOrigin(from),
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
-	};
 }
 //#endregion
 //#region src/ui/icons.js
@@ -11720,6 +11838,353 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		controls[index].focus();
 	});
 	return root;
+}
+//#endregion
+//#region src/global-screens.js
+function setupGuide() {
+	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
+}
+function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
+	const article = h("article", {
+		class: "global-inbox-row",
+		"data-inbox-key": key
+	});
+	if (onOpen) article.addEventListener("click", (event) => {
+		if (event.target.closest("a, button, input, select, textarea")) return;
+		onOpen();
+	});
+	const text = h("div", { class: "global-inbox-text" }, h("a", {
+		class: "title",
+		href
+	}, title), meta || pill ? h("p", { class: "global-inbox-meta" }, meta ? h("span", { class: "global-inbox-meta-text" }, meta) : null, pill || null) : null);
+	const details = onOpen ? iconButton({
+		icon: "chevron-right",
+		label: detailsLabel,
+		onClick: () => onOpen()
+	}) : null;
+	article.append(text, h("div", { class: "global-inbox-actions" }, action || null, details));
+	return article;
+}
+function firstRunCard({ h, t, body, footer }) {
+	return h("div", { class: "global-first-run" }, h("section", {
+		class: "global-first-card",
+		"aria-labelledby": "global-first-title"
+	}, h("span", {
+		class: "brand-mark",
+		"aria-hidden": "true"
+	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
+}
+function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSelect = () => {} }) {
+	const nav = h("nav", {
+		class: "global-settings-nav",
+		role: exclusive ? "tablist" : null,
+		"aria-orientation": exclusive ? "vertical" : null,
+		"aria-label": t("global_settings_nav")
+	});
+	const panels = h("div", { class: "global-settings-panels" });
+	const buttons = [];
+	const roots = [];
+	let preferred = selected || "";
+	for (const section of sections) {
+		const panel = h("section", {
+			class: "global-settings-section",
+			id: `settings-panel-${section.id}`,
+			"data-settings-panel": section.id,
+			role: exclusive ? "tabpanel" : null,
+			"aria-labelledby": exclusive ? `settings-tab-${section.id}` : null
+		});
+		if (section.id === "models") panel.setAttribute("data-settings-models", "");
+		const button = exclusive ? h("button", {
+			type: "button",
+			role: "tab",
+			id: `settings-tab-${section.id}`,
+			"data-settings-nav": section.id,
+			"aria-controls": panel.id
+		}, section.label) : h("a", {
+			href: `#settings-panel-${section.id}`,
+			id: `settings-tab-${section.id}`,
+			"data-settings-nav": section.id
+		}, section.label);
+		if (section.hidden) {
+			button.hidden = true;
+			panel.hidden = true;
+		}
+		button.addEventListener("click", (event) => {
+			if (!exclusive) event.preventDefault();
+			select(section.id, true);
+		});
+		buttons.push(button);
+		roots.push(panel);
+		nav.append(button);
+		panels.append(panel);
+	}
+	const visible = () => buttons.filter((button) => !button.hidden);
+	const marked = (button) => exclusive ? button.getAttribute("aria-selected") === "true" : button.getAttribute("aria-current") === "true";
+	function apply(id) {
+		for (const button of buttons) {
+			const on = !button.hidden && button.dataset.settingsNav === id;
+			if (exclusive) {
+				button.setAttribute("aria-selected", on ? "true" : "false");
+				button.tabIndex = on ? 0 : -1;
+			} else if (on) button.setAttribute("aria-current", "true");
+			else button.removeAttribute("aria-current");
+		}
+		if (!exclusive) return;
+		for (const node of roots) {
+			const button = buttons.find((item) => item.dataset.settingsNav === node.dataset.settingsPanel);
+			node.hidden = !(button && !button.hidden && node.dataset.settingsPanel === id);
+		}
+	}
+	function select(id, scroll) {
+		const button = buttons.find((item) => item.dataset.settingsNav === id);
+		if (!button || button.hidden) return;
+		preferred = id;
+		apply(id);
+		onSelect(id);
+		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
+	}
+	nav.addEventListener("keydown", (event) => {
+		if (![
+			"ArrowUp",
+			"ArrowDown",
+			"ArrowLeft",
+			"ArrowRight",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		const enabled = visible();
+		const current = enabled.indexOf(document.activeElement);
+		if (current < 0) return;
+		event.preventDefault();
+		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1) + enabled.length) % enabled.length];
+		if (!next) return;
+		next.focus();
+		select(next.dataset.settingsNav, true);
+	});
+	const initial = buttons.find((button) => !button.hidden && button.dataset.settingsNav === preferred) || visible()[0];
+	if (initial) apply(initial.dataset.settingsNav);
+	function panel(id) {
+		return roots.find((node) => node.dataset.settingsPanel === id);
+	}
+	function show(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		button.hidden = false;
+		if (!exclusive) node.hidden = false;
+		if (preferred === id) apply(id);
+		else if (!visible().some(marked)) apply(id);
+	}
+	function hide(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		const was = marked(button);
+		button.hidden = true;
+		node.hidden = true;
+		if (was) {
+			const next = visible()[0];
+			if (next) apply(next.dataset.settingsNav);
+		}
+	}
+	function reapply() {
+		if (buttons.find((node) => !node.hidden && node.dataset.settingsNav === preferred)) apply(preferred);
+	}
+	const root = h("div", {
+		class: "global-settings",
+		"data-settings-exclusive": exclusive ? "true" : "false"
+	}, nav, panels);
+	root.reapply = reapply;
+	return {
+		root,
+		panel,
+		show,
+		hide,
+		reapply
+	};
+}
+//#endregion
+//#region src/work-paths.js
+var actionAllowed = (caps, name) => caps?.actions?.some((a) => a.action === name && a.allowed === true) === true;
+var mayStartSession = (caps) => caps?.scopes?.includes("start") && actionAllowed(caps, "session.start");
+function checkpointReason(caps, host) {
+	if (!caps?.features?.checkpoints?.includes(host)) return "paths_host_unavailable";
+	if (!caps?.scopes?.includes("start") || !actionAllowed(caps, "checkpoint.continue")) return "paths_start_required";
+	if (!actionAllowed(caps, "checkpoint.create")) return "paths_checkpoint_required";
+	return null;
+}
+function dispatchExplanation({ h, t }) {
+	return disclosure({
+		label: t("paths_how"),
+		body: h("ol", { class: "work-paths-steps" }, ...[
+			"paths_isolation",
+			"paths_bat",
+			"paths_tracking"
+		].map((key) => h("li", {}, t(key))))
+	});
+}
+function internalFrom(value) {
+	if (typeof value !== "string" || value.length > 2048 || !value.startsWith("#/")) return null;
+	let decoded;
+	try {
+		decoded = decodeURIComponent(value);
+	} catch {
+		return null;
+	}
+	if (/[\\\s\u0000-\u001f\u007f]/u.test(decoded) || decoded.includes("://") || decoded.includes("//") || decoded.slice(1).includes("#")) return null;
+	const path = decoded.split("?")[0];
+	if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions\/(?:new|[a-zA-Z0-9_-]+)|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
+	return value;
+}
+//#endregion
+//#region src/settings-agents.js
+var eligibilityReasons = {
+	PM_NATIVE_PLATFORM_UNSUPPORTED: "agents_platform",
+	PM_NATIVE_EXECUTABLE_UNAVAILABLE: "agents_executable",
+	PM_NATIVE_AUTH_UNAVAILABLE: "agents_auth",
+	PM_NATIVE_HOME_UNAVAILABLE: "agents_home",
+	PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "agents_policy",
+	PM_NATIVE_INSTALLATION_UNAVAILABLE: "agents_installation",
+	action_unavailable: "agents_action",
+	PM_WORKTREE_REQUIRED: "agents_worktree",
+	REPOSITORY_BINDING_CHANGED: "agents_binding",
+	PM_BAT_BINDING_CHANGED: "agents_binding",
+	REPOSITORY_NOT_CONFIGURED: "agents_bat_unknown",
+	REPOSITORY_NOT_BOUND: "agents_binding",
+	REPOSITORY_HOST_UNAVAILABLE: "agents_tier",
+	TIER_DISABLED: "agents_tier",
+	HOST_READ_ONLY: "agents_tier",
+	START_WORKTREE_REQUIRED: "agents_start_worktree"
+};
+function settingsAgents({ h, t, api, caps, guard, from }) {
+	const heading = h("h2", {
+		id: "settings-agents-heading",
+		tabindex: -1,
+		"data-agents-heading": ""
+	}, t("agents_heading"));
+	const status = h("span", {
+		class: "ui-pill tone-neutral",
+		"data-pm-eligibility": ""
+	});
+	const reason = h("span", { "data-pm-eligibility-reason": "" });
+	const codes = h("div");
+	const technical = disclosure({
+		label: t("global_details"),
+		body: codes
+	});
+	const safeFrom = internalFrom(from);
+	const workspaceId = safeFrom?.match(/^#\/pm\/(ws_[a-f0-9]{32})\//)?.[1];
+	let ticket = 0;
+	const current = (mine) => {
+		try {
+			guard();
+			return mine === ticket && root.isConnected;
+		} catch {
+			return false;
+		}
+	};
+	const notChecked = () => {
+		status.textContent = t("agents_unchecked");
+		status.className = "ui-pill tone-neutral";
+		reason.textContent = t("agents_not_checked");
+		codes.replaceChildren();
+		technical.hidden = true;
+	};
+	const paint = (doc) => {
+		const native = doc?.native_analysis, bat = workspaceId ? doc?.bat_analysis : null;
+		const descriptors = [native, bat].filter((value) => value && typeof value.eligible_for_preflight === "boolean");
+		if (!descriptors.length) {
+			notChecked();
+			return;
+		}
+		const permitted = [
+			"observe",
+			"manage",
+			"start"
+		].every((scope) => caps()?.scopes?.includes(scope));
+		const ready = descriptors.some((value) => value.eligible_for_preflight === true && value.action_registered === true && value.authorized !== false) && permitted;
+		status.textContent = t(ready ? "agents_ready" : "agents_unavailable");
+		status.className = `ui-pill tone-${ready ? "info" : "neutral"}`;
+		const failures = descriptors.map((value) => value.action_registered === false ? "agents_action" : value.reason ? eligibilityReasons[value.reason] || (value === bat ? "agents_bat_unknown" : "agents_installation") : !permitted || value.authorized === false ? "agents_scope" : "agents_installation");
+		reason.textContent = t(ready ? "agents_preflight" : failures[0]);
+		codes.replaceChildren(...descriptors.flatMap((value, i) => value.reason ? [h("p", {}, t(i ? "agents_bat" : "agents_native"), ": ", h("code", {}, value.reason))] : []));
+		if (!ready && descriptors.length > 1) codes.prepend(h("p", {}, t(failures[1])));
+		technical.hidden = !codes.childElementCount;
+	};
+	const load = async () => {
+		const mine = ++ticket;
+		notChecked();
+		check.disabled = true;
+		const features = caps()?.features?.pm_workspaces;
+		const endpoint = workspaceId && (features?.native_analysis || features?.bat_analysis || features?.installation_eligibility) ? `/pm/workspaces/${workspaceId}/capabilities` : features?.installation_eligibility ? "/pm/installation-capabilities" : null;
+		try {
+			if (!endpoint) return;
+			const doc = await api("GET", endpoint);
+			if (current(mine)) paint(doc);
+		} catch {
+			if (current(mine)) notChecked();
+		} finally {
+			if (current(mine)) check.disabled = false;
+		}
+	};
+	const check = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("agents_check"),
+		onClick: load,
+		"data-pm-eligibility-check": ""
+	});
+	const pm = h("section", {
+		class: "settings-agent-group",
+		"data-settings-pm-agent": ""
+	}, h("div", { class: "settings-agent-heading" }, h("h3", {}, t("agents_pm")), status, check), h("p", {}, t("agents_pm_help")), h("p", {}, reason, " ", h("a", { href: setupGuide() + "#pm-agent-setup" }, t("agents_pm_docs"))), technical);
+	const config = JSON.stringify({ mcpServers: { bat: {
+		command: "bat-agent-connector-mcp",
+		args: ["--principal-only"],
+		env: { BATC_API_TOKEN: "<SCOPED_TOKEN>" }
+	} } }, null, 2);
+	const copyStatus = h("span", { role: "status" });
+	const copy = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("agents_copy"),
+		onClick: async () => {
+			try {
+				guard();
+				await navigator.clipboard.writeText(config);
+				guard();
+				if (root.isConnected) copyStatus.textContent = t("agents_copied");
+			} catch {
+				if (root.isConnected) copyStatus.textContent = t("agents_copy_failed");
+			}
+		}
+	});
+	const bundled = Boolean(caps()?.managed_installation);
+	const mcp = h("section", {
+		class: "settings-agent-group",
+		"data-settings-mcp": ""
+	}, h("h3", {}, t("agents_mcp")), h("p", {}, t("agents_mcp_can")), h("p", {}, t("agents_mcp_limits")), h("p", { class: "muted" }, t(bundled ? "agents_bundle" : "agents_operator")), ...!bundled ? [
+		h("pre", { "data-mcp-config": "" }, h("code", {}, config)),
+		h("div", { class: "actions" }, copy, copyStatus),
+		h("p", {}, t("agents_token")),
+		disclosure({
+			label: t("agents_token_issue"),
+			body: h("div", {}, h("p", {}, t("agents_issue")), h("pre", {}, h("code", {}, "batc api-token issue --actor mcp-agent --scope observe --scope operate --scope start")), h("p", {}, t("agents_scopes")))
+		})
+	] : [], h("div", { class: "actions" }, h("a", { href: setupGuide() + "#cli-and-agent-access" }, t("agents_mcp_docs")), h("a", { href: "https://github.com/teddashh/bat-agent-connector/blob/main/docs/agent-skills.md" }, t("agents_skill_docs"))));
+	const root = h("section", {
+		class: "panel settings-agents",
+		"aria-labelledby": heading.id
+	}, heading, safeFrom ? h("a", {
+		href: safeFrom,
+		"data-agents-back": ""
+	}, t("agents_back")) : null, pm, mcp);
+	notChecked();
+	return {
+		root,
+		heading,
+		load
+	};
 }
 //#endregion
 //#region src/pm-workbench.js
@@ -12854,170 +13319,6 @@ function reasonText$1(code) {
 	const token = labelSegment(code);
 	if (!token) return "";
 	return reasonLabel(t, token);
-}
-//#endregion
-//#region src/global-screens.js
-function setupGuide() {
-	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
-}
-function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
-	const article = h("article", {
-		class: "global-inbox-row",
-		"data-inbox-key": key
-	});
-	if (onOpen) article.addEventListener("click", (event) => {
-		if (event.target.closest("a, button, input, select, textarea")) return;
-		onOpen();
-	});
-	const text = h("div", { class: "global-inbox-text" }, h("a", {
-		class: "title",
-		href
-	}, title), meta || pill ? h("p", { class: "global-inbox-meta" }, meta ? h("span", { class: "global-inbox-meta-text" }, meta) : null, pill || null) : null);
-	const details = onOpen ? iconButton({
-		icon: "chevron-right",
-		label: detailsLabel,
-		onClick: () => onOpen()
-	}) : null;
-	article.append(text, h("div", { class: "global-inbox-actions" }, action || null, details));
-	return article;
-}
-function firstRunCard({ h, t, body, footer }) {
-	return h("div", { class: "global-first-run" }, h("section", {
-		class: "global-first-card",
-		"aria-labelledby": "global-first-title"
-	}, h("span", {
-		class: "brand-mark",
-		"aria-hidden": "true"
-	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
-}
-function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSelect = () => {} }) {
-	const nav = h("nav", {
-		class: "global-settings-nav",
-		role: exclusive ? "tablist" : null,
-		"aria-orientation": exclusive ? "vertical" : null,
-		"aria-label": t("global_settings_nav")
-	});
-	const panels = h("div", { class: "global-settings-panels" });
-	const buttons = [];
-	const roots = [];
-	let preferred = selected || "";
-	for (const section of sections) {
-		const panel = h("section", {
-			class: "global-settings-section",
-			id: `settings-panel-${section.id}`,
-			"data-settings-panel": section.id,
-			role: exclusive ? "tabpanel" : null,
-			"aria-labelledby": exclusive ? `settings-tab-${section.id}` : null
-		});
-		if (section.id === "models") panel.setAttribute("data-settings-models", "");
-		const button = exclusive ? h("button", {
-			type: "button",
-			role: "tab",
-			id: `settings-tab-${section.id}`,
-			"data-settings-nav": section.id,
-			"aria-controls": panel.id
-		}, section.label) : h("a", {
-			href: `#settings-panel-${section.id}`,
-			id: `settings-tab-${section.id}`,
-			"data-settings-nav": section.id
-		}, section.label);
-		if (section.hidden) {
-			button.hidden = true;
-			panel.hidden = true;
-		}
-		button.addEventListener("click", (event) => {
-			if (!exclusive) event.preventDefault();
-			select(section.id, true);
-		});
-		buttons.push(button);
-		roots.push(panel);
-		nav.append(button);
-		panels.append(panel);
-	}
-	const visible = () => buttons.filter((button) => !button.hidden);
-	const marked = (button) => exclusive ? button.getAttribute("aria-selected") === "true" : button.getAttribute("aria-current") === "true";
-	function apply(id) {
-		for (const button of buttons) {
-			const on = !button.hidden && button.dataset.settingsNav === id;
-			if (exclusive) {
-				button.setAttribute("aria-selected", on ? "true" : "false");
-				button.tabIndex = on ? 0 : -1;
-			} else if (on) button.setAttribute("aria-current", "true");
-			else button.removeAttribute("aria-current");
-		}
-		if (!exclusive) return;
-		for (const node of roots) {
-			const button = buttons.find((item) => item.dataset.settingsNav === node.dataset.settingsPanel);
-			node.hidden = !(button && !button.hidden && node.dataset.settingsPanel === id);
-		}
-	}
-	function select(id, scroll) {
-		const button = buttons.find((item) => item.dataset.settingsNav === id);
-		if (!button || button.hidden) return;
-		preferred = id;
-		apply(id);
-		onSelect(id);
-		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
-	}
-	nav.addEventListener("keydown", (event) => {
-		if (![
-			"ArrowUp",
-			"ArrowDown",
-			"ArrowLeft",
-			"ArrowRight",
-			"Home",
-			"End"
-		].includes(event.key)) return;
-		const enabled = visible();
-		const current = enabled.indexOf(document.activeElement);
-		if (current < 0) return;
-		event.preventDefault();
-		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1) + enabled.length) % enabled.length];
-		if (!next) return;
-		next.focus();
-		select(next.dataset.settingsNav, true);
-	});
-	const initial = buttons.find((button) => !button.hidden && button.dataset.settingsNav === preferred) || visible()[0];
-	if (initial) apply(initial.dataset.settingsNav);
-	function panel(id) {
-		return roots.find((node) => node.dataset.settingsPanel === id);
-	}
-	function show(id) {
-		const button = buttons.find((node) => node.dataset.settingsNav === id);
-		const node = panel(id);
-		if (!button || !node) return;
-		button.hidden = false;
-		if (!exclusive) node.hidden = false;
-		if (preferred === id) apply(id);
-		else if (!visible().some(marked)) apply(id);
-	}
-	function hide(id) {
-		const button = buttons.find((node) => node.dataset.settingsNav === id);
-		const node = panel(id);
-		if (!button || !node) return;
-		const was = marked(button);
-		button.hidden = true;
-		node.hidden = true;
-		if (was) {
-			const next = visible()[0];
-			if (next) apply(next.dataset.settingsNav);
-		}
-	}
-	function reapply() {
-		if (buttons.find((node) => !node.hidden && node.dataset.settingsNav === preferred)) apply(preferred);
-	}
-	const root = h("div", {
-		class: "global-settings",
-		"data-settings-exclusive": exclusive ? "true" : "false"
-	}, nav, panels);
-	root.reapply = reapply;
-	return {
-		root,
-		panel,
-		show,
-		hide,
-		reapply
-	};
 }
 //#endregion
 //#region src/pm-quality-projections.js
@@ -25878,7 +26179,10 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 	}, h("details", { "data-pm-package-handoff-controls": "" }, h("summary", {}, t("ph_title")), sectionCard({ body: h("div", {}, head, availabilityNotice, review, status, facts, useReview, editorView, outcome, disclosure({
 		label: t("ph_details"),
 		body: h("div", {}, h("p", { class: "muted" }, t("ph_intro")), h("p", { class: "muted" }, t("ph_boundary")), h("p", { class: "muted" }, t("ph_agent_help")))
-	})) })));
+	})) })), dispatchExplanation({
+		h,
+		t
+	}));
 	const available = () => {
 		const cap = caps()?.features?.pm_workspaces?.package_handoff;
 		return cap?.available === true && cap.action === "repository.continue" && cap.contract === contract && cap.code_basis_required === true && ["bounded_full_prompt", "bounded_full_prompt_or_fixed_spec_artifact"].includes(cap.source_materialization);
@@ -49269,7 +49573,7 @@ function validRequest$2(r) {
 		"prompt"
 	].every((k) => !(k in r.params) || text$3(r.params[k], k === "prompt" ? 2e4 : 256)) && object$2(r.preconditions) && Object.keys(r.preconditions).length === 0;
 }
-function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference }) {
+function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference, initialHost }) {
 	let raw;
 	try {
 		raw = JSON.parse(localStorage.getItem(storageKey));
@@ -49289,6 +49593,10 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 			title: "",
 			prompt: ""
 		}, raw.intent.request.params);
+	}
+	if (!saved.intent && initialHost && caps()?.hosts?.some((x) => x.host === initialHost) && saved.host !== initialHost) {
+		saved.host = initialHost;
+		saved.workspace = "";
 	}
 	let operation = null, busy = false, submission = null, refreshing = null, readFailed = false;
 	let workspaces = [], discovery = 0, discovering = false, discoveredHost = "";
@@ -53459,7 +53767,13 @@ async function viewSessions(main) {
 		class: "session-project-link",
 		href: "#/projects"
 	}, t("sessions_projects")));
-	main.append(h("div", { class: "session-heading" }, pageHeader({ title: t("sessions_title") }), state.caps?.actions?.some((a) => a.action === "session.start") ? h("a", { href: "#/start" }, t("start_title_page")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), disclosure({
+	main.append(h("div", { class: "session-heading" }, pageHeader({
+		title: t("sessions_title"),
+		meta: t("paths_first")
+	}), mayStartSession(state.caps) ? h("a", {
+		href: "#/start",
+		class: "ui-button primary"
+	}, t("paths_start")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), disclosure({
 		label: t("global_details"),
 		body: h("p", {}, t("sessions_intro"))
 	}), h("div", { class: "filters session-filters" }, searchField(search), hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
@@ -54353,8 +54667,8 @@ async function viewSession(main, host, sid, context = null) {
 		hidden: true,
 		id: "workspace-message-input"
 	}, box, composerRow);
-	const readonly = h("p", {
-		class: "muted session-readonly",
+	const readonly = h("section", {
+		class: "session-readonly work-paths-card",
 		"data-session-readonly": "",
 		hidden: true
 	});
@@ -54942,7 +55256,26 @@ async function viewSession(main, host, sid, context = null) {
 		composer.hidden = !managed;
 		controls.hidden = !managed;
 		readonly.hidden = managed;
-		readonly.textContent = t(row.provenance === "manual" ? "session_readonly_manual" : "session_readonly_unknown");
+		if (row.provenance === "manual") {
+			const reason = checkpointReason(state.caps, host);
+			readonly.replaceChildren(h("h2", {}, t("paths_view_only")), h("p", {}, t("paths_manual")), h("div", { class: "actions" }, ...[reason ? null : button({
+				variant: "secondary",
+				label: t("paths_continue"),
+				onClick: () => {
+					results.open();
+					cps.open();
+				}
+			}), mayStartSession(state.caps) ? h("a", {
+				class: "ui-button secondary",
+				href: `#/start?host=${encodeURIComponent(host)}`
+			}, t("paths_start")) : null].filter(Boolean)), ...[reason ? h("p", {
+				class: "muted",
+				"data-checkpoint-reason": ""
+			}, t(reason), " ", h("a", { href: "#/settings?section=connection" }, t("paths_setup"))) : null].filter(Boolean), h("a", {
+				class: "global-quiet-link",
+				href: "#/settings?section=agents"
+			}, t("paths_mcp")));
+		} else readonly.textContent = t("session_readonly_unknown");
 		renderPending();
 		updateControls();
 	};
@@ -55202,8 +55535,8 @@ async function viewSession(main, host, sid, context = null) {
 	};
 }
 function checkpointPanel(host, sid, { namespace = state.namespace, manual = () => false } = {}) {
-	const can = (state.caps?.features?.checkpoints || []).includes(host);
-	const mayStart = (state.caps?.scopes || []).includes("start");
+	const can = (state.caps?.features?.checkpoints || []).includes(host) && actionAllowed(state.caps, "checkpoint.create");
+	const mayStart = (state.caps?.scopes || []).includes("start") && actionAllowed(state.caps, "checkpoint.continue");
 	const list = h("div", {});
 	const status = h("div", { class: "muted" });
 	const rows = new Map();
@@ -55360,7 +55693,8 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	}, t("checkpoint_record"));
 	const recordForm = h("div", {
 		class: "session-checkpoint-record",
-		hidden: true
+		hidden: true,
+		tabindex: -1
 	}, h("div", { class: "actions" }, pick), note, h("div", { class: "actions" }, create));
 	const action = can ? button({
 		variant: "ghost",
@@ -55377,7 +55711,6 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	const paintNotes = () => notes.replaceChildren(...[
 		h("p", { class: "muted" }, t("checkpoint_help")),
 		manual() ? h("p", { class: "muted" }, t("checkpoint_manual_hint")) : null,
-		can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")),
 		can ? null : h("p", { class: "muted" }, h("code", {}, t("checkpoint_unavailable_keys"))),
 		mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")),
 		mayStart ? null : h("p", { class: "muted" }, h("code", {}, t("needs_start_scope_key")))
@@ -55391,7 +55724,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	checkpointWhy.addEventListener("toggle", () => {
 		if (checkpointWhy.open) paintNotes();
 	});
-	const box = h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), recordForm, status, list, checkpointWhy);
+	const box = h("div", { class: "session-checkpoints" }, can && mayStart ? null : h("p", { class: "muted session-checkpoint-state" }, t(checkpointReason(state.caps, host) || "paths_host_unavailable")), recordForm, status, list, checkpointWhy);
 	const clear = () => {
 		ticket += 1;
 		rows.clear();
@@ -55403,6 +55736,14 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		box,
 		action,
 		clear,
+		open: async () => {
+			const mine = ticket;
+			recordForm.hidden = false;
+			action?.setAttribute("aria-expanded", "true");
+			recordForm.scrollIntoView({ block: "nearest" });
+			if (pick.hidden) await loadPreview(mine);
+			if (mine === ticket) (pick.hidden ? recordForm : pick).focus();
+		},
 		load: async () => {
 			const mine = ticket;
 			await loadPreview(mine);
@@ -56543,11 +56884,12 @@ async function fleetTailscale(root, guard) {
 }
 function openSettings(main, { exclusive = false, refreshButton } = {}) {
 	const memory = viewState(state.namespace || "", "", "settings");
+	const params = new URLSearchParams(location.hash.split("?")[1] || "");
 	const frame = settingsFrame({
 		h,
 		t,
 		exclusive,
-		selected: memory.section || "",
+		selected: params.get("section") || memory.section || "",
 		onSelect: (id) => {
 			memory.section = id;
 		},
@@ -56577,6 +56919,10 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 				hidden: true
 			},
 			{
+				id: "agents",
+				label: t("agents_heading")
+			},
+			{
 				id: "about",
 				label: t("global_nav_about")
 			}
@@ -56592,6 +56938,25 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 	}));
 	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("a", { href: setupGuide() }, t("global_setup_guide"))));
 	main.append(frame.root);
+	const connection = {
+		epoch: state.epoch,
+		namespace: state.namespace,
+		generation
+	};
+	const agents = settingsAgents({
+		h,
+		t,
+		api,
+		caps: () => state.caps,
+		guard: () => assertView(connection),
+		from: params.get("from")
+	});
+	frame.panel("agents").append(agents.root);
+	agents.load();
+	if (params.get("section") === "agents") {
+		agents.heading.scrollIntoView({ block: "nearest" });
+		agents.heading.focus();
+	}
 	return frame;
 }
 function viewBrowserSettings(main) {
@@ -58700,12 +59065,16 @@ async function viewStart(main) {
 		caps: () => state.caps,
 		guard: () => assertView(connection),
 		submitPreference: submit,
+		initialHost: new URLSearchParams(location.hash.split("?")[1] || "").get("host"),
 		ready: () => state.online && !state.nativeBusy,
 		errorBox,
 		opStatus,
 		storageKey: `batc.start.${connection.namespace}`
 	});
-	main.append(h("a", { href: "#/sessions" }, t("nav_sessions")), pageHeader({ title: t("start_title_page") }), h("p", { class: "muted" }, t("start_intro")), ...state.caps?.features?.repository_sync?.length ? [h("p", {}, h("a", { href: "#/published" }, t("pub_title")))] : [], panel.box);
+	main.append(h("a", { href: "#/sessions" }, t("nav_sessions")), pageHeader({ title: t("start_title_page") }), h("p", { class: "muted" }, t("start_intro")), ...state.caps?.features?.repository_sync?.length ? [h("p", {}, h("a", { href: "#/published" }, t("pub_title")))] : [], panel.box, dispatchExplanation({
+		h,
+		t
+	}));
 	try {
 		await panel.init();
 	} catch {}
@@ -58839,7 +59208,10 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		storageKey: `batc.dispatch.${connection.namespace}.${pid}${repairWid ? "." + repairWid : ""}`,
 		attachmentFactory: repairSeed ? null : (prompt, changed) => attachmentDraft(`dispatch.${pid}`, prompt, [], false, changed)
 	});
-	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), pageHeader({ title: t("dispatch_title") }), repairSeed ? h("p", { class: "muted" }, t("repair_dispatch_help")) : "", panel.box);
+	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), pageHeader({ title: t("dispatch_title") }), repairSeed ? h("p", { class: "muted" }, t("repair_dispatch_help")) : "", panel.box, dispatchExplanation({
+		h,
+		t
+	}));
 	try {
 		await panel.init();
 	} catch {}
