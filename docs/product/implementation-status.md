@@ -17,7 +17,7 @@ Python Connector／Task Service 保持唯一中央權威；Web／Tauri 共用 `d
 | [#139 發現身分](https://github.com/teddashh/bat-agent-connector/pull/139) | 中央登記表、總覽與討論來源的結構化 `finding`；`title` 仍為 null，撤回時移除身分 | 2026-10-14 以 `2b8c4add` 合併；`aba02180` 已包含實作，尚未安裝或實機驗收 |
 | [#133 前端](https://github.com/teddashh/bat-agent-connector/pull/133) | 共用管理檢視與 Session、[walkthrough](../../desktop/tests/pm-walkthrough.mjs)、第 5b／6 輪修整 | 2026-10-14 以 `cb7e9f42` 合併，晚於 #132／#134；尚未安裝或實機驗收 |
 
-即時總覽與固定報告分開；近期決策不代替待決數量。採用後可明確回報問題已解決，仍保持未評估。
+即時總覽與固定報告分開；近期決策不代替待決數量。採用後可明確回報問題已解決；這項回報仍標示為未評估。
 具名發現、可讀時程軸、Unknown／尚無紀錄與一致的 Agent 讀取已合併。
 來源撤回、草稿、人工唯讀與原操作 key 保留。
 

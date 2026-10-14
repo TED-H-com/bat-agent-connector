@@ -28,7 +28,7 @@ The **Web and Tauri desktop apps share one interface and one Python backend**. Y
 | What needs a decision? | Open a record and **Discuss with PM**. **Discussions** carries its context chip and automatic title into a reviewable proposal and explicit adoption. An adopted discussion can offer an authorized, editable Resolve issue step; reported resolution remains unassessed. |
 | What is this work meant to satisfy? | **Requirements** traces the adopted requirements through work, criteria, PRs and delivery in the RTM and inspector. |
 | What is still unresolved? | **Issues & changes** keeps risks, issues, actions, changes and decisions in a filterable register with original timelines and named maintenance findings. |
-| Which dates changed? | **Schedule** compares recorded baseline, forecast and actual dates on a labelled axis; phone tracks share a fitted range. Missing dates stay unknown. |
+| Which dates changed? | **Schedule** compares recorded baseline, forecast and actual dates on a labelled axis. Missing dates stay unknown. |
 | What could a dependency change affect? | **Dependencies** shows pinned inventories, evidence and bounded impact in a matrix or graph. |
 | What are the agents using? | **Agents** keeps sourced usage, rows and daily trends on one consistent read, with reported quota windows. Unavailable data stays unknown. |
 | What should happen next? | **Board** follows work by stage. Content approval, requirement acceptance, merge and deployment remain separate. |
