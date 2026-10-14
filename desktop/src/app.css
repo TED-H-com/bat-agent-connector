@@ -67,6 +67,12 @@ input, select, textarea { font: inherit; color: var(--text); background: var(--p
   border-radius: var(--r-sm); min-height: 32px; padding: 5px 10px; max-width: 100%; min-width: 0; }
 .connection-token { width: min(100%, 28rem); }
 .connection-token input { display: block; width: 100%; }
+.managed-setup .setup-field { display: grid; align-content: start; gap: var(--space-1); }
+.managed-setup .capture-fields { gap: var(--space-3); margin-block: var(--space-3); }
+.managed-setup [data-setup-profile] { margin-block: var(--space-3); }
+.managed-setup > [data-setup-connect][open],
+.managed-setup [data-setup-actions] { margin-bottom: var(--space-4); }
+.managed-setup [data-setup-actions] > * { flex-shrink: 0; white-space: nowrap; }
 .connection-controls { align-items: end; }
 .delivery-controls { align-items: end; }
 .delivery-controls label { display: grid; gap: var(--space-1); min-width: 0; }

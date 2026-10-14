@@ -135,7 +135,7 @@ for(const change of ['digest','bytes','scope','view'])test(`report ${change} mis
 
 test('report permission loss removes old private facts and does not request a file',async({page})=>{
   const f=fixture();await mount(page,true,f);await open(page);f.state.reportError=403;await page.getByRole('button',{name:'Save report…',exact:true}).click();
-  await expect(brief(page)).toContainText('Your token lacks this scope');await expect(brief(page)).not.toContainText('Current selected goal');expect(f.state.nativeSaves).toHaveLength(0);
+  await expect(brief(page)).toContainText('Your account does not have the required scope');await expect(brief(page)).not.toContainText('Current selected goal');expect(f.state.nativeSaves).toHaveLength(0);
 });
 
 test('native cancellation and existing destinations do not imply a saved file',async({page})=>{
@@ -201,7 +201,7 @@ test('a same-snapshot refresh does not hide a delayed report permission failure'
   const before=f.state.reads.length;await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect.poll(()=>f.state.reads.length).toBeGreaterThan(before);await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
   await expect(brief(page)).toContainText('Current selected goal');
-  f.state.held[0]();await expect(brief(page)).toContainText('Your token lacks this scope');await expect(brief(page)).not.toContainText('Current selected goal');
+  f.state.held[0]();await expect(brief(page)).toContainText('Your account does not have the required scope');await expect(brief(page)).not.toContainText('Current selected goal');
 });
 
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Brief download controls stay compact ${locale} ${width}`,async({browser,baseURL},info)=>{

@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from "@playwright/test";
 import {createHash} from "node:crypto";
 const aid = "art_" + "a".repeat(32), uploadId = "op_" + "b".repeat(32), applyId = "op_" + "c".repeat(32);
@@ -77,7 +78,7 @@ for (const native of [false, true]) {
     expect(state.bytes).toEqual([...binary]);
     expect(state.writes[0].body.params).toEqual({display_name: "binary-fixture.dat", media_type: "application/octet-stream", size_bytes: binary.length, expected_digest: digest});
     await page.getByRole("button", {name: "Save", exact: true}).click();
-    await expect(page.getByText("LOST Lost apply reply")).toBeVisible();
+    await expectErrorDetails(page, "Lost apply reply", "LOST");
     await page.reload();
     await page.getByRole("button", {name: "More", exact: true}).click();
     await expect(page.locator(".attachment-list")).toContainText(aid);

@@ -203,7 +203,7 @@ export function menu({button: trigger, items}) {
     if (restore && root.isConnected) trigger.focus();}
   function outside(event) {if (!root.contains(event.target)) close(false);}
   function keys(event) {
-    if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); close();}
+    if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {event.preventDefault(); event.stopPropagation(); close();}
     else if (event.key === 'Tab') close(false);
     else if (!event.target?.matches?.('select, input, textarea') && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       event.preventDefault(); const enabled = enabledControls(), at = enabled.indexOf(document.activeElement);
@@ -253,7 +253,7 @@ export function inspector({title, onClose = () => {}, returnFocus, dock = false,
   }
   function keys(event) {
     if (dock && (root.hidden || wide())) return;
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {
       if (!root.contains(event.target) && event.target.closest?.('input, textarea, select, [contenteditable]:not([contenteditable=false])')) return;
       event.preventDefault(); close();
     }

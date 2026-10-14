@@ -44,10 +44,11 @@ function textFor(locale: Locale) {
     matching: (n: number) => zh ? `${n} 筆符合` : `${n} matching`,
     title: zh ? '問題與變更' : 'Issues & changes',
     totals: (counts: number[]) => (zh ? ['風險', '問題', '行動', '變更', '決策'] : ['Risk', 'Issue', 'Action', 'Change', 'Decision'])
-      .map((label, index) => `${label} ${counts[index]}`).join(' · '),
+      .flatMap((label, index) => counts[index] > 0 ? [`${label} ${counts[index]}`] : []).join(' · '),
     shown: (n: number) => zh ? `顯示 ${n} 筆` : `${n} shown`,
-    none: zh ? '目前沒有顯示' : 'None shown',
+    none: zh ? '沒有顯示項目' : 'None shown',
     empty: zh ? '沒有符合的紀錄' : 'No matching records',
+    incomplete: zh ? '紀錄不完整' : 'Records incomplete',
     unavailable: zh ? '來源無法取得' : 'Source unavailable',
     loadMore: zh ? '載入更多' : 'Load more',
     noReasons: zh ? '沒有記下原因欄位' : 'No reason fields recorded',
@@ -162,10 +163,14 @@ for (const locale of locales) {
     const {page, context, errors, calls, copy} = await boot(browser, baseURL, locale, 1440);
     await openView(page, 'issues');
     await expect(page.getByRole('heading', {level: 1})).toHaveText(copy.title);
-    await expect(page.locator('[data-reg-status] option[value="format_valid"]')).toHaveText(copy.zh ? '格式已核對' : 'Format checked');
+    const statusOptions = page.locator('[data-reg-status] option');
+    await expect(statusOptions).toHaveCount(10);
+    await expect(page.locator('[data-reg-status] option[value="format_valid"]')).toHaveCount(0);
+    await expect(page.locator('[data-reg-status] option[value="in_review"]')).toHaveText(copy.zh ? '審閱中' : 'In review');
+    await expect(page.locator('[data-reg-status] option[value="blocked"]')).toHaveText(copy.zh ? '受阻' : 'Blocked');
     await expect(page.locator('[data-reg-status]')).not.toContainText(copy.zh ? '格式有效' : 'Format valid');
     const meta = page.locator('[data-pm-header-meta]');
-    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]));
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]) + ' · ' + copy.shown(3));
     await expect(page.locator('[data-reg-summary]')).toBeVisible();
     await expect(page.locator('[data-reg-age="0-7d"]')).toContainText('2');
     await expect(page.locator('[data-reg-unknown-age]')).toHaveText(copy.age);
@@ -173,15 +178,22 @@ for (const locale of locales) {
     await expect(page.locator('.reg-week').first()).toHaveAttribute('aria-label', /.+/);
     const table = page.locator('[data-pm-register] tbody tr');
     await expect(table).toHaveCount(3);
+    await expect(page.locator('[data-reg-footer]')).not.toContainText(copy.shown(3));
+    await expect(page.locator('[data-reg-trends] > summary')).toBeHidden();
+    const optionGroups = await statusOptions.evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value));
+    for (const pill of await page.locator('[data-pm-register] tbody .ui-pill').all()) expect(optionGroups).toContain(await pill.getAttribute('data-status'));
+    await expect(table.first().locator('.ui-pill')).toHaveText(copy.zh ? '已觀察' : 'Observed');
     await expect(table.first()).toContainText(copy.zh ? '問題' : 'Issue');
     await expect(page.locator('[data-pm-register] thead')).not.toContainText(copy.zh ? '來源' : 'Source');
     await expect(table.first().locator('.reg-chip-more')).toHaveText(copy.zh ? '+1 項' : '+1 more');
     await expect(page.locator('[data-pm-register]')).toContainText(copy.findingName);
     await expect(page.locator('[data-pm-register]')).not.toContainText(copy.labels.risk);
-    await expect(page.locator('[data-reg-count]')).toHaveText(copy.shown(3));
+    await expect(page.locator('[data-reg-count]')).toHaveAttribute('aria-label', copy.shown(3));
     await page.locator('[data-reg-more]').click();
     await expect.poll(() => calls.some(path => path.includes(`/register?`) && path.includes(`after=${REGISTER_PAGE_CURSOR}`))).toBe(true);
     await expect(table).toHaveCount(9);
+    await expect(page.locator(`[data-row-key="${copy.rows.mapping}"]`)).toContainText(copy.zh ? 'GitHub 議題' : 'GitHub issue');
+    await expect(page.locator(`[data-row-key="${copy.rows.mapping}"]`)).not.toContainText(copy.zh ? '尚無紀錄' : 'Not recorded');
     await expect(page.locator('[data-pm-register]')).toContainText(copy.labels.risk);
     await expect(page.locator('[data-reg-more]')).toHaveCount(0);
     await expect(page.locator('[data-reg-count]')).toHaveCount(0);
@@ -219,11 +231,12 @@ for (const locale of locales) {
     await expect(meta).not.toContainText(copy.zh ? '風險' : 'Risk');
     await page.locator('[data-reg-owner]').fill('empty-source');
     await expect(meta).toHaveText(copy.none);
-    await expect(page.getByRole('heading', {level: 2, name: copy.empty})).toBeVisible();
+    await expect(page.getByRole('heading', {level: 2, name: copy.incomplete})).toBeVisible();
+    await expect(page.getByRole('heading', {level: 2, name: copy.empty})).toHaveCount(0);
     await expect(page.locator('[data-reg-summary]')).toBeHidden();
     await page.locator('[data-reg-owner]').fill('');
     await expect(table).toHaveCount(3);
-    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]));
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]) + ' · ' + copy.shown(3));
 
     const finding = page.locator(`[data-row-key="${copy.rows.finding}"]`);
     await finding.focus();
@@ -359,6 +372,8 @@ for (const locale of locales) {
     test.setTimeout(60_000);
     const {page, context, errors, gate, copy} = await boot(browser, baseURL, locale, 1440, {gate: true});
     await openView(page, 'issues');
+    await page.locator('[data-reg-age="0-7d"]').click();
+    await expect(page.locator('[data-reg-filter="age"]')).toBeVisible();
     await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
     await expect(page.locator('[data-reg-inspector]')).toBeVisible();
     gate.denyList = true;
@@ -369,11 +384,208 @@ for (const locale of locales) {
     await expect(page.locator('[data-pm-header-meta]')).toBeHidden();
     await expect(page.locator('[data-pm-register]')).not.toContainText(copy.findingName);
     await expect(page.locator('[data-reg-summary]')).toBeHidden();
+    await expect(page.locator('[data-reg-age]')).toHaveCount(0);
+    await expect(page.locator('[data-reg-filter]')).toHaveCount(0);
+    await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(0);
+    await expectNoJunk(page);
+    expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+    await context.close();
+  });
+
+  test(`issues age and week filters (${locale})`, async ({browser, baseURL}) => {
+    test.setTimeout(60_000);
+    const {page, context, errors, copy} = await boot(browser, baseURL, locale, 1440);
+    await openView(page, 'issues');
+    const meta = page.locator('[data-pm-header-meta]');
+    const rows = page.locator('[data-pm-register] tbody tr');
+    await expect(rows).toHaveCount(3);
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]) + ' · ' + copy.shown(3));
+    const bar = page.locator('[data-reg-age="0-7d"]');
+    await bar.focus();
+    await page.keyboard.press('Enter');
+    await expect(bar).toHaveAttribute('aria-pressed', 'true');
+    await expect(bar).toBeFocused();
+    await expect(rows).toHaveCount(2);
+    await expect(meta).toHaveText(copy.shown(2));
+    await expect(meta).not.toContainText(copy.zh ? '風險' : 'Risk');
+    await expect(page.locator('[data-reg-count]')).toHaveAttribute('aria-label', copy.shown(2));
+    await expect(page.locator('[data-reg-age="0-7d"]')).toContainText('2');
+    const remove = locale === 'zh-TW' ? /移除/ : /Remove/;
+    await page.locator('[data-reg-filter="age"]').getByRole('button', {name: remove}).click();
+    await expect(bar).toHaveAttribute('aria-pressed', 'false');
+    await expect(rows).toHaveCount(3);
+    await expect(page.locator('[data-reg-age-filter]')).toBeFocused();
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]) + ' · ' + copy.shown(3));
+    await expect(page.locator('[data-reg-count]')).toHaveAttribute('aria-label', copy.shown(3));
+    await page.locator('[data-reg-age-filter]').selectOption('31-90d');
+    await expect(rows).toHaveCount(0);
+    await expect(meta).toHaveText(copy.none);
+    await expect(meta).not.toContainText(/\d/);
+    await expect(page.locator('[data-reg-age="31-90d"]')).toContainText('2');
+    await page.locator('[data-reg-filter="age"]').getByRole('button', {name: remove}).click();
+    await expect(rows).toHaveCount(3);
+    await page.locator('[data-reg-week]').last().click();
+    await expect(page.locator('[data-reg-week]').last()).toHaveAttribute('aria-pressed', 'true');
+    await expect(rows).toHaveCount(2);
+    await expect(meta).toHaveText(copy.shown(2));
+    await page.locator('[data-reg-filter="week"]').getByRole('button', {name: remove}).click();
+    await expect(rows).toHaveCount(3);
+    await expect(meta).toHaveText(copy.totals([1, 5, 1, 1, 1]) + ' · ' + copy.shown(3));
+    await expectNoJunk(page);
+    expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+    await context.close();
+  });
+
+  test(`issues columns stay intact (${locale})`, async ({browser, baseURL}) => {
+    test.setTimeout(60_000);
+    const {page, context, errors, copy} = await boot(browser, baseURL, locale, 1440);
+    await openView(page, 'issues');
+    await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(3);
+    for (const width of [1440, 1000]) {
+      await page.setViewportSize({width, height: 900});
+      for (const open of [false, true]) {
+        if (open) {
+          await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+          await expect(page.locator('[data-reg-inspector]')).toBeVisible();
+        } else if (await page.locator('[data-reg-inspector]').count()) {
+          await page.keyboard.press('Escape');
+          await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+        }
+        await expectNoOverflow(page);
+        const clipped = await page.locator('.reg-toolbar').evaluate(toolbar => {
+          const box = toolbar.getBoundingClientRect();
+          return [...toolbar.querySelectorAll('select, input, .ui-segmented button')].filter(node => {
+            const rect = node.getBoundingClientRect();
+            if (rect.width < 1) return false;
+            const cut = node.scrollWidth > node.clientWidth + 2;
+            const outside = rect.left < box.left - 1 || rect.right > box.right + 1;
+            return cut || outside;
+          }).map(node => node.getAttribute('aria-label') || node.textContent || node.tagName);
+        });
+        expect(clipped).toEqual([]);
+        if (width >= 1200 || !open) {
+          for (const column of ['type', 'title', 'status', 'next']) {
+            await expect(page.locator(`[data-pm-register] th[data-column=${column}]`)).toBeVisible();
+          }
+          const typeCell = page.locator(`[data-row-key="${copy.rows.decision}"] [data-column=type] .reg-type`);
+          await expect(typeCell).toContainText(copy.zh ? '決策' : 'Decision');
+          expect(await typeCell.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+          const statusCell = page.locator(`[data-row-key="${copy.rows.decision}"] [data-column=status]`);
+          await expect(statusCell).toBeVisible();
+          await expect(statusCell).toContainText(copy.zh ? '未解決' : 'Open');
+        }
+      }
+    }
     await expectNoJunk(page);
     expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
     await context.close();
   });
 }
+
+for (const locale of locales) test(`issues status groups keep every recorded state (${locale})`, async ({browser, baseURL}) => {
+  const {page, context, fixture, copy} = await boot(browser, baseURL, locale, 1440);
+  await openView(page, 'issues');
+  const statuses = {
+    open: ['open', 'monitoring', 'observed_open', 'tracking'],
+    in_progress: ['in_progress', 'running', 'accepted', 'continue_maintenance'],
+    blocked: ['blocked'], waiting: ['waiting_checks', 'waiting_external'],
+    in_review: ['needs_review', 'proposed', 'uncertain', 'needs_attention', 'format_valid', 'bounded_repair_proposal'],
+    done: ['reported_resolved', 'reported_done', 'succeeded', 'adopted', 'adopted_direction', 'recorded_discussion_decision'],
+    closed: ['rejected', 'cancelled', 'failed'], draft: ['draft'],
+    other: ['future_state', '__proto__', 'constructor', null],
+  };
+  const seed = (await fixture.dispatch({method: 'GET', path: `/pm/workspaces/${fixture.ids.workspaceId}/register?limit=50`})).data;
+  const records = Object.entries(statuses).flatMap(([group, values]) => values.map((status, index) => ({
+    ...seed.rows[0], row_id: `finding.${group}_${index}`, title: `${group} ${index}`, status,
+  })));
+  await page.route('**/register?*', route => {
+    const raw = new URL(route.request().url()).searchParams.get('status');
+    return route.fulfill({json: {...seed, rows: raw ? records.filter(row => row.status === raw) : records,
+      next_cursor: null, summary: null, total_by_type: null, coverage: {...seed.coverage, complete: false}}});
+  });
+  await page.locator('.ui-page-header').getByRole('button', {name: copy.zh ? '重新整理' : 'Refresh'}).click();
+  const rows = page.locator('[data-pm-register] tbody tr');
+  await expect(rows).toHaveCount(records.length);
+  await expect(page.locator('[data-reg-status] option')).toHaveCount(10);
+  for (const [group, values] of Object.entries(statuses)) {
+    await page.locator('[data-reg-status]').selectOption(group);
+    await expect(rows).toHaveCount(values.length);
+    await expect(page.locator('[data-pm-header-meta]')).toHaveText(copy.shown(values.length));
+    for (let index = 0; index < values.length; index++) {
+      await expect(page.locator(`[data-row-key="finding.${group}_${index}"]`)).toBeVisible();
+    }
+  }
+  await page.locator('[data-reg-status]').selectOption('');
+  await expect(rows).toHaveCount(records.length);
+  await expectNoJunk(page);
+  await context.close();
+});
+
+for (const locale of locales) test(`issues age filters exclude resolved and undated rows (${locale})`, async ({browser, baseURL}) => {
+  const {page, context, fixture, copy} = await boot(browser, baseURL, locale, 1440);
+  await openView(page, 'issues');
+  const seed = (await fixture.dispatch({method: 'GET', path: `/pm/workspaces/${fixture.ids.workspaceId}/register?limit=50`})).data;
+  const rows = [
+    {...seed.rows[0], row_id: 'finding.open', status: 'open', created_at: seed.as_of},
+    {...seed.rows[0], row_id: 'finding.resolved', status: 'reported_done', created_at: seed.as_of},
+    {...seed.rows[0], row_id: 'finding.undated', status: 'open', created_at: null},
+  ];
+  await page.route('**/register?*', route => route.fulfill({json: {...seed, rows, next_cursor: null,
+    summary: null, total_by_type: null, coverage: {...seed.coverage, complete: false}}}));
+  await page.locator('.ui-page-header').getByRole('button', {name: copy.zh ? '重新整理' : 'Refresh'}).click();
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(3);
+  await page.locator('[data-reg-age-filter]').selectOption('0-7d');
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(1);
+  await expect(page.locator('[data-row-key="finding.open"]')).toBeVisible();
+  await expect(page.locator('[data-pm-header-meta]')).toHaveText(copy.shown(1));
+  await expect(page.locator('[data-reg-summary]')).toBeHidden();
+  await page.locator('[data-reg-filter="age"] button').click();
+  await expect(page.locator('[data-pm-register] tbody tr')).toHaveCount(3);
+  await context.close();
+});
+
+for (const locale of locales) test(`issues read errors are localized and recover cleanly (${locale})`, async ({browser, baseURL}) => {
+  const {page, context, copy} = await boot(browser, baseURL, locale, 1440);
+  await openView(page, 'issues');
+  await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+  await expect(page.locator('[data-reg-inspector]')).toBeVisible();
+  const selected = page.locator(`[data-row-key="${copy.rows.finding}"]`);
+  expect(await selected.evaluate(row => getComputedStyle(row.querySelector('td')!).backgroundColor
+    !== getComputedStyle(row.querySelector('.ui-pill')!).backgroundColor)).toBe(true);
+  let failed = true;
+  await page.route('**/register?*', route => failed
+    ? route.fulfill({status: 503, json: {error: {code: 'UNAVAILABLE', message: 'Provider detail is not UI copy'}}})
+    : route.fallback());
+  await page.locator('.ui-page-header').getByRole('button', {name: copy.zh ? '重新整理' : 'Refresh'}).click();
+  const panel = page.locator('[data-pm-register]');
+  await expect(panel.getByRole('alert')).toContainText(copy.zh ? '無法讀取紀錄' : 'Could not read records');
+  await expect(panel).not.toContainText('Provider detail is not UI copy');
+  await expect(panel.locator('tbody tr')).toHaveCount(0);
+  await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-header-meta]')).toBeHidden();
+  await expect(page.locator('[data-reg-summary]')).toBeHidden();
+  failed = false;
+  await panel.getByRole('button', {name: copy.zh ? '重試' : 'Retry', exact: true}).click();
+  await expect(panel.locator('tbody tr')).toHaveCount(3);
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  await expect(page.locator('[data-pm-header-meta]')).toContainText(copy.shown(3));
+  await context.close();
+});
+
+for (const locale of locales) test(`issues mobile related chips keep the full touch target (${locale})`, async ({browser, baseURL}) => {
+  const {page, context, copy} = await boot(browser, baseURL, locale, 390);
+  await openView(page, 'issues');
+  await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+  const chip = page.locator('[data-reg-inspector] [data-reg-requirement]').first();
+  await expect(chip).toBeVisible();
+  const box = (await chip.boundingBox())!;
+  // A tap inside the shared 44px target, above the visible 24px chip, must open its requirement.
+  await page.mouse.click(box.x + box.width / 2, box.y - 6);
+  await expect(page).toHaveURL(new RegExp(`/requirements\\?select=${copy.project.ids.requirements.email}`));
+  await expect(page.locator('[data-reg-inspector]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-region="requirements"]')).toBeVisible();
+  await context.close();
+});
 
 test('a late register page does not restore withdrawn rows', async ({browser, baseURL}) => {
   test.setTimeout(60_000);

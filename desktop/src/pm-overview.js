@@ -1,3 +1,4 @@
+import {proof} from './pm-brief.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {workspaceCharter, charterSections} from './pm-charter.js';
 import {planDocument} from './pm-plans.js';
@@ -231,7 +232,7 @@ export function workspaceOverview(options) {
       const list = h('ul', {class: 'pm-overview-bullets'}, ...rows.map((row, i) => h('li', {hidden: i >= 3 && !expanded}, row.text,
         ['agent_assumption', 'unresolved', 'conflicting'].includes(row.status) ? statusPill('unconfirmed') : null)));
       const sources = disclosure({label: t('ov_sources'), key: `${namespace}:${workspaceId}:overview-source:${key}`,
-        body: h('pre', {class: 'pm-brief-proof'}, JSON.stringify(rows, null, 2))});
+        body: proof({h, t, value: rows.map(row => ({...row, ...(document?.selected_inputs?.find(input => input.input_id === row.input_id) || {})}))})});
       sources.classList.add('pm-overview-sources'); sources.querySelector('summary').setAttribute('aria-label', `${t('ov_sources')} · ${t('wb_' + key)}`);
       sources.querySelector('summary').title = t('ov_sources'); sources.querySelector('summary').dataset.overviewLink = `charter:${key}:sources`;
       const decisions = key === 'decisions' && Object.hasOwn(source, 'decision_count');

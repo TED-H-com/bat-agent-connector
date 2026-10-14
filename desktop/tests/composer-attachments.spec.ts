@@ -238,7 +238,12 @@ for (const native of [false, true]) {
     // Oversized image (> 1048576 bytes limit set in fixture)
     const largeBuffer = Buffer.alloc(1048576 + 1024, 0);
     await pasteFile(page, '[data-published-start] textarea[aria-label="Original instructions"]', 'large.png', 'image/png', largeBuffer);
-    await expect(form(page).locator('.attachments [role="status"]')).toContainText('ARTIFACT_TOO_LARGE');
+    const error = form(page).locator('.attachments [data-api-error]');
+    await expect(error.locator('[data-error-summary]')).toHaveText('This file is too large. Choose a smaller file.');
+    expect(await error.innerText()).not.toContain('ARTIFACT_TOO_LARGE');
+    await error.locator('summary').click();
+    await expect(error.locator('[data-error-details] code')).toHaveText('ARTIFACT_TOO_LARGE');
+    await expect(error.locator('[data-error-details]')).toContainText('1048576');
     await expect(form(page).locator('.attachment-list')).toBeEmpty();
 
     expect(state.uploaded).toBe(false);
