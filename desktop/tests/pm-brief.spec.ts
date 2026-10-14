@@ -94,10 +94,10 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Brief
 });
 test('legacy workspace brief keeps its complete snapshot form in Report and recovers the original key',async({page})=>{
   const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}/overview`);
-  await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
+  await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=save]').click();
   f.state.lost=true;await form(page).getByRole('button',{name:'Save report',exact:true}).click();
   await expect(form(page)).toContainText('Reply unavailable');f.state.headVersion=4;
-  await page.reload();await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=versions]').click();
+  await page.reload();await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=save]').click();
   await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
   expect(f.state.snapshots).toHaveLength(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
   expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);

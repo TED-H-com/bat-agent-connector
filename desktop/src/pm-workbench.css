@@ -24,7 +24,7 @@
 .pm-charter-report > details { margin-top: var(--space-4); }
 .pm-charter-save { display: flex; align-items: start; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-4); }
 .pm-charter-save form { max-width: var(--form-width); }
-.pm-charter-save button[type="submit"] { color: var(--text); background: var(--panel); border-color: var(--line); }
+.pm-charter-save button[type="submit"]:not(.ui-button) { color: var(--text); background: var(--panel); border-color: var(--line); }
 .pm-charter-comparison h4 { margin-bottom: var(--space-2); }
 .pm-rtm-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .pm-rtm-layout:has(.pm-rtm-detail:not([hidden])) { grid-template-columns: minmax(0, 1fr) minmax(280px, 36%); }

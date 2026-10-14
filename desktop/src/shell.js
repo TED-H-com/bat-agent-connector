@@ -97,7 +97,10 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     const workSession = workspace && ['session', 'item', 'work'].includes(currentRoute);
     if (workSession) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_work')),
       h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_session')));
-    else if (routeTitle) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, routeTitle));
+    else if (routeTitle) {
+      if (workspace) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'));
+      crumb.append(h('span', {class: 'shell-crumb-view'}, routeTitle));
+    }
     crumb.append(h('button', {type: 'button', class: 'shell-mobile-name', title: workspace?.name || routeTitle,
       'aria-label': workspace?.name || routeTitle || t('ui_menu'), 'aria-controls': 'workspace-sidebar', 'aria-expanded': 'false', onclick: openDrawer}, workspace?.name || routeTitle));
     workspaceBlock.hidden = !workspaceBlock.children.length; projectNav.hidden = !projectNav.children.length;

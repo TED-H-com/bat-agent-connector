@@ -11,7 +11,7 @@ export const pmKanbanStrings = {
     pm_kanban_wip_basis: 'WIP runs from recorded start to content approval. Archived work is excluded.',
     pm_kanban_quality: 'Content approval does not establish DoD, passing tests or a verified deployment.',
     pm_kanban_limits: 'WIP limits, resource capacity and work dependencies are not configured here.',
-    pm_kanban_read_at: 'Read at', pm_kanban_page_at: 'Page summary at', pm_kanban_stage: 'Management stage',
+    pm_kanban_read_at: 'Read at', pm_kanban_page_at: 'Page summary at', pm_kanban_stage: 'Management phase',
     pm_kanban_unknown: 'Unknown', pm_kanban_age: 'Work age', pm_kanban_cycle: 'Management cycle', pm_kanban_wait: 'Current waiting',
     pm_kanban_attempts: '{count} accepted sends', pm_kanban_attempt_basis: 'Returned visible send identities; not a count of completed work.',
     pm_kanban_no_execution: 'No visible linked execution', pm_kanban_quality_unknown: 'Definition of done not assessed',

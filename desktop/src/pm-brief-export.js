@@ -1,18 +1,18 @@
-import {disclosure} from './ui/components.js';
+import {button as actionButton} from './ui/components.js';
 import {nativeDesktop,nativeBriefExportSupport,nativeBriefSave} from './transport/index.ts';
 
 // Read a selected report again for each download. Report text is never live markup.
 export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,onUnavailable,errorBox}) {
   const actor=caps()?.actor,formats={markdown:['md','text/markdown; charset=utf-8'],html:['html','text/html; charset=utf-8'],svg:['svg','image/svg+xml; charset=utf-8']};
   let busy=false,selection='',pendingReceipt=null;
-  const format=h('select',{'aria-label':t('pm_export_format')},...Object.keys(formats).map(key=>h('option',{value:key},key==='markdown'?'Markdown':key.toUpperCase())));
-  const locale=h('select',{'aria-label':t('pm_export_language')},h('option',{value:'en'},'English'),h('option',{value:'zh-TW'},'繁體中文'));
+  const format=h('select',{'aria-label':t('pm_export_format')},...Object.keys(formats).map(key=>h('option',{value:key},t('pm_export_'+key))));
+  const locale=h('select',{'aria-label':t('pm_export_language')},h('option',{value:'en'},t('pm_export_english')),h('option',{value:'zh-TW'},'繁體中文'));
   locale.value=navigator.language.toLowerCase().startsWith('zh')?'zh-TW':'en';
   const status=h('div',{role:'status'}),note=h('p',{class:'muted'},t('pm_export_help'));
-  const button=h('button',{type:'button',class:'secondary',onclick:()=>void save()},t(nativeDesktop?'pm_export_save':'pm_export_download'));
-  const element=disclosure({label:t('pm_export_title'),body:h('div',{},note,
+  const button=actionButton({variant:'primary',label:t(nativeDesktop?'pm_export_save':'pm_export_download'),onClick:()=>void save()});
+  const element=h('div',{},note,
     h('div',{class:'pm-export-fields'},h('label',{},t('pm_export_format'),format),h('label',{},t('pm_export_language'),locale)),
-    h('div',{class:'actions'},button),status)}); element.dataset.pmBriefExport='';
+    h('div',{class:'actions'},button),status); element.dataset.pmBriefExport='';
   const allowed=()=>readable()&&caps()?.actor===actor&&caps()?.scopes?.includes('observe')&&snapshot()?.snapshot_id
     &&caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value)
     &&caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value)&&(!nativeDesktop||nativeBriefExportSupport);
@@ -25,7 +25,7 @@ export function briefExport({h,t,api,alive,workspaceId,caps,snapshot,readable,on
       if(pendingReceipt.error){status.replaceChildren(errorBox(pendingReceipt.error));return;}
       const value=pendingReceipt.receipt;
       status.replaceChildren(h('p',{class:'muted'},value===null?t('pm_export_cancelled'):
-        allowed()&&identity()===pendingReceipt.expected?`${t('pm_export_saved')}: ${value.display_name}`:t('pm_export_prior_saved')));
+        allowed()&&identity()===pendingReceipt.expected?t('pm_export_saved_file',{name:value.display_name}):t('pm_export_prior_saved')));
     }
   }
   function live(expected){alive();if(caps()?.actor!==actor||!allowed()||identity()!==expected)throw Object.assign(Error(t('pm_export_changed')),{code:'PM_EXPORT_VIEW_CHANGED'});}

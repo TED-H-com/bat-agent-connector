@@ -67,14 +67,16 @@
 .ui-menu-panel [role=menuitem]:focus, .ui-menu-panel [role=menuitem]:hover { background: var(--surface-2); }
 .ui-menu-group { display: grid; gap: var(--space-1); padding: 6px 10px; }
 .ui-menu-group select { max-width: 100%; font: inherit; }
-.ui-inspector { position: sticky; top: 64px; width: 400px; max-width: 100%; max-height: calc(100vh - 80px); overflow: auto; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
+.ui-inspector { position: fixed; top: 48px; right: 0; bottom: 0; width: 400px; max-width: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--surface); border-left: 1px solid var(--line); padding: var(--space-4); z-index: 10; }
 .ui-inspector[hidden] { display: none; }
 @media (min-width: 1200px) {
+  body.has-workspace .ui-inspector:not(.ui-inspector-overlay) { top: 48px; max-height: none; }
   .ui-inspector-dock > header > .ui-icon-button { display: none; }
 }
-.ui-inspector > header { display: flex; align-items: center; gap: var(--space-2); }
+.ui-inspector > header { flex: none; display: flex; align-items: center; gap: var(--space-2); }
 .ui-inspector h2 { flex: 1; font-size: var(--fs-section); margin: 0; }
-.ui-inspector-body { margin-top: var(--space-4); }
+.ui-inspector-body { margin-top: var(--space-4); flex: 1; min-height: 0; overflow: auto; }
+.ui-inspector-overlay { inset: 0 0 0 auto; z-index: 50; box-shadow: var(--shadow-overlay); }
 .ui-inspector-back { display: none; }
 .ui-inspector-scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 49; }
 .ui-data-table { max-width: 100%; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
