@@ -128,6 +128,15 @@ proven. The manual delivery path retains its existing behavior. Receipt recovery
 has a separate bounded read budget after stop/deadline and cannot send a new
 merge or deployment.
 
+Source validation uses a fresh memo within one synchronous, immutable database
+snapshot and one fixed repair traversal guard. Its back-edge assumptions remain
+unchanged for that traversal only. Conditional answers never enter the outer
+request memo; nested guards cannot reuse or populate the parent memo. The private
+memo is discarded before leaving the guard, and writes, transaction changes, different
+principals and inherited tasks/threads retain the shared read-cache barriers.
+No memo spans an await or a new provider frame. Those frames still recheck the
+complete current original source chain, owner, scopes, policy and deadline.
+
 Only an original succeeded delivery child with its verified merge/deployment
 receipts yields the parent outcome `merged` or `deployed`. These are distinct
 from version publication and release-baseline advancement. Runtime capacity

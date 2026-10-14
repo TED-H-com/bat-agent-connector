@@ -155,8 +155,9 @@ def _full_access(ops, principal, op):
         raise _bad('NOT_FOUND', 'Repair source traversal is unavailable', 404)
     token = _READING.set(checking | {key})
     try:
-        # Nested answers assume this repair is visible; keep them out of the read memo.
-        with pm_read_cache.guarded():
+        # Memoize only within this exact back-edge assumption and read snapshot.
+        # The private memo is discarded before the guard or snapshot can change.
+        with baselines._snapshot(ops.db), pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, principal):
             _access(ops, principal, op)
             from . import pm_maintenance_repair_evidence as evidence
             evidence.require_evidence_sources(ops, principal, op)
