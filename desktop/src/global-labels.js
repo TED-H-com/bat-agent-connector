@@ -55,6 +55,8 @@ const ACTIONS = {
   'pm.dependencies.retract': 'action_pm_dependencies_retract',
   'pm.dod.revise': 'action_pm_dod_revise',
   'pm.evidence.capture': 'action_pm_evidence_capture',
+  'pm.execution.runtime.observe': 'action_pm_execution_runtime_observe',
+  'pm.session.quiescence.observe': 'action_pm_session_quiescence_observe',
   'pm.execution.verify': 'action_pm_execution_verify',
   'pm.follow_up.analyze': 'action_pm_follow_up_analyze',
   'pm.follow_up.prepare': 'action_pm_follow_up_prepare',
