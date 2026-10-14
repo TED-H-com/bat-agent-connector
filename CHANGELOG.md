@@ -135,6 +135,8 @@
   narrowing the thread; docked inspectors fill the viewport with independent scrolling.
   View headers, lists and secondary sections share one edge beside docked inspectors.
   Fixed dock reservations leave Discussions' own panel column intact, with one scroller.
+  Overview grids follow their available column width beside a reader; milestone
+  date ranges wrap only at the arrow.
   Unreadable Evidence plans keep one message and their diagnostics in the row's Details.
   Shell and lifecycle views share bilingual project phase names; Export report opens
   directly to its choices and download action. Phase empty states fit fallback fonts.

@@ -377,8 +377,11 @@ with three bullets before expansion and a labeled Sources disclosure on each car
 Report controls use the same report terminology and shared disclosure chevrons;
 the saved history arrows remain together. Attention rows keep Discuss beside the title at every width. Details lists localized source coverage, with raw JSON
 behind a separate Raw coverage disclosure.
-Full plan uses the shared inspector and restores focus on Escape. At 768px the
-charter has two columns; at 390px all regions stack in reading order.
+Full plan uses the shared inspector and restores focus on Escape. Overview grids
+respond to the content column through a named container, including beside a docked
+reader. Below 1100px of content, the main regions stack and the charter has two
+columns; below 540px all grids stack in reading order. Milestone calendar dates
+stay intact, with a date range wrapping only before its arrow when needed.
 
 Print includes the status strip and full charter; the saved-charter fallback prints
 inside its Overview region as well. Interactive controls and live attention are omitted.

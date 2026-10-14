@@ -17344,7 +17344,10 @@ function workspaceOverview(options) {
 	let mode = preference.mode === "saved" ? "saved" : "live", signature = "", loading = false, reportLoading = false;
 	const primary = discussLink({ workspaceId }, { "data-overview-discuss": "" });
 	const meta = h("span", { "data-overview-meta": "" });
-	const content = h("div"), status = h("div", { role: "status" }), savedBar = h("div", {
+	const content = h("div", {
+		class: "pm-overview-content",
+		"data-overview-content": ""
+	}), status = h("div", { role: "status" }), savedBar = h("div", {
 		class: "pm-overview-saved",
 		hidden: true
 	});
@@ -17490,7 +17493,12 @@ function workspaceOverview(options) {
 		}, row.title) : null;
 	}
 	function milestoneDate(row) {
-		return h("span", { class: "ui-meta" }, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? h("span", {}, " → ", date(row.forecast_date)) : "", row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null);
+		const changed = row.forecast_date && row.forecast_date !== row.baseline_date;
+		const late = row.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: row.delta_days })) : null;
+		return h("span", {
+			class: "ui-meta pm-overview-date-range",
+			"data-overview-date-range": ""
+		}, h("span", {}, date(row.baseline_date), !changed ? late : null), changed ? h("span", {}, " → ", date(row.forecast_date), late) : null);
 	}
 	function statusStrip(data, fixed = false) {
 		const p = data?.progress, complete = p && classes.every((key) => Number.isSafeInteger(p[key]));
