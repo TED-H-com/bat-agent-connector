@@ -15,6 +15,8 @@ UI screenshots rather than a simulated console or decorative metrics.
 - One main action per section. Secondary links remain visibly secondary. Controls
   have 44px hit targets; keyboard focus is explicit. Mobile navigation collapses.
 - Real screenshot gallery, semantic workflow list and an HTML architecture diagram.
+  Lead with live Overview → record → PM discussion → reviewed adoption in one project.
+  The eight-scene tour uses one synthetic project in both languages.
   Label synthetic demonstration data and distinguish target installation from current
   implementation. The development-preview scope is visible below the gallery and
   before installation. Keep capture hashes and reproduction detail in the linked

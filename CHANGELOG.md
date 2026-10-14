@@ -2,11 +2,11 @@
 
 ## Next release (unreleased)
 
-- Expose a structured `finding` identity on maintenance findings in `pm_register_list`,
-  `pm_register_get`, overview attention and discussion context chips. `title` stays null.
-  Missing or unproven facts are omitted and listed in `unknowns`. A withdrawn source
-  removes the row and the identity together.
-  See the [register contract](docs/design/pm-register.md).
+- Refresh the English and Traditional Chinese README, PM first-use navigation and public
+  website around the project-to-decision journey. Replace the gallery with eight bilingual
+  scenes from one synthetic project, pinned to a labelled candidate with capture hashes.
+  Record which PRs are merged, and separate branch, installation and live evidence, in the
+  [October 14 progress draft](docs/product/progress-2026-10-14.md).
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
@@ -32,6 +32,12 @@
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.
   Totals and summaries require complete relevant sources; hidden or withdrawn records
   are omitted from rows and aggregates together, while other readable records remain.
+  See the [register contract](docs/design/pm-register.md).
+
+- Expose a structured `finding` identity on maintenance findings in `pm_register_list`,
+  `pm_register_get`, overview attention and discussion context chips. `title` stays null.
+  Missing or unproven facts are omitted and listed in `unknowns`. A withdrawn source
+  removes the row and the identity together.
   See the [register contract](docs/design/pm-register.md).
 
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
@@ -890,6 +896,8 @@
   and log reference. Jev and `BAT-STATUS` remain completion claims, not test evidence.
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
+- Split CI into pytest shards and separate frontend, browser and central UI jobs.
+  Balance files by measured times, verify full coverage and preserve native checks.
 
 ## 0.2.4 (unreleased)
 

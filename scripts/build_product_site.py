@@ -54,10 +54,10 @@ parts = [
 <main id="main"><section class="hero section" id="top"><div class="hero-grid"><div>'''
 ]
 parts += [
-    bi("Keep the plan.<br>Follow the result.", "記得原計畫，<br>追到真成果。", "h1"),
+    bi("See the project.<br>Decide with the PM.", "看懂專案，<br>與 PM 完成決策。", "h1"),
     bi(
-        "Discuss the goal, review the plan and connect agent work to delivery evidence. A shared Web and desktop workspace keeps decisions, progress and maintenance in view.",
-        "討論目標、審閱計畫，把 Agent 工作接回交付證據。在共用的 Web 與桌面工作空間，掌握決策、進度與後續維護。",
+        "Understand the project, find a problem and discuss it with the PM. Review a proposed update and adopt it in the same project workspace, shared by Web and desktop.",
+        "先看懂專案狀況，找到問題，再直接與 PM 討論。從原紀錄帶入脈絡、審閱提案到明確採用，都在同一個專案裡完成；Web 與桌面版共用介面。",
         "p",
         "hero-description",
     ),
@@ -71,8 +71,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "PM v1.2 is in integration. Check the current scope and validated packages before installing.",
-        "PM v1.2 仍在整合。安裝前請查看目前範圍與已通過驗證的套件。",
+        "These redesigned views are a candidate preview of frontend #133 at 944a854f, which is in review. Backends #132 (0c354861) and #134 (f25e1556) merged into main on October 13, 2026; neither is installed or live-tested. Match a validated package to its source before installing.",
+        "這組改版介面與截圖是前端 #133 的候選 commit 944a854f，仍在審查。後端 #132（0c354861）與 #134（f25e1556）已於 2026 年 10 月 13 日合併至主線；尚未安裝或實機驗收。安裝前請核對套件來源與驗證紀錄。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -80,34 +80,30 @@ release_note = (
 parts.append('<section class="section product-tour" id="product" aria-label="Product tour / 介面導覽">')
 
 shots = [
-    (
-        "workspace",
-        "Project workspace",
-        "專案工作空間",
-        "Select work to read its conversation, reply and inspect linked results.",
-        "選取工作，一起閱讀對話、回覆並查看關聯成果。",
-    ),
-    (
-        "pm-planning",
-        "PM planning",
-        "PM 計畫",
-        "Inspect a fixed plan draft and its sources before adoption.",
-        "先檢視固定計畫草稿與來源，再決定是否採用。",
-    ),
-    (
-        "pm-kanban",
-        "PM Kanban",
-        "PM 看板",
-        "Scan work by stage; open a card for execution and evidence.",
-        "按階段掃視工作，需要時再展開執行與證據。",
-    ),
-    (
-        "dispatch",
-        "Project dispatch",
-        "專案派工",
-        "Choose the destination and fixed published revision for the agent's own work.",
-        "選擇目的地與固定已發布版本，開始 Agent 自有工作。",
-    ),
+    ("overview", "Overview", "專案總覽",
+     "Start with live progress, blockers and pending decisions; saved reports stay separate.",
+     "先看即時進度、阻礙與待決事項；已存報告保留原快照。"),
+    ("discussions", "Discussions", "討論",
+     "Discuss the blocker with its context chip and automatic title; this proposal is ready for review, not adopted.",
+     "從阻礙直接開啟討論，帶入來源標籤與標題；這份提案可供審閱，尚未採用。"),
+    ("requirements", "Requirements", "需求",
+     "Open the RTM inspector to trace a requirement through work, acceptance and delivery evidence.",
+     "展開需求追溯表與詳情，對照工作、驗收及交付證據。"),
+    ("issues", "Issues &amp; changes", "問題與變更",
+     "Read the register of risks, issues, actions, changes and decisions; open records remain open.",
+     "在登記表追蹤風險、問題、行動、變更與決策；未結案項目保持原狀態。"),
+    ("schedule", "Schedule", "時程",
+     "Compare recorded baseline, forecast and actual dates; undated attempts stay unscheduled.",
+     "對照已記錄的基準、預測與實際日期；沒有起訖證據的執行仍列為未排期。"),
+    ("dependencies", "Dependencies", "技術相依",
+     "Read a pinned inventory graph with evidence styles and explicit partial coverage.",
+     "查看固定版本的相依圖，分清證據種類與部分涵蓋。"),
+    ("board", "Board", "工作看板",
+     "Follow work in five lanes; content approval, requirement acceptance and deployment are separate.",
+     "用五個欄位追蹤工作；內容核准、需求驗收與部署各有自己的證據。"),
+    ("session", "Session", "工作階段",
+     "Read the manual BAT session on demo-host; Connector cannot send or interrupt it.",
+     "閱讀 demo-host 上的人工 BAT 工作階段；Connector 對它保持唯讀。"),
 ]
 parts.append(
     '<div class="tour-controls" role="group" aria-label="Screenshot view / 介面展示">'
@@ -115,7 +111,7 @@ parts.append(
 )
 for key, en, zh, _, _ in shots:
     parts.append(
-        f'<button type="button" data-view="{key}" aria-pressed="{str(key == "workspace").lower()}" aria-controls="view-{key}">'
+        f'<button type="button" data-view="{key}" aria-pressed="{str(key == "overview").lower()}" aria-controls="view-{key}">'
         + bi(en, zh)
         + "</button>"
     )
@@ -130,8 +126,8 @@ for key, _, _, en, zh in shots:
         "<figcaption>"
         + bi(en, zh)
         + bi(
-            "Actual UI · demonstration data · open image for full size",
-            "實際介面 · 展示資料 · 點圖看原尺寸",
+            "Actual UI · synthetic demo data · open image for full size",
+            "實際介面 · 合成展示資料 · 點圖看原尺寸",
             "span",
             "caption-meta",
         )
@@ -170,51 +166,27 @@ parts.append(
     + heading(
         "One small project first",
         "先從小專案開始",
-        "A workflow you can review at every step.",
-        "每一步，都知道該看什麼。",
-        "Try login and password reset as a first scope. Each decision and result retains its original project context.",
-        "以登入與忘記密碼作為第一段範圍，讓每次決策與成果都保留原專案脈絡。",
+        "One project, from problem to decision.",
+        "同一個專案，從問題走到決策。",
+        "Try member sign-in and password reset. Keep the project selected as you move from its status to a sourced discussion and a reviewable update.",
+        "先試會員登入與忘記密碼的小專案。從總覽找到問題、帶入討論，到審閱更新，都保留同一份專案脈絡。",
     )
     + '<ol class="workflow">'
 )
 for i, (en, zh, d, dz) in enumerate(
     [
-        (
-            "Discuss the idea",
-            "討論構想",
-            "Save the goal, constraints, sources and open questions in an Idea thread.",
-            "在 Idea 討論保存目標、限制、來源與未決問題。",
-        ),
-        (
-            "Adopt a plan",
-            "採用計畫",
-            "Prepare the PM's own worktree. Review a proposal and explicitly adopt its fixed requirements.",
-            "準備 PM 自有 worktree，審閱提案後明確採用固定需求。",
-        ),
-        (
-            "Dispatch bounded work",
-            "派出有界工作",
-            "Select engineering packages and destinations. Agents work in their own managed resources.",
-            "選工程包與目的地，讓 Agent 在自己的 managed 資源工作。",
-        ),
-        (
-            "Evaluate the result",
-            "評估成果",
-            "Use original verification evidence and a responsible quality review against acceptance criteria and DoD.",
-            "使用原驗證證據，由責任審閱者對照接受條件與 DoD 評估品質。",
-        ),
-        (
-            "Confirm delivery",
-            "確認交付",
-            "Review the integration and PR. Keep merge, deployment and release-baseline evidence distinct.",
-            "審閱整合及 PR，分開記錄 merge、部署與發布基準證據。",
-        ),
-        (
-            "Maintain and review",
-            "維護與回顧",
-            "Adopt repair bounds and a schedule. Review findings and results, then bring the next decision into Idea.",
-            "採用修復界線與排程，檢視發現及結果，再將下一個決策帶回 Idea。",
-        ),
+        ("Understand the state", "看懂狀況",
+         "Open Overview for the goal, accepted requirements, blockers and pending decisions. Read saved reports separately.",
+         "在專案總覽看目標、已驗收需求、阻礙與待決事項；需要回顧時再切換已存報告。"),
+        ("Find the problem", "找到問題",
+         "Open a record in Requirements, Issues & changes or Schedule and inspect its original evidence.",
+         "從需求、問題與變更或時程開啟紀錄，查看原始證據與下一步。"),
+        ("Discuss with PM", "與 PM 討論",
+         "Use the record's Discuss action. Its context and title follow you into Discussions; save a note and ask the PM.",
+         "按紀錄上的討論入口，來源與標題會一起帶入；寫下想法，再請 PM 提案。"),
+        ("Review and adopt", "審閱並採用",
+         "Check the proposed wording, retained requirements and open questions. An authorized owner explicitly adopts the reviewed update.",
+         "核對建議文字、保留需求與未決問題，再由有權限的負責人明確採用。"),
     ],
     1,
 ):
@@ -224,8 +196,8 @@ for i, (en, zh, d, dz) in enumerate(
 parts.append(
     "</ol>"
     + bi(
-        "Passing tests does not automatically accept a requirement. A plan does not authorize execution, and a finding does not authorize repair. M4 is validating the joined lifecycle; follow the progress report for its current limits.",
-        "測試通過不會自動接受需求，計畫不直接授權執行，finding 也不直接授權修復。M4 正在驗證整條生命週期，現況與限制請看進度報告。",
+        "Adoption needs the PM-owned Git worktree and owner authority. It does not start work or accept a requirement. Passing tests, merging and deployment retain their own evidence.",
+        "採用需要 PM 自有 Git 工作區及工作空間擁有者權限。採用不會直接開工或完成需求驗收；測試、合併與部署各自保留證據。",
         "p",
         "section-note",
     )
@@ -252,48 +224,24 @@ parts.append(
     + '<div class="feature-list">'
 )
 for en, zh, d, dz, path in [
-    (
-        "Plans and sources",
-        "計畫與來源",
-        "Versioned documents distinguish a suggestion, an adopted scope and later changes.",
-        "版本化文件分清建議、已採用範圍與後續變更。",
-        "pm-plans.md",
-    ),
-    (
-        "Roadmap, Sprint and Kanban",
-        "Roadmap、Sprint 與 Kanban",
-        "Organize goals, commitments and work. Selected assessments preserve the result they evaluated.",
-        "整理目標、承諾與工作；選定的評估保留它當時審閱的成果。",
-        "pm-sprints.md",
-    ),
-    (
-        "Follow-up and decisions",
-        "Follow-up 與決策",
-        "Sourced analysis prepares candidate changes and focused questions for review.",
-        "有來源的分析整理候選變更與關鍵問題，供你審閱。",
-        "pm-follow-up.md",
-    ),
-    (
-        "Evidence and delivery",
-        "證據與交付",
-        "Connect fixed commits, original checks, quality reviews, PRs and deployment receipts.",
-        "串起固定 commit、原始 checks、品質審閱、PR 與部署回執。",
-        "delivery.md",
-    ),
-    (
-        "Maintenance Review",
-        "維護 Review",
-        "Adopted policies bound observations and repairs; reports retain findings and original results.",
-        "已採用政策限制觀察與修復，報告保留發現與原始結果。",
-        "pm-maintenance-review.md",
-    ),
-    (
-        "Project Brief exports",
-        "Project Brief 輸出",
-        "Read or export one fixed Brief as Markdown, HTML or SVG. Further document views and slides remain planned.",
-        "讀取或輸出同一份固定 Brief 的 Markdown、HTML 或 SVG；其他文件視圖與簡報仍待完成。",
-        "pm-brief-exports.md",
-    ),
+    ("Overview", "專案總覽", "Live goal, progress, blockers and decisions, with fixed reports on demand.",
+     "看即時目標、進度、阻礙與待決事項，需要時再讀固定報告。", "pm-overview-discussion-context.md"),
+    ("Discussions", "討論", "Source-bound conversations, reviewable proposals and explicit adoption.",
+     "帶著原來源討論，審閱提案後明確採用。", "pm-overview-discussion-context.md"),
+    ("Requirements", "需求", "Trace requirements through bound work, acceptance criteria, PRs and deployment.",
+     "從需求追到關聯工作、驗收條件、PR 與部署。", "pm-project-control-center.md"),
+    ("Issues &amp; changes", "問題與變更", "A filterable register with original records and processing timelines.",
+     "用篩選登記表追蹤原紀錄與處理時間線。", "pm-register.md"),
+    ("Schedule", "時程", "Compare recorded baseline, forecast and actual dates without inventing missing dates.",
+     "對照基準、預測與實際日期，缺少的日期保持未知。", "pm-schedule.md"),
+    ("Dependencies", "技術相依", "Pinned inventories, evidence styles and bounded impact reads in a matrix or graph.",
+     "用矩陣或相依圖查看固定清冊、證據與有界影響。", "pm-dependencies.md"),
+    ("Agents", "Agent 資源", "Sourced usage, daily trends and reported quota windows; unavailable data stays unknown.",
+     "看有來源的用量、每日趨勢與配額窗，無法取得的資料保持未知。", "agent-resource-observation.md"),
+    ("Board", "工作看板", "Follow work by stage and open its shared evidence inspector.",
+     "按階段追蹤工作，再開啟共用詳情查看證據。", "pm-kanban.md"),
+    ("Session", "工作階段", "Read conversations and results; authorized managed controls coexist with read-only manual sessions.",
+     "一起讀對話與成果；自有工作依權限操作，人工工作階段保持唯讀。", "session-reading.md"),
 ]:
     parts.append(
         "<article>"
@@ -630,20 +578,20 @@ for label, lz, en, zh in [
     (
         "Merged main",
         "已合併主線",
-        "Desktop and central foundation; PM plans, quality/dependency evidence, bounded dispatch, policy-bounded repairs, BAT proposals/Follow-up and AHP read-only observation.",
-        "桌面與中央底座、PM 計畫、品質／依賴證據、有界派工、政策內修復、BAT 提案／Follow-up 及 AHP 唯讀觀察。",
+        "Desktop and central foundation; PM plans, quality/dependency evidence, bounded dispatch, policy-bounded repairs, BAT proposals/Follow-up and AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets; #134 adds adopted goals, recent decisions and the guided close of a resolved issue.",
+        "桌面與中央底座、PM 計畫、品質／依賴證據、有界派工、政策內修復、BAT 提案／Follow-up 及 AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶；#134 補上採用後目標、近期決策及問題解決回報引導。",
     ),
     (
         "Candidate work",
         "候選工作",
-        "M4 joins the lifecycle and extends runtime completion, Roadmap quality and Brief deviations. M5 adds workspace analysis choice and serial manual-activity observation. Their current checks belong in the dated progress report.",
-        "M4 串接生命週期，補原執行完成、Roadmap 品質與 Brief 偏差；M5 補 workspace 分析選擇及人工循序活動觀察。最新檢查記錄於附日期的進度報告。",
+        "The redesign connects live Overview, source-bound Discussions, RTM inspectors, the register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough, is in review and not merged yet. M4/M5 retain their separate historical status.",
+        "改版串起即時總覽、來源討論、需求詳情、登記表、時程、技術相依、Agent 資源、看板與工作階段。前端 #133（含操作旅程腳本與截圖）審查中，尚未合併；M4／M5 的歷史狀態另列。",
     ),
     (
         "Still ahead",
         "仍待完成",
-        "General native coding, AHP create-own/write, remaining document views/slides, broader CLI support and usage/efficiency reporting. The full adopted PM v1.2 plan remains the scope.",
-        "一般原生 coding、AHP 自建／寫入、其餘文件視圖／簡報、更多 CLI 及用量／效率報告；範圍仍依完整 PM v1.2 計畫。",
+        "General native coding, AHP create-own/write, remaining document views/slides, broader CLI support, remote usage collection and delivery-efficiency attribution. The full adopted PM v1.2 plan remains the scope.",
+        "一般原生 coding、AHP 自建／寫入、其餘文件視圖／簡報、更多 CLI、遠端用量收集及交付效率歸因；範圍仍依完整 PM v1.2 計畫。",
     ),
     (
         "Evidence limits",
@@ -655,7 +603,7 @@ for label, lz, en, zh in [
     parts.append("<div>" + bi(label, lz, "dt") + bi(en, zh, "dd") + "</div>")
 parts.append(
     '</dl><div class="evidence-links">'
-    + doc("docs/product/progress-2026-10-12.md", "Progress and evidence ↗", "進度與證據 ↗", "")
+    + doc("docs/product/progress-2026-10-14.md", "Progress and evidence ↗", "進度與證據 ↗", "")
     + doc("docs/product/pm-v1.2-plan.md", "Adopted plan ↗", "已採用計畫 ↗", "")
     + link(repo + "/actions?query=branch%3Amain", "Current main checks ↗", "目前 main 檢查 ↗")
     + "</div></section>"
@@ -689,7 +637,7 @@ for i, (en, zh, d, dz, path, zpath) in enumerate(
             "進度報告",
             "Merged, candidate, tested and remaining scope.",
             "已合併、候選、已驗證及剩餘範圍。",
-            "docs/product/progress-2026-10-12.md",
+            "docs/product/progress-2026-10-14.md",
             None,
         ),
         (
@@ -749,8 +697,8 @@ for q, qz, a, az in [
     (
         "Does it scan every CLI's tokens?",
         "已經會掃每個 CLI 的 token 嗎？",
-        "No collector is implemented yet. The planned approach uses per-CLI local aggregation and coverage reporting, then relates usage to accepted work. Token traffic cannot be treated as subscription quota or a bill.",
-        "目前尚未實作 collector。規劃採各 CLI 的本機彙總與資料涵蓋說明，再把用量接回合格工作；token 流量不能直接當成訂閱配額或帳單。",
+        "Local Codex and Claude collectors are implemented. Agents shows sourced observations, daily buckets where available and reported quota windows. Remote collection and delivery-efficiency attribution remain planned; token traffic is not a subscription quota or bill.",
+        "已有 Codex 與 Claude 本機 collector。Agent 資源顯示有來源的觀測、可用的每日桶及回報配額窗；遠端收集與交付效率歸因仍待做，token 流量也不能直接當成訂閱配額或帳單。",
     ),
     (
         "Will optimization change my model automatically?",
@@ -787,10 +735,10 @@ parts.append(
     + "</div></div></footer>"
 )
 
-title = "Better Agent Dashboard · Plans, agent work and delivery evidence"
-zt = "Better Agent Dashboard · 計畫、Agent 工作與交付證據"
-desc = "Discuss and adopt plans, follow agent work, evaluate results and review maintenance in a shared Web and Tauri workspace. Powered by Python Connector, BAT and Windows Fleet."
-zd = "在共用 Web 與 Tauri 工作空間討論及採用計畫、跟進 Agent 工作、評估成果與回顧維護；底層由 Python Connector、BAT 與 Windows Fleet 分工。"
+title = "Better Agent Dashboard · Project state, PM discussions and decisions"
+zt = "Better Agent Dashboard · 專案狀況、PM 討論與決策"
+desc = "Understand project state, find a problem, discuss it with the PM and adopt a reviewed update in one shared Web and Tauri workspace. Python Connector remains the authority."
+zd = "在同一個 Web／Tauri 專案脈絡裡看懂狀況、找到問題、與 PM 討論並採用審閱後的更新；Python Connector 保持唯一中央權威。"
 head = f'''<!doctype html>
 <!-- Generated by scripts/build_product_site.py. Edit the source; see site/README.md. -->
 <html lang="en" data-lang="en" data-title-en="{title}" data-title-zh="{zt}" data-desc-en="{desc}" data-desc-zh="{zd}">
@@ -806,7 +754,7 @@ head = f'''<!doctype html>
 <link rel="alternate" hreflang="x-default" href="https://teddashh.github.io/bat-agent-connector/">
 <meta property="og:type" content="website"><meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}"><meta property="og:url" content="https://teddashh.github.io/bat-agent-connector/">
-<meta property="og:image" content="https://teddashh.github.io/bat-agent-connector/images/workspace-en.png">
+<meta property="og:image" content="https://teddashh.github.io/bat-agent-connector/images/overview-en.png">
 <meta property="og:image:alt" content="Actual shared Dashboard with synthetic demonstration data">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css">

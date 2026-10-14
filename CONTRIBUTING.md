@@ -40,6 +40,45 @@ paths, and prints locations without matched values. It cannot recognize every pr
 hostname or deployment narrative: review those manually, including images and GitHub
 text. Changing current files does not remove information from Git history or old copies.
 
+## Continuous integration
+
+| Workflow | Job | Checks |
+| --- | --- | --- |
+| `ci.yml` | `lint`, `secrets-scan` | Static checks once on Python 3.13; secret scan |
+| `ci.yml` | `pytest <version> (i/5)` | Five separate runners for each Python 3.10–3.13 |
+| `ci.yml` | `pytest-complete` | Combined pytest result and exact collection coverage |
+| `desktop.yml` | `frontend` | Regenerate/check browser assets and run Node tests |
+| `desktop.yml` | `browser-ui (i/3)` | Three Playwright shards on committed browser assets |
+| `desktop.yml` | `central-ui` | Nineteen named central-service UI script steps |
+| `desktop.yml` | `build`, `windows-endpoint-oracle` | Existing native OS matrix, packaged runtime/upgrades, native checks, packaging and installed smoke tests; Windows endpoint fixtures |
+
+Read `pytest-complete` for the combined pytest check: every shard must succeed and
+the manifests must prove complete coverage without duplicates.
+
+After `uv sync --locked --extra dev`, run one shard from the repository root.
+Use a disk-backed `TMPDIR`:
+
+```sh
+pytest-disktmp uv run pytest -q -p tests.ci_shard_plugin \
+  --ci-shard-index=1 --ci-shard-count=5 \
+  --ci-shard-manifest="$TMPDIR/shard-1/manifest.json"
+```
+
+To refresh the measured per-file durations, download all
+`pytest-*` artifacts from one successful GitHub run, preserving subdirectories:
+
+```sh
+uv run python -m scripts.ci_complete "$TMPDIR/pytest-artifacts" \
+  --python 3.10 3.11 3.12 3.13 --shards 5
+uv run python -m scripts.ci_durations "$TMPDIR/pytest-artifacts"
+```
+
+Commit the refreshed `tests/ci_durations.json`. Required local full checks are unchanged:
+ruff, the full Python suite, and Python 3.10 for backend changes. Use `pytest-disktmp`
+(the development host wrapper) or a unique disk-backed `--basetemp`, and remove the
+temporary directory after the run. Never use `/dev/shm` or another tmpfs. Run full
+suites one at a time.
+
 ## Working after the October 10, 2026 history rewrite
 
 Start new contributions from the cleaned public `main`, preferably in a fresh clone.
