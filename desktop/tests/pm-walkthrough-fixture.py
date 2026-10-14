@@ -22,6 +22,7 @@ from bat_agent_connector import (
     api_auth,
     platform_files,
     pm_discussions,
+    pm_governance,
     pm_native_runtime,
     pm_overview,
     pm_plans,
@@ -217,6 +218,8 @@ async def serve(commands):
             token = api_auth.issue(daemon.journal.db, "walkthrough-owner", ["observe", "manage", "start"])
             owner = api_auth.authenticate(daemon.journal.db, token, daemon._admin_token)
             seeded = await seed(daemon, owner, COPY[os.environ.get("BATC_WALKTHROUGH_LOCALE", "en")])
+            original_issue = pm_governance.get_record(daemon.ops, owner, seeded["workspace_id"], seeded["issue_id"])
+            snapshot_count = daemon.ops.db.execute("SELECT count(*) FROM pm_document_snapshots").fetchone()[0]
             settings = {}
             instances = []
 
@@ -258,7 +261,7 @@ async def serve(commands):
                     if row[0] not in seed_ids]
                 browser_ops = [op for op in created if op["idempotency_key"] in request_keys]
                 assert sorted(op["action"] for op in browser_ops) == sorted([
-                    "pm.thread.create", "pm.message.append", "pm.conversation.propose", "pm.conversation.adopt"])
+                    "pm.thread.create", "pm.message.append", "pm.conversation.propose", "pm.conversation.adopt", "pm.governance.revise"])
                 assert all(op["actor"] == owner.actor and op["status"] == "succeeded" for op in browser_ops)
                 assert {row["key"] for row in requests} == {op["idempotency_key"] for op in browser_ops}
                 for row in requests:
@@ -270,12 +273,31 @@ async def serve(commands):
                     adoption["result"]["child_operation_ids"])
                 assert len([r for r in requests if r["action"] == adoption["action"]]) == 2
                 assert ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0] == 2  # Seed + one review.
+                resolution = next(op for op in browser_ops if op["action"] == "pm.governance.revise")
+                assert len([r for r in requests if r["action"] == resolution["action"]]) == 2
+                resolved = pm_governance.get_record(ops, owner, seeded["workspace_id"], seeded["issue_id"])
+                assert resolved["record"]["version"] == original_issue["record"]["version"] + 1
+                assert resolved["record"]["context"] == original_issue["record"]["context"]
+                original_doc, resolved_doc = original_issue["revision"]["document"], resolved["revision"]["document"]
+                assert resolved_doc["status"] == "reported_resolved" and resolved_doc["verification_status"] == "unassessed"
+                assert resolved_doc["rationale"] == resolution["params"]["rationale"]
+                assert {key: value for key, value in original_doc.items() if key not in {"rationale", "status"}} == {
+                    key: value for key, value in resolved_doc.items() if key not in {"rationale", "status"}}
+                assert resolution["preconditions"] == {"expected_version": original_issue["record"]["version"]}
+                assert resolution["params"]["source_refs"] == [{"kind": s["kind"], "id": s["id"]} for s in original_doc["sources"]]
+                assert "snapshot_id" not in resolution["params"]
+                assert ops.db.execute("SELECT count(*) FROM pm_document_snapshots").fetchone()[0] == snapshot_count
                 head = pm_plans.head(ops.db, seeded["workspace_id"])
                 assert head["accepted_revision_id"] == adoption["result"]["revision_id"] != seeded["revision_id"]
                 plan = pm_plans.accepted_plan(ops, owner, seeded["workspace_id"])["plan"]
                 assert [r["id"] for r in plan["document"]["requirements"]] == ["member.login", "member.recovery"]
                 assert seeded["copy"]["exclusion"] not in plan["document"]["markdown"]
                 assert not adoption["result"]["execution_authorized"]
+                overview = pm_overview.read(ops, owner, seeded["workspace_id"])
+                assert overview["plan"]["goal"] == seeded["copy"]["goal"]
+                assert overview["attention_counts"]["blocker"] == overview["progress"]["blocked"] == 0
+                assert any(row["ref"] == {"kind": "plan_revision", "id": head["accepted_revision_id"]}
+                    for row in overview["recent_decisions"])
                 path = pm_runs.workspace_worktree(ops.db, seeded["workspace_id"])["worktree_path"]
                 assert git(path, "rev-parse", "HEAD") == adoption["result"]["commit_sha"]
                 assert snapshot(human) == before and git(remote, "for-each-ref") == remote_before
@@ -283,7 +305,7 @@ async def serve(commands):
                 assert ops.db.execute("SELECT count(*) FROM tasks").fetchone()[0] == 0
                 assert len(instances) == 1 and instances[0].sends == 1 and instances[0].closed
                 print(json.dumps({"verified": True, "browser_operations": len(browser_ops),
-                    "adoptions": 1, "head": head, "tasks": 0, "bat_writes": 0}), flush=True)
+                    "adoptions": 1, "resolutions": 1, "head": head, "tasks": 0, "bat_writes": 0}), flush=True)
         finally:
             if worker is not None:
                 worker.cancel()

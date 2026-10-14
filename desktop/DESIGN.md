@@ -169,6 +169,15 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 Secondary tools use collapsed disclosures or the view's tool drawer. They keep their
 original forms and refresh/withdrawal behavior. Do not rebuild contents to move sections.
 
+Durable PM forms register only while connected. A hidden autonomous child tracks
+connection without changing the ordinary form's layout, selectors or hidden state.
+Detachment releases the registry entry, receipt subscription and polling timer;
+reattachment immediately derives the current workspace, lifecycle, scope and action
+gates, including forms rebuilt when a stale hidden view is reopened. Discarded forms
+receive no further registry updates or state callbacks. A gate that
+closes during submission or receipt checking shows an inline unavailable status;
+the draft, original request and recovery key remain intact.
+
 Routes are `#/pm/<workspace>/<view>` and
 `#/pm/<workspace>/discussions/<thread>`. A workspace-only route restores its last
 view (Overview where available). Old direct thread routes are replaced in history.
@@ -246,14 +255,38 @@ held read cannot block a newer withdrawal.
 Overview defaults to the central `pm_overview` live projection. The shared header
 shows the plan title, adoption date, live/report mode and visible lifecycle stage;
 the plan journal sequence is never displayed as a version. Four equal status
-columns answer goal, accepted requirements, blockers and decisions. Null remains a
+columns answer goal, accepted requirements, blockers and open decisions. The live
+Goal card shows only the goal or its existing unknown/unconfirmed state; the header
+supplies plan title and adoption date. Saved reports retain their fixed baseline
+provenance. Not-started requirements leave empty progress track in both themes;
+accepted, review, in-progress and blocked shares keep their true proportions. Null remains a
 dash, incomplete classification keeps only its known denominator with Partial, and
 complete coverage describes the scan rather than project completion. Unknown
 reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
-Selecting a governance attention item opens its exact Issues & changes inspector,
+The Open decisions card (待決事項) retains the central pending count and adds Recently decided:
+up to five visible completed decisions, with their title, relative time and actor.
+Each row opens the exact Issues & changes register inspector. Missing history is
+Unknown; incomplete or capped history is Partial and describes only loaded rows.
+It never substitutes the history total for the pending count. Saved reports do
+not borrow live decision history.
+
+Completed decisions use past-event ages: just now / 剛剛 below one minute, then
+5m ago / 5 分鐘前, 3h ago / 3 小時前, or 2d ago / 2 天前. Attention retains compact
+waiting ages, with <1m / 不到 1 分鐘 below a minute. Live projection refreshes
+update both kinds of cached ages without replacing their rows.
+
+An adopted discussion with an open sourced issue offers one secondary Resolve
+issue action to its assigned writer or explicit workspace owner, with the action's
+observe/manage scopes. The durable form prefills an editable rationale naming the
+fixed adopted plan title and revision number. It preserves the original finding,
+affected IDs, sources and version precondition; it creates no snapshot. Original-key
+recovery settles the receipt before rereading the finding and Overview. Reported
+resolved remains Not assessed; adoption alone never resolves an issue.
+
+Selecting a governance attention item or completed plan decision opens its exact Issues & changes inspector,
 where Discuss retains the record identity and title. Without the register capability,
 the existing governance tool remains the destination. The destination list settles
 before selection; withdrawn or late record reads cannot reopen an inspector.

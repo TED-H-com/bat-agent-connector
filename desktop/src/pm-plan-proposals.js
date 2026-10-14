@@ -4,6 +4,7 @@ import {iconButton, statusPill} from './ui/components.js';
 import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {structuredAnalysis} from './pm-structured-analysis.js';
+import {issueResolution} from './pm-issue-resolution.js';
 // Proposal freshness has its own safe fallback; generic evidence stays Not available.
 export const proposalReasonLabel = (t, reason) => Object.hasOwn(reasonLabels, reason) ? reasonLabel(t, reason) : t('pd_stale');
 const PROPOSE='pm.conversation.propose',ADOPT='pm.conversation.adopt';
@@ -61,6 +62,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     permitted:()=>active?.proposal_id!==adoptedId&&deciding()&&fresh()&&active?.validation.status==='format_valid'&&validReview(original()?.review)&&!prepare.locked(),
     recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh();}},
     onStateChange:()=>{if(ready)updateControls();},extra:h('div',{},review,content,labelled('pcp_rationale',rationale),note('pcp_review_help'))});
+  const resolution = conversation ? issueResolution({h,t,api,alive,caps,workspaceId,thread,permitted,form,input,labelled,errorBox,refreshParent}) : null;
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
   const reload=iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()});
   const prepareBox=h('details',{open:true,'data-proposal-prepare':''},h('summary',{},t('pcp_prepare')),prepare.box);
@@ -140,7 +142,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     if(conversation&&adopted()){
       const confirmation=h('div',{'data-proposal-adopted':''},statusPill('adopted'));
       if(typeof p.adopted_revision_id==='string'&&/^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id))confirmation.append(' · ',h('a',{'data-proposal-adopted-revision':'',href:`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(threadId)}?revision=${encodeURIComponent(p.adopted_revision_id)}`,onclick:event=>{event.preventDefault();onRevision(p.adopted_revision_id);}},t('pd_accepted_revision')));
-      detail.append(h('p',{},p.document?.summary||''),confirmation);
+      detail.append(h('p',{},p.document?.summary||''),confirmation, resolution.box);
       if(adopt.locked()){
         // Central adoption does not erase an unresolved original operation.
         // Keep only its existing recovery controls in Details, not a new review.
@@ -230,8 +232,9 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     }
     adopt.update();
   }
-  async function choose(id){const own=++ticket;active=null;rendered='';detail.replaceChildren();content.replaceChildren();candidateFields=[];requirementFields=[];adopt.update();if(!id)return;
-    try{const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();}
+  async function choose(id){const own=++ticket;active=null;rendered='';detail.replaceChildren();content.replaceChildren();candidateFields=[];requirementFields=[];resolution?.withdraw();adopt.update();if(!id)return;
+    try{const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
+      await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
     catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));}}
   }
   function page(value,append=false){if(value?.workspace_id!==workspaceId||!Array.isArray(value.proposals)||value.proposals.some(row=>row.thread_id!==threadId||typeof row.proposal_id!=='string'))throw fail();
@@ -245,12 +248,13 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       visible=true;box.hidden=false;page(list);
       const id=preferred||preferredId||original()?.proposal_id||active?.proposal_id||picker.value||(conversation?rows.at(-1)?.proposal_id:null);if(id&&!rows.some(row=>row.proposal_id===id))picker.append(h('option',{value:id},t('pd_proposed')));picker.value=id||'';preferredId=null;
       // Re-read original sources even if the document digest is unchanged.
-      if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();}
+      if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
+        await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
     }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));}}
     finally{if(own===ticket||!visible){loading=false;prepare.update();adopt.update();updateControls();}}
   }
   async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));}}finally{loading=false;updateControls();}}
-  function withdraw(){ticket++;visible=false;active=head=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;prepare?.update();adopt?.update();}
+  function withdraw(){ticket++;visible=false;active=head=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;resolution?.withdraw();prepare?.update();adopt?.update();}
   function composer(textarea){
     ask=h('button',{type:'button',class:'secondary','data-discussion-ask':'',onclick:()=>{
       if(adopt.replaceable())adopt.edit();
@@ -278,5 +282,5 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       }
     }
     if(value.head)head=value.head;if(value.page){visible=true;page(value.page);}prepare.update();adopt.update();
-  },dispose(){clearInterval(clock);withdraw();prepare.dispose();adopt.dispose();}};
+  },dispose(){clearInterval(clock);withdraw();resolution?.dispose();prepare.dispose();adopt.dispose();}};
 }

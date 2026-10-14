@@ -2,47 +2,9 @@
 
 ## Next release (unreleased)
 
-- Keep Requirements acceptance labels within their columns with the CI font, and verify background preservation after the initial detail read settles.
-
-- Preserve shared search and chip sizes against legacy view styles, with invisible mobile chip touch targets.
-
-- Keep the workspace switcher's disclosure chevron after its label on desktop and mobile.
-
-- Use the same bilingual action and operation-status labels in lifecycle summaries and project delivery work.
-
-- Preserve Agents’ paused source snapshot during coalesced event refreshes.
-
-- Preserve parent authorization withdrawal and draft recovery while coalescing visible PM sources; hidden Requirements and Board reopen behind a skeleton until their own reads settle.
-
-- Coalesce central reads for visible views and open tools; defer hidden sections without flashing withdrawn data, and stop sidebar catalog refreshes on ordinary work events.
-- Keep legacy Board chips within one line and translate action labels in work and capture links.
-
-- Resolve discussion source names centrally in every context kind, retain identity-only request params, and use 決策 consistently for decision records.
-- Keep headers and Requirements titles readable in narrow columns; retain inspector search focus and row expansion keys.
-- Age Session send receipts from central completion times and preserve the shared inspector width and heading hierarchy.
-
-- Preserve the full-width session caption above its action row on narrow screens.
-
-- Normalize empty/loading states and refresh icons, localize operation step status, distinguish complete schedule, session and navigation counts, and polish zoom, missing record titles and token totals.
-
-- Coalesce navigation reads for mixed event bursts and verify bounded requests across every authenticated view.
-
-- Fit shared search and filters to their columns, with measured select fallback for segmented controls.
-- Hide secondary table columns beside inspectors, keep identifiers intact, use mobile operation list rows, and extend the selected navigation rail through long pages.
-
-- Align Discuss actions, link focus states and header metadata across project views.
-
-- Keep context chips on one line with complete labels and larger invisible touch targets.
-
-- Unify retained and new disclosure labels and chevrons.
-
-- Share compact, bilingual timestamps across the Web/Tauri views, with timezone
-  tooltips, calendar-safe dates and one visibility-aware minute ticker that retains
-  selected text. Missing message timestamps stay empty after refreshes.
-
 - Add a repeatable real-central PM decision walkthrough in English and zh-TW,
-  with scripted native analysis, temporary Git, original-key adoption recovery
-  and step screenshots. It currently exposes two Overview contract gaps;
+  with scripted native analysis, temporary Git, explicit issue resolution,
+  original-key adoption and resolution recovery, and step screenshots;
   see [walkthrough status](docs/design/pm-decision-walkthrough.md).
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
@@ -52,7 +14,9 @@
   See the [dependency contract](docs/design/pm-dependencies.md).
 
 - Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
-  decisions, deviations and recent deliveries, separate from fixed saved reports.
+  decisions, deviations and recent deliveries, retaining confirmed goals and recent
+  decided history and unresolved requirement blockers across plan revisions,
+  separate from fixed saved reports.
   Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
   See the [overview contract](docs/design/pm-overview-discussion-context.md).
 
@@ -98,16 +62,40 @@
   details and Retry, while unsupported or empty Work sources stay quiet.
 
 - Add shared UX v2 light/dark tokens, accessible UI primitives and local Lucide icons.
+  Unify headers, disclosures, Discuss links, search fields, filter chips, empty/loading
+  states and Refresh icons. Keep full accessible titles in narrow columns, identifiers
+  intact, compact chips with invisible mobile touch targets, and workspace chevrons after
+  their labels. Use bilingual action and operation-status labels across lifecycle,
+  work, capture and delivery flows; complete counts omit loaded markers, and missing
+  facts retain their unknown state.
+  Share compact bilingual timestamps, timezone tooltips, calendar-safe dates and one
+  visibility-aware minute ticker that retains selected text. Missing message times stay
+  empty after refreshes. Search and filters fit their columns, with a measured select
+  fallback for segmented controls. Narrow tables hide secondary columns beside
+  inspectors, Operations uses mobile rows, and the selected rail extends through long pages.
+- Coalesce event reads for the visible view and open tools across authenticated routes,
+  preserving parent authorization, drafts and original-key recovery. Mark hidden sources
+  stale and mask their facts until fresh activation reads settle. Ordinary work events
+  do not reload the sidebar catalog.
 - Unify the Web/Tauri workspace shell with compact navigation, explicit bound work,
   a mobile drawer, canonical PM view routes and namespace-scoped view preferences.
 - Organize existing PM tools into Overview, Discussions, Requirements, Schedule,
   Dependencies, Issues & changes, Agents and Board. Keep secondary tools in disclosures;
   expose reports and lifecycle through header menus without changing durable actions.
+- Track durable PM forms by connection, releasing discarded forms and receipt subscribers
+  and restoring current gates immediately after refresh or inspector reattachment. Explain a gate that
+  closes during submission or receipt checking while preserving drafts and original keys.
 - Show live project status and what needs attention first in Overview, with compact charter cards
-  and saved reports on demand. Unknown values stay explicit, saved reports never mix in live data,
-  and a burst of live events coalesces into one read per source. Open Overview issue and risk
+  and saved reports on demand. Unknown values stay explicit and saved reports never mix in
+  live data. Open Overview issue and risk
   attention items in the Issues & changes inspector, retaining the exact source and a meaningful
-  title for Discuss with PM.
+  title for Discuss with PM. Label the pending count Open decisions (待決事項), show Recently decided
+  with visible completed decision titles, times and actors, linking their exact register
+  inspectors. An adopted discussion offers an authorized, editable Resolve issue form;
+  reported resolution preserves the original finding and remains unassessed. Leave not-started
+  progress as empty track, retain colored states at their true proportions, and omit repeated
+  plan provenance from the live Goal card. Completed decisions say just now or use “ago”;
+  attention keeps compact waiting ages, and both advance on live refresh.
 - Polish Discussions with inline renaming, compact context and thread rows, and a paired composer
   toolbar. Proposal freshness follows central adoptability, an adopted proposal links its accepted
   revision, and first-message drafts and original-key recovery survive reloads. Keep unsent PM
@@ -117,8 +105,10 @@
   central Adopted status and accepted-revision link immediately after a PM proposal adoption,
   including recovery of its original receipt. Keep checking acknowledged PM operations while central
   waits for child operations or checks, using the original receipt and bounded backoff. Name
-  governance context in unsent PM discussions using the current central record; retain local drafts
-  and prevent sending when that source becomes unavailable.
+  every discussion context from central records in draft and saved threads, retaining
+  identity-only request params and the source's actual kind (including Issue / 問題).
+  Keep chips on one line with complete labels, use 決策 for decision records, retain
+  local drafts and prevent sending when a source becomes unavailable.
 - Show acceptance, PR merge and deployment evidence for each requirement in a shared work inspector,
   with list rows on narrow screens and readable columns beside the docked inspector. Board adds
   filters, keyboard navigation, one-line cards and mobile lanes, and keeps existing PM tools in
@@ -133,7 +123,9 @@
   preserves search and group-heading focus. Requirements work links open authorized unassigned work
   even before a plan is adopted. Keep Board card metadata on one centred line with wider fallback
   fonts, truncating flexible labels while preserving their full accessible names and delivery
-  evidence.
+  evidence. Keep title columns readable beside inspectors, preserve search focus and row
+  expansion keys, and fit complete acceptance labels with wider fallback fonts. Verify
+  background preservation after the initial detail read settles.
 - Add the Schedule view: Day, Week and Month zoom over the central schedule projection, with dashed
   baselines, outlined forecasts, filled actuals and an Open marker for an actual without end
   evidence. Partial reads keep a Partial pill, and narrow screens get list rows with mini timelines.
@@ -161,6 +153,7 @@
 - Show sourced token totals, a daily usage trend per CLI aligned to local days, and quota per pool
   and window in Agents. The trend is requested only when the server offers daily buckets, and an
   unavailable or withdrawn source leaves the totals, chart and inspector together.
+  Paused source snapshots remain fixed during event refreshes.
 - Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
   shared page header, inbox groups, operations table and inspector. Pending opens each operation
   from its inspector and reports a failed read instead of an empty inbox, and every registered
@@ -183,7 +176,9 @@
   during live updates and resizing; restore focus on Back to latest and follow successful replies.
   Show received message counts, consistent agent marks, compact durations and Person on manual
   turns. Give mobile Session titles the full header width so wider fonts leave room for a whole
-  pending answer input.
+  pending answer input. Keep Info and Compose distinct on narrow screens, age Sent
+  receipts from central completion times, and retain the shared inspector width and
+  heading hierarchy.
 
 - Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
   lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,

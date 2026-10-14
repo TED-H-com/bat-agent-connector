@@ -13,8 +13,8 @@ const expect = baseExpect.configure({timeout: 30000});
 const backend = resolve(process.env.BATC_PM_BACKEND || '..');
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv/bin/python');
 const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
-const shots = resolve(process.env.BATC_WALKTHROUGH_SHOTS || process.env.TMPDIR || resolve(homedir(), 'agent-work/bac-ux/tmp/walkthrough'),
-  process.env.BATC_WALKTHROUGH_SHOTS ? '.' : 'shots');
+const shots = resolve(process.env.BATC_WALKTHROUGH_SHOTS
+  || (process.env.TMPDIR ? resolve(process.env.TMPDIR, 'shots') : 'test-results/walkthrough'));
 await mkdir(scratch, {recursive: true}); await mkdir(shots, {recursive: true});
 
 async function bounded(promise, milliseconds, message) {
@@ -24,10 +24,14 @@ async function bounded(promise, milliseconds, message) {
 }
 const labels = {
   en: {send: 'Send', ask: 'Ask PM', retry: 'Check original request', adopted: 'Adopted',
+    resolve: 'Resolve issue', resolutionRationale: 'Reason for resolving', resolved: 'Reported resolved', unassessed: 'Not assessed',
+    recently: 'Recently decided', resolution: 'The reviewed expiry decision removes the recovery implementation blocker.',
     accepted: 'Accepted revision', rationale: 'Reason for adopting this update', adopt: 'Adopt this update',
     progress: '0 of 2 accepted',
     message: 'Agree a 15-minute reset-link expiry; keep sign-in and recovery, and exclude referral rewards.'},
   'zh-TW': {send: '傳送', ask: '詢問 PM', retry: '查回原請求', adopted: '已採用',
+    resolve: '回報解決', resolutionRationale: '回報解決的理由', resolved: '回報已解決', unassessed: '未評估',
+    recently: '近期決策', resolution: '已審閱的效期決策解除了密碼重設實作的阻礙。',
     accepted: '已採用版本', rationale: '採用這組更新的理由', adopt: '採用這組更新',
     progress: '2 項中 0 項已驗收',
     message: '確認重設連結效期為 15 分鐘；保留登入與密碼重設，推薦獎勵不在本輪範圍。'},
@@ -41,7 +45,8 @@ async function walkthrough(locale, width) {
   const started = performance.now(), temporary = await mkdtemp(resolve(scratch, 'pm-walkthrough-run-'));
   let child, stopped, spawnError, output, browser, page, fixture, step = 'startup';
   const errors = [], failures = [], requests = [], responses = [], operationReplies = new Map(), reads = new Map(), pending = new Set();
-  let dropAdoption = true, lostAcknowledgements = 0;
+  const dropped = new Set();
+  let lostAcknowledgements = 0;
   const watch = promise => {pending.add(promise); promise.finally(() => pending.delete(promise)).catch(() => {}); return promise;};
   const screenshot = async (number, name) => {
     step = name;
@@ -91,14 +96,15 @@ async function walkthrough(locale, width) {
         }
       })().catch(error => errors.push(`Response ${path}: ${error.message}`)));
     });
-    // Lose exactly the first adoption HTTP acknowledgement *after* the actual
-    // central accepted it. The UI's recovery click must reuse its durable key.
+    // Lose each first adoption/resolution acknowledgement after central admission.
+    // Each UI recovery click must reuse its original durable key and envelope.
     await page.route(url => url.pathname === '/api/v1/operations', async route => {
       const request = route.request();
-      if (request.method() !== 'POST' || request.postDataJSON().action !== 'pm.conversation.adopt' || !dropAdoption) {
+      const action = request.method() === 'POST' ? request.postDataJSON().action : null;
+      if (!['pm.conversation.adopt', 'pm.governance.revise'].includes(action) || dropped.has(action)) {
         await route.continue(); return;
       }
-      dropAdoption = false;
+      dropped.add(action);
       const response = await route.fetch();
       assert.equal(response.status(), 202);
       operationReplies.set(request.headers()['idempotency-key'], (await response.json()).operation);
@@ -200,51 +206,85 @@ async function walkthrough(locale, width) {
     const revision = new URLSearchParams(revisionLink.split('?')[1]).get('revision');
     assert.match(revision, /^pmrev_[a-f0-9]{32}$/);
     assert.notEqual(revision, fixture.revision_id);
+    await expect(page.locator('[data-pm-run-purpose]').filter({hasText: copy.updated})).toContainText(locale === 'en' ? 'Revision' : '版本');
+    assert.doesNotMatch(await proposal.innerText(), /\b(?:pmrev|pmgov|op|pmt)_[a-f0-9]{32}\b/);
     await proposal.locator('[data-proposal-adopted-revision]').click();
     await expect(page.locator(`[data-pm-revision="${revision}"] [data-pm-revision-open]`)).toBeFocused();
+    if (width < 800) await page.keyboard.press('Escape');
+
+    step = 'resolve-issue';
+    await proposal.locator('[data-issue-resolve-open]').click();
+    const resolutionForm = proposal.locator('[data-pm-action="pm.governance.revise"]');
+    const resolutionReason = resolutionForm.getByLabel(l.resolutionRationale, {exact: true});
+    await expect(resolutionReason).toHaveValue(new RegExp(copy.updated));
+    assert.doesNotMatch(await resolutionReason.inputValue(), /pmrev_[a-f0-9]{32}/);
+    await resolutionReason.fill(l.resolution);
+    await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).scrollIntoViewIfNeeded();
+    await screenshot(9, 'resolution-review');
+    await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).click();
+    await resolutionForm.getByRole('button', {name: l.retry, exact: true}).click();
+    await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.resolved);
+    await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.unassessed);
+    await expect(proposal.locator('[data-issue-resolve-open]')).toHaveCount(0);
+    const resolutionRequests = requests.filter(row => row.body.action === 'pm.governance.revise');
+    assert.equal(resolutionRequests.length, 2);
+    assert.deepEqual(resolutionRequests[1], resolutionRequests[0]);
+    assert.equal(resolutionRequests[0].body.params.status, 'reported_resolved');
+    await screenshot(10, 'issue-resolved');
     await bounded(Promise.all([...pending]), 30000, 'Response diagnostics did not finish');
     assert.deepEqual(errors, []);
     assert.deepEqual(responses.filter(unexpectedResponse), []);
-    assert.equal(lostAcknowledgements, 1);
-    assert.equal(failures.length, 1);
-    assert.equal(failures[0].action, 'pm.conversation.adopt');
+    assert.equal(lostAcknowledgements, 2);
+    assert.deepEqual(failures.map(row => row.action), ['pm.conversation.adopt', 'pm.governance.revise']);
     for (const row of requests) assert.match(row.key, /^[A-Za-z0-9._:-]{8,200}$/, 'Every UI operation needs a stable key');
     child.stdin.write(JSON.stringify({action: 'verify', requests: requests.map(row => ({
       key: row.key, action: row.body.action, operation_id: operationReplies.get(row.key)?.operation_id}))}) + '\n');
     assert.equal((await next()).verified, true);
-    console.log(JSON.stringify({locale, width, centralSafetyVerified: true, browserOperations: 4, adoptionAttempts: 2}));
-    // Dismiss the narrow Plan sheet before moving through the real navigation.
-    if (width < 800) await page.keyboard.press('Escape');
+    console.log(JSON.stringify({locale, width, centralSafetyVerified: true, browserOperations: 5, adoptionAttempts: 2, resolutionAttempts: 2}));
     step = 'decision-overview';
     await openPmSection(page, 'overview');
-    await expect(metric('goal')).toContainText(copy.updated);
+    await expect(page.locator('[data-overview-meta]')).toContainText(copy.updated);
     await expect(page.locator('.pm-main > .ui-page-header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
-    await screenshot(9, 'decision-overview');
+    await expect(metric('goal')).toContainText(copy.goal);
+    await expect(metric('blocker').locator('.ui-metric-value')).toHaveText('0');
+    await expect(metric('blocker')).not.toContainText(copy.issue);
+    await expect(attention).toHaveCount(0);
+    await expect(metric('decision').locator('.ui-metric-value')).toHaveText('0');
+    const recent = metric('decision').locator('[data-overview-recent-decisions]');
+    await expect(recent).toContainText(l.recently);
+    const recentDecision = recent.locator(`[data-overview-decided="plan_revision.${revision}"]`);
+    await expect(recentDecision).toContainText(copy.updated);
+    await expect(recentDecision).toContainText('walkthrough-owner');
+    await screenshot(11, 'decision-overview');
     await bounded(Promise.all([...pending]), 30000, 'Response diagnostics did not finish');
     assert.deepEqual(errors, []);
     assert.deepEqual(responses.filter(unexpectedResponse), []);
     assert.equal(reads.get(`/api/v1/pm/workspaces/${fixture.workspace_id}/overview`).plan.revision_id, revision);
-    assert.deepEqual({goalPreserved: (await metric('goal').innerText()).includes(copy.goal),
-      adoptedDecisionVisible: (await metric('decision').innerText()).includes(copy.updated)},
-    {goalPreserved: true, adoptedDecisionVisible: true}, 'Overview must retain the goal and show the completed decision');
-
     step = 'decision-register';
-    await openPmSection(page, 'issues');
+    await recentDecision.getByRole('button').click();
+    await expect(page.locator('[data-reg-inspector]')).toContainText(copy.updated);
+    await page.keyboard.press('Escape');
     await page.locator('[data-reg-type="decision"]').click();
     const decision = page.locator(`[data-row-key="plan_revision.${revision}"]`);
     await expect(decision).toContainText(copy.updated);
     await expect(decision).toContainText(l.adopted);
     await decision.click();
     await expect(page.locator('[data-reg-inspector]')).toContainText(copy.updated);
-    await screenshot(10, 'decision-register');
+    await screenshot(12, 'decision-register');
+    await page.keyboard.press('Escape');
+    await page.locator('[data-reg-type="issue"]').click();
+    const issue = page.locator(`[data-row-key="governance.${fixture.issue_id}"]`);
+    await expect(issue).toContainText(l.resolved);
+    await issue.click();
+    await expect(page.locator('[data-reg-inspector]')).toContainText(l.resolved);
+    await screenshot(13, 'resolved-register');
     await bounded(Promise.all([...pending]), 30000, 'Response diagnostics did not finish');
     assert.deepEqual(errors, []);
     assert.deepEqual(responses.filter(unexpectedResponse), []);
-    assert.equal(lostAcknowledgements, 1);
-    assert.equal(failures.length, 1);
-    assert.equal(failures[0].action, 'pm.conversation.adopt');
+    assert.equal(lostAcknowledgements, 2);
+    assert.deepEqual(failures.map(row => row.action), ['pm.conversation.adopt', 'pm.governance.revise']);
     for (const row of requests) assert.match(row.key, /^[A-Za-z0-9._:-]{8,200}$/, 'Every UI operation needs a stable key');
-    console.log(JSON.stringify({locale, width, passed: true, operations: 4, adoptionAttempts: 2,
+    console.log(JSON.stringify({locale, width, passed: true, operations: 5, adoptionAttempts: 2, resolutionAttempts: 2,
       seconds: Number(((performance.now() - started) / 1000).toFixed(2))}));
   } catch (error) {
     if (page) {

@@ -49,11 +49,20 @@ const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].i
 // A remounted form can recover an acknowledged ID without resending an unknown
 // POST. Notifications contain no result; the active form reads with current access.
 const receiptSubscribers = new Map();
+// An autonomous, hidden child tracks the ordinary form's connection without
+// changing editor.box, form selectors, layout or the form's hidden behavior.
+const formConnectionTag = 'batc-pm-form-connection';
+if (!customElements.get(formConnectionTag)) customElements.define(formConnectionTag, class extends HTMLElement {
+  #changed = () => {};
+  observe(callback) {this.#changed = callback;}
+  connectedCallback() {this.#changed(true);}
+  disconnectedCallback() {this.#changed(false);}
+});
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
@@ -89,7 +98,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope)
     && caps()?.actions?.some(row => row.action === action && row.allowed === true);
   const receiveReceipt = () => {
-    if (disposed || damaged || !saved.intent) return;
+    if (disposed || !form.isConnected || damaged || !saved.intent) return;
     try {
       guard();
       const stored = JSON.parse(localStorage.getItem(storage));
@@ -101,8 +110,12 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       update();
     } catch { /* a retired or unreadable form cannot apply the receipt */ }
   };
-  const subscribers = receiptSubscribers.get(storage) || new Set();
-  subscribers.add(receiveReceipt); receiptSubscribers.set(storage, subscribers);
+  let subscribers = null;
+  const unsubscribe = () => {
+    subscribers?.delete(receiveReceipt);
+    if (subscribers && !subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
+    subscribers = null;
+  };
   const terminal = () => ['failed', 'cancelled'].includes(operation?.status);
   const reset = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {
     try {
@@ -126,7 +139,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     }, receiptDelays[receiptAttempt++]);
   }
   function update() {
-    if (disposed) return;
+    if (disposed || !form.isConnected) return;
     const locked = busy || damaged || Boolean(saved.intent) || !allowed();
     for (const input of Object.values(fields)) input.disabled = locked;
     button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
@@ -137,7 +150,11 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     onStateChange();
   }
   async function run(automatic = false) {
-    if (disposed || busy || damaged || !allowed() || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+    if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+    if (!allowed()) {
+      if (!automatic) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); update();}
+      return;
+    }
     stopTimer();
     if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
     let firstAttempt = stagedHere; stagedHere = false;
@@ -173,7 +190,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         : await api('POST', '/operations?wait=3', intent.request, intent.key, collectReceipt);
       collectReceipt(data);
       guard();
-      if (disposed || !allowed()) return;
+      if (disposed) return;
+      if (!allowed()) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); return;}
       const op = data.operation;
       saved.intent.operation_id = op.operation_id; persist(); operation = op;
       receipt.replaceChildren(h('a', {href: `#/op/${op.operation_id}`}, t('pm_operation')), ' · ', statusText(op.status));
@@ -203,8 +221,18 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     } finally {busy = false; update();}
   }
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
-  update();
-  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+  const connection = h(formConnectionTag, {hidden: true});
+  connection.observe(connected => {
+    onConnectionChange(connected);
+    if (disposed) return;
+    if (connected) {
+      subscribers = receiptSubscribers.get(storage) || new Set();
+      subscribers.add(receiveReceipt); receiptSubscribers.set(storage, subscribers);
+      receiveReceipt(); update();
+    } else {stopTimer(); unsubscribe();}
+  });
+  form.append(connection);
+  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
     stage: () => {
       if (disposed || busy || saved.intent || damaged) return false;
       guard(); saved.values = capture();
@@ -218,8 +246,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       receiptAttempt = 0; receiptPolling = true; void run(true);
     },
     dispose: () => {
-      disposed = true; receiptPolling = false; stopTimer(); subscribers.delete(receiveReceipt);
-      if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
+      disposed = true; receiptPolling = false; stopTimer(); unsubscribe(); onConnectionChange(false);
+      for (const input of Object.values(fields)) input.disabled = true;
+      button.disabled = reset.disabled = true;
     },
     set: (name, value) => {if (!busy && !saved.intent && !damaged) {fields[name].value = value; changed();}},
     values: () => capture()};
@@ -356,7 +385,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     }}, icon('chevron-left'), t('pd_back', {view: t(session ? 'ui_session' : 'ui_' + origin)}));
   };
   if (threadId) h = discussionDom(h, JSON.stringify([namespace, workspaceId, threadId]));
-  const forms = [], alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
+  const forms = new Set(), alive = () => {guard(); if (disposed) throw Object.assign(Error(), {code: 'PM_DISPOSED'});};
   const permitted = decide => loaded && Boolean(workspace) && (caps()?.scopes?.includes('admin')
     || (decide ? workspace.membership?.role === 'owner' : ['owner', 'contributor'].includes(workspace.membership?.role)));
   const input = (label, {multiline = false, max = 2000, required = true, value = ''} = {}) => {
@@ -367,7 +396,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const form = options => {
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
-      recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)()}); forms.push(value); return value;
+      recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)(),
+      onConnectionChange: connected => {
+        if (connected && !disposed) forms.add(value);
+        else forms.delete(value);
+        if (connected && disposed) value.dispose();
+      }});
+    const dispose = value.dispose;
+    value.dispose = () => {forms.delete(value); dispose();};
+    return value;
   };
   const status = h('div', {role: 'status', class: 'pm-status'}), workspaceList = h('div', {class: 'pm-workspace-list'});
   const name = input('pm_workspace_name', {max: 120}), repositories = input('pm_repositories', {required: false});
@@ -437,7 +474,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         const destination = ['requirement', 'work_item'].includes(ref.kind) ? 'requirements' : ref.kind === 'milestone' && !row.kind ? 'schedule' : 'issues';
         location.hash = `#/pm/${encodeURIComponent(workspaceId)}/${destination}`; workbench?.select(destination);
         if (destination === 'requirements') await traceability?.openRef?.(ref);
-        else if (ref.kind === 'governance') {
+        else if (ref.kind === 'governance' || ref.kind === 'plan_revision' && register) {
           if (register) await register.openRef(ref);
           else await governance?.openRef?.(ref);
         }
@@ -808,8 +845,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const checkbox of facts?.querySelectorAll('input[type=checkbox]') || [])
       checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
   };
-  // Initial section constructors can register forms before the thread attaches them.
-  const updateForms = () => {for (let i = forms.length - 1; i >= 0; i--) {if (forms[i].box.isConnected) forms[i].update(); else if (initialReadComplete) forms.splice(i, 1);}};
+  // Discarded forms leave the registry immediately; temporarily detached forms
+  // rejoin and derive the current gates synchronously on reconnection.
+  const updateForms = () => {for (const value of forms) value.update();};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => timeStamp(value, {empty:''});
   const sourceText = item => {
@@ -1065,9 +1103,24 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (!append && signature === packageSignature) return;
     if (!append) {packages.replaceChildren(); packageSignature = signature;}
     for (const run of page.runs || []) {
+      const adoptionRef = typeof run.purpose === 'string' && run.purpose.match(/^Adopt plan (pmrev_[0-9a-f]{32})$/);
+      const caption = h('span', {'data-pm-run-purpose': ''}, adoptionRef ? t('pcp_plan_context') : run.purpose);
       const detail = h('div'), item = h('details', {'data-pm-run': run.run_id},
-        h('summary', {}, run.purpose, ' · ', time(run.created_at),
+        h('summary', {}, caption, ' · ', time(run.created_at),
           run.adapter === 'codex-native-linux' ? ' · ' + nativeRunState(t, run) : ''), detail);
+      if (adoptionRef) void (async () => {
+        try {
+          const value = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans/${adoptionRef[1]}`);
+          alive(); if (!item.isConnected) return;
+          if (value.plan?.workspace_id !== workspaceId || value.plan.revision_id !== adoptionRef[1]
+            || typeof value.plan.document?.title !== 'string' || !Number.isSafeInteger(value.plan.sequence)) throw Error(t('pm_scope_mismatch'));
+          caption.textContent = value.plan.document.title + ' · ' + t('pm_revision_number', {number: value.plan.sequence});
+        } catch (error) {
+          if (!item.isConnected || retired(error)) return;
+          if ([403, 404].includes(error.status)) item.remove();
+          else detail.replaceChildren(errorBox(error));
+        }
+      })();
       let fetched = false, pending = false;
       item.addEventListener('toggle', async () => {
         if (!item.open || fetched || pending) return;
@@ -1080,6 +1133,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const context = saved.context;
           detail.replaceChildren(h('p', {class: 'muted'}, t('pm_package_version', {version: context.thread_version})),
             h('a', {href: `#/op/${saved.operation_id}`}, t('pm_operation')),
+            adoptionRef ? h('details', {}, h('summary', {}, t('pcp_original')), h('p', {}, saved.purpose)) : '',
             ...Object.entries(context.inputs_by_status || {}).filter(([, inputs]) => inputs.length).map(([status, inputs]) =>
               h('section', {}, h('h4', {}, discussionLabel(t, 'pm_status_', status)), ...inputs.map(input => h('div', {}, h('p', {}, input.value),
                 h('small', {class: 'muted'}, [input.source_ref?.ref || input.source_ref?.message_id,

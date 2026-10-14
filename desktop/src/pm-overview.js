@@ -80,7 +80,8 @@ export function workspaceOverview(options) {
     const goalReason = (data?.unknown || []).find(row => row.field === 'plan.goal')?.reason;
     const goal = metric({label: t('ov_goal'), value: data?.plan?.goal ?? '—', context: h('div', {},
       !data?.plan?.goal ? goalReason === 'goal_unconfirmed' ? statusPill('unconfirmed') : !goalReason || goalReason === 'unknown' ? statusPill('unknown') : h('span', {class: 'ui-meta'}, reasonLabel(t, goalReason)) : null,
-      h('div', {}, data?.plan?.title || '—'), data?.plan?.adopted_at != null ? h('div', {}, timeLabel(t, 'ov_adopted', {date: date(data.plan.adopted_at)})) : null)});
+      fixed ? h('div', {}, data?.plan?.title || '—') : null,
+      fixed && data?.plan?.adopted_at != null ? h('div', {}, timeLabel(t, 'ov_adopted', {date: date(data.plan.adopted_at)})) : null)});
     goal.dataset.overviewMetric = 'goal';
     if (fixed && savedPartial()) goal.append(statusPill('partial'));
     const next = data?.next_milestone;
@@ -94,16 +95,30 @@ export function workspaceOverview(options) {
     const metrics = ['blocker', 'decision'].map(kind => {
       const first = data?.attention?.find(row => row.kind === kind);
       const node = metric({label: t(kind === 'blocker' ? 'ov_blockers' : 'ov_decisions'), value: data?.attention_counts?.[kind] ?? null,
-        context: h('div', {}, itemLink(first, 'status'), kind === 'decision' && first ? discuss(first, 'status') : null)});
+        context: h('div', {}, itemLink(first, 'status'), kind === 'decision' && first ? discuss(first, 'status') : null,
+          kind === 'decision' && !fixed ? recentDecisions(data) : null)});
       node.dataset.overviewMetric = kind; return node;
     });
     return h('div', {class: 'pm-overview-status', 'data-overview-status': ''}, goal, progress, ...metrics);
   }
-  function age(since) {
+  function age(since, past = false) {
     if (!Number.isFinite(since) || !Number.isFinite(projection?.as_of)) return null;
     const seconds = Math.max(0, projection.as_of - since);
+    if (seconds < 60) return t(past ? 'ov_just_now' : 'ov_under_minute');
     const [key, unit] = seconds >= 86400 ? ['ov_day', 86400] : seconds >= 3600 ? ['ov_hour', 3600] : ['ov_minute', 60];
-    return t(key, {n: Math.floor(seconds / unit)});
+    const elapsed = t(key, {n: Math.floor(seconds / unit)});
+    return past ? t('ov_ago', {age: elapsed}) : elapsed;
+  }
+  const decisionMeta = row => [age(row.decided_at, true), row.actor].filter(Boolean).join(' · ');
+  function recentDecisions(data) {
+    const rows = Array.isArray(data?.recent_decisions) ? data.recent_decisions : null;
+    const partial = rows && (data.recent_decisions_complete !== true || data.recent_decisions_truncated === true);
+    return h('section', {class: 'pm-overview-decisions' + (rows?.length === 0 && !partial ? ' pm-overview-decisions-empty' : ''), 'data-overview-recent-decisions': ''},
+      h('h3', {}, t('ov_recent_decisions')),
+      ...(rows || []).map(row => h('div', {'data-overview-decided': row.key}, itemLink(row, 'decided'),
+        h('div', {class: 'ui-meta', 'data-overview-decided-meta': ''}, decisionMeta(row)))),
+      !rows ? statusPill('unknown') : partial ? h('div', {class: 'ui-meta'}, statusPill('partial'), ' ', t('ov_showing', {n: rows.length}))
+        : !rows.length && data.recent_decisions_count === 0 ? h('span', {class: 'ui-meta'}, t('ov_no_items')) : null);
   }
   function contextText(row) {
     const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
@@ -267,6 +282,10 @@ export function workspaceOverview(options) {
       const node = attentionNodes.get(row.key)?.node.querySelector('[data-overview-age]'), value = age(row.since);
       if (node && value !== null && node.textContent !== value) node.textContent = value;
     }
+    for (const row of Array.isArray(projection.recent_decisions) ? projection.recent_decisions : []) {
+      const node = content.querySelector(`[data-overview-decided="${CSS.escape(row.key)}"] [data-overview-decided-meta]`), value = decisionMeta(row);
+      if (node && node.textContent !== value) node.textContent = value;
+    }
     // as_of changes on every read. It must not replace reading nodes or their focus.
     const next = JSON.stringify([{...projection, as_of: null}, plan]);
     if (signature === `live:${next}`) return;
@@ -279,7 +298,8 @@ export function workspaceOverview(options) {
     if (reader && (relatedSelection ? !projection.attention.some(row => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
     const main = attention(projection);
     commitParts([
-      {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown], render: () => statusStrip(projection)},
+      {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown,
+        projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated], render: () => statusStrip(projection)},
       {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete], render: () => {
         const columns = parts.get('columns')?.node;
         if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}

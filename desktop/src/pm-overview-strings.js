@@ -1,6 +1,7 @@
 export const overviewStrings = {
   en: {
-    ov_live: 'Live', ov_goal: 'Goal', ov_progress: 'Progress', ov_blockers: 'Blockers', ov_decisions: 'Decisions',
+    ov_live: 'Live', ov_goal: 'Goal', ov_progress: 'Progress', ov_blockers: 'Blockers', ov_decisions: 'Open decisions',
+    ov_recent_decisions: 'Recently decided',
     ov_accepted: '{accepted} of {total} accepted', ov_requirements: '{n} requirements', ov_adopted: 'adopted {date}',
     ov_attention: 'Needs attention', ov_milestones: 'Milestones', ov_deliveries: 'Recent deliveries', ov_deliveries_loaded: 'Recent deliveries (loaded)',
     ov_discuss: 'Discuss', ov_empty: 'Nothing needs you right now.', ov_incomplete: 'Nothing loaded needs you · sources incomplete',
@@ -17,11 +18,13 @@ export const overviewStrings = {
     ov_blocker: 'Blocker', ov_decision: 'Decision', ov_deviation: 'Deviation', ov_risk: 'Risk',
     ov_context_requirement: '{n} requirements', ov_context_work: 'Related work', ov_context_milestone: 'Milestone',
     ov_day: '{n}d', ov_hour: '{n}h', ov_minute: '{n}m', ov_delta: '+{n}d',
+    ov_just_now: 'just now', ov_under_minute: '<1m', ov_ago: '{age} ago',
     ov_partial_history: 'More reports available', ov_loading_report: 'Loading report…',
     ov_report_previous: 'Previous report', ov_report_next: 'Next report',
   },
   'zh-TW': {
     ov_live: '即時', ov_goal: '目標', ov_progress: '進度', ov_blockers: '阻礙', ov_decisions: '待決事項',
+    ov_recent_decisions: '近期決策',
     ov_accepted: '{total} 項中 {accepted} 項已驗收', ov_requirements: '{n} 項需求', ov_adopted: '{date} 採用',
     ov_attention: '需要關注', ov_milestones: '里程碑', ov_deliveries: '近期交付', ov_deliveries_loaded: '近期交付（已載入）',
     ov_discuss: '討論', ov_empty: '目前沒有需要你處理的事項。', ov_incomplete: '已載入事項無待辦 · 來源不完整',
@@ -38,6 +41,7 @@ export const overviewStrings = {
     ov_blocker: '阻礙', ov_decision: '待決', ov_deviation: '偏差', ov_risk: '風險',
     ov_context_requirement: '{n} 項需求', ov_context_work: '相關工作', ov_context_milestone: '里程碑',
     ov_day: '{n} 天', ov_hour: '{n} 小時', ov_minute: '{n} 分鐘', ov_delta: '+{n} 天',
+    ov_just_now: '剛剛', ov_under_minute: '不到 1 分鐘', ov_ago: '{age}前',
     ov_partial_history: '還有其他報告', ov_loading_report: '正在載入報告…',
     ov_report_previous: '上一份報告', ov_report_next: '下一份報告',
   },
