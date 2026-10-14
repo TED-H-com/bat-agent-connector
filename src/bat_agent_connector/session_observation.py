@@ -6,6 +6,7 @@ import contextlib
 import json
 import math
 import os
+import time
 from collections import Counter
 from urllib.parse import urlsplit
 
@@ -218,11 +219,17 @@ class SessionObservation:
                 from .session_reading import begin_observation
                 read_generation = begin_observation(self.daemon.journal)
             kwargs = {**params, "index_reading": True} if method == "session_read" else params
-            work = asyncio.create_task(asyncio.wait_for(fn(fleet, **kwargs), deadline(method, params)))
+            started = time.monotonic()
+            work = asyncio.create_task(fn(fleet, **kwargs))
             hangup = asyncio.create_task(reader.read(1)) if reader is not None else None
             pending = {work, hangup} if hangup else {work}
             while True:
-                done, _ = await asyncio.wait(pending, timeout=REAUTH_S, return_when=asyncio.FIRST_COMPLETED)
+                remaining = started + deadline(method, params) - time.monotonic()
+                if remaining <= 0:
+                    raise asyncio.TimeoutError
+                done, _ = await asyncio.wait(
+                    pending, timeout=min(REAUTH_S, remaining), return_when=asyncio.FIRST_COMPLETED
+                )
                 if hangup is not None and hangup in done:
                     if writer is not None:
                         writer.close()

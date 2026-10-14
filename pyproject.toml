@@ -36,6 +36,7 @@ dev = [
   "pytest>=9.1,<10",
   "pytest-asyncio>=1.4,<2",
   "trustme>=1.2.1,<2",
+  "PyYAML>=6.0.3,<7",
   "ruff>=0.16,<0.17",
 ]
 desktop-build = [
