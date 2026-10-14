@@ -11,7 +11,9 @@ import gzip
 import hashlib
 import importlib.metadata
 import json
+import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +30,11 @@ def main() -> None:
     executable = "batc-managed-runtime" + (".exe" if sys.platform == "win32" else "")
     BUILD.mkdir(parents=True, exist_ok=True)
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    commit = os.environ.get("BATC_BUILD_COMMIT")
+    if commit and not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+        raise SystemExit("BATC_BUILD_COMMIT must be a full commit hash")
+    build_info = BUILD / "build-info.json"
+    build_info.write_text(json.dumps({"commit": commit or None}) + "\n", encoding="utf-8")
     subprocess.run(  # noqa: S603 - fixed locked build tool and repository-owned entry point
         [
             sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile",
@@ -37,6 +44,7 @@ def main() -> None:
             "--collect-all", "bat_agent_connector",
             # Windows has no system IANA database; policy schedules use the same zones.
             "--collect-data", "tzdata",
+            "--add-data", f"{build_info}:bat_agent_connector",
             # Host helpers are transmitted as source, not imported on the central host.
             "--add-data", f"{ROOT / 'src' / 'bat_agent_connector'}:bat_agent_connector",
             str(ROOT / "desktop" / "scripts" / "managed-runtime-entry.py"),
