@@ -164,6 +164,12 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const group = statusSelect.value;
     return Boolean(ageValue || weekValue || group === 'other' || (group && !apiStatus(group)));
   }
+  function filtersActive() {return Boolean(typeValue || statusSelect.value || ownerInput.value.trim() || searchInput.value.trim() || ageValue || weekValue);}
+  function clearFilters() {
+    typeValue = ''; typeControl.setValue(''); statusSelect.value = '';
+    ownerInput.value = ''; searchInput.value = ''; ageValue = ''; ageSelect.value = ''; weekValue = '';
+    searchInput.focus(); reloadNow();
+  }
   function catalogueComplete() {return coverage?.complete === true && !nextCursor;}
   function ageBucket(row) {
     if (!Array.isArray(coverage?.open_statuses) || !coverage.open_statuses.includes(row?.status)) return null;
@@ -389,7 +395,14 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (unavailable) {tableHost.replaceChildren(emptyState({icon: 'circle-alert', title: t('reg_unavailable')})); return;}
     if (!loaded) {tableHost.replaceChildren(skeleton(4)); return;}
     const shown = visibleRows();
-    if (!shown.length) {tableHost.replaceChildren(emptyState({icon: 'search', title: t('reg_empty')})); return;}
+    if (!shown.length) {
+      const filtered = filtersActive(), complete = catalogueComplete();
+      tableHost.replaceChildren(emptyState({icon: filtered ? 'search' : 'inbox',
+        title: t(!complete ? 'reg_empty_partial' : filtered ? 'reg_empty' : 'reg_empty_all'),
+        text: !complete && filtered ? t('reg_no_loaded_matches') : null,
+        action: filtered ? button({size: 'sm', label: t('reg_clear_filters'), onClick: clearFilters}) : null,
+      })); return;
+    }
     if (!wideQuery.matches) {paintList(focusKey, shown); return;}
     const columns = [
       {key: 'type', label: t('reg_col_type'), render: row => h('span', {class: 'reg-type'}, icon(TYPE_ICON[row.type] || 'circle-alert'), h('span', {}, t('reg_type_' + row.type)))},
@@ -691,8 +704,13 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
         void refresh();
         return;
       }
-      statusLine.replaceChildren(inlineError({error: {message: t('reg_detail_error')}, retry: () => void loadDetail(rowId)}));
+      statusLine.replaceChildren(readError(t('reg_detail_error'), () => void loadDetail(rowId)));
     }
+  }
+  function readError(message, retry) {
+    const notice = inlineError({error: {message}});
+    notice.append(button({size: 'sm', label: t('ui_retry'), onClick: retry}));
+    return notice;
   }
   function fail(error) {
     serial++;
@@ -701,7 +719,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     loaded = true; unavailable = false; failed = error; selected = null; preference.inspector = false;
     closeSheet(false);
     onMeta(null);
-    statusLine.replaceChildren(inlineError({error: {message: t('reg_read_error')}, retry: () => void refresh()}));
+    statusLine.replaceChildren(readError(t('reg_read_error'), () => void refresh()));
     render();
   }
   function withdraw() {

@@ -1223,8 +1223,12 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-shell [data-pm-kanban] .pm-board-toolbar > select { width: auto; flex: 0 1 13rem; max-width: min(100%, 13rem); min-width: 8rem; }
 .pm-shell [data-pm-kanban] .pm-board-toolbar > label { flex: none; max-width: 100%; min-width: 0; white-space: nowrap; }
 .pm-board-toolbar select { max-width: 210px; }
-.pm-kanban-list { display: grid; grid-auto-flow: column; grid-auto-columns: var(--board-lane, minmax(210px, 1fr)); gap: var(--space-3); overflow-x: auto; align-items: start; max-width: 100%; padding-bottom: var(--space-3); }
-.pm-kanban-column { background: var(--surface-2); border-radius: var(--r-md); padding: var(--space-2); min-width: 0; min-height: 440px; }
+.pm-kanban-list { display: grid; grid-auto-flow: column; grid-auto-columns: var(--board-lane, minmax(210px, 1fr)); gap: var(--space-3); overflow-x: auto; align-items: stretch; max-width: 100%; padding-bottom: var(--space-3); }
+.pm-kanban-column { background: var(--surface-2); border-radius: var(--r-md); padding: var(--space-2); min-width: 0; min-height: 0; }
+.pm-board-error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pm-board-error .ui-inline-error { flex: 1 1 auto; min-width: 0; }
+.pm-board-error .ui-disclosure { flex: none; }
+[data-board-empty][hidden] { display: none; }
 .pm-kanban-column > header { margin-bottom: var(--space-2); }
 .pm-board-lane-toggle { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text-2); text-align: left; font-size: var(--fs-small); font-weight: 600; }
 .pm-board-lane-toggle .ui-icon { flex: none; }
@@ -1252,14 +1256,15 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-kanban-footer .ui-disclosure { margin-left: auto; }
 .pm-kanban-footer .ui-disclosure > div { max-width: 640px; }
 @media (max-width: 799px) {
-  .pm-kanban-list { display: flex; flex-direction: column; overflow: visible; }
-  .pm-board-content::before, .pm-board-content::after { display: none; }
-  .pm-kanban-column { width: 100%; min-height: 0; }
   .pm-board-lane-toggle { min-height: 44px; }
   .pm-shell [data-pm-kanban] .pm-board-toolbar .pm-work-search { flex-basis: 100%; min-width: 0; }
   .pm-shell [data-pm-kanban] .pm-board-toolbar > select { flex: 1 1 8rem; max-width: 100%; min-width: 0; }
   .pm-board-toolbar select { max-width: 100%; min-width: 0; }
-  .pm-kanban-list { --board-lane: initial; }
+}
+@media (max-width: 599px) {
+  .pm-kanban-list { display: flex; flex-direction: column; overflow: visible; --board-lane: initial; }
+  .pm-board-content::before, .pm-board-content::after { display: none; }
+  .pm-kanban-column { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pm-kanban-card, .pm-board-lane-toggle .ui-icon { transition: none; }

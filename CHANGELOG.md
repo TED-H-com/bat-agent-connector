@@ -77,7 +77,10 @@
   header. The type, title, status and next step
   stay visible as the table narrows. A mapping row without a title uses its source
   name. Board lanes fill the width in whole columns, keep each count, and ellipsize
-  the lane name. The board toolbar wraps whole controls.
+  the lane name. The board toolbar wraps whole controls. Filtered empty results
+  offer Clear filters; genuinely empty and incomplete reads have distinct states.
+  Board counts append the number shown while filtered, and horizontal lanes share
+  the tallest content height. Both panels keep Retry beside the read error.
 
 - Add a read-only issues, actions and changes register via `pm_register_list` and
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.

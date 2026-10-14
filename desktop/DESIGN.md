@@ -697,6 +697,12 @@ that text visibly in the footer. The selected row uses a
 `--surface-3` selection token, separate from an info pill. Pages follow `next_cursor`;
 row ids and cursors are passed through unchanged.
 
+A filtered empty register offers a small secondary Clear filters action that resets
+type, status, owner, age, opening week and search. A complete, unfiltered empty
+register says there are no issues or changes yet and has no reset action. An
+incomplete read says Records incomplete instead of implying there are no matches.
+Read errors use one shared inline error with an adjacent small secondary Retry.
+
 The inspector shows the processing timeline in the order the server sent. The row
 uses the shared status group. The precise recorded wording, including an operation
 accepted for processing, stays in Details and does not use the inspected-result
@@ -777,11 +783,13 @@ rows, counts, the chart and the inspector together.
 
 Board uses neutral lanes and compact cards with explicit requirement/session
 associations. Search, requirement/agent filters, grouping and collapsed lanes are
-view preferences. The toolbar wraps whole controls. Below 800px lanes stack; wider
+view preferences. The toolbar wraps whole controls. Below 600px lanes stack; wider
 boards show a whole number of lanes that fill the width, at least about 168px, and
 scroll horizontally inside the board. A lane name uses an ellipsis and keeps its
 count. A lane that does not fit starts at the edge, so the edge fade still marks
-more lanes. Arrow keys navigate cards and lanes; Enter opens the inspector. Live
+more lanes. Lanes in a horizontal row share the tallest lane's content height,
+with no fixed minimum; stacked lanes keep their own content height.
+Arrow keys navigate cards and lanes; Enter opens the inspector. Live
 updates defer lane movement while that lane is hovered or focused, but withdrawal
 removes inaccessible facts immediately. Local transitions are 140ms and respect
 reduced motion.
@@ -798,6 +806,14 @@ Each lane is a list with an H2 heading. Cards are list items with an H3 title
 button, described by their requirement, status and recorded delivery/blocker/age
 facts. Visually hidden status text stays inside the card’s bounds; blocker flags are not tab stops. Paged lanes show loaded counts and one
 visible partial marker; an empty Board hides the lanes and shows one empty state.
+A complete read with no filtered matches says No work matches these filters and
+offers a small secondary Clear filters action. It resets search, requirement and
+agent, retaining grouping. A complete Board with no associated work and no filters
+keeps its own empty state without that action. A partial read with no loaded
+matches says Work list incomplete. While filters are active the header appends
+N shown or None shown once; grouping alone does not add it. Board read errors use
+one shared inline error with an adjacent small secondary Retry. Details stays
+beside it only when an error code adds information beyond the sentence.
 Opening the inspector reveals the selected card after docking. Closing restores
 focus to the latest selection, falling back to the view heading after withdrawal.
 An unchanged read failure keeps its status, Details and Retry nodes, including

@@ -4703,6 +4703,10 @@ var pmRegisterStrings = {
 		reg_load_more: "Load more",
 		reg_empty: "No matching records",
 		reg_unavailable: "Source unavailable",
+		reg_empty_all: "No issues or changes yet",
+		reg_clear_filters: "Clear filters",
+		reg_empty_partial: "Records incomplete",
+		reg_no_loaded_matches: "No loaded records match",
 		reg_pair: "{label}: {value}",
 		reg_pull_requests: "Pull requests",
 		reg_open_age: "Open by age",
@@ -4823,6 +4827,10 @@ var pmRegisterStrings = {
 		reg_load_more: "載入更多",
 		reg_empty: "沒有符合的紀錄",
 		reg_unavailable: "來源無法取得",
+		reg_empty_all: "還沒有問題或變更",
+		reg_clear_filters: "清除篩選",
+		reg_empty_partial: "紀錄不完整",
+		reg_no_loaded_matches: "已載入紀錄沒有符合項目",
 		reg_pair: "{label}：{value}",
 		reg_pull_requests: "PR",
 		reg_open_age: "未決天數",
@@ -5849,10 +5857,14 @@ var pmKanbanStrings = {
 		pm_kanban_board_details: "Board details",
 		pm_kanban_partial_sources: "Sources incomplete",
 		pm_kanban_refresh: "Refresh work flow",
-		pm_kanban_retry: "Retry work flow",
 		pm_kanban_loading: "Reading work flow…",
 		pm_kanban_empty: "No work has been explicitly associated with this workspace.",
 		pm_kanban_more: "Load more work",
+		pm_kanban_no_matches: "No work matches these filters",
+		pm_kanban_clear_filters: "Clear filters",
+		pm_kanban_none_shown: "None shown",
+		pm_kanban_incomplete: "Work list incomplete",
+		pm_kanban_no_loaded_matches: "No loaded work matches",
 		pm_kanban_partial: "More work remains outside this page.",
 		pm_kanban_bounded: "This read was shortened to fit the response limit.",
 		pm_kanban_loaded: "{count} distinct work items shown",
@@ -5964,10 +5976,14 @@ var pmKanbanStrings = {
 		pm_kanban_board_details: "看板資料",
 		pm_kanban_partial_sources: "來源不完整",
 		pm_kanban_refresh: "重新整理工作流",
-		pm_kanban_retry: "重試工作流",
 		pm_kanban_loading: "正在讀取工作流…",
 		pm_kanban_empty: "這個工作區尚未明確關聯任何工作。",
 		pm_kanban_more: "載入更多工作",
+		pm_kanban_no_matches: "沒有符合篩選條件的工作",
+		pm_kanban_clear_filters: "清除篩選",
+		pm_kanban_none_shown: "沒有顯示項目",
+		pm_kanban_incomplete: "工作清單不完整",
+		pm_kanban_no_loaded_matches: "已載入工作沒有符合項目",
 		pm_kanban_partial: "這一頁以外還有其他工作。",
 		pm_kanban_bounded: "本次讀取因回應大小限制而縮短。",
 		pm_kanban_loaded: "已顯示 {count} 項不同工作",
@@ -23442,6 +23458,21 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const group = statusSelect.value;
 		return Boolean(ageValue || weekValue || group === "other" || group && !apiStatus(group));
 	}
+	function filtersActive() {
+		return Boolean(typeValue || statusSelect.value || ownerInput.value.trim() || searchInput.value.trim() || ageValue || weekValue);
+	}
+	function clearFilters() {
+		typeValue = "";
+		typeControl.setValue("");
+		statusSelect.value = "";
+		ownerInput.value = "";
+		searchInput.value = "";
+		ageValue = "";
+		ageSelect.value = "";
+		weekValue = "";
+		searchInput.focus();
+		reloadNow();
+	}
 	function catalogueComplete() {
 		return coverage?.complete === true && !nextCursor;
 	}
@@ -23779,9 +23810,16 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		}
 		const shown = visibleRows();
 		if (!shown.length) {
+			const filtered = filtersActive(), complete = catalogueComplete();
 			tableHost.replaceChildren(emptyState({
-				icon: "search",
-				title: t("reg_empty")
+				icon: filtered ? "search" : "inbox",
+				title: t(!complete ? "reg_empty_partial" : filtered ? "reg_empty" : "reg_empty_all"),
+				text: !complete && filtered ? t("reg_no_loaded_matches") : null,
+				action: filtered ? button({
+					size: "sm",
+					label: t("reg_clear_filters"),
+					onClick: clearFilters
+				}) : null
 			}));
 			return;
 		}
@@ -24249,11 +24287,17 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				refresh();
 				return;
 			}
-			statusLine.replaceChildren(inlineError({
-				error: { message: t("reg_detail_error") },
-				retry: () => void loadDetail(rowId)
-			}));
+			statusLine.replaceChildren(readError(t("reg_detail_error"), () => void loadDetail(rowId)));
 		}
+	}
+	function readError(message, retry) {
+		const notice = inlineError({ error: { message } });
+		notice.append(button({
+			size: "sm",
+			label: t("ui_retry"),
+			onClick: retry
+		}));
+		return notice;
 	}
 	function fail(error) {
 		serial++;
@@ -24271,10 +24315,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		preference.inspector = false;
 		closeSheet(false);
 		onMeta(null);
-		statusLine.replaceChildren(inlineError({
-			error: { message: t("reg_read_error") },
-			retry: () => void refresh()
-		}));
+		statusLine.replaceChildren(readError(t("reg_read_error"), () => void refresh()));
 		render();
 	}
 	function withdraw() {
@@ -29074,7 +29115,11 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}
 	}, ...["status", "milestone"].map((value) => h$1("option", { value }, t("wv_" + value))));
 	group.value = preference.group || "status";
-	const content = h$1("div", { class: "pm-board-content" }, list), layout = h$1("div", { class: "pm-work-layout" }, content);
+	const empty = h$1("div", {
+		"data-board-empty": "",
+		hidden: true
+	});
+	const content = h$1("div", { class: "pm-board-content" }, list, empty), layout = h$1("div", { class: "pm-work-layout" }, content);
 	const element = h$1("section", {
 		class: "pm-kanban",
 		"data-pm-kanban": ""
@@ -29169,7 +29214,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		refreshButton.disabled = false;
 		element.removeAttribute("aria-busy");
 		list.hidden = true;
-		content.querySelector(".ui-empty")?.remove();
+		empty.hidden = true;
+		empty.replaceChildren();
 		element.querySelector("[data-board-partial]")?.remove();
 		requirementFilter.replaceChildren(h$1("option", { value: "" }, t("wv_all_requirements")));
 		delete requirementFilter.dataset.options;
@@ -29183,18 +29229,21 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		const signature = JSON.stringify([message, labelSegment(error.code)]);
 		if (signature === failureSignature) return;
 		failureSignature = signature;
-		status.replaceChildren(inlineError({ error: { message } }), ...error.code ? [disclosure({
-			label: t("wv_details"),
-			body: h$1("p", {}, labelSegment(error.code))
-		})] : [], h$1("button", {
-			type: "button",
-			class: "ui-button secondary",
-			onclick: () => {
+		const notice = inlineError({ error: { message } });
+		notice.append(button({
+			size: "sm",
+			label: t("ui_retry"),
+			onClick: () => {
 				if (reading) return;
 				pages = 1;
 				refresh();
 			}
-		}, t("pm_kanban_retry")));
+		}));
+		const code = labelSegment(error.code);
+		status.replaceChildren(h$1("div", { class: "pm-board-error" }, notice, code && !message.includes(code) ? disclosure({
+			label: t("wv_details"),
+			body: h$1("p", { class: "mono" }, code)
+		}) : null));
 	}
 	function requirements(card) {
 		return ((card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id))?.document?.requirements || []).filter((row) => card.binding.requirement_ids?.includes(row.id));
@@ -29214,11 +29263,46 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		fill(agentFilter, "wv_all_agents", [...sources.values()].flatMap((source) => workAgents(source).map((agent) => [agent, cliName(agent)])), preference.agent);
 	}
 	const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
+	const partialRead = () => partialWorkPage() || [...sources.values()].some((source) => deliveryCoverage(source) !== "complete");
+	const filtersActive = () => Boolean(search.value.trim() || requirementFilter.value || agentFilter.value);
+	function clearFilters() {
+		search.value = "";
+		requirementFilter.value = "";
+		agentFilter.value = "";
+		preference.search = "";
+		preference.requirement = "";
+		preference.agent = "";
+		search.focus();
+		renderColumns(true);
+	}
+	function renderEmpty(count) {
+		list.hidden = !count;
+		empty.hidden = Boolean(count);
+		if (count) {
+			empty.replaceChildren();
+			return;
+		}
+		const filtered = filtersActive(), partial = partialRead();
+		empty.replaceChildren(emptyState({
+			title: t(partial ? "pm_kanban_incomplete" : filtered ? "pm_kanban_no_matches" : "pm_kanban_empty"),
+			text: partial && filtered ? t("pm_kanban_no_loaded_matches") : null,
+			action: filtered ? button({
+				size: "sm",
+				label: t("pm_kanban_clear_filters"),
+				onClick: clearFilters
+			}) : null
+		}));
+	}
 	function renderMetrics() {
 		if (!page) return;
-		const partial = partialWorkPage() || [...sources.values()].some((source) => deliveryCoverage(source) !== "complete");
+		const partial = partialRead();
 		const blocked = [...rows.values()].filter(({ card }) => blockedWork(card)).length;
-		meta.textContent = joinLabel([t(partial ? "wv_loaded" : "wv_work_count", { n: rows.size }), blocked ? t(blocked === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: blocked }) : null]);
+		const shown = [...rows.values()].filter(({ node }) => !node.hidden).length;
+		meta.textContent = joinLabel([
+			t(partial ? "wv_loaded" : "wv_work_count", { n: rows.size }),
+			blocked ? t(blocked === 1 ? "wv_blocked_one" : "wv_blocked_count", { n: blocked }) : null,
+			filtersActive() ? t(shown ? "reg_shown" : "pm_kanban_none_shown", { n: shown }) : null
+		]);
 		boardInfo.replaceChildren(...[
 			page.wip ? h$1("p", {}, t("pm_kanban_wip", page.wip)) : note("wv_source_unavailable"),
 			partial ? note("pm_kanban_partial") : null,
@@ -29324,7 +29408,13 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		return [...columns, "archived"].includes(card.column) ? card.column : "unknown";
 	}
 	function renderColumns(force = false) {
-		if (!page || !rows.size) return;
+		if (!page) return;
+		if (!rows.size) {
+			list.replaceChildren();
+			renderEmpty(0);
+			renderMetrics();
+			return;
+		}
 		const query = search.value.trim().toLocaleLowerCase();
 		const groupKeys = group.value === "status" ? [...columns] : milestones.map((row) => row.milestone_id);
 		const currentLanes = new Map([...list.children].map((node) => [node.dataset.pmKanbanColumn, node]));
@@ -29380,6 +29470,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			else label.removeAttribute("aria-label");
 		}
 		markSelection();
+		renderEmpty([...rows.values()].filter(({ node }) => !node.hidden).length);
+		renderMetrics();
 		requestAnimationFrame(updateEdges);
 	}
 	function markSelection() {
@@ -29422,10 +29514,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		next = data.next_cursor ?? null;
 		fillFilters();
 		renderColumns();
-		renderMetrics();
-		list.hidden = !rows.size;
 		failureSignature = "";
-		status.replaceChildren(...!rows.size ? [emptyState({ title: t("pm_kanban_empty") })] : []);
+		status.replaceChildren();
 		if (selected && !rows.has(selected)) {
 			selected = null;
 			preference.selected = null;
@@ -29625,7 +29715,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		return typeof title === "string" ? title : "";
 	}
 	function fitLanes() {
-		if (matchMedia("(max-width: 799px)").matches) {
+		if (matchMedia("(max-width: 599px)").matches) {
 			if (list.style.getPropertyValue("--board-lane")) list.style.removeProperty("--board-lane");
 			return;
 		}

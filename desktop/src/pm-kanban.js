@@ -1,5 +1,5 @@
 import {h} from './ui/dom.js';
-import {searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState, inlineError} from './ui/components.js';
+import {button, searchField, pageHeader, iconButton, statusPill, agentMark, contextChip, disclosure, emptyState, inlineError} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {cliName} from './pm-agents-trend.js';
@@ -23,7 +23,8 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const agentFilter = h('select', {'aria-label': t('wv_agent'), onchange: () => {preference.agent = agentFilter.value; renderColumns(true);}});
   const group = h('select', {'aria-label': t('wv_group'), onchange: () => {preference.group = group.value; renderColumns(true);}},
     ...['status', 'milestone'].map(value => h('option', {value}, t('wv_' + value)))); group.value = preference.group || 'status';
-  const content = h('div', {class: 'pm-board-content'}, list), layout = h('div', {class: 'pm-work-layout'}, content);
+  const empty = h('div', {'data-board-empty': '', hidden: true});
+  const content = h('div', {class: 'pm-board-content'}, list, empty), layout = h('div', {class: 'pm-work-layout'}, content);
   const element = h('section', {class: 'pm-kanban', 'data-pm-kanban': ''},
     !embedded ? pageHeader({title: t('ui_board'), meta, actions: [refreshButton]}) : null,
     h('div', {class: 'pm-board-toolbar'}, searchField(search, {class:'pm-work-search'}), requirementFilter, agentFilter, h('label', {}, t('wv_group'), group)),
@@ -64,7 +65,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (!keepStatus) {failureSignature = ''; status.replaceChildren();}
     if (forgetRoute) writeSelection(null);
     closeRetaining(); list.replaceChildren(); meta.replaceChildren(); boardInfo.replaceChildren(); more.hidden = true; more.disabled = false; refreshButton.disabled = false; element.removeAttribute('aria-busy');
-    list.hidden = true; content.querySelector('.ui-empty')?.remove(); element.querySelector('[data-board-partial]')?.remove();
+    list.hidden = true; empty.hidden = true; empty.replaceChildren(); element.querySelector('[data-board-partial]')?.remove();
     requirementFilter.replaceChildren(h('option', {value: ''}, t('wv_all_requirements'))); delete requirementFilter.dataset.options;
     agentFilter.replaceChildren(h('option', {value: ''}, t('wv_all_agents'))); delete agentFilter.dataset.options;
   }
@@ -74,9 +75,11 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     const signature = JSON.stringify([message, labelSegment(error.code)]);
     if (signature === failureSignature) return;
     failureSignature = signature;
-    status.replaceChildren(inlineError({error: {message}}),
-    ...(error.code ? [disclosure({label: t('wv_details'), body: h('p', {}, labelSegment(error.code))})] : []),
-    h('button', {type: 'button', class: 'ui-button secondary', onclick: () => {if (reading) return; pages = 1; void refresh();}}, t('pm_kanban_retry')));}
+    const notice = inlineError({error: {message}});
+    notice.append(button({size: 'sm', label: t('ui_retry'), onClick: () => {if (reading) return; pages = 1; void refresh();}}));
+    const code = labelSegment(error.code);
+    status.replaceChildren(h('div', {class: 'pm-board-error'}, notice,
+      code && !message.includes(code) ? disclosure({label: t('wv_details'), body: h('p', {class: 'mono'}, code)}) : null));}
   function requirements(card) {const bound = card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id);
     return (bound?.document?.requirements || []).filter(row => card.binding.requirement_ids?.includes(row.id));}
   function fillFilters() {
@@ -91,11 +94,31 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     fill(agentFilter, 'wv_all_agents', [...sources.values()].flatMap(source => workAgents(source).map(agent => [agent, cliName(agent)])), preference.agent);
   }
   const partialWorkPage = () => next != null || page?.visibility_filtered || page?.coverage?.byte_limited || page?.coverage?.visibility_filtered || page?.coverage?.withdrawn;
+  const partialRead = () => partialWorkPage() || [...sources.values()].some(source => deliveryCoverage(source) !== 'complete');
+  const filtersActive = () => Boolean(search.value.trim() || requirementFilter.value || agentFilter.value);
+  function clearFilters() {
+    search.value = ''; requirementFilter.value = ''; agentFilter.value = '';
+    preference.search = ''; preference.requirement = ''; preference.agent = '';
+    search.focus(); renderColumns(true);
+  }
+  function renderEmpty(count) {
+    list.hidden = !count;
+    empty.hidden = Boolean(count);
+    if (count) {empty.replaceChildren(); return;}
+    const filtered = filtersActive(), partial = partialRead();
+    empty.replaceChildren(emptyState({
+      title: t(partial ? 'pm_kanban_incomplete' : filtered ? 'pm_kanban_no_matches' : 'pm_kanban_empty'),
+      text: partial && filtered ? t('pm_kanban_no_loaded_matches') : null,
+      action: filtered ? button({size: 'sm', label: t('pm_kanban_clear_filters'), onClick: clearFilters}) : null,
+    }));
+  }
   function renderMetrics() {
     if (!page) return;
-    const partial = partialWorkPage() || [...sources.values()].some(source => deliveryCoverage(source) !== 'complete');
+    const partial = partialRead();
     const blocked = [...rows.values()].filter(({card}) => blockedWork(card)).length;
-    meta.textContent = joinLabel([t(partial ? 'wv_loaded' : 'wv_work_count', {n: rows.size}), blocked ? t(blocked === 1 ? 'wv_blocked_one' : 'wv_blocked_count', {n: blocked}) : null]);
+    const shown = [...rows.values()].filter(({node}) => !node.hidden).length;
+    meta.textContent = joinLabel([t(partial ? 'wv_loaded' : 'wv_work_count', {n: rows.size}), blocked ? t(blocked === 1 ? 'wv_blocked_one' : 'wv_blocked_count', {n: blocked}) : null,
+      filtersActive() ? t(shown ? 'reg_shown' : 'pm_kanban_none_shown', {n: shown}) : null]);
     boardInfo.replaceChildren(...[page.wip ? h('p', {}, t('pm_kanban_wip', page.wip)) : note('wv_source_unavailable'),
       partial ? note('pm_kanban_partial') : null, page.coverage?.byte_limited ? note('pm_kanban_bounded') : null].filter(Boolean));
     element.querySelector('[data-board-partial]')?.remove();
@@ -151,7 +174,8 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     return [...columns, 'archived'].includes(card.column) ? card.column : 'unknown';
   }
   function renderColumns(force = false) {
-    if (!page || !rows.size) return;
+    if (!page) return;
+    if (!rows.size) {list.replaceChildren(); renderEmpty(0); renderMetrics(); return;}
     const query = search.value.trim().toLocaleLowerCase();
     const groupKeys = group.value === 'status' ? [...columns] : milestones.map(row => row.milestone_id);
     const currentLanes = new Map([...list.children].map(node => [node.dataset.pmKanbanColumn, node]));
@@ -187,6 +211,8 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       }
     }
     markSelection();
+    renderEmpty([...rows.values()].filter(({node}) => !node.hidden).length);
+    renderMetrics();
     requestAnimationFrame(updateEdges);
   }
   function markSelection() {for (const {node, card} of rows.values()) node.querySelector('[data-board-open]').setAttribute('aria-pressed', String(selected === card.work_item_id));}
@@ -204,9 +230,8 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     }
     page = data; const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (routeId && rows.has(routeId)) {selected = routeId; preference.selected = routeId;}
-    next = data.next_cursor ?? null; fillFilters(); renderColumns(); renderMetrics();
-    list.hidden = !rows.size;
-    failureSignature = ''; status.replaceChildren(...(!rows.size ? [emptyState({title: t('pm_kanban_empty')})] : []));
+    next = data.next_cursor ?? null; fillFilters(); renderColumns();
+    failureSignature = ''; status.replaceChildren();
     if (selected && !rows.has(selected)) {selected = null; preference.selected = null; writeSelection(null); closeRetaining(); viewHeading()?.focus();}
     else if (selected && active) void select(selected, true);
   }
@@ -279,7 +304,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   function titleFor(id) {const title = rows.get(id)?.card?.work?.title; return typeof title === 'string' ? title : '';}
   function fitLanes() {
-    if (matchMedia('(max-width: 799px)').matches) {
+    if (matchMedia('(max-width: 599px)').matches) {
       if (list.style.getPropertyValue('--board-lane')) list.style.removeProperty('--board-lane');
       return;
     }

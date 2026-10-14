@@ -389,7 +389,7 @@ for (const locale of ['en', 'zh-TW']) test(`S1 Board keeps Retry focus and statu
   try {
     await f.mount(page, 'board');
     const status = page.locator('[data-pm-kanban] > [role=status]');
-    const retry = status.getByRole('button', {name: locale === 'en' ? 'Retry work flow' : '重試工作流', exact: true});
+    const retry = status.getByRole('button', {name: locale === 'en' ? 'Retry' : '重試', exact: true});
     await expect(retry).toBeVisible();
     await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
     expect(reads).toBe(1); // Activation and the initial workspace read share one request.

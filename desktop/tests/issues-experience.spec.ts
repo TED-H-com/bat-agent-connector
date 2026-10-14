@@ -48,6 +48,7 @@ function textFor(locale: Locale) {
     shown: (n: number) => zh ? `顯示 ${n} 筆` : `${n} shown`,
     none: zh ? '目前沒有顯示' : 'None shown',
     empty: zh ? '沒有符合的紀錄' : 'No matching records',
+    incomplete: zh ? '紀錄不完整' : 'Records incomplete',
     unavailable: zh ? '來源無法取得' : 'Source unavailable',
     loadMore: zh ? '載入更多' : 'Load more',
     noReasons: zh ? '沒有記下原因欄位' : 'No reason fields recorded',
@@ -199,7 +200,8 @@ for (const locale of locales) {
     await expect(meta).not.toContainText(copy.zh ? '風險' : 'Risk');
     await page.locator('[data-reg-owner]').fill('empty-source');
     await expect(meta).toHaveText(copy.none);
-    await expect(page.getByRole('heading', {level: 2, name: copy.empty})).toBeVisible();
+    await expect(page.getByRole('heading', {level: 2, name: copy.incomplete})).toBeVisible();
+    await expect(page.getByRole('heading', {level: 2, name: copy.empty})).toHaveCount(0);
     await expect(page.locator('[data-reg-summary]')).toBeHidden();
     await page.locator('[data-reg-owner]').fill('');
     await expect(table).toHaveCount(3);

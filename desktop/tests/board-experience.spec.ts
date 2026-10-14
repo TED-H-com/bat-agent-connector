@@ -121,7 +121,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
   await expect(inspector).toHaveCount(0);
   await page.keyboard.press('Escape'); await expect(card.locator('[data-board-open]')).toBeFocused();
   await page.keyboard.press('ArrowLeft'); await expect(card.locator('[data-board-open]')).not.toBeFocused();
-  if (width < 800) {
+  if (width < 600) {
     const lanes = board.locator('[data-pm-kanban-column]');
     const boxes = await lanes.evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().x)); expect(new Set(boxes).size).toBe(1);
     const toggle = lanes.first().getByRole('button').first(); await toggle.click(); await expect(toggle).toHaveAttribute('aria-expanded', 'false');
