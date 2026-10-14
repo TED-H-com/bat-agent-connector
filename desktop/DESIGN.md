@@ -755,3 +755,6 @@ Issues. Closed discussion tools wait for their next visible disclosure.
 Agents event reads respect Pause updates. A later event can supersede an older
 in-flight source read while updates are running; only explicit Refresh bypasses
 the pause. Parent authorization remains checked while the projection is paused.
+
+Lifecycle and delivery detail summaries use the shared action and operation-status
+labels. PM writer states reuse nativeRunState; step names remain identifiers.

@@ -2156,7 +2156,7 @@ function deliveryWork(item, repositories = [], compact = false) {
   if (item.eligible && state.caps?.features?.execution_delivery?.version === 1) links.push(h("a", {
     href: `#/delivery/${[item.host, item.kind, item.id, repo].map(encodeURIComponent).join("/")}`}, t("delivery_review_result")));
   return h("div", {class: "row", "data-project-work": item.id}, h("div", {class: "grow"},
-    compact ? null : h("strong", {}, item.title || item.branch || item.action || item.id), compact ? null : [" ", chip(t(activity.key), activity.tone)],
+    compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)],
     h("p", {class: "muted"}, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)),
     h("p", {class: "muted"}, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded"
       ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status),
@@ -2210,7 +2210,7 @@ function deploymentReceipt(dep) {
       fill(body, h("dl", { class: "kv" }, ...values.filter(([, v]) => v !== null && v !== undefined && v !== "")
         .flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])),
         op.status_reason ? h("p", {}, op.status_reason) : null,
-        ...(op.steps || []).map(s => h("div", { class: "row" }, h("code", {}, s.name), h("code", {}, s.status))));
+        ...(op.steps || []).map(s => h("div", { class: "row" }, h("code", {}, s.name), h("span", {}, operationStatusLabel(s.status)))));
     } catch (e) { fill(body, errorBox(e)); read = false; }
   });
   return details;

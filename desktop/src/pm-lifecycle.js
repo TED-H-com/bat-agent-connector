@@ -1,3 +1,5 @@
+import {nativeRunState} from './pm-native-analysis.js';
+import {actionLabel, operationStatusLabel} from './global-labels.js';
 import {emptyState, skeleton} from './ui/components.js';
 // Management intent and execution admissions stay on the central journal.
 export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,form,input,labelled,errorBox,onChange}) {
@@ -98,7 +100,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
         if(retentionLocked()){check.checked=chosen().includes(id);return;}
         retain.set('operations',JSON.stringify(check.checked?[...new Set([...chosen(),id])]:chosen().filter(value=>value!==id)));retain.update();
       });
-      retentionChoices.append(h('label',{},check,' ',row?`${row.action} · ${row.operation_status}`:t('pm_lifecycle_retained_missing'),h('code',{},id)));
+      retentionChoices.append(h('label',{},check,' ',row?`${actionLabel(row.action)} · ${operationStatusLabel(row.operation_status)}`:t('pm_lifecycle_retained_missing'),h('code',{},id)));
     }
     retention.hidden=!current?.lifecycle.transition_id&&!retain.locked()&&!selected.length;
   }
@@ -107,10 +109,10 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
     if(!rows.length)work.append(emptyState({title:t('pm_lifecycle_inflight_empty')}));
     if(workFiltered)work.append(h('p',{class:'muted'},t('pm_lifecycle_filtered')));
     for(const row of rows){
-      const details=h('details',{'data-pm-lifecycle-operation':row.operation_id},h('summary',{},row.action,' · ',t('pm_lifecycle_'+row.disposition)),
-        h('p',{},row.actor,' · ',row.operation_status),h('a',{href:`#/op/${row.operation_id}`},t('pm_operation')));
-      for(const step of row.steps||[])details.append(h('p',{class:'muted'},`${step.name} · ${step.status}`));
-      if(row.writer)details.append(h('p',{class:'muted'},`${t('pm_lifecycle_writer')}: ${row.writer.status}`));
+      const details=h('details',{'data-pm-lifecycle-operation':row.operation_id},h('summary',{},actionLabel(row.action),' · ',t('pm_lifecycle_'+row.disposition)),
+        h('p',{},row.actor,' · ',operationStatusLabel(row.operation_status)),h('a',{href:`#/op/${row.operation_id}`},t('pm_operation')));
+      for(const step of row.steps||[])details.append(h('p',{class:'muted'},`${step.name} · ${operationStatusLabel(step.status)}`));
+      if(row.writer)details.append(h('p',{class:'muted'},`${t('pm_lifecycle_writer')}: ${nativeRunState(t,row.writer)}`));
       if(row.retention)details.append(h('p',{},row.retention.reason));
       if(row.retention_visibility_filtered)details.append(h('p',{class:'muted'},t('pm_lifecycle_filtered')));
       work.append(details);

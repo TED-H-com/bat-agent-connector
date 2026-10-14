@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Use the same bilingual action and operation-status labels in lifecycle summaries and project delivery work.
+
 - Preserve Agents’ paused source snapshot during coalesced event refreshes.
 
 - Preserve parent authorization withdrawal and draft recovery while coalescing visible PM sources; hidden Requirements and Board reopen behind a skeleton until their own reads settle.

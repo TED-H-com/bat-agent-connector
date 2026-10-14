@@ -23833,6 +23833,364 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 	};
 }
 //#endregion
+//#region src/pm-context-bundle.js
+function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
+	const value = h("input", { type: "hidden" }), summary = h("div", { "data-pm-context-selection": "" });
+	const status = h("p", {
+		class: "muted",
+		role: "status"
+	}), details = h("div", { "data-pm-context-preview": "" });
+	let request = null, preview = null, verified = null, loading = false, generation = 0;
+	const supported = () => caps()?.features?.pm_workspaces?.accepted_context_bundle?.schema === "pm_context_bundle_v1";
+	const currentVersion = () => thread()?.thread?.version;
+	const selected = () => {
+		try {
+			return value.value ? validate(JSON.parse(value.value)) : null;
+		} catch {
+			return null;
+		}
+	};
+	function validate(row) {
+		const ref = row?.context_bundle_ref, sha = /^[0-9a-f]{64}$/;
+		if (row?.schema !== "pm_context_bundle_preview_v1" || row.workspace_id !== target.workspace_id || row.thread_id !== target.thread_id || !Number.isSafeInteger(row.thread_version) || row.thread_version < 1 || ref?.schema !== "pm_context_bundle_v1" || Object.keys(ref).sort().join(",") !== "adoption_operation_id,document_digest,git_receipt_digest,revision_id,schema" || !/^pmrev_[0-9a-f]{32}$/.test(ref.revision_id) || !/^op_[0-9a-f]{32}$/.test(ref.adoption_operation_id) || !sha.test(ref.document_digest) || !sha.test(ref.git_receipt_digest) || !Array.isArray(row.manifest) || !row.manifest.length || row.manifest.some((file) => typeof file.path !== "string" || !sha.test(file.digest) || !Number.isSafeInteger(file.utf8_bytes) || file.utf8_bytes < 0 || typeof file.included !== "boolean") || typeof row.coverage?.accepted_document_complete !== "boolean" || row.coverage.accepted_document_complete !== row.manifest.every((file) => file.included) || row.coverage.acceptance_coverage !== (row.coverage.accepted_document_complete ? "complete_original_document" : "incomplete_original_document") || row.execution_authorized !== false || row.coverage.execution_authorized !== false || row.coverage.adoption_authorized !== false || row.authority !== "context_only") throw Error(t("pm_cb_invalid"));
+		return row;
+	}
+	const signature = (row) => JSON.stringify(row?.context_bundle_ref);
+	const valid = () => !value.value || Boolean(selected() && verified === value.value && selected().thread_version === currentVersion() && supported());
+	const inspect = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: async () => {
+			try {
+				guard?.();
+				if (loading || request?.locked() || !supported()) return;
+				loading = true;
+				const ticket = ++generation, actor = caps()?.actor;
+				preview = null;
+				verified = null;
+				status.replaceChildren(skeleton(2));
+				details.replaceChildren();
+				update();
+				request?.update();
+				const result = await api("GET", `/pm/workspaces/${encodeURIComponent(target.workspace_id)}/threads/${encodeURIComponent(target.thread_id)}/context-bundle`);
+				guard?.();
+				if (ticket !== generation || caps()?.actor !== actor || request?.locked()) return;
+				preview = validate(result);
+				if (preview.thread_version !== currentVersion()) throw Error(t("pm_cb_stale"));
+				const old = selected();
+				if (old && signature(old) === signature(preview) && old.thread_version === preview.thread_version && JSON.stringify(old.manifest) === JSON.stringify(preview.manifest)) verified = value.value;
+				status.textContent = "";
+				renderDetails(preview);
+			} catch (error) {
+				preview = null;
+				verified = null;
+				details.replaceChildren();
+				status.textContent = error.message || t("pm_cb_unavailable");
+			} finally {
+				loading = false;
+				update();
+				request?.update();
+			}
+		}
+	}, t("pm_cb_preview"));
+	const choose = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			try {
+				guard?.();
+				if (!preview || preview.thread_version !== currentVersion() || request?.locked()) return;
+				request.set("accepted_context", JSON.stringify(preview));
+				verified = value.value;
+				update();
+				request.update();
+			} catch {}
+		}
+	}, t("pm_cb_select"));
+	const clear = h("button", {
+		type: "button",
+		class: "secondary",
+		hidden: true,
+		onclick: () => {
+			try {
+				guard?.();
+				if (request?.locked()) return;
+				request.set("accepted_context", "");
+				verified = null;
+				update();
+				request.update();
+			} catch {}
+		}
+	}, t("pm_cb_clear"));
+	const box = h("details", { "data-pm-context-bundle": "" }, h("summary", {}, t("pm_cb_title")), h("p", { class: "muted" }, t("pm_cb_help")), value, summary, h("div", { class: "actions" }, inspect, clear), status, details, choose);
+	function renderDetails(row) {
+		details.replaceChildren(h("p", {}, h("strong", {}, t(row.coverage.accepted_document_complete ? "pm_cb_complete" : "pm_cb_incomplete"))), h("p", { class: "pm-source" }, t("pm_cb_revision"), " ", row.context_bundle_ref.revision_id), h("ul", {}, ...row.manifest.map((file) => h("li", { class: "pm-source" }, file.path, " · ", t(file.included ? "pm_cb_included" : "pm_cb_omitted"), " · ", String(file.utf8_bytes), " ", t("pm_cb_bytes")))), h("p", { class: "muted" }, t("pm_cb_boundary")));
+	}
+	function update() {
+		const locked = request?.locked(), row = selected();
+		box.hidden = !supported() && !value.value;
+		inspect.disabled = Boolean(locked || loading || !supported() || !thread());
+		choose.hidden = !preview;
+		choose.disabled = Boolean(locked || loading || preview?.thread_version !== currentVersion());
+		choose.textContent = t(preview?.coverage.accepted_document_complete ? "pm_cb_select" : "pm_cb_select_partial");
+		clear.hidden = !value.value;
+		clear.disabled = Boolean(locked);
+		summary.replaceChildren();
+		if (value.value) summary.append(h("p", {}, h("strong", {}, t("pm_cb_selected")), " ", row ? row.context_bundle_ref.revision_id : t("pm_cb_invalid")), h("p", { class: "muted" }, t(row?.coverage.accepted_document_complete ? "pm_cb_complete" : "pm_cb_incomplete")), h("p", { class: "muted" }, t(locked ? "pm_cb_original" : valid() ? "pm_cb_fixed" : "pm_cb_recheck")));
+	}
+	return {
+		box,
+		value,
+		valid,
+		update,
+		bind: (form) => {
+			request = form;
+			update();
+		},
+		params: (values) => {
+			if (!values.accepted_context) return {};
+			return { context_bundle_ref: validate(JSON.parse(values.accepted_context)).context_bundle_ref };
+		}
+	};
+}
+//#endregion
+//#region src/pm-native-analysis.js
+function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard }) {
+	const specs = [{
+		key: "native_analysis",
+		adapter: "codex-native-linux",
+		action: "pm.run.analyze",
+		label: "pm_analysis_local"
+	}, {
+		key: "bat_analysis",
+		adapter: "bat-pm-linux-v1",
+		action: "pm.run.bat.analyze",
+		label: "pm_analysis_bat"
+	}];
+	const advertised = (spec) => caps()?.features?.pm_workspaces?.[spec.key] === true;
+	const storage = typeof namespace === "string" ? `batc.pm.${namespace}.analysis-adapter.${JSON.stringify(target)}` : null;
+	let selected = specs.find((spec) => advertised(spec) && capability()?.[spec.key]?.eligible_for_preflight === true)?.key || specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
+	try {
+		const saved = storage && localStorage.getItem(storage);
+		if (specs.some((spec) => spec.key === saved)) {
+			selected = saved;
+			restored = true;
+		}
+	} catch {}
+	const selector = h("select", {
+		"aria-label": t("pm_analysis_adapter"),
+		"data-pm-analysis-adapter": ""
+	});
+	const explanation = h("p", {
+		class: "muted",
+		"data-pm-native-eligibility": ""
+	});
+	const binding = h("p", {
+		class: "pm-source",
+		"data-pm-analysis-binding": "",
+		hidden: true
+	});
+	const recovery = h("p", {
+		class: "muted",
+		"data-pm-analysis-recovery": "",
+		hidden: true
+	});
+	const current = h("div", { "data-pm-native-runs": "" });
+	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
+	const requests = [];
+	let composerNode = null, ask = null, connection = null, working = null, clock = null;
+	const otherLocked = (spec) => requests.some((row) => row.spec !== spec && row.request.locked());
+	for (const spec of specs) {
+		const purpose = input("pm_native_purpose", {
+			multiline: true,
+			max: 4e3
+		});
+		const model = input("pm_native_model", {
+			max: 128,
+			required: false
+		});
+		model.placeholder = t("pm_native_default_model");
+		const context = pmContextBundle({
+			h,
+			t,
+			api,
+			guard,
+			caps,
+			target,
+			thread
+		});
+		const request = form({
+			action: spec.action,
+			target,
+			fields: {
+				purpose,
+				model,
+				accepted_context: context.value
+			},
+			params: (values) => ({
+				purpose: values.purpose,
+				...context.params(values),
+				...values.model.trim() ? { model: values.model.trim() } : {}
+			}),
+			preconditions: () => ({ expected_version: thread().thread.version }),
+			permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec) && context.valid() && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
+			recoverPermitted: authorized,
+			label: "pm_native_analyze",
+			onSaved: refresh,
+			onStateChange: () => {
+				context.update();
+				if (ready) render();
+			},
+			extra: h("div", { class: "pm-fields" }, labelled("pm_native_purpose", purpose), context.box, labelled("pm_native_model", model))
+		});
+		context.bind(request);
+		requests.push({
+			spec,
+			request
+		});
+	}
+	if (!restored) selected = requests.find((row) => row.request.locked())?.spec.key || selected;
+	selector.addEventListener("change", () => {
+		try {
+			guard?.();
+		} catch {
+			return;
+		}
+		if (!specs.some((spec) => spec.key === selector.value)) return;
+		selected = selector.value;
+		try {
+			if (storage) localStorage.setItem(storage, selected);
+		} catch {}
+		update();
+	});
+	const box = h("section", {
+		class: "pm-packages pm-native-analysis",
+		"data-pm-native-analysis": ""
+	}, h("h3", {}, t("pm_native_title")), h("p", { class: "muted" }, t("pm_native_context_only")), h("div", { class: "pm-fields" }, labelled("pm_analysis_adapter", selector)), explanation, binding, recovery, ...requests.map((row) => row.request.box), current);
+	function render() {
+		const active = specs.find((spec) => spec.key === selected);
+		const descriptor = capability()?.[selected];
+		const options = requests.filter((row) => advertised(row.spec) || row.request.locked() || row.spec === active);
+		selector.replaceChildren(...options.map((row) => h("option", { value: row.spec.key }, t(row.spec.label) + (row.request.locked() ? " · " + t("pm_analysis_original") : ""))));
+		selector.value = selected;
+		for (const row of requests) row.request.box.hidden = row.spec !== active;
+		const pending = requests.filter((row) => row.spec !== active && row.request.locked());
+		recovery.hidden = !pending.length;
+		recovery.textContent = pending.length ? t("pm_analysis_recover_other") + " " + pending.map((row) => t(row.spec.label)).join(", ") : "";
+		const eligible = advertised(active) && descriptor?.eligible_for_preflight === true;
+		const reason = selected === "bat_analysis" ? {
+			PM_WORKTREE_REQUIRED: "pm_analysis_bat_worktree",
+			REPOSITORY_BINDING_CHANGED: "pm_analysis_bat_binding_changed",
+			HOST_READ_ONLY: "pm_analysis_bat_readonly"
+		} : {
+			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
+			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
+			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
+			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
+			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
+		};
+		explanation.textContent = t(!authorized() || descriptor?.authorized === false ? "pm_native_permissions" : eligible ? selected === "bat_analysis" ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : reason[descriptor?.reason] || (selected === "bat_analysis" ? "pm_analysis_bat_unavailable" : "pm_native_unavailable"));
+		if (composerNode) {
+			const request = requests.find((row) => row.spec === active)?.request;
+			ask.textContent = t(request?.locked() ? "pm_check_original" : "pd_ask");
+			ask.hidden = !eligible && !request?.locked();
+			ask.disabled = !request?.canSubmit();
+			connection.hidden = eligible;
+			discussionFeedback({
+				t,
+				request,
+				node: working,
+				eligible
+			});
+		}
+		const source = thread() && selected === "bat_analysis" && advertised(active) ? descriptor?.selected_binding : null;
+		if (!thread()) current.replaceChildren();
+		binding.hidden = !source;
+		binding.textContent = source ? t("pm_analysis_selected_binding") + " " + [
+			source.host,
+			source.workspace_id,
+			source.repository
+		].filter(Boolean).join(" · ") : "";
+	}
+	let lastRuns = [];
+	function update(runs) {
+		if (runs) lastRuns = runs;
+		render();
+		current.replaceChildren(...lastRuns.filter((run) => specs.some((spec) => spec.adapter === run.adapter)).map((run) => h("p", { class: "pm-source" }, h("strong", {}, run.purpose), " · ", t(specs.find((spec) => spec.adapter === run.adapter).label), " · ", nativeRunState(t, run), run.outcome?.actual_model ? " · " + run.outcome.actual_model : "", " · ", h("a", { href: `#/op/${encodeURIComponent(run.operation_id)}` }, t("pm_operation")))));
+		for (const row of requests) row.request.update();
+	}
+	ready = true;
+	update();
+	return {
+		box,
+		update,
+		recheck() {
+			for (const { request } of requests) request.recheck();
+		},
+		composer(textarea) {
+			ask = h("button", {
+				type: "button",
+				class: "secondary",
+				"data-discussion-ask": "",
+				onclick: () => {
+					const request = requests.find((row) => row.spec.key === selected)?.request;
+					if (!request) return;
+					if (!request.locked()) request.set("purpose", textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t("pd_ask"));
+					request.submit();
+				}
+			}, t("pd_ask"));
+			connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
+			working = h("p", {
+				class: "muted",
+				role: "status",
+				"data-discussion-working": ""
+			});
+			composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
+			clock = setInterval(() => {
+				const request = requests.find((row) => row.spec.key === selected)?.request;
+				if (composerNode.isConnected && request?.checking() && [
+					"running",
+					"accepted",
+					"queued",
+					"pending"
+				].includes(request?.operation()?.status)) render();
+			}, 1e3);
+			render();
+			return composerNode;
+		},
+		dispose() {
+			clearInterval(clock);
+		}
+	};
+}
+function nativeRunState(t, run) {
+	return t({
+		completed: "pm_native_completed",
+		aborted: "pm_native_aborted",
+		running: "pm_native_running",
+		reserved: "pm_native_preparing",
+		blocked: "pm_native_blocked",
+		unknown: "pm_native_unknown"
+	}[run.state || run.status] || "pm_native_unknown");
+}
+function pmDiscussionMessage({ h, t, message, time, timestamp }) {
+	const assistant = message.role === "assistant";
+	const provenance = message.provenance;
+	const complete = assistant && provenance?.completeness === "complete" && typeof provenance.native_turn_id === "string" && provenance.native_turn_id && typeof provenance.run_id === "string" && /^pmr_[0-9a-f]{32}$/.test(provenance.run_id);
+	const source = provenance?.source_refs || {};
+	const article = h("article", {
+		class: "pm-note",
+		"data-note-id": message.message_id,
+		"data-pm-role": assistant ? "assistant" : "user"
+	}, h("div", { class: "pm-note-stamp" }, assistant ? agentMark("pm") : h("span", {
+		class: "ui-agent-mark",
+		"aria-hidden": true
+	}, (message.actor || "?").slice(0, 2).toUpperCase()), h("strong", {}, assistant ? t("pm_native_assistant") : message.actor), assistant ? h("span", {}, provenance?.model || t("pm_native_unknown_model")) : "", timeStamp(message.created_at)), h("div", { class: "pm-note-text" }, message.content));
+	if (assistant) article.append(h("p", { class: "muted" }, t(complete ? "pm_native_reply_recorded" : "pm_native_reply_unproven")), h("details", { class: "pm-source" }, h("summary", {}, t("pm_native_evidence")), h("p", {}, t("pm_native_origin"), " ", String(source.adapter || t("pm_native_unknown_source"))), h("p", {}, t("pm_native_run"), " ", String(provenance?.run_id || "—")), h("p", {}, t("pm_native_thread"), " ", String(source.native_thread_id || provenance?.sdk_session_id || "—")), h("p", {}, t("pm_native_turn"), " ", String(provenance?.native_turn_id || "—")), h("p", {}, t("pm_native_message"), " ", String(provenance?.native_message_id || "—")), h("p", {}, t("pm_native_context"), " ", String(provenance?.context_digest || "—"))));
+	return article;
+}
+//#endregion
 //#region src/pm-lifecycle.js
 function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, form, input, labelled, errorBox, onChange }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/lifecycle`, actor = caps()?.actor;
@@ -24039,7 +24397,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 				retain.set("operations", JSON.stringify(check.checked ? [...new Set([...chosen(), id])] : chosen().filter((value) => value !== id)));
 				retain.update();
 			});
-			retentionChoices.append(h("label", {}, check, " ", row ? `${row.action} · ${row.operation_status}` : t("pm_lifecycle_retained_missing"), h("code", {}, id)));
+			retentionChoices.append(h("label", {}, check, " ", row ? `${actionLabel(row.action)} · ${operationStatusLabel(row.operation_status)}` : t("pm_lifecycle_retained_missing"), h("code", {}, id)));
 		}
 		retention.hidden = !current?.lifecycle.transition_id && !retain.locked() && !selected.length;
 	}
@@ -24048,9 +24406,9 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		if (!rows.length) work.append(emptyState({ title: t("pm_lifecycle_inflight_empty") }));
 		if (workFiltered) work.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 		for (const row of rows) {
-			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, row.action, " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", row.operation_status), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
-			for (const step of row.steps || []) details.append(h("p", { class: "muted" }, `${step.name} · ${step.status}`));
-			if (row.writer) details.append(h("p", { class: "muted" }, `${t("pm_lifecycle_writer")}: ${row.writer.status}`));
+			const details = h("details", { "data-pm-lifecycle-operation": row.operation_id }, h("summary", {}, actionLabel(row.action), " · ", t("pm_lifecycle_" + row.disposition)), h("p", {}, row.actor, " · ", operationStatusLabel(row.operation_status)), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation")));
+			for (const step of row.steps || []) details.append(h("p", { class: "muted" }, `${step.name} · ${operationStatusLabel(step.status)}`));
+			if (row.writer) details.append(h("p", { class: "muted" }, `${t("pm_lifecycle_writer")}: ${nativeRunState(t, row.writer)}`));
 			if (row.retention) details.append(h("p", {}, row.retention.reason));
 			if (row.retention_visibility_filtered) details.append(h("p", { class: "muted" }, t("pm_lifecycle_filtered")));
 			work.append(details);
@@ -34956,364 +35314,6 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 			renderProof();
 		}
 	};
-}
-//#endregion
-//#region src/pm-context-bundle.js
-function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
-	const value = h("input", { type: "hidden" }), summary = h("div", { "data-pm-context-selection": "" });
-	const status = h("p", {
-		class: "muted",
-		role: "status"
-	}), details = h("div", { "data-pm-context-preview": "" });
-	let request = null, preview = null, verified = null, loading = false, generation = 0;
-	const supported = () => caps()?.features?.pm_workspaces?.accepted_context_bundle?.schema === "pm_context_bundle_v1";
-	const currentVersion = () => thread()?.thread?.version;
-	const selected = () => {
-		try {
-			return value.value ? validate(JSON.parse(value.value)) : null;
-		} catch {
-			return null;
-		}
-	};
-	function validate(row) {
-		const ref = row?.context_bundle_ref, sha = /^[0-9a-f]{64}$/;
-		if (row?.schema !== "pm_context_bundle_preview_v1" || row.workspace_id !== target.workspace_id || row.thread_id !== target.thread_id || !Number.isSafeInteger(row.thread_version) || row.thread_version < 1 || ref?.schema !== "pm_context_bundle_v1" || Object.keys(ref).sort().join(",") !== "adoption_operation_id,document_digest,git_receipt_digest,revision_id,schema" || !/^pmrev_[0-9a-f]{32}$/.test(ref.revision_id) || !/^op_[0-9a-f]{32}$/.test(ref.adoption_operation_id) || !sha.test(ref.document_digest) || !sha.test(ref.git_receipt_digest) || !Array.isArray(row.manifest) || !row.manifest.length || row.manifest.some((file) => typeof file.path !== "string" || !sha.test(file.digest) || !Number.isSafeInteger(file.utf8_bytes) || file.utf8_bytes < 0 || typeof file.included !== "boolean") || typeof row.coverage?.accepted_document_complete !== "boolean" || row.coverage.accepted_document_complete !== row.manifest.every((file) => file.included) || row.coverage.acceptance_coverage !== (row.coverage.accepted_document_complete ? "complete_original_document" : "incomplete_original_document") || row.execution_authorized !== false || row.coverage.execution_authorized !== false || row.coverage.adoption_authorized !== false || row.authority !== "context_only") throw Error(t("pm_cb_invalid"));
-		return row;
-	}
-	const signature = (row) => JSON.stringify(row?.context_bundle_ref);
-	const valid = () => !value.value || Boolean(selected() && verified === value.value && selected().thread_version === currentVersion() && supported());
-	const inspect = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: async () => {
-			try {
-				guard?.();
-				if (loading || request?.locked() || !supported()) return;
-				loading = true;
-				const ticket = ++generation, actor = caps()?.actor;
-				preview = null;
-				verified = null;
-				status.replaceChildren(skeleton(2));
-				details.replaceChildren();
-				update();
-				request?.update();
-				const result = await api("GET", `/pm/workspaces/${encodeURIComponent(target.workspace_id)}/threads/${encodeURIComponent(target.thread_id)}/context-bundle`);
-				guard?.();
-				if (ticket !== generation || caps()?.actor !== actor || request?.locked()) return;
-				preview = validate(result);
-				if (preview.thread_version !== currentVersion()) throw Error(t("pm_cb_stale"));
-				const old = selected();
-				if (old && signature(old) === signature(preview) && old.thread_version === preview.thread_version && JSON.stringify(old.manifest) === JSON.stringify(preview.manifest)) verified = value.value;
-				status.textContent = "";
-				renderDetails(preview);
-			} catch (error) {
-				preview = null;
-				verified = null;
-				details.replaceChildren();
-				status.textContent = error.message || t("pm_cb_unavailable");
-			} finally {
-				loading = false;
-				update();
-				request?.update();
-			}
-		}
-	}, t("pm_cb_preview"));
-	const choose = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
-			try {
-				guard?.();
-				if (!preview || preview.thread_version !== currentVersion() || request?.locked()) return;
-				request.set("accepted_context", JSON.stringify(preview));
-				verified = value.value;
-				update();
-				request.update();
-			} catch {}
-		}
-	}, t("pm_cb_select"));
-	const clear = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
-			try {
-				guard?.();
-				if (request?.locked()) return;
-				request.set("accepted_context", "");
-				verified = null;
-				update();
-				request.update();
-			} catch {}
-		}
-	}, t("pm_cb_clear"));
-	const box = h("details", { "data-pm-context-bundle": "" }, h("summary", {}, t("pm_cb_title")), h("p", { class: "muted" }, t("pm_cb_help")), value, summary, h("div", { class: "actions" }, inspect, clear), status, details, choose);
-	function renderDetails(row) {
-		details.replaceChildren(h("p", {}, h("strong", {}, t(row.coverage.accepted_document_complete ? "pm_cb_complete" : "pm_cb_incomplete"))), h("p", { class: "pm-source" }, t("pm_cb_revision"), " ", row.context_bundle_ref.revision_id), h("ul", {}, ...row.manifest.map((file) => h("li", { class: "pm-source" }, file.path, " · ", t(file.included ? "pm_cb_included" : "pm_cb_omitted"), " · ", String(file.utf8_bytes), " ", t("pm_cb_bytes")))), h("p", { class: "muted" }, t("pm_cb_boundary")));
-	}
-	function update() {
-		const locked = request?.locked(), row = selected();
-		box.hidden = !supported() && !value.value;
-		inspect.disabled = Boolean(locked || loading || !supported() || !thread());
-		choose.hidden = !preview;
-		choose.disabled = Boolean(locked || loading || preview?.thread_version !== currentVersion());
-		choose.textContent = t(preview?.coverage.accepted_document_complete ? "pm_cb_select" : "pm_cb_select_partial");
-		clear.hidden = !value.value;
-		clear.disabled = Boolean(locked);
-		summary.replaceChildren();
-		if (value.value) summary.append(h("p", {}, h("strong", {}, t("pm_cb_selected")), " ", row ? row.context_bundle_ref.revision_id : t("pm_cb_invalid")), h("p", { class: "muted" }, t(row?.coverage.accepted_document_complete ? "pm_cb_complete" : "pm_cb_incomplete")), h("p", { class: "muted" }, t(locked ? "pm_cb_original" : valid() ? "pm_cb_fixed" : "pm_cb_recheck")));
-	}
-	return {
-		box,
-		value,
-		valid,
-		update,
-		bind: (form) => {
-			request = form;
-			update();
-		},
-		params: (values) => {
-			if (!values.accepted_context) return {};
-			return { context_bundle_ref: validate(JSON.parse(values.accepted_context)).context_bundle_ref };
-		}
-	};
-}
-//#endregion
-//#region src/pm-native-analysis.js
-function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard }) {
-	const specs = [{
-		key: "native_analysis",
-		adapter: "codex-native-linux",
-		action: "pm.run.analyze",
-		label: "pm_analysis_local"
-	}, {
-		key: "bat_analysis",
-		adapter: "bat-pm-linux-v1",
-		action: "pm.run.bat.analyze",
-		label: "pm_analysis_bat"
-	}];
-	const advertised = (spec) => caps()?.features?.pm_workspaces?.[spec.key] === true;
-	const storage = typeof namespace === "string" ? `batc.pm.${namespace}.analysis-adapter.${JSON.stringify(target)}` : null;
-	let selected = specs.find((spec) => advertised(spec) && capability()?.[spec.key]?.eligible_for_preflight === true)?.key || specs.find(advertised)?.key || specs[0].key, ready = false, restored = false;
-	try {
-		const saved = storage && localStorage.getItem(storage);
-		if (specs.some((spec) => spec.key === saved)) {
-			selected = saved;
-			restored = true;
-		}
-	} catch {}
-	const selector = h("select", {
-		"aria-label": t("pm_analysis_adapter"),
-		"data-pm-analysis-adapter": ""
-	});
-	const explanation = h("p", {
-		class: "muted",
-		"data-pm-native-eligibility": ""
-	});
-	const binding = h("p", {
-		class: "pm-source",
-		"data-pm-analysis-binding": "",
-		hidden: true
-	});
-	const recovery = h("p", {
-		class: "muted",
-		"data-pm-analysis-recovery": "",
-		hidden: true
-	});
-	const current = h("div", { "data-pm-native-runs": "" });
-	const authorized = () => permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("start");
-	const requests = [];
-	let composerNode = null, ask = null, connection = null, working = null, clock = null;
-	const otherLocked = (spec) => requests.some((row) => row.spec !== spec && row.request.locked());
-	for (const spec of specs) {
-		const purpose = input("pm_native_purpose", {
-			multiline: true,
-			max: 4e3
-		});
-		const model = input("pm_native_model", {
-			max: 128,
-			required: false
-		});
-		model.placeholder = t("pm_native_default_model");
-		const context = pmContextBundle({
-			h,
-			t,
-			api,
-			guard,
-			caps,
-			target,
-			thread
-		});
-		const request = form({
-			action: spec.action,
-			target,
-			fields: {
-				purpose,
-				model,
-				accepted_context: context.value
-			},
-			params: (values) => ({
-				purpose: values.purpose,
-				...context.params(values),
-				...values.model.trim() ? { model: values.model.trim() } : {}
-			}),
-			preconditions: () => ({ expected_version: thread().thread.version }),
-			permitted: () => selected === spec.key && advertised(spec) && authorized() && !otherLocked(spec) && context.valid() && capability()?.[spec.key]?.authorized !== false && capability()?.[spec.key]?.eligible_for_preflight === true,
-			recoverPermitted: authorized,
-			label: "pm_native_analyze",
-			onSaved: refresh,
-			onStateChange: () => {
-				context.update();
-				if (ready) render();
-			},
-			extra: h("div", { class: "pm-fields" }, labelled("pm_native_purpose", purpose), context.box, labelled("pm_native_model", model))
-		});
-		context.bind(request);
-		requests.push({
-			spec,
-			request
-		});
-	}
-	if (!restored) selected = requests.find((row) => row.request.locked())?.spec.key || selected;
-	selector.addEventListener("change", () => {
-		try {
-			guard?.();
-		} catch {
-			return;
-		}
-		if (!specs.some((spec) => spec.key === selector.value)) return;
-		selected = selector.value;
-		try {
-			if (storage) localStorage.setItem(storage, selected);
-		} catch {}
-		update();
-	});
-	const box = h("section", {
-		class: "pm-packages pm-native-analysis",
-		"data-pm-native-analysis": ""
-	}, h("h3", {}, t("pm_native_title")), h("p", { class: "muted" }, t("pm_native_context_only")), h("div", { class: "pm-fields" }, labelled("pm_analysis_adapter", selector)), explanation, binding, recovery, ...requests.map((row) => row.request.box), current);
-	function render() {
-		const active = specs.find((spec) => spec.key === selected);
-		const descriptor = capability()?.[selected];
-		const options = requests.filter((row) => advertised(row.spec) || row.request.locked() || row.spec === active);
-		selector.replaceChildren(...options.map((row) => h("option", { value: row.spec.key }, t(row.spec.label) + (row.request.locked() ? " · " + t("pm_analysis_original") : ""))));
-		selector.value = selected;
-		for (const row of requests) row.request.box.hidden = row.spec !== active;
-		const pending = requests.filter((row) => row.spec !== active && row.request.locked());
-		recovery.hidden = !pending.length;
-		recovery.textContent = pending.length ? t("pm_analysis_recover_other") + " " + pending.map((row) => t(row.spec.label)).join(", ") : "";
-		const eligible = advertised(active) && descriptor?.eligible_for_preflight === true;
-		const reason = selected === "bat_analysis" ? {
-			PM_WORKTREE_REQUIRED: "pm_analysis_bat_worktree",
-			REPOSITORY_BINDING_CHANGED: "pm_analysis_bat_binding_changed",
-			HOST_READ_ONLY: "pm_analysis_bat_readonly"
-		} : {
-			PM_NATIVE_PLATFORM_UNSUPPORTED: "pm_native_platform",
-			PM_NATIVE_EXECUTABLE_UNAVAILABLE: "pm_native_install",
-			PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "pm_native_managed",
-			PM_NATIVE_AUTH_UNAVAILABLE: "pm_native_auth",
-			PM_NATIVE_HOME_UNAVAILABLE: "pm_native_auth"
-		};
-		explanation.textContent = t(!authorized() || descriptor?.authorized === false ? "pm_native_permissions" : eligible ? selected === "bat_analysis" ? "pm_analysis_bat_preflight" : "pm_native_preflight_pending" : reason[descriptor?.reason] || (selected === "bat_analysis" ? "pm_analysis_bat_unavailable" : "pm_native_unavailable"));
-		if (composerNode) {
-			const request = requests.find((row) => row.spec === active)?.request;
-			ask.textContent = t(request?.locked() ? "pm_check_original" : "pd_ask");
-			ask.hidden = !eligible && !request?.locked();
-			ask.disabled = !request?.canSubmit();
-			connection.hidden = eligible;
-			discussionFeedback({
-				t,
-				request,
-				node: working,
-				eligible
-			});
-		}
-		const source = thread() && selected === "bat_analysis" && advertised(active) ? descriptor?.selected_binding : null;
-		if (!thread()) current.replaceChildren();
-		binding.hidden = !source;
-		binding.textContent = source ? t("pm_analysis_selected_binding") + " " + [
-			source.host,
-			source.workspace_id,
-			source.repository
-		].filter(Boolean).join(" · ") : "";
-	}
-	let lastRuns = [];
-	function update(runs) {
-		if (runs) lastRuns = runs;
-		render();
-		current.replaceChildren(...lastRuns.filter((run) => specs.some((spec) => spec.adapter === run.adapter)).map((run) => h("p", { class: "pm-source" }, h("strong", {}, run.purpose), " · ", t(specs.find((spec) => spec.adapter === run.adapter).label), " · ", nativeRunState(t, run), run.outcome?.actual_model ? " · " + run.outcome.actual_model : "", " · ", h("a", { href: `#/op/${encodeURIComponent(run.operation_id)}` }, t("pm_operation")))));
-		for (const row of requests) row.request.update();
-	}
-	ready = true;
-	update();
-	return {
-		box,
-		update,
-		recheck() {
-			for (const { request } of requests) request.recheck();
-		},
-		composer(textarea) {
-			ask = h("button", {
-				type: "button",
-				class: "secondary",
-				"data-discussion-ask": "",
-				onclick: () => {
-					const request = requests.find((row) => row.spec.key === selected)?.request;
-					if (!request) return;
-					if (!request.locked()) request.set("purpose", textarea.value.trim() || thread()?.messages?.at(-1)?.content || thread()?.thread?.title || t("pd_ask"));
-					request.submit();
-				}
-			}, t("pd_ask"));
-			connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
-			working = h("p", {
-				class: "muted",
-				role: "status",
-				"data-discussion-working": ""
-			});
-			composerNode = h("div", { class: "pd-ask" }, ask, connection, working);
-			clock = setInterval(() => {
-				const request = requests.find((row) => row.spec.key === selected)?.request;
-				if (composerNode.isConnected && request?.checking() && [
-					"running",
-					"accepted",
-					"queued",
-					"pending"
-				].includes(request?.operation()?.status)) render();
-			}, 1e3);
-			render();
-			return composerNode;
-		},
-		dispose() {
-			clearInterval(clock);
-		}
-	};
-}
-function nativeRunState(t, run) {
-	return t({
-		completed: "pm_native_completed",
-		aborted: "pm_native_aborted",
-		running: "pm_native_running",
-		reserved: "pm_native_preparing",
-		blocked: "pm_native_blocked",
-		unknown: "pm_native_unknown"
-	}[run.state || run.status] || "pm_native_unknown");
-}
-function pmDiscussionMessage({ h, t, message, time, timestamp }) {
-	const assistant = message.role === "assistant";
-	const provenance = message.provenance;
-	const complete = assistant && provenance?.completeness === "complete" && typeof provenance.native_turn_id === "string" && provenance.native_turn_id && typeof provenance.run_id === "string" && /^pmr_[0-9a-f]{32}$/.test(provenance.run_id);
-	const source = provenance?.source_refs || {};
-	const article = h("article", {
-		class: "pm-note",
-		"data-note-id": message.message_id,
-		"data-pm-role": assistant ? "assistant" : "user"
-	}, h("div", { class: "pm-note-stamp" }, assistant ? agentMark("pm") : h("span", {
-		class: "ui-agent-mark",
-		"aria-hidden": true
-	}, (message.actor || "?").slice(0, 2).toUpperCase()), h("strong", {}, assistant ? t("pm_native_assistant") : message.actor), assistant ? h("span", {}, provenance?.model || t("pm_native_unknown_model")) : "", timeStamp(message.created_at)), h("div", { class: "pm-note-text" }, message.content));
-	if (assistant) article.append(h("p", { class: "muted" }, t(complete ? "pm_native_reply_recorded" : "pm_native_reply_unproven")), h("details", { class: "pm-source" }, h("summary", {}, t("pm_native_evidence")), h("p", {}, t("pm_native_origin"), " ", String(source.adapter || t("pm_native_unknown_source"))), h("p", {}, t("pm_native_run"), " ", String(provenance?.run_id || "—")), h("p", {}, t("pm_native_thread"), " ", String(source.native_thread_id || provenance?.sdk_session_id || "—")), h("p", {}, t("pm_native_turn"), " ", String(provenance?.native_turn_id || "—")), h("p", {}, t("pm_native_message"), " ", String(provenance?.native_message_id || "—")), h("p", {}, t("pm_native_context"), " ", String(provenance?.context_digest || "—"))));
-	return article;
 }
 //#endregion
 //#region src/pm-workspace.js
@@ -51148,7 +51148,7 @@ function deliveryWork(item, repositories = [], compact = false) {
 	return h("div", {
 		class: "row",
 		"data-project-work": item.id
-	}, h("div", { class: "grow" }, compact ? null : h("strong", {}, item.title || item.branch || item.action || item.id), compact ? null : [" ", chip(t(activity.key), activity.tone)], h("p", { class: "muted" }, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)), h("p", { class: "muted" }, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded" ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status), " · ", t("delivery_result_unverified")), item.unavailable ? h("p", { class: "muted" }, t("delivery_source_unavailable"), " ", h("code", {}, item.unavailable.code)) : null, h("div", { class: "actions" }, ...links, ...(item.delivered_to || []).map((receipt) => h("a", {
+	}, h("div", { class: "grow" }, compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)], h("p", { class: "muted" }, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)), h("p", { class: "muted" }, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded" ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status), " · ", t("delivery_result_unverified")), item.unavailable ? h("p", { class: "muted" }, t("delivery_source_unavailable"), " ", h("code", {}, item.unavailable.code)) : null, h("div", { class: "actions" }, ...links, ...(item.delivered_to || []).map((receipt) => h("a", {
 		href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
 		target: "_blank",
 		rel: "noopener",
@@ -51209,7 +51209,7 @@ function deploymentReceipt(dep) {
 				[t("dep_attempt"), saved.run_attempt],
 				[t("dep_error_code"), op.error_code || saved.error_code || saved.reconciliation_error]
 			];
-			fill(body, h("dl", { class: "kv" }, ...values.filter(([, v]) => v !== null && v !== void 0 && v !== "").flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])), op.status_reason ? h("p", {}, op.status_reason) : null, ...(op.steps || []).map((s) => h("div", { class: "row" }, h("code", {}, s.name), h("code", {}, s.status))));
+			fill(body, h("dl", { class: "kv" }, ...values.filter(([, v]) => v !== null && v !== void 0 && v !== "").flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])), op.status_reason ? h("p", {}, op.status_reason) : null, ...(op.steps || []).map((s) => h("div", { class: "row" }, h("code", {}, s.name), h("span", {}, operationStatusLabel(s.status)))));
 		} catch (e) {
 			fill(body, errorBox(e));
 			read = false;
