@@ -35766,7 +35766,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value), pruneEmpty = false }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value), pruneEmpty = false }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -35820,6 +35820,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		input.addEventListener("change", changed);
 	}
 	const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope) && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
+	const sendReady = () => Boolean(saved.intent?.operation_id) || canSend();
 	const receiveReceipt = () => {
 		if (disposed || !form.isConnected || damaged || !saved.intent) return;
 		try {
@@ -35896,7 +35897,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		if (disposed || !form.isConnected) return;
 		const locked = busy || damaged || Boolean(saved.intent) || !allowed();
 		for (const input of Object.values(fields)) input.disabled = locked;
-		button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
 		button.textContent = t(saved.intent ? "pm_check_original" : label);
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
@@ -35905,7 +35906,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	}
 	async function run(automatic = false) {
 		if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
-		if (!allowed()) {
+		if (!allowed() || !sendReady()) {
 			if (!automatic) {
 				status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
 				update();
@@ -36040,7 +36041,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		submit: run,
 		edit: () => reset.click(),
 		replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused),
-		canSubmit: () => !disposed && !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused,
+		canSubmit: () => !disposed && !busy && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused,
 		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
 		stage: () => {
@@ -36091,7 +36092,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		values: () => capture()
 	};
 }
-async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, onContext = () => {}, openCreate = false }) {
+async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false }) {
 	if (!pmAvailable(caps())) {
 		main.append(h("p", {}, t("pm_unavailable")));
 		return;
@@ -36298,6 +36299,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			errorBox,
 			statusText: threadId ? (value) => discussionLabel(t, "pd_op_", value) : void 0,
 			...options,
+			canSend,
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
 			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)(),
 			onConnectionChange: (connected) => {
@@ -37387,6 +37389,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (section === brief && main.querySelector("[data-overview-related]")) return true;
 		return node?.isConnected && !node.closest("[hidden], details:not([open])");
 	};
+	const sectionRequired = (section) => section === lifecycle || sectionVisible(section);
 	function activateSection(section, value) {
 		if (!section) return;
 		activationReads.delete(section);
@@ -37426,7 +37429,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		activationReads.delete(section);
 		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section.refresh()));
 		alive();
-		if (sectionVisible(section)) revealSource(section);
+		if (sectionRequired(section)) revealSource(section);
 	}
 	function refreshStaleVisible() {
 		if (!loaded) return Promise.resolve();
@@ -37456,6 +37459,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const updateForms = () => {
 		for (const value of forms) value.update();
 	};
+	const offOnline = onOnline(() => {
+		try {
+			alive();
+			updateForms();
+		} catch {}
+	});
 	const timestamp = (value) => typeof value === "number" ? value * 1e3 : value;
 	const time = (value) => timeStamp(value, { empty: "" });
 	const sourceText = (item) => {
@@ -38350,9 +38359,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				traceability
 			]) {
 				const lazy = lazyThreadSections.get(section);
-				if (section && (!event || sectionVisible(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden)) {
+				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden)) {
 					await section.refresh();
-					if (sectionVisible(section)) revealSource(section);
+					if (sectionRequired(section)) revealSource(section);
 				}
 				alive();
 				if (ticket !== sequence) return;
@@ -38612,7 +38621,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const reads = [];
 		if (!pmEvent(kind) && (threadId || workbench?.selected() === "discussions")) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
 		if (pmEvent(kind)) reads.push(eventRead(refreshAuthority, refreshAuthority));
-		for (const section of sectionModules()) if (sectionVisible(section)) {
+		for (const section of sectionModules()) if (sectionRequired(section)) {
 			if (section === issues && kind !== "pm_workspace" && !kind.startsWith("pm_issue")) continue;
 			if (section === dependencies && !pmEvent(kind) && !["project", "integration"].includes(kind)) continue;
 			reads.push(eventRead(section, () => refreshSection(section)));
@@ -38630,6 +38639,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		discussionTools?.dispose();
 		sequence++;
 		off();
+		offOnline();
 		createPanel?.close();
 		detailPanel?.close();
 		reportMenu?.dispose();
@@ -54834,6 +54844,8 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
 		t,
 		api,
 		caps: () => state.caps,
+		canSend: () => !state.nativeBusy && state.online && state.viewReady,
+		onOnline,
 		guard: () => assertView(connection),
 		namespace: connection.namespace,
 		workspaceId: workspaceId === "new" ? null : workspaceId,

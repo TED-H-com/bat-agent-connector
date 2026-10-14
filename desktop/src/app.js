@@ -4147,6 +4147,7 @@ async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
   const view = threadId ? 'discussions' : viewOrThread || lastProjectView(state.namespace, workspaceId);
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   return mountPmWorkspace({main, h, t, api, caps: () => state.caps,
+    canSend: () => !state.nativeBusy && state.online && state.viewReady, onOnline,
     guard: () => assertView(connection), namespace: connection.namespace,
     workspaceId: workspaceId === 'new' ? null : workspaceId, threadId, view, onEvents, errorBox,
     onContext: context => shell?.update(context), openCreate: workspaceId === 'new'});

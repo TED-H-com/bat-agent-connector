@@ -4,7 +4,9 @@
 
 - Add a repeatable real-central PM decision walkthrough in English and zh-TW,
   with scripted native analysis, temporary Git, explicit issue resolution,
-  original-key adoption and resolution recovery, and step screenshots;
+  original-key adoption and resolution recovery, and step screenshots. Keep hidden
+  lifecycle admission fresh when events supersede Refresh, and pause original-key
+  retry controls while Central sending is paused;
   see [walkthrough status](docs/design/pm-decision-walkthrough.md).
 
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and

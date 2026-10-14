@@ -19,7 +19,9 @@ late responses cannot restore them. View changes do not start another event read
 Events coalesce reads for the visible view and tools mounted in its drawer. Hidden
 sections become stale and stay masked until a fresh read settles when shown. A held
 projection read can still be superseded by a newer withdrawal read. PM record events
-follow the same visibility rule; workspace authority has its own scoped read.
+follow the same visibility rule; workspace authority and lifecycle admission have
+their own scoped reads even while the Lifecycle drawer is closed. A newer event
+read must restore lifecycle gates withdrawn by a superseded manual Refresh.
 
 ## Tokens and type
 
@@ -176,7 +178,11 @@ reattachment immediately derives the current workspace, lifecycle, scope and act
 gates, including forms rebuilt when a stale hidden view is reopened. Discarded forms
 receive no further registry updates or state callbacks. A gate that
 closes during submission or receipt checking shows an inline unavailable status;
-the draft, original request and recovery key remain intact.
+the draft, original request and recovery key remain intact. Submit controls follow
+the shared transport send gate. An unknown admission waits for sending to resume
+before an explicit retry with its original key; an acknowledged operation ID
+remains recoverable by GET without another POST. Reconnection never reposts an
+unknown admission automatically.
 
 Routes are `#/pm/<workspace>/<view>` and
 `#/pm/<workspace>/discussions/<thread>`. A workspace-only route restores its last

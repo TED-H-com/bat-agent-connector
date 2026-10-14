@@ -62,7 +62,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
@@ -97,6 +97,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }
   const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope)
     && caps()?.actions?.some(row => row.action === action && row.allowed === true);
+  // An acknowledged ID can be read while sending is paused. An unknown admission
+  // still needs its explicit original-key POST once the transport admits sends.
+  const sendReady = () => Boolean(saved.intent?.operation_id) || canSend();
   const receiveReceipt = () => {
     if (disposed || !form.isConnected || damaged || !saved.intent) return;
     try {
@@ -142,7 +145,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     if (disposed || !form.isConnected) return;
     const locked = busy || damaged || Boolean(saved.intent) || !allowed();
     for (const input of Object.values(fields)) input.disabled = locked;
-    button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+    button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
     button.textContent = t(saved.intent ? 'pm_check_original' : label);
     reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
     reset.disabled = busy || !allowed();
@@ -151,7 +154,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }
   async function run(automatic = false) {
     if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
-    if (!allowed()) {
+    if (!allowed() || !sendReady()) {
       if (!automatic) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); update();}
       return;
     }
@@ -232,7 +235,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     } else {stopTimer(); unsubscribe();}
   });
   form.append(connection);
-  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
     stage: () => {
       if (disposed || busy || saved.intent || damaged) return false;
       guard(); saved.values = capture();
@@ -254,7 +257,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     values: () => capture()};
 }
 
-export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, onContext = () => {}, openCreate = false}) {
+export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace, workspaceId, threadId, view, onEvents, errorBox, canSend = () => true, onOnline = () => () => {}, onContext = () => {}, openCreate = false}) {
   if (!pmAvailable(caps())) {main.append(h('p', {}, t('pm_unavailable'))); return;}
   // Navigation preference must not wait for unrelated secondary reads to settle.
   if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, 'discussions');
@@ -394,7 +397,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   };
   const labelled = (label, field) => h('label', {}, t(label), field);
   const form = options => {
-    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
+    const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options, canSend,
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
       recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)(),
       onConnectionChange: connected => {
@@ -790,6 +793,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if (section === brief && main.querySelector('[data-overview-related]')) return true;
     return node?.isConnected && !node.closest('[hidden], details:not([open])');
   };
+  // Lifecycle is an admission source for every durable form, including forms
+  // outside its drawer. Its central read cannot wait for that drawer to open.
+  const sectionRequired = section => section === lifecycle || sectionVisible(section);
   function activateSection(section, value) {
     if (!section) return;
     activationReads.delete(section);
@@ -824,7 +830,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     activationReads.delete(section);
     await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({event:true}) : section.refresh()));
     alive();
-    if (sectionVisible(section)) revealSource(section);
+    if (sectionRequired(section)) revealSource(section);
   }
   function refreshStaleVisible() {
     if (!loaded) return Promise.resolve();
@@ -848,6 +854,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   // Discarded forms leave the registry immediately; temporarily detached forms
   // rejoin and derive the current gates synchronously on reconnection.
   const updateForms = () => {for (const value of forms) value.update();};
+  const offOnline = onOnline(() => {try {alive(); updateForms();} catch { /* a retired view keeps its original intent */ }});
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => timeStamp(value, {empty:''});
   const sourceText = item => {
@@ -1287,7 +1294,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       worktreeChoice?.update();
       for (const section of [lifecycle, evidence, brief, ahp, releaseBaselines, maintenancePolicy, maintenanceRepairs, maintenanceReview, qualityReviews, roadmap, schedule, kanban, sprints, meetings, governance, register, specifications, followUp, engineering,materialization,handoff,workBatches,issues,traceability]) {
         const lazy = lazyThreadSections.get(section);
-        if (section && (!event || sectionVisible(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)) {await section.refresh(); if (sectionVisible(section)) revealSource(section);}
+        if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest('[data-discussion-tab]')?.hidden)) {await section.refresh(); if (sectionRequired(section)) revealSource(section);}
         alive(); if (ticket !== sequence) return;
       }
       nativeAnalysis?.update(runs?.runs || []);
@@ -1425,7 +1432,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     const reads = [];
     if (!pmEvent(kind) && (threadId || workbench?.selected() === 'discussions')) reads.push(eventRead(refreshDiscussionSources,refreshDiscussionSources));
     if (pmEvent(kind)) reads.push(eventRead(refreshAuthority, refreshAuthority));
-    for (const section of sectionModules()) if (sectionVisible(section)) {
+    for (const section of sectionModules()) if (sectionRequired(section)) {
       if (section === issues && kind !== 'pm_workspace' && !kind.startsWith('pm_issue')) continue;
       if (section === dependencies && !pmEvent(kind) && !['project','integration'].includes(kind)) continue;
       reads.push(eventRead(section, () => refreshSection(section)));
@@ -1438,7 +1445,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     uiState.listScroll = workspaceList.scrollTop;
     threadState.scroll = content.querySelector('.pd-transcript')?.scrollTop || 0;
     disposed = true; main.removeEventListener('toggle', openedSource, true); for (const placeholder of maskedSources.values()) placeholder.remove(); maskedSources.clear();
-    discussionTools?.dispose(); sequence++; off(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
+    discussionTools?.dispose(); sequence++; off(); offOnline(); createPanel?.close(); detailPanel?.close(); reportMenu?.dispose(); overflow.dispose();
     brief?.dispose?.();traceability?.dispose();kanban?.dispose();resources?.dispose();schedule?.dispose();scheduleTools?.dispose();dependencies?.dispose();register?.dispose();
     proposalReview?.dispose();nativeAnalysis?.dispose();ahp?.dispose();
     for (const control of viewToolMenus.values()) control.dispose();

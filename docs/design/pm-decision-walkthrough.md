@@ -74,6 +74,12 @@ POST still occurs exactly twice with one key and unchanged request.
 Central readback can render Adopted while that original receipt is still being
 checked. If its recovery form remains in Details, the test requires its terminal
 Saved marker before proceeding; a retained disabled control is not a new write.
+The lifecycle read remains required while its drawer is hidden because it gates
+forms in other views. A thread event superseding manual Refresh must restore that
+source. Recovery controls follow the shared send gate: an unknown admission waits
+for sending to resume, then requires an explicit retry with the original key and
+envelope. A known original operation ID remains readable without another POST.
+Neither reconnect nor event refresh automatically reposts an unknown admission.
 
 ## Decision loop contract
 
