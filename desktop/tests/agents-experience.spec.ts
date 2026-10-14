@@ -385,13 +385,13 @@ test('x labels and the in-progress marker stay inside the plot', async ({browser
       const before = fixture.reads.length;
       await page.getByRole('radio', {name: period, exact: true}).click();
       await expect.poll(() => fixture.reads.length).toBeGreaterThan(before);
+      await expect(page.locator('[data-resource-chart] g.day')).toHaveCount(Number(period.slice(0, -1)));
       await expect.poll(async () => page.locator('.pm-agents-xlabels span', {hasText: /\d/}).count()).toBeGreaterThan(0);
-      const clipped = await page.locator('.pm-agents-xlabels').evaluate(box => [...box.querySelectorAll('span')].filter(node => node.textContent && !node.hidden).flatMap(node => {
+      await expect.poll(() => page.locator('.pm-agents-xlabels').evaluate(box => [...box.querySelectorAll('span')].filter(node => node.textContent && !node.hidden).flatMap(node => {
         const label = node.getBoundingClientRect();
         const plot = box.getBoundingClientRect();
         return label.width > 0 && (label.left < plot.left - 1 || label.right > plot.right + 1) ? [node.textContent] : [];
-      }));
-      expect(clipped, `${period} at ${width}`).toEqual([]);
+      })), {message: `${period} at ${width}`}).toEqual([]);
     }
   }
   await page.setViewportSize({width: 390, height: 844});
