@@ -1,6 +1,6 @@
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
+import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button, sectionCard} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {cliName} from './pm-agents-trend.js';
 import {actionLabel, formatTime, operationMeta, operationStatusKey, operationStatusLabel, reasonText, workStatusKey} from './global-labels.js';
@@ -23,7 +23,7 @@ import {attentionView} from "./attention.js";
 import {parsePullRequest} from "./delivery-input.js";
 import {sessionLabelsPanel, validLabels} from "./session-labels.js";
 import {readArtifactContent} from "./transport/artifact-content.ts";
-import {conversationPanel} from "./conversation.js";
+import {conversationPanel, readingSummary} from "./conversation.js";
 import {composerShortcut} from "./composer-shortcut.js";
 import {treeInteractions} from "./tree-interactions.js";
 import {modelPreferencesPanel} from "./model-preferences.js";
@@ -42,7 +42,7 @@ import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
 import { mountTailscale } from "./tailscale.js";
 import { mountUpdates } from "./updates.js";
-import { groupedSessions, matchesSession, runtimeStale, sessionActivity, sessionStatus } from "./state/sessions.js";
+import { groupedSessions, matchesSession, runtimeStale, sessionActivity, sessionPill } from "./state/sessions.js";
 import { capturePanel } from "./capture.js";
 import { taskControlsPanel } from "./task-controls.js";
 import { operationList } from "./operation-list.js";
@@ -54,6 +54,8 @@ import { orchestrationPanel, orchestrationActions } from "./orchestration.js";
 import { repositoryStartPanel } from "./repository-start.js";
 import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.js";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
+import {renderDeliveryWork, renderObservedResource, unavailableProject} from "./observed-resource.js";
+import {observedText} from "./observed-resource-strings.js";
 
 const TOKEN_KEY = "batc.dashboard.token";
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
@@ -916,15 +918,17 @@ async function viewSessions(main) {
     sessionStorage.setItem(storageKey, values.toString());
   };
   const row = session => {
-    const id = `${session.host}/${session.session_id}`, activity = sessionActivity(session);
+    const id = `${session.host}/${session.session_id}`, activity = sessionActivity(session), pill = sessionPill(session);
     const origin = session.provenance === "manual" ? "sessions_manual" : session.provenance === "connector_managed"
       ? "sessions_connector" : "sessions_origin_unknown";
     const access = session.api_access === "managed" ? "managed" : session.api_access === "read_only" ? "read_only" : "sessions_access_unknown";
+    const outOfSync = session.gone_at || ["gone", "missing"].includes(session.state?.enumeration);
     const evidence = () => [
       h("dl", {class: "kv"}, h("dt", {}, t("sessions_label")), h("dd", {}, session.title || session.session_id),
         h("dt", {}, t("sessions_workspace")), h("dd", {}, session.workspace || t("sessions_workspace_unknown")),
         h("dt", {}, t("sessions_workspace_id")), h("dd", {}, h("code", {}, session.workspace_id || t("obs_unknown"))),
         h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, session.session_id)),
+        h("dt", {}, t("obs_axis_activity")), h("dd", {}, t(activity.key)),
         h("dt", {}, t("activity")), h("dd", {}, observationTime(session.last_activity_at)),
         h("dt", {}, t("observed")), h("dd", {}, observationTime(session.observed_at))),
       h("p", {class: "muted"}, confinementLabel(session)), confinementDetails(session), observationState(session)];
@@ -939,12 +943,13 @@ async function viewSessions(main) {
     return h("article", {class: "session-entry", "data-resource-id": id},
       h("div", {class: "session-entry-heading"},
         h("a", {class: "title", title: session.title || session.session_id, href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`}, session.title || session.session_id),
-        chip(t(activity.key), activity.tone)),
+        pill ? chip(t(pill.key), pill.tone) : null),
       h("div", {class: "session-entry-meta"},
         h("span", {class: session.api_access === "managed" ? "" : "session-readonly"}, session.provenance === "connector_managed" && session.api_access === "managed" ? t(access) : `${t(origin)} · ${t(access)}`),
         h("span", {}, [cliName(session.agent_kind), session.worktree_branch].filter(Boolean).join(" · "))),
       runtimeStale(session) ? h("p", {class: "session-stale muted"}, t("sessions_stale"), " · ",
-        session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale")) : null,
+        session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale"))
+        : outOfSync ? h("p", {class: "session-stale muted"}, t("sessions_not_seen")) : null,
       validLabels(session.connector_metadata?.labels) && session.connector_metadata.labels.length ? h("div", {class: "actions session-entry-meta", "aria-label": t("labels_title")},
         ...session.connector_metadata.labels.slice(0, 2).map(v => chip(v)),
         session.connector_metadata.labels.length > 2 ? h("span", {class: "muted", title: session.connector_metadata.labels.join(" · ")}, `+${session.connector_metadata.labels.length - 2}`) : null) : null,
@@ -1064,7 +1069,11 @@ function observationState(row) {
     h("p", {class: "muted"}, t("obs_lifecycle_note")),
     h("dl", {class: "kv"}, ...axes.flatMap(axis => {
       const evidence = row.state?.evidence?.[axis];
-      return [h("dt", {}, t("obs_axis_" + axis)), h("dd", {}, t("obs_value_" + (row.state?.[axis] || "unknown")),
+      const raw = row.state?.[axis] || "unknown";
+      const label = axis === "activity" && raw === "unknown"
+        ? t(sessionActivity(row).key)
+        : t("obs_value_" + raw);
+      return [h("dt", {}, t("obs_axis_" + axis)), h("dd", {}, label,
         evidence?.stale ? [" · ", chip(t("stale"), "stale")] : null,
         h("div", {class: "muted"}, observationTime(evidence?.observed_at), " · ", evidence?.source_ref || t("obs_unknown")))];
     })));
@@ -1087,14 +1096,16 @@ function discoveryEvidence(scopes) {
 
 // Each history/relations cursor owns its server as_of. Invalidation only announces newer facts;
 // it never rewrites loaded pages or mixes a new head into the old cursor's result set.
-function observationPanels(type, id, path) {
+function observationPanels(type, id, path, plain = false) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const section = (mode) => {
     const relations = mode === "relations";
     const list = h("div", {}), status = h("div", {}), evidence = h("p", {class: "muted"});
     const notice = h("p", {class: "note", hidden: true}, t("obs_new_facts"));
-    const kind = h("input", {placeholder: t("obs_event_kind"), "aria-label": t("obs_event_kind")});
-    const execution = h("input", {placeholder: t("obs_execution_filter"), "aria-label": t("obs_execution_filter")});
+    const kindLabel = plain ? observedText(t, "or_event_kind") : t("obs_event_kind");
+    const executionLabel = plain ? observedText(t, "or_execution_filter") : t("obs_execution_filter");
+    const kind = h("input", {placeholder: kindLabel, "aria-label": kindLabel});
+    const execution = h("input", {placeholder: executionLabel, "aria-label": executionLabel});
     const closed = h("input", {type: "checkbox", checked: true});
     let cursor = null, asOf = null, busy = false, parameters = "", loaded = false, latestSeen = state.lastEvent;
     const seen = new Set();
@@ -1153,7 +1164,7 @@ function observationPanels(type, id, path) {
         }
         if (!seen.size) list.replaceChildren(emptyState({title:t('obs_empty')}));
         cursor = result.next_cursor; more.hidden = !cursor; loaded = true; notice.hidden = latestSeen <= asOf;
-        evidence.replaceChildren(...[t("obs_snapshot", {seq: asOf}), " ", t("obs_historical_limits"),
+        evidence.replaceChildren(...[plain ? observedText(t, "or_history_snapshot", {seq: asOf}) : t("obs_snapshot", {seq: asOf}), " ", t("obs_historical_limits"),
           !relations ? [" ", t("obs_first_recorded"), ": ", observationTime(result.coverage?.first_recorded_at)] : ""].flat());
         status.replaceChildren();
       } catch (error) { status.replaceChildren(errorBox(error)); }
@@ -1162,25 +1173,21 @@ function observationPanels(type, id, path) {
     const box = disclosure({label: t(relations ? "obs_relations" : "obs_history"), body: h("div", {},
       h("div", {class: "filters"}, relations ? execution : kind,
         relations ? h("label", {}, closed, " ", t("obs_include_closed")) : null, refresh), notice, evidence, status, list, more)});
-    box.classList.add("panel", "observation-panel");
+    box.classList.add("observation-panel");
+    if (!plain) box.classList.add("panel");
     box.dataset.observation = mode;
     box.addEventListener("toggle", () => {if (box.open && !loaded) load(true);});
     return {box, changed: event => {latestSeen = Math.max(latestSeen, event.seq); if (loaded && latestSeen > asOf) notice.hidden = false;}};
   };
   const history = section("history"), relations = section("relations");
-  return {box: h("div", {}, history.box, relations.box), changed: event => {history.changed(event); relations.changed(event);}};
+  return {box: h(plain ? "section" : "div", plain ? {class: "or-observations", "data-resource-disclosures": ""} : {},
+    history.box, relations.box), changed: event => {history.changed(event); relations.changed(event);}};
 }
 
-function taskStateLabel(state) {
-  const known = ["queued", "dispatching", "accepted", "running", "waiting_permission", "quota_limited", "human_owned", "needs_ted", "verifying", "done", "failed", "uncertain"];
-  if (known.includes(state)) return t("task_state_" + state);
-  const operation = t("op_" + state);
-  return operation === "op_" + state ? (state || "?") : operation;
-}
 async function viewTask(main, id) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
-  const head = h("div", {class: "panel"}), status = h("div", {role: "status"});
-  const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`);
+  const head = h("div", {class: "panel", "data-observed-resource": ""}), status = h("div", {role: "status"});
+  const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`, true);
   let task = null, readReady = false, active = null, retry;
   const panel = taskControlsPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection), taskId: id,
     task: () => task, ready: () => readReady && state.online && !state.nativeBusy,
@@ -1198,19 +1205,14 @@ async function viewTask(main, id) {
       assertView(connection);
       if (data.task?.task_id !== id) throw new Error(t("task_control_invalid"));
       task = data.task;
-      head.replaceChildren(pageHeader({title: t("task_title")}), h("p", {}, task.project || id),
-        h("p", {class: "actions"}, chip(t([true, false, 0, 1].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")),
-          chip(taskStateLabel(task.state))),
-        h("p", {class: "muted"}, task.host || "", " · ", h("code", {}, id)),
-        ...(task.host && task.session_id ? [h("p", {}, h("a", {href: `#/session/${encodeURIComponent(task.host)}/${encodeURIComponent(task.session_id)}`}, t("task_open_session")))] : []),
-        ...(state.caps?.features?.cleanup_task === true ? [h("p", {}, h("a", {href: `#/cleanup/task/${encodeURIComponent(id)}`}, t("cleanup_task_preview")))] : []),
-        ...(state.caps?.artifacts?.capture?.managed_single_file === true ? [h("p", {}, h("a", {href: `#/artifact-review/task/${encodeURIComponent(id)}`}, t("ar_open")))] : []),
-        h("details", {}, h("summary", {}, t("task_evidence")), h("pre", {class: "pre"}, JSON.stringify(task, null, 2))));
+      place(head, "replaceChildren", renderObservedResource({h, type: "execution", id, resource: task, caps: state.caps, namespace: state.namespace}));
       status.replaceChildren(); readReady = true; clearTimeout(retry);
     })();
     try {await active;} catch (error) {
       if (connection.generation === generation && connection.epoch === state.epoch) {
-        readReady = false; status.replaceChildren(errorBox(error));
+        readReady = false;
+        if ([403, 404, 410].includes(error?.status)) place(head, "replaceChildren");
+        status.replaceChildren(errorBox(error));
         clearTimeout(retry); retry = setTimeout(() => load().catch(() => {}), 3000);
       }
       throw error;
@@ -1225,38 +1227,26 @@ async function viewTask(main, id) {
 
 async function viewObservedResource(main, type, id) {
   const path = type === "execution" ? `/tasks/${encodeURIComponent(id)}` : `/worktrees/${encodeURIComponent(id)}`;
-  const head = h("div", {class: "panel"});
-  const panels = observationPanels(type, id, path);
-  main.append(head, panels.box);
+  const head = h("div", {class: "panel", "data-observed-resource": ""});
+  const status = h("div", {"data-observed-status": ""});
+  const panels = observationPanels(type, id, path, true);
+  main.append(head, status, panels.box);
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
+  let ticket = 0;
   const load = async () => {
+    const mine = ++ticket;
     try {
       const data = await api("GET", path); assertView(connection);
+      if (mine !== ticket) return;
       const resource = data[type === "execution" ? "task" : "worktree"];
-      const sessions = resource.known_sessions || [];
-      fill(head, pageHeader({title: t(type === "execution" ? "obs_execution" : "obs_worktree")}), h("code", {}, id),
-        h("p", {class: "muted"}, t("obs_known_identity")),
-        type === "worktree" ? [h("dl", {class: "kv"},
-          h("dt", {}, t("host")), h("dd", {}, resource.host || t("obs_unknown")),
-          h("dt", {}, t("delivery_worktree_branch")), h("dd", {}, h("code", {}, resource.branch || t("obs_unknown"))),
-          h("dt", {}, t("delivery_worktree_path")), h("dd", {}, h("code", {}, resource.worktree_path || t("obs_unknown"))),
-          h("dt", {}, t("delivery_worktree_owner")), h("dd", {}, resource.intent_type || t("obs_unknown"), " · ",
-            resource.intent_type === "registry" ? h("code", {}, resource.intent_id || t("obs_unknown"))
-              : observationLink(resource.intent_type === "task" ? "execution" : "operation", resource.intent_id))),
-          h("h2", {}, t("delivery_worktree_sessions")),
-          h("p", {class: "muted"}, t("delivery_worktree_recorded")),
-          ...sessions.map(s => h("div", {class: "row"}, observationLink("session", `${s.host}/${s.session_id}`),
-            chip(t(sessionActivity(s.observation || {}).key), sessionActivity(s.observation || {}).tone))),
-          !sessions.length ? h("p", {class: "muted"}, t("none")) : null,
-          ...(resource.work || []).map(item => deliveryWork(item)),
-          h("p", {class: "note"}, t("delivery_worktree_cleanup")),
-          h("p", {}, h("a", {href: `#/cleanup/${resource.intent_type === "task" ? "task" : "host"}/${encodeURIComponent(resource.intent_type === "task" ? resource.intent_id : resource.host || "")}`}, t("cleanup_preview")))] : null,
-        type === "execution" && state.caps?.features?.cleanup_task === true ?
-          h("p", {}, h("a", {href: `#/cleanup/task/${encodeURIComponent(id)}`}, t("cleanup_task_preview"))) : null,
-        type === "execution" && state.caps?.artifacts?.capture?.managed_single_file === true ?
-          h("p", {}, h("a", {href: `#/artifact-review/task/${encodeURIComponent(id)}`}, t("ar_open"))) : null,
-        h("details", {}, h("summary", {}, t("sessions_details")), h("pre", {class: "pre"}, JSON.stringify(resource, null, 2))));
-    } catch (error) {head.append(errorBox(error));}
+      place(head, "replaceChildren", renderObservedResource({h, type, id, resource, caps: state.caps, namespace: state.namespace}));
+      status.replaceChildren();
+    } catch (error) {
+      if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== ticket) return;
+      if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) return;
+      if ([403, 404, 410].includes(error?.status)) place(head, "replaceChildren");
+      status.replaceChildren(errorBox(error));
+    }
   };
   await load(); const reload = debounceRefresh(load, 500);
   return onEvents(event => {panels.changed(event); if ([type, "task", "operation", "session"].includes(event.resource_type)) return reload();});
@@ -1660,6 +1650,14 @@ async function viewSession(main, host, sid, context = null) {
     for (const control of pending.querySelectorAll("[data-answer-action]"))
       control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
   };
+  let lastReading = null;
+  const readingDetail = h("p", {class: "muted note", "data-session-reading-detail": "", hidden: true});
+  const paintReadingDetail = readingData => {
+    if (readingData !== undefined) lastReading = readingData;
+    const summary = readingSummary(t, lastReading || row?.reading);
+    readingDetail.textContent = summary.detail;
+    readingDetail.hidden = !summary.detail;
+  };
   const applyObservation = data => {
     row = data.session || (data.cleanup?.length ? {host, session_id: sid, provenance: "unknown", api_access: "read_only"} : null);
     if (!row) throw new Error(t("obs_unknown"));
@@ -1671,7 +1669,11 @@ async function viewSession(main, host, sid, context = null) {
     // Unknown stays unknown: no ID as a title and no BAT mark for an unreported agent.
     titleNode.textContent = row.title || t("session_untitled");
     markSlot.replaceChildren(agentMark(row.agent_kind));
-    pillSlot.replaceChildren(statusPill(sessionStatus(row)));
+    const headerPill = sessionPill(row);
+    const pillTone = headerPill?.tone === "stale" ? "warn" : headerPill?.tone || "neutral";
+    pillSlot.replaceChildren(...(headerPill ? [
+      h("span", {class: `ui-pill tone-${pillTone}`, "data-status": headerPill.status}, t(headerPill.key))
+    ] : []));
     const metaBits = [];
     if (context?.project?.name) metaBits.push({kind: "link", href: `#/project/${encodeURIComponent(context.project.project_id)}`, text: context.project.name});
     else if (row.workspace) metaBits.push({kind: "text", text: row.workspace});
@@ -1688,14 +1690,16 @@ async function viewSession(main, host, sid, context = null) {
     }));
     paintOrigin();
     mobileLayout?.updateInfo();
+    paintReadingDetail();
     metadata.replaceChildren(h("div", {class: "actions"}, ...sessionBadges(row)),
       h("dl", { class: "kv" },
         h("dt", {}, t("host")), h("dd", {}, h("a", {href: `#/host/${encodeURIComponent(host)}`}, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""),
-        h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
+        h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, row.session_id)),
         h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
-        h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, {empty:t("obs_unknown")}),
-          row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
+        h("dt", {}, t("obs_axis_activity")), h("dd", {}, t(sessionActivity(row).key)),
+        h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, {empty:t("obs_unknown")}))),
+      readingDetail, observationState(row), confinementDetails(row));
     if (!batHandoff) batHandoff = sessionBatPanel({h, t, guard: () => assertView(connection), session: () => row,
       storageKey: `batc.session-bat.${connection.namespace}.${JSON.stringify([host, sid])}`});
     batSlot.append(batHandoff.box); batHandoff.update();
@@ -1802,6 +1806,7 @@ async function viewSession(main, host, sid, context = null) {
         if (request !== messageRequest) return;
       }
       messageOffset = offset; nextMessageOffset = read.next_offset; firstMessages = false;
+      paintReadingDetail(readingSupported ? read.reading : null);
       conversation.update(read.messages, readingSupported ? {...read, restore, latest, olderWindow: offset > 0} : {next_offset: read.next_offset});
     } catch (error) {
       if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
@@ -2160,25 +2165,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 }
 
 function deliveryWork(item, repositories = [], compact = false) {
-  const activity = sessionActivity(item.session || {});
-  const repo = item.repository || (repositories.length === 1 ? repositories[0] : "");
-  const links = [];
-  if (item.operation_id) links.push(h("a", {href: `#/op/${encodeURIComponent(item.operation_id)}`}, t("permissions_details")));
-  if (item.task_id) links.push(observationLink("execution", item.task_id));
-  if (!compact && item.host && item.session_id) links.push(observationLink("session", `${item.host}/${item.session_id}`));
-  if (item.worktree_id) links.push(observationLink("worktree", item.worktree_id));
-  if (item.eligible && state.caps?.features?.execution_delivery?.version === 1) links.push(h("a", {
-    href: `#/delivery/${[item.host, item.kind, item.id, repo].map(encodeURIComponent).join("/")}`}, t("delivery_review_result")));
-  return h("div", {class: "row", "data-project-work": item.id}, h("div", {class: "grow"},
-    compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)],
-    h("p", {class: "muted"}, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)),
-    h("p", {class: "muted"}, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded"
-      ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status),
-      " · ", t("delivery_result_unverified")),
-    item.unavailable ? h("p", {class: "muted"}, t("delivery_source_unavailable"), " ", h("code", {}, item.unavailable.code)) : null,
-    h("div", {class: "actions"}, ...links,
-      ...(item.delivered_to || []).map(receipt => h("a", {href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
-        target: "_blank", rel: "noopener", title: `${receipt.pinned_sha} → ${receipt.delivered_sha}`}, t("delivered_to", {n: receipt.pull_number}))))));
+  return renderDeliveryWork(item, repositories, compact, {h, caps: state.caps, namespace: state.namespace});
 }
 
 function deploymentIdentity(identity, empty = "dep_no_version") {
@@ -3182,17 +3169,20 @@ async function change(out, action, target, params, pre, scope) {
   }
   return null;
 }
-function manageNote() { return may("manage") ? null : h("p", { class: "note" }, t("needs_manage_access")); }
+function manageNote() { return may("manage") ? null : h("p", { class: "note" }, observedText(t, "or_readonly_project")); }
 function indent(el, depth) { el.style.setProperty("--depth", String(depth)); return el; } // CSP: no style attributes
 function stateChip(c) {
   return statusPill(workStatusKey(c?.display_state));
 }
 function counts(c) {
-  return [c.doing ? h("span", {class: "ui-pill tone-info"}, `${t("ui_status_in_progress")} ${c.doing}`) : null,
-    c.awaiting_approval ? h("span", {class: "ui-pill tone-review"}, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
-    h("span", {class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : "")}, t("wi_done_of", {done: c.done, total: c.total}))];
+  const known = value => Number.isSafeInteger(value) && value >= 0;
+  const complete = c?.partial !== true && c?.complete !== false;
+  return [complete && known(c?.doing) && c.doing > 0 ? h("span", {class: "ui-pill tone-info", "data-project-count": "doing"}, `${t("ui_status_in_progress")} ${c.doing}`) : null,
+    complete && known(c?.awaiting_approval) && c.awaiting_approval > 0 ? h("span", {class: "ui-pill tone-review", "data-project-count": "review"}, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
+    complete && known(c?.done) && known(c?.total) && c.done <= c.total ? h("span", {class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : ""), "data-project-count": "completion"},
+      t("wi_done_of", {done: c.done, total: c.total})) : null];
 }
-// ↑ ↓ and pin for one entry among its siblings; pinned entries never cross unpinned ones.
+// Reorder and pin one entry among its siblings; pinned entries never cross unpinned ones.
 function orderButtons(sibs, i, key, run) {
   const me = sibs[i];
   const swap = j => () => {
@@ -3201,10 +3191,16 @@ function orderButtons(sibs, i, key, run) {
     run("order", before, order, Object.fromEntries(sibs.map(x => [x[key], x.version])));
   };
   const can = j => j >= 0 && j < sibs.length && sibs[j].pinned === me.pinned;
-  return [h("button", { class: "mini", title: t("move_up"), "aria-label": t("move_up"), disabled: !can(i - 1), onclick: swap(i - 1) }, "↑"),
-    h("button", { class: "mini", title: t("move_down"), "aria-label": t("move_down"), disabled: !can(i + 1), onclick: swap(i + 1) }, "↓"),
-    h("button", { class: `mini ${me.pinned ? "on" : ""}`, title: me.pinned ? t("unpin") : t("pin"),
-      "aria-label": me.pinned ? t("unpin") : t("pin"), onclick: () => run("pin", me.pinned) }, me.pinned ? "★" : "☆")];
+  const move = (offset, icon, label) => {
+    const j = i + offset, enabled = can(j);
+    const reason = j < 0 ? "or_order_first" : j >= sibs.length ? "or_order_last" : "or_order_pinned";
+    return iconButton({icon, label: t(label), title: enabled ? t(label) : observedText(t, reason),
+      disabled: !enabled, onClick: swap(j)});
+  };
+  const pin = iconButton({icon: "star", label: t(me.pinned ? "unpin" : "pin"),
+    "aria-pressed": String(Boolean(me.pinned)), onClick: () => run("pin", me.pinned)});
+  pin.classList.add("or-order-pin");
+  return [move(-1, "chevron-up", "move_up"), move(1, "chevron-down", "move_down"), pin];
 }
 // A row's "…" opens a small form under it. While any is open, live reloads wait (a draft is never lost) and run
 // once the last one closes.
@@ -3214,14 +3210,22 @@ function setEditing(n) {
   if (!editing && idleReload) { const fn = idleReload; idleReload = null; fn(); }
 }
 function drawer(...children) {
+  return drawerControls(false, children);
+}
+function recordDrawer(...children) {
+  return drawerControls(true, children);
+}
+function drawerControls(useIcon, children) {
   const box = h("div", { class: "drawer", id: `drawer-${crypto.randomUUID()}`, hidden: true }, ...children);
-  const toggle = h("button", { class: "mini", title: t("more"), "aria-label": t("more"),
-    "aria-controls": box.id, "aria-expanded": "false", onclick: () => {
+  const attrs = {title: t("more"), "aria-label": t("more"), "aria-controls": box.id, "aria-expanded": "false"};
+  const onClick = () => {
     box.hidden = !box.hidden;
     toggle.setAttribute("aria-expanded", String(!box.hidden));
     if (!box.hidden) drawerOpens += 1;
     setEditing(editing + (box.hidden ? -1 : 1));
-  } }, "…");
+  };
+  const toggle = useIcon ? iconButton({icon: "more-horizontal", label: t("more"), ...attrs, onClick})
+    : h("button", {class: "mini", ...attrs, onclick: onClick}, "…");
   const open = (focus = false) => {
     if (box.hidden) toggle.click();
     if (focus) box.querySelector("input:not(:disabled),textarea:not(:disabled),select:not(:disabled),button:not(:disabled),a")?.focus();
@@ -3271,25 +3275,37 @@ function liveReload(fn, kinds, prepare = null) {
 async function viewProjects(main) {
   freshPage();
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
+  let request = 0;
   const out = h("div", {});
-  const tree = h("div", { class: "panel" });
+  const tree = h("div", {"data-project-list": ""});
   const archived = h("div", {});
   const create = createRecordForm({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     namespace: connection.namespace, kind: "project", errorBox, opStatus,
     onCreated: async op => {location.hash = `#/project/${op.result.project_id}`;}});
   const showArchived = h("input", { type: "checkbox" });
-  main.append(pageHeader({title: t("nav_projects"), actions: [iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => render().catch(() => {})})]}),
-    disclosure({label: t("global_details"), body: h("p", {}, t("projects_help"))}), manageNote() || "",
-    create.box, out, tree,
-    h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+  const refresh = iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => render().catch(() => {})});
+  const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
+  const note = manageNote();
+  const help = disclosure({label: t("global_details"), body: h("p", {}, t("projects_help"))});
+  create.box.hidden = true; filter.hidden = true; help.hidden = true;
+  if (note) note.hidden = true;
+  main.append(pageHeader({title: t("nav_projects"), actions: [refresh]}),
+    note || "", create.box, out, sectionCard({body: h("div", {class: "or-item-list"}, filter, tree, archived, help)}));
   const render = async (fromEvent = false) => {
-    const opens = drawerOpens;
+    const opens = drawerOpens, mine = ++request;
+    let received = false;
     try {
       const data = await api("GET", `/projects${showArchived.checked ? "?include_archived=true" : ""}`);
-      if (!tree.isConnected) return;
+      received = true;
+      assertView(connection);
+      if (!tree.isConnected || mine !== request) return;
+      if (!Array.isArray(data.projects)) throw new Error(observedText(t, "or_projects_unknown"));
       create.setContext({rows: data.projects});
       if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
       freshPage();
+      create.box.hidden = !may("manage") || state.caps?.actions?.find(row => row.action === "project.create")?.allowed === false;
+      filter.hidden = false; refresh.hidden = false;
+      help.hidden = false; if (note) note.hidden = false;
       const rows = [];
       const walk = (sibs, depth, parent) => sibs.forEach((p, i) => {
         const msg = out; // outside the tree: it survives the re-render below
@@ -3300,7 +3316,7 @@ async function viewProjects(main) {
         };
         const rename = h("input", { value: p.name, maxlength: 80 });
         const sub = h("input", { placeholder: t("new_sub_project"), maxlength: 80 });
-        const d = drawer(
+        const d = recordDrawer(
           h("div", { class: "filters" }, rename, h("button", { class: "secondary", onclick: async () => {
             const ok = await change(msg, "project.update", { project_id: p.project_id }, { name: rename.value.trim() },
               { expected_version: p.version }, `project.rename.${p.project_id}`);
@@ -3332,12 +3348,21 @@ async function viewProjects(main) {
       fill(tree, ...(rows.length ? rows : [h("p", { class: "muted" }, t("no_projects"))]));
       fill(archived, ...(data.archived || []).map(p => h("div", { class: "row" },
         h("div", { class: "grow" }, h("span", { class: "muted" }, p.name)),
-        h("button", { class: "secondary", disabled: !may("manage"), onclick: async () => {
+        may("manage") ? h("button", { class: "secondary", onclick: async () => {
           await change(out, "project.update", { project_id: p.project_id }, { archived: false },
             { expected_version: p.version }, `project.restore.${p.project_id}`);
           render();
-        } }, t("restore")))));
-    } catch (e) { fill(tree, errorBox(e)); }
+        } }, t("restore")) : null)));
+    } catch (error) {
+      if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request || !tree.isConnected) return;
+      request++; create.setContext({rows: [], active: false}); create.box.hidden = true;
+      fill(out); fill(archived); filter.hidden = true; refresh.hidden = true; freshPage();
+      help.hidden = true; if (note) note.hidden = true;
+      errorBox(error);
+      fill(tree, unavailableProject({h, error, collection: true, transportFailed: !received && error?.status === undefined,
+        connection: () => {viewState(connection.namespace, "", "settings").section = "connection"; location.hash = "#/settings";},
+        retry: () => render().catch(() => {})}));
+    }
   };
   showArchived.onchange = () => render();
   await render();
@@ -3348,26 +3373,69 @@ async function viewProject(main, pid) {
   freshPage();
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   let draft = null; // the project form's values after a stale save, put back into the reloaded form
-  const head = h("div", { class: "panel" });
-  const items = h("div", { class: "panel" });
+  let request = 0, prepared = null, currentEditor = null;
+  let workEditors = new Map();
+  const workDrafts = new Map();
+  const head = h("div", { class: "panel", "data-project-summary": "" });
+  const items = h("div", {"data-project-items": ""});
   const work = h("section", {class: "panel", hidden: true, "data-project-work-list": true});
   const out = h("div", {});
   const archived = h("div", {});
   const showArchived = h("input", { type: "checkbox" });
   const create = createRecordForm({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
-    namespace: connection.namespace, kind: "work_item", projectId: pid, errorBox, opStatus,
+    namespace: connection.namespace, kind: "work_item", projectId: pid, showScope: false, errorBox, opStatus,
     onCreated: async () => render()});
-  main.append(manageNote() || "", out, head, work, h("h2", {}, t("work_items")), create.box, items,
-    h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+  const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
+  const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.box, items, archived)});
+  itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
+  const note = manageNote(); if (note) note.hidden = true;
+  main.append(note || "", out, head, work, itemCard);
+  const rememberEditors = () => {
+    if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
+    for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden)
+      workDrafts.set(id, {child: editor.child.value, branch: editor.branch.value});
+  };
+  const withdraw = (error, transportFailed) => {
+    rememberEditors(); workEditors.clear();
+    currentEditor = null; prepared = null; request++;
+    create.setContext({rows: [], active: false}); create.box.hidden = true;
+    fill(work); work.hidden = true; fill(items); fill(archived); fill(out); itemCard.hidden = true;
+    if (note) note.hidden = true;
+    errorBox(error);
+    fill(head, unavailableProject({h, error, transportFailed, retry: () => render().catch(() => {})})); freshPage();
+  };
+  const readProject = async () => {
+    const mine = ++request;
+    let received = false;
+    try {
+      const data = await api("GET", `/projects/${encodeURIComponent(pid)}${showArchived.checked ? "?include_archived=true" : ""}`);
+      received = true;
+      assertView(connection);
+      if (mine !== request) return null;
+      if (data.project?.project_id !== pid) throw new Error(t("workspace_work_missing"));
+      return data;
+    } catch (error) {
+      if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request) return null;
+      withdraw(error, !received && error?.status === undefined); throw error;
+    }
+  };
+  const prepare = async () => {
+    prepared = null;
+    const data = await readProject();
+    if (data) prepared = {data, request};
+  };
   const render = async (fromEvent = false) => {
     const opens = drawerOpens;
-    let data;
-    try { data = await api("GET", `/projects/${pid}${showArchived.checked ? "?include_archived=true" : ""}`); }
-    catch (e) { fill(head, errorBox(e)); return; }
-    if (!head.isConnected) return;
+    const data = prepared?.request === request ? prepared.data : await readProject().catch(() => null);
+    prepared = null;
+    if (!data || !head.isConnected) return;
     if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
+    rememberEditors(); workEditors = new Map();
     freshPage();
     const p = data.project;
+    if (note) note.hidden = false;
+    itemCard.hidden = false;
+    create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed === false;
     create.setContext({rows: data.work_items, name: p.name, active: !p.archived});
     work.hidden = !Array.isArray(data.work);
     fill(work, h("h2", {}, t("delivery_project_work")),
@@ -3375,13 +3443,13 @@ async function viewProject(main, pid) {
     const msg = out;
     const v = draft || { name: p.name, description: p.description, repositories: p.repositories, task_project: p.task_project || "" };
     const f = {
-      name: h("input", { value: v.name, maxlength: 80 }),
-      description: h("textarea", {}, v.description),
-      repositories: h("input", { value: v.repositories.join(", "), placeholder: "owner/name, owner/name" }),
-      task_project: h("input", { value: v.task_project, placeholder: t("task_project") }),
+      name: h("input", { value: v.name, maxlength: 80, "aria-label": t("name") }),
+      description: h("textarea", {"aria-label": t("description")}, v.description),
+      repositories: h("input", { value: v.repositories.join(", "), placeholder: "owner/name, owner/name", "aria-label": observedText(t, "or_repositories") }),
+      task_project: h("input", { value: v.task_project, placeholder: t("task_project"), "aria-label": t("task_project") }),
     };
-    const d = drawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description,
-      h("label", {}, t("repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project,
+    const d = recordDrawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description,
+      h("label", {}, observedText(t, "or_repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project,
       h("div", { class: "actions" }, h("button", { class: "primary", onclick: async () => {
         const params = { name: f.name.value.trim(), description: f.description.value,
           repositories: f.repositories.value.split(/[\s,]+/).filter(Boolean), task_project: f.task_project.value.trim() };
@@ -3390,6 +3458,7 @@ async function viewProject(main, pid) {
         if (!ok && STALE.includes(lastFailure)) draft = params;
         if (ok || draft) render();
       } }, t("save"))));
+    d.box.dataset.projectEditor = "";
     fill(head,
       h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")),
         ...data.path.flatMap(x => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])),
@@ -3397,12 +3466,14 @@ async function viewProject(main, pid) {
       p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""),
         h("p", {class: "pre"}, p.description)) : null,
       h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map(r => chip(r)),
-        !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {class: "session-project-link", href: `#/dispatch/${pid}`}, t("dispatch_title")) : null,
+        may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {class: "session-project-link", href: `#/dispatch/${pid}`}, t("dispatch_title")) : null,
         p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null),
-      d.box,
+      may("manage") && !p.archived ? d.box : null,
       data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ",
         ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
-    if (draft) { draft = null; d.open(); }
+    currentEditor = {drawer: d, values: () => ({name: f.name.value.trim(), description: f.description.value,
+      repositories: f.repositories.value.split(/[\s,]+/).filter(Boolean), task_project: f.task_project.value.trim()})};
+    if (draft && may("manage") && !p.archived) { draft = null; d.open(); }
     const rows = [];
     const walk = (sibs, depth, parent) => sibs.forEach((w, i) => {
       const rowMsg = out; // outside the tree: it survives the re-render below
@@ -3413,11 +3484,13 @@ async function viewProject(main, pid) {
       };
       const child = h("input", { placeholder: t("new_child_item"), maxlength: 120 });
       const branch = h("input", { placeholder: t("new_branch_item"), maxlength: 120 });
+      const retained = workDrafts.get(w.work_item_id);
+      if (retained) {child.value = retained.child; branch.value = retained.branch;}
       const create = (input, params, scope) => h("button", { class: "secondary", onclick: async () => {
         if (!input.value.trim()) return;
         if (await change(rowMsg, "work_item.create", { project_id: pid }, { title: input.value.trim(), ...params }, {}, scope)) render();
       } }, t("add_item"));
-      const dr = drawer(
+      const dr = recordDrawer(
         h("div", { class: "filters" }, child, create(child, { parent_id: w.work_item_id }, `wi.child.${w.work_item_id}`)),
         h("div", { class: "filters" }, branch, create(branch, { parent_id: parent || null, derived_from: w.work_item_id },
           `wi.branch.${w.work_item_id}`)),
@@ -3426,6 +3499,9 @@ async function viewProject(main, pid) {
             { expected_version: w.version }, `wi.archive.${w.work_item_id}`);
           if (ok || STALE.includes(lastFailure)) render();
         } }, t("archive_with_children"))));
+      dr.box.dataset.workItemInspector = "";
+      workEditors.set(w.work_item_id, {drawer: dr, child, branch});
+      if (retained && may("manage") && !p.archived) {workDrafts.delete(w.work_item_id); dr.open();}
       const done = w.steps.filter(s => s.done).length;
       const row = indent(h("div", { class: "row tree" }, stateChip(w.completion),
         h("div", { class: "grow" }, h("a", { class: "title", href: `#/item/${w.work_item_id}` }, w.title),
@@ -3436,22 +3512,22 @@ async function viewProject(main, pid) {
       if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({h, t, row,
         scope: `${connection.namespace}.item.${pid}.${parent}`, siblings: sibs, index: i, key: "work_item_id", run,
         open: () => dr.open(true), guard: () => assertView(connection), editing: active => setEditing(editing + (active ? 1 : -1))}));
-      rows.push(row, dr.box);
+      rows.push(row, may("manage") && !p.archived ? dr.box : null);
       walk(w.children, depth + 1, w.work_item_id);
     });
     walk(data.work_items, 0, "");
-    fill(items, ...(rows.length ? rows : [h("p", { class: "muted" }, t("no_items"))]));
+    fill(items, ...(rows.length ? rows : showArchived.checked && data.archived?.length ? [] : [emptyState({title: t("no_items"), heading: "h3"})]));
     fill(archived, ...(data.archived || []).map(w => h("div", { class: "row" },
       h("div", { class: "grow" }, h("a", { class: "muted", href: `#/item/${w.work_item_id}` }, w.title)),
-      h("button", { class: "secondary", disabled: !may("manage") || p.archived, onclick: async () => {
+      may("manage") && !p.archived ? h("button", { class: "secondary", onclick: async () => {
         await change(out, "work_item.update", { work_item_id: w.work_item_id }, { archived: false },
           { expected_version: w.version }, `wi.restore.${w.work_item_id}`);
         render();
-      } }, t("restore")))));
+      } }, t("restore")) : null)));
   };
   showArchived.onchange = () => render();
   await render();
-  return liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"]);
+  return liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
 }
 
 function linkTarget(l) {
@@ -4190,7 +4266,7 @@ function mountWorkspace(name) {
     if (identity) {
       const connection = {epoch: state.epoch, namespace: state.namespace};
       workspaceNav = workspaceNavigation({h, t, api, guard: () => assertConnection(connection), onEvents,
-        namespace: state.namespace, errorBox});
+        namespace: state.namespace, errorBox, caps: () => state.caps});
       document.getElementById("workspace").prepend(workspaceNav.box);
       workspaceSidebar = setupSidebarResizer({aside: workspaceNav.box, workspace: document.getElementById("workspace"), t});
       shell = dashboardShell({navigation: workspaceNav, namespace: state.namespace, caps: () => state.caps,

@@ -28,6 +28,7 @@ try {
   await expect(relations.getByRole("link", {name: fixture.execution_id, exact: true})).toBeVisible();
   await control("question");
   await expect(page.getByRole("textbox", {name: "Which fixture branch?"})).toBeVisible();
+  await expect(page.locator('.session-pill [data-status="asking_you"]')).toHaveText("Waiting for you");
   await expect(draft).toHaveValue("Real central draft remains");
   await expect(history).toContainText("New journal facts are available");
   assert.deepEqual(await history.locator("[data-history-seq]").evaluateAll(rows => rows.map(row => row.dataset.historySeq)), firstPage);
@@ -41,7 +42,7 @@ try {
   await page.locator('[data-observation="relations"] > summary').click();
   await expect(page.getByRole("link", {name: fixture.execution_id, exact: true})).toBeVisible();
   await page.getByRole("link", {name: fixture.execution_id, exact: true}).click();
-  await expect(page.getByRole("heading", {name: "Execution", exact: true})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Fixture observation only", exact: true})).toBeVisible();
   await page.locator('[data-observation="relations"] > summary').click();
   await expect(page.getByRole("link", {name: "h1/sess-claude-0001", exact: true})).toBeVisible();
   await page.getByRole("link", {name: "h1/sess-claude-0001", exact: true}).click();
@@ -54,7 +55,9 @@ try {
   const inventoryRow = page.locator('[data-resource-id="h1/sess-claude-0001"]');
   await expect(inventoryRow).toBeVisible();
   await expect(inventoryRow).toContainText("Connector-managed");
-  await expect(inventoryRow).toContainText("asking you");
+  const waitingPill = inventoryRow.locator(".session-entry-heading .chip");
+  await expect(waitingPill).toBeVisible();
+  await expect(waitingPill).toHaveText("Waiting for you");
   await page.getByRole("searchbox", {name: "Search loaded sessions"}).fill("sess-claude-0001");
   await expect(page.locator(".session-inventory [data-resource-id]")).toHaveCount(1);
   await inventoryRow.locator("summary").first().click();

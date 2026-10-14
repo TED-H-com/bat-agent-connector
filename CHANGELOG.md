@@ -2,8 +2,26 @@
 
 ## Next release (unreleased)
 
+- PM background updates no longer disable a pressed Save button and lose a plan
+  revision submission. Explicit refreshes, lifecycle changes and source withdrawal
+  still close admission gates, with late-response protection preserved.
+
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
+
+- Sessions show a status pill in the list, rail and header only when they need
+  attention or are active (`Waiting for you` / `等待處理`, `Running` / `執行中`,
+  `Out of sync` / `未同步`, or managed failure/attention). Unloaded tabs with
+  unknown activity stay quiet in the list and note "Not open in BAT" /
+  "BAT 中未開啟" in Details; loaded tabs without a reported streaming flag note
+  "BAT did not report activity" / "BAT 未回報活動狀態" in Details.
+  `GET /api/v1/sessions/{host}/{id}/messages` adds `reading.incomplete_reasons`
+  (`archive_unconfirmed`, `archive_budget`, `message_ids`) and optional
+  `reading.unindexed_count`, and the conversation header replaces the generic
+  "Partial history" warning with reason-specific quiet notes and `N+` unread
+  lower bounds, including alongside archive budget and unconfirmed-history notes.
+  Session details label the Session ID correctly, translate Workspace as 工作區 in
+  zh-TW, and show the formatted observed time once without a duplicate raw ISO code tag.
 
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
@@ -48,6 +66,21 @@
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited
   sources only; conclusions stay unaccepted). zh-TW operation, agent and provider
   words use the existing label tables.
+
+- Worktree and execution pages now read as a name, an owner, and the latest
+  result. Record IDs, the raw record, and cleanup limits stay in Details.
+  A delivery row keeps one review action; other links sit in More actions
+  or in Details. Manual and unknown worktrees stay read-only.
+  Untitled sessions retain a readable label, and dispatch appears only when
+  paused. Read-only accounts do not see pause or project-creation controls.
+  Project withdrawal clears rows, counts and editors while retaining drafts;
+  unknown counts and unavailable project lists no longer appear as zero.
+  Unavailable projects explain the read failure with a return link and transient
+  failures offer Retry. Readers have no execution control card; resource history
+  uses plain disclosures, and project overflow/reorder controls use shared icons.
+  Unreadable project lists hide the view-only notice and offer Connection settings
+  when forbidden; error codes stay in Details. Move/pin icons explain disabled
+  moves, and execution facts distinguish ownership kind from a named lead agent.
 
 - Sprints, AHP observations, work packages, package handoff, work batches and
   delivery receipts open on the answer: a status pill, one main action, and
@@ -131,6 +164,12 @@
   review. Overview keeps decision text clear and explains delivered work awaiting
   this round's acceptance, with Requirements and sourced PM discussion links in
   English and Traditional Chinese.
+
+- Keep Requirements rows and Board agent options stable when identical delivery
+  reads finish in a different order.
+
+- Keep release registration focus and keyboard input when source previews arrive
+  during rationale entry, so Web and Tauri submit the reviewed request once.
 
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;

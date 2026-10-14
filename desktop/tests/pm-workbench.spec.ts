@@ -4,7 +4,76 @@ import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
 import {workbenchFixture,route,workId} from './pm-workbench-fixture.ts';
 const charter=(page:any)=>page.locator('[data-pm-charter]'),rtm=(page:any)=>page.locator('[data-pm-rtm]');
+// Only response timing changes: each pass returns the fixture's identical receipts.
+function deliveryOrderFixture() {
+  const f=workbenchFixture(), completed:{id:string,data:any}[]=[];
+  let reverse=false;
+  const dispatch=async(input:any)=>{
+    const result=await f.dispatch(input);
+    if(input.method==='GET'&&input.path.includes('/deliveries?')){
+      const id=new URL(input.path,'http://fixture').pathname.split('/').at(-2)!;
+      if(id===workId(reverse?3:1))await new Promise(resolve=>setTimeout(resolve,250));
+      completed.push({id,data:result.data});
+    }
+    return result;
+  };
+  return {...f,dispatch,completed,reverse:()=>{reverse=true;}};
+}
+async function awaitBackgroundRead(page:any,f:ReturnType<typeof deliveryOrderFixture>) {
+  // The next event read uses the acknowledged cursor only after the view read settles.
+  await expect.poll(()=>f.state.reads.some(path=>{
+    const url=new URL(path,'http://fixture');
+    return url.pathname==='/events'&&url.searchParams.get('after')===String(f.base.state.cursor);
+  })).toBe(true);
+  await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
+}
 for(const native of [false,true])test.describe(native?'native workbench':'web workbench',()=>{
+  test('identical delivery reads in a different completion order preserve the reading row, position and focus',async({page})=>{
+    const f=deliveryOrderFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
+    await page.locator('[data-pm-view="requirements"]').click();
+    const row=rtm(page).locator('[data-rtm-requirement="membership.recovery"]');
+    const toggle=rtm(page).locator('[data-rtm-toggle="membership.recovery"]');
+    await expect(row).toBeVisible();await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
+    await toggle.focus();await page.keyboard.press('Enter');
+    await expect(toggle).toHaveAttribute('aria-expanded','true');
+    await row.evaluate(element=>element.setAttribute('data-reading-marker','row'));
+    const position=await row.boundingBox(),order=await rtm(page).locator('[data-rtm-requirement]').evaluateAll(rows=>rows.map(row=>row.getAttribute('data-rtm-requirement')));
+    const first=f.completed.slice();expect(first).toHaveLength(3);expect(first.at(-1)?.id).toBe(workId(1));
+    f.reverse();f.base.state.cursor++;
+    await awaitBackgroundRead(page,f);
+    const second=f.completed.slice(3);expect(second).toHaveLength(3);expect(second.at(-1)?.id).toBe(workId(3));
+    expect(second.map(row=>row.id)).not.toEqual(first.map(row=>row.id));
+    expect(new Map(second.map(row=>[row.id,row.data]))).toEqual(new Map(first.map(row=>[row.id,row.data])));
+    await expect(row).toHaveAttribute('data-reading-marker','row');
+    expect(await row.boundingBox()).toEqual(position);
+    expect(await rtm(page).locator('[data-rtm-requirement]').evaluateAll(rows=>rows.map(row=>row.getAttribute('data-rtm-requirement')))).toEqual(order);
+    await expect(toggle).toBeFocused();await expect(toggle).toHaveAttribute('aria-expanded','true');
+    expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
+  });
+  test('identical delivery reads in a different completion order preserve Board agent options and focus',async({page})=>{
+    const f=deliveryOrderFixture();
+    const agents=['codex','claude','grok'];
+    f.board.state.cards.forEach((card:any,i:number)=>card.execution.sessions=[{resource_id:`demo/agent-${i}`}]);
+    const dispatch=async(input:any)=>{
+      const match=/^\/sessions\/demo\/agent-(\d)$/.exec(input.path);
+      return match?{status:200,data:{session:{host:'demo',session_id:`agent-${match[1]}`,agent_kind:agents[Number(match[1])]}}}:f.dispatch(input);
+    };
+    await mountConversation(page,native,dispatch);await page.goto(route);await page.locator('[data-pm-view="board"]').click();
+    const board=page.locator('[data-pm-kanban]'),filter=board.getByRole('combobox',{name:'Agent',exact:true});
+    await expect(board.locator('[data-pm-kanban-work]')).toHaveCount(3);await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
+    await expect(filter.locator('option')).toHaveCount(4);
+    const options=await filter.locator('option').allTextContents();
+    await filter.selectOption('claude');await filter.focus();
+    await filter.locator('option[value="claude"]').evaluate(element=>element.setAttribute('data-reading-marker','option'));
+    expect(f.completed).toHaveLength(3);expect(f.completed.at(-1)?.id).toBe(workId(1));
+    f.reverse();f.base.state.cursor++;await awaitBackgroundRead(page,f);
+    expect(f.completed).toHaveLength(6);expect(f.completed.at(-1)?.id).toBe(workId(3));
+    await expect(filter.locator('option[value="claude"]')).toHaveAttribute('data-reading-marker','option');
+    expect(await filter.locator('option').allTextContents()).toEqual(options);
+    await expect(filter).toHaveValue('claude');await expect(filter).toBeFocused();
+    await expect(board.locator('[data-pm-kanban-work]:visible')).toHaveCount(1);
+    expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
+  });
   test('Charter separates report history from the same adopted plan and compares fixed sources',async({page})=>{
     const f=workbenchFixture();await mountConversation(page,native,f.dispatch);await page.goto(route);
     await expect(charter(page)).toBeVisible();await expect(charter(page).locator('[data-charter-section]')).toHaveCount(6);

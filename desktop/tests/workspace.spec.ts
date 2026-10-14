@@ -6,7 +6,7 @@ for (const native of [false,true]) {
     const tree=page.locator('.workspace-nav'); await tree.getByRole('link',{name:/Improve empty search results/}).click();
     await expect(page).toHaveURL(new RegExp('/work/'));
     await expect(page.locator('.conversation')).toContainText('Tests are still running');
-    await expect(page.locator('[data-workspace-result]')).toContainText('Review result and add to PR');
+    await expect(page.locator('[data-workspace-result]').getByRole('link', {name: 'Review result', exact: true})).toBeVisible();
     const draft=page.getByPlaceholder('Message for this managed session…'); await draft.fill('Keep this draft');
     f.data.messages.push({id:'next',role:'assistant',ts:'2026-10-10T12:03:00Z',text:'Another observation'});
     f.data.session.streaming=false;f.data.events.push({seq:1,resource_type:'session',resource_id:'demo/search-results',kind:'session.updated'});

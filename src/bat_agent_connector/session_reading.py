@@ -42,8 +42,9 @@ def schema(journal):
             PRIMARY KEY(principal_id,host,session_id))""")
 
 
-def index_messages(messages, *, complete, include_tools=False):
+def index_messages(messages, *, complete, include_tools=False, archive_reason=None):
     """Called with source messages, before the response's text/size truncation."""
+    archive_complete = bool(complete)
     visible = [summary for message in messages
                if (summary := summarize_message(message, include_tools=False, max_chars=2**31)) is not None]
     counts = Counter(summary.get("id") for summary in visible if isinstance(summary.get("id"), str))
@@ -62,16 +63,27 @@ def index_messages(messages, *, complete, include_tools=False):
                 offsets[mid] = offset
             offset += 1
     index = []
+    unindexed_count = 0
     for summary in reversed(visible):
         mid = summary.get("id")
         if not isinstance(mid, str) or not mid or len(mid) > 512 or counts[mid] != 1:
             complete = False
+            unindexed_count += 1
             continue
         revision = hashlib.sha256(json.dumps(summary, sort_keys=True, ensure_ascii=False,
                                              separators=(",", ":")).encode()).hexdigest()
         index.append({"id": mid, "revision": revision, "page_offset": offsets[mid],
                       "text": summary["text"]})
-    return {"messages": index, "complete": bool(complete)}
+    incomplete_reasons = []
+    if not archive_complete:
+        incomplete_reasons.append(archive_reason if archive_reason in ("archive_unconfirmed", "archive_budget")
+                                  else "archive_unconfirmed")
+    if unindexed_count > 0:
+        incomplete_reasons.append("message_ids")
+    result = {"messages": index, "complete": bool(complete), "incomplete_reasons": incomplete_reasons}
+    if unindexed_count > 0:
+        result["unindexed_count"] = unindexed_count
+    return result
 
 
 def reading(journal, principal, host, sid):
@@ -137,6 +149,10 @@ def observe(journal, principal, response, *, generation=None):
                 message["reading"] = {"revision": source["revision"], "unread": not bool(marked),
                                       "can_mark": message.get("text") == source["text"]}
     response["reading"] = reading(journal, principal, host, sid)
+    if snapshot is not None:
+        response["reading"]["incomplete_reasons"] = list(snapshot.get("incomplete_reasons") or [])
+        if snapshot.get("unindexed_count"):
+            response["reading"]["unindexed_count"] = int(snapshot["unindexed_count"])
     if snapshot is not None and response["reading"]["position"]:
         position = response["reading"]["position"]
         source = indexed.get(position["message_id"])

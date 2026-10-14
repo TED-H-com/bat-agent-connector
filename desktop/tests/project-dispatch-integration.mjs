@@ -112,7 +112,7 @@ try {
     const work = page.locator('[data-workspace-result] [data-project-work="'+operations[index]+'"]');
     await expect(work).toContainText('Result unverified');
     await expect(work).not.toContainText('done');
-    await work.getByRole('link', {name: 'Review result and add to PR'}).click();
+    await work.getByRole('link', {name: 'Review result', exact: true}).click();
     await expect(page.getByPlaceholder('owner/name')).toHaveValue('o/r');
     await page.getByRole('textbox', {name: 'Repository or GitHub PR URL'}).fill('https://github.com/o/r/pull/1');
     await page.getByRole('button', {name: 'Load PR', exact: true}).click();
