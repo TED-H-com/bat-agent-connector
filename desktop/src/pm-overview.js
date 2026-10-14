@@ -169,6 +169,7 @@ export function workspaceOverview(options) {
     const unknown = data?.unknown || [];
     const reason = unknown.find(row => row.field === field)?.reason
       || unknown.find(row => sources.some(key => row.field === key || row.field.startsWith(key + '.')))?.reason
+      || (data?.visibility?.restricted ? 'restricted' : data?.visibility?.filtered ? 'filtered' : null)
       || sources.map(key => data?.coverage?.sources?.[key]?.status).find(Boolean) || 'incomplete_sources';
     return h('span', {class: 'ui-meta'}, statusPill('unknown'), ' ', reasonLabel(t, reason));
   }
@@ -176,10 +177,11 @@ export function workspaceOverview(options) {
     const milestones = sectionCard({title: t('ov_milestones'), body: h('div', {}, ...data.milestones.map(row => h('div', {class: 'pm-overview-milestone', 'data-overview-milestone': row.milestone_id},
       h('div', {}, itemLink(row, 'milestones'), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? emptyField(data, 'milestones', data.coverage?.sources?.roadmap?.complete === true, ['roadmap']) : null,
       data.milestones_truncated ? h('div', {class: 'ui-meta'}, t('ov_showing', {n: data.milestones.length})) : null)});
-    const deliveries = sectionCard({title: t(data.recent_deliveries_complete ? 'ov_deliveries' : 'ov_deliveries_loaded'), body: h('div', {},
+    const deliveriesComplete = data.recent_deliveries_complete === true && data.coverage?.sources?.attention_references?.complete !== false;
+    const deliveries = sectionCard({title: t(deliveriesComplete ? 'ov_deliveries' : 'ov_deliveries_loaded'), body: h('div', {},
       ...data.recent_deliveries.map(row => h('div', {class: 'pm-overview-delivery', 'data-overview-delivery': row.work_item_id},
         itemLink({...row, ref: {kind: 'work_item', id: row.work_item_id}}, 'deliveries'), statusPill(row.state))),
-      !data.recent_deliveries.length ? emptyField(data, 'recent_deliveries', data.recent_deliveries_complete === true, ['work', 'quality', 'deliveries']) : null)});
+      !data.recent_deliveries.length ? emptyField(data, 'recent_deliveries', deliveriesComplete, ['work', 'quality', 'deliveries', 'attention_references']) : null)});
     return h('div', {class: 'pm-overview-side'}, milestones, deliveries);
   }
   function closeReader() {reader?.close(); reader = null; readerDocument = null; relatedSelection = null;}

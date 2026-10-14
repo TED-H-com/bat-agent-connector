@@ -277,9 +277,10 @@ in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
 Empty milestone and delivery lists say None recorded / 尚無紀錄 only with complete
-roadmap or recent-delivery coverage. Otherwise they show Unknown and the recorded
-localized reason. Empty charter cards require a readable complete plan (or an
-unrestricted complete saved report); open decisions require a complete known zero.
+roadmap or recent-delivery coverage, including any delivery output-reference limit.
+Otherwise they show Unknown and the recorded localized reason. Empty charter cards
+require a readable complete plan (or an unrestricted complete saved report); open
+decisions require a complete known zero.
 Missing coverage never establishes absence.
 
 The Open decisions card (待決事項) retains the central pending count and adds Recently decided:

@@ -16395,7 +16395,7 @@ function workspaceOverview(options) {
 	function emptyField(data, field, complete, sources = []) {
 		if (complete) return h("span", { class: "ui-meta" }, t("ov_no_items"));
 		const unknown = data?.unknown || [];
-		const reason = unknown.find((row) => row.field === field)?.reason || unknown.find((row) => sources.some((key) => row.field === key || row.field.startsWith(key + ".")))?.reason || sources.map((key) => data?.coverage?.sources?.[key]?.status).find(Boolean) || "incomplete_sources";
+		const reason = unknown.find((row) => row.field === field)?.reason || unknown.find((row) => sources.some((key) => row.field === key || row.field.startsWith(key + ".")))?.reason || (data?.visibility?.restricted ? "restricted" : data?.visibility?.filtered ? "filtered" : null) || sources.map((key) => data?.coverage?.sources?.[key]?.status).find(Boolean) || "incomplete_sources";
 		return h("span", { class: "ui-meta" }, statusPill("unknown"), " ", reasonLabel(t, reason));
 	}
 	function sidebar(data) {
@@ -16406,8 +16406,9 @@ function workspaceOverview(options) {
 				"data-overview-milestone": row.milestone_id
 			}, h("div", {}, itemLink(row, "milestones"), milestoneDate(row)), statusPill(row.status))), !data.milestones.length ? emptyField(data, "milestones", data.coverage?.sources?.roadmap?.complete === true, ["roadmap"]) : null, data.milestones_truncated ? h("div", { class: "ui-meta" }, t("ov_showing", { n: data.milestones.length })) : null)
 		});
+		const deliveriesComplete = data.recent_deliveries_complete === true && data.coverage?.sources?.attention_references?.complete !== false;
 		const deliveries = sectionCard({
-			title: t(data.recent_deliveries_complete ? "ov_deliveries" : "ov_deliveries_loaded"),
+			title: t(deliveriesComplete ? "ov_deliveries" : "ov_deliveries_loaded"),
 			body: h("div", {}, ...data.recent_deliveries.map((row) => h("div", {
 				class: "pm-overview-delivery",
 				"data-overview-delivery": row.work_item_id
@@ -16417,10 +16418,11 @@ function workspaceOverview(options) {
 					kind: "work_item",
 					id: row.work_item_id
 				}
-			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", data.recent_deliveries_complete === true, [
+			}, "deliveries"), statusPill(row.state))), !data.recent_deliveries.length ? emptyField(data, "recent_deliveries", deliveriesComplete, [
 				"work",
 				"quality",
-				"deliveries"
+				"deliveries",
+				"attention_references"
 			]) : null)
 		});
 		return h("div", { class: "pm-overview-side" }, milestones, deliveries);
