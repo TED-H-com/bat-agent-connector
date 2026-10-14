@@ -214,6 +214,7 @@ class ApiV1:
             ("GET", r"/api/v1/capabilities", self.capabilities, "observe"),
             ("GET", r"/api/v1/workspaces", self.workspaces, "observe"),
             ("GET", r"/api/v1/pm/workspaces", self.pm_workspaces, "observe"),
+            ("GET", r"/api/v1/pm/installation-capabilities", self.pm_installation_capabilities, "observe"),
             ("GET", r"/api/v1/pm/profiles", self.pm_profiles, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})", self.pm_workspace, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/lifecycle", self.pm_lifecycle, "observe"),
@@ -756,6 +757,12 @@ class ApiV1:
     async def pm_run(self, principal, query, workspace_id, run_id, **_):
         return self._pm_read(principal, "pm_run_get", query, workspace_id=workspace_id, run_id=run_id)
 
+    async def pm_installation_capabilities(self, principal, query, **_):
+        from . import pm_native_capabilities
+        self._exact_query(query, set())
+        return 200, {"native_analysis": pm_native_capabilities.installation(self.daemon.ops),
+                     "workspace_required": True}
+
     async def pm_capabilities(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_capabilities_get", query, workspace_id=workspace_id)
 
@@ -1152,6 +1159,7 @@ class ApiV1:
                                                     "runner": False, "context_packages": True,
                                                     "accepted_context_bundle": {"schema": "pm_context_bundle_v1", "context_version": 2,
                                                         "max_utf8_bytes": 262144, "explicit_selection": True, "complete_files_only": True},
+                                                    "installation_eligibility": True,
                                                     "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,
                                                     "bat_analysis": "pm.run.bat.analyze" in self.daemon.ops.actions,
                                                     "runtime_reason": "external_tool_policy_unverified",
