@@ -2016,7 +2016,12 @@ mod tests {
     fn pm_installation_eligibility_is_an_exact_read_only_route() {
         let root = "/pm/installation-capabilities";
         assert!(validate_request(&get(root)).is_ok());
-        for suffix in ["/refresh", "?workspace_id=other", "?path=fixture", "?token=fixture"] {
+        for suffix in [
+            "/refresh",
+            "?workspace_id=other",
+            "?path=fixture",
+            "?token=fixture",
+        ] {
             assert!(validate_request(&get(&format!("{root}{suffix}"))).is_err());
         }
         let mut keyed = get(root);
