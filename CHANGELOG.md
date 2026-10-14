@@ -134,7 +134,10 @@
   Schedule shows "End time not recorded" for a terminal attempt with no end time, and "Open" only
   when the projection marks the span open. Unscheduled omits rows already in the tree. The tree
   keeps one tab stop. A hidden Schedule does not fetch. Day labels and the Today mark do not
-  collide, and narrow layouts share one timeline origin.
+  collide, and narrow layouts share one timeline origin. Month ticks use short month names;
+  attempt actions and interval tooltips use shared localized labels and calendar dates.
+  Keep bar and delta labels above Today and beneath sticky titles, and fill the grid
+  without stretching its date scale.
 - Add the Dependencies view, which answers which checks to re-run when a dependency changes: a
   component matrix with evidence styles, a bounded graph, and an inspector with the pinned version,
   owner, tests to re-run and affected components. Capture again stays the durable header action.

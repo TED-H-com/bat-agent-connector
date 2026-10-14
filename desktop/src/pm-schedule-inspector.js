@@ -6,7 +6,8 @@ import {agentMark, disclosure, statusPill} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {discussHref} from './pm-discuss-link.js';
 import {sessionHref} from './session-navigation.js';
-import {firstLine, milestoneDelta, scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
+import {milestoneDelta, scheduleRef, sessionAttempt, notObserved} from './pm-schedule-model.js';
+import {scheduleTitle, scheduleFirstLine} from './pm-schedule-labels.js';
 
 export function rowStatus(row, data) {
   return notObserved(row, data) ? h('span', {class: 'ui-pill tone-neutral'}, t('sched_not_observed')) : statusPill(row.status);
@@ -50,17 +51,17 @@ export function render(row, {workspaceId, data}) {
       session.read_only ? statusPill('read_only') : null));
   }
   const attemptList = h('ul', {class: 'schedule-attempts'}, ...attempts.map(attempt => h('li', {'data-schedule-attempt': attempt.id},
-    h('strong', {}, attempt.title), h('div', {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t('sched_agent')),
+    h('strong', {title: scheduleTitle(attempt)}, scheduleTitle(attempt)), h('div', {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t('sched_agent')),
     h('div', {}, rowStatus(attempt, data)), h('div', {class: 'ui-meta'}, sessionAttempt(attempt) ? t('sched_no_dates') : dateRange(attempt.actual)),
     sessionAttempt(attempt) && attempt.status === 'in_progress' ? h('span', {class: 'ui-meta'}, t('sched_open')) : null)));
   if (attempts.length) status.append(disclosure({label: t('sched_attempts'), body: attemptList, open: true}));
   const select = refs.work_item_id || work?.refs?.work_item_id || refs.requirement_id || refs.requirement_ids?.[0] || served.requirement_ids?.[0] || null;
   const links = h('div', {class: 'schedule-inspector-actions'},
     select ? h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/requirements?${new URLSearchParams({select})}`}, t('sched_requirements')) : null,
-    h('a', {class: 'ui-button secondary', href: discussHref({workspaceId, refs: [scheduleRef(row, data)], title: t('sched_change_title', {title: firstLine(row)}), from: 'schedule'}), 'data-schedule-discuss': ''}, t('sched_propose')));
+    h('a', {class: 'ui-button secondary', href: discussHref({workspaceId, refs: [scheduleRef(row, data)], title: t('sched_change_title', {title: scheduleFirstLine(row)}), from: 'schedule'}), 'data-schedule-discuss': ''}, t('sched_propose')));
   const notes = [...data.unknown || [], ...row.notes || []];
   const details = disclosure({label: t('sched_details'), body: h('div', {},
-    h('div', {class: 'schedule-full-title'}, row.title),
+    row.kind === 'attempt' && refs.operation_id ? h('code', {}, row.title) : h('div', {class: 'schedule-full-title'}, row.title),
     ...['baseline', 'forecast', 'actual'].filter(key => row[key]).map(key => h('p', {}, t('sched_' + key), ': ', dateRange(row[key]))),
     ...notes.map(note => h('p', {}, reasonLabel(t, note.reason), h('code', {}, note.reason))),
     h('code', {}, row.id), refs.issue ? h('code', {}, `${refs.issue.repository}#${refs.issue.number}`) : null,

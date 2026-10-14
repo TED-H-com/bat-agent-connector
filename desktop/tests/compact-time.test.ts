@@ -1,9 +1,18 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {compactDate, compactTime, fullTime} from '../src/ui/time.js';
+import {axisDate, compactDate, compactTime, fullTime} from '../src/ui/time.js';
 
 const now = Date.parse('2026-10-13T09:00:00.000Z');
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+for (const locale of ['en', 'zh-TW']) test(`axis labels match their scale and keep calendar dates ${locale}`, () => {
+  for (const value of ['2026-09-25', '2026-10-01', '2026-11-01']) {
+    const month = Number(value.slice(5, 7));
+    assert.equal(axisDate(value, {locale, unit: 'month'}), locale === 'en' ? months[month - 1] : `${month}月`);
+    for (const unit of ['day', 'week']) assert.equal(axisDate(value, {locale, unit, now}), compactDate(value, {locale, now}));
+  }
+  for (const value of [null, '', 'not-a-date', '2026-02-30']) assert.equal(axisDate(value, {locale, unit: 'month'}), '');
+});
 
 function absolute(date: Date, locale: string) {
   const zh = locale.toLowerCase().startsWith('zh');

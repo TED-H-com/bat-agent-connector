@@ -11538,6 +11538,15 @@ function compactDate(value, { locale = "en", now = Date.now() } = {}) {
 	const year = date.getFullYear() !== new Date(now).getFullYear() ? date.getFullYear() : null;
 	return zh(locale) ? `${year == null ? "" : `${year}年`}${date.getMonth() + 1}月${date.getDate()}日` : `${MONTHS[date.getMonth()]} ${date.getDate()}${year == null ? "" : `, ${year}`}`;
 }
+function axisDate$1(value, { locale = "en", unit = "day", now = Date.now() } = {}) {
+	const date = parse(value);
+	if (!date) return "";
+	if (unit === "month") return zh(locale) ? `${date.getMonth() + 1}月` : MONTHS[date.getMonth()];
+	return compactDate(date, {
+		locale,
+		now
+	});
+}
 function compactTime(value, { locale = "en", now = Date.now() } = {}) {
 	const date = parse(value);
 	if (!date) return "";
@@ -11570,6 +11579,10 @@ function fullTime(value, { locale = "en" } = {}) {
 //#region src/ui/stamps.js
 var instant = (value, milliseconds) => typeof value === "number" ? new Date(value * (milliseconds ? 1 : 1e3)) : value;
 var timeText = (value, options = {}) => (options.dateOnly || calendarDate(value) ? compactDate : compactTime)(instant(value, options.milliseconds), {
+	locale,
+	...options
+});
+var axisDateText = (value, options = {}) => axisDate$1(value, {
 	locale,
 	...options
 });
@@ -30149,6 +30162,13 @@ function scheduleTree(rows, collapsed) {
 	return visible;
 }
 //#endregion
+//#region src/pm-schedule-labels.js
+function scheduleTitle(row) {
+	if (row.kind === "attempt" && row.refs?.operation_id) return actionLabel(row.title === row.refs.operation_id ? "" : row.title);
+	return String(row.title || "");
+}
+var scheduleFirstLine = (row) => scheduleTitle(row).split(/\r?\n/)[0];
+//#endregion
 //#region src/pm-schedule-inspector.js
 function rowStatus(row, data) {
 	return notObserved(row, data) ? h$1("span", { class: "ui-pill tone-neutral" }, t("sched_not_observed")) : statusPill(row.status);
@@ -30190,7 +30210,7 @@ function render(row, { workspaceId, data }) {
 			from: "schedule"
 		}) }, t("sched_session")), session.read_only ? statusPill("read_only") : null));
 	}
-	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", {}, attempt.title), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
+	const attemptList = h$1("ul", { class: "schedule-attempts" }, ...attempts.map((attempt) => h$1("li", { "data-schedule-attempt": attempt.id }, h$1("strong", { title: scheduleTitle(attempt) }, scheduleTitle(attempt)), h$1("div", {}, attempt.refs?.agent?.cli || attempt.refs?.agent?.model || t("sched_agent")), h$1("div", {}, rowStatus(attempt, data)), h$1("div", { class: "ui-meta" }, sessionAttempt(attempt) ? t("sched_no_dates") : dateRange(attempt.actual)), sessionAttempt(attempt) && attempt.status === "in_progress" ? h$1("span", { class: "ui-meta" }, t("sched_open")) : null)));
 	if (attempts.length) status.append(disclosure({
 		label: t("sched_attempts"),
 		body: attemptList,
@@ -30202,7 +30222,7 @@ function render(row, { workspaceId, data }) {
 		href: discussHref({
 			workspaceId,
 			refs: [scheduleRef(row, data)],
-			title: t("sched_change_title", { title: firstLine(row) }),
+			title: t("sched_change_title", { title: scheduleFirstLine(row) }),
 			from: "schedule"
 		}),
 		"data-schedule-discuss": ""
@@ -30210,7 +30230,7 @@ function render(row, { workspaceId, data }) {
 	const notes = [...data.unknown || [], ...row.notes || []];
 	const details = disclosure({
 		label: t("sched_details"),
-		body: h$1("div", {}, h$1("div", { class: "schedule-full-title" }, row.title), ...[
+		body: h$1("div", {}, row.kind === "attempt" && refs.operation_id ? h$1("code", {}, row.title) : h$1("div", { class: "schedule-full-title" }, row.title), ...[
 			"baseline",
 			"forecast",
 			"actual"
@@ -30351,7 +30371,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		if (panel && next === panelSignature) return;
 		if (!panel) {
 			panel = inspector({
-				title: firstLine(row),
+				title: scheduleFirstLine(row),
 				onClose: () => {
 					const previous = selected;
 					panel = null;
@@ -30365,7 +30385,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			panel.dataset.scheduleInspector = "";
 			layout.append(panel);
 		}
-		panel.querySelector("h2").textContent = firstLine(row);
+		panel.querySelector("h2").textContent = scheduleFirstLine(row);
 		const opened = [...panel.body.querySelectorAll("details")].map((node) => node.open), scroll = panel.scrollTop;
 		const focus = [...panel.body.querySelectorAll("a, summary")].indexOf(document.activeElement);
 		panel.body.replaceChildren(render(row, {
@@ -30403,7 +30423,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 		markSelection();
 		showPanel();
 	}
-	const label = (row) => row.kind === "group" ? t("sched_unassigned") : firstLine(row);
+	const label = (row) => row.kind === "group" ? t("sched_unassigned") : scheduleFirstLine(row);
 	function toggle(id) {
 		collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
 		remember();
@@ -30472,7 +30492,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			const step = zoom === "day" ? Math.max(2, Math.ceil(72 / scale), Math.ceil(length / 300)) : zoom === "week" ? Math.max(1, Math.ceil(length / 2100)) * 7 : Math.max(1, Math.ceil(length / 9e3));
 			for (let date = domain.start, count = 0; date <= domain.end && count < 300; count++) {
 				const instant = new Date(date * DAY);
-				const tick = h$1("span", { class: "schedule-tick" }, timeStamp(instant.toISOString().slice(0, 10), { dateOnly: true }));
+				const tick = h$1("span", { class: "schedule-tick" }, axisDateText(instant.toISOString().slice(0, 10), { unit: zoom }));
 				tick.style.left = `${(date - domain.start) * scale}px`;
 				node.append(tick);
 				if (zoom === "month") {
@@ -30486,8 +30506,9 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			for (const span of rowSpans) {
 				const start = span.start ?? span.end, end = span.end ?? start;
 				const marker = row.kind === "milestone";
-				const endText = span.open ? t("sched_open") : span.unknownEnd ? reasonLabel(t, "terminal_time_unrecorded") : span.end !== null ? row[span.kind].end : null;
-				const rangeText = endText && row[span.kind].end !== row[span.kind].start ? `${row[span.kind].start || "—"} → ${endText}` : row[span.kind].start || endText || "—";
+				const interval = row[span.kind], startText = timeText(interval.start?.slice(0, 10), { dateOnly: true });
+				const endText = span.open ? t("sched_open") : span.unknownEnd ? reasonLabel(t, "terminal_time_unrecorded") : span.end !== null ? timeText(interval.end?.slice(0, 10), { dateOnly: true }) : null;
+				const rangeText = endText && span.end !== span.start ? `${startText || "—"} → ${endText}` : startText || endText || "—";
 				const barTitle = `${t("sched_" + span.kind)} · ${rangeText}`;
 				const bar = h$1("span", {
 					class: `schedule-bar ${span.kind}${marker ? " milestone" : ""}${span.open ? " open" : ""}${row.status === "blocked" ? " blocked" : ""}`,
@@ -30580,7 +30601,7 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 				onkeydown: (event) => keydown(event, item, index)
 			}, expand, h$1("span", { class: "schedule-tree-copy" }, h$1("span", {
 				class: "schedule-title",
-				title: row.title
+				title: scheduleTitle(row)
 			}, label(row)), h$1("span", {
 				id: descId,
 				class: "schedule-date-range"
@@ -30633,9 +30654,9 @@ function workspaceSchedule({ api, alive, namespace, workspaceId, canRead }) {
 			meta.replaceChildren(...upcoming ? [h$1("span", { class: "schedule-answer" }, firstLine(upcoming), delta ? " · " + t("sched_delta", { n: delta > 0 ? "+" + delta : delta }) : "")] : [], h$1("span", {}, t(data.partial ? "sched_loaded" : "sched_count", { n: data.rows.length })), ...data.partial ? [statusPill("partial")] : [], details);
 			const list = h$1("ul", {}, ...data.unscheduled.map((row) => h$1("li", {}, button({
 				variant: "ghost",
-				label: firstLine(row),
+				label: scheduleFirstLine(row),
 				"data-schedule-select": row.id,
-				title: row.title,
+				title: scheduleTitle(row),
 				onClick: (event) => select(row.id, event.currentTarget)
 			}), row.kind === "work" || row.kind === "attempt" ? rowStatus(row, data) : null)));
 			unscheduled.replaceChildren(...data.unscheduled.length ? [disclosure({

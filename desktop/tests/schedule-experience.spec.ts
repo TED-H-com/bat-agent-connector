@@ -271,7 +271,7 @@ test('terminal span without end time reads End time not recorded and mobile date
   await expect(bar).not.toHaveClass(/\bopen\b/);
   await expect(bar).not.toHaveAttribute('data-open', 'true');
   await expect(bar).toHaveText('End time not recorded');
-  await expect(bar).toHaveAttribute('title', 'Actual · 2026-10-08T10:00:00Z → End time not recorded');
+  await expect(bar).toHaveAttribute('title', 'Actual · Oct 8 → End time not recorded');
   await item(page, rowId).click();
   const inspector = page.locator('[data-schedule-inspector]');
   await inspector.locator('[data-schedule-section="details"] > summary').click();
@@ -280,7 +280,7 @@ test('terminal span without end time reads End time not recorded and mobile date
   await page.setViewportSize({width: 390, height: 844});
   await expect(page.locator(`[data-schedule-row="${rowId}"] .schedule-date-range`)).toHaveText('Actual Oct 8 → End time not recorded');
   const forecastBar = page.locator('[data-schedule-track="work:forecast_start_only"] .schedule-bar');
-  await expect(forecastBar).toHaveAttribute('title', 'Forecast · 2026-10-21');
+  await expect(forecastBar).toHaveAttribute('title', 'Forecast · Oct 21');
   await expect(forecastBar).not.toContainText('End time not recorded');
   await expect(page.locator(`[data-schedule-row^="attempt:operation:${f.ids.work.resetEmail}:"] .schedule-date-range`)).toHaveText('Actual Oct 6');
   await expect(page.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toHaveText('Actual Oct 5 → Open');
@@ -404,7 +404,7 @@ test('inspector shows visible schedule dates and milestone delta, links mileston
       },
     });
   }});
-  await expect(page.locator('[data-schedule-track="milestone:recovery_review"] [data-schedule-bar="baseline"]')).toHaveAttribute('title', 'Baseline · 2026-10-16');
+  await expect(page.locator('[data-schedule-track="milestone:recovery_review"] [data-schedule-bar="baseline"]')).toHaveAttribute('title', 'Baseline · Oct 16');
   await item(page, 'milestone:recovery_review').click();
   const inspector = page.locator('[data-schedule-inspector]');
   const statusSection = inspector.locator('[data-schedule-section="status"]');
@@ -426,6 +426,32 @@ test('inspector shows visible schedule dates and milestone delta, links mileston
   await expect(inspector.locator('[data-schedule-section="details"]')).toContainText(`${project.ids.repository}#42`);
 });
 
+for (const locale of ['en', 'zh-TW']) test(`attempt action names and interval tooltips are localized ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL}), page = await context.newPage();
+  const f = await start(page, locale);
+  const attempt = page.locator('.schedule-chart [data-schedule-select^="attempt:operation:"]');
+  const name = locale === 'en' ? 'Start session' : '開始工作階段';
+  await expect(attempt).toHaveAccessibleName(name);
+  await expect(attempt.locator('.schedule-title')).toHaveText(name);
+  await expect(attempt.locator('.schedule-title')).toHaveAttribute('title', name);
+  const bar = page.locator('[data-schedule-track^="attempt:operation:"] .schedule-bar');
+  const interval = locale === 'en' ? 'Actual · Oct 6' : '實際 · 10月6日';
+  await expect(bar).toHaveAttribute('title', interval);
+  await expect(bar).toHaveAccessibleName(interval);
+  const tooltips = await page.locator('.schedule-bar').evaluateAll(nodes => nodes.map(node => node.getAttribute('title')));
+  expect(tooltips.join('\n')).not.toMatch(/\d{4}-\d{2}-\d{2}|session\.start/);
+  await attempt.click();
+  const inspector = page.locator('[data-schedule-inspector]');
+  await expect(inspector.getByRole('heading', {level: 2})).toHaveText(name);
+  await inspector.locator('[data-schedule-section="details"] > summary').click();
+  await expect(inspector.locator('[data-schedule-section="details"] code').filter({hasText: /^session\.start$/})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await item(page, `work:${f.ids.work.resetEmail}`).click();
+  await expect(inspector.locator('[data-schedule-attempt^="attempt:operation:"] strong')).toHaveText(name);
+  expect(f.writes).toEqual([]);
+  await context.close();
+});
+
 test('viewport has no nested vertical scroll cap, Day ticks and Today marker never collide in EN or zh-TW, and mobile rows share one horizontal origin', async ({browser, baseURL}) => {
   for (const locale of ['en', 'zh-TW'] as const) {
     const context = await browser.newContext({locale, baseURL, viewport: {width: 1440, height: 900}}), page = await context.newPage();
@@ -437,8 +463,10 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
     expect(vpStyle.maxHeight).toBe('none');
 
     const zooms = locale === 'en' ? ['Day', 'Week', 'Month'] : ['日', '週', '月'];
-    for (const label of zooms) {
+    for (const colorScheme of ['light', 'dark'] as const) for (const label of zooms) {
+      await page.emulateMedia({colorScheme});
       await page.getByRole('radio', {name: label, exact: true}).click();
+      await page.getByRole('button', {name: locale === 'en' ? 'Today' : '今天', exact: true}).click();
       const check = await page.evaluate(() => {
         const axis = document.querySelector('.schedule-axis') as HTMLElement;
         const axisRect = axis.getBoundingClientRect();
@@ -457,6 +485,25 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
         for (const tk of ticks) {
           if (todayRect.left >= tk.textLeft - 1 && todayRect.left <= tk.textRightAbs + 1 && todayRect.top < tk.textBottom) todayCutsText = true;
         }
+        const scrollY = window.scrollY;
+        for (const label of document.querySelectorAll('.schedule-bar-label, .schedule-delta')) {
+          const line = label.closest('.schedule-track')!.querySelector('.schedule-today') as HTMLElement;
+          const range = document.createRange(); range.selectNodeContents(label);
+          const textRect = range.getBoundingClientRect(), lineRect = line.getBoundingClientRect();
+          const style = getComputedStyle(label), color = style.backgroundColor;
+          const opaque = color.startsWith('rgb(') || (color.startsWith('rgba(') && Number(color.match(/[\d.]+/g)?.[3]) === 1);
+          // Both label types must cover the line, even if this fixture's delta is later than Today.
+          if (!opaque || Number(style.zIndex) <= Number(getComputedStyle(line).zIndex)) todayCutsText = true;
+          if (lineRect.left < textRect.left || lineRect.left > textRect.right) continue;
+          // Hit-test the actual paint order at the intersection, including bar ancestors.
+          window.scrollBy(0, textRect.top - innerHeight / 2);
+          const visibleText = range.getBoundingClientRect(), visibleLine = line.getBoundingClientRect();
+          const previous = line.style.pointerEvents; line.style.pointerEvents = 'auto';
+          const layers = document.elementsFromPoint(visibleLine.left + .25, (visibleText.top + visibleText.bottom) / 2);
+          line.style.pointerEvents = previous;
+          if (layers.indexOf(label) < 0 || layers.indexOf(line) < 0 || layers.indexOf(label) > layers.indexOf(line)) todayCutsText = true;
+        }
+        window.scrollTo(0, scrollY);
         return {overlaps, todayCutsText};
       });
       expect(check).toEqual({overlaps: 0, todayCutsText: false});
@@ -479,6 +526,63 @@ test('viewport has no nested vertical scroll cap, Day ticks and Today marker nev
     expect(await mobileAlign()).toEqual({laneCount: 14, uniqueScrolls: 1, uniqueTodayX: 1});
     await context.close();
   }
+});
+
+test('sticky titles cover horizontally scrolled bar labels in both locales and themes', async ({browser, baseURL}) => {
+  for (const locale of ['en', 'zh-TW']) {
+    const context = await browser.newContext({locale, baseURL, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+    const f = await start(page, locale);
+    for (const colorScheme of ['light', 'dark'] as const) for (const zoom of locale === 'en' ? ['Day', 'Week'] : ['日', '週']) {
+      // Week fits most of the desktop chart; use a narrower column so scrolling
+      // can bring an open-bar label underneath the sticky title cell.
+      await page.setViewportSize({width: ['Day', '日'].includes(zoom) ? 1440 : 1000, height: 900});
+      await page.emulateMedia({colorScheme});
+      await page.getByRole('radio', {name: zoom, exact: true}).click();
+      expect(await page.evaluate(() => {
+        const viewport = document.querySelector('.schedule-viewport') as HTMLElement;
+        const label = document.querySelector('.schedule-bar-label')!;
+        const cell = label.closest('.schedule-row')!.querySelector('.schedule-tree-cell')!;
+        const previous = viewport.scrollLeft, title = cell.getBoundingClientRect();
+        viewport.scrollLeft += label.getBoundingClientRect().left - (title.left + title.width / 2);
+        const rect = label.getBoundingClientRect();
+        const coversLabel = cell.contains(document.elementFromPoint(rect.left + 4, (rect.top + rect.bottom) / 2));
+        viewport.scrollLeft = previous;
+        return coversLabel;
+      })).toBe(true);
+    }
+    expect(f.writes).toEqual([]);
+    await context.close();
+  }
+});
+
+for (const colorScheme of ['light', 'dark'] as const) test(`Month grid fills every lane without stretching its date scale ${colorScheme}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, colorScheme, viewport: {width: 1440, height: 900}}), page = await context.newPage();
+  const f = await start(page);
+  await page.getByRole('radio', {name: 'Month', exact: true}).click();
+  const geometry = () => page.evaluate(() => ({
+    axis: document.querySelector('.schedule-axis')!.getBoundingClientRect().right,
+    chart: document.querySelector('.schedule-chart')!.getBoundingClientRect().right,
+    lanes: [...document.querySelectorAll('.schedule-lane')].map(lane => ({
+      lane: lane.getBoundingClientRect().right, track: lane.querySelector('.schedule-track')!.getBoundingClientRect().right,
+    })),
+    positions: [...document.querySelectorAll('.schedule-bar, .schedule-delta, .schedule-today')].map(node => (node as HTMLElement).style.left),
+    scaleWidth: (document.querySelector('.schedule-chart') as HTMLElement).style.getPropertyValue('--schedule-width'),
+  }));
+  const desktop = await geometry();
+  expect(Math.abs(desktop.axis - desktop.chart)).toBeLessThan(1);
+  expect(desktop.lanes.length).toBeGreaterThan(10);
+  for (const lane of desktop.lanes) {
+    expect(Math.abs(lane.track - desktop.chart)).toBeLessThan(1);
+    expect(Math.abs(lane.track - lane.lane)).toBeLessThan(1);
+  }
+  await page.setViewportSize({width: 390, height: 844});
+  const mobile = await geometry();
+  for (const lane of mobile.lanes.slice(1)) expect(lane.track).toBeGreaterThanOrEqual(lane.lane);
+  expect(mobile.positions).toEqual(desktop.positions);
+  expect(mobile.scaleWidth).toBe(desktop.scaleWidth);
+  await noOverflow(page);
+  expect(f.writes).toEqual([]);
+  await context.close();
 });
 
 test('Propose change uses Change: {firstLine} and omits milestone ref when milestone has no baseline in baseline revision', async ({page}) => {

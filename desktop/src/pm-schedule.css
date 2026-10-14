@@ -16,7 +16,7 @@
 .schedule-meta code, .schedule-inspector-content code { display: block; color: var(--text-3); overflow-wrap: anywhere; }
 .schedule-viewport { max-width: 100%; overflow-x: auto; overflow-y: visible; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); scrollbar-gutter: stable; }
 .schedule-chart { --schedule-tree: 328px; min-width: 0; width: max(100%, calc(var(--schedule-tree) + var(--schedule-width))); background: var(--surface); }
-.schedule-row { display: grid; grid-template-columns: var(--schedule-tree) var(--schedule-width); min-height: 56px; }
+.schedule-row { display: grid; grid-template-columns: var(--schedule-tree) minmax(var(--schedule-width), 1fr); min-height: 56px; }
 .schedule-tree-cell { position: sticky; left: 0; z-index: 3; display: flex; align-items: center; gap: var(--space-1); height: 56px; min-width: 0; background: var(--surface); border-bottom: 1px solid var(--line); border-right: 1px solid var(--line-strong); padding-right: var(--space-2); cursor: pointer; }
 .schedule-tree-cell:hover { background: var(--surface-2); }
 .schedule-tree-cell[aria-level="1"] .schedule-title { font-weight: 600; }
@@ -33,14 +33,14 @@
 .schedule-head { position: sticky; top: 0; z-index: 5; min-height: 40px; }
 .schedule-head > .schedule-tree-cell { height: 40px; padding-left: var(--space-4); background: var(--surface-2); font-size: var(--fs-caption); color: var(--text-2); cursor: default; }
 .schedule-lane { min-width: 0; }
-.schedule-track { height: 56px; position: relative; border-bottom: 1px solid var(--line); overflow: hidden; }
+.schedule-track { min-width: 100%; height: 56px; position: relative; isolation: isolate; border-bottom: 1px solid var(--line); overflow: hidden; }
 .schedule-axis { height: 40px; background: var(--surface-2); }
 .schedule-tick { position: absolute; top: 0; height: 100%; padding: var(--space-2); border-left: 1px solid var(--line); white-space: nowrap; font-size: var(--fs-caption); color: var(--text-2); }
 .schedule-weekend { position: absolute; inset: 0; opacity: .65; }
 .schedule-today { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--accent); z-index: 2; pointer-events: none; }
 .schedule-axis .schedule-today { top: auto; height: 6px; }
 .schedule-axis .schedule-today::before { content: ''; display: block; width: 5px; height: 5px; background: var(--accent); transform: translateX(-3px); }
-.schedule-bar { position: absolute; height: 10px; border-radius: var(--r-xs); z-index: 1; }
+.schedule-bar { position: absolute; height: 10px; border-radius: var(--r-xs); }
 .schedule-bar.baseline { top: 9px; border: 1px dashed var(--text-2); }
 .schedule-bar.forecast { top: 24px; border: 1px solid var(--accent); background: var(--accent-soft); }
 .schedule-bar.actual { top: 22px; height: 12px; background: var(--accent); }
@@ -49,8 +49,8 @@
 .schedule-bar.milestone { font-size: 16px; width: 16px; height: 20px; line-height: 20px; background: none; border: 0; transform: translateX(-8px); border-radius: 0; }
 .schedule-bar.milestone.baseline { top: 11px; width: 11px; height: 11px; font-size: 0; border: 1px dashed var(--text-2); background: var(--surface); transform: translateX(-5px) rotate(45deg); }
 .schedule-bar.milestone.forecast { top: 27px; color: var(--accent); }
-.schedule-bar-label { position: absolute; left: calc(100% + 8px); top: -4px; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); white-space: nowrap; }
-.schedule-delta { position: absolute; top: 28px; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.schedule-bar-label { position: absolute; z-index: 3; left: calc(100% + 8px); top: -4px; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); white-space: nowrap; }
+.schedule-delta { position: absolute; z-index: 3; top: 28px; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface); padding: 0 2px; border-radius: var(--r-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .schedule-unscheduled { margin-top: var(--space-4); }
 .schedule-unscheduled ul { list-style: none; margin: var(--space-3) 0; padding: 0; }
 .schedule-unscheduled li { display: flex; align-items: center; gap: var(--space-2); border-bottom: 1px solid var(--line); padding: var(--space-1) 0; min-width: 0; }
