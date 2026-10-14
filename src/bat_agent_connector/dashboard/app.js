@@ -10575,7 +10575,7 @@ var projectViews$2 = new Set([
 	"agents",
 	"board"
 ]);
-function sessionHref({ host, sessionId, from = "" }) {
+function sessionHref$1({ host, sessionId, from = "" }) {
 	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
 	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
 }
@@ -10590,7 +10590,7 @@ function sessionOrigin(value) {
 		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
 		const from = query.get("from") || "";
 		if (from && !projectViews$2.has(from)) return "";
-		return sessionHref({
+		return sessionHref$1({
 			host,
 			sessionId,
 			from
@@ -10734,6 +10734,39 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 var paths = {
+	"star": [["polygon", { "points": "12 3 14.8 8.7 21 9.6 16.5 14 17.6 20.2 12 17.3 6.4 20.2 7.5 14 3 9.6 9.2 8.7 12 3" }]],
+	"grip-vertical": [
+		["circle", {
+			"cx": "9",
+			"cy": "5",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "9",
+			"cy": "12",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "9",
+			"cy": "19",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "15",
+			"cy": "5",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "15",
+			"cy": "12",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "15",
+			"cy": "19",
+			"r": "1"
+		}]
+	],
 	"pencil": [["path", { "d": "m16 3 5 5L7 22H2v-5L16 3Z" }], ["path", { "d": "m14 5 5 5" }]],
 	"panel-right": [["rect", {
 		"x": "3",
@@ -13236,7 +13269,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		if (data.milestones) served.append(paragraph(t("wv_milestone"), " · ", joinLabel(data.milestones.map((row) => row.title)) || t("wv_no_milestone")));
 		if (card) {
 			state.append(h$1("div", { class: "pm-work-inline" }, workStatusPill(t, card), ...workAgents(source).map(agentMark)), paragraph(t("wv_owner"), " · ", labelSegment(card.assignment?.actor) || (card.assignment?.reason === "creator_is_not_assignee" ? t("wv_not_recorded") : reasonLabel(t, card.assignment?.reason))));
-			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref({
+			for (const session of source.sessions || []) state.append(paragraph(h$1("a", { href: sessionHref$1({
 				host: session.host,
 				sessionId: session.session_id,
 				from
@@ -21343,7 +21376,7 @@ var defaults = {
 };
 var record$4 = (value) => value && typeof value === "object" && !Array.isArray(value);
 var key$1 = (value, max) => typeof value === "string" && value.length <= max && /^[a-z][a-z0-9_.-]*$/.test(value);
-var text$4 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
+var text$5 = (value, max) => typeof value === "string" && !!value.trim() && [...value].length <= max && !value.includes("\0");
 var refs$1 = (values, allowed, min = 1) => Array.isArray(values) && values.length >= min && values.length <= 20 && new Set(values).size === values.length && values.every((value) => allowed.has(value));
 function cyclic(requirements) {
 	const graph = new Map(requirements.map((row) => [row.id, row.depends_on])), active = new Set(), done = new Set();
@@ -21576,10 +21609,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (p.document !== null || p.document_digest !== null) throw fail();
 		} else {
 			const d = p.document;
-			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$4(d.title, 160) || !text$4(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
+			if (!/^[0-9a-f]{64}$/.test(p.document_digest) || d?.version !== 1 || !text$5(d.title, 160) || !text$5(d.summary, 8e3) || !Array.isArray(d.candidates) || !d.candidates.length || d.candidates.length > 20 || !Array.isArray(d.requirements) || d.requirements.length > 20 || !Array.isArray(d.questions) || d.questions.length > 3) throw fail();
 			const keys = new Set();
 			for (const row of d.candidates) {
-				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$4(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
+				if (!record$4(row) || !key$1(row.key, 60) || keys.has(row.key) || !text$5(row.text, 4e3) || !Object.hasOwn(defaults, row.kind) || !Array.isArray(row.source_refs) || !row.source_refs.length || row.source_refs.some((ref) => !Object.hasOwn(c.source_references, ref))) throw fail();
 				keys.add(row.key);
 			}
 			if (!validRequirements(d.requirements, new Set(d.candidates.filter((row) => row.kind !== "excluded").map((row) => row.key)))) throw fail();
@@ -21602,9 +21635,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		};
 	}
 	function reviewIssue(value) {
-		if (!active || !record$4(value) || !text$4(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
+		if (!active || !record$4(value) || !text$5(value.title, 160) || !Array.isArray(value.rows) || value.rows.some((row) => !record$4(row)) || !Array.isArray(value.requirements) || value.requirements.length > 20 || value.requirements.some((row) => !record$4(row))) return "pcp_missing";
 		const keys = active.document?.candidates?.map((row) => row.key) || [];
-		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$4(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
+		if (value.rows.length !== keys.length || new Set(value.rows.map((row) => row.key)).size !== keys.length || value.rows.some((row) => !keys.includes(row.key) || !key$1(row.key, 60) || !text$5(row.text, 4e3) || !statuses.includes(row.status) || typeof row.include !== "boolean")) return "pcp_missing";
 		const included = new Set(value.rows.filter((row) => row.include).map((row) => row.key));
 		if (!included.size) return "pcp_empty_selection";
 		if (value.requirements.some((row) => Array.isArray(row.acceptance_keys) && !row.acceptance_keys.length)) return "pcp_acceptance_missing";
@@ -32564,7 +32597,7 @@ function render(row, { workspaceId, data }) {
 	for (const attempt of sessions) {
 		const agent = attempt.refs?.agent, session = attempt.refs?.session;
 		if (agent) status.append(h$1("div", { class: "schedule-agent" }, agent.cli ? agentMark(agent.cli) : null, shownAgent(agent)));
-		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref({
+		if (session) status.append(h$1("div", { class: "schedule-session" }, h$1("a", { href: sessionHref$1({
 			host: session.host,
 			sessionId: session.session_id,
 			from: "schedule"
@@ -41356,9 +41389,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 }
 //#endregion
 //#region src/state/sessions.js
-var text$3 = (value) => typeof value === "string" ? value : "";
+var text$4 = (value) => typeof value === "string" ? value : "";
 function workspaceGroup(session) {
-	const host = text$3(session.host), id = text$3(session.workspace_id), name = text$3(session.workspace);
+	const host = text$4(session.host), id = text$4(session.workspace_id), name = text$4(session.workspace);
 	return {
 		key: JSON.stringify([
 			host,
@@ -41393,7 +41426,7 @@ function matchesSession(session, query) {
 		session.model,
 		session.worktree_branch,
 		...Array.isArray(session.connector_metadata?.labels) ? session.connector_metadata.labels : []
-	].map(text$3).join("\n").toLocaleLowerCase();
+	].map(text$4).join("\n").toLocaleLowerCase();
 	return query.trim().toLocaleLowerCase().split(/\s+/).every((word) => haystack.includes(word));
 }
 function runtimeStale(session) {
@@ -41441,8 +41474,153 @@ function sessionStatus(session) {
 	return "unknown";
 }
 //#endregion
+//#region src/observed-resource-strings.js
+var observedStrings = {
+	en: {
+		or_execution: "Execution",
+		or_worktree: "Worktree",
+		or_work: "Work",
+		or_owner: "Owner",
+		or_ownership: "Ownership",
+		or_paused: "Paused",
+		or_connection_settings: "Connection settings",
+		or_order_first: "Already first in this group.",
+		or_order_last: "Already last in this group.",
+		or_order_pinned: "Pinned and unpinned items stay in separate groups.",
+		or_owner_task: "Managed task",
+		or_owner_operation: "Managed operation",
+		or_owner_registry: "Registered",
+		or_owner_manual: "Manual (read-only)",
+		or_readonly_task: "This account can view this work but cannot pause dispatch.",
+		or_controls_unavailable: "Controls are unavailable until this work can be read.",
+		or_work_ended: "This work has ended.",
+		or_readonly_project: "This account can view projects; change the credential under Connection to edit.",
+		or_projects_unknown: "This read did not return a project list.",
+		or_project_unavailable: "Project unavailable",
+		or_projects_unavailable: "Projects unavailable",
+		or_project_denied: "This credential does not have access.",
+		or_project_missing: "The requested project could not be found.",
+		or_projects_missing: "The project list could not be found.",
+		or_connector_unavailable: "Connector is unavailable.",
+		or_back_projects: "Back to Projects",
+		or_event_kind: "Event kind (optional)",
+		or_execution_filter: "Execution ID (optional)",
+		or_history_snapshot: "Fixed journal snapshot: {seq}.",
+		or_repositories: "Repositories",
+		or_latest: "Latest result",
+		or_sessions: "Sessions",
+		or_session: "Session",
+		or_open_session: "Open session",
+		or_review: "Review result",
+		or_details: "Details",
+		or_raw: "Raw record",
+		or_identity: "This identity is recorded. History does not grant writes.",
+		or_cleanup: "Cleanup needs a fresh preview of active work, undelivered results, reservations, and blockers.",
+		or_unverified: "Not verified",
+		or_verified: "Verified",
+		or_verification_reason: "Result unverified; dispatch acceptance does not verify the work.",
+		or_result_unknown: "No result evidence was returned.",
+		or_unavailable: "Could not read this result.",
+		or_cleanup_preview: "Preview cleanup",
+		or_host: "Host",
+		or_work_id: "Work ID",
+		or_owner_kind: "Owner kind",
+		or_dispatch: "Dispatch",
+		or_reason: "Reason",
+		or_pinned: "Source commit",
+		or_delivered: "Delivered commit",
+		or_pr: "PR #{n}",
+		or_path: "Path",
+		or_branch: "Branch",
+		or_actor: "Actor",
+		or_project: "Project",
+		or_state: "State",
+		or_worktree_id: "Worktree ID",
+		or_owner_id: "Owner ID",
+		or_operation_id: "Operation",
+		or_task_id: "Task",
+		or_session_id: "Session",
+		or_link_operation: "Operation",
+		or_link_execution: "Execution",
+		or_link_worktree: "Worktree"
+	},
+	"zh-TW": {
+		or_execution: "工作執行",
+		or_worktree: "工作目錄",
+		or_work: "工作",
+		or_owner: "負責人",
+		or_ownership: "歸屬類型",
+		or_paused: "已暫停",
+		or_connection_settings: "連線設定",
+		or_order_first: "已在這一組的最上方。",
+		or_order_last: "已在這一組的最下方。",
+		or_order_pinned: "置頂與未置頂項目分開排序。",
+		or_owner_task: "受管任務",
+		or_owner_operation: "受管操作",
+		or_owner_registry: "已登記",
+		or_owner_manual: "人工（唯讀）",
+		or_readonly_task: "這個帳號可以檢視，但不能暫停派工。",
+		or_controls_unavailable: "讀取這筆工作後才能使用控制功能。",
+		or_work_ended: "這筆工作已結束。",
+		or_readonly_project: "這個帳號可檢視專案；如需編輯，請到「連線」更換憑證。",
+		or_projects_unknown: "這次讀取未提供專案清單。",
+		or_project_unavailable: "無法開啟專案",
+		or_projects_unavailable: "無法取得專案",
+		or_project_denied: "這個權杖沒有檢視權限。",
+		or_project_missing: "找不到要求的專案。",
+		or_projects_missing: "找不到專案清單。",
+		or_connector_unavailable: "目前無法連線至 Connector。",
+		or_back_projects: "返回專案",
+		or_event_kind: "事件類型（選填）",
+		or_execution_filter: "執行識別碼（選填）",
+		or_history_snapshot: "固定歷程快照：{seq}。",
+		or_repositories: "儲存庫",
+		or_latest: "最新成果",
+		or_sessions: "工作階段",
+		or_session: "工作階段",
+		or_open_session: "開啟工作階段",
+		or_review: "審閱成果",
+		or_details: "詳細資訊",
+		or_raw: "原始紀錄",
+		or_identity: "這是已記錄的身分。歷程不代表可以寫入。",
+		or_cleanup: "整理前需要最新預覽，列出進行中的工作、尚未交付的成果、保留項目與阻擋原因。",
+		or_unverified: "尚未驗證",
+		or_verified: "已驗證",
+		or_verification_reason: "成果尚未驗證；派工已受理不代表工作已通過驗證。",
+		or_result_unknown: "這次讀取未提供成果證據。",
+		or_unavailable: "無法讀取這筆成果。",
+		or_cleanup_preview: "預覽整理",
+		or_host: "主機",
+		or_work_id: "工作識別碼",
+		or_owner_kind: "歸屬類型",
+		or_dispatch: "派工",
+		or_reason: "原因",
+		or_pinned: "來源提交",
+		or_delivered: "交付提交",
+		or_pr: "PR #{n}",
+		or_path: "路徑",
+		or_branch: "分支",
+		or_actor: "執行者",
+		or_project: "專案",
+		or_state: "狀態",
+		or_worktree_id: "工作目錄識別碼",
+		or_owner_id: "負責人識別碼",
+		or_operation_id: "操作",
+		or_task_id: "任務",
+		or_session_id: "工作階段",
+		or_link_operation: "操作",
+		or_link_execution: "執行",
+		or_link_worktree: "工作目錄"
+	}
+};
+function observedText(t, key, values = {}) {
+	const supplied = t(key, values);
+	if (supplied !== key) return supplied;
+	return (observedStrings[locale][key] ?? observedStrings.en[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
+}
+//#endregion
 //#region src/workspace-nav.js
-function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }) {
+function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, caps = () => null }) {
 	const key = `batc.tree.${namespace}`;
 	let saved = [], hasPreference = false;
 	try {
@@ -41452,7 +41630,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 	} catch {}
 	const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
 	let pmWorkspace = null, bindingSource = false, bindingKnown = false, bindingPartial = false, globalTree = false, contextVersion = 0;
-	let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
+	let roots = [], catalogKnown = false, disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
 	const status = h("div", {
 		class: "workspace-tree-status",
 		role: "status"
@@ -41479,14 +41657,17 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		"aria-label": t("workspace_search"),
 		placeholder: t("ui_search_work")
 	});
+	const createProject = h("a", {
+		href: "#/projects",
+		title: t("workspace_manage"),
+		"aria-label": t("workspace_manage"),
+		"data-project-create": "",
+		hidden: true
+	}, "+");
 	const box = h("aside", {
 		class: "workspace-nav",
 		"aria-label": t("workspace_navigation")
-	}, h("div", { class: "workspace-nav-heading" }, h("strong", {}, t("nav_projects")), h("a", {
-		href: "#/projects",
-		title: t("workspace_manage"),
-		"aria-label": t("workspace_manage")
-	}, "+")), searchField(search, { class: "workspace-search" }), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
+	}, h("div", { class: "workspace-nav-heading" }, h("strong", {}, t("nav_projects")), createProject), searchField(search, { class: "workspace-search" }), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
 	const alive = () => {
 		guard();
 		if (disposed) throw new Error("Navigation disposed");
@@ -41550,6 +41731,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 	].map(encodeURIComponent).join("/")}`, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id), workActivity(item), item.reading);
 	const render = () => {
 		if (disposed) return;
+		createProject.hidden = !catalogKnown || !caps()?.scopes?.includes("manage") || caps()?.actions?.find((row) => row.action === "project.create")?.allowed === false;
 		const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;
 		const query = search.value.trim().toLocaleLowerCase();
 		const matches = (text) => !query || String(text || "").toLocaleLowerCase().includes(query);
@@ -41589,7 +41771,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		const bound = pmWorkspace && !globalTree;
 		bindingNote.hidden = !bound || !bindingPartial;
 		tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? "available" : "empty" : "unknown" : "global";
-		if (!nodes.length && (query || !bound)) tree.append(h("p", { class: "muted workspace-tree-hint" }, t(bound && !bindingKnown ? "ui_work_links_unavailable" : query ? "workspace_no_match" : "no_projects")));
+		if (!nodes.length && (query || !bound && catalogKnown)) tree.append(h("p", { class: "muted workspace-tree-hint" }, t(bound && !bindingKnown ? "ui_work_links_unavailable" : !bound && !catalogKnown ? "ui_work_unavailable" : query ? "workspace_no_match" : "no_projects")));
 		if (focus) [...tree.querySelectorAll("[data-tree-key]")].find((node) => node.dataset.treeKey === focus)?.focus({ preventScroll: true });
 		filterSessions();
 	};
@@ -41601,6 +41783,18 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		}
 	};
 	let catalogRows = null;
+	const showReadError = (error) => {
+		const detail = error ? errorBox(error) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
+		const label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
+		status.replaceChildren(h("div", {
+			class: "workspace-read-error",
+			"data-work-read-error": ""
+		}, icon("circle-alert", { size: 20 }), h("details", {}, h("summary", { title: detail.textContent }, label), detail, roots.length ? h("p", { class: "muted" }, t("workspace_stale")) : null), iconButton({
+			icon: "refresh-cw",
+			label: t("ui_retry"),
+			onClick: () => refresh().catch(() => {})
+		})));
+	};
 	const refresh = ({ catalog = true } = {}) => {
 		const version = contextVersion;
 		const run = serial.catch(() => {}).then(async () => {
@@ -41613,7 +41807,13 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				if (catalog || catalogRows === null) {
 					const data = await api("GET", "/projects");
 					current();
-					catalogRows = data.projects || [];
+					if (!Array.isArray(data.projects)) {
+						catalogRows = [];
+						catalogKnown = false;
+					} else {
+						catalogRows = data.projects;
+						catalogKnown = true;
+					}
 				}
 				const clearCounts = (rows) => rows.map((row) => ({
 					...row,
@@ -41675,7 +41875,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 					current();
 					projects.set(id, detail);
 				}
-				if (!roots.length && !sessionsLoaded && [
+				if (catalogKnown && !roots.length && !sessionsLoaded && [
 					"#/home",
 					"#/sessions",
 					"#/",
@@ -41702,9 +41902,11 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				}
 				status.replaceChildren();
 				render();
+				if (!catalogKnown) showReadError(null);
 			} catch (error) {
 				if (version !== contextVersion || disposed) return;
 				alive();
+				catalogKnown = false;
 				if ([403, 404].includes(error.status)) {
 					catalogRows = null;
 					roots = [];
@@ -41713,17 +41915,9 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 					projects.clear();
 					sessionRows.replaceChildren();
 					more.hidden = true;
-					render();
 				}
-				const detail = errorBox(error), label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
-				status.replaceChildren(h("div", {
-					class: "workspace-read-error",
-					"data-work-read-error": ""
-				}, icon("circle-alert", { size: 20 }), h("details", {}, h("summary", { title: detail.textContent }, label), detail, roots.length ? h("p", { class: "muted" }, t("workspace_stale")) : null), iconButton({
-					icon: "refresh-cw",
-					label: t("ui_retry"),
-					onClick: () => refresh().catch(() => {})
-				})));
+				render();
+				showReadError(error);
 				throw error;
 			}
 		});
@@ -41787,6 +41981,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			globalTree = all;
 			contextVersion++;
 			catalogRows = null;
+			catalogKnown = false;
 			roots = [];
 			bindingKnown = false;
 			bindingPartial = false;
@@ -44159,13 +44354,13 @@ var ids = (rows, key) => rows.map((row) => row[key]);
 var same$2 = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
 function treeInteractions({ h, t, row, scope, siblings, index, key, run, open, guard, editing }) {
 	const me = siblings[index];
-	const handle = h("button", {
-		class: "mini tree-drag-handle",
-		type: "button",
+	const handle = iconButton({
+		icon: "grip-vertical",
+		label: t("tree_drag", { name: me.name || me.title }),
 		draggable: "true",
-		title: t("tree_drag_help"),
-		"aria-label": t("tree_drag", { name: me.name || me.title })
-	}, "↕");
+		title: t("tree_drag_help")
+	});
+	handle.classList.add("tree-drag-handle");
 	const clear = () => {
 		if (drag) {
 			drag.editing(false);
@@ -45590,7 +45785,7 @@ var admissionRefusals$3 = {
 	WORK_ITEM_ARCHIVED: 409,
 	WRONG_PROJECT: 409
 };
-function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, onCreated, errorBox, opStatus }) {
+function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, errorBox, opStatus }) {
 	const project = kind === "project", action = project ? "project.create" : "work_item.create";
 	const target = project ? {} : { project_id: projectId }, key = `batc.create.${namespace}.${kind}.${projectId || "root"}`;
 	const primary = project ? "name" : "title", fields = new Map(), choices = new Map();
@@ -45765,15 +45960,16 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 			} catch {}
 		}
 	};
-	const create = h("button", {
-		class: "primary",
-		type: "submit"
-	}, t(project ? "add_project" : "add_item"));
-	const review = h("button", {
-		class: "secondary",
-		type: "button",
+	const create = button({
+		variant: "primary",
+		type: "submit",
+		label: t(project ? "add_project" : "add_item")
+	});
+	const review = button({
+		variant: "secondary",
 		hidden: true,
-		onclick: () => {
+		label: t("create_edit_request"),
+		onClick: () => {
 			guard();
 			if (busy || !(terminal$7(operation) || saved.intent?.initialAdmissionRefused)) return;
 			try {
@@ -45791,7 +45987,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				status.replaceChildren(errorBox(error));
 			}
 		}
-	}, t("create_edit_request"));
+	});
 	const form = h("form", {
 		class: "panel",
 		"data-create-record": kind,
@@ -45799,7 +45995,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 			event.preventDefault();
 			run();
 		}
-	}, scope, compact, advanced, h("div", { class: "actions" }, create, review, unsaved), status, receipt);
+	}, showScope ? scope : null, compact, advanced, h("div", { class: "actions" }, create, review, unsaved), status, receipt);
 	function update() {
 		for (const input of fields.values()) input.disabled = !allowed || !permitted() || busy || !!saved.intent || damaged;
 		create.disabled = !allowed || !permitted() || busy || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
@@ -47678,9 +47874,10 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		message.replaceChildren();
 		update();
 	};
-	const apply = h("button", {
-		class: "secondary",
-		onclick: async () => {
+	const apply = button({
+		variant: "secondary",
+		label: t("task_pause"),
+		onClick: async () => {
 			if (!live() || busy || refreshing || readFailed || !writable() || saved.intent?.operation_id || saved.intent && (!saved.intent.request || saved.intent.refused)) return;
 			const previous = saved;
 			if (!saved.intent) saved = {
@@ -47737,14 +47934,16 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 				showError(e);
 			}
 		}
-	}, t("task_pause"));
-	const check = h("button", {
-		class: "secondary",
-		onclick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)
-	}, t("permissions_check"));
-	const another = h("button", {
-		class: "secondary",
-		onclick: () => {
+	});
+	const check = button({
+		variant: "secondary",
+		label: t("permissions_check"),
+		onClick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)
+	});
+	const another = button({
+		variant: "secondary",
+		label: t("task_control_new"),
+		onClick: () => {
 			if (!live() || busy || refreshing || readFailed || !writable() || !(terminal$6(operation) || saved.intent?.refused)) return;
 			const previous = saved;
 			saved = { abort: false };
@@ -47760,8 +47959,8 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 			message.replaceChildren();
 			update();
 		}
-	}, t("task_control_new"));
-	const abortLabel = h("label", { class: "muted" }, abort, " ", t("task_abort"));
+	});
+	const abortLabel = h("label", { class: "capture-choice muted" }, abort, " ", t("task_abort"));
 	abort.onchange = () => {
 		if (!live() || saved.intent || busy) {
 			abort.checked = saved.abort;
@@ -47775,22 +47974,27 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		}
 		update();
 	};
-	const box = h("section", {
-		class: "panel",
-		"data-task-controls": ""
-	}, h("h2", {}, t("task_controls")), h("p", { class: "muted" }, t("task_control_help")), abortLabel, h("div", { class: "actions" }, apply, check, another), restriction, result, message);
+	const help = h("p", { class: "muted" }, t("task_control_help"));
+	const box = sectionCard({
+		title: t("task_controls"),
+		body: h("div", {}, help, abortLabel, h("div", { class: "actions" }, apply, check, another), restriction, result, message)
+	});
+	box.dataset.taskControls = "";
 	function update() {
 		const fixed = Boolean(saved.intent);
-		abortLabel.hidden = action() !== "task.pause";
+		const canOperate = permitted();
+		box.hidden = !(caps()?.scopes || []).includes("operate");
+		help.hidden = !canOperate;
+		abortLabel.hidden = !canOperate || action() !== "task.pause";
 		abort.disabled = fixed || busy;
-		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
+		apply.hidden = !canOperate || Boolean(saved.intent?.operation_id || saved.intent?.refused);
 		apply.disabled = busy || Boolean(refreshing) || readFailed || !writable() || Boolean(fixed && !saved.intent.request);
 		apply.textContent = t(fixed ? "permissions_retry" : action() === "task.pause" ? "task_pause" : "task_resume");
 		check.hidden = !saved.intent?.operation_id;
 		check.disabled = busy || Boolean(refreshing);
-		another.hidden = !(terminal$6(operation) || saved.intent?.refused);
+		another.hidden = !canOperate || !(terminal$6(operation) || saved.intent?.refused);
 		another.disabled = busy || Boolean(refreshing) || readFailed || !writable();
-		restriction.textContent = writable() ? "" : t("task_control_unavailable");
+		restriction.textContent = writable() ? "" : observedText(t, !canOperate ? "or_readonly_task" : ["done", "failed"].includes(task()?.state) ? "or_work_ended" : "or_controls_unavailable");
 		result.replaceChildren();
 		if (fixed) {
 			result.append(h("p", {}, operation ? opStatus(operation) : t(saved.intent.refused ? "task_control_refused" : "permissions_unknown"), " ", ...saved.intent.operation_id ? [h("a", { href: `#/op/${saved.intent.operation_id}` }, t("permissions_details"))] : []), h("p", { class: "muted" }, t("task_control_fixed", { version: saved.intent.request?.preconditions.control_version ?? "?" })));
@@ -48668,7 +48872,7 @@ var terminal$3 = (op) => [
 	"cancelled"
 ].includes(op?.status);
 var equal$3 = (a, b) => a === b || object$2(a) && object$2(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => equal$3(a[k], b[k]));
-var text$2 = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
+var text$3 = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
 var fields = [
 	"host",
 	"workspace",
@@ -48679,7 +48883,7 @@ var fields = [
 ];
 var admissionRefusals$1 = new Set(["TIER_DISABLED", "START_WORKTREE_REQUIRED"]);
 function validRequest$2(r) {
-	return r?.action === "session.start" && object$2(r.target) && Object.keys(r.target).length === 2 && text$2(r.target.host, 256) && text$2(r.target.workspace, 256) && object$2(r.params) && Object.keys(r.params).every((k) => [
+	return r?.action === "session.start" && object$2(r.target) && Object.keys(r.target).length === 2 && text$3(r.target.host, 256) && text$3(r.target.workspace, 256) && object$2(r.params) && Object.keys(r.params).every((k) => [
 		"agent",
 		"model",
 		"title",
@@ -48689,7 +48893,7 @@ function validRequest$2(r) {
 		"model",
 		"title",
 		"prompt"
-	].every((k) => !(k in r.params) || text$2(r.params[k], k === "prompt" ? 2e4 : 256)) && object$2(r.preconditions) && Object.keys(r.preconditions).length === 0;
+	].every((k) => !(k in r.params) || text$3(r.params[k], k === "prompt" ? 2e4 : 256)) && object$2(r.preconditions) && Object.keys(r.preconditions).length === 0;
 }
 function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference }) {
 	let raw;
@@ -48699,7 +48903,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 	let saved = Object.fromEntries(fields.map((k) => [k, typeof raw?.[k] === "string" ? raw[k] : k === "agent" ? "claude" : ""]));
 	if (!["claude", "codex"].includes(saved.agent)) saved.agent = "claude";
 	if (raw?.intent) {
-		const valid = validRequest$2(raw.intent.request) && text$2(raw.intent.key, 200);
+		const valid = validRequest$2(raw.intent.request) && text$3(raw.intent.key, 200);
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
@@ -48796,7 +49000,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 			const doc = await api("GET", `/workspaces?host=${encodeURIComponent(selectedHost)}&limit=200`);
 			guard();
 			if (expected !== discovery || saved.host !== selectedHost || saved.intent) return;
-			if (!Array.isArray(doc.workspaces) || doc.workspaces.length > 200 || typeof doc.has_more !== "boolean" || !object$2(doc.errors) || Object.keys(doc.errors).length || doc.workspaces.some((w) => !object$2(w) || w.host !== selectedHost || !text$2(w.workspace_id, 256) || typeof w.folder !== "string") || new Set(doc.workspaces.map((w) => w.workspace_id)).size !== doc.workspaces.length) throw new Error(t("start_discovery_failed"));
+			if (!Array.isArray(doc.workspaces) || doc.workspaces.length > 200 || typeof doc.has_more !== "boolean" || !object$2(doc.errors) || Object.keys(doc.errors).length || doc.workspaces.some((w) => !object$2(w) || w.host !== selectedHost || !text$3(w.workspace_id, 256) || typeof w.folder !== "string") || new Set(doc.workspaces.map((w) => w.workspace_id)).size !== doc.workspaces.length) throw new Error(t("start_discovery_failed"));
 			workspaces = doc.workspaces;
 			discoveredHost = selectedHost;
 			renderWorkspaces();
@@ -48826,7 +49030,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 			params: candidate.params,
 			preconditions: candidate.preconditions
 		}, intent.request) || intent.operation_id && intent.operation_id !== candidate.operation_id) throw new Error(t("start_invalid_result"));
-		for (const proof of [candidate.result, candidate.external_refs?.start_result]) if (proof?.started === true && (proof.host !== intent.request.target.host || !text$2(proof.session_id, 256) || proof.session_id !== candidate.external_refs?.session_id)) throw new Error(t("start_invalid_result"));
+		for (const proof of [candidate.result, candidate.external_refs?.start_result]) if (proof?.started === true && (proof.host !== intent.request.target.host || !text$3(proof.session_id, 256) || proof.session_id !== candidate.external_refs?.session_id)) throw new Error(t("start_invalid_result"));
 		operation = candidate;
 		intent.operation_id = candidate.operation_id;
 		readFailed = false;
@@ -49268,7 +49472,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 //#endregion
 //#region src/orchestration.js
 var object$1 = (v) => v && typeof v === "object" && !Array.isArray(v);
-var text$1 = (v, max = 256) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
+var text$2 = (v, max = 256) => typeof v === "string" && v.trim().length > 0 && v.length <= max;
 var opId = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
 var equal$2 = (a, b) => a === b || Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => equal$2(v, b[i])) || object$1(a) && object$1(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => equal$2(a[k], b[k]));
 var terminal$2 = (op) => [
@@ -49297,12 +49501,12 @@ var admissionRefusals = new Set([
 ]);
 var withinBodyLimit = (r) => new TextEncoder().encode(JSON.stringify(r)).length <= 2e5;
 function validRequest$1(r, mode) {
-	if (!object$1(r) || r.action !== orchestrationActions[mode] || !object$1(r.target) || !object$1(r.params) || !object$1(r.preconditions) || Object.keys(r.preconditions).length || Object.keys(r.target).length !== 2 || !text$1(r.target.host) || !text$1(r.target[sessionMode(mode) ? "session_id" : "workspace"]) || !withinBodyLimit(r)) return false;
+	if (!object$1(r) || r.action !== orchestrationActions[mode] || !object$1(r.target) || !object$1(r.params) || !object$1(r.preconditions) || Object.keys(r.preconditions).length || Object.keys(r.target).length !== 2 || !text$2(r.target.host) || !text$2(r.target[sessionMode(mode) ? "session_id" : "workspace"]) || !withinBodyLimit(r)) return false;
 	const p = r.params, keys = Object.keys(p);
-	if (mode === "relay") return keys.length === 3 && text$1(p.message, 12e3) && typeof p.queue === "boolean" && p.start_if_missing === false;
-	if (mode === "planner") return keys.length === 2 && text$1(p.message, 12e3) && Number.isInteger(p.max_items) && p.max_items >= 1 && p.max_items <= 16;
-	if (mode === "failover") return keys.every((k) => ["tail_messages", "instructions"].includes(k)) && p.tail_messages === 12 && (!("instructions" in p) || text$1(p.instructions, 4e3));
-	return keys.length === 2 && ["claude", "codex"].includes(p.agent) && Array.isArray(p.plan) && p.plan.length >= 1 && p.plan.length <= 16 && p.plan.every((v, i) => object$1(v) && Object.keys(v).length === 3 && v.index === i + 1 && text$1(v.title, 200) && text$1(v.prompt, 19e3));
+	if (mode === "relay") return keys.length === 3 && text$2(p.message, 12e3) && typeof p.queue === "boolean" && p.start_if_missing === false;
+	if (mode === "planner") return keys.length === 2 && text$2(p.message, 12e3) && Number.isInteger(p.max_items) && p.max_items >= 1 && p.max_items <= 16;
+	if (mode === "failover") return keys.every((k) => ["tail_messages", "instructions"].includes(k)) && p.tail_messages === 12 && (!("instructions" in p) || text$2(p.instructions, 4e3));
+	return keys.length === 2 && ["claude", "codex"].includes(p.agent) && Array.isArray(p.plan) && p.plan.length >= 1 && p.plan.length <= 16 && p.plan.every((v, i) => object$1(v) && Object.keys(v).length === 3 && v.index === i + 1 && text$2(v.title, 200) && text$2(v.prompt, 19e3));
 }
 function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, mode, context = {} }) {
 	if (!Object.hasOwn(orchestrationActions, mode)) throw new Error("Unknown orchestration form");
@@ -49326,7 +49530,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		}]
 	};
 	if (raw?.intent) {
-		const valid = validRequest$1(raw.intent.request, mode) && text$1(raw.intent.key, 200);
+		const valid = validRequest$1(raw.intent.request, mode) && text$2(raw.intent.key, 200);
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
@@ -49454,7 +49658,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 			guard();
 			if (mine !== discovery || expectedHost !== saved.host || saved.intent) return;
 			const list = doc[sessionMode(mode) ? "sessions" : "workspaces"], id = sessionMode(mode) ? "session_id" : "workspace_id";
-			if (!Array.isArray(list) || list.length > 200 || list.some((row) => row?.host !== expectedHost || !text$1(row?.[id])) || new Set(list.map((row) => row[id])).size !== list.length || !sessionMode(mode) && (!object$1(doc.errors) || Object.keys(doc.errors).length || typeof doc.has_more !== "boolean") || sessionMode(mode) && doc.next_cursor !== null && !text$1(doc.next_cursor, 8192)) throw new Error(t("orch_discovery_failed"));
+			if (!Array.isArray(list) || list.length > 200 || list.some((row) => row?.host !== expectedHost || !text$2(row?.[id])) || new Set(list.map((row) => row[id])).size !== list.length || !sessionMode(mode) && (!object$1(doc.errors) || Object.keys(doc.errors).length || typeof doc.has_more !== "boolean") || sessionMode(mode) && doc.next_cursor !== null && !text$2(doc.next_cursor, 8192)) throw new Error(t("orch_discovery_failed"));
 			rows = sessionMode(mode) ? list.filter((row) => mode === "failover" ? failoverSource(row) : managed(row)) : list;
 			discoveredHost = expectedHost;
 			renderSelection();
@@ -49739,10 +49943,10 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 			total: intent.request?.params.plan.length || 0
 		})));
 		if (mode === "relay" && proof.sent === true) result.append(h("p", {}, t("orch_relay_accepted")));
-		if (mode === "planner" && proof.prompt_sent === true && text$1(proof.session_id)) result.append(h("p", {}, t("orch_planner_started"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(proof.session_id)}` }, proof.session_id)));
+		if (mode === "planner" && proof.prompt_sent === true && text$2(proof.session_id)) result.append(h("p", {}, t("orch_planner_started"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(proof.session_id)}` }, proof.session_id)));
 		if (mode === "failover") {
 			const sid = proof.new_session_id || proof.pending_successor;
-			if (text$1(sid)) result.append(h("p", {}, t(proof.prompt_sent === true ? "orch_handoff_accepted" : "orch_successor_unconfirmed"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(sid)}` }, sid)));
+			if (text$2(sid)) result.append(h("p", {}, t(proof.prompt_sent === true ? "orch_handoff_accepted" : "orch_successor_unconfirmed"), " ", h("a", { href: `#/session/${encodeURIComponent(intent.request.target.host)}/${encodeURIComponent(sid)}` }, sid)));
 		}
 		if (operation.steps?.length) result.append(h("details", { "data-orchestration-steps": "" }, h("summary", {}, t("orch_steps")), h("ul", {}, ...operation.steps.map((step) => h("li", {}, `${step.name} · ${operationStatusLabel(step.status)}`)))));
 	}
@@ -49817,7 +50021,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 //#region src/repository-start.js
 var object = (v) => v && typeof v === "object" && !Array.isArray(v);
 var equal$1 = (a, b) => a === b || Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => equal$1(v, b[i])) || object(a) && object(b) && Object.keys(a).length === Object.keys(b).length && Object.keys(a).every((k) => equal$1(a[k], b[k]));
-var text = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max && !/[\x00-\x1f\x7f]/.test(v);
+var text$1 = (v, max) => typeof v === "string" && v.trim().length > 0 && v.length <= max && !/[\x00-\x1f\x7f]/.test(v);
 var oid$1 = (v) => typeof v === "string" && /^op_[0-9a-f]{32}$/.test(v);
 var sha = (v) => typeof v === "string" && /^[0-9a-f]{40}$/.test(v);
 var digest$1 = (v) => typeof v === "string" && /^[0-9a-f]{64}$/.test(v);
@@ -49830,7 +50034,7 @@ var target = (v) => object(v) && Object.keys(v).length === 3 && [
 	"repository",
 	"host",
 	"workspace_id"
-].every((k) => text(v[k], 256));
+].every((k) => text$1(v[k], 256));
 var ref = (v) => typeof v === "string" && /^refs\/heads\/(?!-)(?!.*\.\.)(?!.*\/\/)(?!.*@\{)[A-Za-z0-9._/-]{1,200}$/.test(v) && !/[./]$/.test(v) && v.slice(11).split("/").every((p) => !p.startsWith(".") && !p.endsWith(".lock"));
 var branchRef = (value) => value.startsWith("refs/") ? value : "refs/heads/" + value;
 var preconditions = (v) => object(v) && Object.keys(v).length === 2 && Number.isSafeInteger(v.repository_id) && v.repository_id > 0 && digest$1(v.binding_digest);
@@ -49860,8 +50064,8 @@ var validRequest = (r) => r?.action === "repository.continue" && target(r.target
 	"work_item_id",
 	"source_ref",
 	"source_sha"
-].includes(k)) && ref(r.params.source_ref) && sha(r.params.source_sha) && ["claude", "codex"].includes(r.params.agent) && typeof r.params.prompt === "string" && r.params.prompt.trim() && r.params.prompt.length <= 12e3 && ["title", "model"].every((k) => !(k in r.params) || text(r.params[k], 256)) && (!("artifacts" in r.params) || artifactRefs(r.params.artifacts));
-var validPreview$1 = (p, input) => object(p) && equal$1(p.target, input.target) && p.source_ref === input.source_ref && sha(p.source_sha) && p.exact_ref_head_only === true && preconditions(p.preconditions) && p.repository_id === p.preconditions.repository_id && p.binding_digest === p.preconditions.binding_digest && object(p.workspace) && p.workspace.workspace_id === input.target.workspace_id && text(p.workspace.folder, 4096) && (p.workspace.name == null || typeof p.workspace.name === "string");
+].includes(k)) && ref(r.params.source_ref) && sha(r.params.source_sha) && ["claude", "codex"].includes(r.params.agent) && typeof r.params.prompt === "string" && r.params.prompt.trim() && r.params.prompt.length <= 12e3 && ["title", "model"].every((k) => !(k in r.params) || text$1(r.params[k], 256)) && (!("artifacts" in r.params) || artifactRefs(r.params.artifacts));
+var validPreview$1 = (p, input) => object(p) && equal$1(p.target, input.target) && p.source_ref === input.source_ref && sha(p.source_sha) && p.exact_ref_head_only === true && preconditions(p.preconditions) && p.repository_id === p.preconditions.repository_id && p.binding_digest === p.preconditions.binding_digest && object(p.workspace) && p.workspace.workspace_id === input.target.workspace_id && text$1(p.workspace.folder, 4096) && (p.workspace.name == null || typeof p.workspace.name === "string");
 var noAdmission = new Set(["REPOSITORY_NOT_BOUND", "REPOSITORY_HOST_UNAVAILABLE"]);
 function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, project = null, repairSeed = null, attachmentFactory, submitPreference }) {
 	if (repairSeed && (repairSeed.project_id !== project || !workItemId(repairSeed.work_item_id) || !digest$1(repairSeed.expected_work_item_fingerprint) || typeof repairSeed.prompt !== "string" || !repairSeed.prompt.trim())) throw new Error(t("repair_unavailable"));
@@ -49878,7 +50082,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		title: typeof raw?.title === "string" ? raw.title : ""
 	};
 	if (raw?.intent) {
-		const valid = validRequest(raw.intent.request) && text(raw.intent.key, 200) && (!project || raw.intent.request.params.project_id === project) && (repairSeed ? raw.intent.request.params.work_item_id === repairSeed.work_item_id : !raw.intent.request.params.work_item_id);
+		const valid = validRequest(raw.intent.request) && text$1(raw.intent.key, 200) && (!project || raw.intent.request.params.project_id === project) && (repairSeed ? raw.intent.request.params.work_item_id === repairSeed.work_item_id : !raw.intent.request.params.work_item_id);
 		saved.intent = {
 			request: valid ? raw.intent.request : null,
 			key: valid ? raw.intent.key : null,
@@ -50067,7 +50271,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 			...intent.request.params.project_id ? { project_id: intent.request.params.project_id } : {},
 			...intent.request.params.work_item_id ? { work_item_id: intent.request.params.work_item_id } : {}
 		})) if (name in refs && refs[name] !== value) throw new Error(t("pub_invalid_result"));
-		if (result != null && (!object(result) || result.host !== intent.request.target.host || result.workspace_id !== intent.request.target.workspace_id || result.repository !== intent.request.target.repository || result.source_ref !== intent.request.params.source_ref || result.source_sha !== intent.request.params.source_sha || result.repository_id !== intent.request.preconditions.repository_id || result.binding_digest !== intent.request.preconditions.binding_digest || !text(result.session_id, 256) || result.session_id !== candidate.external_refs?.session_id)) throw new Error(t("pub_invalid_result"));
+		if (result != null && (!object(result) || result.host !== intent.request.target.host || result.workspace_id !== intent.request.target.workspace_id || result.repository !== intent.request.target.repository || result.source_ref !== intent.request.params.source_ref || result.source_sha !== intent.request.params.source_sha || result.repository_id !== intent.request.preconditions.repository_id || result.binding_digest !== intent.request.preconditions.binding_digest || !text$1(result.session_id, 256) || result.session_id !== candidate.external_refs?.session_id)) throw new Error(t("pub_invalid_result"));
 		if (candidate.status === "succeeded" && (!result || result.message_id !== `batc-${candidate.operation_id}`)) throw new Error(t("pub_invalid_result"));
 		operation = candidate;
 		intent.operation_id = candidate.operation_id;
@@ -50237,7 +50441,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		if (!original || !saved.intent.key) outcome.append(h("p", { class: "error" }, t("permissions_damaged")));
 		if (original?.params.artifacts?.length) outcome.append(h("p", { class: "muted" }, t("dispatch_fixed_inputs")), h("ul", { class: "dispatch-fixed-inputs" }, ...original.params.artifacts.map((r) => h("li", {}, `${r.artifact_id} · r${r.revision} · ${r.digest}`))));
 		const complete = operation?.status === "succeeded" && operation.result?.message_id === `batc-${operation.operation_id}`;
-		const proof = complete ? operation.result : operation?.steps?.some((s) => s.name === "session.start" && s.status === "succeeded") && text(operation.external_refs?.session_id, 256) ? {
+		const proof = complete ? operation.result : operation?.steps?.some((s) => s.name === "session.start" && s.status === "succeeded") && text$1(operation.external_refs?.session_id, 256) ? {
 			host: saved.target.host,
 			session_id: operation.external_refs.session_id
 		} : null;
@@ -51341,6 +51545,306 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		content.dispose();
 		off();
 	};
+}
+//#endregion
+//#region src/observed-resource.js
+var say = (key, values) => observedText(t, key, values);
+var text = (value) => typeof value === "string" ? value.trim() : "";
+var list = (value) => Array.isArray(value) ? value.filter(Boolean) : [];
+var TASK_PILLS = {
+	queued: "not_started",
+	dispatching: "in_progress",
+	accepted: "in_progress",
+	running: "running",
+	waiting_permission: "asking_you",
+	quota_limited: "blocked",
+	human_owned: "needs_you",
+	needs_ted: "needs_you",
+	verifying: "in_review",
+	done: "done",
+	failed: "failed",
+	uncertain: "unknown",
+	waiting: "waiting"
+};
+function ownerKind(resource) {
+	if (!text(resource?.intent_id)) return "manual";
+	const kind = text(resource?.intent_type);
+	if (kind === "task" || kind === "registry") return kind;
+	if ([
+		"operation",
+		"checkpoint.continue",
+		"integration.handoff",
+		"repository.continue",
+		"session.start"
+	].includes(kind)) return "operation";
+	return "manual";
+}
+function actionLink(h, href, label, variant) {
+	return h("a", {
+		class: `ui-button ${variant} ui-sm`,
+		href
+	}, label);
+}
+function unavailableProject({ h, error, collection = false, transportFailed = false, retry, connection }) {
+	const denied = [401, 403].includes(error?.status), missing = error?.status === 404;
+	const recoverable = error?.status === 503 || error?.status === 0 || transportFailed;
+	const reason = denied ? "or_project_denied" : missing ? collection ? "or_projects_missing" : "or_project_missing" : "or_connector_unavailable";
+	const actions = [];
+	if (!collection) actions.push(actionLink(h, "#/projects", say("or_back_projects"), "secondary"));
+	if (collection && denied && connection) actions.push(button({
+		variant: "secondary",
+		label: say("or_connection_settings"),
+		onClick: connection
+	}));
+	if (recoverable && retry) actions.push(button({
+		variant: "secondary",
+		label: t("retry"),
+		onClick: retry
+	}));
+	const state = emptyState({
+		icon: "circle-alert",
+		title: say(collection ? "or_projects_unavailable" : "or_project_unavailable"),
+		text: say(reason)
+	});
+	if (text(error?.code)) state.append(disclosure({
+		label: say("or_details"),
+		body: h("p", { class: "mono" }, text(error.code))
+	}));
+	if (actions.length) state.append(h("div", { class: "actions" }, ...actions));
+	state.dataset.projectUnavailable = collection ? "list" : "project";
+	return state;
+}
+function pairs(h, rows) {
+	const kept = rows.filter(([, value]) => value !== null && value !== void 0 && value !== "");
+	return kept.length ? h("dl", { class: "or-dl" }, ...kept.flatMap(([label, value]) => [h("dt", {}, label), h("dd", { class: typeof value === "string" ? "mono" : "" }, value)])) : null;
+}
+function fact(h, label, value) {
+	return h("div", { class: "or-fact" }, h("span", { class: "or-label" }, label), h("div", { class: "or-value" }, value));
+}
+function stamp(value) {
+	return value === null || value === void 0 || value === "" ? null : timeStamp(value);
+}
+function at(value) {
+	if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+	return text(value) ? Date.parse(value) / 1e3 || 0 : 0;
+}
+function sessionHref(session) {
+	return `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`;
+}
+function sessionRow$1(h, session) {
+	const observation = session?.observation || {};
+	const title = text(observation.title) || text(session?.title) || t("session_untitled");
+	const fresh = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale && !observation.gone_at && !["gone", "missing"].includes(observation.state?.enumeration) && observation.state?.lifecycle !== "ended";
+	const activity = fresh && observation.pending ? statusPill("asking_you") : fresh && observation.streaming === true ? statusPill("running") : fresh && observation.streaming === false ? statusPill("waiting") : null;
+	return h("div", {
+		class: "or-session",
+		"data-observed-session": ""
+	}, h("div", { class: "or-session-name" }, session?.host && session?.session_id ? h("a", { href: sessionHref(session) }, title) : h("span", {}, title), text(session?.host) ? h("span", {
+		class: "or-label",
+		"data-observed-session-host": ""
+	}, session.host) : null), activity);
+}
+function pauseReason(task) {
+	const event = list(task?.events).filter((row) => row.kind === "paused").sort((a, b) => at(b.created_at) - at(a.created_at))[0];
+	try {
+		return text((typeof event?.body === "string" ? JSON.parse(event.body) : event?.body)?.reason);
+	} catch {
+		return "";
+	}
+}
+function receipts(item) {
+	return list(item?.delivered_to).filter((row) => text(row.repository) && Number.isInteger(row.pull_number) && row.pull_number > 0).sort((a, b) => at(b.delivered_at) - at(a.delivered_at));
+}
+function prAnchor(h, receipt) {
+	return receipt ? h("a", {
+		class: "or-pr",
+		href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
+		target: "_blank",
+		rel: "noopener",
+		"data-observed-pr": String(receipt.pull_number)
+	}, say("or_pr", { n: receipt.pull_number })) : null;
+}
+function deliveryPill(item) {
+	if (item?.unavailable || !item?.result?.status) return statusPill("unknown");
+	if (item.result.status === "failed") return statusPill("failed");
+	if (item.result.status !== "unverified") return statusPill("unknown");
+	const pill = statusPill("not_assessed");
+	pill.textContent = say("or_unverified");
+	return pill;
+}
+function workName(item) {
+	return text(item?.title) || text(item?.branch) || (item?.action ? actionLabel(item.action) : "") || say("or_work");
+}
+function workLinks(item, repositories, caps) {
+	const links = [];
+	if (item.operation_id) links.push([
+		"operation",
+		say("or_link_operation"),
+		`#/op/${encodeURIComponent(item.operation_id)}`
+	]);
+	if (item.task_id) links.push([
+		"execution",
+		say("or_link_execution"),
+		`#/task/${encodeURIComponent(item.task_id)}`
+	]);
+	if (item.host && item.session_id) links.push([
+		"session",
+		say("or_open_session"),
+		sessionHref(item)
+	]);
+	if (item.worktree_id) links.push([
+		"worktree",
+		say("or_link_worktree"),
+		`#/worktree/${encodeURIComponent(item.worktree_id)}`
+	]);
+	if (item.eligible && item.host && item.kind && item.id && caps?.features?.execution_delivery?.version === 1) {
+		const repo = item.repository || (repositories.length === 1 ? repositories[0] : "");
+		links.push([
+			"review",
+			say("or_review"),
+			`#/delivery/${[
+				item.host,
+				item.kind,
+				item.id,
+				repo
+			].map(encodeURIComponent).join("/")}`
+		]);
+	}
+	return links;
+}
+function rawRecord(h, value) {
+	const nested = disclosure({
+		label: say("or_raw"),
+		body: h("pre", { class: "pre" }, JSON.stringify(value ?? {}, null, 2))
+	});
+	nested.dataset.observedRaw = "";
+	return nested;
+}
+function detailsBlock(body, key) {
+	const root = disclosure({
+		label: say("or_details"),
+		body,
+		key
+	});
+	root.dataset.observedDetails = "";
+	return root;
+}
+function resultReason(h, item) {
+	return h("p", { class: "or-note" }, item?.unavailable ? say("or_unavailable") : item?.result?.status === "unverified" ? say("or_verification_reason") : say("or_result_unknown"));
+}
+function technicalWork(h, item, links) {
+	return h("div", { class: "or-tech-work" }, pairs(h, [
+		[say("or_actor"), text(item.actor)],
+		[say("or_host"), text(item.host)],
+		[say("or_branch"), text(item.branch)],
+		[say("or_work_id"), text(item.id)],
+		[say("or_operation_id"), text(item.operation_id)],
+		[say("or_task_id"), text(item.task_id)],
+		[say("or_session_id"), text(item.session_id)],
+		[say("or_worktree_id"), text(item.worktree_id)],
+		[say("or_path"), text(item.worktree_path)],
+		[say("or_dispatch"), text(item.status)],
+		[say("or_reason"), text(item.unavailable?.code)]
+	]), resultReason(h, item), stamp(item.created_at), ...receipts(item).map((receipt) => h("div", { class: "or-receipt" }, prAnchor(h, receipt), stamp(receipt.delivered_at), pairs(h, [
+		[say("or_operation_id"), text(receipt.operation_id)],
+		[say("or_pinned"), text(receipt.pinned_sha)],
+		[say("or_delivered"), text(receipt.delivered_sha)]
+	]))), links.length ? h("div", { class: "or-links" }, ...links.map(([, label, href]) => h("a", { href }, label))) : null);
+}
+function renderWorktree({ h, id, resource, caps, namespace }) {
+	const kind = ownerKind(resource), work = list(resource?.work), sessions = list(resource?.known_sessions);
+	const latest = [...work].sort((a, b) => Math.max(at(b.created_at), at(receipts(b)[0]?.delivered_at)) - Math.max(at(a.created_at), at(receipts(a)[0]?.delivered_at)))[0];
+	const receipt = receipts(latest)[0], session = sessions.find((item) => item.host && item.session_id);
+	const ownerWork = work.find((item) => kind === "task" ? item.task_id === resource.intent_id : item.operation_id === resource.intent_id);
+	const ownerHref = kind === "task" ? `#/task/${encodeURIComponent(resource.intent_id)}` : kind === "operation" ? `#/op/${encodeURIComponent(resource.intent_id)}` : null;
+	const owner = h("span", { "data-observed-owner": kind }, say(`or_owner_${kind}`), ownerHref ? [" · ", h("a", { href: ownerHref }, text(ownerWork?.title) || say(kind === "task" ? "or_link_execution" : "or_link_operation"))] : null);
+	const actions = [];
+	if (session) actions.push(actionLink(h, sessionHref(session), say("or_open_session"), "primary"));
+	if (kind !== "manual" && (kind === "task" || resource.host)) actions.push(actionLink(h, `#/cleanup/${kind === "task" ? "task" : "host"}/${encodeURIComponent(kind === "task" ? resource.intent_id : resource.host)}`, say("or_cleanup_preview"), "secondary"));
+	const details = detailsBlock(h("div", {}, pairs(h, [
+		[say("or_worktree_id"), text(resource?.resource_id || id)],
+		[say("or_owner_id"), text(resource?.intent_id)],
+		[say("or_owner_kind"), text(resource?.intent_type)],
+		[say("or_path"), text(resource?.worktree_path)],
+		[say("or_branch"), text(resource?.branch)]
+	]), h("p", { class: "or-note" }, say("or_identity")), h("p", { class: "or-note" }, say("or_cleanup")), ...work.map((item) => technicalWork(h, item, workLinks(item, [], caps))), !latest ? h("p", { class: "or-note" }, say("or_result_unknown")) : null, rawRecord(h, resource)), `observed.${namespace}.worktree.${id}`);
+	return [pageHeader({
+		title: text(work[0]?.title) || text(resource?.branch) || say("or_worktree"),
+		meta: [resource?.host, resource?.branch].map(text).filter(Boolean).join(" · "),
+		actions
+	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_ownership"), owner), fact(h, say("or_latest"), h("span", {
+		class: "or-result",
+		"data-observed-result": ""
+	}, latest ? deliveryPill(latest) : statusPill("unknown"), prAnchor(h, receipt), stamp(receipt?.delivered_at ?? latest?.created_at))), sessions.length ? h("div", { class: "or-sessions" }, h("span", { class: "or-label" }, say("or_sessions")), ...sessions.map((item) => sessionRow$1(h, item))) : null, details) })];
+}
+function renderExecution({ h, id, task, caps, namespace }) {
+	const choices = [];
+	if (task?.host && task?.session_id) choices.push([say("or_open_session"), sessionHref(task)]);
+	if (caps?.artifacts?.capture?.managed_single_file === true) choices.push([say("or_review"), `#/artifact-review/task/${encodeURIComponent(id)}`]);
+	if (caps?.features?.cleanup_task === true) choices.push([say("or_cleanup_preview"), `#/cleanup/task/${encodeURIComponent(id)}`]);
+	const pause = task?.paused === true || task?.paused === 1 ? statusPill("stopped") : null;
+	if (pause) {
+		pause.dataset.taskDispatch = "";
+		pause.textContent = say("or_paused");
+	}
+	const reason = pause ? pauseReason(task) : "";
+	const delivery = task?.delivery, stage = delivery?.stage;
+	const resultPill = [
+		"merged",
+		"deployed",
+		"adopted"
+	].includes(stage) ? statusPill(stage) : statusPill(stage === "verified" ? "accepted" : "unknown");
+	if (stage === "verified") {
+		resultPill.dataset.status = "verified";
+		resultPill.textContent = say("or_verified");
+	}
+	return [pageHeader({
+		title: text(task?.title) || text(task?.original_words).split("\n").find(Boolean) || text(task?.external_branch) || say("or_execution"),
+		meta: [task?.host, task?.external_branch].map(text).filter(Boolean).join(" · "),
+		actions: choices.slice(0, 2).map(([label, href], i) => actionLink(h, href, label, i ? "secondary" : "primary"))
+	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_ownership"), say("or_owner_task")), text(task?.lead_agent) ? fact(h, say("or_owner"), cliName(text(task.lead_agent))) : null, fact(h, say("or_state"), statusPill(TASK_PILLS[task?.state] || "unknown")), pause ? fact(h, say("or_dispatch"), h("span", { class: "or-result" }, pause, reason ? h("span", { "data-observed-pause-reason": "" }, reason) : null)) : null, fact(h, say("or_latest"), h("span", { class: "or-result" }, resultPill, stamp(delivery?.[stage]?.at))), detailsBlock(h("div", {}, pairs(h, [
+		[say("or_task_id"), text(task?.task_id || id)],
+		[say("or_session_id"), text(task?.session_id)],
+		[say("or_project"), text(task?.project)],
+		[say("or_branch"), text(task?.external_branch)],
+		[say("or_path"), text(task?.external_worktree_path)],
+		[say("or_state"), text(task?.state)]
+	]), choices.length > 2 ? h("div", { class: "or-links" }, ...choices.slice(2).map(([label, href]) => h("a", { href }, label))) : null, !stage ? h("p", { class: "or-note" }, say("or_result_unknown")) : null, h("p", { class: "or-note" }, say("or_identity")), h("p", { class: "or-note" }, say("or_cleanup")), rawRecord(h, task)), `observed.${namespace}.execution.${id}`)) })];
+}
+function renderObservedResource({ h, type, id, resource, caps, namespace = "" }) {
+	return type === "execution" ? renderExecution({
+		h,
+		id,
+		task: resource,
+		caps,
+		namespace
+	}) : renderWorktree({
+		h,
+		id,
+		resource,
+		caps,
+		namespace
+	});
+}
+function renderDeliveryWork(item, repositories = [], compact = false, { h, caps, namespace = "" } = {}) {
+	const links = workLinks(item, list(repositories), caps), review = links.find(([key]) => key === "review");
+	const other = links.filter(([key]) => key !== "review");
+	const overflow = !compact && other.length ? menu({
+		button: iconButton({
+			icon: "more-horizontal",
+			label: t("ui_more")
+		}),
+		items: other.map(([key, label, href]) => ({
+			key,
+			label,
+			href
+		}))
+	}) : null;
+	const details = detailsBlock(technicalWork(h, item, compact ? other : []), `observed.${namespace}.work.${item.kind}.${item.id}`);
+	return h("div", {
+		class: "or-work",
+		"data-project-work": item.id
+	}, h("div", { class: "or-work-main" }, h("span", { class: "or-work-title" }, workName(item)), deliveryPill(item), prAnchor(h, receipts(item)[0])), review || overflow ? h("div", { class: "or-work-actions" }, review ? actionLink(h, review[2], review[1], "secondary") : null, overflow) : null, details);
 }
 //#endregion
 //#region src/app.js
@@ -52823,7 +53327,7 @@ function discoveryEvidence(scopes) {
 		errors: scope.errors || []
 	}, null, 2))), h("h3", {}, t("obs_outside_scan")), h("ul", {}, ...(scope.outside_scan || []).map((x) => h("li", {}, t("obs_scope_" + x.scope), " · ", h("code", {}, x.reason)))))) : [h("p", { class: "muted" }, t("obs_no_scan"))]);
 }
-function observationPanels(type, id, path) {
+function observationPanels(type, id, path, plain = false) {
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -52836,13 +53340,15 @@ function observationPanels(type, id, path) {
 			class: "note",
 			hidden: true
 		}, t("obs_new_facts"));
+		const kindLabel = plain ? observedText(t, "or_event_kind") : t("obs_event_kind");
+		const executionLabel = plain ? observedText(t, "or_execution_filter") : t("obs_execution_filter");
 		const kind = h("input", {
-			placeholder: t("obs_event_kind"),
-			"aria-label": t("obs_event_kind")
+			placeholder: kindLabel,
+			"aria-label": kindLabel
 		});
 		const execution = h("input", {
-			placeholder: t("obs_execution_filter"),
-			"aria-label": t("obs_execution_filter")
+			placeholder: executionLabel,
+			"aria-label": executionLabel
 		});
 		const closed = h("input", {
 			type: "checkbox",
@@ -52936,7 +53442,7 @@ function observationPanels(type, id, path) {
 				loaded = true;
 				notice.hidden = latestSeen <= asOf;
 				evidence.replaceChildren(...[
-					t("obs_snapshot", { seq: asOf }),
+					plain ? observedText(t, "or_history_snapshot", { seq: asOf }) : t("obs_snapshot", { seq: asOf }),
 					" ",
 					t("obs_historical_limits"),
 					!relations ? [
@@ -52958,7 +53464,8 @@ function observationPanels(type, id, path) {
 			label: t(relations ? "obs_relations" : "obs_history"),
 			body: h("div", {}, h("div", { class: "filters" }, relations ? execution : kind, relations ? h("label", {}, closed, " ", t("obs_include_closed")) : null, refresh), notice, evidence, status, list, more)
 		});
-		box.classList.add("panel", "observation-panel");
+		box.classList.add("observation-panel");
+		if (!plain) box.classList.add("panel");
 		box.dataset.observation = mode;
 		box.addEventListener("toggle", () => {
 			if (box.open && !loaded) load(true);
@@ -52973,30 +53480,15 @@ function observationPanels(type, id, path) {
 	};
 	const history = section("history"), relations = section("relations");
 	return {
-		box: h("div", {}, history.box, relations.box),
+		box: h(plain ? "section" : "div", plain ? {
+			class: "or-observations",
+			"data-resource-disclosures": ""
+		} : {}, history.box, relations.box),
 		changed: (event) => {
 			history.changed(event);
 			relations.changed(event);
 		}
 	};
-}
-function taskStateLabel(state) {
-	if ([
-		"queued",
-		"dispatching",
-		"accepted",
-		"running",
-		"waiting_permission",
-		"quota_limited",
-		"human_owned",
-		"needs_ted",
-		"verifying",
-		"done",
-		"failed",
-		"uncertain"
-	].includes(state)) return t("task_state_" + state);
-	const operation = t("op_" + state);
-	return operation === "op_" + state ? state || "?" : operation;
 }
 async function viewTask(main, id) {
 	const connection = {
@@ -53004,8 +53496,11 @@ async function viewTask(main, id) {
 		namespace: state.namespace,
 		generation
 	};
-	const head = h("div", { class: "panel" }), status = h("div", { role: "status" });
-	const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`);
+	const head = h("div", {
+		class: "panel",
+		"data-observed-resource": ""
+	}), status = h("div", { role: "status" });
+	const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`, true);
 	let task = null, readReady = false, active = null, retry;
 	const panel = taskControlsPanel({
 		h,
@@ -53037,12 +53532,14 @@ async function viewTask(main, id) {
 			assertView(connection);
 			if (data.task?.task_id !== id) throw new Error(t("task_control_invalid"));
 			task = data.task;
-			head.replaceChildren(pageHeader({ title: t("task_title") }), h("p", {}, task.project || id), h("p", { class: "actions" }, chip(t([
-				true,
-				false,
-				0,
-				1
-			].includes(task.paused) ? task.paused ? "task_paused" : "task_dispatch_enabled" : "task_unknown")), chip(taskStateLabel(task.state))), h("p", { class: "muted" }, task.host || "", " · ", h("code", {}, id)), ...task.host && task.session_id ? [h("p", {}, h("a", { href: `#/session/${encodeURIComponent(task.host)}/${encodeURIComponent(task.session_id)}` }, t("task_open_session")))] : [], ...state.caps?.features?.cleanup_task === true ? [h("p", {}, h("a", { href: `#/cleanup/task/${encodeURIComponent(id)}` }, t("cleanup_task_preview")))] : [], ...state.caps?.artifacts?.capture?.managed_single_file === true ? [h("p", {}, h("a", { href: `#/artifact-review/task/${encodeURIComponent(id)}` }, t("ar_open")))] : [], h("details", {}, h("summary", {}, t("task_evidence")), h("pre", { class: "pre" }, JSON.stringify(task, null, 2))));
+			place(head, "replaceChildren", renderObservedResource({
+				h,
+				type: "execution",
+				id,
+				resource: task,
+				caps: state.caps,
+				namespace: state.namespace
+			}));
 			status.replaceChildren();
 			readReady = true;
 			clearTimeout(retry);
@@ -53052,6 +53549,11 @@ async function viewTask(main, id) {
 		} catch (error) {
 			if (connection.generation === generation && connection.epoch === state.epoch) {
 				readReady = false;
+				if ([
+					403,
+					404,
+					410
+				].includes(error?.status)) place(head, "replaceChildren");
 				status.replaceChildren(errorBox(error));
 				clearTimeout(retry);
 				retry = setTimeout(() => load().catch(() => {}), 3e3);
@@ -53080,32 +53582,44 @@ async function viewTask(main, id) {
 }
 async function viewObservedResource(main, type, id) {
 	const path = type === "execution" ? `/tasks/${encodeURIComponent(id)}` : `/worktrees/${encodeURIComponent(id)}`;
-	const head = h("div", { class: "panel" });
-	const panels = observationPanels(type, id, path);
-	main.append(head, panels.box);
+	const head = h("div", {
+		class: "panel",
+		"data-observed-resource": ""
+	});
+	const status = h("div", { "data-observed-status": "" });
+	const panels = observationPanels(type, id, path, true);
+	main.append(head, status, panels.box);
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
 		generation
 	};
+	let ticket = 0;
 	const load = async () => {
+		const mine = ++ticket;
 		try {
 			const data = await api("GET", path);
 			assertView(connection);
+			if (mine !== ticket) return;
 			const resource = data[type === "execution" ? "task" : "worktree"];
-			const sessions = resource.known_sessions || [];
-			fill(head, pageHeader({ title: t(type === "execution" ? "obs_execution" : "obs_worktree") }), h("code", {}, id), h("p", { class: "muted" }, t("obs_known_identity")), type === "worktree" ? [
-				h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, resource.host || t("obs_unknown")), h("dt", {}, t("delivery_worktree_branch")), h("dd", {}, h("code", {}, resource.branch || t("obs_unknown"))), h("dt", {}, t("delivery_worktree_path")), h("dd", {}, h("code", {}, resource.worktree_path || t("obs_unknown"))), h("dt", {}, t("delivery_worktree_owner")), h("dd", {}, resource.intent_type || t("obs_unknown"), " · ", resource.intent_type === "registry" ? h("code", {}, resource.intent_id || t("obs_unknown")) : observationLink(resource.intent_type === "task" ? "execution" : "operation", resource.intent_id))),
-				h("h2", {}, t("delivery_worktree_sessions")),
-				h("p", { class: "muted" }, t("delivery_worktree_recorded")),
-				...sessions.map((s) => h("div", { class: "row" }, observationLink("session", `${s.host}/${s.session_id}`), chip(t(sessionActivity(s.observation || {}).key), sessionActivity(s.observation || {}).tone))),
-				!sessions.length ? h("p", { class: "muted" }, t("none")) : null,
-				...(resource.work || []).map((item) => deliveryWork(item)),
-				h("p", { class: "note" }, t("delivery_worktree_cleanup")),
-				h("p", {}, h("a", { href: `#/cleanup/${resource.intent_type === "task" ? "task" : "host"}/${encodeURIComponent(resource.intent_type === "task" ? resource.intent_id : resource.host || "")}` }, t("cleanup_preview")))
-			] : null, type === "execution" && state.caps?.features?.cleanup_task === true ? h("p", {}, h("a", { href: `#/cleanup/task/${encodeURIComponent(id)}` }, t("cleanup_task_preview"))) : null, type === "execution" && state.caps?.artifacts?.capture?.managed_single_file === true ? h("p", {}, h("a", { href: `#/artifact-review/task/${encodeURIComponent(id)}` }, t("ar_open"))) : null, h("details", {}, h("summary", {}, t("sessions_details")), h("pre", { class: "pre" }, JSON.stringify(resource, null, 2))));
+			place(head, "replaceChildren", renderObservedResource({
+				h,
+				type,
+				id,
+				resource,
+				caps: state.caps,
+				namespace: state.namespace
+			}));
+			status.replaceChildren();
 		} catch (error) {
-			head.append(errorBox(error));
+			if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== ticket) return;
+			if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code)) return;
+			if ([
+				403,
+				404,
+				410
+			].includes(error?.status)) place(head, "replaceChildren");
+			status.replaceChildren(errorBox(error));
 		}
 	};
 	await load();
@@ -53660,7 +54174,7 @@ async function viewSession(main, host, sid, context = null) {
 			workspaceId,
 			refs,
 			title: row?.title || "",
-			from: sessionHref({
+			from: sessionHref$1({
 				host,
 				sessionId: sid,
 				from: originView()
@@ -54710,28 +55224,11 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 	]);
 }
 function deliveryWork(item, repositories = [], compact = false) {
-	const activity = sessionActivity(item.session || {});
-	const repo = item.repository || (repositories.length === 1 ? repositories[0] : "");
-	const links = [];
-	if (item.operation_id) links.push(h("a", { href: `#/op/${encodeURIComponent(item.operation_id)}` }, t("permissions_details")));
-	if (item.task_id) links.push(observationLink("execution", item.task_id));
-	if (!compact && item.host && item.session_id) links.push(observationLink("session", `${item.host}/${item.session_id}`));
-	if (item.worktree_id) links.push(observationLink("worktree", item.worktree_id));
-	if (item.eligible && state.caps?.features?.execution_delivery?.version === 1) links.push(h("a", { href: `#/delivery/${[
-		item.host,
-		item.kind,
-		item.id,
-		repo
-	].map(encodeURIComponent).join("/")}` }, t("delivery_review_result")));
-	return h("div", {
-		class: "row",
-		"data-project-work": item.id
-	}, h("div", { class: "grow" }, compact ? null : h("strong", {}, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id)), compact ? null : [" ", chip(t(activity.key), activity.tone)], h("p", { class: "muted" }, item.host || "?", item.actor ? ` · ${item.actor}` : "", " · ", h("code", {}, item.branch || item.id)), h("p", { class: "muted" }, t("delivery_dispatch_state"), " ", t(item.operation_id && item.status === "succeeded" ? "delivery_dispatch_accepted" : (item.operation_id ? "op_" : "task_state_") + item.status), " · ", t("delivery_result_unverified")), item.unavailable ? h("p", { class: "muted" }, t("delivery_source_unavailable"), " ", h("code", {}, item.unavailable.code)) : null, h("div", { class: "actions" }, ...links, ...(item.delivered_to || []).map((receipt) => h("a", {
-		href: `https://github.com/${receipt.repository}/pull/${receipt.pull_number}`,
-		target: "_blank",
-		rel: "noopener",
-		title: `${receipt.pinned_sha} → ${receipt.delivered_sha}`
-	}, t("delivered_to", { n: receipt.pull_number }))))));
+	return renderDeliveryWork(item, repositories, compact, {
+		h,
+		caps: state.caps,
+		namespace: state.namespace
+	});
 }
 function deploymentIdentity(identity, empty = "dep_no_version") {
 	if (!identity?.source_sha && !identity?.artifact_id) return emptyState({ title: t(empty) });
@@ -56226,7 +56723,7 @@ async function change(out, action, target, params, pre, scope) {
 	return null;
 }
 function manageNote() {
-	return may("manage") ? null : h("p", { class: "note" }, t("needs_manage_access"));
+	return may("manage") ? null : h("p", { class: "note" }, observedText(t, "or_readonly_project"));
 }
 function indent(el, depth) {
 	el.style.setProperty("--depth", String(depth));
@@ -56236,13 +56733,24 @@ function stateChip(c) {
 	return statusPill(workStatusKey(c?.display_state));
 }
 function counts(c) {
+	const known = (value) => Number.isSafeInteger(value) && value >= 0;
+	const complete = c?.partial !== true && c?.complete !== false;
 	return [
-		c.doing ? h("span", { class: "ui-pill tone-info" }, `${t("ui_status_in_progress")} ${c.doing}`) : null,
-		c.awaiting_approval ? h("span", { class: "ui-pill tone-review" }, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
-		h("span", { class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : "") }, t("wi_done_of", {
+		complete && known(c?.doing) && c.doing > 0 ? h("span", {
+			class: "ui-pill tone-info",
+			"data-project-count": "doing"
+		}, `${t("ui_status_in_progress")} ${c.doing}`) : null,
+		complete && known(c?.awaiting_approval) && c.awaiting_approval > 0 ? h("span", {
+			class: "ui-pill tone-review",
+			"data-project-count": "review"
+		}, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
+		complete && known(c?.done) && known(c?.total) && c.done <= c.total ? h("span", {
+			class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : ""),
+			"data-project-count": "completion"
+		}, t("wi_done_of", {
 			done: c.done,
 			total: c.total
-		}))
+		})) : null
 	];
 }
 function orderButtons(sibs, i, key, run) {
@@ -56254,27 +56762,28 @@ function orderButtons(sibs, i, key, run) {
 		run("order", before, order, Object.fromEntries(sibs.map((x) => [x[key], x.version])));
 	};
 	const can = (j) => j >= 0 && j < sibs.length && sibs[j].pinned === me.pinned;
+	const move = (offset, icon, label) => {
+		const j = i + offset, enabled = can(j);
+		const reason = j < 0 ? "or_order_first" : j >= sibs.length ? "or_order_last" : "or_order_pinned";
+		return iconButton({
+			icon,
+			label: t(label),
+			title: enabled ? t(label) : observedText(t, reason),
+			disabled: !enabled,
+			onClick: swap(j)
+		});
+	};
+	const pin = iconButton({
+		icon: "star",
+		label: t(me.pinned ? "unpin" : "pin"),
+		"aria-pressed": String(Boolean(me.pinned)),
+		onClick: () => run("pin", me.pinned)
+	});
+	pin.classList.add("or-order-pin");
 	return [
-		h("button", {
-			class: "mini",
-			title: t("move_up"),
-			"aria-label": t("move_up"),
-			disabled: !can(i - 1),
-			onclick: swap(i - 1)
-		}, "↑"),
-		h("button", {
-			class: "mini",
-			title: t("move_down"),
-			"aria-label": t("move_down"),
-			disabled: !can(i + 1),
-			onclick: swap(i + 1)
-		}, "↓"),
-		h("button", {
-			class: `mini ${me.pinned ? "on" : ""}`,
-			title: me.pinned ? t("unpin") : t("pin"),
-			"aria-label": me.pinned ? t("unpin") : t("pin"),
-			onclick: () => run("pin", me.pinned)
-		}, me.pinned ? "★" : "☆")
+		move(-1, "chevron-up", "move_up"),
+		move(1, "chevron-down", "move_down"),
+		pin
 	];
 }
 var editing = 0;
@@ -56289,23 +56798,38 @@ function setEditing(n) {
 	}
 }
 function drawer(...children) {
+	return drawerControls(false, children);
+}
+function recordDrawer(...children) {
+	return drawerControls(true, children);
+}
+function drawerControls(useIcon, children) {
 	const box = h("div", {
 		class: "drawer",
 		id: `drawer-${crypto.randomUUID()}`,
 		hidden: true
 	}, ...children);
-	const toggle = h("button", {
-		class: "mini",
+	const attrs = {
 		title: t("more"),
 		"aria-label": t("more"),
 		"aria-controls": box.id,
-		"aria-expanded": "false",
-		onclick: () => {
-			box.hidden = !box.hidden;
-			toggle.setAttribute("aria-expanded", String(!box.hidden));
-			if (!box.hidden) drawerOpens += 1;
-			setEditing(editing + (box.hidden ? -1 : 1));
-		}
+		"aria-expanded": "false"
+	};
+	const onClick = () => {
+		box.hidden = !box.hidden;
+		toggle.setAttribute("aria-expanded", String(!box.hidden));
+		if (!box.hidden) drawerOpens += 1;
+		setEditing(editing + (box.hidden ? -1 : 1));
+	};
+	const toggle = useIcon ? iconButton({
+		icon: "more-horizontal",
+		label: t("more"),
+		...attrs,
+		onClick
+	}) : h("button", {
+		class: "mini",
+		...attrs,
+		onclick: onClick
 	}, "…");
 	const open = (focus = false) => {
 		if (box.hidden) toggle.click();
@@ -56389,8 +56913,9 @@ async function viewProjects(main) {
 		namespace: state.namespace,
 		generation
 	};
+	let request = 0;
 	const out = h("div", {});
-	const tree = h("div", { class: "panel" });
+	const tree = h("div", { "data-project-list": "" });
 	const archived = h("div", {});
 	const create = createRecordForm({
 		h,
@@ -56407,28 +56932,45 @@ async function viewProjects(main) {
 		}
 	});
 	const showArchived = h("input", { type: "checkbox" });
-	main.append(pageHeader({
-		title: t("nav_projects"),
-		actions: [iconButton({
-			icon: "refresh-cw",
-			label: t("global_refresh"),
-			onClick: () => render().catch(() => {})
-		})]
-	}), disclosure({
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("global_refresh"),
+		onClick: () => render().catch(() => {})
+	});
+	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
+	const note = manageNote();
+	const help = disclosure({
 		label: t("global_details"),
 		body: h("p", {}, t("projects_help"))
-	}), manageNote() || "", create.box, out, tree, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+	});
+	create.box.hidden = true;
+	filter.hidden = true;
+	help.hidden = true;
+	if (note) note.hidden = true;
+	main.append(pageHeader({
+		title: t("nav_projects"),
+		actions: [refresh]
+	}), note || "", create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived, help) }));
 	const render = async (fromEvent = false) => {
-		const opens = drawerOpens;
+		const opens = drawerOpens, mine = ++request;
+		let received = false;
 		try {
 			const data = await api("GET", `/projects${showArchived.checked ? "?include_archived=true" : ""}`);
-			if (!tree.isConnected) return;
+			received = true;
+			assertView(connection);
+			if (!tree.isConnected || mine !== request) return;
+			if (!Array.isArray(data.projects)) throw new Error(observedText(t, "or_projects_unknown"));
 			create.setContext({ rows: data.projects });
 			if (holdRender(fromEvent, opens)) {
 				idleReload = () => render(true);
 				return;
 			}
 			freshPage();
+			create.box.hidden = !may("manage") || state.caps?.actions?.find((row) => row.action === "project.create")?.allowed === false;
+			filter.hidden = false;
+			refresh.hidden = false;
+			help.hidden = false;
+			if (note) note.hidden = false;
 			const rows = [];
 			const walk = (sibs, depth, parent) => sibs.forEach((p, i) => {
 				const msg = out;
@@ -56451,7 +56993,7 @@ async function viewProjects(main) {
 					placeholder: t("new_sub_project"),
 					maxlength: 80
 				});
-				const d = drawer(h("div", { class: "filters" }, rename, h("button", {
+				const d = recordDrawer(h("div", { class: "filters" }, rename, h("button", {
 					class: "secondary",
 					onclick: async () => {
 						if (await change(msg, "project.update", { project_id: p.project_id }, { name: rename.value.trim() }, { expected_version: p.version }, `project.rename.${p.project_id}`) || STALE.includes(lastFailure)) render();
@@ -56497,16 +57039,40 @@ async function viewProjects(main) {
 			});
 			walk(data.projects, 0, "");
 			fill(tree, ...rows.length ? rows : [h("p", { class: "muted" }, t("no_projects"))]);
-			fill(archived, ...(data.archived || []).map((p) => h("div", { class: "row" }, h("div", { class: "grow" }, h("span", { class: "muted" }, p.name)), h("button", {
+			fill(archived, ...(data.archived || []).map((p) => h("div", { class: "row" }, h("div", { class: "grow" }, h("span", { class: "muted" }, p.name)), may("manage") ? h("button", {
 				class: "secondary",
-				disabled: !may("manage"),
 				onclick: async () => {
 					await change(out, "project.update", { project_id: p.project_id }, { archived: false }, { expected_version: p.version }, `project.restore.${p.project_id}`);
 					render();
 				}
-			}, t("restore")))));
-		} catch (e) {
-			fill(tree, errorBox(e));
+			}, t("restore")) : null)));
+		} catch (error) {
+			if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request || !tree.isConnected) return;
+			request++;
+			create.setContext({
+				rows: [],
+				active: false
+			});
+			create.box.hidden = true;
+			fill(out);
+			fill(archived);
+			filter.hidden = true;
+			refresh.hidden = true;
+			freshPage();
+			help.hidden = true;
+			if (note) note.hidden = true;
+			errorBox(error);
+			fill(tree, unavailableProject({
+				h,
+				error,
+				collection: true,
+				transportFailed: !received && error?.status === void 0,
+				connection: () => {
+					viewState(connection.namespace, "", "settings").section = "connection";
+					location.hash = "#/settings";
+				},
+				retry: () => render().catch(() => {})
+			}));
 		}
 	};
 	showArchived.onchange = () => render();
@@ -56521,8 +57087,14 @@ async function viewProject(main, pid) {
 		generation
 	};
 	let draft = null;
-	const head = h("div", { class: "panel" });
-	const items = h("div", { class: "panel" });
+	let request = 0, prepared = null, currentEditor = null;
+	let workEditors = new Map();
+	const workDrafts = new Map();
+	const head = h("div", {
+		class: "panel",
+		"data-project-summary": ""
+	});
+	const items = h("div", { "data-project-items": "" });
 	const work = h("section", {
 		class: "panel",
 		hidden: true,
@@ -56540,27 +57112,97 @@ async function viewProject(main, pid) {
 		namespace: connection.namespace,
 		kind: "work_item",
 		projectId: pid,
+		showScope: false,
 		errorBox,
 		opStatus,
 		onCreated: async () => render()
 	});
-	main.append(manageNote() || "", out, head, work, h("h2", {}, t("work_items")), create.box, items, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
+	const itemCard = sectionCard({
+		title: t("work_items"),
+		actions: [filter],
+		body: h("div", { class: "or-item-list" }, create.box, items, archived)
+	});
+	itemCard.dataset.projectItemCard = "";
+	itemCard.hidden = true;
+	create.box.hidden = true;
+	const note = manageNote();
+	if (note) note.hidden = true;
+	main.append(note || "", out, head, work, itemCard);
+	const rememberEditors = () => {
+		if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
+		for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden) workDrafts.set(id, {
+			child: editor.child.value,
+			branch: editor.branch.value
+		});
+	};
+	const withdraw = (error, transportFailed) => {
+		rememberEditors();
+		workEditors.clear();
+		currentEditor = null;
+		prepared = null;
+		request++;
+		create.setContext({
+			rows: [],
+			active: false
+		});
+		create.box.hidden = true;
+		fill(work);
+		work.hidden = true;
+		fill(items);
+		fill(archived);
+		fill(out);
+		itemCard.hidden = true;
+		if (note) note.hidden = true;
+		errorBox(error);
+		fill(head, unavailableProject({
+			h,
+			error,
+			transportFailed,
+			retry: () => render().catch(() => {})
+		}));
+		freshPage();
+	};
+	const readProject = async () => {
+		const mine = ++request;
+		let received = false;
+		try {
+			const data = await api("GET", `/projects/${encodeURIComponent(pid)}${showArchived.checked ? "?include_archived=true" : ""}`);
+			received = true;
+			assertView(connection);
+			if (mine !== request) return null;
+			if (data.project?.project_id !== pid) throw new Error(t("workspace_work_missing"));
+			return data;
+		} catch (error) {
+			if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request) return null;
+			withdraw(error, !received && error?.status === void 0);
+			throw error;
+		}
+	};
+	const prepare = async () => {
+		prepared = null;
+		const data = await readProject();
+		if (data) prepared = {
+			data,
+			request
+		};
+	};
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens;
-		let data;
-		try {
-			data = await api("GET", `/projects/${pid}${showArchived.checked ? "?include_archived=true" : ""}`);
-		} catch (e) {
-			fill(head, errorBox(e));
-			return;
-		}
-		if (!head.isConnected) return;
+		const data = prepared?.request === request ? prepared.data : await readProject().catch(() => null);
+		prepared = null;
+		if (!data || !head.isConnected) return;
 		if (holdRender(fromEvent, opens)) {
 			idleReload = () => render(true);
 			return;
 		}
+		rememberEditors();
+		workEditors = new Map();
 		freshPage();
 		const p = data.project;
+		if (note) note.hidden = false;
+		itemCard.hidden = false;
+		create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed === false;
 		create.setContext({
 			rows: data.work_items,
 			name: p.name,
@@ -56578,19 +57220,22 @@ async function viewProject(main, pid) {
 		const f = {
 			name: h("input", {
 				value: v.name,
-				maxlength: 80
+				maxlength: 80,
+				"aria-label": t("name")
 			}),
-			description: h("textarea", {}, v.description),
+			description: h("textarea", { "aria-label": t("description") }, v.description),
 			repositories: h("input", {
 				value: v.repositories.join(", "),
-				placeholder: "owner/name, owner/name"
+				placeholder: "owner/name, owner/name",
+				"aria-label": observedText(t, "or_repositories")
 			}),
 			task_project: h("input", {
 				value: v.task_project,
-				placeholder: t("task_project")
+				placeholder: t("task_project"),
+				"aria-label": t("task_project")
 			})
 		};
-		const d = drawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description, h("label", {}, t("repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project, h("div", { class: "actions" }, h("button", {
+		const d = recordDrawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description, h("label", {}, observedText(t, "or_repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project, h("div", { class: "actions" }, h("button", {
 			class: "primary",
 			onclick: async () => {
 				const params = {
@@ -56604,14 +57249,24 @@ async function viewProject(main, pid) {
 				if (ok || draft) render();
 			}
 		}, t("save"))));
+		d.box.dataset.projectEditor = "";
 		fill(head, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])), pageHeader({
 			title: p.name,
 			pill: p.archived ? chip(t("archived"), "warn") : null
-		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
+		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
 			class: "session-project-link",
 			href: `#/dispatch/${pid}`
-		}, t("dispatch_title")) : null, p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null), d.box, data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ", ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
-		if (draft) {
+		}, t("dispatch_title")) : null, p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null), may("manage") && !p.archived ? d.box : null, data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ", ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
+		currentEditor = {
+			drawer: d,
+			values: () => ({
+				name: f.name.value.trim(),
+				description: f.description.value,
+				repositories: f.repositories.value.split(/[\s,]+/).filter(Boolean),
+				task_project: f.task_project.value.trim()
+			})
+		};
+		if (draft && may("manage") && !p.archived) {
 			draft = null;
 			d.open();
 		}
@@ -56637,6 +57292,11 @@ async function viewProject(main, pid) {
 				placeholder: t("new_branch_item"),
 				maxlength: 120
 			});
+			const retained = workDrafts.get(w.work_item_id);
+			if (retained) {
+				child.value = retained.child;
+				branch.value = retained.branch;
+			}
 			const create = (input, params, scope) => h("button", {
 				class: "secondary",
 				onclick: async () => {
@@ -56647,7 +57307,7 @@ async function viewProject(main, pid) {
 					}, {}, scope)) render();
 				}
 			}, t("add_item"));
-			const dr = drawer(h("div", { class: "filters" }, child, create(child, { parent_id: w.work_item_id }, `wi.child.${w.work_item_id}`)), h("div", { class: "filters" }, branch, create(branch, {
+			const dr = recordDrawer(h("div", { class: "filters" }, child, create(child, { parent_id: w.work_item_id }, `wi.child.${w.work_item_id}`)), h("div", { class: "filters" }, branch, create(branch, {
 				parent_id: parent || null,
 				derived_from: w.work_item_id
 			}, `wi.branch.${w.work_item_id}`)), h("div", { class: "actions" }, h("button", {
@@ -56656,6 +57316,16 @@ async function viewProject(main, pid) {
 					if (await change(rowMsg, "work_item.update", { work_item_id: w.work_item_id }, { archived: true }, { expected_version: w.version }, `wi.archive.${w.work_item_id}`) || STALE.includes(lastFailure)) render();
 				}
 			}, t("archive_with_children"))));
+			dr.box.dataset.workItemInspector = "";
+			workEditors.set(w.work_item_id, {
+				drawer: dr,
+				child,
+				branch
+			});
+			if (retained && may("manage") && !p.archived) {
+				workDrafts.delete(w.work_item_id);
+				dr.open();
+			}
 			const done = w.steps.filter((s) => s.done).length;
 			const row = indent(h("div", { class: "row tree" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
 				class: "title",
@@ -56675,22 +57345,24 @@ async function viewProject(main, pid) {
 				guard: () => assertView(connection),
 				editing: (active) => setEditing(editing + (active ? 1 : -1))
 			}));
-			rows.push(row, dr.box);
+			rows.push(row, may("manage") && !p.archived ? dr.box : null);
 			walk(w.children, depth + 1, w.work_item_id);
 		});
 		walk(data.work_items, 0, "");
-		fill(items, ...rows.length ? rows : [h("p", { class: "muted" }, t("no_items"))]);
+		fill(items, ...rows.length ? rows : showArchived.checked && data.archived?.length ? [] : [emptyState({
+			title: t("no_items"),
+			heading: "h3"
+		})]);
 		fill(archived, ...(data.archived || []).map((w) => h("div", { class: "row" }, h("div", { class: "grow" }, h("a", {
 			class: "muted",
 			href: `#/item/${w.work_item_id}`
-		}, w.title)), h("button", {
+		}, w.title)), may("manage") && !p.archived ? h("button", {
 			class: "secondary",
-			disabled: !may("manage") || p.archived,
 			onclick: async () => {
 				await change(out, "work_item.update", { work_item_id: w.work_item_id }, { archived: false }, { expected_version: w.version }, `wi.restore.${w.work_item_id}`);
 				render();
 			}
-		}, t("restore")))));
+		}, t("restore")) : null)));
 	};
 	showArchived.onchange = () => render();
 	await render();
@@ -56702,7 +57374,7 @@ async function viewProject(main, pid) {
 		"execution",
 		"session",
 		"integration"
-	]);
+	], prepare);
 }
 function linkTarget(l) {
 	const x = l.target || {};
@@ -57978,7 +58650,8 @@ function mountWorkspace(name) {
 				guard: () => assertConnection(connection),
 				onEvents,
 				namespace: state.namespace,
-				errorBox
+				errorBox,
+				caps: () => state.caps
 			});
 			document.getElementById("workspace").prepend(workspaceNav.box);
 			workspaceSidebar = setupSidebarResizer({

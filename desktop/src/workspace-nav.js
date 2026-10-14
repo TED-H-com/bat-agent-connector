@@ -4,14 +4,15 @@ import {joinLabel} from './label-text.js';
 import {actionLabel, railPresentation} from './global-labels.js';
 import {icon} from './ui/icons.js';
 import {searchField, iconButton} from './ui/components.js';
+import {observedText} from './observed-resource-strings.js';
 
-export function workspaceNavigation({h, t, api, guard, onEvents, namespace, errorBox}) {
+export function workspaceNavigation({h, t, api, guard, onEvents, namespace, errorBox, caps = () => null}) {
   const key = `batc.tree.${namespace}`;
   let saved = [], hasPreference = false;
   try {const raw = sessionStorage.getItem(key); saved = JSON.parse(raw || '[]'); hasPreference = raw !== null;} catch { /* local preference only */ }
   const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
   let pmWorkspace = null, bindingSource = false, bindingKnown = false, bindingPartial = false, globalTree = false, contextVersion = 0;
-  let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
+  let roots = [], catalogKnown = false, disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
   const status = h('div', {class: 'workspace-tree-status', role: 'status'});
   const bindingNote = h('p', {class: 'workspace-binding-note', hidden: true, 'data-bound-partial': ''}, t('ui_bound_partial'));
   const tree = h('div', {class: 'workspace-tree'});
@@ -21,9 +22,11 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const sessionTree = h('details', {class: 'workspace-session-tree'},
     h('summary', {}, icon('chevron-right', {size: 20}), h('span', {}, t('nav_sessions'))), sessionRows, more);
   const search = h('input', {type: 'search', 'aria-label': t('workspace_search'), placeholder: t('ui_search_work')});
+  const createProject = h('a', {href: '#/projects', title: t('workspace_manage'), 'aria-label': t('workspace_manage'),
+    'data-project-create': '', hidden: true}, '+');
   const box = h('aside', {class: 'workspace-nav', 'aria-label': t('workspace_navigation')},
     h('div', {class: 'workspace-nav-heading'}, h('strong', {}, t('nav_projects')),
-      h('a', {href: '#/projects', title: t('workspace_manage'), 'aria-label': t('workspace_manage')}, '+')),
+      createProject),
     searchField(search, {class:'workspace-search'}), status, bindingNote, h('div', {class: 'workspace-tree-scroll'}, tree, sessionTree),
     h('div', {class: 'workspace-nav-footer'},
       h('a', {href: '#/sessions'}, t('workspace_all_sessions')),
@@ -64,6 +67,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     item.title || item.branch || (item.action ? actionLabel(item.action) : item.id), workActivity(item), item.reading);
   const render = () => {
     if (disposed) return;
+    createProject.hidden = !catalogKnown || !caps()?.scopes?.includes('manage') || caps()?.actions?.find(row => row.action === 'project.create')?.allowed === false;
     const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;
     const query = search.value.trim().toLocaleLowerCase();
     const matches = text => !query || String(text || '').toLocaleLowerCase().includes(query);
@@ -99,8 +103,8 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? 'available' : 'empty' : 'unknown' : 'global';
     // No permanent empty/unavailable sentence in the rail. A search still explains
     // whether its missing results are known empty or cannot currently be read.
-    if (!nodes.length && (query || !bound)) tree.append(h('p', {class: 'muted workspace-tree-hint'},
-      t(bound && !bindingKnown ? 'ui_work_links_unavailable' : query ? 'workspace_no_match' : 'no_projects')));
+    if (!nodes.length && (query || !bound && catalogKnown)) tree.append(h('p', {class: 'muted workspace-tree-hint'},
+      t(bound && !bindingKnown ? 'ui_work_links_unavailable' : !bound && !catalogKnown ? 'ui_work_unavailable' : query ? 'workspace_no_match' : 'no_projects')));
     if (focus) [...tree.querySelectorAll('[data-tree-key]')].find(node => node.dataset.treeKey === focus)?.focus({preventScroll: true});
     filterSessions();
   };
@@ -113,13 +117,29 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     }
   };
   let catalogRows = null;
+  const showReadError = error => {
+    const detail = error ? errorBox(error) : h('p', {class: 'muted'}, observedText(t, 'or_projects_unknown'));
+    const label = t(pmWorkspace && !globalTree ? 'ui_work_links_unavailable' : 'ui_work_unavailable');
+    status.replaceChildren(h('div', {class: 'workspace-read-error', 'data-work-read-error': ''},
+      icon('circle-alert', {size: 20}),
+      h('details', {}, h('summary', {title: detail.textContent}, label), detail,
+        roots.length ? h('p', {class: 'muted'}, t('workspace_stale')) : null),
+      iconButton({icon: 'refresh-cw', label: t('ui_retry'), onClick: () => refresh().catch(() => {})})));
+  };
   const refresh = ({catalog = true} = {}) => {
     const version = contextVersion;
     const run = serial.catch(() => {}).then(async () => {
       const current = () => {alive(); if (version !== contextVersion) throw new Error('Navigation context changed');};
       current();
       try {
-        if (catalog || catalogRows === null) {const data = await api('GET', '/projects'); current(); catalogRows = data.projects || [];}
+        if (catalog || catalogRows === null) {
+          const data = await api('GET', '/projects'); current();
+          if (!Array.isArray(data.projects)) {
+            // Older providers can omit this catalog. It is unknown, and does not
+            // make an independent task/session event read unsuccessful.
+            catalogRows = []; catalogKnown = false;
+          } else {catalogRows = data.projects; catalogKnown = true;}
+        }
         const clearCounts = rows => rows.map(row => ({...row, counts: null, children: clearCounts(row.children || [])}));
         let nextRoots = catalog ? catalogRows : clearCounts(catalogRows), nextBindingKnown = false, nextBindingPartial = false;
         if (pmWorkspace && !globalTree) {
@@ -166,7 +186,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
         for (const id of expanded) if (ids.has(id)) {
           const detail = await api('GET', `/projects/${encodeURIComponent(id)}`); current(); projects.set(id, detail);
         }
-        if (!roots.length && !sessionsLoaded && ['#/home', '#/sessions', '#/', ''].includes(selected)) sessionTree.open = true;
+        if (catalogKnown && !roots.length && !sessionsLoaded && ['#/home', '#/sessions', '#/', ''].includes(selected)) sessionTree.open = true;
         if (sessionTree.open && (!pmWorkspace || globalTree)) {
           const rows = new Map(), cursors = new Set();
           let cursor = null;
@@ -187,17 +207,14 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
           if (focused) [...sessionRows.querySelectorAll('a')].find(a => a.getAttribute('href') === focused)?.focus({preventScroll:true});
           more.hidden = !cursor; sessionsLoaded = true; filterSessions();
         }
-        status.replaceChildren(); render();
+        status.replaceChildren(); render(); if (!catalogKnown) showReadError(null);
       } catch (error) {
         if (version !== contextVersion || disposed) return;
-        alive(); if ([403, 404].includes(error.status)) {catalogRows = null; roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true; render();}
+        alive(); catalogKnown = false;
+        if ([403, 404].includes(error.status)) {catalogRows = null; roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); more.hidden = true;}
+        render();
         // Keep the exact error available on demand, including refresh-cycle reporting.
-        const detail = errorBox(error), label = t(pmWorkspace && !globalTree ? 'ui_work_links_unavailable' : 'ui_work_unavailable');
-        status.replaceChildren(h('div', {class: 'workspace-read-error', 'data-work-read-error': ''},
-          icon('circle-alert', {size: 20}),
-          h('details', {}, h('summary', {title: detail.textContent}, label), detail,
-            roots.length ? h('p', {class: 'muted'}, t('workspace_stale')) : null),
-          iconButton({icon: 'refresh-cw', label: t('ui_retry'), onClick: () => refresh().catch(() => {})})));
+        showReadError(error);
         throw error;
       }
     });
@@ -233,7 +250,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   refresh().catch(() => {});
   return {box, setWorkspace(id, source, all = false) {
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
-    pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++; catalogRows = null;
+    pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++; catalogRows = null; catalogKnown = false;
     roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();
     sessionTree.hidden = Boolean(id) && !all; box.querySelector('.workspace-nav-heading').hidden = Boolean(id) && !all;
     render(); refresh().catch(() => {});

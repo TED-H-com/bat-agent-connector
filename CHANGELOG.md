@@ -49,6 +49,21 @@
   sources only; conclusions stay unaccepted). zh-TW operation, agent and provider
   words use the existing label tables.
 
+- Worktree and execution pages now read as a name, an owner, and the latest
+  result. Record IDs, the raw record, and cleanup limits stay in Details.
+  A delivery row keeps one review action; other links sit in More actions
+  or in Details. Manual and unknown worktrees stay read-only.
+  Untitled sessions retain a readable label, and dispatch appears only when
+  paused. Read-only accounts do not see pause or project-creation controls.
+  Project withdrawal clears rows, counts and editors while retaining drafts;
+  unknown counts and unavailable project lists no longer appear as zero.
+  Unavailable projects explain the read failure with a return link and transient
+  failures offer Retry. Readers have no execution control card; resource history
+  uses plain disclosures, and project overflow/reorder controls use shared icons.
+  Unreadable project lists hide the view-only notice and offer Connection settings
+  when forbidden; error codes stay in Details. Move/pin icons explain disabled
+  moves, and execution facts distinguish ownership kind from a named lead agent.
+
 - Sprints, AHP observations, work packages, package handoff, work batches and
   delivery receipts open on the answer: a status pill, one main action, and
   identifiers in Details. zh-TW uses 衝刺, 工作階段, 完成定義, 推送, 合併 and
