@@ -256,7 +256,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
         observers.set(card.work_item_id, observer);
       }
       const body = detail.element.body.querySelector('[data-work-section="details"] > div');
-      if (observer.box.parentNode !== body) body.append(observer.box);
+      if (observer.box.parentNode !== body) body.insertBefore(observer.box, body.querySelector(':scope > pre'));
       observer.update(card.execution?.manual_observation_sources ?? []);
     }
     if (opening) requestAnimationFrame(() => {const node = rows.get(card.work_item_id)?.node;

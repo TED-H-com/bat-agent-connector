@@ -878,7 +878,8 @@ from its bound revision and never replaced by a raw ID in a chip or filter.
 Original-turn completion stays a concise card fact, separate from management status,
 quality and delivery. The shared inspector keeps exact activity receipts and localized
 retained-session runtime labels in Details. Board Details also holds the existing
-linked-manual observation form: it reads one original input, never controls the session.
+linked-manual observation form above the full source dump: it reads one original input,
+never controls the session.
 Read-only members have no new-observation entry point; an authorized original receipt
 remains recoverable. Closing, refreshing or withdrawing the Board invalidates pending
 observation reads and clears receipts with rows and counts. Drafts and original keys

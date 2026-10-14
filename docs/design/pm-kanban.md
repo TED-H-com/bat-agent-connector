@@ -206,7 +206,8 @@ never derives an agent from a session name or an assignee from an execution acto
 
 M4 retains original-turn completion as a concise card fact. Exact activity receipts,
 localized retained-session runtime labels (including Idle / 閒置中), and the existing
-manual single-input observation form live in the shared inspector's Details.
+manual single-input observation form live in the shared inspector's Details,
+with the observation controls before the full source dump.
 Manual sessions remain read-only; recording quiescence grants no session control,
 quality acceptance or proof of process termination. Read-only members have no new
 observation entry point, but may recover an authorized original receipt. A source
