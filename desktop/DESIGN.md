@@ -379,7 +379,9 @@ view when `pm_overview` is absent.
 ## Discussions
 
 Discussions uses a 280px searchable thread list and a conversation with its composer
-pinned below the scrolling transcript. The Context / Inputs / Plan panel starts closed
+pinned below the scrolling transcript. Below 800px, the list route shows only the
+list; a thread or `/discussions/new` replaces it, and Back returns to the list.
+At 800px and wider the list and detail remain side by side. The Discussion info panel (Context / Inputs / Plan) starts closed
 for a plain thread at every width. One bound context chip or the Context icon opens it
 and returns focus on close. A new reviewable proposal or original proposal recovery
 opens Plan; an original input request opens Inputs. Explicit open/close and tab choices
@@ -436,7 +438,8 @@ preference state.
 Without an analysis composer, notes show Saved and one sentence explains that the
 PM will not reply. Set up PM opens Settings with the current discussion return route.
 A proposal-free thread shows no Proposed update card. Collapsed proposals show the
-title, summary, impact pills, Review & adopt and Ask follow-up; scope and questions
+title, summary, impact pills and the named exclusions, followed by Review & adopt
+and Ask follow-up; editable scope and questions
 open in the adoption panel. Review & adopt is primary until it opens, then Adopt is
 primary and Send remains secondary. Source rows use human labels and shared times;
 full source identities are copyable in Details, without JSON blocks.

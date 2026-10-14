@@ -17,6 +17,8 @@
   saved messages without a connected PM, and meetings appear only in meeting threads.
   Keep proposal answer actions compact, hide unavailable report saves while retaining
   original-request recovery, and give empty states a short title and supporting line.
+  Keep the phone thread list separate from unsent drafts, name exclusions before review,
+  and show meeting prerequisites without empty selectors or repeated messages.
 
 - Schedule at phone width fits every bar to the shared date range, with a range
   caption and the Today line, and does not offer Day zoom there. Week ticks label

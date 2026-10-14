@@ -86,7 +86,7 @@ export function discussionComposer({t, form, analysis, details, draft = false}) 
   if (analysis) {
     actions.append(analysis.querySelector('[data-discussion-ask]'));
     status.append(analysis);
-  } else status.append(h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' · ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
+  } else status.append(h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
   form.box.append(h('div', {class: 'pd-composer-row'}, status, actions));
   if (details) form.box.append(details);
   return h('div', {class: 'pd-composer'}, form.box);

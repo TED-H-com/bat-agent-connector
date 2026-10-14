@@ -177,7 +177,11 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     const edited=saved.review,title=input('pcp_name',{max:160,value:edited.title});
     const accepted=acceptedDocument(p);
     if(conversation)detail.append(h('p',{class:'pm-note-text'},p.document.summary),h('div',{class:'pd-impact','data-proposal-impact':''},
-      ...[...new Set(p.document.candidates.map(row=>row.kind))].map(kind=>{const pill=statusPill({proposal:'in_review',assumption:'unconfirmed',unknown:'unknown',conflict:'blocked',excluded:'read_only'}[kind]);pill.textContent=t('pcp_'+kind);return pill;})));
+      ...[...new Set(p.document.candidates.filter(row=>row.kind!=='excluded').map(row=>row.kind))].map(kind=>{const pill=statusPill({proposal:'in_review',assumption:'unconfirmed',unknown:'unknown',conflict:'blocked',excluded:'read_only'}[kind]);pill.textContent=t('pcp_'+kind);return pill;})));
+    if(conversation)for(const candidate of p.document.candidates.filter(row=>row.kind==='excluded')){
+      const pill=statusPill('read_only');pill.textContent=t('pcp_excluded');
+      detail.append(h('p',{class:'pd-exclusion','data-proposal-exclusion':candidate.key},pill,h('span',{},candidate.text)));
+    }
     const before=h('details',{},h('summary',{},t('pcp_before')),
       accepted?h('div',{},h('strong',{},accepted.title||''),h('p',{class:'pm-note-text'},accepted.markdown||''),h('ul',{},...(accepted.requirements||[]).map(row=>h('li',{},row.id,' · ',row.text))),h('small',{class:'pm-source'},t('pcp_baseline'),' · ',p.context.plan_head.accepted_revision_id)):note('pcp_first'));
     const technical=h('details',{'data-proposal-details':''},h('summary',{},t('pd_details')),labelled('pcp_name',title),h('code',{class:'mono'},p.proposal_id),h('code',{class:'mono','data-proposal-adoptable-reason':''},p.adoptable_reason||''),before);

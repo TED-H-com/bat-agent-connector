@@ -3703,7 +3703,7 @@ var discussionStrings = {
 		pd_message: "Message the PM…",
 		pd_send: "Send",
 		pd_ask: "Ask PM",
-		pd_panel: "Thread panel",
+		pd_panel: "Discussion info",
 		pd_tab_context: "Context",
 		pd_tab_inputs: "Inputs",
 		pd_tab_plan: "Plan",
@@ -6316,6 +6316,8 @@ var pmMeetingStrings = {
 		pm_meeting_choose: "Meeting",
 		pm_meeting_refresh: "Refresh meetings",
 		pm_meeting_empty: "No meeting has been recorded.",
+		pm_meeting_empty_title: "No meetings yet",
+		pm_meeting_empty_help: "Meeting records will appear here.",
 		pm_meeting_stale: "The source version changed. Your draft and any original request are preserved. Review the updated baseline before a new submission.",
 		pm_meeting_rebase: "Update baseline",
 		pm_meeting_unknown: "Unknown",
@@ -6425,6 +6427,8 @@ var pmMeetingStrings = {
 		pm_meeting_choose: "會議",
 		pm_meeting_refresh: "更新會議資料",
 		pm_meeting_empty: "尚未建立會議紀錄。",
+		pm_meeting_empty_title: "尚無會議",
+		pm_meeting_empty_help: "會議紀錄會顯示在這裡。",
 		pm_meeting_stale: "來源版本已變更。草稿與原操作請求均已保留；送出新操作前，請檢視更新後的基準。",
 		pm_meeting_rebase: "檢視更新後的會議基準",
 		pm_meeting_unknown: "未知",
@@ -13504,7 +13508,7 @@ function discussionComposer({ t, form, analysis, details, draft = false }) {
 	if (analysis) {
 		actions.append(analysis.querySelector("[data-discussion-ask]"));
 		status.append(analysis);
-	} else status.append(h$1("p", { class: "muted" }, h$1("span", {}, t("pd_not_connected")), " · ", h$1("a", { href: discussionSettingsHref() }, t("pd_setup"))));
+	} else status.append(h$1("p", { class: "muted" }, h$1("span", {}, t("pd_not_connected")), " ", h$1("a", { href: discussionSettingsHref() }, t("pd_setup"))));
 	form.box.append(h$1("div", { class: "pd-composer-row" }, status, actions));
 	if (details) form.box.append(details);
 	return h$1("div", { class: "pd-composer" }, form.box);
@@ -21606,7 +21610,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		if (conversation) detail.append(h("p", { class: "pm-note-text" }, p.document.summary), h("div", {
 			class: "pd-impact",
 			"data-proposal-impact": ""
-		}, ...[...new Set(p.document.candidates.map((row) => row.kind))].map((kind) => {
+		}, ...[...new Set(p.document.candidates.filter((row) => row.kind !== "excluded").map((row) => row.kind))].map((kind) => {
 			const pill = statusPill({
 				proposal: "in_review",
 				assumption: "unconfirmed",
@@ -21617,6 +21621,14 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			pill.textContent = t("pcp_" + kind);
 			return pill;
 		})));
+		if (conversation) for (const candidate of p.document.candidates.filter((row) => row.kind === "excluded")) {
+			const pill = statusPill("read_only");
+			pill.textContent = t("pcp_excluded");
+			detail.append(h("p", {
+				class: "pd-exclusion",
+				"data-proposal-exclusion": candidate.key
+			}, pill, h("span", {}, candidate.text)));
+		}
 		const before = h("details", {}, h("summary", {}, t("pcp_before")), accepted ? h("div", {}, h("strong", {}, accepted.title || ""), h("p", { class: "pm-note-text" }, accepted.markdown || ""), h("ul", {}, ...(accepted.requirements || []).map((row) => h("li", {}, row.id, " · ", row.text))), h("small", { class: "pm-source" }, t("pcp_baseline"), " · ", p.context.plan_head.accepted_revision_id)) : note("pcp_first"));
 		const technical = h("details", { "data-proposal-details": "" }, h("summary", {}, t("pd_details")), labelled("pcp_name", title), h("code", { class: "mono" }, p.proposal_id), h("code", {
 			class: "mono",
@@ -30874,6 +30886,8 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			refresh(true);
 		}
 	});
+	const selection = labelled("pm_meeting_choose", choose);
+	selection.hidden = true;
 	const warning = h("p", {
 		class: "muted",
 		hidden: true
@@ -30903,7 +30917,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		icon: "refresh-cw",
 		label: t("pm_meeting_refresh"),
 		onClick: () => void refresh()
-	})), labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors) });
+	})), selection, status, warning, rebase, view, editors) });
 	element.classList.add("pm-evidence", "pm-meetings");
 	element.dataset.pmMeetings = "";
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
@@ -30956,7 +30970,8 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		rebase.hidden = !stale || !can();
 		rebase.disabled = !loaded;
 		choose.disabled = !loaded;
-		launch.hidden = !can();
+		selection.hidden = !loaded || !model?.meetings.length;
+		launch.hidden = !can() || !model?.sprints.length;
 		readOnly.hidden = !loaded || can();
 		launch.setAttribute("aria-expanded", String(loaded && createOpen));
 		if (createBox) createBox.hidden = !createOpen;
@@ -31189,7 +31204,12 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		view.replaceChildren();
 		const detail = model.detail;
 		if (!detail) {
-			view.append(emptyState({ title: t("pm_meeting_empty") }));
+			const empty = emptyState({
+				title: t("pm_meeting_empty_title"),
+				text: t("pm_meeting_empty_help")
+			});
+			empty.querySelector("p").classList.add("muted");
+			view.append(empty);
 			return;
 		}
 		const context = detail.context.document;
@@ -31637,6 +31657,10 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		return holder;
 	}
 	function creationEditor() {
+		if (!model.sprints.length) {
+			createBox = null;
+			return entryPoint(note("pm_meeting_sprint_required"), can);
+		}
 		const initial = model.sprints.some((row) => row.sprint_id === navigation.sprint_id) ? navigation.sprint_id : model.sprints.find((row) => row.status === "active")?.sprint_id || model.sprints[0]?.sprint_id || "";
 		const holder = h("div", { class: "pm-fields" }), sprint = options("pm_meeting_sprint", model.sprints.map((row) => [row.sprint_id, row.definition.title]), initial), slot = h("div");
 		holder.append(labelled("pm_meeting_sprint", sprint), slot);
@@ -31777,7 +31801,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			};
 			loaded = true;
 			editors.hidden = false;
-			choose.replaceChildren(...meetings.length ? meetings.map((row) => h("option", { value: row.meeting_id }, row.title)) : [h("option", { value: "" }, t("pm_meeting_empty"))]);
+			choose.replaceChildren(...meetings.map((row) => h("option", { value: row.meeting_id }, row.title)));
 			choose.value = selectedId;
 			renderView();
 			if (force || !signature || changed && !dirty && !forms.some((editor) => editor.locked())) renderEditors();
@@ -38442,7 +38466,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	};
 	const content = h("div", {
 		class: "pm-content",
-		"data-discussions": ""
+		"data-discussions": "",
+		"data-discussion-route": threadId ? "detail" : "list"
 	}), body = h("section", { class: "pm-main" }, heading, status, content);
 	const creationHome = h("div", { hidden: true }, workspaceForm.box);
 	main.append(h("div", { class: "pm-shell" }, body, creationHome));

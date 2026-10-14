@@ -165,6 +165,11 @@ async function walkthrough(locale, width) {
     await page.locator('[data-discussion-ask]').click();
     const proposal = page.locator('[data-pm-plan-proposals]');
     await expect(proposal).toContainText(copy.summary);
+    if (width < 1200) await page.keyboard.press('Escape');
+    const excludedSummary = proposal.locator('[data-proposal-exclusion="referral"]');
+    await expect(excludedSummary).toBeVisible();
+    await expect(excludedSummary).toContainText(copy.exclusion);
+    await proposal.locator('[data-proposal-review]').click();
     await expect(proposal.locator('[data-proposal-candidate]')).toHaveCount(6);
     const exclusion = proposal.locator('[data-proposal-candidate="referral"]').locator('..');
     await expect(exclusion).toContainText(copy.exclusion);
@@ -173,7 +178,6 @@ async function walkthrough(locale, width) {
     await exclusion.scrollIntoViewIfNeeded();
     await expect(exclusion).toBeInViewport();
     await screenshot(6, 'proposal');
-    await proposal.locator('[data-proposal-review]').click();
     await proposal.getByLabel(l.rationale, {exact: true}).fill(l.message);
     await expect(proposal.getByRole('button', {name: l.adopt, exact: true})).toBeEnabled();
     await screenshot(7, 'review');

@@ -12,7 +12,7 @@ export const discussionStrings = {
     pm_plan_worktree_required: 'Adoption needs a PM-owned worktree and owner access with permission to create work',
     pd_status_unchecked: 'Status not checked', pd_accepted_revision: 'Open revision', pd_save: 'Save', pd_cancel: 'Cancel', pd_finished: 'PM finished', pd_retry: 'Retry', pd_more_context: '+{count} more context items',
     pd_new: 'New discussion', pd_search: 'Search', pd_message: 'Message the PM…', pd_send: 'Send', pd_ask: 'Ask PM',
-    pd_panel: 'Thread panel', pd_tab_context: 'Context', pd_tab_inputs: 'Inputs', pd_tab_plan: 'Plan', pd_back: 'Back to {view}',
+    pd_panel: 'Discussion info', pd_tab_context: 'Context', pd_tab_inputs: 'Inputs', pd_tab_plan: 'Plan', pd_back: 'Back to {view}',
     pd_title: 'Discussion title', pd_rename: 'Rename', pd_unavailable: 'Unavailable', pd_bound_label: 'Originally: {label}',
     pd_not_connected: 'Messages are saved. The PM is not connected and will not reply.', pd_setup: 'Set up PM', pd_working: 'PM is working', pd_proposed: 'Proposed update',
     pd_review: 'Review & adopt', pd_follow_up: 'Ask follow-up', pd_stale: 'Out of date', pd_again: 'Ask PM again',

@@ -440,7 +440,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const registerMeta = h('p', {class: 'ui-meta', 'data-pm-header-meta': '', hidden: true});
   heading.querySelector('.ui-page-heading')?.append(registerMeta);
   const setHeaderMeta = text => {registerMeta.textContent = text || ''; registerMeta.hidden = !text;};
-  const content = h('div', {class: 'pm-content', 'data-discussions': ''}), body = h('section', {class: 'pm-main'}, heading, status, content);
+  const content = h('div', {class: 'pm-content', 'data-discussions': '', 'data-discussion-route': threadId ? 'detail' : 'list'}), body = h('section', {class: 'pm-main'}, heading, status, content);
   const creationHome = h('div', {hidden: true}, workspaceForm.box);
   main.append(h('div', {class: 'pm-shell'}, body, creationHome));
   let createPanel = null;
