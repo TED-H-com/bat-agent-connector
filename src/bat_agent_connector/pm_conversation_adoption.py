@@ -51,8 +51,9 @@ def _admit(ops, principal, target, params, pre):
     thread = pm_discussions._thread(ops.db, **target)
     head = pm_plans.head(ops.db, target["workspace_id"])
     if (type(pre["expected_version"]) is not int or type(pre["expected_plan_version"]) is not int
-            or thread["version"] != pre["expected_version"] or thread["version"] != context["thread_version"]
-            or head != context["plan_head"] or head["version"] != pre["expected_plan_version"]
+            or pre["expected_version"] not in {thread["version"], context["thread_version"]}
+            or not proposal["adoptable"]
+            or head["version"] != pre["expected_plan_version"]
             or head["accepted_revision_id"] != pre["expected_accepted_revision_id"]):
         raise proposals.error("The reviewed discussion or plan baseline changed", "VERSION_CONFLICT", 409)
     pm_discussions._text(params["rationale"], "rationale", 4000)
@@ -151,19 +152,21 @@ def _guard(ops, parent):
     children = _children(db, parent)
     context = proposal["context"]
     thread = pm_discussions._thread(db, **parent["target"])
-    expected_thread, expected_draft = context["thread_version"], context["draft_id"]
+    expected_draft = context["draft_id"]
+    applied_children = []
     expected_head = dict(context["plan_head"])
     for child in children:
         applied = db.execute("SELECT result FROM pm_discussion_applied WHERE operation_id=?", (child["operation_id"],)).fetchone()
         if applied:
             result = json.loads(applied[0])
-            expected_thread += 1
+            applied_children.append(child["operation_id"])
             expected_draft = result.get("draft_id", expected_draft)
         draft = db.execute("SELECT result FROM pm_plan_applied WHERE operation_id=?", (child["operation_id"],)).fetchone()
         if draft:
             expected_head["version"] += 1
             expected_head["latest_revision_id"] = json.loads(draft[0])["revision_id"]
-    if (thread["version"] != expected_thread or thread["draft_id"] != expected_draft
+    if (not pm_discussions.content_unchanged(db, thread, context["thread_version"], allowed_operations=applied_children)
+            or thread["draft_id"] != expected_draft
             or pm_plans.head(db, parent["target"]["workspace_id"]) != expected_head):
         raise proposals.error("Discussion or plan changed during the reviewed update", "VERSION_CONFLICT", 409)
     return principal, proposal, children
@@ -186,13 +189,13 @@ def require_child(db, operation_id):
         raise proposals.error("Original review child is unavailable", "PM_CONVERSATION_CHANGED", 409)
 
 
-def _request(parent, proposal, children):
+def _request(parent, proposal, children, *, base_version=None):
     reviewed = parent["params"]["review"]
     originals = proposal["document"]["candidates"]
     rows = {row["key"]: row for row in reviewed["rows"]}
     ordinal, count = len(children), len(originals)
     context = proposal["context"]
-    version = context["thread_version"]
+    version = context["thread_version"] if base_version is None else base_version
     common = {"target": parent["target"], "idempotency_key": "pm-conversation:" + parent["operation_id"] + ":" + str(ordinal)}
     if ordinal < count:
         original = originals[ordinal]
@@ -230,7 +233,10 @@ def _create(ctx):
     def create():
         parent = ctx.service._row(ctx.operation_id)
         principal, proposal, children = _guard(ctx.service, parent)
-        request = _request(parent, proposal, children)
+        thread = pm_discussions._thread(ctx.service.db, **parent['target'])
+        applied = sum(ctx.service.db.execute('SELECT 1 FROM pm_discussion_applied WHERE operation_id=?',
+            (child['operation_id'],)).fetchone() is not None for child in children)
+        request = _request(parent, proposal, children, base_version=thread['version'] - applied)
         child, fresh = ctx.service.create(principal, **request, entry="pm-conversation")
         if not fresh:
             raise proposals.error("Child key exists without original relation", "PM_CONVERSATION_CHANGED", 409)

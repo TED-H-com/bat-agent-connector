@@ -132,6 +132,16 @@ the mapping history, including a predecessor package's evidence. A withdrawn
 source hides the complete quoted mapping, even if a later package omitted that
 source. A filtered list can be empty with a forward cursor.
 
+`coverage` is `{returned,scanned,visibility_filtered,source_incomplete,byte_limited,has_more}`.
+On a list page, a mapping whose source check answers 404 is hidden and sets
+`visibility_filtered: true`. A mapping whose source check answers 409 (for
+example `PM_SOURCE_LINEAGE_LIMIT`) is skipped without failing the rest of the
+page and sets `source_incomplete: true` instead: it was not shown to be hidden,
+so a consumer that reports totals treats that page as partial. The register
+marks its issue-mapping source `source_incomplete` (totals and summary null);
+the schedule documents a skipped mapping as hidden. `get_mapping` still returns
+the 409.
+
 The integrator must route both actions through
 `operation_visible(db, principal, operation)` before operation GET/list/wait,
 same-key replay and events expose parameters, steps or results. This hook reads

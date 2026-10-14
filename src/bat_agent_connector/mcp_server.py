@@ -78,7 +78,7 @@ READ_TOOLS = [
     "pm_spec_materializations_list", "pm_spec_materialization_get",
     "pm_maintenance_reviews_list", "pm_maintenance_review_current_get", "pm_maintenance_review_get", "pm_maintenance_review_events_list",
     "pm_maintenance_checks_list", "pm_maintenance_check_current_get", "pm_maintenance_check_get", "pm_maintenance_schedule_get",
-    "pm_resources_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
+    "pm_overview_get", "pm_dependencies_get", "pm_dependencies_revisions_list", "pm_dependencies_impact_get", "pm_resources_get", "pm_register_list", "pm_register_get", "pm_schedule_get", "pm_ahp_adapters_list", "pm_ahp_observations_list", "pm_ahp_observation_current_get", "pm_ahp_observation_get",
     "pm_github_observations_list", "pm_github_observation_current_get", "pm_github_observation_get",
     "pm_workload_snapshots_list", "pm_workload_snapshot_current_get", "pm_workload_snapshot_get",
     "pm_maintenance_policies_list", "pm_maintenance_policy_current_get", "pm_maintenance_policy_get",
@@ -760,9 +760,54 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read due time, policy limits and current blockers; this never starts work."""
         return await pm_daemon("pm_maintenance_schedule_get", workspace_id=workspace_id)
 
-    async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None) -> dict[str, Any]:
-        """Read observed local CLI usage and reported quota; never collect or dispatch from a read."""
-        return await pm_daemon("pm_resources_get", workspace_id=workspace_id, since=since, until=until)
+    async def pm_overview_get(workspace_id: str) -> dict[str, Any]:
+        """Read live visible project status: confirmed adopted goal (governance.goal before goal/value/problem), progress with stable blocker impacts across plan revisions, pending attention and up to five recent decided plan/governance items with register refs. Incomplete decision totals stay null; inspect coverage. Separate from fixed saved reports; never collects or dispatches."""
+        return await pm_daemon("pm_overview_get", workspace_id=workspace_id)
+
+    async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None,
+                               buckets: str | None = None, tz: str | None = None) -> dict[str, Any]:
+        """Read observed local CLI usage and reported quota. Pass buckets='day' for local daily totals; never collect or dispatch from a read."""
+        # Omit unset selectors so a newer client can still read an older daemon.
+        optional = {}
+        if buckets is not None:
+            optional["buckets"] = buckets
+        if tz is not None:
+            optional["tz"] = tz
+        return await pm_daemon("pm_resources_get", workspace_id=workspace_id, since=since, until=until, **optional)
+
+    async def pm_schedule_get(workspace_id: str, after: str | None = None, limit: int | None = None) -> dict[str, Any]:
+        """Read the recorded project schedule. Does not compute a forecast, critical path, or token attribution."""
+        fields = {"workspace_id": workspace_id}
+        if after is not None:
+            fields["after"] = after
+        if limit is not None:
+            fields["limit"] = limit
+        return await pm_daemon("pm_schedule_get", **fields)
+
+    async def pm_register_list(workspace_id: str, type: str | None = None, status: str | None = None, owner: str | None = None,
+                               q: str | None = None, after: str | None = None, limit: int = 50) -> dict[str, Any]:
+        """Read the issues, actions and changes register. This never discusses, repairs or dispatches."""
+        return await pm_daemon("pm_register_list", workspace_id=workspace_id, type=type, status=status, owner=owner, q=q, after=after, limit=limit)
+
+    async def pm_register_get(workspace_id: str, row_id: str) -> dict[str, Any]:
+        """Read one register row and the processing chain of its explicit links."""
+        return await pm_daemon("pm_register_get", workspace_id=workspace_id, row_id=row_id)
+
+    async def pm_dependencies_get(workspace_id: str) -> dict[str, Any]:
+        """Read the latest pinned dependency inventory under current source authority."""
+        return await pm_daemon("pm_dependencies_get", workspace_id=workspace_id)
+
+    async def pm_dependencies_revisions_list(workspace_id: str, after: int = 0, limit: int = 20) -> dict[str, Any]:
+        """Page immutable dependency capture summaries."""
+        return await pm_daemon("pm_dependencies_revisions_list", workspace_id=workspace_id, after=after, limit=limit)
+
+    async def pm_dependencies_impact_get(workspace_id: str, dependency: str) -> dict[str, Any]:
+        """Find direct and transitive captured dependents and verification hints.
+
+        dependency is the pmdepkey_ key from pm_dependencies_get (dependencies.<kind>[].key,
+        edges[].dependency_key or declared[].dependency_key). A package name is refused with 422.
+        """
+        return await pm_daemon("pm_dependencies_impact_get", workspace_id=workspace_id, dependency=dependency)
 
     async def pm_ahp_adapters_list(workspace_id: str) -> dict[str, Any]:
         """List administrator-granted AHP observer IDs; never returns endpoints or credentials."""
@@ -1083,7 +1128,8 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_spec_materializations_list, pm_spec_materialization_get,
                pm_maintenance_reviews_list, pm_maintenance_review_current_get, pm_maintenance_review_get, pm_maintenance_review_events_list,
                pm_maintenance_checks_list, pm_maintenance_check_current_get, pm_maintenance_check_get, pm_maintenance_schedule_get,
-               pm_resources_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
+               pm_overview_get, pm_dependencies_get, pm_dependencies_revisions_list, pm_dependencies_impact_get,
+               pm_resources_get, pm_register_list, pm_register_get, pm_schedule_get, pm_ahp_adapters_list, pm_ahp_observations_list, pm_ahp_observation_current_get, pm_ahp_observation_get,
                pm_github_observations_list, pm_github_observation_current_get, pm_github_observation_get,
                pm_workload_snapshots_list, pm_workload_snapshot_current_get, pm_workload_snapshot_get,
                pm_maintenance_policies_list, pm_maintenance_policy_current_get, pm_maintenance_policy_get,

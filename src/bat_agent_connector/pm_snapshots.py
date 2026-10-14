@@ -10,7 +10,7 @@ import json
 import re
 import time
 
-from . import pm_evidence, pm_plans, pm_workspace, work_items
+from . import pm_evidence, pm_plans, pm_read_cache, pm_workspace, work_items
 from .operations import ActionDef, OperationError
 
 TEMPLATE_VERSION = 1
@@ -471,6 +471,7 @@ def list_snapshots(ops, principal, workspace_id, *, after=0, limit=50):
                 "visibility_filtered": filtered}
 
 
+@pm_read_cache.memoized
 def get_snapshot(ops, principal, workspace_id, snapshot_id):
     with ops.journal.tx():
         _member(ops, principal, workspace_id)

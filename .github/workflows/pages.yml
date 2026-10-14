@@ -36,6 +36,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Fetch the pinned screenshot source commit
+        run: |
+          commit=$(python3 -c 'import json; print(json.load(open("site/images/manifest.json"))["frontend_source_commit"])')
+          git fetch --no-tags --depth=1 origin "$commit"
       - name: Generated content and local documentation links
         run: |
           python3 scripts/build_product_site.py --check

@@ -22,7 +22,7 @@ RECORD_ACTIONS = frozenset({
     'pm.maintenance.repair.evidence.record',
     'pm.quality.review.create', 'pm.quality.review.record', 'pm.quality.review.revoke',
     'pm.maintenance.repair.runtime.observe',
-    'pm.workspace.member.set', 'pm.message.append', 'pm.input.record',
+    'pm.workspace.member.set', 'pm.message.append', 'pm.thread.rename', 'pm.input.record',
     'pm.ahp.observe', 'pm.evidence.capture', 'pm.snapshot.create', 'pm.roadmap.observe', 'pm.workload.capture', 'pm.github.observe',
     'pm.meeting.note', 'pm.meeting.complete', 'pm.meeting.follow_up.record',
     'pm.governance.adoption.link', 'pm.sprint.close', 'pm.sprint.cancel',

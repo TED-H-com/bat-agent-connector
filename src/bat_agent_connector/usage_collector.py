@@ -124,6 +124,8 @@ class UsageCollector:
                     continue
                 cursor, parser = (json.loads(row["cursor"]), json.loads(row["parser"])) if row else ({}, {})
                 try:
+                    # Coverage is this instant, before the read, not the later commit clock.
+                    started = now()
                     page = await asyncio.to_thread(read_page, source, cursor, parser)
                     if row and row["quota"] and page["quota"]:
                         old_rate = json.loads(row["quota"])
@@ -148,9 +150,11 @@ class UsageCollector:
                     for key, value in prepared.items():
                         db.execute("INSERT INTO resource_usage_samples VALUES(?,?,?,?) ON CONFLICT(source_id,sample_id) "
                                    "DO UPDATE SET value=excluded.value", (source.source_id, key, value["at"], json.dumps(value)))
+                    cursor = page["cursor"]
+                    cursor["coverage_at"] = started
                     db.execute("UPDATE resource_usage_sources SET cursor=?,parser=?,quota=COALESCE(?,quota),"
                                "checked_at=?,successful_at=?,status=? WHERE source_id=?",
-                               (json.dumps(page["cursor"]), json.dumps(page["parser"]),
+                               (json.dumps(cursor), json.dumps(page["parser"]),
                                 json.dumps(page["quota"]) if page["quota"] else None, at, at, page["status"], source.source_id))
 
     def prepare(self, source, samples):

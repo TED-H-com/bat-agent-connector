@@ -7,7 +7,14 @@ from . import pm_discussions, pm_profiles, pm_workspace
 from .operations import OperationError
 
 FIELDS = {
-    "pm_resources_get": ("workspace_id", "since", "until"),
+    "pm_dependencies_get": ("workspace_id",),
+    "pm_dependencies_revisions_list": ("workspace_id", "after", "limit"),
+    "pm_dependencies_impact_get": ("workspace_id", "dependency"),
+    "pm_overview_get": ("workspace_id",),
+    "pm_resources_get": ("workspace_id", "since", "until", "buckets", "tz"),
+    "pm_schedule_get": ("workspace_id", "after", "limit"),
+    "pm_register_list": ("workspace_id", "type", "status", "owner", "q", "after", "limit"),
+    "pm_register_get": ("workspace_id", "row_id"),
     "pm_ahp_adapters_list": ("workspace_id",),
     "pm_ahp_observations_list": ("workspace_id", "after", "limit"),
     "pm_ahp_observation_current_get": ("workspace_id",),
@@ -113,9 +120,30 @@ def read(ops, principal, method, params):
     if method not in FIELDS or set(params) - set(FIELDS[method]):
         raise OperationError("INVALID_PARAMS", "Unknown PM read parameters", 422)
     workspace_id, thread_id = params.get("workspace_id"), params.get("thread_id")
+    if method == "pm_overview_get":
+        from .pm_overview import read as overview
+        return overview(ops, principal, workspace_id)
+    if method in {"pm_dependencies_get", "pm_dependencies_revisions_list", "pm_dependencies_impact_get"}:
+        from . import pm_dependency_reads as dependencies
+        if method == "pm_dependencies_get":
+            return dependencies.get(ops, principal, workspace_id)
+        if method == "pm_dependencies_impact_get":
+            return dependencies.impact(ops, principal, workspace_id, dependency=params.get("dependency"))
+        return dependencies.revisions(ops, principal, workspace_id, after=params.get("after", 0), limit=params.get("limit", 20))
     if method == "pm_resources_get":
         from .pm_resources import read as resources
-        return resources(ops, principal, workspace_id, since=params.get("since"), until=params.get("until"))
+        return resources(ops, principal, workspace_id, since=params.get("since"), until=params.get("until"),
+                         tz=params.get("tz"), buckets=params.get("buckets"))
+    if method == "pm_schedule_get":
+        from .pm_schedule import read as schedule
+        return schedule(ops, principal, workspace_id, after=params.get("after"), limit=params.get("limit"))
+    if method == "pm_register_list":
+        from .pm_register import list_register
+        return list_register(ops, principal, workspace_id, row_type=params.get("type"), status=params.get("status"),
+                             owner=params.get("owner"), q=params.get("q"), after=params.get("after"), limit=params.get("limit", 50))
+    if method == "pm_register_get":
+        from .pm_register import get_register
+        return get_register(ops, principal, workspace_id, params.get("row_id"))
     if method == "pm_context_bundle_preview":
         from .pm_context_bundles import preview
         return preview(ops, principal, workspace_id, thread_id, max_chars=params.get("max_chars", 32000))

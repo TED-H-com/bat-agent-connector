@@ -103,7 +103,7 @@ def _size(value):
 
 
 def _seal(value):
-    items = [*value['messages'], *(item for group in value['inputs_by_status'].values() for item in group)]
+    items = [*value.get('bound_context', []), *value['messages'], *(item for group in value['inputs_by_status'].values() for item in group)]
     value['coverage']['content_chars'] = sum(len(json.dumps(item, ensure_ascii=False)) for item in items)
     value['coverage']['discussion_utf8_bytes'] = sum(_size(item) for item in items)
     return _size(value) - _size(value['purpose']) + PURPOSE_BYTES

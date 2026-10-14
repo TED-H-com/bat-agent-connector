@@ -1,51 +1,57 @@
 # Product screenshots
 
-These eight unedited PNGs show the real shared browser frontend at merged main
-`662460311345db7dd0a9fe65ea8010dc3e5e4897`, captured on 2026-10-12 with synthetic API
-fixtures. They do not show customer data or establish native installation, live
-provider acceptance, completed delivery, or features from later branches.
+These sixteen unedited PNGs show the real shared browser frontend at candidate
+`944a854fc381f61c6281edb7fcbcf887321a0c68`, using the single membership demo project
+in [`desktop/tests/demo/index.ts`](../../desktop/tests/demo/index.ts).
+This is a development preview, not merged-main, native installation or live acceptance evidence.
+Re-pin the capture to merged main and regenerate it after frontend #133 merges.
+The [progress report](../../docs/product/progress-2026-10-14.md) separates those states.
 
-| Images | Scene |
+| Images (English / zh-TW) | Scene and state |
 | --- | --- |
-| `workspace-en.png`, `workspace-zh.png` | Project tree, original conversation, reply composer and result inspector. The example is still running and its result is unverified. |
-| `dispatch-en.png`, `dispatch-zh.png` | An unsubmitted project dispatch form with an explicit repository/host/workspace selection. No version preview or execution is requested. |
-| `pm-planning-en.png`, `pm-planning-zh.png` | A fixed Planning revision with scope, proposed acceptance criteria and open decisions. It has not been adopted; acceptance and budget still need an owner review. |
-| `pm-kanban-en.png`, `pm-kanban-zh.png` | Seven synthetic work items in the existing five workflow columns, unassessed DoD, and explicit incomplete source coverage. Content approval is not delivery acceptance. |
+| `overview-en.png`, `overview-zh.png` | Live Overview: eight adopted requirements, three accepted, one blocker, two pending decisions and a recorded forecast three days late. Saved reports are separate. |
+| `discussions-en.png`, `discussions-zh.png` | Discussion opened from the Overview blocker through its Discuss link. Automatic title, original context chip and a reviewable proposal; the proposal is not adopted and does not authorize work. |
+| `requirements-en.png`, `requirements-zh.png` | RTM with email sign-in expanded and its bound work inspector open. Requirement acceptance, PR merge and deployment remain separate evidence. |
+| `issues-en.png`, `issues-zh.png` | Both register pages loaded, showing risks, issues, an action, a proposed change and a decision. Open records remain open. |
+| `schedule-en.png`, `schedule-zh.png` | Recorded baseline, forecast and actual dates, with Design review collapsed through its normal control. Recovery review is forecast three days late; undated session attempts remain unscheduled. |
+| `dependencies-en.png`, `dependencies-zh.png` | Pinned inventory graph with its Partial label and evidence legend. The graph is bounded; missing versions, ownership and freshness remain unknown. |
+| `board-en.png`, `board-zh.png` | Twelve synthetic work items across five workflow lanes. Waiting and review states remain distinct from accepted content and delivery. |
+| `session-en.png`, `session-zh.png` | Manual BAT session on `demo-host`, with its read-only transcript. There are no send, answer or interrupt controls. |
 
-Public images are 1440 × 960. English uses browser locale `en-US`; Traditional
-Chinese uses `zh-TW`. All scenes use the existing light theme for a consistent
-tour; the application also supports the system dark theme. The capture opens normal disclosures, fills an
-unsubmitted form and scrolls the page. It does not replace, hide or rewrite DOM
-content. Fixture setup and the immutable draft are synthetic server responses.
+All product data is synthetic, including acceptance and delivery receipts.
+The discussion scene performs only three mock operations: create a bound thread,
+save a note and prepare a proposal. It stops before adoption; all other scenes are reads.
+No customer data, real host, provider or credential is used.
 
-[`manifest.json`](manifest.json) records the pinned frontend tree, hashes of the
-capture script, fixture dependency files, lockfile, served browser assets and
-each PNG. It also records browser/Node versions, a fixed fixture clock, UTC time
-zone, actual locale and viewport, and overflow checks at 390, 768 and 1440 pixels
-for every scene. These checks concern layout, not native or live acceptance.
+Public images are 1440 × 960, light theme, UTC, with actual browser locales
+`en-US` and `zh-TW`. The fixture and browser clock are fixed at
+`2026-10-13T09:00:00.000Z`. The capture uses ordinary navigation, composer and
+inspector controls. It does not hide, replace or rewrite DOM content.
+The app also supports the user's system dark theme.
 
-To repeat this capture:
+[`manifest.json`](manifest.json) records the candidate source commit and frontend
+tree, capture time, fixture clock, browser/Node versions, actual locale and viewport.
+SHA-256 hashes cover the script, demo dependencies, lockfile, served browser assets
+and every PNG. Each scene has fresh-context overflow checks at 390, 768 and 1440px.
+Browser/console errors and external requests fail the capture.
+These checks concern shared-browser layout, not native or live acceptance.
 
-1. Use Node 24 and install the locked dependencies in `desktop/` with `npm ci`.
-   Install the Playwright Chromium browser if it is not already available.
+To repeat the capture:
+
+1. Use Node 24 and the locked `desktop/` dependencies (`npm ci`), with Playwright Chromium installed.
 2. Run `npm run check:browser` from `desktop/` to check the committed shared assets.
-3. From the repository root, run the following. Keep temporary data on disk; the
-   browser capture does not require a backend test run.
+3. From the repository root, choose a disk-backed temporary directory and run:
 
    ```sh
-   mkdir -p "$HOME/agent-work/tmp/native-pm"
-   env TMPDIR="$HOME/agent-work/tmp/native-pm" \
-     CAPTURE_REVIEW_DIR="$HOME/agent-work/tmp/public-screenshot-review" \
+   CAPTURE_REVIEW_DIR="$TMPDIR/review/gallery" \
      node --experimental-strip-types scripts/capture_site.mjs
    ```
 
-4. Inspect all eight public images and the 24 responsive previews in
-   `CAPTURE_REVIEW_DIR`; review the regenerated manifest before committing.
+4. Inspect all sixteen public images and the 48 responsive previews in `CAPTURE_REVIEW_DIR`.
+   Review the regenerated manifest before committing.
 
-The script owns a temporary loopback HTTP server and closes it and Chromium on
-exit. API calls use the committed synthetic fixtures; external requests fail the
-capture. No live Connector or credentials are needed. A source-byte check refuses
-to capture frontend changes against the old pinned commit. To refresh for a new
-frontend revision, deliberately update the script's source commit, review fixture
-compatibility and regenerate the complete set. Rendering may vary between browser
-or system-font versions; the manifest identifies the files actually produced.
+The script owns its ephemeral loopback server and Chromium, and closes both on exit.
+A source-byte check refuses frontend or demo changes against the pinned commit.
+To refresh, deliberately update the pin, review fixture compatibility and regenerate
+all scenes. Rendering may vary with browser and system fonts; the manifest
+identifies the files actually produced.

@@ -1,14 +1,44 @@
 # Better Agent Dashboard／Connector 實作狀態
 
 本頁保留底座與整合歷史。最新 PM v1.2 範圍以 [採用計畫](pm-v1.2-plan.md)及
-[PM 狀態](pm-v1.2-status.md)為準；本輪證據與阻擋見 [進度報告](progress-2026-10-12.md)，
-接手步驟見 [交接](../handoff/2026-10-12-pm-v1.2.md)。
+[PM 狀態](pm-v1.2-status.md)為準；本輪見 [10 月 14 日進度草稿](progress-2026-10-14.md)。
+2026-10-12 的證據與阻擋保留在[前次進度](progress-2026-10-12.md)，
+當時接手步驟見 [交接](../handoff/2026-10-12-pm-v1.2.md)。
 
 ## 目前續作
 
-**2026-10-12：**公開主線 c0027daa 已合併至 #115；PM 新功能、M4／M5 候選與精確驗證狀態見
-[PM 狀態](pm-v1.2-status.md)及 [本輪進度](progress-2026-10-12.md)。
-M4 原完整流程本機兩版通過，但最終 CI／Windows 阻擋仍需處理；尚未 owner 安裝或 live 驗收。
+本輪候選 `944a854f` 已把管理檢視接成同一個專案工作台：
+專案總覽 → 原紀錄 → PM 討論 → 審閱並採用。
+Python Connector／Task Service 保持唯一中央權威；Web／Tauri 共用 `desktop/src`。
+
+| 項目 | 分支交付 | 合併狀態 |
+| --- | --- | --- |
+| [#132 後端](https://github.com/teddashh/bat-agent-connector/pull/132) | 固定相依清冊／impact、唯讀時程、登記、每日資源桶、即時總覽、討論來源／改名及提案可採用性的中央讀取與操作 | 2026-10-13 以 `0c354861` 合併至 main；尚未安裝或實機驗收 |
+| [#134 決策流程後端](https://github.com/teddashh/bat-agent-connector/pull/134) | `feat/pm-overview-decision-loop`：保留採用後目標、`recent_decisions`、跨版本原需求 ID 的阻礙比對及採用後問題結案引導；結案不代表需求驗收 | 2026-10-13 以 `f25e1556` 合併至 main；不在圖庫候選 `944a854f` 中；尚未安裝或實機驗收 |
+| [#133 前端](https://github.com/teddashh/bat-agent-connector/pull/133) | Overview／Discussions／Requirements／Schedule／Dependencies／Issues & changes／Agents／Board；Session 保留 managed 操作與人工唯讀；包含 [walkthrough 腳本](https://github.com/teddashh/bat-agent-connector/blob/944a854fc381f61c6281edb7fcbcf887321a0c68/desktop/tests/pm-walkthrough.mjs)與截圖 | 審查中，尚未合併；整合分支已併入 #132 與 #134 |
+
+即時總覽與已存報告分開。原紀錄的討論入口保留來源標籤與自動標題。
+RTM 共用詳情、甘特圖、相依矩陣／圖、登記時間線及每日資源趨勢已在分支。
+來源撤回、unknown／partial、草稿與原操作 key 不因改版改變。
+#134 依固定欄位順序讀取已確認輸入中的目標，並比較 current／blocked／absent 需求 ID。
+問題已解決的回報使用既有 `pm.governance.revise`，須在新版本採用後進行。
+#134 合併前 GitHub CI 全部通過，包含 Python 3.10–3.13；本機 Python 3.14 完整套件為 6322 passed、48 skipped、0 failed。
+
+| 層級 | 狀態 |
+| --- | --- |
+| 分支整合（branch） | 本頁描述 `944a854f` 候選；公開圖庫用同一個合成會員專案，沒有 native／live 效果。 |
+| 主線（merged） | #132（`0c354861`）與 #134（`f25e1556`）已於 2026-10-13 合併；#133 尚未合併。既有 #121 Charter／RTM 與 #122 本機資源不代表本輪完成。 |
+| 安裝／原生驗收（installed/native） | #132／#134 尚未安裝；尚無前端候選的安裝／原生驗收回執。 |
+| 實機驗收（live-tested） | #132／#134 尚未實機驗收；尚無前端候選的實際 BAT／provider／模型／部署驗收回執；CI 與截圖不代替實機證據。 |
+
+候選 `944a854f` 的 walkthrough 仍停在 Return，因為該樹未含 #134 的目標與決策資料。
+#133 整合分支已併入合併後的 #132 與 #134；合併前記錄完整端到端結果。
+接續工作為最終來源 review／完整 checks、#133 合併及重釘公開圖庫。
+安裝與實機驗收另行留證；遠端資源收集、交付效率歸因、一般 native coding、AHP 寫入、
+其餘文件／簡報與完整 PM v1.2 backlog 仍待完成。
+詳見[本輪進度草稿](progress-2026-10-14.md)、[PM 狀態](pm-v1.2-status.md)與
+[管理工作台合約](../design/pm-project-control-center.md)。
+M4／M5 保留前次固定候選與歷史檢查，未由本輪文件或截圖重新驗證。
 
 以下為既有桌面／Connector 底座及前次固定來源紀錄，標示日期屬於當時，不能用來推定新的 PM 里程碑已完成。
 
@@ -99,7 +129,7 @@ published continuation 與 Task Service 原命令接到既有固定 commit previ
 unknown BAT merge 顯示保留目錄與 ACK 證據／結案限制。桌面連接頁補使用順序，Fleet 顯示實際
 backend 及 PowerShell 相容預設；完整無設定檔首次安裝精靈、正式簽章／更新仍未完成。
 
-本分支用暫存 Git、MockBat／FakeGitHub 驗證來源與交付；190 項派工／整合回歸、85 項
+該次候選用暫存 Git、MockBat／FakeGitHub 驗證來源與交付；190 項派工／整合回歸、85 項
 來源／整理檢查、674 項共用 UI 與 31 項 Rust bridge 檢查已通過。實際中央 HTTP／IPC 的
 兩次原派工已各自接到同一個測試 PR，固定來源 receipt 一致，人工 checkout 不變。預覽選擇
 不再被自己的事件刷新清除；Tauri bridge 限定開放指定成果的查詢。完整候選 gates 另留紀錄於
@@ -138,7 +168,7 @@ principal 與 unread filter；Rust bridge 只允許 work-items 的布林 unread 
 這完成 P1-2 的狀態分離與「未讀工作更新」範圍。完整聊天訊息未讀數與跨入口對話閱讀位置
 仍未實作，不能從局部訊息摘要、最後活動時間或 event ACK 推算。
 
-分支已通過 107 項後端相關測試、30 項 Rust bridge 測試、20 項 Node 測試及實際中央 fixture。
+該次候選已通過 107 項後端相關測試、30 項 Rust bridge 測試、20 項 Node 測試及實際中央 fixture。
 另驗證 14 項身份切換、延遲回覆與草稿保留回歸：初次完整 UI run 抓出的舊首頁請求晚到問題
 已修正。`test:attention` 已加入 desktop CI；完整 shared UI 與 Python 3.13／3.10 gate 的
 候選結果另由 PR/checks 與 本機驗證紀錄（未隨原始碼發布） 記錄。
@@ -153,7 +183,7 @@ principal 與 unread filter；Rust bridge 只允許 work-items 的布林 unread 
 `feat/shared-conversation-reading` 完成審查 P1-1：安全程式碼／表格呈現、原文複製與失敗備援、
 串流／刷新保留閱讀位置及「回到最新訊息」。沿用最近 30 則讀取；未加跨裝置已讀狀態。
 Web 與 Tauri 共用 `conversation.js`／`message-format.js`，兩個 build 已更新。
-分支已有 20 項 Node、616 項 shared UI 通過；包含 25 項新增閱讀／雙入口案例及
+該次候選已有 20 項 Node、616 項 shared UI 通過；包含 25 項新增閱讀／雙入口案例及
 中英 × browser/IPC × 390/768/1440 畫面。實際 Connector＋MockBat fixture 的事件續接、
 retention reset 與草稿恢復通過；兩種 build 的 JavaScript 相同，CSS 扣除 generated notice 也相同。
 初次 clipboard fallback 測試發現 textarea 會正規化 CRLF，已修正整段手動複製並通過回歸。
@@ -354,41 +384,41 @@ Desktop CI 現在也跑六組 actual-central fixtures，保存合成 UI 證據�
 - GitHub Codex bot 後期額度用盡，後續使用獨立本機 Codex peer review，沒有冒稱新 bot verdict。
   **沒有 live host/provider writes、主機安裝或 Windows installed acceptance；M1/M2/M3 與完整產品交付尚未完成。**
 
-## 接手基線
+## 2026-10-08 接手基線（歷史）
 
 | 來源 | 接手時 remote head | 狀態及下一步 |
 | --- | --- | --- |
-| #35 observation | `4e80b47` | CI 綠；worker 修無資料時 relations cursor 驗證，完成後審查與整合；legacy reviewer root/policy 一致性待核對 |
-| #36 operations Part A | `3dbef57` | CI 綠但不是最新修正；worker 已有 `5bf45c6` pause/verifier 修正，內部 failover authority 尚在跑 |
-| #37 confinement | `ba6a10c` | 衝突、無 CI；worker 修 Python 啟動前依賴完整性與 pre-send rollback；須累加 #36 gate |
-| #38 cleanup Part A | `242218c` | 衝突、無 CI；worker 已有 `5138b9d`/`1f18017` 容量及移除 host 修正，retirement follow-up 尚在跑 |
+| #35 observation | `4e80b47` | CI 綠；無資料時 relations cursor 驗證待修，完成後審查與整合；legacy reviewer root/policy 一致性待核對 |
+| #36 operations Part A | `3dbef57` | CI 綠但不是最新修正；已有 `5bf45c6` pause/verifier 修正，內部 failover authority 尚在跑 |
+| #37 confinement | `ba6a10c` | 衝突、無 CI；Python 啟動前依賴完整性與 pre-send rollback 待修；須累加 #36 gate |
+| #38 cleanup Part A | `242218c` | 衝突、無 CI；已有 `5138b9d`/`1f18017` 容量及移除 host 修正，retirement follow-up 尚在跑 |
 | #39 Hub import | `09dc74a` | 明確排除，不合併、不作依賴；通用 project/work-item 已在 main |
 | Delivery Part B（local） | `2281498` | 既有已審成果需在 #35/#36 後整合；data step 3、history adapter、owner lease、固定 UI key 等 pending notes 仍適用 |
 | Artifacts Part A（local） | `e71ba65` | 保留已有成果；在 confinement/cleanup 後整合 exact replica manifest，無 Hub import 依賴 |
 
-四個舊 worker 接手時仍活著；不在它們的 dirty clones 同時編輯。Review 完成的 SHA
-才能作整合來源；查 remote head 並以 expected head 合併，避免合入未審的新 push。
+當時四項工作仍在進行，整合需避開各自未提交的修改。只有完成審查的 SHA
+可作整合來源；依 remote head 與 expected head 核對，避免合入未審的新 push。
 
-## Owners、接口與依賴（目前分工）
+## 2026-10-08 接口與依賴（歷史分工）
 
-| 包 | 整合 owner / 工作線 | 交付與依賴 | 現況 |
+| 包 | 負責範圍 | 交付與依賴 | 當時狀態 |
 | --- | --- | --- | --- |
-| R00 | Codex 主協調 | 決策、scope、狀態、中央/native 邊界 | 本分支文件 |
-| R01 | Codex 主協調；既有 ops/confinement workers 完成當輪修正 | #36 → #37；legacy operations Part B；shared operation/task gates | #36/#37/#49 main；本輪加 send/continue/answer，其餘依盤點 |
-| R02 | Codex desktop worker | `desktop/**`、共用 UI source、受限 transport、window/tray；依 R00 | #44 已合併；installed 驗收待做 |
-| R03 | Codex 主協調（待 R02 bridge） | Fleet inventory/PS adapter → Rust parity、ownership、bootstrap | #45 PS adapter 已合併；Rust parity 尚缺 |
-| R04 | Codex 主協調；observation worker 完成修正 | #35 read models → 共用 frontend state/history/relations | #35 main；#48 frontend 已合併 |
-| R05 | Codex 主協調；保留 artifacts 分支 | fixed checkpoint、artifact bytes/manifest、明確 repository 的已發布版本同步；依 R01/R02/R08 接口 | checkpoint/#46/#50/B1 UI main；B2 工作線續作，repository 同步待查核；直接未發布 Git relay 已排除 |
-| R06 | Codex 主協調 | 既有 project/work_items、completion + R04 詳情；無 importer | 基礎 main；桌面 history/details 已合併，剩餘能力待驗收 |
-| R07 | Codex 主協調；保留 delivery 分支 | integration、cancel 追蹤、composite scopes、source SHA/recipe、UI；依 R01 | Part A main；#47 Part B 已合併 |
-| R08 | Codex 主協調；cleanup worker 完成修正 | #38 + R01/R04/R05 引用、task cleanup、recovery | #38 main；task-owned cleanup 仍保留 |
-| R09 | Codex 主協調 | canonical API/skill + 薄 wrappers、installer/client pins；隨 R01–R08 | #43 canonical/generated 已合併；final candidate pin 已固定；實際安裝待做 |
-| R10 | Codex 主協調 + 使用者環境 | 同 SHA app/backend、Windows WebView、BAT、選定測試 repo/environment、多 client | 未實機驗收 |
+| R00 | 產品整合 | 決策、scope、狀態、中央/native 邊界 | 已記錄產品方向文件 |
+| R01 | 中央操作與隔離 | #36 → #37；legacy operations Part B；shared operation/task gates | #36/#37/#49 main；當輪加 send/continue/answer，其餘依盤點 |
+| R02 | 桌面與共用前端 | `desktop/**`、共用 UI source、受限 transport、window/tray；依 R00 | #44 已合併；installed 驗收待做 |
+| R03 | Fleet（待 R02 bridge） | Fleet inventory/PS adapter → Rust parity、ownership、bootstrap | #45 PS adapter 已合併；Rust parity 尚缺 |
+| R04 | 觀測與前端資料 | #35 read models → 共用 frontend state/history/relations | #35 main；#48 frontend 已合併 |
+| R05 | 成果與接續 | fixed checkpoint、artifact bytes/manifest、明確 repository 的已發布版本同步；依 R01/R02/R08 接口 | checkpoint/#46/#50/B1 UI main；B2 工作線續作，repository 同步待查核；直接未發布 Git relay 已排除 |
+| R06 | 專案與工作項目 | 既有 project/work_items、completion + R04 詳情；無 importer | 基礎 main；桌面 history/details 已合併，剩餘能力待驗收 |
+| R07 | 交付 | integration、cancel 追蹤、composite scopes、source SHA/recipe、UI；依 R01 | Part A main；#47 Part B 已合併 |
+| R08 | 整理與恢復 | #38 + R01/R04/R05 引用、task cleanup、recovery | #38 main；task-owned cleanup 仍保留 |
+| R09 | API／技能與版本整合 | canonical API/skill + 薄 wrappers、installer/client pins；隨 R01–R08 | #43 canonical/generated 已合併；final candidate pin 已固定；實際安裝待做 |
+| R10 | 安裝版與使用者環境驗收 | 同 SHA app/backend、Windows WebView、BAT、選定測試 repo/environment、多 client | 未實機驗收 |
 
 共用 `operations.py`、`service.py`、`api_v1.py`、`task_daemon.py`、`task_journal.py`
-及 contract generator 的整合 owner 是主協調。Desktop worker 擁有 frontend transport/state
-抽取與 build；其他功能提出接口需求，避免同時重構核心檔。Registry/flock、start claims
-及 cleanup reservation 要跑组合回歸。
+及 contract generator 當時由中央整合統一管理；桌面工作負責 frontend transport/state
+抽取與 build。其他功能提出接口需求，避免同時重構核心檔。Registry/flock、start claims
+及 cleanup reservation 需要組合回歸。
 
 ## 原定執行順序（完成狀態以上方快照為準）
 
@@ -402,9 +432,9 @@ Desktop CI 現在也跑六組 actual-central fixtures，保存合成 UI 證據�
 
 ## 驗收證據與外部依賴
 
-- R00：依 `git`/GitHub heads、handoff、worker logs、actual API registry 查核；無 runtime 變更。
+- R00：依 `git`/GitHub heads、handoff、工作紀錄、actual API registry 查核；無 runtime 變更。
 - R02：已合併 source 有 build/fixture/native 子集證據；尚無 Windows installed/tray/跨登入、簽章或 live 組合證據。
-- Backend：各舊分支的 full suite 結果保留在 handoff/worker 報告；未當作整合結果。
+- Backend：各舊候選的 full suite 結果保留在交接／工作報告；未當作整合結果。
 - #37 trusted auditor `check_ssh_alias`/`check_uid`/`bat_account` 與限定 sudoers 需實際
   host 配置。沒有這些證據不得宣稱全域隔離或授予較高受限執行模式。
 - 正式部署示範仍需選定測試 repo/environment、使用者 scopes、Windows 與 signing 設定；

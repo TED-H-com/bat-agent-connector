@@ -2,6 +2,49 @@
 
 ## Next release (unreleased)
 
+- Refresh the English and Traditional Chinese README, PM first-use navigation and public
+  website around the project-to-decision journey. Replace the gallery with eight bilingual
+  scenes from one synthetic project, pinned to a labelled candidate with capture hashes.
+  Record which PRs are merged, and separate branch, installation and live evidence, in the
+  [October 14 progress draft](docs/product/progress-2026-10-14.md).
+
+- Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
+  reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
+  `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
+  and withdrawn sources lose rows and counts together.
+  See the [dependency contract](docs/design/pm-dependencies.md).
+
+- Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
+  decisions, deviations and recent deliveries, retaining confirmed goals and recent
+  decided history and unresolved requirement blockers across plan revisions,
+  separate from fixed saved reports.
+  Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
+  See the [overview contract](docs/design/pm-overview-discussion-context.md).
+
+- Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
+  `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
+  proposal reads include visible adoption receipts and list titles.
+  Withdrawn context is redacted and access to analysis derived from it remains protected.
+  The PM profile catalog uses version 3; version 2 plans still read and adopt.
+  See the [discussion contract](docs/design/pm-overview-discussion-context.md).
+
+- Add a read-only issues, actions and changes register via `pm_register_list` and
+  `pm_register_get`, with source identities, recorded statuses and linked detail timelines.
+  Totals and summaries require complete relevant sources; hidden or withdrawn records
+  are omitted from rows and aggregates together, while other readable records remain.
+  See the [register contract](docs/design/pm-register.md).
+
+- Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
+  dates, including unscheduled work and execution attempts for a future schedule view.
+  Partial pages never claim totals; withdrawn sources lose rows and derived dates together,
+  and missing dates stay unknown. Manual sessions remain read-only.
+  See the [schedule contract](docs/design/pm-schedule.md).
+
+- Add opt-in daily usage through `pm_resources_get` with `buckets=day` and an IANA `tz`,
+  covering up to 92 local dates for usage charts. Complete days are settled, not frozen.
+  Missing counters stay null; withdrawn sources lose buckets and totals together.
+  See the [resource contract](docs/design/agent-resource-observation.md).
+
 - Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
   startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
   Installed-app UI tests retry transient UI Automation reads within the existing

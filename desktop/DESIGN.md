@@ -79,3 +79,8 @@ source-reported models from requested model context, and observed tokens from cu
 quota windows. Missing counters stay unknown. Source failures withdraw numbers and
 model details together. Filters and a selected inspector keep their place during
 background reads; the toolbar can pause view updates without stopping collection.
+When the resources projection includes `buckets`, the usage trend is one stacked bar
+per local day and CLI. An incomplete day shows its observed tokens with the in-progress
+or settling marker; a null metric stays unknown.
+The resources read includes `buckets` only when the request sets `buckets=day`.
+Omit the chart when the projection has no buckets.
