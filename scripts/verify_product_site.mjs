@@ -25,11 +25,12 @@ const server = createServer(async (req, res) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
 const base = origin + '/bat-agent-connector/';
-const browser = await chromium.launch();
+const views = ['overview', 'discussions', 'requirements', 'issues', 'schedule', 'dependencies', 'board', 'session'];
+const browser = await chromium.launch({args: ['--disable-dev-shm-usage']});
 const results = [];
 try {
   for (const lang of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
-    const context = await browser.newContext({ viewport: { width, height: 900 }, locale: lang });
+    const context = await browser.newContext({ viewport: { width, height: 900 }, locale: lang === 'en' ? 'en-US' : lang, colorScheme: 'light' });
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -42,27 +43,23 @@ try {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: resolve(output, `hero-${lang}-${width}.png`) });
     await page.locator('#product').scrollIntoViewIfNeeded();
-    await page.locator('[data-view="dispatch"]').click();
-    assert.equal(await page.locator('#view-workspace').isVisible(), false);
-    assert.equal(await page.locator('#view-dispatch').isVisible(), true);
-    await page.locator('#view-dispatch img:visible').evaluate(img => img.decode());
-    await page.screenshot({ path: resolve(output, `dispatch-${lang}-${width}.png`) });
-    for (const view of ['pm-planning', 'pm-kanban']) {
+    assert.equal(await page.locator('[data-view]').count(), views.length);
+    assert.equal(await page.locator('#view-overview').isVisible(), true);
+    for (const view of views) {
       await page.locator(`[data-view="${view}"]`).focus();
       await page.keyboard.press('Enter');
       assert.equal(await page.locator(`#view-${view}`).isVisible(), true);
       assert.equal(await page.locator('.product-shot:visible').count(), 1);
       assert.equal(await page.locator(`[data-view="${view}"]`).getAttribute('aria-pressed'), 'true');
       await page.locator(`#view-${view} img:visible`).evaluate(img => img.decode());
+      assert.equal(await page.locator(`#view-${view} img:visible`).getAttribute('src'), `images/${view}-${lang === 'en' ? 'en' : 'zh'}.png`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.screenshot({ path: resolve(output, `${view}-${lang}-${width}.png`) });
     }
-    await page.locator('[data-view="workspace"]').focus();
-    await page.keyboard.press('Enter');
-    assert.equal(await page.locator('#view-workspace').isVisible(), true);
-    await page.locator('#view-workspace img:visible').evaluate(img => img.decode());
+    await page.locator('[data-view="overview"]').click();
+    await page.evaluate(() => window.scrollTo({top: 0, behavior: 'instant'}));
     await page.screenshot({ path: resolve(output, `page-${lang}-${width}.png`), fullPage: true });
-    for (const section of ['architecture', 'windows']) {
+    for (const section of ['workflow', 'features', 'architecture', 'windows']) {
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
       await page.screenshot({
         path: resolve(output, `${section}-${lang}-${width}.png`),
@@ -84,6 +81,8 @@ try {
     const changed = lang === 'en' ? 'zh' : 'en';
     await page.locator(`[data-language="${changed}"]`).click();
     assert.equal(new URL(page.url()).hash, '#workflow');
+    await page.locator('#workflow').scrollIntoViewIfNeeded();
+    await page.screenshot({path: resolve(output, `language-switch-${lang}-${width}.png`)});
     await page.reload();
     assert.equal(await page.locator('html').getAttribute('data-lang'), changed);
     await page.goto(base); // Saved preference remains available without URL override.
@@ -102,7 +101,7 @@ try {
   const noJS = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
   const fallback = await noJS.newPage();
   await fallback.goto(base);
-  for (const view of ['workspace', 'dispatch', 'pm-planning', 'pm-kanban']) {
+  for (const view of views) {
     assert.equal(await fallback.locator(`#view-${view}`).isVisible(), true);
     await fallback.locator(`#view-${view} img:visible`).evaluate(img => img.decode());
   }
@@ -123,7 +122,7 @@ try {
   assert.equal(new URL(page.url()).pathname, '/bat-agent-connector/');
   await blocked.close();
   await writeFile(resolve(output, 'result.json'), JSON.stringify({ results, noJavaScript: true, blockedStorage: true, notFound: true }, null, 2) + '\n');
-  console.log('Passed 6 responsive bilingual scenarios, gallery, keyboard/mobile navigation, preference persistence, blocked storage, no-JS fallback and 404 recovery.');
+  console.log('Passed 6 responsive bilingual scenarios, all 8 gallery scenes (48 selections), keyboard/mobile navigation, preference persistence, blocked storage, no-JS fallback and 404 recovery.');
 } finally {
   await browser.close();
   await new Promise(resolve => server.close(resolve));

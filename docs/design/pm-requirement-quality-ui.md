@@ -18,7 +18,12 @@ reference retains the exact review, assessment operation/version/digest, and
 candidate; refresh cannot substitute another assessment.
 
 For a handoff's declared requirement prerequisites, the user selects each
-original assessment and reviews the handoff again. The identity-only
+original assessment and reviews the handoff again. Newly populated prerequisite
+selectors stay disabled until the original package, readiness and published-base
+reads finish. Rebuilding the choices during review must apply the editor's current
+read/lock/authority state before the next awaited read, so a displayed selection
+cannot be silently ignored. This same editor supplies both single handoff starts
+and selected batch entries. The identity-only
 `pm_requirement_quality_refs` map is included in readiness and the fixed handoff
 only when nonempty. It is bounded to 16 KiB using public JSON spacing and UTF-8.
 The selector requires

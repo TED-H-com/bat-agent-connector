@@ -14,6 +14,12 @@
   retry controls while Central sending is paused;
   see [walkthrough status](docs/design/pm-decision-walkthrough.md).
 
+- Refresh the English and Traditional Chinese README, PM first-use navigation and public
+  website around the project-to-decision journey. Replace the gallery with eight bilingual
+  scenes from one synthetic project, pinned to a labelled candidate with capture hashes.
+  Record which PRs are merged, and separate branch, installation and live evidence, in the
+  [October 14 progress draft](docs/product/progress-2026-10-14.md).
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
@@ -324,6 +330,8 @@
   worktrees for reviewed cleanup. Publish the same workflow in canonical agent skill `.8`.
 - Add fixed-selection batch approval and managed artifact capture/review to the shared UI. Preserve
   each original request, operation and immutable revision across reloads and partial outcomes.
+- Keep engineering handoff prerequisite selectors disabled while their sources are read. A slow read
+  can no longer drop a selected assessment, and batch preflight refuses unavailable sources.
 - Add Task Service reviewed cleanup and automatic eligible lifecycle cleanup using the same central
   ownership, control-version and live-consumer checks. Retain dirty/unique content and task history.
 - Add native file picker/drop uploads, bounded literal text/static PNG preview, and Save As for an
@@ -1109,6 +1117,8 @@
   and log reference. Jev and `BAT-STATUS` remain completion claims, not test evidence.
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
+- Split CI into pytest shards and separate frontend, browser and central UI jobs.
+  Balance files by measured times, verify full coverage and preserve native checks.
 
 - Overview now shows live project status and attention first, with compact charter cards and saved reports
   on demand. Unknown values remain explicit, and saved reports never mix in live data.

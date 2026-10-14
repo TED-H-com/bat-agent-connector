@@ -1,25 +1,44 @@
 # Better Agent Dashboard／Connector 實作狀態
 
 本頁保留底座與整合歷史。最新 PM v1.2 範圍以 [採用計畫](pm-v1.2-plan.md)及
-[PM 狀態](pm-v1.2-status.md)為準；2026-10-12 的證據與阻擋見 [進度報告](progress-2026-10-12.md)，
+[PM 狀態](pm-v1.2-status.md)為準；本輪見 [10 月 14 日進度草稿](progress-2026-10-14.md)。
+2026-10-12 的證據與阻擋保留在[前次進度](progress-2026-10-12.md)，
 當時接手步驟見 [交接](../handoff/2026-10-12-pm-v1.2.md)。
 
 ## 目前續作
 
-PM 後端管理合約已在 `main`：固定 commit 相依清冊、唯讀專案時程、問題／行動／變更登記、
-每日資源桶、即時 overview、討論來源與改名，以及 proposal 的 `adoptable`／`adoptable_reason`。
-Python Connector／Task Service 保持唯一中央權威；合約與剩餘範圍見
-[PM 狀態](pm-v1.2-status.md)及 [六視圖合約](../design/pm-project-control-center.md)。
+本輪候選 `944a854f` 已把管理檢視接成同一個專案工作台：
+專案總覽 → 原紀錄 → PM 討論 → 審閱並採用。
+Python Connector／Task Service 保持唯一中央權威；Web／Tauri 共用 `desktop/src`。
+
+| 項目 | 分支交付 | 合併狀態 |
+| --- | --- | --- |
+| [#132 後端](https://github.com/teddashh/bat-agent-connector/pull/132) | 固定相依清冊／impact、唯讀時程、登記、每日資源桶、即時總覽、討論來源／改名及提案可採用性的中央讀取與操作 | 2026-10-13 以 `0c354861` 合併至 main；尚未安裝或實機驗收 |
+| [#134 決策流程後端](https://github.com/teddashh/bat-agent-connector/pull/134) | `feat/pm-overview-decision-loop`：保留採用後目標、`recent_decisions`、跨版本原需求 ID 的阻礙比對及採用後問題結案引導；結案不代表需求驗收 | 2026-10-13 以 `f25e1556` 合併至 main；不在圖庫候選 `944a854f` 中；尚未安裝或實機驗收 |
+| [#133 前端](https://github.com/teddashh/bat-agent-connector/pull/133) | Overview／Discussions／Requirements／Schedule／Dependencies／Issues & changes／Agents／Board；Session 保留 managed 操作與人工唯讀；包含 [walkthrough 腳本](https://github.com/teddashh/bat-agent-connector/blob/944a854fc381f61c6281edb7fcbcf887321a0c68/desktop/tests/pm-walkthrough.mjs)與截圖 | 審查中，尚未合併；整合分支已併入 #132 與 #134 |
+
+即時總覽與已存報告分開。原紀錄的討論入口保留來源標籤與自動標題。
+RTM 共用詳情、甘特圖、相依矩陣／圖、登記時間線及每日資源趨勢已在分支。
+來源撤回、unknown／partial、草稿與原操作 key 不因改版改變。
+#134 依固定欄位順序讀取已確認輸入中的目標，並比較 current／blocked／absent 需求 ID。
+問題已解決的回報使用既有 `pm.governance.revise`，須在新版本採用後進行。
+#134 合併前 GitHub CI 全部通過，包含 Python 3.10–3.13；本機 Python 3.14 完整套件為 6322 passed、48 skipped、0 failed。
 
 | 層級 | 狀態 |
 | --- | --- |
-| 分支整合（branch） | 改版前端在獨立整合中，仍需完成上述視圖接入及前端 PR。 |
-| 主線（merged） | 後端合約已合併；使用它們的改版前端尚未合併。既有 #121 Charter／RTM 與 #122 資源頁不代表改版完成。 |
-| 安裝／原生驗收（installed/native） | 尚未安裝此整合版本；安裝版與原生驗收待執行。 |
-| 實機驗收（live-tested） | 尚未執行此整合的實際 BAT／provider／模型／部署驗收；CI 不代替實機證據。 |
+| 分支整合（branch） | 本頁描述 `944a854f` 候選；公開圖庫用同一個合成會員專案，沒有 native／live 效果。 |
+| 主線（merged） | #132（`0c354861`）與 #134（`f25e1556`）已於 2026-10-13 合併；#133 尚未合併。既有 #121 Charter／RTM 與 #122 本機資源不代表本輪完成。 |
+| 安裝／原生驗收（installed/native） | #132／#134 尚未安裝；尚無前端候選的安裝／原生驗收回執。 |
+| 實機驗收（live-tested） | #132／#134 尚未實機驗收；尚無前端候選的實際 BAT／provider／模型／部署驗收回執；CI 與截圖不代替實機證據。 |
 
-接續工作為前端接入與獨立前端 PR、安裝版／原生驗收、實機驗收。
-M4／M5 的固定候選與歷史檢查另見 [PM 狀態](pm-v1.2-status.md)，不因後端合併推定完成。
+候選 `944a854f` 的 walkthrough 仍停在 Return，因為該樹未含 #134 的目標與決策資料。
+#133 整合分支已併入合併後的 #132 與 #134；合併前記錄完整端到端結果。
+接續工作為最終來源 review／完整 checks、#133 合併及重釘公開圖庫。
+安裝與實機驗收另行留證；遠端資源收集、交付效率歸因、一般 native coding、AHP 寫入、
+其餘文件／簡報與完整 PM v1.2 backlog 仍待完成。
+詳見[本輪進度草稿](progress-2026-10-14.md)、[PM 狀態](pm-v1.2-status.md)與
+[管理工作台合約](../design/pm-project-control-center.md)。
+M4／M5 保留前次固定候選與歷史檢查，未由本輪文件或截圖重新驗證。
 
 以下為既有桌面／Connector 底座及前次固定來源紀錄，標示日期屬於當時，不能用來推定新的 PM 里程碑已完成。
 

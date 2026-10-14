@@ -24176,6 +24176,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 			});
 			box.append(h("label", {}, `${t("ph_quality_requirement")} ${rid}`, node));
 		}
+		editor.update();
 	}
 	function selectedQuality(row) {
 		const refs = boundedQualityMap(JSON.parse(editor.fields.quality_selection.value || "{}")), needed = prerequisites(row);
