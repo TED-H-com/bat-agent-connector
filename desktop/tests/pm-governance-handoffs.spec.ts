@@ -4,6 +4,23 @@ import {demoFixture} from './demo/index.ts';
 import {governanceFixture} from './pm-governance-fixture.ts';
 import {meetingFixture} from './pm-meetings-fixture.ts';
 import {workspaceId, pmFixture} from './pm-fixture.ts';
+import {openPmSection} from './pm-navigation.ts';
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`unselected register governance shows only its selection hint ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: 1000}}), page = await context.newPage();
+  try {
+    const demo = demoFixture({locale}), writes: any[] = [];
+    await mountConversation(page, false, input => {if (input.method === 'POST') writes.push(input); return demo.dispatch(input);});
+    await page.goto(`/dashboard/#/pm/${demo.ids.workspaceId}/issues`); await openPmSection(page, 'issues', 'ui_governance');
+    const panel = page.locator('[data-pm-governance]'), hint = panel.locator('[data-pm-governance-prompt]');
+    const sentence = locale === 'en' ? 'Select an item above.' : '從上方清單選取一筆事項。';
+    await expect(hint).toBeVisible(); await expect.poll(() => panel.innerText()).toBe(sentence);
+    await expect(panel.locator('.pm-heading')).toBeHidden(); await expect(panel.locator('[data-pm-action]')).toBeHidden();
+    await expect(panel.locator('[data-pm-governance-row], [data-pm-governance-selected], [data-pm-governance-detail]')).toHaveCount(0);
+    const height = await hint.evaluate(node => ({hint: node.getBoundingClientRect().height, body: node.parentElement!.getBoundingClientRect().height}));
+    expect(height.body - height.hint).toBeLessThanOrEqual(1); expect(writes).toEqual([]);
+  } finally {await context.close();}
+});
 
 for (const locale of ['en', 'zh-TW']) for (const kind of ['governance', 'meeting']) test(`register opens the selected ${kind} form and focuses it, ${locale}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale}); const page = await context.newPage();
@@ -40,6 +57,20 @@ for (const locale of ['en', 'zh-TW']) for (const kind of ['governance', 'meeting
       return result;
     };
     await mountConversation(page, false, dispatch); await page.goto(`/dashboard/#/pm/${workspaceId}/issues`);
+    if (kind === 'governance') {
+      await openPmSection(page, 'issues', 'ui_governance');
+      const panel = page.locator('[data-pm-governance]'), launch = panel.locator('[data-pm-governance-record]');
+      const record = panel.locator('[data-pm-action="pm.governance.record"]'), title = record.getByLabel(locale === 'en' ? 'Finding title' : '事項標題', {exact: true});
+      await expect(panel.locator('[data-pm-governance-prompt]')).toBeVisible(); await expect(launch).toBeVisible();
+      await launch.click(); await expect(record).toBeVisible(); await expect(record.locator('input:not([type=hidden]),select,textarea').first()).toBeFocused();
+      await expect(panel.locator('[data-pm-governance-prompt]')).toBeHidden(); await title.fill('Preserve the register creation draft');
+      await record.getByRole('button', {name: locale === 'en' ? 'Cancel' : '取消', exact: true}).click();
+      await expect(record).toBeHidden(); await expect(panel.locator('[data-pm-governance-prompt]')).toBeVisible();
+      await page.reload(); await openPmSection(page, 'issues', 'ui_governance');
+      await expect(record).toBeVisible(); await expect(title).toHaveValue('Preserve the register creation draft');
+      await expect(launch).toHaveAttribute('aria-expanded', 'true'); await expect(panel.locator('[data-pm-governance-prompt]')).toBeHidden();
+      expect(writes).toEqual([]);
+    }
     await page.locator('[data-reg-table] tbody tr').first().click();
     const inspector = page.locator('.ui-inspector[data-reg-row]');
     await inspector.getByRole('button', {name: kind === 'governance' ? (locale === 'en' ? 'Revise record' : '修訂紀錄') : (locale === 'en' ? 'Record follow-up' : '記錄後續'), exact: true}).click();

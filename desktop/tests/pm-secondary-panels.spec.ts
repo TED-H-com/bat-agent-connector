@@ -37,16 +37,33 @@ for (const locale of ['en', 'zh-TW']) {
       else await expect(editor.locator('input[aria-label]').first()).toHaveValue('Preserved creation draft');
       expect(f.state.writes).toHaveLength(0);
     });
-    test(`${panel} read-only explains the hidden action ${locale}`, async ({page}) => {
+    for (const width of [1440, 390]) test(`${panel} read-only header keeps its reason and refresh aligned ${locale} ${width}`, async ({page}) => {
+      await page.setViewportSize({width, height: 1000});
       const f = fixture(); f.state.role = 'reader'; f.state.manage = false; await mount(page, f);
       await expect(page.locator(`[${hook}]`)).toBeHidden();
-      await expect(page.locator('[data-pm-panel-readonly]')).toBeVisible();
-      await expect(page.locator('[data-pm-panel-readonly]')).toHaveText(reason);
+      const header = page.locator('.pm-heading'), explanation = header.locator('[data-pm-panel-readonly]'), refresh = header.locator('.ui-icon-button');
+      await expect(header).toHaveCount(1); await expect(explanation).toBeVisible(); await expect(explanation).toHaveText(reason);
+      await expect(refresh).toBeVisible();
+      const positions = await header.evaluate(node => {
+        const reason = node.querySelector('[data-pm-panel-readonly]')!.getBoundingClientRect(), refresh = node.querySelector('.ui-icon-button')!.getBoundingClientRect();
+        return {reasonLeft: reason.left, reasonRight: reason.right, refreshLeft: refresh.left, refreshRight: refresh.right, headerRight: node.getBoundingClientRect().right,
+          centreDifference: Math.abs(reason.top + reason.height / 2 - refresh.top - refresh.height / 2)};
+      });
+      expect(positions.reasonLeft).toBeLessThan(positions.refreshLeft); expect(positions.reasonRight).toBeLessThanOrEqual(positions.refreshLeft);
+      expect(positions.centreDifference).toBeLessThanOrEqual(4); expect(positions.headerRight - positions.refreshRight).toBeLessThanOrEqual(1);
       await expect(page.locator('.pm-heading button.primary:visible')).toHaveCount(0);
       await expect(page.locator(`[data-pm-action="${action}"] button[type=submit]`)).toBeDisabled();
       expect(f.state.writes).toHaveLength(0);
     });
   }
+  test(`governance toggle retains its label after selection ${locale}`, async ({page}) => {
+    const f = governance.governanceFixture(); await governance.mount(page, f, locale);
+    const row = page.locator(`[data-pm-governance-row="${f.state.records[1].record.record_id}"]`), toggle = row.getByRole('button');
+    const label = zh ? '查看事項' : 'View finding';
+    await expect(toggle).toHaveText(label); await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await toggle.click(); await expect(toggle).toHaveAttribute('aria-pressed', 'true'); await expect(toggle).toHaveText(label);
+    await expect(row).toHaveClass(/is-selected/); expect(f.state.writes).toHaveLength(0);
+  });
   test(`governance punctuation and actors ${locale}`, async ({page}) => {
     const f = governance.governanceFixture(); f.state.records[0].revision.document.owner_actor = 'reader';
     await governance.mount(page, f, locale);

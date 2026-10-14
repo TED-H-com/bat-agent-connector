@@ -20,9 +20,9 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const rebase = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
   const readOnly = h('p', {class: 'ui-meta', hidden: true, 'data-pm-panel-readonly': ''}, t('pm_panel_read_only'));
   const launch = button({variant: 'primary', label: t('pm_meeting_new'), 'data-pm-meeting-create': '', 'aria-controls': createId, 'aria-expanded': 'false', onClick: () => reveal('pm.meeting.create')});
-  const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, launch,
+  const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, launch, readOnly,
     iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), onClick: () => void refresh()})),
-    readOnly, labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors)});
+    labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors)});
   element.classList.add('pm-evidence', 'pm-meetings'); element.dataset.pmMeetings = '';
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
   const fold = (key, body, open = false) => {const node = disclosure({label: t(key), body, open}); node.dataset.pmFold = key; return node;};

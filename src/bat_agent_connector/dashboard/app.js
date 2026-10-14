@@ -4313,7 +4313,7 @@ var pmGovernanceStrings = {
 		pm_gov_unknown: "Unknown",
 		pm_gov_empty: "No findings",
 		pm_gov_inspect: "View finding",
-		pm_gov_selected: "Selected finding",
+		pm_gov_select_above: "Select an item above.",
 		pm_gov_risk: "Risk",
 		pm_gov_assumption: "Assumption",
 		pm_gov_issue: "Issue",
@@ -4422,7 +4422,7 @@ var pmGovernanceStrings = {
 		pm_gov_unknown: "未知",
 		pm_gov_empty: "尚無事項",
 		pm_gov_inspect: "查看事項",
-		pm_gov_selected: "目前選取",
+		pm_gov_select_above: "從上方清單選取一筆事項。",
 		pm_gov_risk: "風險",
 		pm_gov_assumption: "假設",
 		pm_gov_issue: "問題",
@@ -22344,11 +22344,17 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		"aria-expanded": "false",
 		onClick: () => showCreate()
 	});
-	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, iconButton({
+	const heading = h("div", { class: "pm-heading" }, launch, readOnly, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_gov_refresh"),
 		onClick: () => void refresh()
-	})), readOnly, status, list, detail, warning, review, editors) });
+	}));
+	const prompt = h("p", {
+		class: "ui-meta",
+		hidden: true,
+		"data-pm-governance-prompt": ""
+	}, t("pm_gov_select_above"));
+	const element = sectionCard({ body: h("div", {}, heading, prompt, status, list, detail, warning, review, editors) });
 	element.classList.add("pm-evidence", "pm-governance");
 	element.dataset.pmGovernance = "";
 	const actor = () => caps()?.actor;
@@ -22406,6 +22412,8 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		widgets.forEach((widget) => widget());
 		launch.hidden = !can();
 		readOnly.hidden = !loaded || can();
+		prompt.hidden = !loaded || !withRegister || Boolean(model?.detail) || createOpen;
+		heading.hidden = !prompt.hidden && !can();
 		launch.setAttribute("aria-expanded", String(loaded && createOpen));
 		if (createBox) createBox.hidden = !createOpen;
 		warning.hidden = !stale;
@@ -22620,7 +22628,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			return score(a) - score(b) || (a.record.kind === "change" ? -1 : 0) - (b.record.kind === "change" ? -1 : 0) || a.record.sequence - b.record.sequence;
 		});
 		list.replaceChildren(...!withRegister && ordered.length ? ordered.map(({ record, revision }) => h("article", {
-			class: "pm-fact",
+			class: "pm-fact" + (selectedId === record.record_id ? " is-selected" : ""),
 			"data-pm-governance-row": record.record_id
 		}, h("div", { class: "pm-fact-heading" }, h("strong", { class: "pm-source" }, revision.document.title), h("span", { class: "muted" }, t("pm_gov_" + record.kind))), h("p", { class: "muted" }, statusPill(revision.document.status === "reported_resolved" ? "not_assessed" : revision.document.status === "monitoring" ? "waiting" : "not_started"), " · ", actorLabel(revision.document.owner_actor), revision.document.decision ? " · " + t("pm_gov_" + revision.document.decision.disposition) : ""), h("button", {
 			type: "button",
@@ -22630,7 +22638,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				selectRecord(record.record_id);
 				refresh(true);
 			}
-		}, t(selectedId === record.record_id ? "pm_gov_selected" : "pm_gov_inspect")))) : withRegister ? [] : [emptyState({ title: t("pm_gov_empty") })]);
+		}, t("pm_gov_inspect")))) : withRegister ? [] : [emptyState({ title: t("pm_gov_empty") })]);
 		if (!withRegister && model.nextCursor != null) list.append(note("pm_gov_partial"), h("button", {
 			type: "button",
 			class: "ui-button secondary ui-sm",
@@ -26751,11 +26759,11 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		"aria-expanded": "false",
 		onClick: () => void showPrepare()
 	});
-	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, iconButton({
+	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, writeWarning, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_fu_refresh"),
 		onClick: () => void refresh()
-	})), writeWarning, status, view, fold("pm_fu_history", labelled("pm_fu_history_choose", choose), more), editorFold) });
+	})), status, view, fold("pm_fu_history", labelled("pm_fu_history_choose", choose), more), editorFold) });
 	element.classList.add("pm-follow-up");
 	element.dataset.pmFollowUp = "";
 	function metadataPage(data, after) {
@@ -29600,11 +29608,11 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		"aria-expanded": "false",
 		onClick: () => reveal("pm.meeting.create")
 	});
-	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, iconButton({
+	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, readOnly, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_meeting_refresh"),
 		onClick: () => void refresh()
-	})), readOnly, labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors) });
+	})), labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors) });
 	element.classList.add("pm-evidence", "pm-meetings");
 	element.dataset.pmMeetings = "";
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));

@@ -13,6 +13,8 @@
   durable form without submitting it; original drafts and recovery keys remain intact.
   Creation has one entry with focus and Cancel, read-only access explains its permission
   requirement, and missing follow-up baseline areas are named in both languages.
+  Read-only reasons stay beside Refresh; unselected register governance shows a
+  selection hint, and finding toggles retain their label when selected.
 
 - Reviewed handoff facts no longer print empty placeholders. The issues register
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited

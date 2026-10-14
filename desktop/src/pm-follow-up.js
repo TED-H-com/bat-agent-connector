@@ -160,9 +160,9 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
   editor.box.querySelector('.actions').append(button({variant:'secondary',label:t('pm_panel_cancel'),onClick:()=>{prepareOpen=false;sync();if(!launch.hidden)launch.focus();}}));
   const more=h('button',{type:'button',class:'ui-button secondary ui-sm',hidden:true,onclick:()=>void loadMetadata(next)},t('pm_fu_more'));
   launch=button({variant:'primary',label:t('pm_fu_prepare'),'data-pm-follow-up-prepare':'','aria-controls':prepareId,'aria-expanded':'false',onClick:()=>void showPrepare()});
-  const element=sectionCard({body:h('div',{},h('div',{class:'pm-heading'},launch,
+  const element=sectionCard({body:h('div',{},h('div',{class:'pm-heading'},launch,writeWarning,
     iconButton({icon:'refresh-cw', label:t('pm_fu_refresh'),onClick:()=>void refresh()})),
-    writeWarning,status,view,fold('pm_fu_history',labelled('pm_fu_history_choose',choose),more),editorFold)});
+    status,view,fold('pm_fu_history',labelled('pm_fu_history_choose',choose),more),editorFold)});
   element.classList.add('pm-follow-up');element.dataset.pmFollowUp='';
   function metadataPage(data,after) {
     check(data);if(!number(data.head_version)||!Array.isArray(data.intakes)||data.next_cursor!=null&&(!number(data.next_cursor)||data.next_cursor<=after))throw Error(t('pm_fu_scope_error'));

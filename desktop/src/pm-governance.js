@@ -17,9 +17,10 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   const review = button({variant: 'secondary', hidden: true, onClick: () => {if (loaded) void renderEditors(true);}, label: t('pm_gov_review_fresh')});
   const readOnly = h('p', {class: 'ui-meta', hidden: true, 'data-pm-panel-readonly': ''}, t('pm_panel_read_only'));
   const launch = button({variant: 'primary', label: t('pm_gov_new'), 'data-pm-governance-record': '', 'aria-controls': createId, 'aria-expanded': 'false', onClick: () => showCreate()});
+  const heading = h('div', {class: 'pm-heading'}, launch, readOnly, iconButton({icon:'refresh-cw', label:t('pm_gov_refresh'), onClick: () => void refresh()}));
+  const prompt = h('p', {class: 'ui-meta', hidden: true, 'data-pm-governance-prompt': ''}, t('pm_gov_select_above'));
   const element = sectionCard({body: h('div', {},
-    h('div', {class: 'pm-heading'}, launch, iconButton({icon:'refresh-cw', label:t('pm_gov_refresh'), onClick: () => void refresh()})),
-    readOnly, status, list, detail, warning, review, editors)});
+    heading, prompt, status, list, detail, warning, review, editors)});
   element.classList.add('pm-evidence', 'pm-governance'); element.dataset.pmGovernance = '';
   const actor = () => caps()?.actor;
   const can = () => loaded && permitted(false);
@@ -50,6 +51,8 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   function update() {
     forms.forEach(editor => editor.update()); widgets.forEach(widget => widget());
     launch.hidden = !can(); readOnly.hidden = !loaded || can();
+    prompt.hidden = !loaded || !withRegister || Boolean(model?.detail) || createOpen;
+    heading.hidden = !prompt.hidden && !can();
     launch.setAttribute('aria-expanded', String(loaded && createOpen));
     if (createBox) createBox.hidden = !createOpen;
     warning.hidden = !stale; review.hidden = !stale; review.disabled = !loaded;
@@ -178,12 +181,12 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       const score = row => (row.revision.document.status === 'reported_resolved' ? 2 : row.revision.document.status === 'monitoring' ? 1 : 0);
       return score(a) - score(b) || (a.record.kind === 'change' ? -1 : 0) - (b.record.kind === 'change' ? -1 : 0) || a.record.sequence - b.record.sequence;
     });
-    list.replaceChildren(...(!withRegister && ordered.length ? ordered.map(({record, revision}) => h('article', {class: 'pm-fact', 'data-pm-governance-row': record.record_id},
+    list.replaceChildren(...(!withRegister && ordered.length ? ordered.map(({record, revision}) => h('article', {class: 'pm-fact' + (selectedId === record.record_id ? ' is-selected' : ''), 'data-pm-governance-row': record.record_id},
       h('div', {class: 'pm-fact-heading'}, h('strong', {class: 'pm-source'}, revision.document.title), h('span', {class: 'muted'}, t('pm_gov_' + record.kind))),
       h('p', {class: 'muted'}, statusPill(revision.document.status === 'reported_resolved' ? 'not_assessed' : revision.document.status === 'monitoring' ? 'waiting' : 'not_started'), ' · ', actorLabel(revision.document.owner_actor),
         revision.document.decision ? ' · ' + t('pm_gov_' + revision.document.decision.disposition) : ''),
       h('button', {type: 'button', class: 'ui-button secondary ui-sm', 'aria-pressed': String(selectedId === record.record_id), onclick: () => {selectRecord(record.record_id); void refresh(true);}},
-        t(selectedId === record.record_id ? 'pm_gov_selected' : 'pm_gov_inspect')))) : withRegister ? [] : [emptyState({title: t('pm_gov_empty')})]));
+        t('pm_gov_inspect')))) : withRegister ? [] : [emptyState({title: t('pm_gov_empty')})]));
     if (!withRegister && model.nextCursor != null) list.append(note('pm_gov_partial'), h('button', {type: 'button', class: 'ui-button secondary ui-sm', onclick: () => {pageCount++; void refresh();}}, t('pm_gov_more')));
     detail.replaceChildren();
     if (withRegister || !model.detail) return;

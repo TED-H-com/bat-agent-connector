@@ -25,8 +25,6 @@
 .pm-fu-assessments pre {white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;font-size: var(--fs-body);max-width:100%;}
 .pm-fu-assessments button[aria-pressed=true] {border-color:var(--accent);}
 @media(max-width:640px){
-  .pm-follow-up .pm-heading {display:block;}
-  .pm-follow-up .pm-heading > button {margin-bottom:var(--space-2);}
   .pm-follow-up .pm-fu-domain {grid-template-columns:minmax(0,1fr);gap:var(--space-1);}
   .pm-follow-up :is(button,summary,select) {min-height:44px;}
   .pm-follow-up summary {padding:var(--space-2) 0;}
@@ -35,6 +33,12 @@
 
 /* Secondary governance tools share the v2 card and compact form rhythm. */
 :is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-heading {display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin-bottom:var(--space-3);}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-heading [data-pm-panel-readonly] {flex:1;min-width:0;margin:0;}
+:is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-heading > .ui-icon-button {margin-left:auto;}
+.pm-governance .pm-heading[hidden] {display:none;}
+.pm-governance [data-pm-governance-prompt] {margin:0;}
+.pm-governance [data-pm-governance-row] {padding-inline:var(--space-2);}
+.pm-governance [data-pm-governance-row].is-selected {background:var(--accent-soft);box-shadow:inset 2px 0 var(--accent);}
 :is(.pm-governance,.pm-meetings,.pm-follow-up) .pm-fact-heading {display:flex;align-items:center;gap:var(--space-2);}
 :is(.pm-governance,.pm-meetings,.pm-follow-up) label.pm-fact-heading {display:flex;flex-direction:row;flex-wrap:nowrap;align-items:flex-start;margin:var(--space-2) 0;}
 :is(.pm-governance,.pm-meetings,.pm-follow-up) label.pm-fact-heading > span {flex:1;min-width:0;}
