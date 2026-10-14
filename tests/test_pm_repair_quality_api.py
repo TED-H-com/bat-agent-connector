@@ -17,12 +17,7 @@ world, pm, ready, fixed = repairtests.world, repairtests.pm, repairtests.ready, 
 reviewed = qualitytests.reviewed
 
 
-@pytest.fixture
-async def repair_ready(fixed, monkeypatch):
-    # API initialization supplies the real hooks; exercise those without the
-    # isolated domain fixture's stand-ins.
-    monkeypatch.setattr(repairtests, 'shared_hooks', lambda _: None)
-    return await repairtests.repair_ready.__wrapped__(fixed, monkeypatch)
+repair_ready = repairtests.repair_ready
 
 
 async def read_parity(w, monkeypatch, auth, routes):
