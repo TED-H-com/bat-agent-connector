@@ -129,9 +129,11 @@ export function workspaceOverview(options) {
     const labels = ids.map(id => plan?.document?.requirements?.find(req => req.id === id)?.text).filter(Boolean);
     return labels.join(' · ') || (ids.length ? t('ov_context_requirement', {n: ids.length}) : c.work_item_id ? t('ov_context_work') : c.milestone_id ? t('ov_context_milestone') : '');
   }
-  function attention(data, anchor) {
+  function attention(data, resetOrder) {
     if (!attentionList) {attentionList = h('div', {class: 'pm-overview-attention', 'data-overview-attention': ''}); attentionCard = sectionCard({title: t('ov_attention'), body: attentionList});}
-    const rows = attentionList, reading = Boolean(anchor) || rows.contains(document.activeElement) || Boolean(rows.querySelector('[data-overview-row]:hover'));
+    const rows = attentionList, selection = document.getSelection();
+    const reading = !resetOrder && (rows.contains(document.activeElement) || Boolean(rows.querySelector('[data-overview-row]:hover'))
+      || Boolean(selection && !selection.isCollapsed && rows.contains(selection.anchorNode) && rows.contains(selection.focusNode)));
     const keys = new Set(data.attention.map(row => row.key));
     for (const [key, entry] of attentionNodes) if (!keys.has(key)) {entry.node.remove(); attentionNodes.delete(key);}
     rows.querySelector('.pm-overview-footer')?.remove(); rows.querySelector('.ui-empty')?.remove();
@@ -300,10 +302,10 @@ export function workspaceOverview(options) {
     if (!row?.isConnected || !box.contains(row) || !anchor.scroller.isConnected) return;
     anchor.scroller.scrollTop += row.getBoundingClientRect().top - anchor.top;
   }
-  function render(anchor = mode === 'live' ? readingAnchor() : null) {
-    try {renderContent(anchor);} finally {restoreAnchor(anchor);}
+  function render(anchor = mode === 'live' ? readingAnchor() : null, resetOrder = false) {
+    try {renderContent(resetOrder);} finally {restoreAnchor(anchor);}
   }
-  function renderContent(anchor) {
+  function renderContent(resetOrder) {
     header(); savedBar.hidden = mode !== 'saved'; box.dataset.overviewMode = mode;
     if (mode === 'saved') {
       reportPartial.hidden = !savedPartial();
@@ -326,7 +328,7 @@ export function workspaceOverview(options) {
     }
     // as_of changes on every read. It must not replace reading nodes or their focus.
     const next = JSON.stringify([{...projection, as_of: null}, plan]);
-    if (signature === `live:${next}`) return;
+    if (signature === `live:${next}` && !resetOrder) return;
     signature = `live:${next}`;
     const source = {baseline: {document: plan?.document}, brief: {}, plan_complete: projection.coverage?.sources?.plan?.complete === true,
       coverage: projection.coverage, unknown: projection.unknown, decision_count: projection.attention_counts.decision, attention_truncated: projection.attention_truncated};
@@ -335,7 +337,7 @@ export function workspaceOverview(options) {
     const focused = content.contains(document.activeElement) ? document.activeElement : null;
     const focusId = focused?.getAttribute('data-overview-link'), focusPart = focused?.closest('[data-overview-part]')?.dataset.overviewPart;
     if (reader && (relatedSelection ? !projection.attention.some(row => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
-    const main = attention(projection, anchor);
+    const main = attention(projection, resetOrder);
     commitParts([
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown,
         projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated], render: () => statusStrip(projection)},
@@ -384,7 +386,11 @@ export function workspaceOverview(options) {
     reportActions: {compare: () => {if (mode !== 'saved') {mode = preference.mode = 'saved'; saved = reports.current(); signature = ''; render();} return reports.comparePrevious();}, print: () => window.print()},
     setActive(value) {if (active === value) {header(); return;} active = value;
       if (!value) {preference.scroll = window.scrollY; closeReader();}
-      else if (preference.scroll) requestAnimationFrame(() => {if (active) window.scrollTo(0, preference.scroll);});
+      else {
+        // Returning to Overview starts with Central's order, including unchanged data.
+        render(null, true);
+        if (preference.scroll) requestAnimationFrame(() => {if (active) window.scrollTo(0, preference.scroll);});
+      }
       header();},
     dispose() {active = false; serial++; closeReader();},
   };

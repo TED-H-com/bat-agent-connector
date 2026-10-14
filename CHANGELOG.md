@@ -36,7 +36,9 @@
 - Overview distinguishes unread milestone, delivery and charter sources from known
   empty records in English and Traditional Chinese. Live updates keep the attention
   row being read at its viewport position and preserve Progress Details focus and
-  open state; withdrawn rows and their counts still disappear immediately.
+  open state. Attention stays in Central's severity/age order during passive viewing
+  and on return to Overview; focus, hover or text selection holds the existing order.
+  Withdrawn rows and their counts still disappear immediately.
 
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;

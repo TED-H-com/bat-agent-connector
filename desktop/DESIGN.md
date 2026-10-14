@@ -312,9 +312,12 @@ Attention retains the central severity/age ordering, with exact context identiti
 passed to `discussHref`. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
 by identity within their own part, including the Progress Details summary and its open state.
 Before updating any Overview region, the focused attention row, hovered row, or first
-visible row anchors the viewport. Overview preserves its order and compensates its
-actual scrolling container after layout, with native CSS anchoring disabled so
-Chromium and WebKit have the same behavior. A withdrawn anchor is removed immediately
+visible row anchors the viewport. Focus, hover or a non-collapsed text selection
+inside the attention list preserves its existing order and appends new rows. Passive
+visibility uses Central's severity/age order; returning to Overview re-sorts even
+unchanged data. Overview compensates its actual scrolling container after layout,
+with native CSS anchoring disabled so Chromium and WebKit have the same behavior.
+A withdrawn anchor is removed immediately
 and receives no scroll compensation. Cached ages advance with the projection timestamp.
 Overview records its scroll position before a view switch hides it and restores it after
 the destination header has finished laying out. Repeated selection

@@ -16323,7 +16323,7 @@ function workspaceOverview(options) {
 		const c = row.context || {}, ids = c.requirement_ids || (c.requirement_id ? [c.requirement_id] : []);
 		return ids.map((id) => plan?.document?.requirements?.find((req) => req.id === id)?.text).filter(Boolean).join(" · ") || (ids.length ? t("ov_context_requirement", { n: ids.length }) : c.work_item_id ? t("ov_context_work") : c.milestone_id ? t("ov_context_milestone") : "");
 	}
-	function attention(data, anchor) {
+	function attention(data, resetOrder) {
 		if (!attentionList) {
 			attentionList = h("div", {
 				class: "pm-overview-attention",
@@ -16334,7 +16334,8 @@ function workspaceOverview(options) {
 				body: attentionList
 			});
 		}
-		const rows = attentionList, reading = Boolean(anchor) || rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover"));
+		const rows = attentionList, selection = document.getSelection();
+		const reading = !resetOrder && (rows.contains(document.activeElement) || Boolean(rows.querySelector("[data-overview-row]:hover")) || Boolean(selection && !selection.isCollapsed && rows.contains(selection.anchorNode) && rows.contains(selection.focusNode)));
 		const keys = new Set(data.attention.map((row) => row.key));
 		for (const [key, entry] of attentionNodes) if (!keys.has(key)) {
 			entry.node.remove();
@@ -16700,14 +16701,14 @@ function workspaceOverview(options) {
 		if (!row?.isConnected || !box.contains(row) || !anchor.scroller.isConnected) return;
 		anchor.scroller.scrollTop += row.getBoundingClientRect().top - anchor.top;
 	}
-	function render(anchor = mode === "live" ? readingAnchor() : null) {
+	function render(anchor = mode === "live" ? readingAnchor() : null, resetOrder = false) {
 		try {
-			renderContent(anchor);
+			renderContent(resetOrder);
 		} finally {
 			restoreAnchor(anchor);
 		}
 	}
-	function renderContent(anchor) {
+	function renderContent(resetOrder) {
 		header();
 		savedBar.hidden = mode !== "saved";
 		box.dataset.overviewMode = mode;
@@ -16762,7 +16763,7 @@ function workspaceOverview(options) {
 			...projection,
 			as_of: null
 		}, plan]);
-		if (signature === `live:${next}`) return;
+		if (signature === `live:${next}` && !resetOrder) return;
 		signature = `live:${next}`;
 		const source = {
 			baseline: { document: plan?.document },
@@ -16780,7 +16781,7 @@ function workspaceOverview(options) {
 		const focused = content.contains(document.activeElement) ? document.activeElement : null;
 		const focusId = focused?.getAttribute("data-overview-link"), focusPart = focused?.closest("[data-overview-part]")?.dataset.overviewPart;
 		if (reader && (relatedSelection ? !projection.attention.some((row) => row.key === relatedSelection.key && JSON.stringify(row) === JSON.stringify(relatedSelection)) : readerDocument !== JSON.stringify(plan?.document))) closeReader();
-		const main = attention(projection, anchor);
+		const main = attention(projection, resetOrder);
 		commitParts([
 			{
 				key: "status",
@@ -16936,9 +16937,12 @@ function workspaceOverview(options) {
 			if (!value) {
 				preference.scroll = window.scrollY;
 				closeReader();
-			} else if (preference.scroll) requestAnimationFrame(() => {
-				if (active) window.scrollTo(0, preference.scroll);
-			});
+			} else {
+				render(null, true);
+				if (preference.scroll) requestAnimationFrame(() => {
+					if (active) window.scrollTo(0, preference.scroll);
+				});
+			}
 			header();
 		},
 		dispose() {

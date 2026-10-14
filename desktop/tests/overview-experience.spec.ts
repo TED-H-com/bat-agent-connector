@@ -115,19 +115,21 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`emp
   expect(f.state.writes).toEqual([]); await context.close();
 });
 
-for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (const reading of ['focused', 'hovered', 'visible']) test(`changed event burst holds the ${reading} attention row ${locale} ${width}`, async ({browser, baseURL}) => {
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (const reading of ['focused', 'hovered', 'selected', 'visible']) test(`changed event burst holds the ${reading} attention row ${locale} ${width}`, async ({browser, baseURL}) => {
   const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
   const page = await context.newPage(), f = fixture(locale);
-  // Enough authorized rows to scroll the second row to the top in either locale.
+  // Enough authorized rows to keep the passive anchor away from either scroll limit
+  // when Central reverses the order; interactive cases still read the second row.
   const risk = f.state.data.attention.at(-1);
   f.state.data.attention.push(...Array.from({length: 4}, (_, i) => ({...risk, key: `risk:governance:extra-${i}`,
     ref: {kind: 'governance', id: 'pmgov_' + (100 + i).toString(16).padStart(32, '0')}})));
   f.state.data.attention_counts.risk += 4;
   await boot(page, f); await page.evaluate(() => document.fonts.ready);
-  const key = f.state.data.attention[1].key, row = root(page).locator(`[data-overview-row="${key}"]`), link = row.locator('[data-overview-open]');
+  const key = f.state.data.attention[reading === 'visible' ? 4 : 1].key, row = root(page).locator(`[data-overview-row="${key}"]`), link = row.locator('[data-overview-open]');
   await row.evaluate((node, reading) => {
     document.activeElement instanceof HTMLElement && document.activeElement.blur();
-    window.scrollBy(0, node.getBoundingClientRect().top - (reading === 'visible' ? -10 : 200));
+    window.scrollBy(0, node.getBoundingClientRect().top - (['visible', 'selected'].includes(reading) ? -10 : 200));
+    getSelection()?.removeAllRanges();
   }, reading);
   await page.mouse.move(0, 0);
   if (reading === 'focused') await link.focus();
@@ -135,19 +137,62 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (cons
   if (reading === 'visible') {
     expect(await root(page).locator('[data-overview-row]').evaluateAll(nodes => nodes.find(node => node.getBoundingClientRect().bottom > 0 && node.getBoundingClientRect().top < innerHeight)?.getAttribute('data-overview-row'))).toBe(key);
   }
-  // Select the text being read as well as checking keyboard focus.
-  const selected = await row.locator('strong').evaluate(node => {
+  // Selection alone is interaction; focus and hover cases remain independent.
+  const selected = reading === 'selected' ? await row.locator('strong').evaluate(node => {
     const selection = getSelection()!, range = document.createRange(); range.selectNodeContents(node);
     selection.removeAllRanges(); selection.addRange(range); return selection.toString();
-  });
-  const top = (await row.boundingBox())!.y;
+  }) : '';
+  const top = (await row.boundingBox())!.y, originalOrder = f.state.data.attention.map((item: any) => item.key);
+  const shots = reading === 'visible' && process.env.BATC_OVERVIEW_SHOTS ? `${process.env.TMPDIR}/follow-up-shots` : null;
+  if (shots) {mkdirSync(shots, {recursive: true}); await page.screenshot({path: `${shots}/${locale}-${width}-passive-before.png`, animations: 'disabled'});}
   f.state.data.attention[0].title = (locale === 'en' ? 'A revised dependency blocker needs a longer maintenance assessment and remediation description. ' : '相依套件阻礙已更新，需要更詳細的維護評估與修正說明。').repeat(5);
   f.state.data.attention.reverse(); f.state.data.progress.accepted = 2; f.state.data.progress.in_review = 2;
   await burst(page, f);
   await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '2 of 8 accepted' : '8 項中 2 項已驗收');
   expect(Math.abs((await row.boundingBox())!.y - top)).toBeLessThanOrEqual(1);
+  expect(await root(page).locator('[data-overview-row]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-overview-row'))))
+    .toEqual(reading === 'visible' ? f.state.data.attention.map((item: any) => item.key) : originalOrder);
   if (reading === 'focused') await expect(link).toBeFocused();
   expect(await page.evaluate(() => getSelection()?.toString())).toBe(selected);
+  if (shots) await page.screenshot({path: `${shots}/${locale}-${width}-passive-after.png`, animations: 'disabled'});
+  expect(f.state.writes).toEqual([]); await context.close();
+});
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`a new top-severity blocker leads a passively visible attention list ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
+  const page = await context.newPage(), f = fixture(locale); await boot(page, f); await page.evaluate(() => document.fonts.ready);
+  const anchor = root(page).locator('[data-overview-row]').first();
+  await anchor.evaluate(node => {
+    document.activeElement instanceof HTMLElement && document.activeElement.blur(); getSelection()?.removeAllRanges();
+    window.scrollBy(0, node.getBoundingClientRect().top - 200);
+  });
+  await page.mouse.move(0, 0);
+  const top = (await anchor.boundingBox())!.y, anchorKey = await anchor.getAttribute('data-overview-row');
+  const blocker = {...f.state.data.attention[0], key: 'blocker:governance:new-critical', severity: 'critical', since: f.state.data.as_of - 10 * 86400,
+    ref: {kind: 'governance', id: 'pmgov_' + 'c'.repeat(32)}, title: locale === 'en' ? 'New critical dependency blocker' : '新增的重大相依套件阻礙'};
+  f.state.data.attention.unshift(blocker); f.state.data.attention_counts.blocker++;
+  await burst(page, f);
+  await expect(root(page).locator('[data-overview-row]').first()).toHaveAttribute('data-overview-row', blocker.key);
+  expect(await root(page).locator('[data-overview-row]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-overview-row'))))
+    .toEqual(f.state.data.attention.map((item: any) => item.key));
+  expect(Math.abs((await root(page).locator(`[data-overview-row="${anchorKey}"]`).boundingBox())!.y - top)).toBeLessThanOrEqual(1);
+  expect(f.state.writes).toEqual([]); await context.close();
+});
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`returning to Overview restores Central's attention order ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, colorScheme, viewport: {width, height: width === 390 ? 844 : 900}});
+  const page = await context.newPage(), f = fixture(locale); await boot(page, f);
+  const originalOrder = f.state.data.attention.map((item: any) => item.key), row = root(page).locator('[data-overview-row]').nth(1);
+  await row.locator('[data-overview-open]').focus();
+  f.state.data.attention.reverse(); f.state.data.progress.accepted = 2; f.state.data.progress.in_review = 2;
+  await burst(page, f); await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '2 of 8 accepted' : '8 項中 2 項已驗收');
+  expect(await root(page).locator('[data-overview-row]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-overview-row')))).toEqual(originalOrder);
+  await row.locator('strong').evaluate(node => {
+    const selection = getSelection()!, range = document.createRange(); range.selectNodeContents(node); selection.removeAllRanges(); selection.addRange(range);
+  });
+  await openPmSection(page, 'requirements'); await openPmSection(page, 'overview');
+  await expect.poll(() => root(page).locator('[data-overview-row]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-overview-row'))))
+    .toEqual(f.state.data.attention.map((item: any) => item.key));
   expect(f.state.writes).toEqual([]); await context.close();
 });
 
