@@ -1,6 +1,6 @@
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button} from './ui/components.js';
+import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button, sectionCard} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {cliName} from './pm-agents-trend.js';
 import {actionLabel, formatTime, operationMeta, operationStatusKey, operationStatusLabel, reasonText, workStatusKey} from './global-labels.js';
@@ -54,6 +54,7 @@ import { repositoryStartPanel } from "./repository-start.js";
 import { mountArtifactReview, managedCaptureExecution } from "./artifact-review.js";
 import { consumePageAsync, settleRefreshes, storageScope } from "./state/events.ts";
 import {renderDeliveryWork, renderObservedResource} from "./observed-resource.js";
+import {observedText} from "./observed-resource-strings.js";
 
 const TOKEN_KEY = "batc.dashboard.token";
 const state = { token: null, caps: null, lastEvent: 0, lastEventAt: 0, listeners: new Set(), namespace: "", epoch: 0, online: false, pollHealth: 'initial', viewReady: false, sync: null, endpoint: "", connectionError: null, nativeBusy: false, nativeAttempt: 0, connectionNotice: null, refreshCycle: null };
@@ -3124,15 +3125,18 @@ async function change(out, action, target, params, pre, scope) {
   }
   return null;
 }
-function manageNote() { return may("manage") ? null : h("p", { class: "note" }, t("needs_manage_access")); }
+function manageNote() { return may("manage") ? null : h("p", { class: "note" }, observedText(t, "or_readonly_project")); }
 function indent(el, depth) { el.style.setProperty("--depth", String(depth)); return el; } // CSP: no style attributes
 function stateChip(c) {
   return statusPill(workStatusKey(c?.display_state));
 }
 function counts(c) {
-  return [c.doing ? h("span", {class: "ui-pill tone-info"}, `${t("ui_status_in_progress")} ${c.doing}`) : null,
-    c.awaiting_approval ? h("span", {class: "ui-pill tone-review"}, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
-    h("span", {class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : "")}, t("wi_done_of", {done: c.done, total: c.total}))];
+  const known = value => Number.isSafeInteger(value) && value >= 0;
+  const complete = c?.partial !== true && c?.complete !== false;
+  return [complete && known(c?.doing) && c.doing > 0 ? h("span", {class: "ui-pill tone-info", "data-project-count": "doing"}, `${t("ui_status_in_progress")} ${c.doing}`) : null,
+    complete && known(c?.awaiting_approval) && c.awaiting_approval > 0 ? h("span", {class: "ui-pill tone-review", "data-project-count": "review"}, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
+    complete && known(c?.done) && known(c?.total) && c.done <= c.total ? h("span", {class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : ""), "data-project-count": "completion"},
+      t("wi_done_of", {done: c.done, total: c.total})) : null];
 }
 // ↑ ↓ and pin for one entry among its siblings; pinned entries never cross unpinned ones.
 function orderButtons(sibs, i, key, run) {
@@ -3290,26 +3294,63 @@ async function viewProject(main, pid) {
   freshPage();
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   let draft = null; // the project form's values after a stale save, put back into the reloaded form
-  const head = h("div", { class: "panel" });
-  const items = h("div", { class: "panel" });
+  let request = 0, prepared = null, currentEditor = null;
+  let workEditors = new Map();
+  const workDrafts = new Map();
+  const head = h("div", { class: "panel", "data-project-summary": "" });
+  const items = h("div", {"data-project-items": ""});
   const work = h("section", {class: "panel", hidden: true, "data-project-work-list": true});
   const out = h("div", {});
   const archived = h("div", {});
   const showArchived = h("input", { type: "checkbox" });
   const create = createRecordForm({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
-    namespace: connection.namespace, kind: "work_item", projectId: pid, errorBox, opStatus,
+    namespace: connection.namespace, kind: "work_item", projectId: pid, showScope: false, errorBox, opStatus,
     onCreated: async () => render()});
-  main.append(manageNote() || "", out, head, work, h("h2", {}, t("work_items")), create.box, items,
-    h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+  const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
+  const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.box, items, archived)});
+  itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
+  main.append(manageNote() || "", out, head, work, itemCard);
+  const rememberEditors = () => {
+    if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
+    for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden)
+      workDrafts.set(id, {child: editor.child.value, branch: editor.branch.value});
+  };
+  const withdraw = error => {
+    rememberEditors(); workEditors.clear();
+    currentEditor = null; prepared = null; request++;
+    create.setContext({rows: [], active: false}); create.box.hidden = true;
+    fill(work); work.hidden = true; fill(items); fill(archived); fill(out); itemCard.hidden = true;
+    fill(head, errorBox(error)); freshPage();
+  };
+  const readProject = async () => {
+    const mine = ++request;
+    try {
+      const data = await api("GET", `/projects/${encodeURIComponent(pid)}${showArchived.checked ? "?include_archived=true" : ""}`);
+      assertView(connection);
+      if (mine !== request) return null;
+      if (data.project?.project_id !== pid) throw new Error(t("workspace_work_missing"));
+      return data;
+    } catch (error) {
+      if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request) return null;
+      withdraw(error); throw error;
+    }
+  };
+  const prepare = async () => {
+    prepared = null;
+    const data = await readProject();
+    if (data) prepared = {data, request};
+  };
   const render = async (fromEvent = false) => {
     const opens = drawerOpens;
-    let data;
-    try { data = await api("GET", `/projects/${pid}${showArchived.checked ? "?include_archived=true" : ""}`); }
-    catch (e) { fill(head, errorBox(e)); return; }
-    if (!head.isConnected) return;
+    const data = prepared?.request === request ? prepared.data : await readProject().catch(() => null);
+    prepared = null;
+    if (!data || !head.isConnected) return;
     if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
+    rememberEditors(); workEditors = new Map();
     freshPage();
     const p = data.project;
+    itemCard.hidden = false;
+    create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed === false;
     create.setContext({rows: data.work_items, name: p.name, active: !p.archived});
     work.hidden = !Array.isArray(data.work);
     fill(work, h("h2", {}, t("delivery_project_work")),
@@ -3317,13 +3358,13 @@ async function viewProject(main, pid) {
     const msg = out;
     const v = draft || { name: p.name, description: p.description, repositories: p.repositories, task_project: p.task_project || "" };
     const f = {
-      name: h("input", { value: v.name, maxlength: 80 }),
-      description: h("textarea", {}, v.description),
-      repositories: h("input", { value: v.repositories.join(", "), placeholder: "owner/name, owner/name" }),
-      task_project: h("input", { value: v.task_project, placeholder: t("task_project") }),
+      name: h("input", { value: v.name, maxlength: 80, "aria-label": t("name") }),
+      description: h("textarea", {"aria-label": t("description")}, v.description),
+      repositories: h("input", { value: v.repositories.join(", "), placeholder: "owner/name, owner/name", "aria-label": observedText(t, "or_repositories") }),
+      task_project: h("input", { value: v.task_project, placeholder: t("task_project"), "aria-label": t("task_project") }),
     };
     const d = drawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description,
-      h("label", {}, t("repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project,
+      h("label", {}, observedText(t, "or_repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project,
       h("div", { class: "actions" }, h("button", { class: "primary", onclick: async () => {
         const params = { name: f.name.value.trim(), description: f.description.value,
           repositories: f.repositories.value.split(/[\s,]+/).filter(Boolean), task_project: f.task_project.value.trim() };
@@ -3332,6 +3373,7 @@ async function viewProject(main, pid) {
         if (!ok && STALE.includes(lastFailure)) draft = params;
         if (ok || draft) render();
       } }, t("save"))));
+    d.box.dataset.projectEditor = "";
     fill(head,
       h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")),
         ...data.path.flatMap(x => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])),
@@ -3339,12 +3381,14 @@ async function viewProject(main, pid) {
       p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""),
         h("p", {class: "pre"}, p.description)) : null,
       h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map(r => chip(r)),
-        !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {class: "session-project-link", href: `#/dispatch/${pid}`}, t("dispatch_title")) : null,
+        may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {class: "session-project-link", href: `#/dispatch/${pid}`}, t("dispatch_title")) : null,
         p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null),
-      d.box,
+      may("manage") && !p.archived ? d.box : null,
       data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ",
         ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
-    if (draft) { draft = null; d.open(); }
+    currentEditor = {drawer: d, values: () => ({name: f.name.value.trim(), description: f.description.value,
+      repositories: f.repositories.value.split(/[\s,]+/).filter(Boolean), task_project: f.task_project.value.trim()})};
+    if (draft && may("manage") && !p.archived) { draft = null; d.open(); }
     const rows = [];
     const walk = (sibs, depth, parent) => sibs.forEach((w, i) => {
       const rowMsg = out; // outside the tree: it survives the re-render below
@@ -3355,6 +3399,8 @@ async function viewProject(main, pid) {
       };
       const child = h("input", { placeholder: t("new_child_item"), maxlength: 120 });
       const branch = h("input", { placeholder: t("new_branch_item"), maxlength: 120 });
+      const retained = workDrafts.get(w.work_item_id);
+      if (retained) {child.value = retained.child; branch.value = retained.branch;}
       const create = (input, params, scope) => h("button", { class: "secondary", onclick: async () => {
         if (!input.value.trim()) return;
         if (await change(rowMsg, "work_item.create", { project_id: pid }, { title: input.value.trim(), ...params }, {}, scope)) render();
@@ -3368,6 +3414,9 @@ async function viewProject(main, pid) {
             { expected_version: w.version }, `wi.archive.${w.work_item_id}`);
           if (ok || STALE.includes(lastFailure)) render();
         } }, t("archive_with_children"))));
+      dr.box.dataset.workItemInspector = "";
+      workEditors.set(w.work_item_id, {drawer: dr, child, branch});
+      if (retained && may("manage") && !p.archived) {workDrafts.delete(w.work_item_id); dr.open();}
       const done = w.steps.filter(s => s.done).length;
       const row = indent(h("div", { class: "row tree" }, stateChip(w.completion),
         h("div", { class: "grow" }, h("a", { class: "title", href: `#/item/${w.work_item_id}` }, w.title),
@@ -3378,22 +3427,22 @@ async function viewProject(main, pid) {
       if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({h, t, row,
         scope: `${connection.namespace}.item.${pid}.${parent}`, siblings: sibs, index: i, key: "work_item_id", run,
         open: () => dr.open(true), guard: () => assertView(connection), editing: active => setEditing(editing + (active ? 1 : -1))}));
-      rows.push(row, dr.box);
+      rows.push(row, may("manage") && !p.archived ? dr.box : null);
       walk(w.children, depth + 1, w.work_item_id);
     });
     walk(data.work_items, 0, "");
-    fill(items, ...(rows.length ? rows : [h("p", { class: "muted" }, t("no_items"))]));
+    fill(items, ...(rows.length ? rows : showArchived.checked && data.archived?.length ? [] : [emptyState({title: t("no_items"), heading: "h3"})]));
     fill(archived, ...(data.archived || []).map(w => h("div", { class: "row" },
       h("div", { class: "grow" }, h("a", { class: "muted", href: `#/item/${w.work_item_id}` }, w.title)),
-      h("button", { class: "secondary", disabled: !may("manage") || p.archived, onclick: async () => {
+      may("manage") && !p.archived ? h("button", { class: "secondary", onclick: async () => {
         await change(out, "work_item.update", { work_item_id: w.work_item_id }, { archived: false },
           { expected_version: w.version }, `wi.restore.${w.work_item_id}`);
         render();
-      } }, t("restore")))));
+      } }, t("restore")) : null)));
   };
   showArchived.onchange = () => render();
   await render();
-  return liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"]);
+  return liveReload(render, ["project", "work_item", "operation", "task", "execution", "session", "integration"], prepare);
 }
 
 function linkTarget(l) {
@@ -4132,7 +4181,7 @@ function mountWorkspace(name) {
     if (identity) {
       const connection = {epoch: state.epoch, namespace: state.namespace};
       workspaceNav = workspaceNavigation({h, t, api, guard: () => assertConnection(connection), onEvents,
-        namespace: state.namespace, errorBox});
+        namespace: state.namespace, errorBox, caps: () => state.caps});
       document.getElementById("workspace").prepend(workspaceNav.box);
       workspaceSidebar = setupSidebarResizer({aside: workspaceNav.box, workspace: document.getElementById("workspace"), t});
       shell = dashboardShell({navigation: workspaceNav, namespace: state.namespace, caps: () => state.caps,

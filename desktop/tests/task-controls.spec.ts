@@ -47,7 +47,7 @@ for (const native of [false,true]) {
     await form(page).getByRole('button',{name:'Prepare another control'}).click();
     expect(state.posts).toHaveLength(1);
     await form(page).getByRole('button',{name:'Resume dispatch',exact:true}).click();
-    await expect(page.getByText('Dispatch not paused',{exact:true})).toBeVisible();
+    await expect(page.locator('[data-task-dispatch]')).toHaveCount(0);
     expect(state.posts[1].body).toEqual({action:'task.resume',target:{task_id:taskId},params:{},preconditions:{control_version:8}});
     expect(state.posts[1].idempotency_key).not.toBe(state.posts[0].idempotency_key);
     expect(state.errors).toEqual([]);
@@ -126,9 +126,11 @@ for (const native of [false,true]) {
     state.failTask=false; state.events.push({seq:1,resource_type:'task',resource_id:taskId,kind:'task.updated'});
     await expect(form(page).getByRole('button',{name:'Pause dispatch',exact:true})).toBeEnabled();
     state.allowed=null; await page.reload();
-    await expect(form(page).getByRole('button',{name:'Pause dispatch',exact:true})).toBeDisabled();
+    await expect(form(page).getByRole('button',{name:'Pause dispatch',exact:true,includeHidden:true})).toBeDisabled();
+    await expect(form(page).getByRole('button',{name:'Pause dispatch',exact:true})).toBeHidden();
     state.allowed=true; state.scopes=['observe']; await page.reload();
-    await expect(form(page).getByRole('button',{name:'Pause dispatch',exact:true})).toBeDisabled();
+    await expect(form(page).getByRole('button',{name:'Pause dispatch',exact:true,includeHidden:true})).toBeDisabled();
+    await expect(form(page).getByRole('button',{name:'Pause dispatch',exact:true})).toBeHidden();
     expect(state.posts).toHaveLength(0);
   });
   test(`${mode}: backend identity change leaves the old key isolated`, async ({page}) => {

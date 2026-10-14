@@ -46,7 +46,7 @@ for (const locale of ['en-US', 'zh-TW']) {
 
       await page.goto('/dashboard/#/task/' + taskId);
       await expect(page.getByRole('heading', {level: 1})).toHaveText(workTitle);
-      await expect(page.getByText(zh ? '未暫停派工' : 'Dispatch not paused', {exact: true})).toBeVisible();
+      await expect(page.locator('[data-task-dispatch]')).toHaveCount(0);
       const taskSurface = await surface(page);
       expect(taskSurface).not.toMatch(/wt_|op_|task_/);
       expect(taskSurface).not.toContain('{');

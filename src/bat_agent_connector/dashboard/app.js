@@ -39308,8 +39308,121 @@ function sessionStatus(session) {
 	return "unknown";
 }
 //#endregion
+//#region src/observed-resource-strings.js
+var observedStrings = {
+	en: {
+		or_execution: "Execution",
+		or_worktree: "Worktree",
+		or_work: "Work",
+		or_owner: "Owner",
+		or_owner_task: "Managed task",
+		or_owner_operation: "Managed operation",
+		or_owner_registry: "Registered",
+		or_owner_manual: "Manual (read-only)",
+		or_readonly_task: "This account can view this work but cannot pause dispatch.",
+		or_controls_unavailable: "Controls are unavailable until this work can be read.",
+		or_work_ended: "This work has ended.",
+		or_readonly_project: "This account can view projects; change the credential under Connection to edit.",
+		or_projects_unknown: "This read did not return a project list.",
+		or_repositories: "Repositories",
+		or_latest: "Latest result",
+		or_sessions: "Sessions",
+		or_session: "Session",
+		or_open_session: "Open session",
+		or_review: "Review result",
+		or_details: "Details",
+		or_raw: "Raw record",
+		or_identity: "This identity is recorded. History does not grant writes.",
+		or_cleanup: "Cleanup needs a fresh preview of active work, undelivered results, reservations, and blockers.",
+		or_unverified: "Not verified",
+		or_verified: "Verified",
+		or_verification_reason: "Result unverified; dispatch acceptance does not verify the work.",
+		or_result_unknown: "No result evidence was returned.",
+		or_unavailable: "Could not read this result.",
+		or_cleanup_preview: "Preview cleanup",
+		or_host: "Host",
+		or_work_id: "Work ID",
+		or_owner_kind: "Owner kind",
+		or_dispatch: "Dispatch",
+		or_reason: "Reason",
+		or_pinned: "Source commit",
+		or_delivered: "Delivered commit",
+		or_pr: "PR #{n}",
+		or_path: "Path",
+		or_branch: "Branch",
+		or_actor: "Actor",
+		or_project: "Project",
+		or_state: "State",
+		or_worktree_id: "Worktree ID",
+		or_owner_id: "Owner ID",
+		or_operation_id: "Operation",
+		or_task_id: "Task",
+		or_session_id: "Session",
+		or_link_operation: "Operation",
+		or_link_execution: "Execution",
+		or_link_worktree: "Worktree"
+	},
+	"zh-TW": {
+		or_execution: "工作執行",
+		or_worktree: "工作目錄",
+		or_work: "工作",
+		or_owner: "負責人",
+		or_owner_task: "受管任務",
+		or_owner_operation: "受管操作",
+		or_owner_registry: "已登記",
+		or_owner_manual: "人工（唯讀）",
+		or_readonly_task: "這個帳號可以檢視，但不能暫停派工。",
+		or_controls_unavailable: "讀取這筆工作後才能使用控制功能。",
+		or_work_ended: "這筆工作已結束。",
+		or_readonly_project: "這個帳號可檢視專案；如需編輯，請到「連線」更換憑證。",
+		or_projects_unknown: "這次讀取未提供專案清單。",
+		or_repositories: "儲存庫",
+		or_latest: "最新成果",
+		or_sessions: "工作階段",
+		or_session: "工作階段",
+		or_open_session: "開啟工作階段",
+		or_review: "審閱成果",
+		or_details: "詳細資訊",
+		or_raw: "原始紀錄",
+		or_identity: "這是已記錄的身分。歷程不代表可以寫入。",
+		or_cleanup: "整理前需要最新預覽，列出進行中的工作、尚未交付的成果、保留項目與阻擋原因。",
+		or_unverified: "尚未驗證",
+		or_verified: "已驗證",
+		or_verification_reason: "成果尚未驗證；派工已受理不代表工作已通過驗證。",
+		or_result_unknown: "這次讀取未提供成果證據。",
+		or_unavailable: "無法讀取這筆成果。",
+		or_cleanup_preview: "預覽整理",
+		or_host: "主機",
+		or_work_id: "工作識別碼",
+		or_owner_kind: "歸屬類型",
+		or_dispatch: "派工",
+		or_reason: "原因",
+		or_pinned: "來源提交",
+		or_delivered: "交付提交",
+		or_pr: "PR #{n}",
+		or_path: "路徑",
+		or_branch: "分支",
+		or_actor: "執行者",
+		or_project: "專案",
+		or_state: "狀態",
+		or_worktree_id: "工作目錄識別碼",
+		or_owner_id: "負責人識別碼",
+		or_operation_id: "操作",
+		or_task_id: "任務",
+		or_session_id: "工作階段",
+		or_link_operation: "操作",
+		or_link_execution: "執行",
+		or_link_worktree: "工作目錄"
+	}
+};
+function observedText(t, key, values = {}) {
+	const supplied = t(key, values);
+	if (supplied !== key) return supplied;
+	return (observedStrings[locale][key] ?? observedStrings.en[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
+}
+//#endregion
 //#region src/workspace-nav.js
-function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }) {
+function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, caps = () => null }) {
 	const key = `batc.tree.${namespace}`;
 	let saved = [], hasPreference = false;
 	try {
@@ -39319,7 +39432,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 	} catch {}
 	const expanded = new Set(Array.isArray(saved) ? saved : []), projects = new Map();
 	let pmWorkspace = null, bindingSource = false, bindingKnown = false, bindingPartial = false, globalTree = false, contextVersion = 0;
-	let roots = [], disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
+	let roots = [], catalogKnown = false, disposed = false, serial = Promise.resolve(), selected = location.hash, revealProject = null;
 	const status = h("div", {
 		class: "workspace-tree-status",
 		role: "status"
@@ -39346,14 +39459,17 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		"aria-label": t("workspace_search"),
 		placeholder: t("ui_search_work")
 	});
+	const createProject = h("a", {
+		href: "#/projects",
+		title: t("workspace_manage"),
+		"aria-label": t("workspace_manage"),
+		"data-project-create": "",
+		hidden: true
+	}, "+");
 	const box = h("aside", {
 		class: "workspace-nav",
 		"aria-label": t("workspace_navigation")
-	}, h("div", { class: "workspace-nav-heading" }, h("strong", {}, t("nav_projects")), h("a", {
-		href: "#/projects",
-		title: t("workspace_manage"),
-		"aria-label": t("workspace_manage")
-	}, "+")), searchField(search, { class: "workspace-search" }), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
+	}, h("div", { class: "workspace-nav-heading" }, h("strong", {}, t("nav_projects")), createProject), searchField(search, { class: "workspace-search" }), status, bindingNote, h("div", { class: "workspace-tree-scroll" }, tree, sessionTree), h("div", { class: "workspace-nav-footer" }, h("a", { href: "#/sessions" }, t("workspace_all_sessions")), h("a", { href: "#/projects" }, t("workspace_manage"))));
 	const alive = () => {
 		guard();
 		if (disposed) throw new Error("Navigation disposed");
@@ -39417,6 +39533,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 	].map(encodeURIComponent).join("/")}`, item.title || item.branch || (item.action ? actionLabel(item.action) : item.id), workActivity(item), item.reading);
 	const render = () => {
 		if (disposed) return;
+		createProject.hidden = !catalogKnown || !caps()?.scopes?.includes("manage") || caps()?.actions?.find((row) => row.action === "project.create")?.allowed === false;
 		const focus = tree.contains(document.activeElement) ? document.activeElement?.dataset.treeKey : null;
 		const query = search.value.trim().toLocaleLowerCase();
 		const matches = (text) => !query || String(text || "").toLocaleLowerCase().includes(query);
@@ -39456,7 +39573,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		const bound = pmWorkspace && !globalTree;
 		bindingNote.hidden = !bound || !bindingPartial;
 		tree.dataset.bindingState = bound ? bindingKnown ? roots.length ? "available" : "empty" : "unknown" : "global";
-		if (!nodes.length && (query || !bound)) tree.append(h("p", { class: "muted workspace-tree-hint" }, t(bound && !bindingKnown ? "ui_work_links_unavailable" : query ? "workspace_no_match" : "no_projects")));
+		if (!nodes.length && (query || !bound && catalogKnown)) tree.append(h("p", { class: "muted workspace-tree-hint" }, t(bound && !bindingKnown ? "ui_work_links_unavailable" : !bound && !catalogKnown ? "ui_work_unavailable" : query ? "workspace_no_match" : "no_projects")));
 		if (focus) [...tree.querySelectorAll("[data-tree-key]")].find((node) => node.dataset.treeKey === focus)?.focus({ preventScroll: true });
 		filterSessions();
 	};
@@ -39468,6 +39585,18 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 		}
 	};
 	let catalogRows = null;
+	const showReadError = (error) => {
+		const detail = error ? errorBox(error) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
+		const label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
+		status.replaceChildren(h("div", {
+			class: "workspace-read-error",
+			"data-work-read-error": ""
+		}, icon("circle-alert", { size: 20 }), h("details", {}, h("summary", { title: detail.textContent }, label), detail, roots.length ? h("p", { class: "muted" }, t("workspace_stale")) : null), iconButton({
+			icon: "refresh-cw",
+			label: t("ui_retry"),
+			onClick: () => refresh().catch(() => {})
+		})));
+	};
 	const refresh = ({ catalog = true } = {}) => {
 		const version = contextVersion;
 		const run = serial.catch(() => {}).then(async () => {
@@ -39480,7 +39609,13 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				if (catalog || catalogRows === null) {
 					const data = await api("GET", "/projects");
 					current();
-					catalogRows = data.projects || [];
+					if (!Array.isArray(data.projects)) {
+						catalogRows = [];
+						catalogKnown = false;
+					} else {
+						catalogRows = data.projects;
+						catalogKnown = true;
+					}
 				}
 				const clearCounts = (rows) => rows.map((row) => ({
 					...row,
@@ -39542,7 +39677,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 					current();
 					projects.set(id, detail);
 				}
-				if (!roots.length && !sessionsLoaded && [
+				if (catalogKnown && !roots.length && !sessionsLoaded && [
 					"#/home",
 					"#/sessions",
 					"#/",
@@ -39569,9 +39704,11 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 				}
 				status.replaceChildren();
 				render();
+				if (!catalogKnown) showReadError(null);
 			} catch (error) {
 				if (version !== contextVersion || disposed) return;
 				alive();
+				catalogKnown = false;
 				if ([403, 404].includes(error.status)) {
 					catalogRows = null;
 					roots = [];
@@ -39580,17 +39717,9 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 					projects.clear();
 					sessionRows.replaceChildren();
 					more.hidden = true;
-					render();
 				}
-				const detail = errorBox(error), label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
-				status.replaceChildren(h("div", {
-					class: "workspace-read-error",
-					"data-work-read-error": ""
-				}, icon("circle-alert", { size: 20 }), h("details", {}, h("summary", { title: detail.textContent }, label), detail, roots.length ? h("p", { class: "muted" }, t("workspace_stale")) : null), iconButton({
-					icon: "refresh-cw",
-					label: t("ui_retry"),
-					onClick: () => refresh().catch(() => {})
-				})));
+				render();
+				showReadError(error);
 				throw error;
 			}
 		});
@@ -39654,6 +39783,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox }
 			globalTree = all;
 			contextVersion++;
 			catalogRows = null;
+			catalogKnown = false;
 			roots = [];
 			bindingKnown = false;
 			bindingPartial = false;
@@ -43083,7 +43213,7 @@ var admissionRefusals$3 = {
 	WORK_ITEM_ARCHIVED: 409,
 	WRONG_PROJECT: 409
 };
-function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, onCreated, errorBox, opStatus }) {
+function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, errorBox, opStatus }) {
 	const project = kind === "project", action = project ? "project.create" : "work_item.create";
 	const target = project ? {} : { project_id: projectId }, key = `batc.create.${namespace}.${kind}.${projectId || "root"}`;
 	const primary = project ? "name" : "title", fields = new Map(), choices = new Map();
@@ -43258,15 +43388,16 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 			} catch {}
 		}
 	};
-	const create = h("button", {
-		class: "primary",
-		type: "submit"
-	}, t(project ? "add_project" : "add_item"));
-	const review = h("button", {
-		class: "secondary",
-		type: "button",
+	const create = button({
+		variant: "primary",
+		type: "submit",
+		label: t(project ? "add_project" : "add_item")
+	});
+	const review = button({
+		variant: "secondary",
 		hidden: true,
-		onclick: () => {
+		label: t("create_edit_request"),
+		onClick: () => {
 			guard();
 			if (busy || !(terminal$7(operation) || saved.intent?.initialAdmissionRefused)) return;
 			try {
@@ -43284,7 +43415,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				status.replaceChildren(errorBox(error));
 			}
 		}
-	}, t("create_edit_request"));
+	});
 	const form = h("form", {
 		class: "panel",
 		"data-create-record": kind,
@@ -43292,7 +43423,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 			event.preventDefault();
 			run();
 		}
-	}, scope, compact, advanced, h("div", { class: "actions" }, create, review, unsaved), status, receipt);
+	}, showScope ? scope : null, compact, advanced, h("div", { class: "actions" }, create, review, unsaved), status, receipt);
 	function update() {
 		for (const input of fields.values()) input.disabled = !allowed || !permitted() || busy || !!saved.intent || damaged;
 		create.disabled = !allowed || !permitted() || busy || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
@@ -45171,9 +45302,10 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		message.replaceChildren();
 		update();
 	};
-	const apply = h("button", {
-		class: "secondary",
-		onclick: async () => {
+	const apply = button({
+		variant: "secondary",
+		label: t("task_pause"),
+		onClick: async () => {
 			if (!live() || busy || refreshing || readFailed || !writable() || saved.intent?.operation_id || saved.intent && (!saved.intent.request || saved.intent.refused)) return;
 			const previous = saved;
 			if (!saved.intent) saved = {
@@ -45230,14 +45362,16 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 				showError(e);
 			}
 		}
-	}, t("task_pause"));
-	const check = h("button", {
-		class: "secondary",
-		onclick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)
-	}, t("permissions_check"));
-	const another = h("button", {
-		class: "secondary",
-		onclick: () => {
+	});
+	const check = button({
+		variant: "secondary",
+		label: t("permissions_check"),
+		onClick: () => (onSettled ? onSettled() : refresh(true)).catch(showError)
+	});
+	const another = button({
+		variant: "secondary",
+		label: t("task_control_new"),
+		onClick: () => {
 			if (!live() || busy || refreshing || readFailed || !writable() || !(terminal$6(operation) || saved.intent?.refused)) return;
 			const previous = saved;
 			saved = { abort: false };
@@ -45253,8 +45387,8 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 			message.replaceChildren();
 			update();
 		}
-	}, t("task_control_new"));
-	const abortLabel = h("label", { class: "muted" }, abort, " ", t("task_abort"));
+	});
+	const abortLabel = h("label", { class: "capture-choice muted" }, abort, " ", t("task_abort"));
 	abort.onchange = () => {
 		if (!live() || saved.intent || busy) {
 			abort.checked = saved.abort;
@@ -45268,22 +45402,25 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 		}
 		update();
 	};
+	const help = h("p", { class: "muted" }, t("task_control_help"));
 	const box = h("section", {
 		class: "panel",
 		"data-task-controls": ""
-	}, h("h2", {}, t("task_controls")), h("p", { class: "muted" }, t("task_control_help")), abortLabel, h("div", { class: "actions" }, apply, check, another), restriction, result, message);
+	}, h("h2", {}, t("task_controls")), help, abortLabel, h("div", { class: "actions" }, apply, check, another), restriction, result, message);
 	function update() {
 		const fixed = Boolean(saved.intent);
-		abortLabel.hidden = action() !== "task.pause";
+		const canOperate = permitted();
+		help.hidden = !canOperate;
+		abortLabel.hidden = !canOperate || action() !== "task.pause";
 		abort.disabled = fixed || busy;
-		apply.hidden = Boolean(saved.intent?.operation_id || saved.intent?.refused);
+		apply.hidden = !canOperate || Boolean(saved.intent?.operation_id || saved.intent?.refused);
 		apply.disabled = busy || Boolean(refreshing) || readFailed || !writable() || Boolean(fixed && !saved.intent.request);
 		apply.textContent = t(fixed ? "permissions_retry" : action() === "task.pause" ? "task_pause" : "task_resume");
 		check.hidden = !saved.intent?.operation_id;
 		check.disabled = busy || Boolean(refreshing);
-		another.hidden = !(terminal$6(operation) || saved.intent?.refused);
+		another.hidden = !canOperate || !(terminal$6(operation) || saved.intent?.refused);
 		another.disabled = busy || Boolean(refreshing) || readFailed || !writable();
-		restriction.textContent = writable() ? "" : t("task_control_unavailable");
+		restriction.textContent = writable() ? "" : observedText(t, !canOperate ? "or_readonly_task" : ["done", "failed"].includes(task()?.state) ? "or_work_ended" : "or_controls_unavailable");
 		result.replaceChildren();
 		if (fixed) {
 			result.append(h("p", {}, operation ? opStatus(operation) : t(saved.intent.refused ? "task_control_refused" : "permissions_unknown"), " ", ...saved.intent.operation_id ? [h("a", { href: `#/op/${saved.intent.operation_id}` }, t("permissions_details"))] : []), h("p", { class: "muted" }, t("task_control_fixed", { version: saved.intent.request?.preconditions.control_version ?? "?" })));
@@ -48836,107 +48973,6 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	};
 }
 //#endregion
-//#region src/observed-resource-strings.js
-var observedStrings = {
-	en: {
-		or_execution: "Execution",
-		or_worktree: "Worktree",
-		or_work: "Work",
-		or_owner: "Owner",
-		or_owner_task: "Managed task",
-		or_owner_operation: "Managed operation",
-		or_owner_registry: "Registered",
-		or_owner_manual: "Manual (read-only)",
-		or_latest: "Latest result",
-		or_sessions: "Sessions",
-		or_session: "Session",
-		or_open_session: "Open session",
-		or_review: "Review result",
-		or_details: "Details",
-		or_raw: "Raw record",
-		or_identity: "This identity is recorded. History does not grant writes.",
-		or_cleanup: "Cleanup needs a fresh preview of active work, undelivered results, reservations, and blockers.",
-		or_unverified: "Not verified",
-		or_verified: "Verified",
-		or_verification_reason: "Result unverified; dispatch acceptance does not verify the work.",
-		or_result_unknown: "No result evidence was returned.",
-		or_unavailable: "Could not read this result.",
-		or_cleanup_preview: "Preview cleanup",
-		or_host: "Host",
-		or_work_id: "Work ID",
-		or_owner_kind: "Owner kind",
-		or_dispatch: "Dispatch",
-		or_reason: "Reason",
-		or_pinned: "Source commit",
-		or_delivered: "Delivered commit",
-		or_pr: "PR #{n}",
-		or_path: "Path",
-		or_branch: "Branch",
-		or_actor: "Actor",
-		or_project: "Project",
-		or_state: "State",
-		or_worktree_id: "Worktree ID",
-		or_owner_id: "Owner ID",
-		or_operation_id: "Operation",
-		or_task_id: "Task",
-		or_session_id: "Session",
-		or_link_operation: "Operation",
-		or_link_execution: "Execution",
-		or_link_worktree: "Worktree"
-	},
-	"zh-TW": {
-		or_execution: "工作執行",
-		or_worktree: "工作目錄",
-		or_work: "工作",
-		or_owner: "負責人",
-		or_owner_task: "受管任務",
-		or_owner_operation: "受管操作",
-		or_owner_registry: "已登記",
-		or_owner_manual: "人工（唯讀）",
-		or_latest: "最新成果",
-		or_sessions: "工作階段",
-		or_session: "工作階段",
-		or_open_session: "開啟工作階段",
-		or_review: "審閱成果",
-		or_details: "詳細資訊",
-		or_raw: "原始紀錄",
-		or_identity: "這是已記錄的身分。歷程不代表可以寫入。",
-		or_cleanup: "整理前需要最新預覽，列出進行中的工作、尚未交付的成果、保留項目與阻擋原因。",
-		or_unverified: "尚未驗證",
-		or_verified: "已驗證",
-		or_verification_reason: "成果尚未驗證；派工已受理不代表工作已通過驗證。",
-		or_result_unknown: "這次讀取未提供成果證據。",
-		or_unavailable: "無法讀取這筆成果。",
-		or_cleanup_preview: "預覽整理",
-		or_host: "主機",
-		or_work_id: "工作識別碼",
-		or_owner_kind: "歸屬類型",
-		or_dispatch: "派工",
-		or_reason: "原因",
-		or_pinned: "來源提交",
-		or_delivered: "交付提交",
-		or_pr: "PR #{n}",
-		or_path: "路徑",
-		or_branch: "分支",
-		or_actor: "執行者",
-		or_project: "專案",
-		or_state: "狀態",
-		or_worktree_id: "工作目錄識別碼",
-		or_owner_id: "負責人識別碼",
-		or_operation_id: "操作",
-		or_task_id: "任務",
-		or_session_id: "工作階段",
-		or_link_operation: "操作",
-		or_link_execution: "執行",
-		or_link_worktree: "工作目錄"
-	}
-};
-function observedText(t, key, values = {}) {
-	const supplied = t(key, values);
-	if (supplied !== key) return supplied;
-	return (observedStrings[locale][key] ?? observedStrings.en[key] ?? key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
-}
-//#endregion
 //#region src/observed-resource.js
 var say = (key, values) => observedText(t, key, values);
 var text = (value) => typeof value === "string" ? value.trim() : "";
@@ -48994,13 +49030,24 @@ function sessionHref(session) {
 }
 function sessionRow$1(h, session) {
 	const observation = session?.observation || {};
-	const title = text(observation.title) || text(session?.title) || text(session?.host) || say("or_session");
+	const title = text(observation.title) || text(session?.title) || t("session_untitled");
 	const fresh = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale && !observation.gone_at && !["gone", "missing"].includes(observation.state?.enumeration) && observation.state?.lifecycle !== "ended";
 	const activity = fresh && observation.pending ? statusPill("asking_you") : fresh && observation.streaming === true ? statusPill("running") : fresh && observation.streaming === false ? statusPill("waiting") : null;
 	return h("div", {
 		class: "or-session",
 		"data-observed-session": ""
-	}, session?.host && session?.session_id ? h("a", { href: sessionHref(session) }, title) : h("span", {}, title), activity);
+	}, h("div", { class: "or-session-name" }, session?.host && session?.session_id ? h("a", { href: sessionHref(session) }, title) : h("span", {}, title), text(session?.host) ? h("span", {
+		class: "or-label",
+		"data-observed-session-host": ""
+	}, session.host) : null), activity);
+}
+function pauseReason(task) {
+	const event = list(task?.events).filter((row) => row.kind === "paused").sort((a, b) => at(b.created_at) - at(a.created_at))[0];
+	try {
+		return text((typeof event?.body === "string" ? JSON.parse(event.body) : event?.body)?.reason);
+	} catch {
+		return "";
+	}
 }
 function receipts(item) {
 	return list(item?.delivered_to).filter((row) => text(row.repository) && Number.isInteger(row.pull_number) && row.pull_number > 0).sort((a, b) => at(b.delivered_at) - at(a.delivered_at));
@@ -49132,19 +49179,12 @@ function renderExecution({ h, id, task, caps, namespace }) {
 	if (task?.host && task?.session_id) choices.push([say("or_open_session"), sessionHref(task)]);
 	if (caps?.artifacts?.capture?.managed_single_file === true) choices.push([say("or_review"), `#/artifact-review/task/${encodeURIComponent(id)}`]);
 	if (caps?.features?.cleanup_task === true) choices.push([say("or_cleanup_preview"), `#/cleanup/task/${encodeURIComponent(id)}`]);
-	const pause = statusPill([
-		true,
-		false,
-		0,
-		1
-	].includes(task?.paused) ? task.paused ? "stopped" : "in_progress" : "unknown");
-	pause.dataset.taskDispatch = "";
-	if ([
-		true,
-		false,
-		0,
-		1
-	].includes(task?.paused)) pause.textContent = t(task.paused ? "task_paused" : "task_dispatch_enabled");
+	const pause = task?.paused === true || task?.paused === 1 ? statusPill("stopped") : null;
+	if (pause) {
+		pause.dataset.taskDispatch = "";
+		pause.textContent = t("task_paused");
+	}
+	const reason = pause ? pauseReason(task) : "";
 	const delivery = task?.delivery, stage = delivery?.stage;
 	const resultPill = [
 		"merged",
@@ -49159,7 +49199,7 @@ function renderExecution({ h, id, task, caps, namespace }) {
 		title: text(task?.title) || text(task?.original_words).split("\n").find(Boolean) || text(task?.external_branch) || say("or_execution"),
 		meta: [task?.host, task?.external_branch].map(text).filter(Boolean).join(" · "),
 		actions: choices.slice(0, 2).map(([label, href], i) => actionLink(h, href, label, i ? "secondary" : "primary"))
-	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_owner"), say("or_owner_task")), fact(h, say("or_state"), statusPill(TASK_PILLS[task?.state] || "unknown")), fact(h, say("or_dispatch"), pause), fact(h, say("or_latest"), h("span", { class: "or-result" }, resultPill, stamp(delivery?.[stage]?.at))), detailsBlock(h("div", {}, pairs(h, [
+	}), sectionCard({ body: h("div", { class: "or-body" }, fact(h, say("or_owner"), say("or_owner_task")), fact(h, say("or_state"), statusPill(TASK_PILLS[task?.state] || "unknown")), pause ? fact(h, say("or_dispatch"), h("span", { class: "or-result" }, pause, reason ? h("span", { "data-observed-pause-reason": "" }, reason) : null)) : null, fact(h, say("or_latest"), h("span", { class: "or-result" }, resultPill, stamp(delivery?.[stage]?.at))), detailsBlock(h("div", {}, pairs(h, [
 		[say("or_task_id"), text(task?.task_id || id)],
 		[say("or_session_id"), text(task?.session_id)],
 		[say("or_project"), text(task?.project)],
@@ -54060,7 +54100,7 @@ async function change(out, action, target, params, pre, scope) {
 	return null;
 }
 function manageNote() {
-	return may("manage") ? null : h("p", { class: "note" }, t("needs_manage_access"));
+	return may("manage") ? null : h("p", { class: "note" }, observedText(t, "or_readonly_project"));
 }
 function indent(el, depth) {
 	el.style.setProperty("--depth", String(depth));
@@ -54070,13 +54110,24 @@ function stateChip(c) {
 	return statusPill(workStatusKey(c?.display_state));
 }
 function counts(c) {
+	const known = (value) => Number.isSafeInteger(value) && value >= 0;
+	const complete = c?.partial !== true && c?.complete !== false;
 	return [
-		c.doing ? h("span", { class: "ui-pill tone-info" }, `${t("ui_status_in_progress")} ${c.doing}`) : null,
-		c.awaiting_approval ? h("span", { class: "ui-pill tone-review" }, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
-		h("span", { class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : "") }, t("wi_done_of", {
+		complete && known(c?.doing) && c.doing > 0 ? h("span", {
+			class: "ui-pill tone-info",
+			"data-project-count": "doing"
+		}, `${t("ui_status_in_progress")} ${c.doing}`) : null,
+		complete && known(c?.awaiting_approval) && c.awaiting_approval > 0 ? h("span", {
+			class: "ui-pill tone-review",
+			"data-project-count": "review"
+		}, `${t("ui_status_in_review")} ${c.awaiting_approval}`) : null,
+		complete && known(c?.done) && known(c?.total) && c.done <= c.total ? h("span", {
+			class: "ui-pill" + (c.total && c.done === c.total ? " tone-ok" : ""),
+			"data-project-count": "completion"
+		}, t("wi_done_of", {
 			done: c.done,
 			total: c.total
-		}))
+		})) : null
 	];
 }
 function orderButtons(sibs, i, key, run) {
@@ -54355,8 +54406,14 @@ async function viewProject(main, pid) {
 		generation
 	};
 	let draft = null;
-	const head = h("div", { class: "panel" });
-	const items = h("div", { class: "panel" });
+	let request = 0, prepared = null, currentEditor = null;
+	let workEditors = new Map();
+	const workDrafts = new Map();
+	const head = h("div", {
+		class: "panel",
+		"data-project-summary": ""
+	});
+	const items = h("div", { "data-project-items": "" });
 	const work = h("section", {
 		class: "panel",
 		hidden: true,
@@ -54374,27 +54431,85 @@ async function viewProject(main, pid) {
 		namespace: connection.namespace,
 		kind: "work_item",
 		projectId: pid,
+		showScope: false,
 		errorBox,
 		opStatus,
 		onCreated: async () => render()
 	});
-	main.append(manageNote() || "", out, head, work, h("h2", {}, t("work_items")), create.box, items, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
+	const itemCard = sectionCard({
+		title: t("work_items"),
+		actions: [filter],
+		body: h("div", { class: "or-item-list" }, create.box, items, archived)
+	});
+	itemCard.dataset.projectItemCard = "";
+	itemCard.hidden = true;
+	create.box.hidden = true;
+	main.append(manageNote() || "", out, head, work, itemCard);
+	const rememberEditors = () => {
+		if (currentEditor && !currentEditor.drawer.box.hidden) draft = currentEditor.values();
+		for (const [id, editor] of workEditors) if (!editor.drawer.box.hidden) workDrafts.set(id, {
+			child: editor.child.value,
+			branch: editor.branch.value
+		});
+	};
+	const withdraw = (error) => {
+		rememberEditors();
+		workEditors.clear();
+		currentEditor = null;
+		prepared = null;
+		request++;
+		create.setContext({
+			rows: [],
+			active: false
+		});
+		create.box.hidden = true;
+		fill(work);
+		work.hidden = true;
+		fill(items);
+		fill(archived);
+		fill(out);
+		itemCard.hidden = true;
+		fill(head, errorBox(error));
+		freshPage();
+	};
+	const readProject = async () => {
+		const mine = ++request;
+		try {
+			const data = await api("GET", `/projects/${encodeURIComponent(pid)}${showArchived.checked ? "?include_archived=true" : ""}`);
+			assertView(connection);
+			if (mine !== request) return null;
+			if (data.project?.project_id !== pid) throw new Error(t("workspace_work_missing"));
+			return data;
+		} catch (error) {
+			if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request) return null;
+			withdraw(error);
+			throw error;
+		}
+	};
+	const prepare = async () => {
+		prepared = null;
+		const data = await readProject();
+		if (data) prepared = {
+			data,
+			request
+		};
+	};
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens;
-		let data;
-		try {
-			data = await api("GET", `/projects/${pid}${showArchived.checked ? "?include_archived=true" : ""}`);
-		} catch (e) {
-			fill(head, errorBox(e));
-			return;
-		}
-		if (!head.isConnected) return;
+		const data = prepared?.request === request ? prepared.data : await readProject().catch(() => null);
+		prepared = null;
+		if (!data || !head.isConnected) return;
 		if (holdRender(fromEvent, opens)) {
 			idleReload = () => render(true);
 			return;
 		}
+		rememberEditors();
+		workEditors = new Map();
 		freshPage();
 		const p = data.project;
+		itemCard.hidden = false;
+		create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed === false;
 		create.setContext({
 			rows: data.work_items,
 			name: p.name,
@@ -54412,19 +54527,22 @@ async function viewProject(main, pid) {
 		const f = {
 			name: h("input", {
 				value: v.name,
-				maxlength: 80
+				maxlength: 80,
+				"aria-label": t("name")
 			}),
-			description: h("textarea", {}, v.description),
+			description: h("textarea", { "aria-label": t("description") }, v.description),
 			repositories: h("input", {
 				value: v.repositories.join(", "),
-				placeholder: "owner/name, owner/name"
+				placeholder: "owner/name, owner/name",
+				"aria-label": observedText(t, "or_repositories")
 			}),
 			task_project: h("input", {
 				value: v.task_project,
-				placeholder: t("task_project")
+				placeholder: t("task_project"),
+				"aria-label": t("task_project")
 			})
 		};
-		const d = drawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description, h("label", {}, t("repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project, h("div", { class: "actions" }, h("button", {
+		const d = drawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description, h("label", {}, observedText(t, "or_repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project, h("div", { class: "actions" }, h("button", {
 			class: "primary",
 			onclick: async () => {
 				const params = {
@@ -54438,14 +54556,24 @@ async function viewProject(main, pid) {
 				if (ok || draft) render();
 			}
 		}, t("save"))));
+		d.box.dataset.projectEditor = "";
 		fill(head, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])), pageHeader({
 			title: p.name,
 			pill: p.archived ? chip(t("archived"), "warn") : null
-		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
+		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
 			class: "session-project-link",
 			href: `#/dispatch/${pid}`
-		}, t("dispatch_title")) : null, p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null), d.box, data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ", ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
-		if (draft) {
+		}, t("dispatch_title")) : null, p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null), may("manage") && !p.archived ? d.box : null, data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ", ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
+		currentEditor = {
+			drawer: d,
+			values: () => ({
+				name: f.name.value.trim(),
+				description: f.description.value,
+				repositories: f.repositories.value.split(/[\s,]+/).filter(Boolean),
+				task_project: f.task_project.value.trim()
+			})
+		};
+		if (draft && may("manage") && !p.archived) {
 			draft = null;
 			d.open();
 		}
@@ -54471,6 +54599,11 @@ async function viewProject(main, pid) {
 				placeholder: t("new_branch_item"),
 				maxlength: 120
 			});
+			const retained = workDrafts.get(w.work_item_id);
+			if (retained) {
+				child.value = retained.child;
+				branch.value = retained.branch;
+			}
 			const create = (input, params, scope) => h("button", {
 				class: "secondary",
 				onclick: async () => {
@@ -54490,6 +54623,16 @@ async function viewProject(main, pid) {
 					if (await change(rowMsg, "work_item.update", { work_item_id: w.work_item_id }, { archived: true }, { expected_version: w.version }, `wi.archive.${w.work_item_id}`) || STALE.includes(lastFailure)) render();
 				}
 			}, t("archive_with_children"))));
+			dr.box.dataset.workItemInspector = "";
+			workEditors.set(w.work_item_id, {
+				drawer: dr,
+				child,
+				branch
+			});
+			if (retained && may("manage") && !p.archived) {
+				workDrafts.delete(w.work_item_id);
+				dr.open();
+			}
 			const done = w.steps.filter((s) => s.done).length;
 			const row = indent(h("div", { class: "row tree" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
 				class: "title",
@@ -54509,22 +54652,24 @@ async function viewProject(main, pid) {
 				guard: () => assertView(connection),
 				editing: (active) => setEditing(editing + (active ? 1 : -1))
 			}));
-			rows.push(row, dr.box);
+			rows.push(row, may("manage") && !p.archived ? dr.box : null);
 			walk(w.children, depth + 1, w.work_item_id);
 		});
 		walk(data.work_items, 0, "");
-		fill(items, ...rows.length ? rows : [h("p", { class: "muted" }, t("no_items"))]);
+		fill(items, ...rows.length ? rows : showArchived.checked && data.archived?.length ? [] : [emptyState({
+			title: t("no_items"),
+			heading: "h3"
+		})]);
 		fill(archived, ...(data.archived || []).map((w) => h("div", { class: "row" }, h("div", { class: "grow" }, h("a", {
 			class: "muted",
 			href: `#/item/${w.work_item_id}`
-		}, w.title)), h("button", {
+		}, w.title)), may("manage") && !p.archived ? h("button", {
 			class: "secondary",
-			disabled: !may("manage") || p.archived,
 			onclick: async () => {
 				await change(out, "work_item.update", { work_item_id: w.work_item_id }, { archived: false }, { expected_version: w.version }, `wi.restore.${w.work_item_id}`);
 				render();
 			}
-		}, t("restore")))));
+		}, t("restore")) : null)));
 	};
 	showArchived.onchange = () => render();
 	await render();
@@ -54536,7 +54681,7 @@ async function viewProject(main, pid) {
 		"execution",
 		"session",
 		"integration"
-	]);
+	], prepare);
 }
 function linkTarget(l) {
 	const x = l.target || {};
@@ -55812,7 +55957,8 @@ function mountWorkspace(name) {
 				guard: () => assertConnection(connection),
 				onEvents,
 				namespace: state.namespace,
-				errorBox
+				errorBox,
+				caps: () => state.caps
 			});
 			document.getElementById("workspace").prepend(workspaceNav.box);
 			workspaceSidebar = setupSidebarResizer({

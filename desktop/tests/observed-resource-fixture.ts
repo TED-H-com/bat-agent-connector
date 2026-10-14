@@ -9,11 +9,23 @@ export const bareId = 'op_' + '2'.repeat(32);
 export const sessionTitle = 'Review the login copy';
 export const workTitle = 'Ship the login copy';
 
-function caps() {
-  return {actor: 'observed', scopes: ['observe', 'integrate'], api_version: 1, contract_version: '2026-10-08',
+export type ResourceFixtureState = {gone: boolean, seq: number, events: any[], empty?: boolean, error?: boolean, intent?: string,
+  resource?: any, task?: any, posts?: any[], hold?: () => Promise<void>, manage?: boolean, denyCreation?: boolean,
+  project?: any, workItems?: any[], archived?: any[], projectStatus?: number, listStatus?: number, listMissing?: boolean,
+  holdProject?: (archived: boolean) => Promise<void>};
+function caps(state: ResourceFixtureState) {
+  return {actor: 'observed', scopes: ['observe', 'integrate', ...(state.manage ? ['manage'] : [])], api_version: 1, contract_version: '2026-10-08',
     hosts: [{host: 'demo', writes: true}], repositories: [{repository: 'example/repository'}],
     features: {execution_delivery: {version: 1}, cleanup_task: true},
-    artifacts: {capture: {managed_single_file: true}}, actions: []};
+    artifacts: {capture: {managed_single_file: true}}, actions: ['project.create', 'work_item.create'].map(action => ({action, allowed: state.manage && !state.denyCreation}))};
+}
+export function project(extra = {}) {
+  return {project_id: projectId, name: 'Login', description: '', task_project: '', repositories: ['example/repository'],
+    children: [], version: 1, counts: {total: 0, done: 0, doing: 0, awaiting_approval: 0}, ...extra};
+}
+export function workItem(extra = {}) {
+  return {work_item_id: 'wi_' + 'a'.repeat(20), project_id: projectId, title: 'Check the login copy', version: 1,
+    completion: {display_state: 'todo'}, children: [], steps: [], ...extra};
 }
 export function work() {
   return {kind: 'execution', id: workId, host: 'demo', session_id: 'login-session', operation_id: opId,
@@ -32,7 +44,7 @@ export function tree(extra = {}) {
     ], work: [work()], ...extra};
 }
 
-export async function mount(page: any, locale: string, state: {gone: boolean, seq: number, events: any[], empty?: boolean, error?: boolean, intent?: string, resource?: any, task?: any, posts?: any[], hold?: () => Promise<void>}) {
+export async function mount(page: any, locale: string, state: ResourceFixtureState) {
   await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
   await page.addInitScript(() => sessionStorage.setItem('batc.dashboard.token', 'fixture-token'));
   await page.route('**/api/v1/**', async route => {
@@ -40,8 +52,8 @@ export async function mount(page: any, locale: string, state: {gone: boolean, se
     const path = url.pathname.slice('/api/v1'.length);
     const send = (status: number, data: unknown) => route.fulfill({status, json: data});
     if (route.request().method() !== 'GET') {state.posts?.push(path); return send(405, {error: {code: 'READ_ONLY', message: 'Read only'}});}
-    if (path === '/capabilities') return send(200, caps());
-    if (path === '/bootstrap') return send(200, {capabilities: caps(), sync: {version: 1, server_id: 'observed', principal_id: 'reader', checkpoint: {cursor: 0, token: 'zero'}}});
+    if (path === '/capabilities') return send(200, caps(state));
+    if (path === '/bootstrap') return send(200, {capabilities: caps(state), sync: {version: 1, server_id: 'observed', principal_id: 'reader', checkpoint: {cursor: 0, token: 'zero'}}});
     if (path === '/events') {
       const after = Number(url.searchParams.get('after') || 0);
       const events = state.events.filter(event => event.seq > after);
@@ -59,15 +71,20 @@ export async function mount(page: any, locale: string, state: {gone: boolean, se
     if (path === '/worktrees/' + unknownWt) return send(200, {worktree: {resource_id: unknownWt, host: 'demo', scope_status: 'current', intent_type: 'unknown'}});
     if (path === '/tasks/' + taskId) return state.gone || state.error ? send(state.error ? 403 : 404, {error: {code: state.error ? 'FORBIDDEN' : 'NOT_FOUND', message: 'Record unavailable'}}) : send(200, {task: state.task || {task_id: taskId, host: 'demo', session_id: 'login-session', project: 'Login copy',
       original_words: workTitle, state: state.empty ? null : 'running', paused: state.empty ? null : false, external_branch: 'login-copy', external_worktree_path: '/srv/login'}});
+    if (path === '/projects') {
+      if (state.listStatus) return send(state.listStatus, {error: {code: state.listStatus === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'List unavailable'}});
+      return send(200, state.listMissing ? {} : {projects: [state.project || project()], archived: []});
+    }
     if (path === '/projects/' + projectId) {
-      if (state.error) return send(403, {error: {code: 'FORBIDDEN', message: 'Record unavailable'}});
+      const status = state.projectStatus || (state.error ? 403 : 200);
       const bare = {...work(), id: bareId, operation_id: bareId, title: 'Notes without a session', session_id: '', delivered_to: []};
-      return send(200, {project: {project_id: projectId, name: 'Login', repositories: ['example/repository'], version: 1, counts: {total: 0, approved: 0}},
-        path: [], sub_projects: [], work_items: [], work: state.empty ? [] : [work(), bare], archived: []});
+      const record = structuredClone({project: state.project || project(), path: [], sub_projects: [], work_items: state.workItems || [],
+        work: state.empty ? [] : [work(), bare], archived: url.searchParams.has('include_archived') ? state.archived || [] : []});
+      if (state.holdProject) await state.holdProject(url.searchParams.has('include_archived'));
+      return status === 200 ? send(200, record) : send(status, {error: {code: status === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'Record unavailable'}});
     }
     if (path.endsWith('/history')) return send(200, {events: [], next_cursor: null, as_of: 1});
     if (path.endsWith('/relations')) return send(200, {relations: [], next_cursor: null, as_of: 1});
     return send(200, {sessions: [], operations: [], hosts: [], work_items: [], events: [], relations: [], next_cursor: null});
   });
 }
-

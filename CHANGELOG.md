@@ -67,6 +67,10 @@
   result. Record IDs, the raw record, and cleanup limits stay in Details.
   A delivery row keeps one review action; other links sit in More actions
   or in Details. Manual and unknown worktrees stay read-only.
+  Untitled sessions retain a readable label, and dispatch appears only when
+  paused. Read-only accounts do not see pause or project-creation controls.
+  Project withdrawal clears rows, counts and editors while retaining drafts;
+  unknown counts and unavailable project lists no longer appear as zero.
 
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;

@@ -43,14 +43,23 @@ function sessionHref(session) {
 }
 function sessionRow(h, session) {
   const observation = session?.observation || {};
-  const title = text(observation.title) || text(session?.title) || text(session?.host) || say('or_session');
+  const title = text(observation.title) || text(session?.title) || t('session_untitled');
   const fresh = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale
     && !observation.gone_at && !['gone', 'missing'].includes(observation.state?.enumeration) && observation.state?.lifecycle !== 'ended';
   const activity = fresh && observation.pending ? statusPill('asking_you')
     : fresh && observation.streaming === true ? statusPill('running')
     : fresh && observation.streaming === false ? statusPill('waiting') : null;
   return h('div', {class: 'or-session', 'data-observed-session': ''},
-    session?.host && session?.session_id ? h('a', {href: sessionHref(session)}, title) : h('span', {}, title), activity);
+    h('div', {class: 'or-session-name'},
+      session?.host && session?.session_id ? h('a', {href: sessionHref(session)}, title) : h('span', {}, title),
+      text(session?.host) ? h('span', {class: 'or-label', 'data-observed-session-host': ''}, session.host) : null), activity);
+}
+function pauseReason(task) {
+  const event = list(task?.events).filter(row => row.kind === 'paused').sort((a, b) => at(b.created_at) - at(a.created_at))[0];
+  try {
+    const body = typeof event?.body === 'string' ? JSON.parse(event.body) : event?.body;
+    return text(body?.reason);
+  } catch {return '';}
 }
 function receipts(item) {
   return list(item?.delivered_to).filter(row => text(row.repository) && Number.isInteger(row.pull_number) && row.pull_number > 0)
@@ -149,9 +158,9 @@ function renderExecution({h, id, task, caps, namespace}) {
   if (task?.host && task?.session_id) choices.push([say('or_open_session'), sessionHref(task)]);
   if (caps?.artifacts?.capture?.managed_single_file === true) choices.push([say('or_review'), `#/artifact-review/task/${encodeURIComponent(id)}`]);
   if (caps?.features?.cleanup_task === true) choices.push([say('or_cleanup_preview'), `#/cleanup/task/${encodeURIComponent(id)}`]);
-  const pause = statusPill([true, false, 0, 1].includes(task?.paused) ? task.paused ? 'stopped' : 'in_progress' : 'unknown');
-  pause.dataset.taskDispatch = '';
-  if ([true, false, 0, 1].includes(task?.paused)) pause.textContent = t(task.paused ? 'task_paused' : 'task_dispatch_enabled');
+  const pause = task?.paused === true || task?.paused === 1 ? statusPill('stopped') : null;
+  if (pause) {pause.dataset.taskDispatch = ''; pause.textContent = t('task_paused');}
+  const reason = pause ? pauseReason(task) : '';
   const delivery = task?.delivery, stage = delivery?.stage;
   const resultPill = ['merged', 'deployed', 'adopted'].includes(stage) ? statusPill(stage)
     : statusPill(stage === 'verified' ? 'accepted' : 'unknown');
@@ -162,7 +171,8 @@ function renderExecution({h, id, task, caps, namespace}) {
   sectionCard({body: h('div', {class: 'or-body'},
     fact(h, say('or_owner'), say('or_owner_task')),
     fact(h, say('or_state'), statusPill(TASK_PILLS[task?.state] || 'unknown')),
-    fact(h, say('or_dispatch'), pause),
+    pause ? fact(h, say('or_dispatch'), h('span', {class: 'or-result'}, pause,
+      reason ? h('span', {'data-observed-pause-reason': ''}, reason) : null)) : null,
     fact(h, say('or_latest'), h('span', {class: 'or-result'}, resultPill, stamp(delivery?.[stage]?.at))),
     detailsBlock(h('div', {}, pairs(h, [
       [say('or_task_id'), text(task?.task_id || id)], [say('or_session_id'), text(task?.session_id)],

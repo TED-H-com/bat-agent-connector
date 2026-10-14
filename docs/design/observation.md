@@ -411,7 +411,12 @@ The latest worktree result uses returned work and delivery receipt times. A reco
 PR receipt is distinct from result verification; dispatch acceptance cannot establish
 completion. Task delivery pills use the journal's recorded delivery stage, independently
 of dispatch state. Missing evidence is Unknown. Related sessions use their observed
-title or host, with activity pills only for fresh running/waiting observations.
+title or the shared untitled label, with host metadata on its own line and
+activity pills only for fresh running/waiting observations. The dispatch row
+appears only while paused; a reason is shown only when the returned pause event
+contains one. Accounts without the existing control grant see a plain read-only
+explanation instead of pause/resume entry points; original-operation readback
+and frozen requests remain available under their existing rules.
 
 One collapsed Details holds identity, path, source/receipt commits, navigation links
 and cleanup limits; Raw record is separately collapsed within it. Summary actions
@@ -421,6 +426,17 @@ Details preferences are scoped to the connection namespace and resource identity
 A withdrawn read clears summary rows and Details together; view/request guards
 reject late responses. Existing task controls, durable requests and recovery keys
 remain owned by their original controller module.
+
+The project detail page removes work rows, counts and editors when its source
+read fails, including during editing. Request/view guards reject older responses;
+private project, child-item and creation drafts survive source recovery. Project
+IDs do not repeat above the creation form. Read-only accounts do not see creation,
+dispatch or edit entry points. Counts require complete, numeric source evidence;
+an absent or partial total has no completion chip. The archive checkbox sits on
+one line with its label inside the work-item card, which also owns its empty state.
+The sidebar requires a successful project list to claim an empty catalog. A
+missing list remains unknown without treating unrelated task reads as failed;
+API failures retain their existing refresh/checkpoint error handling.
 
 ## 必要前置條件、實際副作用與唯讀邊界
 
