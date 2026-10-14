@@ -99,7 +99,7 @@ function rowsFor(project: DemoProject) {
       source: {kind: 'issue_mapping', id: project.ids.issueMapping}, unknowns: {title: 'not_recorded', owner: 'not_recorded'}}),
     row(project, {row_id: ids.risk, type: 'risk', basis: 'explicit', title: text.risk, status: 'blocked', owner: project.ids.actor,
       source: {kind: 'governance', id: riskId()},
-      actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId}, required: {}}]}),
+      actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId, record_id: riskId()}, required: {}}]}),
     row(project, {row_id: ids.action, type: 'action', basis: 'explicit', title: text.action, status: 'in_progress', owner: project.ids.actor,
       source: {kind: 'follow_up', id: followId()}}),
     row(project, {...observed, row_id: ids.pull, source: {kind: 'finding', id: findings.pull.id}, finding: findings.pull.finding, unknowns: {title: 'not_recorded'}}),

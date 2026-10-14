@@ -1,3 +1,4 @@
+async function openRead(node:any) {await node.first().evaluate((el:Element)=>{for(let p=(el.tagName==='SUMMARY'?el.parentElement?.parentElement:el.parentElement);p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});await node.first().click();}
 import {test,expect,type Page} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {action,meetingFixture,mount,boot,openAction,reason,snapshotId} from './pm-meetings-fixture';
@@ -9,16 +10,16 @@ async function saveDraft(page:Page,kind='planning') {
     await editor.getByLabel('Delivery approach',{exact:true}).fill('Inspect the fixed change and review its result');
     await editor.getByLabel('Capacity and availability discussed',{exact:true}).fill('One developer can review this week');
   }else if(kind==='review'){
-    await editor.getByLabel('What the results mean for the Goal',{exact:true}).fill('Tests support the change; actual usage remains unknown');
+    await editor.getByLabel('Goal impact',{exact:true}).fill('Tests support the change; actual usage remains unknown');
     await editor.getByLabel('Feedback (one point per line)',{exact:true}).fill('The reset instructions are easier to follow');
     await editor.getByLabel('Next direction (one point per line)',{exact:true}).fill('Maintain the current direction and observe');
   }else{
     await editor.getByLabel('Process and collaboration observations (one per line)',{exact:true}).fill('Written handoffs helped avoid duplicate work');
-    await editor.getByLabel('What happened to previous improvements',{exact:true}).fill('There is no measured result yet');
+    await editor.getByLabel('Previous improvements',{exact:true}).fill('There is no measured result yet');
     await editor.getByLabel('If adopting no improvement, explain why',{exact:true}).fill('The current approach is useful; no new change is warranted');
   }
   await reason(page,'draft');await editor.getByRole('button',{name:'Save discussion draft',exact:true}).click();
-  await expect(page.getByRole('heading',{name:'Saved discussion draft',exact:true})).toBeVisible();
+  await expect(page.locator('summary').filter({hasText:'Saved discussion draft'})).toBeVisible();
 }
 async function saveNote(page:Page,waitSaved=true) {
   await openAction(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('We discussed results, uncertainty and the next direction together.');
@@ -33,7 +34,7 @@ async function complete(page:Page) {
 test('fixed source, Goal and quality stay in the meeting without tabs or writes',async({page})=>{
   const f=meetingFixture();await mount(page,f);
   await expect(page.locator('[data-pm-meetings]')).toContainText('Members regain access without losing their account');
-  await page.getByText('Fixed context: selected work and quality commitments',{exact:true}).click();
+  await openRead(page.getByText('Fixed context',{exact:true}));
   await expect(page.locator('[data-pm-meetings]')).toContainText('Relevant tests and actual behavior are checked');
   await expect(page.locator('[data-pm-meetings]')).toContainText('DoD and improvement effects are unassessed');
   await expect(page.getByRole('tab')).toHaveCount(0);expect(f.state.writes).toEqual([]);
@@ -46,7 +47,7 @@ for(const kind of ['planning','review','retro'])test(`${kind} draft and explicit
   if(kind==='review')expect(output.next_steps).toEqual(['Maintain the current direction and observe']);
   if(kind==='retro'){expect(output.no_improvement_rationale).toContain('no new change');expect(f.state.meetings[0].draft.document.follow_ups).toEqual([]);}
   const revision=f.state.meetings[0].draft.revision_id;await complete(page);
-  await expect(page.locator('[data-pm-meeting-completion]')).toContainText('Attendance and quality are not independently verified');
+  await expect(page.locator('[data-pm-meetings]')).toContainText('Attendance and quality are not independently verified');
   expect(f.state.writes.at(-1).body.params.draft_revision_id).toBe(revision);
   expect(f.state.writes.map((row:any)=>row.body.action)).toEqual(['pm.meeting.note','pm.meeting.draft','pm.meeting.complete']);
 });
@@ -56,7 +57,7 @@ test('a lost completion reply recovers the exact request after completed state a
   const original=structuredClone(f.state.writes.at(-1));await page.reload();await boot(page);
   await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
   expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(3);
-  await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
+  await page.locator('[data-pm-meeting-completion]').evaluate(el=>{for(let p=(el.tagName==='SUMMARY'?el.parentElement?.parentElement:el.parentElement);p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
 });
 test('saving a note preserves another open draft and requires an explicit version refresh',async({page})=>{
   const f=meetingFixture();await mount(page,f);await openAction(page,'draft');
@@ -64,7 +65,7 @@ test('saving a note preserves another open draft and requires an explicit versio
   await field.fill('Keep this unfinished reasoning');await saveNote(page);
   await expect(field).toBeVisible();await expect(field).toHaveValue('Keep this unfinished reasoning');
   await expect(editor.locator('button[type=submit]')).toBeDisabled();
-  await expect(page.locator('[data-pm-meetings]')).toContainText('Review updated meeting baseline');
+  await expect(page.locator('[data-pm-meetings]')).toContainText('Update baseline');
   expect(f.state.writes.map((row:any)=>row.body.action)).toEqual(['pm.meeting.note']);
 });
 test('current membership and designated owner govern completion even after reload',async({page})=>{
@@ -85,8 +86,8 @@ test('new source versions preserve typed text and fixed context until explicit u
   expect(f.state.meetings[0].context.document.sprint_version).toBe(4);expect(f.state.writes).toEqual([]);
   await openAction(page,'context.revise');await action(page,'context.revise').getByLabel('Saved project snapshot',{exact:true}).selectOption('pmsnap_'+'9'.repeat(32));
   await reason(page,'context.revise');
-  if(await page.getByRole('button',{name:'Review updated meeting baseline',exact:true}).isVisible())await page.getByRole('button',{name:'Review updated meeting baseline',exact:true}).click();
-  await openAction(page,'context.revise');await action(page,'context.revise').getByRole('button',{name:'Save new meeting context',exact:true}).click();
+  if(await page.getByRole('button',{name:'Update baseline',exact:true}).isVisible())await page.getByRole('button',{name:'Update baseline',exact:true}).click();
+  await openAction(page,'context.revise');await action(page,'context.revise').getByRole('button',{name:'Save context',exact:true}).click();
   expect(f.state.writes.at(-1).body.preconditions).toEqual({expected_version:1,expected_sprint_version:5});
   expect(f.state.meetings[0].context.document.snapshot_ref.snapshot_id).toBe('pmsnap_'+'9'.repeat(32));
 });
@@ -104,7 +105,7 @@ test('normal controls retain stable decision and follow-up IDs across reload',as
   await expect(draft.getByLabel('Responsible person',{exact:true})).toHaveValue('developer');
   const after=await page.evaluate(()=>Object.values(localStorage).find((value:any)=>value.includes('Check handoff quality')));expect(after).toBe(before);
   await draft.getByLabel('Process and collaboration observations (one per line)',{exact:true}).fill('Context questions repeated');
-  await draft.getByLabel('What happened to previous improvements',{exact:true}).fill('No prior measured improvement');await reason(page,'draft');
+  await draft.getByLabel('Previous improvements',{exact:true}).fill('No prior measured improvement');await reason(page,'draft');
   await draft.getByRole('button',{name:'Save discussion draft',exact:true}).click();
   const saved=f.state.meetings[0].draft.document;expect(saved.follow_ups[0]).toMatchObject({owner_actor:'developer',verification:'Review one real handoff'});
   expect(saved.follow_ups[0].id).toMatch(/^followup_[0-9a-f]{32}$/);expect(saved.decisions[0].id).toMatch(/^decision_[0-9a-f]{32}$/);
@@ -118,16 +119,16 @@ test('follow-up result is an unverified record on the original assignment',async
   await action(page,'follow_up.record').getByLabel('Result and remaining uncertainty',{exact:true}).fill('The handoff was reviewed; impact remains unmeasured');
   await reason(page,'follow_up.record');await action(page,'follow_up.record').getByRole('button',{name:'Record follow-up result',exact:true}).click();
   expect(f.state.writes[0].body.params).toMatchObject({follow_up_id:'handoff',status:'reported_done'});expect(f.state.writes[0].body.params).not.toHaveProperty('snapshot_id');
-  await page.getByText('Discussion and source history',{exact:true}).click();await page.getByText('#1 · developer',{exact:true}).click();
+  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Follow-up results',{exact:true}));await openRead(page.getByText('#1 · developer',{exact:true}));
   await expect(page.locator('[data-pm-meetings]')).toContainText('Reported done — unverified');
   expect(detail.completion.document.follow_ups[0].owner_actor).toBe('developer');
 });
 test('history follows cursors and a revoked history read clears previously visible facts',async({page})=>{
   const f=meetingFixture();f.state.moreNotes=true;f.state.pagedSnapshots=true;await mount(page,f);
   expect(f.state.reads).toContain('/pm/workspaces/'+'ws_'+'1'.repeat(32)+'/snapshots?after=10&limit=50');
-  await page.getByText('Discussion and source history',{exact:true}).click();await page.getByRole('button',{name:'More Discussion notes',exact:true}).click();
-  await page.getByText('#2 · developer',{exact:true}).click();await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
-  f.state.failRead='revoked';await page.getByRole('button',{name:'More Context revisions',exact:true}).click();
+  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Load more',exact:true}).click();
+  await openRead(page.getByText('#2 · developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
+  f.state.failRead='revoked';await openRead(page.getByText('Context revisions',{exact:true}));await page.getByText('Context revisions',{exact:true}).locator('..').getByRole('button',{name:'Load more',exact:true}).click();
   await expect(page.locator('[data-pm-meetings]')).toContainText('Workspace access removed');
   expect(await page.locator('[data-pm-meetings]').innerText()).not.toContain('Members regain access');expect(f.state.writes).toEqual([]);
 });
@@ -147,23 +148,23 @@ test('review outcomes outside a changed context remain visible until explicitly 
   detail.context.document.selected_items=[];await page.reload();await boot(page);await openAction(page,'draft');
   await expect(action(page,'draft').getByLabel('Observed result',{exact:true})).toHaveValue('Preserve the original result claim');
   await expect(action(page,'draft')).toContainText('Source outside the current context');await expect(action(page,'draft').locator('button[type=submit]')).toBeDisabled();
-  await page.getByRole('button',{name:'Review updated meeting baseline',exact:true}).click();await openAction(page,'draft');
+  await page.getByRole('button',{name:'Update baseline',exact:true}).click();await openAction(page,'draft');
   await expect(action(page,'draft').getByLabel('Observed result',{exact:true})).toHaveValue('Preserve the original result claim');
   await action(page,'draft').getByRole('button',{name:'Remove',exact:true}).click();await expect(action(page,'draft').getByLabel('Observed result',{exact:true})).toHaveCount(0);
   expect(f.state.writes).toHaveLength(0);
 });
 test('non-latest meeting selection survives reload with its original lost note request',async({page})=>{
   const f=meetingFixture(),first=f.state.meetings[0].meeting.meeting_id;f.addMeeting('retro','Later discussion');await mount(page,f);
-  await page.getByLabel('Meeting',{exact:true}).selectOption(first);await expect(page.getByRole('heading',{name:'Account recovery discussion · Draft',exact:true})).toBeVisible();
+  await page.getByLabel('Meeting',{exact:true}).selectOption(first);await expect(page.locator('[data-pm-meeting-selected]')).toHaveAttribute('data-pm-meeting-selected',first);
   await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();f.state.lost=true;await saveNote(page,false);await expect(action(page,'note')).toContainText('Reply unavailable');
   const original=structuredClone(f.state.writes[0]);await page.reload();await boot(page);await expect(page.getByLabel('Meeting',{exact:true})).toHaveValue(first);
   await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
 });
 test('zero cursor offers standalone history when detail budget includes no notes',async({page})=>{
   const f=meetingFixture();f.state.meetings[0].history_next_cursors.notes=0;await mount(page,f);
-  await page.getByText('Discussion and source history',{exact:true}).click();await page.getByRole('button',{name:'More Discussion notes',exact:true}).click();
+  await openRead(page.getByText('History',{exact:true}));await openRead(page.getByText('Discussion notes',{exact:true}));await page.getByRole('button',{name:'Load more',exact:true}).click();
   expect(f.state.reads.some((path:string)=>path.endsWith('/history/notes?after=0&limit=20'))).toBe(true);
-  await page.getByText('#2 · developer',{exact:true}).click();await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
+  await openRead(page.getByText('#2 · developer',{exact:true}));await expect(page.getByText('A second discussion note',{exact:true})).toBeVisible();
 });
 test('Review creation stays disabled before the Sprint has started',async({page})=>{
   const f=meetingFixture();f.state.sprints[0].started_at=null;f.state.sprints[0].status='planned';await mount(page,f);await openAction(page,'create');
@@ -199,3 +200,14 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`meeti
   const out=process.env.BATC_PM_MEETING_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
   await page.screenshot({path:`${out}/meeting-${locale}-${width}.png`,fullPage:true});
 });
+
+ test('saved decisions use their title and narrow context keeps identifiers in Details',async({page})=>{
+  const f=meetingFixture('review'), detail=f.state.meetings[0]; detail.meeting.draft_revision_id='pmmrev_'+'a'.repeat(32);
+  detail.draft={meeting_id:detail.meeting.meeting_id,revision_id:detail.meeting.draft_revision_id,document:{kind:'review',output:{goal_review:'Review recovery',outcomes:[],feedback:[],environment_changes:[],next_steps:[]},
+    decisions:[{id:'evidence',title:'Check recovery evidence',rationale:'Verify the result',source_refs:[]}],follow_ups:[],source_refs:[],unresolved_questions:[]}};
+  await page.setViewportSize({width:390,height:844}); await mount(page,f); await page.getByText('Saved discussion draft',{exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Check recovery evidence',exact:true})).toBeVisible();
+  await expect(page.locator('[data-pm-meetings] h4').filter({hasText:/^$/})).toHaveCount(0);
+  expect(await page.locator('[data-pm-meetings]').evaluate(el=>[...el.querySelectorAll('code')].every(node=>Boolean(node.closest('details'))))).toBe(true);
+  expect(f.state.writes).toEqual([]);
+ });

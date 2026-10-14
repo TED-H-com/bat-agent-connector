@@ -110,7 +110,8 @@ export async function mount(page:Page,f:ReturnType<typeof fixture>,{locale='en',
     const {pmStrings}=await import('/__follow_up_src/pm-strings.js');
     const {durableForm}=await import('/__follow_up_src/pm-workspace.js');
     const win=window as any;let caps=await win.followUpFixtureCaps();
-    const strings={...pmStrings[locale],...pmFollowUpStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[key,value])=>text.replaceAll('{'+key+'}',String(value)),strings[key]||key);
+    const {uiStrings}=await import('/__follow_up_src/ui/ui-strings.js');
+    const strings={...uiStrings[locale],...pmStrings[locale],...pmFollowUpStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[key,value])=>text.replaceAll('{'+key+'}',String(value)),strings[key]||key);
     const h=(tag:string,attrs:any={},...children:any[])=>{const node=document.createElement(tag);for(const[key,value]of Object.entries(attrs)){
       if(value==null||value===false)continue;if(key.startsWith('on'))node.addEventListener(key.slice(2),value as any);else node.setAttribute(key,value===true?'':String(value));}
       for(const child of children.flat())if(child!=null&&child!==false)node.append(child instanceof Node?child:String(child));return node;};

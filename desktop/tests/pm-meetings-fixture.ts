@@ -8,7 +8,7 @@ const actions=['create','context.revise','note','draft','complete','follow_up.re
 export const action=(page:Page,name:string)=>page.locator(`[data-pm-action="pm.meeting.${name}"]`);
 export function meetingFixture(kind='planning') {
   const binding={binding_id:'pmwb_'+'4'.repeat(32),work_item_id:'wi_'+'5'.repeat(20),plan_revision_id:'pmrev_'+'6'.repeat(32),
-    assignee:'owner',how:'Verify account recovery in my own worktree',requirement_ids:['account.recovery']};
+    title:'Verify account recovery',assignee:'owner',how:'Verify account recovery in my own worktree',requirement_ids:['account.recovery']};
   const sprint={workspace_id:workspaceId,sprint_id:sprintId,version:4,status:'active',started_at:'2026-10-11T10:00:00Z',
     definition:{title:'Reliable account recovery',owner_actor:'owner',developers:['owner','developer'],capacity_note:'One focused improvement'}};
   const snapshot={workspace_id:workspaceId,snapshot_id:snapshotId,title:'Account recovery snapshot',snapshot_digest:'b'.repeat(64),as_of:'2026-10-11T12:00:00Z',journal_cursor:40,
@@ -106,7 +106,8 @@ export async function boot(page:Page,locale='en') {
   await page.evaluate(async locale=>{
     const {workspaceMeetings}=await import('/__meeting_src/pm-meetings.js'),{durableForm}=await import('/__meeting_src/pm-workspace.js');
     const {pmMeetingStrings}=await import('/__meeting_src/pm-meetings-strings.js'),{pmStrings}=await import('/__meeting_src/pm-strings.js');
-    const strings={...pmStrings[locale],...pmMeetingStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[name,value])=>text.replaceAll('{'+name+'}',String(value)),strings[key]||key);
+    const {uiStrings}=await import('/__meeting_src/ui/ui-strings.js');
+    const strings={...uiStrings[locale],...pmStrings[locale],...pmMeetingStrings[locale]},t=(key:string,args:any={})=>Object.entries(args).reduce((text,[name,value])=>text.replaceAll('{'+name+'}',String(value)),strings[key]||key);
     const h=(tag:string,attrs:any={},...children:any[])=>{const el=document.createElement(tag);for(const [key,value]of Object.entries(attrs||{})){
       if(value===null||value===undefined||value===false)continue;if(key.startsWith('on'))el.addEventListener(key.slice(2),value as any);else el.setAttribute(key,value===true?'':String(value));
     }for(const child of children.flat()){if(child===null||child===undefined||child===false)continue;el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};

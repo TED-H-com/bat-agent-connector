@@ -1,3 +1,4 @@
+async function openRead(node:any) {await node.first().evaluate((el:Element)=>{for(let p=(el.tagName==='SUMMARY'?el.parentElement?.parentElement:el.parentElement);p;p=p.parentElement)if(p instanceof HTMLDetailsElement)p.open=true;});await node.first().click();}
 import {test, expect, type Page} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {action, governanceFixture, mount, boot, openAction, reason, snapshotId, proposedId, assumptionId, adoptionId} from './pm-governance-fixture';
@@ -19,9 +20,9 @@ async function newFinding(page: Page) {
 test('attention list keeps unknown verification and source status without tabs or open blank forms', async ({page}) => {
   const f = governanceFixture(); await mount(page, f);
   await expect(view(page).getByRole('tab')).toHaveCount(0);
-  await expect(view(page)).toContainText('Verification is unassessed');
+  await expect(view(page)).toContainText('A reported resolution does not verify delivery');
   await expect(action(page, 'record')).toBeHidden(); await expect(action(page, 'revise')).toBeHidden();
-  await page.locator('[data-pm-governance-detail]').getByText('Fixed sources', {exact: true}).click();
+  await openRead(page.locator('[data-pm-governance-detail]').getByText('Fixed sources', {exact: true}));
   await expect(page.locator('[data-pm-governance-detail]')).toContainText('Agent assumption');
   await expect(view(page)).toContainText('Not scheduled'); expect(f.state.writes).toEqual([]);
 });
@@ -40,7 +41,7 @@ test('revision preserves original sources and reports resolution without asserti
   await expect(editor.getByRole('checkbox').first()).toBeChecked(); await expect(editor.getByRole('checkbox').first()).toBeDisabled();
   await editor.getByLabel('Management status', {exact: true}).selectOption('reported_resolved'); await reason(page, 'revise');
   await editor.getByRole('button', {name: 'Save finding revision', exact: true}).click();
-  await expect(view(page)).toContainText('Reported resolved · unassessed'); await expect(view(page)).toContainText('Verification is unassessed');
+  await expect(view(page)).toContainText('Reported resolved'); await expect(view(page)).toContainText('A reported resolution does not verify delivery');
   expect(f.state.writes[0].body.params.source_refs).toEqual([{kind: 'plan_input', id: assumptionId}]);
   expect(f.state.writes[0].body.params).not.toHaveProperty('snapshot_id'); expect(f.state.writes[0].body.preconditions).toEqual({expected_version: 1});
 });
@@ -55,18 +56,18 @@ test('direction decision keeps exact proposal and scope adoption separate', asyn
 test('actual adoption requires reading the matching original operation', async ({page}) => {
   const f = governanceFixture(); f.state.records[1].revision.document.decision = {disposition: 'adopted_direction', rationale: 'Use existing provider', recorded_by: 'owner'};
   await mount(page, f); await selectChange(page, f); await reason(page, 'adoption.link'); const editor = action(page, 'adoption.link');
-  await editor.getByLabel('Successful plan adoption operation ID', {exact: true}).fill(adoptionId);
+  await editor.getByLabel('Adoption operation', {exact: true}).fill(adoptionId);
   await expect(editor.getByRole('button', {name: 'Link verified adoption', exact: true})).toBeDisabled();
   await editor.getByRole('button', {name: 'Read original adoption', exact: true}).click();
   await editor.getByRole('button', {name: 'Link verified adoption', exact: true}).click();
-  await expect(page.locator('[data-pm-governance-detail]')).toContainText('Historical adoption verified');
+  await expect(page.locator('[data-pm-governance-detail]')).toContainText('Historical');
   expect(f.state.writes[0].body.params.adoption_operation_id).toBe(adoptionId);
   expect(f.state.writes.map((row: any) => row.body.action)).toEqual(['pm.governance.adoption.link']);
 });
 test('mismatched adoption does not enable link', async ({page}) => {
   const f = governanceFixture(); f.state.records[1].revision.document.decision = {disposition: 'adopted_direction'}; f.state.adoptionMismatch = true;
   await mount(page, f); await selectChange(page, f); await reason(page, 'adoption.link'); const editor = action(page, 'adoption.link');
-  await editor.getByLabel('Successful plan adoption operation ID', {exact: true}).fill(adoptionId); await editor.getByRole('button', {name: 'Read original adoption', exact: true}).click();
+  await editor.getByLabel('Adoption operation', {exact: true}).fill(adoptionId); await editor.getByRole('button', {name: 'Read original adoption', exact: true}).click();
   await expect(editor).toContainText('does not prove adoption'); await expect(editor.getByRole('button', {name: 'Link verified adoption', exact: true})).toBeDisabled(); expect(f.state.writes).toEqual([]);
 });
 test('lost decision reply preserves key and original version across changed state and reload', async ({page}) => {
@@ -120,13 +121,13 @@ test('whole-record pages consume invisible sequences and do not treat incomplete
 test('history pages preserve old text and stop on source access loss', async ({page}) => {
   const f = governanceFixture(), rid = f.state.records[0].record.record_id; f.state.historyPageSize = 1;
   f.state.history[rid].push({...structuredClone(f.state.history[rid][0]), version: 2, sequence: 2, document: {...f.state.history[rid][0].document, rationale: 'Earlier explicit decision'}});
-  await mount(page, f); await page.getByText('Finding and decision history', {exact: true}).click();
-  await page.getByRole('button', {name: 'More history', exact: true}).click(); await page.getByText('#2 · owner · Finding recorded', {exact: true}).click();
+  await mount(page, f); await openRead(page.getByText('History', {exact: true}));
+  await page.getByRole('button', {name: 'More history', exact: true}).click(); await openRead(page.getByText('#2 · owner · Finding recorded', {exact: true}));
   await expect(view(page)).toContainText('Earlier explicit decision'); expect(f.state.writes).toEqual([]);
 });
 test('lazy history authorization failure removes previously shown facts', async ({page}) => {
   const f = governanceFixture(); await mount(page, f); f.state.failRead = true;
-  await page.getByText('Finding and decision history', {exact: true}).click(); await expect(view(page)).toContainText('Workspace access removed');
+  await openRead(page.getByText('History', {exact: true})); await expect(view(page)).toContainText('Workspace access removed');
   await expect(page.locator('[data-pm-governance-detail]')).toHaveCount(0); expect(f.state.writes).toEqual([]);
 });
 test('older delayed success cannot repopulate a newer failed view', async ({page}) => {
@@ -157,8 +158,8 @@ test('snapshot without adopted baseline keeps creation editable without inventin
 });
 test('new proposed plan must be inspected before recording and does not silently become adopted', async ({page}) => {
   const f = governanceFixture(); await mount(page, f); const editor = await newFinding(page);
-  await editor.getByLabel('Kind', {exact: true}).selectOption('change'); await editor.getByText('Alternatives, proposed plan and related findings', {exact: true}).click();
-  await editor.getByLabel('Proposed plan revision ID (change proposals only)', {exact: true}).fill(proposedId);
+  await editor.getByLabel('Kind', {exact: true}).selectOption('change'); await editor.getByText('Alternatives & related', {exact: true}).click();
+  await editor.getByLabel('Proposed plan version', {exact: true}).fill(proposedId);
   await expect(editor.getByRole('button', {name: 'Save finding', exact: true})).toBeDisabled(); await editor.getByRole('button', {name: 'Read proposed revision', exact: true}).click();
   await editor.getByRole('button', {name: 'Save finding', exact: true}).click(); expect(f.state.writes[0].body.params.proposed_revision_id).toBe(proposedId);
   expect(f.state.writes[0].body.params).not.toHaveProperty('scope_applied'); expect(f.state.writes[0].body.params).not.toHaveProperty('decision');
@@ -167,7 +168,7 @@ test('reported drift requires both observed evidence and fixed plan source plus 
   const f = governanceFixture(); await mount(page, f); const editor = await newFinding(page);
   await editor.getByLabel('Kind', {exact: true}).selectOption('drift'); await expect(editor).toContainText('an observed evidence fact');
   await expect(editor.getByRole('button', {name: 'Save finding', exact: true})).toBeDisabled();
-  await editor.getByText('Response, impact and intended review', {exact: true}).click(); await editor.getByLabel('Affected dimension', {exact: true}).selectOption('quality');
+  await editor.getByText('Response & impact', {exact: true}).click(); await editor.getByLabel('Affected dimension', {exact: true}).selectOption('quality');
   await editor.getByRole('checkbox', {name: /^Evidence ·/}).check(); await editor.getByRole('button', {name: 'Save finding', exact: true}).click();
   expect(f.state.writes[0].body.params.dimension).toBe('quality'); expect(f.state.writes[0].body.params.source_refs.map((row: any) => row.kind)).toEqual(['plan_input', 'evidence']);
 });
@@ -189,7 +190,7 @@ test('focused unsent draft survives an unchanged refresh', async ({page}) => {
 });
 for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) test(`governance layout ${locale} ${width}`, async ({page}, info) => {
   const f = governanceFixture(); await page.setViewportSize({width, height: 900}); await mount(page, f, locale);
-  await expect(view(page).getByRole('heading', {level: 2})).toHaveText(locale === 'en' ? 'Risks, changes and decisions' : '風險、變更與決策');
+  await expect(view(page).locator('[data-pm-governance-record]')).toHaveText(locale === 'en' ? 'Record finding' : '記錄新事項');await expect(view(page).getByRole('heading', {level: 2})).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const out = process.env.BATC_PM_GOVERNANCE_SCREENSHOTS || info.outputPath('screenshots'); await mkdir(out, {recursive: true});
   await page.screenshot({path: `${out}/governance-${locale}-${width}.png`, fullPage: true});
@@ -201,3 +202,16 @@ for (const locale of ['en', 'zh-TW']) test(`expanded governance form at mobile w
   const out = process.env.BATC_PM_GOVERNANCE_SCREENSHOTS || info.outputPath('screenshots'); await mkdir(out, {recursive: true});
   await action(page, 'record').screenshot({path: `${out}/governance-form-${locale}-390.png`});
 });
+
+ test('record action focuses the finding form, chooses requirement names and formats review time', async ({page}) => {
+  const f=governanceFixture(); await mount(page,f);
+  await page.locator('[data-pm-governance-record]').click();
+  const editor=action(page,'record'); await expect(editor).toBeVisible(); await expect(editor.getByLabel('Kind',{exact:true})).toBeFocused();
+  await newFinding(page); const response=editor.locator('details').filter({has:page.getByText('Response & impact',{exact:true})}); await response.locator('summary').click();
+  await editor.getByRole('group',{name:'Affected requirements',exact:true}).getByRole('checkbox').check();
+  const when=editor.getByLabel('Review time',{exact:true}); await expect(when).toHaveAttribute('type','datetime-local'); await when.fill('2026-11-01T14:30');
+  await expect(editor.locator('time')).toBeVisible(); expect(f.state.writes).toEqual([]);
+  await editor.getByRole('button',{name:'Save finding',exact:true}).click();
+  expect(f.state.writes[0].body.params.affected_requirement_ids).toEqual(['account.recovery']);
+  expect(f.state.writes[0].body.params.review_at).toMatch(/^2026-11-01T.*Z$/);
+ });
