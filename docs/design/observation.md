@@ -414,9 +414,9 @@ of dispatch state. Missing evidence is Unknown. Related sessions use their obser
 title or the shared untitled label, with host metadata on its own line and
 activity pills only for fresh running/waiting observations. The dispatch row
 appears only while paused; a reason is shown only when the returned pause event
-contains one. Accounts without the existing control grant see a plain read-only
-explanation instead of pause/resume entry points; original-operation readback
-and frozen requests remain available under their existing rules.
+contains one. Accounts without the operate scope do not see the execution control
+card; paused state and its recorded reason remain in the summary. Controller
+readback and frozen requests retain their existing rules and original keys.
 
 One collapsed Details holds identity, path, source/receipt commits, navigation links
 and cleanup limits; Raw record is separately collapsed within it. Summary actions
@@ -426,6 +426,8 @@ Details preferences are scoped to the connection namespace and resource identity
 A withdrawn read clears summary rows and Details together; view/request guards
 reject late responses. Existing task controls, durable requests and recovery keys
 remain owned by their original controller module.
+Resource history and execution/session links are collapsed disclosures in one
+plain section beneath the summary, divided by hairlines rather than separate cards.
 
 The project detail page removes work rows, counts and editors when its source
 read fails, including during editing. Request/view guards reject older responses;
@@ -437,6 +439,12 @@ one line with its label inside the work-item card, which also owns its empty sta
 The sidebar requires a successful project list to claim an empty catalog. A
 missing list remains unknown without treating unrelated task reads as failed;
 API failures retain their existing refresh/checkpoint error handling.
+Unavailable project lists and project pages use the shared empty state, a short
+localized response reason, and Back to Projects for an open project. Only network
+and service-unavailable reads offer Retry. List withdrawal clears rows, counts and
+editors; an older successful response cannot restore them. Project and work-item
+overflow controls and reorder grips use shared ghost icon buttons, retain their
+names and keyboard alternatives, and have 44px touch targets.
 
 ## 必要前置條件、實際副作用與唯讀邊界
 

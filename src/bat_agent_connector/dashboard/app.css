@@ -2337,6 +2337,9 @@ body.pm-mode #main { padding: 0; }
 .or-archive-filter { margin: 0; color: var(--text-2); font-size: var(--fs-small); }
 .or-archive-filter input { width: 16px; height: 16px; min-height: 0; padding: 0; flex: none; }
 .or-note { margin: var(--space-2) 0 0; color: var(--text-2); font-size: var(--fs-small); }
+.or-observations > .ui-disclosure { margin: 0; padding-block: var(--space-3); border-bottom: 1px solid var(--line); }
+.or-observations > .ui-disclosure:first-child { border-top: 1px solid var(--line); }
+[data-project-unavailable] > p { color: var(--text-2); }
 .or-dl { display: grid; grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr); gap: var(--space-2) var(--space-3); margin: var(--space-2) 0; }
 .or-dl dt { color: var(--text-3); font-size: var(--fs-small); }
 .or-dl dd { margin: 0; min-width: 0; }

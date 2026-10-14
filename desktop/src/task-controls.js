@@ -82,6 +82,7 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
   function update() {
     const fixed = Boolean(saved.intent);
     const canOperate = permitted();
+    box.hidden = !(caps()?.scopes || []).includes("operate");
     help.hidden = !canOperate;
     abortLabel.hidden = !canOperate || action() !== "task.pause"; abort.disabled = fixed || busy;
     apply.hidden = !canOperate || Boolean(saved.intent?.operation_id || saved.intent?.refused);

@@ -43,14 +43,15 @@ for (const locale of ['en-US', 'zh-TW']) {
     expect(state.posts).toEqual([]);
   });
 
-  test(`4: accounts without control permission see one plain explanation ${locale}`, async ({page}) => {
+  test(`4: accounts without control permission have no pause entry point ${locale}`, async ({page}) => {
     await page.addInitScript(value => Object.defineProperty(navigator, 'language', {value}), locale);
     const state = await taskFixture(page, false, {scopes: ['observe']});
     const panel = page.locator('[data-task-controls]');
     for (const allowed of [true, false]) {
       state.scopes = allowed ? ['observe'] : ['observe', 'operate']; state.allowed = allowed;
       await page.goto('/dashboard/#/task/' + taskId); await page.reload();
-      await expect(panel).toContainText(zh ? '這個帳號可以檢視，但不能暫停派工。' : 'This account can view this work but cannot pause dispatch.');
+      if (allowed) await expect(panel).toBeHidden();
+      else await expect(panel).toContainText(zh ? '這個帳號可以檢視，但不能暫停派工。' : 'This account can view this work but cannot pause dispatch.');
       await expect(panel.getByRole('button', {name: zh ? '暫停派工' : 'Pause dispatch', exact: true})).toBeHidden();
       await expect(panel.getByRole('checkbox')).toBeHidden();
       expect(await panel.innerText()).not.toMatch(/\boperate\b|\bscope\b|權限/);
@@ -131,7 +132,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     await expect(page.locator('[data-project-work]')).toHaveCount(0, {timeout: 10000});
     await expect(page.locator('[data-project-count], [data-project-editor], [data-work-item-inspector]')).toHaveCount(0);
     await expect(items(page)).toBeHidden();
-    await expect(page.locator('#main .error')).toBeVisible();
+    await expect(summary(page).getByRole('heading', {name: zh ? '無法開啟專案' : 'Project unavailable', exact: true})).toBeVisible();
     expect(await page.locator('#main').innerText()).not.toContain('Check the login copy');
     state.projectStatus = 0; signal(state);
     await expect(editor.getByRole('textbox', {name: zh ? '名稱' : 'Name', exact: true})).toHaveValue('Unsent project name', {timeout: 10000});

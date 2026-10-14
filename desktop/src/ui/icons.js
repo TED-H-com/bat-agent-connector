@@ -46,6 +46,14 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 const paths = {
+  "grip-vertical": [
+    ["circle", {"cx": "9", "cy": "5", "r": "1"}],
+    ["circle", {"cx": "9", "cy": "12", "r": "1"}],
+    ["circle", {"cx": "9", "cy": "19", "r": "1"}],
+    ["circle", {"cx": "15", "cy": "5", "r": "1"}],
+    ["circle", {"cx": "15", "cy": "12", "r": "1"}],
+    ["circle", {"cx": "15", "cy": "19", "r": "1"}]
+  ],
   "pencil": [
     ["path", {"d": "m16 3 5 5L7 22H2v-5L16 3Z"}],
     ["path", {"d": "m14 5 5 5"}]

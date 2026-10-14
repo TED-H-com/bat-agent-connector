@@ -1,6 +1,6 @@
 import {t} from './i18n.js';
 import {actionLabel} from './global-labels.js';
-import {disclosure, iconButton, menu, pageHeader, sectionCard, statusPill} from './ui/components.js';
+import {button, disclosure, emptyState, iconButton, menu, pageHeader, sectionCard, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {observedText as textOf} from './observed-resource-strings.js';
 
@@ -22,6 +22,19 @@ function ownerKind(resource) {
 }
 function actionLink(h, href, label, variant) {
   return h('a', {class: `ui-button ${variant} ui-sm`, href}, label);
+}
+export function unavailableProject({h, error, collection = false, retry}) {
+  const denied = [401, 403].includes(error?.status), missing = error?.status === 404;
+  const recoverable = error?.status === 503 || error?.status === 0 || error?.name === 'TypeError';
+  const reason = denied ? 'or_project_denied' : missing ? (collection ? 'or_projects_missing' : 'or_project_missing') : 'or_connector_unavailable';
+  const actions = [];
+  if (!collection) actions.push(actionLink(h, '#/projects', say('or_back_projects'), 'secondary'));
+  if (recoverable && retry) actions.push(button({variant: 'secondary', label: t('retry'), onClick: retry}));
+  const state = emptyState({icon: 'circle-alert', title: say(collection ? 'or_projects_unavailable' : 'or_project_unavailable'),
+    text: say(reason),
+    action: actions.length ? h('div', {class: 'actions'}, ...actions) : null});
+  state.dataset.projectUnavailable = collection ? 'list' : 'project';
+  return state;
 }
 function pairs(h, rows) {
   const kept = rows.filter(([, value]) => value !== null && value !== undefined && value !== '');

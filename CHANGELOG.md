@@ -30,6 +30,9 @@
   paused. Read-only accounts do not see pause or project-creation controls.
   Project withdrawal clears rows, counts and editors while retaining drafts;
   unknown counts and unavailable project lists no longer appear as zero.
+  Unavailable projects explain the read failure with a return link and transient
+  failures offer Retry. Readers have no execution control card; resource history
+  uses plain disclosures, and project overflow/reorder controls use shared icons.
 
 - Sprints, AHP observations, work packages, package handoff, work batches and
   delivery receipts open on the answer: a status pill, one main action, and

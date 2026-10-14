@@ -41,7 +41,7 @@ try {
   await page.locator('[data-observation="relations"] > summary').click();
   await expect(page.getByRole("link", {name: fixture.execution_id, exact: true})).toBeVisible();
   await page.getByRole("link", {name: fixture.execution_id, exact: true}).click();
-  await expect(page.getByRole("heading", {name: "Execution", exact: true})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Fixture observation only", exact: true})).toBeVisible();
   await page.locator('[data-observation="relations"] > summary').click();
   await expect(page.getByRole("link", {name: "h1/sess-claude-0001", exact: true})).toBeVisible();
   await page.getByRole("link", {name: "h1/sess-claude-0001", exact: true}).click();

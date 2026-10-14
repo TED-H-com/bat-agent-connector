@@ -123,7 +123,8 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     const f=fixture(); f.state.manage=false; await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects');
     const project=page.locator('[data-create-record="project"]');
     await expect(project.getByLabel('New project name',{exact:true})).toBeDisabled();
-    await expect(project.getByRole('button',{name:'Add',exact:true})).toBeDisabled();
+    await expect(project.getByRole('button',{name:'Add',exact:true,includeHidden:true})).toBeDisabled();
+    await expect(project).toBeHidden();
     f.state.manage=true; f.state.archived=true; await page.reload(); await page.goto('/dashboard/#/project/'+pid);
     const item=page.locator('[data-create-record="work_item"]');
     await expect(item.getByLabel('New work item',{exact:true})).toBeDisabled();

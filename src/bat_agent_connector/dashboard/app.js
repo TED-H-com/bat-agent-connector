@@ -10430,6 +10430,38 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 var paths = {
+	"grip-vertical": [
+		["circle", {
+			"cx": "9",
+			"cy": "5",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "9",
+			"cy": "12",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "9",
+			"cy": "19",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "15",
+			"cy": "5",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "15",
+			"cy": "12",
+			"r": "1"
+		}],
+		["circle", {
+			"cx": "15",
+			"cy": "19",
+			"r": "1"
+		}]
+	],
 	"pencil": [["path", { "d": "m16 3 5 5L7 22H2v-5L16 3Z" }], ["path", { "d": "m14 5 5 5" }]],
 	"panel-right": [["rect", {
 		"x": "3",
@@ -40183,6 +40215,16 @@ var observedStrings = {
 		or_work_ended: "This work has ended.",
 		or_readonly_project: "This account can view projects; change the credential under Connection to edit.",
 		or_projects_unknown: "This read did not return a project list.",
+		or_project_unavailable: "Project unavailable",
+		or_projects_unavailable: "Projects unavailable",
+		or_project_denied: "This credential does not have access.",
+		or_project_missing: "The requested project could not be found.",
+		or_projects_missing: "The project list could not be found.",
+		or_connector_unavailable: "Connector is unavailable.",
+		or_back_projects: "Back to Projects",
+		or_event_kind: "Event kind (optional)",
+		or_execution_filter: "Execution ID (optional)",
+		or_history_snapshot: "Fixed journal snapshot: {seq}.",
 		or_repositories: "Repositories",
 		or_latest: "Latest result",
 		or_sessions: "Sessions",
@@ -40235,6 +40277,16 @@ var observedStrings = {
 		or_work_ended: "這筆工作已結束。",
 		or_readonly_project: "這個帳號可檢視專案；如需編輯，請到「連線」更換憑證。",
 		or_projects_unknown: "這次讀取未提供專案清單。",
+		or_project_unavailable: "無法開啟專案",
+		or_projects_unavailable: "無法取得專案",
+		or_project_denied: "這個權杖沒有檢視權限。",
+		or_project_missing: "找不到要求的專案。",
+		or_projects_missing: "找不到專案清單。",
+		or_connector_unavailable: "目前無法連線至 Connector。",
+		or_back_projects: "返回專案",
+		or_event_kind: "事件類型（選填）",
+		or_execution_filter: "執行識別碼（選填）",
+		or_history_snapshot: "固定歷程快照：{seq}。",
 		or_repositories: "儲存庫",
 		or_latest: "最新成果",
 		or_sessions: "工作階段",
@@ -42641,13 +42693,13 @@ var ids = (rows, key) => rows.map((row) => row[key]);
 var same$2 = (a, b) => a.length === b.length && a.every((value, i) => value === b[i]);
 function treeInteractions({ h, t, row, scope, siblings, index, key, run, open, guard, editing }) {
 	const me = siblings[index];
-	const handle = h("button", {
-		class: "mini tree-drag-handle",
-		type: "button",
+	const handle = iconButton({
+		icon: "grip-vertical",
+		label: t("tree_drag", { name: me.name || me.title }),
 		draggable: "true",
-		title: t("tree_drag_help"),
-		"aria-label": t("tree_drag", { name: me.name || me.title })
-	}, "↕");
+		title: t("tree_drag_help")
+	});
+	handle.classList.add("tree-drag-handle");
 	const clear = () => {
 		if (drag) {
 			drag.editing(false);
@@ -46269,6 +46321,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	function update() {
 		const fixed = Boolean(saved.intent);
 		const canOperate = permitted();
+		box.hidden = !(caps()?.scopes || []).includes("operate");
 		help.hidden = !canOperate;
 		abortLabel.hidden = !canOperate || action() !== "task.pause";
 		abort.disabled = fixed || busy;
@@ -49870,6 +49923,26 @@ function actionLink(h, href, label, variant) {
 		href
 	}, label);
 }
+function unavailableProject({ h, error, collection = false, retry }) {
+	const denied = [401, 403].includes(error?.status), missing = error?.status === 404;
+	const recoverable = error?.status === 503 || error?.status === 0 || error?.name === "TypeError";
+	const reason = denied ? "or_project_denied" : missing ? collection ? "or_projects_missing" : "or_project_missing" : "or_connector_unavailable";
+	const actions = [];
+	if (!collection) actions.push(actionLink(h, "#/projects", say("or_back_projects"), "secondary"));
+	if (recoverable && retry) actions.push(button({
+		variant: "secondary",
+		label: t("retry"),
+		onClick: retry
+	}));
+	const state = emptyState({
+		icon: "circle-alert",
+		title: say(collection ? "or_projects_unavailable" : "or_project_unavailable"),
+		text: say(reason),
+		action: actions.length ? h("div", { class: "actions" }, ...actions) : null
+	});
+	state.dataset.projectUnavailable = collection ? "list" : "project";
+	return state;
+}
 function pairs(h, rows) {
 	const kept = rows.filter(([, value]) => value !== null && value !== void 0 && value !== "");
 	return kept.length ? h("dl", { class: "or-dl" }, ...kept.flatMap(([label, value]) => [h("dt", {}, label), h("dd", { class: typeof value === "string" ? "mono" : "" }, value)])) : null;
@@ -51576,7 +51649,7 @@ function discoveryEvidence(scopes) {
 		errors: scope.errors || []
 	}, null, 2))), h("h3", {}, t("obs_outside_scan")), h("ul", {}, ...(scope.outside_scan || []).map((x) => h("li", {}, t("obs_scope_" + x.scope), " · ", h("code", {}, x.reason)))))) : [h("p", { class: "muted" }, t("obs_no_scan"))]);
 }
-function observationPanels(type, id, path) {
+function observationPanels(type, id, path, plain = false) {
 	const connection = {
 		epoch: state.epoch,
 		namespace: state.namespace,
@@ -51589,13 +51662,15 @@ function observationPanels(type, id, path) {
 			class: "note",
 			hidden: true
 		}, t("obs_new_facts"));
+		const kindLabel = plain ? observedText(t, "or_event_kind") : t("obs_event_kind");
+		const executionLabel = plain ? observedText(t, "or_execution_filter") : t("obs_execution_filter");
 		const kind = h("input", {
-			placeholder: t("obs_event_kind"),
-			"aria-label": t("obs_event_kind")
+			placeholder: kindLabel,
+			"aria-label": kindLabel
 		});
 		const execution = h("input", {
-			placeholder: t("obs_execution_filter"),
-			"aria-label": t("obs_execution_filter")
+			placeholder: executionLabel,
+			"aria-label": executionLabel
 		});
 		const closed = h("input", {
 			type: "checkbox",
@@ -51689,7 +51764,7 @@ function observationPanels(type, id, path) {
 				loaded = true;
 				notice.hidden = latestSeen <= asOf;
 				evidence.replaceChildren(...[
-					t("obs_snapshot", { seq: asOf }),
+					plain ? observedText(t, "or_history_snapshot", { seq: asOf }) : t("obs_snapshot", { seq: asOf }),
 					" ",
 					t("obs_historical_limits"),
 					!relations ? [
@@ -51711,7 +51786,8 @@ function observationPanels(type, id, path) {
 			label: t(relations ? "obs_relations" : "obs_history"),
 			body: h("div", {}, h("div", { class: "filters" }, relations ? execution : kind, relations ? h("label", {}, closed, " ", t("obs_include_closed")) : null, refresh), notice, evidence, status, list, more)
 		});
-		box.classList.add("panel", "observation-panel");
+		box.classList.add("observation-panel");
+		if (!plain) box.classList.add("panel");
 		box.dataset.observation = mode;
 		box.addEventListener("toggle", () => {
 			if (box.open && !loaded) load(true);
@@ -51726,7 +51802,10 @@ function observationPanels(type, id, path) {
 	};
 	const history = section("history"), relations = section("relations");
 	return {
-		box: h("div", {}, history.box, relations.box),
+		box: h(plain ? "section" : "div", plain ? {
+			class: "or-observations",
+			"data-resource-disclosures": ""
+		} : {}, history.box, relations.box),
 		changed: (event) => {
 			history.changed(event);
 			relations.changed(event);
@@ -51743,7 +51822,7 @@ async function viewTask(main, id) {
 		class: "panel",
 		"data-observed-resource": ""
 	}), status = h("div", { role: "status" });
-	const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`);
+	const observations = observationPanels("execution", id, `/tasks/${encodeURIComponent(id)}`, true);
 	let task = null, readReady = false, active = null, retry;
 	const panel = taskControlsPanel({
 		h,
@@ -51830,7 +51909,7 @@ async function viewObservedResource(main, type, id) {
 		"data-observed-resource": ""
 	});
 	const status = h("div", { "data-observed-status": "" });
-	const panels = observationPanels(type, id, path);
+	const panels = observationPanels(type, id, path, true);
 	main.append(head, status, panels.box);
 	const connection = {
 		epoch: state.epoch,
@@ -55033,23 +55112,38 @@ function setEditing(n) {
 	}
 }
 function drawer(...children) {
+	return drawerControls(false, children);
+}
+function recordDrawer(...children) {
+	return drawerControls(true, children);
+}
+function drawerControls(useIcon, children) {
 	const box = h("div", {
 		class: "drawer",
 		id: `drawer-${crypto.randomUUID()}`,
 		hidden: true
 	}, ...children);
-	const toggle = h("button", {
-		class: "mini",
+	const attrs = {
 		title: t("more"),
 		"aria-label": t("more"),
 		"aria-controls": box.id,
-		"aria-expanded": "false",
-		onclick: () => {
-			box.hidden = !box.hidden;
-			toggle.setAttribute("aria-expanded", String(!box.hidden));
-			if (!box.hidden) drawerOpens += 1;
-			setEditing(editing + (box.hidden ? -1 : 1));
-		}
+		"aria-expanded": "false"
+	};
+	const onClick = () => {
+		box.hidden = !box.hidden;
+		toggle.setAttribute("aria-expanded", String(!box.hidden));
+		if (!box.hidden) drawerOpens += 1;
+		setEditing(editing + (box.hidden ? -1 : 1));
+	};
+	const toggle = useIcon ? iconButton({
+		icon: "more-horizontal",
+		label: t("more"),
+		...attrs,
+		onClick
+	}) : h("button", {
+		class: "mini",
+		...attrs,
+		onclick: onClick
 	}, "…");
 	const open = (focus = false) => {
 		if (box.hidden) toggle.click();
@@ -55133,8 +55227,9 @@ async function viewProjects(main) {
 		namespace: state.namespace,
 		generation
 	};
+	let request = 0;
 	const out = h("div", {});
-	const tree = h("div", { class: "panel" });
+	const tree = h("div", { "data-project-list": "" });
 	const archived = h("div", {});
 	const create = createRecordForm({
 		h,
@@ -55151,28 +55246,37 @@ async function viewProjects(main) {
 		}
 	});
 	const showArchived = h("input", { type: "checkbox" });
+	const refresh = iconButton({
+		icon: "refresh-cw",
+		label: t("global_refresh"),
+		onClick: () => render().catch(() => {})
+	});
+	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
+	create.box.hidden = true;
+	filter.hidden = true;
 	main.append(pageHeader({
 		title: t("nav_projects"),
-		actions: [iconButton({
-			icon: "refresh-cw",
-			label: t("global_refresh"),
-			onClick: () => render().catch(() => {})
-		})]
+		actions: [refresh]
 	}), disclosure({
 		label: t("global_details"),
 		body: h("p", {}, t("projects_help"))
-	}), manageNote() || "", create.box, out, tree, h("label", { class: "muted" }, showArchived, " ", t("show_archived")), archived);
+	}), manageNote() || "", create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived) }));
 	const render = async (fromEvent = false) => {
-		const opens = drawerOpens;
+		const opens = drawerOpens, mine = ++request;
 		try {
 			const data = await api("GET", `/projects${showArchived.checked ? "?include_archived=true" : ""}`);
-			if (!tree.isConnected) return;
+			assertView(connection);
+			if (!tree.isConnected || mine !== request) return;
+			if (!Array.isArray(data.projects)) throw new Error(observedText(t, "or_projects_unknown"));
 			create.setContext({ rows: data.projects });
 			if (holdRender(fromEvent, opens)) {
 				idleReload = () => render(true);
 				return;
 			}
 			freshPage();
+			create.box.hidden = !may("manage") || state.caps?.actions?.find((row) => row.action === "project.create")?.allowed === false;
+			filter.hidden = false;
+			refresh.hidden = false;
 			const rows = [];
 			const walk = (sibs, depth, parent) => sibs.forEach((p, i) => {
 				const msg = out;
@@ -55195,7 +55299,7 @@ async function viewProjects(main) {
 					placeholder: t("new_sub_project"),
 					maxlength: 80
 				});
-				const d = drawer(h("div", { class: "filters" }, rename, h("button", {
+				const d = recordDrawer(h("div", { class: "filters" }, rename, h("button", {
 					class: "secondary",
 					onclick: async () => {
 						if (await change(msg, "project.update", { project_id: p.project_id }, { name: rename.value.trim() }, { expected_version: p.version }, `project.rename.${p.project_id}`) || STALE.includes(lastFailure)) render();
@@ -55241,16 +55345,33 @@ async function viewProjects(main) {
 			});
 			walk(data.projects, 0, "");
 			fill(tree, ...rows.length ? rows : [h("p", { class: "muted" }, t("no_projects"))]);
-			fill(archived, ...(data.archived || []).map((p) => h("div", { class: "row" }, h("div", { class: "grow" }, h("span", { class: "muted" }, p.name)), h("button", {
+			fill(archived, ...(data.archived || []).map((p) => h("div", { class: "row" }, h("div", { class: "grow" }, h("span", { class: "muted" }, p.name)), may("manage") ? h("button", {
 				class: "secondary",
-				disabled: !may("manage"),
 				onclick: async () => {
 					await change(out, "project.update", { project_id: p.project_id }, { archived: false }, { expected_version: p.version }, `project.restore.${p.project_id}`);
 					render();
 				}
-			}, t("restore")))));
-		} catch (e) {
-			fill(tree, errorBox(e));
+			}, t("restore")) : null)));
+		} catch (error) {
+			if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request || !tree.isConnected) return;
+			request++;
+			create.setContext({
+				rows: [],
+				active: false
+			});
+			create.box.hidden = true;
+			fill(out);
+			fill(archived);
+			filter.hidden = true;
+			refresh.hidden = true;
+			freshPage();
+			errorBox(error);
+			fill(tree, unavailableProject({
+				h,
+				error,
+				collection: true,
+				retry: () => render().catch(() => {})
+			}));
 		}
 	};
 	showArchived.onchange = () => render();
@@ -55329,7 +55450,12 @@ async function viewProject(main, pid) {
 		fill(archived);
 		fill(out);
 		itemCard.hidden = true;
-		fill(head, errorBox(error));
+		errorBox(error);
+		fill(head, unavailableProject({
+			h,
+			error,
+			retry: () => render().catch(() => {})
+		}));
 		freshPage();
 	};
 	const readProject = async () => {
@@ -55401,7 +55527,7 @@ async function viewProject(main, pid) {
 				"aria-label": t("task_project")
 			})
 		};
-		const d = drawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description, h("label", {}, observedText(t, "or_repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project, h("div", { class: "actions" }, h("button", {
+		const d = recordDrawer(h("label", {}, t("name")), f.name, h("label", {}, t("description")), f.description, h("label", {}, observedText(t, "or_repositories")), f.repositories, h("label", {}, t("task_project")), f.task_project, h("div", { class: "actions" }, h("button", {
 			class: "primary",
 			onclick: async () => {
 				const params = {
@@ -55473,7 +55599,7 @@ async function viewProject(main, pid) {
 					}, {}, scope)) render();
 				}
 			}, t("add_item"));
-			const dr = drawer(h("div", { class: "filters" }, child, create(child, { parent_id: w.work_item_id }, `wi.child.${w.work_item_id}`)), h("div", { class: "filters" }, branch, create(branch, {
+			const dr = recordDrawer(h("div", { class: "filters" }, child, create(child, { parent_id: w.work_item_id }, `wi.child.${w.work_item_id}`)), h("div", { class: "filters" }, branch, create(branch, {
 				parent_id: parent || null,
 				derived_from: w.work_item_id
 			}, `wi.branch.${w.work_item_id}`)), h("div", { class: "actions" }, h("button", {

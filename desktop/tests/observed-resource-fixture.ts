@@ -12,7 +12,7 @@ export const workTitle = 'Ship the login copy';
 export type ResourceFixtureState = {gone: boolean, seq: number, events: any[], empty?: boolean, error?: boolean, intent?: string,
   resource?: any, task?: any, posts?: any[], hold?: () => Promise<void>, manage?: boolean, denyCreation?: boolean,
   project?: any, workItems?: any[], archived?: any[], projectStatus?: number, listStatus?: number, listMissing?: boolean,
-  holdProject?: (archived: boolean) => Promise<void>};
+  holdProject?: (archived: boolean) => Promise<void>, holdList?: (archived: boolean) => Promise<void>, listNetwork?: boolean};
 function caps(state: ResourceFixtureState) {
   return {actor: 'observed', scopes: ['observe', 'integrate', ...(state.manage ? ['manage'] : [])], api_version: 1, contract_version: '2026-10-08',
     hosts: [{host: 'demo', writes: true}], repositories: [{repository: 'example/repository'}],
@@ -72,8 +72,11 @@ export async function mount(page: any, locale: string, state: ResourceFixtureSta
     if (path === '/tasks/' + taskId) return state.gone || state.error ? send(state.error ? 403 : 404, {error: {code: state.error ? 'FORBIDDEN' : 'NOT_FOUND', message: 'Record unavailable'}}) : send(200, {task: state.task || {task_id: taskId, host: 'demo', session_id: 'login-session', project: 'Login copy',
       original_words: workTitle, state: state.empty ? null : 'running', paused: state.empty ? null : false, external_branch: 'login-copy', external_worktree_path: '/srv/login'}});
     if (path === '/projects') {
-      if (state.listStatus) return send(state.listStatus, {error: {code: state.listStatus === 403 ? 'FORBIDDEN' : 'NOT_FOUND', message: 'List unavailable'}});
-      return send(200, state.listMissing ? {} : {projects: [state.project || project()], archived: []});
+      if (state.listNetwork) return route.abort('failed');
+      const status = state.listStatus, record = structuredClone(state.listMissing ? {} : {projects: [state.project || project()], archived: []});
+      if (state.holdList) await state.holdList(url.searchParams.has('include_archived'));
+      if (status) return send(status, {error: {code: status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'UNAVAILABLE', message: 'List unavailable'}});
+      return send(200, record);
     }
     if (path === '/projects/' + projectId) {
       const status = state.projectStatus || (state.error ? 403 : 200);
@@ -85,6 +88,7 @@ export async function mount(page: any, locale: string, state: ResourceFixtureSta
     }
     if (path.endsWith('/history')) return send(200, {events: [], next_cursor: null, as_of: 1});
     if (path.endsWith('/relations')) return send(200, {relations: [], next_cursor: null, as_of: 1});
+    if (path.startsWith('/tasks/') && path.endsWith('/sessions')) return send(200, {relations: [], next_cursor: null, as_of: 1});
     return send(200, {sessions: [], operations: [], hosts: [], work_items: [], events: [], relations: [], next_cursor: null});
   });
 }
