@@ -846,7 +846,7 @@ export const STRINGS = {
     provenance_manual: "人工建立（BAT）", provenance_connector_managed: "Connector 建立", provenance_unknown: "來源不明",
     state_streaming: "執行中", state_loaded: "已載入", state_unloaded: "未載入", pending_ask_user: "等你回答",
     pending_permission: "等待權限",
-    host: "主機", workspace: "Workspace", title: "標題", agent: "Agent", state: "狀態", activity: "最後活動",
+    host: "主機", workspace: "工作區", title: "標題", agent: "Agent", state: "狀態", activity: "最後活動",
     observed: "觀測時間", all_hosts: "全部主機", all_access: "全部", only_managed: "只看受管理",
     only_read_only: "只看唯讀", load_more: "載入更多",
     session_untitled: "未命名工作階段",

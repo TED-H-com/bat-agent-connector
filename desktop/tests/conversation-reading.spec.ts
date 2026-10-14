@@ -69,9 +69,9 @@ for (const native of [false, true]) {
     await expect(page.locator('[data-conversation-reading]')).toHaveText(`${remaining}+ unread`);
     await expect(page.locator('[data-session-reading-detail]')).toHaveText('Some messages have no ID and are not counted.');
     data.incomplete_reasons = ['archive_budget']; data.unindexed_count = undefined; data.cursor++;
-    await expect(page.locator('[data-conversation-reading]')).toHaveText('Showing the latest 3,000 messages');
+    await expect(page.locator('[data-conversation-reading]')).toHaveText(`${remaining}+ unread · Showing the latest 3,000 messages`);
     data.incomplete_reasons = ['archive_unconfirmed']; data.cursor++;
-    await expect(page.locator('[data-conversation-reading]')).toHaveText('Earlier messages may not be loaded');
+    await expect(page.locator('[data-conversation-reading]')).toHaveText(`${remaining}+ unread · Earlier messages may not be loaded`);
     await expect(page.locator('[data-session-reading-detail]')).toHaveText('BAT did not confirm the end of the history.');
     data.incomplete_reasons = undefined; data.cursor++;
     await expect(page.locator('[data-conversation-reading]')).toHaveText(`${remaining}+ unread · earlier messages may not be loaded`);

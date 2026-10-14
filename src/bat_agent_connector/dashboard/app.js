@@ -8352,7 +8352,7 @@ var STRINGS = {
 		pending_ask_user: "等你回答",
 		pending_permission: "等待權限",
 		host: "主機",
-		workspace: "Workspace",
+		workspace: "工作區",
 		title: "標題",
 		agent: "Agent",
 		state: "狀態",
@@ -41243,17 +41243,19 @@ function readingSummary(t, reading) {
 		detail: ""
 	};
 	const reasons = Array.isArray(reading.incomplete_reasons) ? reading.incomplete_reasons : [];
+	const lowerBound = t("conversation_unread_lower_bound", { count: reading.unread_count });
+	const idDetail = reasons.includes("message_ids") ? t("conversation_message_ids_detail") : "";
 	if (reasons.includes("archive_budget")) return {
-		line: t("conversation_archive_budget"),
-		detail: reasons.includes("message_ids") ? t("conversation_message_ids_detail") : ""
+		line: `${lowerBound} · ${t("conversation_archive_budget")}`,
+		detail: idDetail
 	};
 	if (reasons.includes("archive_unconfirmed")) return {
-		line: t("conversation_archive_unconfirmed"),
-		detail: t("conversation_archive_unconfirmed_detail")
+		line: `${lowerBound} · ${t("conversation_archive_unconfirmed")}`,
+		detail: [t("conversation_archive_unconfirmed_detail"), idDetail].filter(Boolean).join(" ")
 	};
 	if (reasons.includes("message_ids")) return {
-		line: t("conversation_unread_lower_bound", { count: reading.unread_count }),
-		detail: t("conversation_message_ids_detail")
+		line: lowerBound,
+		detail: idDetail
 	};
 	return {
 		line: t("conversation_partial", { count: reading.unread_count }),
@@ -51589,7 +51591,7 @@ async function viewSession(main, host, sid, context = null) {
 		paintOrigin();
 		mobileLayout?.updateInfo();
 		paintReadingDetail();
-		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
+		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
 			"manual",
 			"connector_managed",
 			"unknown"

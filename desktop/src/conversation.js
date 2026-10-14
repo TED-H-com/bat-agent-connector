@@ -15,22 +15,24 @@ export function readingSummary(t, reading) {
   if (!reading || reading.unread_count == null) return {line: t("conversation_unknown"), detail: ""};
   if (reading.complete) return {line: t("conversation_unread", {count: reading.unread_count}), detail: ""};
   const reasons = Array.isArray(reading.incomplete_reasons) ? reading.incomplete_reasons : [];
+  const lowerBound = t("conversation_unread_lower_bound", {count: reading.unread_count});
+  const idDetail = reasons.includes("message_ids") ? t("conversation_message_ids_detail") : "";
   if (reasons.includes("archive_budget")) {
     return {
-      line: t("conversation_archive_budget"),
-      detail: reasons.includes("message_ids") ? t("conversation_message_ids_detail") : "",
+      line: `${lowerBound} · ${t("conversation_archive_budget")}`,
+      detail: idDetail,
     };
   }
   if (reasons.includes("archive_unconfirmed")) {
     return {
-      line: t("conversation_archive_unconfirmed"),
-      detail: t("conversation_archive_unconfirmed_detail"),
+      line: `${lowerBound} · ${t("conversation_archive_unconfirmed")}`,
+      detail: [t("conversation_archive_unconfirmed_detail"), idDetail].filter(Boolean).join(" "),
     };
   }
   if (reasons.includes("message_ids")) {
     return {
-      line: t("conversation_unread_lower_bound", {count: reading.unread_count}),
-      detail: t("conversation_message_ids_detail"),
+      line: lowerBound,
+      detail: idDetail,
     };
   }
   return {line: t("conversation_partial", {count: reading.unread_count}), detail: ""};

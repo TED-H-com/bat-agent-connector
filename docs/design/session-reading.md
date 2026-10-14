@@ -22,7 +22,7 @@ effective principal（actor／scopes／admin digest）、完整 host／session I
   `archive_unconfirmed`；掃描達到 3,000 則上限記為 `archive_budget`；缺 ID 或有重複 ID
   記為 `message_ids` 並附 `unindexed_count`。完整讀取的 `incomplete_reasons` 為 `[]`。
   對話列與工作階段詳情依原因安靜提示（僅 `message_ids` 且 archive 完整時顯示 `N+` 未讀下界並在詳情說明
-  部分訊息無 ID；`archive_budget` 顯示最近 3,000 則訊息；`archive_unconfirmed` 顯示較早訊息可能未載入
+  部分訊息無 ID；`archive_budget` 與 `archive_unconfirmed` 也保留 `N+` 未讀下界，分別附顯示最近 3,000 則訊息與較早訊息可能未載入
   並在詳情說明 BAT 未確認歷史結尾；舊版 central 未附原因時顯示中性提示），不使用錯誤色或「部分紀錄」字樣。
   BAT live／archive 不是 atomic snapshot；不從 idle、時間、event ACK 推算完整對話。
 - 觀察請求在網路 I/O 前取得中央遞增序號。較舊請求晚回來仍可顯示其原版本，但不得

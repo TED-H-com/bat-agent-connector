@@ -41,7 +41,7 @@ import { nativeAttachments } from "./native-files.js";
 import { mountFleet } from "./fleet.js";
 import { mountTailscale } from "./tailscale.js";
 import { mountUpdates } from "./updates.js";
-import { groupedSessions, matchesSession, runtimeStale, sessionActivity, sessionPill, sessionStatus } from "./state/sessions.js";
+import { groupedSessions, matchesSession, runtimeStale, sessionActivity, sessionPill } from "./state/sessions.js";
 import { capturePanel } from "./capture.js";
 import { taskControlsPanel } from "./task-controls.js";
 import { operationList } from "./operation-list.js";
@@ -1707,7 +1707,7 @@ async function viewSession(main, host, sid, context = null) {
     metadata.replaceChildren(h("div", {class: "actions"}, ...sessionBadges(row)),
       h("dl", { class: "kv" },
         h("dt", {}, t("host")), h("dd", {}, h("a", {href: `#/host/${encodeURIComponent(host)}`}, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""),
-        h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)),
+        h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, row.session_id)),
         h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")),
         h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + (['manual', 'connector_managed', 'unknown'].includes(row.provenance) ? row.provenance : 'unknown'))),
         h("dt", {}, t("obs_axis_activity")), h("dd", {}, t(sessionActivity(row).key)),

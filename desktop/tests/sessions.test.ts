@@ -72,11 +72,11 @@ test('reading summary explains incomplete reasons without alarming partial-histo
     detail: '部分訊息沒有 ID，未計入未讀數。',
   });
   assert.deepEqual(readingSummary(zh, {unread_count: 120, complete: false, incomplete_reasons: ['archive_budget']}), {
-    line: '顯示最近 3,000 則訊息',
+    line: '120+ 則未讀 · 顯示最近 3,000 則訊息',
     detail: '',
   });
   assert.deepEqual(readingSummary(zh, {unread_count: 12, complete: false, incomplete_reasons: ['archive_unconfirmed']}), {
-    line: '較早的訊息可能未載入',
+    line: '12+ 則未讀 · 較早的訊息可能未載入',
     detail: 'BAT 未確認歷史紀錄是否已到結尾。',
   });
   assert.deepEqual(readingSummary(zh, {unread_count: 9, complete: false}), {
@@ -89,11 +89,11 @@ test('reading summary explains incomplete reasons without alarming partial-histo
     detail: 'Some messages have no ID and are not counted.',
   });
   assert.deepEqual(readingSummary(en, {unread_count: 120, complete: false, incomplete_reasons: ['archive_budget']}), {
-    line: 'Showing the latest 3,000 messages',
+    line: '120+ unread · Showing the latest 3,000 messages',
     detail: '',
   });
   assert.deepEqual(readingSummary(en, {unread_count: 12, complete: false, incomplete_reasons: ['archive_unconfirmed']}), {
-    line: 'Earlier messages may not be loaded',
+    line: '12+ unread · Earlier messages may not be loaded',
     detail: 'BAT did not confirm the end of the history.',
   });
   assert.deepEqual(readingSummary(en, {unread_count: 9, complete: false}), {
@@ -102,3 +102,32 @@ test('reading summary explains incomplete reasons without alarming partial-histo
   });
 });
 
+for (const lang of ['en', 'zh-TW'] as const) {
+  test(`reading summary retains counts and all explanations for combined reasons (${lang})`, () => {
+    const t = tr(lang), ids = t('conversation_message_ids_detail');
+    const summary = (reasons: string[], count = 34) => readingSummary(t,
+      {unread_count: count, complete: false, incomplete_reasons: reasons, unindexed_count: 2});
+    assert.deepEqual(summary(['archive_budget', 'message_ids']), {
+      line: lang === 'en' ? '34+ unread · Showing the latest 3,000 messages' : '34+ 則未讀 · 顯示最近 3,000 則訊息',
+      detail: ids,
+    });
+    assert.deepEqual(summary(['archive_unconfirmed', 'message_ids']), {
+      line: lang === 'en' ? '34+ unread · Earlier messages may not be loaded' : '34+ 則未讀 · 較早的訊息可能未載入',
+      detail: `${t('conversation_archive_unconfirmed_detail')} ${ids}`,
+    });
+    assert.equal(summary(['archive_budget'], 0).line,
+      lang === 'en' ? '0+ unread · Showing the latest 3,000 messages' : '0+ 則未讀 · 顯示最近 3,000 則訊息');
+  });
+  test(`complete and unknown reading counts retain their meaning (${lang})`, () => {
+    const t = tr(lang);
+    for (const count of [0, 34]) assert.deepEqual(readingSummary(t, {unread_count: count, complete: true, incomplete_reasons: []}), {
+      line: lang === 'en' ? `Last observed: ${count} unread` : `上次觀察：${count} 則未讀`, detail: '',
+    });
+    for (const reading of [null, {}, {unread_count: null, complete: false, incomplete_reasons: ['archive_budget']},
+      {complete: false, incomplete_reasons: ['message_ids']}]) assert.deepEqual(readingSummary(t, reading), {
+      line: lang === 'en' ? 'Conversation has not been observed' : '尚未讀取對話紀錄', detail: '',
+    });
+    assert.equal(t('workspace'), lang === 'en' ? 'Workspace' : '工作區');
+    assert.equal(t('sessions_id'), lang === 'en' ? 'Session ID' : '工作階段 ID');
+  });
+}

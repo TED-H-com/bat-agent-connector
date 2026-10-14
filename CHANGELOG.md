@@ -12,8 +12,9 @@
   (`archive_unconfirmed`, `archive_budget`, `message_ids`) and optional
   `reading.unindexed_count`, and the conversation header replaces the generic
   "Partial history" warning with reason-specific quiet notes and `N+` unread
-  lower bounds. Session details show the formatted observed time once without a
-  duplicate raw ISO code tag.
+  lower bounds, including alongside archive budget and unconfirmed-history notes.
+  Session details label the Session ID correctly, translate Workspace as 工作區 in
+  zh-TW, and show the formatted observed time once without a duplicate raw ISO code tag.
 
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.

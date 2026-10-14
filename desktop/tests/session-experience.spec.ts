@@ -90,6 +90,10 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const detailsText = await page.locator('[data-session-details]').innerText();
     expect(detailsText).toContain('Codex · example-codex');
     expect(detailsText).not.toMatch(/(^|\n)codex ·/);
+    const details = page.locator('[data-session-details]');
+    await expect(details.locator('dt').filter({hasText: zh ? /^工作階段 ID$/ : /^Session ID$/})).toHaveCount(1);
+    await expect(details.locator('dt').filter({hasText: zh ? /^工作區$/ : /^Workspace$/})).toHaveCount(1);
+    await expect(details.locator('dt').filter({hasText: zh ? /^標題$/ : /^Title$/})).toHaveCount(0);
     await expect(page.locator('[data-session-details] time + code')).toHaveCount(0);
     await page.locator('[data-session-details] > summary').click();
     await expect(page.locator('.session-work-line')).toHaveText(zh ? '工作 · 電子郵件登入' : 'Work · Email sign-in');
