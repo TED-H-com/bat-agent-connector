@@ -22303,7 +22303,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	];
 	let serial = 0, loaded = false, dirty = false, stale = false, signature = "", selectedId = "", model = null, forms = [], widgets = [];
 	let pageCount = 1, sourceTicket = 0, createSnapshot = null, createEditor = null, refreshCreateSource = null;
-	let createOpen = false, createBox = null;
+	let createOpen = false, createBox = null, entries = [];
 	const createId = "pm-governance-create-" + crypto.randomUUID();
 	const actorLabel = (value) => panelActorLabel(t, value);
 	const navigationKey = `batc.pm.governance.selection.${namespace}.${workspaceId}.${caps()?.actor}`;
@@ -22408,16 +22408,17 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		return entry;
 	}
 	function update() {
+		entries.forEach((sync) => sync());
 		forms.forEach((editor) => editor.update());
 		widgets.forEach((widget) => widget());
 		launch.hidden = !can();
 		readOnly.hidden = !loaded || can();
-		prompt.hidden = !loaded || !withRegister || Boolean(model?.detail) || createOpen;
+		prompt.hidden = !loaded || !withRegister || Boolean(model?.detail) || createOpen && can();
 		heading.hidden = !prompt.hidden && !can();
 		launch.setAttribute("aria-expanded", String(loaded && createOpen));
 		if (createBox) createBox.hidden = !createOpen;
 		warning.hidden = !stale;
-		review.hidden = !stale;
+		review.hidden = !stale || !can();
 		review.disabled = !loaded;
 	}
 	function unavailable(error) {
@@ -22438,10 +22439,29 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		++sourceTicket;
 		forms = [];
 		widgets = [];
+		entries = [];
 		createSnapshot = null;
 		createEditor = null;
 		refreshCreateSource = null;
 		editors.replaceChildren();
+	}
+	function entryPoint(node, permitted) {
+		const slot = h("div");
+		let moving = false;
+		const sync = () => {
+			if (moving) return;
+			moving = true;
+			try {
+				if (permitted()) {
+					if (node.parentNode !== slot) slot.append(node);
+				} else node.remove();
+			} finally {
+				moving = false;
+			}
+		};
+		entries.push(sync);
+		sync();
+		return slot;
 	}
 	function showCreate() {
 		if (!loaded || !createEditor) return;
@@ -22918,14 +22938,15 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				hidden: !createOpen
 			}, editor.box);
 			return {
-				element: createBox,
+				element: entryPoint(createBox, allowed),
 				mount: readSource
 			};
 		}
 		sourceSync = refsWidget(fields.source_refs, sourceHolder, snapshot, () => editor, doc.sources);
 		widgets.push(sourceSync);
 		return {
-			element: fold("pm_gov_edit", editor.box, editor.locked()),
+			element: entryPoint(fold("pm_gov_edit", editor.box, editor.locked()), allowed),
+			permitted: allowed,
 			mount: async () => {}
 		};
 	}
@@ -22947,7 +22968,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			params: (values) => values,
 			extra: h("div", { class: "pm-fields" }, note("pm_gov_direction_only"), labelled("pm_gov_disposition", disposition), labelled("pm_gov_reason", rationale))
 		}, rebase);
-		holder.append(fold("pm_gov_decide", decision.box, decision.locked()));
+		holder.append(entryPoint(fold("pm_gov_decide", decision.box, decision.locked()), owner));
 		const adoption_operation_id = input("pm_gov_operation_id", { max: 35 }), adoptionReason = reason(), receipt = h("div", {
 			role: "status",
 			"data-pm-governance-adoption-receipt": ""
@@ -22999,21 +23020,24 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			},
 			extra: h("div", { class: "pm-fields" }, note("pm_gov_link_help"), labelled("pm_gov_operation_id", adoption_operation_id), inspect, receipt, labelled("pm_gov_reason", adoptionReason))
 		}, rebase);
-		holder.append(fold("pm_gov_adoption", editor.box, editor.locked()));
+		holder.append(entryPoint(fold("pm_gov_adoption", editor.box, editor.locked()), owner));
 		return holder;
 	}
 	async function renderEditors(rebase = false) {
 		clearEditors();
 		dirty = false;
 		stale = false;
-		if (model.detail) editors.append(withRegister ? h("strong", { "data-pm-governance-selected": selectedId }, model.detail.revision.document.title) : "", findingEditor(model.detail, rebase).element, decisionEditors(rebase), button({
-			variant: "secondary",
-			label: t("pm_gov_resolve"),
-			onClick: () => void openRef({
-				kind: "governance",
-				id: selectedId
-			}, { form: "resolve" })
-		}));
+		if (model.detail) {
+			const finding = findingEditor(model.detail, rebase);
+			editors.append(withRegister ? h("strong", { "data-pm-governance-selected": selectedId }, model.detail.revision.document.title) : "", finding.element, decisionEditors(rebase), entryPoint(button({
+				variant: "secondary",
+				label: t("pm_gov_resolve"),
+				onClick: () => void openRef({
+					kind: "governance",
+					id: selectedId
+				}, { form: "resolve" })
+			}), finding.permitted));
+		}
 		const create = findingEditor(null, rebase);
 		editors.append(create.element);
 		update();
@@ -23137,7 +23161,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		await refresh(true);
 		const action = requested === "record" ? "record" : requested === "decide" ? "decide" : requested === "adoption.link" ? "adoption.link" : "revise";
 		const editor = forms.find((row) => row.box.dataset.pmAction === "pm.governance." + action);
-		if (!loaded || !editor) return;
+		if (!loaded || !editor || !editor.box.isConnected) return;
 		if (requested === "record") {
 			showCreate();
 			return;
@@ -26684,7 +26708,8 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		rebase.disabled = editor.locked() || !can();
 		versionWarning.hidden = !stale();
 		writeWarning.hidden = !loaded || can();
-		editorFold.hidden = !loaded || !prepareOpen;
+		editorFold.hidden = !loaded || !prepareOpen || !can();
+		if (analysis) analysis.element.hidden = !can();
 		if (launch) {
 			launch.hidden = !can();
 			launch.setAttribute("aria-expanded", String(loaded && prepareOpen));
@@ -29565,7 +29590,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	} catch {}
 	let model = null, selectedId = typeof navigation.meeting_id === "string" ? navigation.meeting_id : "", signature = "", serial = 0, loaded = false, dirty = false, stale = false, reviewing = false;
 	let forms = [], editorMeetingId = null;
-	let createOpen = false, createBox = null;
+	let createOpen = false, createBox = null, entries = [];
 	const createId = "pm-meeting-create-" + crypto.randomUUID();
 	const actorLabel = (value) => panelActorLabel(t, value);
 	const status = h("div", { role: "status" }), view = h("div"), editors = h("div");
@@ -29659,14 +29684,34 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	});
 	const pre = () => ({ expected_version: model.detail.meeting.version });
 	function update() {
+		entries.forEach((sync) => sync());
 		forms.forEach((editor) => editor.update());
-		warning.hidden = rebase.hidden = !stale;
+		warning.hidden = !stale;
+		rebase.hidden = !stale || !can();
 		rebase.disabled = !loaded;
 		choose.disabled = !loaded;
 		launch.hidden = !can();
 		readOnly.hidden = !loaded || can();
 		launch.setAttribute("aria-expanded", String(loaded && createOpen));
 		if (createBox) createBox.hidden = !createOpen;
+	}
+	function entryPoint(node, permitted) {
+		const slot = h("div");
+		let moving = false;
+		const sync = () => {
+			if (moving) return;
+			moving = true;
+			try {
+				if (permitted()) {
+					if (node.parentNode !== slot) slot.append(node);
+				} else node.remove();
+			} finally {
+				moving = false;
+			}
+		};
+		entries.push(sync);
+		sync();
+		return slot;
 	}
 	function unavailable(error) {
 		loaded = false;
@@ -30261,7 +30306,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		syncDecisions();
 		const completeBox = fold("pm_meeting_complete", completion.box, completion.locked());
 		completeBox.hidden = detail.meeting.status === "completed" && !completion.locked();
-		holder.append(completeBox);
+		holder.append(entryPoint(completeBox, owner));
 		const snapshots = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`]), context.snapshot_ref.snapshot_id), contextReason = reason();
 		const sprint = model.sprints.find((row) => row.sprint_id === detail.meeting.sprint_id);
 		const revise = localForm({
@@ -30294,6 +30339,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			max: 8e3
 		}), followReason = reason();
 		const snapshot = options("pm_meeting_result_snapshot", [["", t("pm_meeting_keep_snapshot")], ...model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`])]);
+		const canRecord = () => can() && (owner() || items.some((item) => item.id === followId.value && item.owner_actor === caps()?.actor && ["owner", "contributor"].includes(role(caps()?.actor))));
 		const follow = localForm({
 			action: "pm.meeting.follow_up.record",
 			target: target(),
@@ -30306,7 +30352,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			},
 			preconditions: pre,
 			context: detail.meeting.completion_id,
-			permitted: () => can() && detail.meeting.status === "completed" && items.some((item) => item.id === followId.value && (owner() || item.owner_actor === caps()?.actor && ["owner", "contributor"].includes(role(caps()?.actor)))),
+			permitted: () => canRecord() && detail.meeting.status === "completed" && items.some((item) => item.id === followId.value),
 			label: "pm_meeting_save_result",
 			params: (values) => {
 				const { snapshot_id, ...rest } = values;
@@ -30318,10 +30364,10 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			},
 			extra: h("div", { class: "pm-fields" }, note("pm_meeting_follow_help"), labelled("pm_meeting_follow_choice", followId), labelled("pm_meeting_follow_status", state), labelled("pm_meeting_follow_result", result), labelled("pm_meeting_result_snapshot", snapshot), labelled("pm_meeting_reason", followReason))
 		});
-		followId.addEventListener("change", () => follow.update());
+		followId.addEventListener("change", () => update());
 		const followBox = fold("pm_meeting_record_result", follow.box, follow.locked());
 		followBox.hidden = !items.length && !follow.locked();
-		holder.append(followBox);
+		holder.append(entryPoint(followBox, canRecord));
 		return holder;
 	}
 	function creationEditor() {
@@ -30381,9 +30427,10 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			id: createId,
 			hidden: !createOpen
 		}, holder);
-		return createBox;
+		return entryPoint(createBox, can);
 	}
 	function renderEditors(reviewBaselines = false) {
+		entries.forEach((sync) => sync());
 		const meetingId = model.detail?.meeting.meeting_id || null;
 		const expanded = editorMeetingId === meetingId ? new Set([...editors.querySelectorAll("details[open][data-pm-fold]")].map((node) => node.dataset.pmFold)) : new Set();
 		const focused = editors.contains(document.activeElement) ? document.activeElement : null;
@@ -30393,11 +30440,12 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		stale = false;
 		dirty = false;
 		forms = [];
+		entries = [];
 		reviewing = reviewBaselines;
 		editors.replaceChildren();
 		if (model.detail) {
 			const actions = meetingEditors();
-			editors.append(fold("pm_meeting_actions", actions, Boolean(actions.querySelector("details[open]"))));
+			editors.append(entryPoint(fold("pm_meeting_actions", actions, Boolean(actions.querySelector("details[open]"))), can));
 		}
 		editors.append(creationEditor());
 		reviewing = false;
@@ -30490,8 +30538,9 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			if (![...field.options].some((option) => option.value === followUpId)) return;
 			if (editor.locked() && field.value !== followUpId) return;
 			if (!editor.locked()) editor.set("follow_up_id", followUpId);
-			editor.update();
+			update();
 		}
+		if (!editor.box.isConnected) return;
 		for (let node = editor.box.parentElement; node && node !== element; node = node.parentElement) if (node instanceof HTMLDetailsElement) {
 			node.hidden = false;
 			node.open = true;

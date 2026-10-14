@@ -230,7 +230,7 @@ test('withdrawn selected source clears the entire saved intake view, not just th
 
 test('reader role disables writing and actor change removes the former actor’s view and editor',async({page})=>{
   const f=fixture();await mount(page,f);await openEditor(page);await pickSnapshot(page);f.state.role='reader';
-  await refresh(page);await expect(page.getByRole('button',{name:'Save discussion preparation',exact:true})).toBeDisabled();
+  await refresh(page);await expect(edit(page)).toBeHidden();await expect(edit(page).locator('button[type=submit]')).toBeDisabled();
   await expect(section(page).locator('[data-pm-panel-readonly]')).toHaveText('Read only: needs operate permission');
   f.state.actor='other-person';f.state.role='owner';await refresh(page);
   await expect(section(page)).toContainText('signed-in actor changed');await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(0);

@@ -73,10 +73,10 @@ test('saving a note preserves another open draft and requires an explicit versio
 });
 test('current membership and designated owner govern completion even after reload',async({page})=>{
   const f=meetingFixture();await mount(page,f);await saveDraft(page);
-  f.state.role='contributor';await page.evaluate(()=>(window as any).refreshMeetings());await openAction(page,'complete');
-  await expect(action(page,'complete').locator('button[type=submit]')).toBeDisabled();
-  f.state.actor='developer';await page.reload();await boot(page);await openAction(page,'complete');
-  await expect(action(page,'complete').locator('button[type=submit]')).toBeDisabled();expect(f.state.writes).toHaveLength(1);
+  f.state.role='contributor';await page.evaluate(()=>(window as any).refreshMeetings());
+  await expect(action(page,'complete')).toHaveCount(0);
+  f.state.actor='developer';await page.reload();await boot(page);
+  await expect(action(page,'complete')).toHaveCount(0);expect(f.state.writes).toHaveLength(1);
 });
 test('new source versions preserve typed text and fixed context until explicit update',async({page})=>{
   const f=meetingFixture();await mount(page,f);await openAction(page,'draft');const field=action(page,'draft').getByLabel('Why this Sprint matters',{exact:true});
@@ -178,16 +178,17 @@ test('Review creation stays disabled before the Sprint has started',async({page}
 });
 test('a malformed page cursor or mismatched workspace prevents writes and clears facts',async({page})=>{
   const f=meetingFixture();await mount(page,f);await reason(page,'note','Keep this unsent reason');f.state.pagedSnapshots=true;f.state.badCursor=true;
-  await page.evaluate(()=>(window as any).refreshMeetings());await expect(action(page,'note').locator('button[type=submit]')).toBeDisabled();
+  await page.evaluate(()=>(window as any).refreshMeetings());await expect(action(page,'note')).toHaveCount(0);
   expect(await page.locator('[data-pm-meetings]').innerText()).not.toContain('Members regain access');
   f.state.badCursor=false;f.state.wrongScope=true;await page.evaluate(()=>(window as any).refreshMeetings());
-  await expect(action(page,'note').locator('button[type=submit]')).toBeDisabled();expect(f.state.writes).toHaveLength(0);
+  await expect(action(page,'note')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
 });
 test('mismatched receipt and lost acknowledgement remain locked after scope revocation',async({page})=>{
   const f=meetingFixture();await mount(page,f);f.state.mismatch=true;await saveNote(page,false);
   await expect(action(page,'note')).toContainText('does not match');const original=structuredClone(f.state.writes[0]);
+  const stored=()=>page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.includes('pm.meeting.note'))));const pending=await stored();
   f.state.manage=false;await page.evaluate(()=>(window as any).refreshMeetings());
-  await expect(action(page,'note').getByRole('button',{name:'Check original request',exact:true})).toBeDisabled();
+  await expect(action(page,'note')).toHaveCount(0);expect(await stored()).toEqual(pending);expect(f.state.writes).toHaveLength(1);
   f.state.manage=true;f.state.mismatch=false;await page.evaluate(()=>(window as any).refreshMeetings());
   await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes.at(-1)).toEqual(original);
 });

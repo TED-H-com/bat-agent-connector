@@ -6,7 +6,7 @@ import {action, governanceFixture, mount, boot, openAction, reason, snapshotId, 
 const view = (page: Page) => page.locator('[data-pm-governance]');
 async function selectChange(page: Page, f: ReturnType<typeof governanceFixture>) {
   await page.locator(`[data-pm-governance-row="${f.state.records[1].record.record_id}"]`).getByRole('button').click();
-  await expect(action(page, 'decide')).toHaveCount(1);
+  await expect(page.locator('[data-pm-governance-detail]')).toHaveAttribute('data-pm-governance-detail', f.state.records[1].record.record_id);
 }
 async function newFinding(page: Page) {
   await openAction(page, 'record'); const editor = action(page, 'record');
@@ -103,17 +103,18 @@ for (const failed of [true, 'large']) test(`source failure ${failed} does not le
 });
 test('current writer and actual owner roles gate edits and decisions without admin impersonation', async ({page}) => {
   const f = governanceFixture(); f.state.actor = 'developer'; f.state.role = 'contributor'; f.state.admin = true;
-  await mount(page, f); await selectChange(page, f); await openAction(page, 'decide'); await openAction(page, 'revise');
-  await expect(action(page, 'decide').locator('button[type=submit]')).toBeDisabled(); await expect(action(page, 'revise').locator('button[type=submit]')).toBeDisabled();
+  await mount(page, f); await selectChange(page, f);
+  await expect(action(page, 'decide')).toHaveCount(0); await expect(action(page, 'adoption.link')).toHaveCount(0); await expect(action(page, 'revise')).toHaveCount(0);
+  await expect(view(page).getByRole('button', {name: 'Resolve', exact: true})).toHaveCount(0); expect(f.state.writes).toEqual([]);
   f.state.records[1].revision.document.owner_actor = 'developer'; f.state.records[1].record.version = 2; f.state.records[1].revision.version = 2;
   await page.evaluate(() => (window as any).refreshGovernance()); await reason(page, 'revise');
   await expect(action(page, 'revise').locator('button[type=submit]')).toBeEnabled();
-  f.state.manage = false; await page.evaluate(() => (window as any).refreshGovernance()); await expect(action(page, 'revise').locator('button[type=submit]')).toBeDisabled();
+  f.state.manage = false; await page.evaluate(() => (window as any).refreshGovernance()); await expect(action(page, 'revise')).toHaveCount(0); expect(f.state.writes).toEqual([]);
 });
 test('administrator without explicit membership cannot impersonate a direction owner', async ({page}) => {
   const f = governanceFixture(); f.state.actor = 'administrator'; f.state.role = 'owner'; f.state.admin = true;
-  await mount(page, f); await selectChange(page, f); await openAction(page, 'decide');
-  await expect(action(page, 'decide').locator('button[type=submit]')).toBeDisabled(); expect(f.state.writes).toEqual([]);
+  await mount(page, f); await selectChange(page, f);
+  await expect(action(page, 'decide')).toHaveCount(0); await expect(action(page, 'adoption.link')).toHaveCount(0); expect(f.state.writes).toEqual([]);
 });
 test('whole-record pages consume invisible sequences and do not treat incomplete list as total', async ({page}) => {
   const f = governanceFixture(); f.state.hiddenFirst = true; f.state.pageSize = 1;

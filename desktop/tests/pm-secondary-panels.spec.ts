@@ -52,10 +52,70 @@ for (const locale of ['en', 'zh-TW']) {
       expect(positions.reasonLeft).toBeLessThan(positions.refreshLeft); expect(positions.reasonRight).toBeLessThanOrEqual(positions.refreshLeft);
       expect(positions.centreDifference).toBeLessThanOrEqual(4); expect(positions.headerRight - positions.refreshRight).toBeLessThanOrEqual(1);
       await expect(page.locator('.pm-heading button.primary:visible')).toHaveCount(0);
-      await expect(page.locator(`[data-pm-action="${action}"] button[type=submit]`)).toBeDisabled();
+      await expect(page.locator('[data-pm-action]:visible button:enabled')).toHaveCount(0);
+      if (panel === 'follow-up') {
+        await expect(page.locator(`[data-pm-action="${action}"]`)).toBeHidden();
+        await expect(page.locator(`[data-pm-action="${action}"] button[type=submit]`)).toBeDisabled();
+        await expect(page.locator('[data-pm-follow-up-analyze]')).toBeHidden();
+      } else await expect(page.locator('[data-pm-action]')).toHaveCount(0);
       expect(f.state.writes).toHaveLength(0);
     });
   }
+  test(`read-only governance retains reading without write entries ${locale}`, async ({page}) => {
+    const f = governance.governanceFixture(); f.state.manage = false; f.state.role = 'reader'; await governance.mount(page, f, locale);
+    await page.locator(`[data-pm-governance-row="${f.state.records[1].record.record_id}"]`).getByRole('button').click();
+    await expect(page.locator('[data-pm-governance-detail]')).toHaveAttribute('data-pm-governance-detail', f.state.records[1].record.record_id);
+    await expect(page.getByText(reason, {exact: true})).toHaveCount(1); await expect(page.getByText(reason, {exact: true})).toBeVisible();
+    for (const action of ['revise','decide','adoption.link']) await expect(governance.action(page, action)).toHaveCount(0);
+    await expect(page.getByText(zh ? '修訂這筆事項' : 'Revise finding', {exact: true})).toHaveCount(0);
+    await expect(page.getByRole('button', {name: zh ? '回報解決' : 'Resolve', exact: true})).toHaveCount(0);
+    await page.locator('[data-pm-governance-detail] > details > summary').click();
+    await page.getByText(zh ? '歷史' : 'History', {exact: true}).click();
+    await expect(page.getByText(zh ? '#1 · 擁有者 · 記錄事項' : '#1 · Owner · Finding recorded', {exact: true})).toBeVisible();
+    expect(f.state.writes).toEqual([]);
+  });
+  test(`owner governance entries and drafts survive permission changes ${locale}`, async ({page}) => {
+    const f = governance.governanceFixture(); await governance.mount(page, f, locale);
+    await page.locator(`[data-pm-governance-row="${f.state.records[1].record.record_id}"]`).getByRole('button').click();
+    await expect(page.getByText(zh ? '修訂這筆事項' : 'Revise finding', {exact: true})).toBeVisible();
+    await expect(page.getByRole('button', {name: zh ? '回報解決' : 'Resolve', exact: true})).toBeVisible();
+    for (const action of ['revise','decide','adoption.link']) {await expect(governance.action(page, action)).toHaveCount(1); await governance.openAction(page, action);}
+    const title = governance.action(page, 'revise').getByLabel(zh ? '事項標題' : 'Finding title', {exact: true});
+    const decision = governance.action(page, 'decide').getByLabel(zh ? '本次記錄的理由' : 'Reason for this record', {exact: true});
+    const adoption = governance.action(page, 'adoption.link').getByLabel(zh ? '本次記錄的理由' : 'Reason for this record', {exact: true});
+    await title.fill('Keep the revision draft'); await decision.fill('Keep the direction draft'); await adoption.fill('Keep the adoption draft');
+    const stored = () => page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.includes('pm.governance.'))));
+    const drafts = await stored();
+    f.state.role = 'contributor'; await page.evaluate(() => (window as any).refreshGovernance());
+    await expect(governance.action(page, 'revise')).toHaveCount(1);
+    await expect(governance.action(page, 'decide')).toHaveCount(0); await expect(governance.action(page, 'adoption.link')).toHaveCount(0);
+    expect(await stored()).toEqual(drafts);
+    f.state.role = 'reader'; f.state.manage = false; await page.evaluate(() => (window as any).refreshGovernance());
+    await expect(page.locator('[data-pm-action]')).toHaveCount(0); expect(await stored()).toEqual(drafts); expect(f.state.writes).toEqual([]);
+    await page.reload(); await governance.boot(page, locale); await expect(page.locator('[data-pm-action]')).toHaveCount(0); expect(await stored()).toEqual(drafts);
+    f.state.role = 'owner'; f.state.manage = true; await page.evaluate(() => (window as any).refreshGovernance());
+    for (const action of ['revise','decide','adoption.link']) await governance.openAction(page, action);
+    await expect(title).toHaveValue('Keep the revision draft'); await expect(decision).toHaveValue('Keep the direction draft'); await expect(adoption).toHaveValue('Keep the adoption draft');
+    await expect(governance.action(page, 'adoption.link').locator('button[type=submit]')).toBeDisabled();
+    await expect(page.getByRole('button', {name: zh ? '回報解決' : 'Resolve', exact: true})).toBeVisible();
+    expect(await stored()).toEqual(drafts); expect(f.state.writes).toEqual([]);
+  });
+  test(`meeting drafts return after a permission downgrade and reload ${locale}`, async ({page}) => {
+    const f = meetings.meetingFixture(); await meetings.mount(page, f, locale);
+    await meetings.openAction(page, 'note'); await meetings.openAction(page, 'draft');
+    const note = meetings.action(page, 'note').locator('textarea').first(), draft = meetings.action(page, 'draft').locator('textarea').first();
+    await note.fill('Keep the discussion note'); await draft.fill('Keep the planning draft');
+    const stored = () => page.evaluate(() => Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.includes('pm.meeting.'))));
+    const drafts = await stored(); f.state.manage = false; f.state.role = 'reader';
+    await page.evaluate(() => (window as any).refreshMeetings()); await expect(page.locator('[data-pm-action]')).toHaveCount(0);
+    await expect(page.getByText(reason, {exact: true})).toHaveCount(1); expect(await stored()).toEqual(drafts); expect(f.state.writes).toEqual([]);
+    await page.reload(); await meetings.boot(page, locale); await expect(page.locator('[data-pm-action]')).toHaveCount(0); expect(await stored()).toEqual(drafts);
+    f.state.manage = true; f.state.role = 'owner'; await page.evaluate(() => (window as any).refreshMeetings());
+    await meetings.openAction(page, 'note'); await meetings.openAction(page, 'draft');
+    await expect(note).toHaveValue('Keep the discussion note'); await expect(draft).toHaveValue('Keep the planning draft');
+    await expect(meetings.action(page, 'complete')).toHaveCount(1); await expect(meetings.action(page, 'complete').locator('button[type=submit]')).toBeDisabled();
+    expect(await stored()).toEqual(drafts); expect(f.state.writes).toEqual([]);
+  });
   test(`governance toggle retains its label after selection ${locale}`, async ({page}) => {
     const f = governance.governanceFixture(); await governance.mount(page, f, locale);
     const row = page.locator(`[data-pm-governance-row="${f.state.records[1].record.record_id}"]`), toggle = row.getByRole('button');

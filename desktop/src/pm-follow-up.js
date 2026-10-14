@@ -140,7 +140,8 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     choices.querySelectorAll('input,select,button').forEach(node=>{node.disabled=locked;});
     meetingChoices.querySelectorAll('input,select,button').forEach(node=>{node.disabled=locked;});
     rebase.hidden=!baseline.value||!stale();rebase.disabled=editor.locked()||!can();
-    versionWarning.hidden=!stale();writeWarning.hidden=!loaded||can();editorFold.hidden=!loaded||!prepareOpen;
+    versionWarning.hidden=!stale();writeWarning.hidden=!loaded||can();editorFold.hidden=!loaded||!prepareOpen||!can();
+    if(analysis)analysis.element.hidden=!can();
     if(launch){launch.hidden=!can();launch.setAttribute('aria-expanded',String(loaded&&prepareOpen));}
   }
   const rebase=h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>{bindVersions();editor.update();}},t('pm_fu_use_versions'));

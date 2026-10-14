@@ -15,6 +15,8 @@
   requirement, and missing follow-up baseline areas are named in both languages.
   Read-only reasons stay beside Refresh; unselected register governance shows a
   selection hint, and finding toggles retain their label when selected.
+  Unavailable write entry points are hidden using each action's existing permissions;
+  drafts and original requests return when permission is restored.
 
 - Reviewed handoff facts no longer print empty placeholders. The issues register
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited
