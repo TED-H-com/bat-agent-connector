@@ -27,3 +27,8 @@ test('fingerprints normalize optional prefix, spaces and colons without acceptin
   assert.equal(normalizeSetupFingerprint('a'.repeat(63)), null);
   assert.equal(normalizeSetupFingerprint('g'.repeat(64)), null);
 });
+test('explicit protocol-default BAT ports survive URL normalization', () => {
+  assert.equal(parseBatConnectionUrl(`wss://localhost:443?token=synthetic-secret&fp=${fingerprint}`)?.endpoint, 'wss://localhost:443');
+  assert.equal(parseBatConnectionUrl(`ws://localhost:80?token=synthetic-secret&fp=${fingerprint}`)?.endpoint, 'wss://localhost:80');
+  assert.equal(validSetupEndpoint('wss://localhost:443/'), true);
+});

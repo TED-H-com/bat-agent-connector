@@ -21,11 +21,12 @@ try {
       await form.locator('input[type=password]').fill('synthetic-bat-secret');
     } else await form.locator('[data-setup-field=connection_url]').fill(`ws://127.0.0.1?token=synthetic-bat-secret&fp=${'a'.repeat(64)}`);
     await shot('url-filled');
-    state.refused=true;
+    state.refused=true;state.refusalCode='INVALID_TARGET';state.refusalMessage='Choose a stable logical host name';
+    if(stage==='before') await form.locator('input').first().fill('本機');
     if(stage==='after') {state.refusalCode='INVALID_TARGET';state.admissionRefused=true;state.refusalStatus=422;}
     await form.locator('button[type=submit]').click(); await expect.poll(()=>state.posts.length).toBe(1); await shot('refusal');
     state.refused=false;
-    if(stage==='before') await panel.locator('.actions').first().locator('button').last().click();
+    if(stage==='before') {await panel.locator('.actions').first().locator('button').last().click();await form.locator('input').first().fill('local');}
     if(stage==='after') await form.locator('[data-setup-field=host]').fill('local');
     await form.locator('button[type=submit]').click(); await expect(panel.locator('a[href^="#/op/"]')).toBeVisible();
     await shot('connected'); await shot('settings');

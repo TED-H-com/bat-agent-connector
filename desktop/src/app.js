@@ -2872,13 +2872,11 @@ function viewBrowserSettings(main) {
   const frame = openSettings(main, {exclusive: true});
   const managed = state.token === browserSessionToken;
   const facts = connectionFacts();
-  const footer = h("div", {class: "global-card-footer"});
   frame.panel("connection").append(h("section", {class: "panel"},
     facts, connectionAccess(),
     managed ? h("h2", {}, t("managed_browser_connected")) : null,
     disclosure({label: t("global_details"), body: h('div', {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)}),
-    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect")),
-    footer));
+    h("button", {class: "danger", onclick: () => {disconnect(); route();}}, t("disconnect"))));
   frame.show("fleet");
   frame.panel("fleet").append(fleetEmpty());
   return () => {};
@@ -2908,8 +2906,7 @@ function viewBrowserSignedOut(main) {
       h("button", {class: "primary", type: "submit"}, t("connect")),
       h("a", {class: "global-quiet-link", href: setupGuide()}, t("global_setup_guide"))),
     disclosure({label: t("global_details"), body: h("p", {}, t("token_help"))}), info);
-  const footer = h("div", {class: "global-card-footer"});
-  const root = firstRunCard({h, t, body: form, footer});
+  const root = firstRunCard({h, t, body: form});
   main.append(root);
 }
 function viewSettings(main) {

@@ -5,13 +5,15 @@ export function normalizeSetupFingerprint(value) {
   const normalized = value.trim().toUpperCase().replace(/^SHA256:/, '').replace(/[: ]/g, '');
   return /^[0-9A-F]{64}$/.test(normalized) ? normalized : null;
 }
+const explicitPort = value => value.replace(/^wss?:\/\//i, '').split(/[/?#]/, 1)[0].match(/:(\d+)$/)?.[1];
 export function parseBatConnectionUrl(value) {
   try {
     const raw = value.trim();
     if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) && !/^wss?:\/\//i.test(raw)) return null;
     const url = new URL(/^wss?:\/\//i.test(raw) ? raw : `wss://${raw}`);
     const token = url.searchParams.get('token'), fingerprint = normalizeSetupFingerprint(url.searchParams.get('fp') || '');
-    const port = Number(url.port || 9876);
+    // URL.port drops protocol-default ports (443/80); keep an explicit BAT port.
+    const port = Number(explicitPort(raw) || 9876);
     if (!['wss:', 'ws:'].includes(url.protocol) || !url.hostname || url.username || url.password ||
         !token || !fingerprint || !Number.isInteger(port) || port < 1 || port > 65535) return null;
     return {endpoint: `wss://${url.hostname}:${port}`, fingerprint, token,
@@ -22,7 +24,7 @@ export function validSetupEndpoint(value) {
   try {
     const url = new URL(value);
     return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) &&
-      url.protocol === 'wss:' && !!url.hostname && Number(url.port) > 0 && !url.username && !url.password &&
+      url.protocol === 'wss:' && !!url.hostname && Number(explicitPort(value)) > 0 && !url.username && !url.password &&
       !value.includes('?') && !value.includes('#') && /^wss:\/\/[^/]+\/?$/i.test(value);
   } catch {return false;}
 }

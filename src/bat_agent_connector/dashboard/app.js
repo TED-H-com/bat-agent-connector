@@ -7079,8 +7079,6 @@ var STRINGS = {
 		connection_scopes: "授權範圍代碼",
 		connection_access: "可用權限",
 		connection_other_access: "其他授權",
-		platform_posix: "macOS／Linux",
-		platform_windows: "Windows",
 		error_code_NOT_MANAGED: "此安裝未提供引導設定。",
 		error_code_FORBIDDEN: "目前帳號沒有這項操作的權限。",
 		error_code_INVALID_CONFIGURATION: "設定無效，請核對連線、憑證指紋與受管目錄。",
@@ -8695,8 +8693,6 @@ var STRINGS = {
 		connection_scopes: "Scope codes",
 		connection_access: "Access",
 		connection_other_access: "Other access",
-		platform_posix: "macOS / Linux",
-		platform_windows: "Windows",
 		error_code_NOT_MANAGED: "Guided setup is unavailable for this installation.",
 		error_code_FORBIDDEN: "Your account does not have the required scope.",
 		error_code_INVALID_CONFIGURATION: "Check the connection, certificate fingerprint and managed directories.",
@@ -39828,13 +39824,14 @@ function normalizeSetupFingerprint(value) {
 	const normalized = value.trim().toUpperCase().replace(/^SHA256:/, "").replace(/[: ]/g, "");
 	return /^[0-9A-F]{64}$/.test(normalized) ? normalized : null;
 }
+var explicitPort = (value) => value.replace(/^wss?:\/\//i, "").split(/[/?#]/, 1)[0].match(/:(\d+)$/)?.[1];
 function parseBatConnectionUrl(value) {
 	try {
 		const raw = value.trim();
 		if (/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) && !/^wss?:\/\//i.test(raw)) return null;
 		const url = new URL(/^wss?:\/\//i.test(raw) ? raw : `wss://${raw}`);
 		const token = url.searchParams.get("token"), fingerprint = normalizeSetupFingerprint(url.searchParams.get("fp") || "");
-		const port = Number(url.port || 9876);
+		const port = Number(explicitPort(raw) || 9876);
 		if (!["wss:", "ws:"].includes(url.protocol) || !url.hostname || url.username || url.password || !token || !fingerprint || !Number.isInteger(port) || port < 1 || port > 65535) return null;
 		return {
 			endpoint: `wss://${url.hostname}:${port}`,
@@ -39853,7 +39850,7 @@ function parseBatConnectionUrl(value) {
 function validSetupEndpoint(value) {
 	try {
 		const url = new URL(value);
-		return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) && url.protocol === "wss:" && !!url.hostname && Number(url.port) > 0 && !url.username && !url.password && !value.includes("?") && !value.includes("#") && /^wss:\/\/[^/]+\/?$/i.test(value);
+		return value.length <= 512 && !/\s/.test(value) && /^wss:\/\//i.test(value) && url.protocol === "wss:" && !!url.hostname && Number(explicitPort(value)) > 0 && !url.username && !url.password && !value.includes("?") && !value.includes("#") && /^wss:\/\/[^/]+\/?$/i.test(value);
 	} catch {
 		return false;
 	}
@@ -53627,7 +53624,6 @@ function viewBrowserSettings(main) {
 	const frame = openSettings(main, { exclusive: true });
 	const managed = state.token === browserSessionToken;
 	const facts = connectionFacts();
-	const footer = h("div", { class: "global-card-footer" });
 	frame.panel("connection").append(h("section", { class: "panel" }, facts, connectionAccess(), managed ? h("h2", {}, t("managed_browser_connected")) : null, disclosure({
 		label: t("global_details"),
 		body: h("div", {}, connectionIdentity(), managed ? h("p", {}, t("managed_browser_help")) : null)
@@ -53637,7 +53633,7 @@ function viewBrowserSettings(main) {
 			disconnect();
 			route();
 		}
-	}, t("disconnect")), footer));
+	}, t("disconnect"))));
 	frame.show("fleet");
 	frame.panel("fleet").append(fleetEmpty());
 	return () => {};
@@ -53683,8 +53679,7 @@ function viewBrowserSignedOut(main) {
 		}, t("global_setup_guide"))), disclosure({
 			label: t("global_details"),
 			body: h("p", {}, t("token_help"))
-		}), info),
-		footer: h("div", { class: "global-card-footer" })
+		}), info)
 	});
 	main.append(root);
 }

@@ -52,6 +52,7 @@ for (const locale of ['en','zh-TW']) for (const native of [false,true]) test.des
     const state = await managedSetupFixture(page,native,locale);state.refused=true;state.refusalCode='INVALID_TARGET';state.refusalStatus=422;
     await page.goto('/dashboard/');await field(page,'connection_url').fill(url);await formFor(page).locator('button[type=submit]').click();
     await expect(field(page,'host')).toBeEditable();await expect(field(page,'host')).toBeFocused();
+    await expect(page.locator('[data-error-summary]')).toHaveText(locale==='en'?'Setup was not saved. Correct the marked field.':'設定未儲存，請修正標示的欄位。');
     await expect(page.locator('[data-setup-error=host]')).toContainText(locale==='en'?'Host ID must':'主機代號須');
     const recover=page.getByRole('button',{name:locale==='en'?'Check request':'查回請求',exact:true});await expect(recover).toBeHidden();
     expect((await draft(page)).intent).toBeUndefined();
