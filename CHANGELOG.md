@@ -105,6 +105,9 @@
   this round's acceptance, with Requirements and sourced PM discussion links in
   English and Traditional Chinese.
 
+- Keep Requirements rows and Board agent options stable when identical delivery
+  reads finish in a different order.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.
