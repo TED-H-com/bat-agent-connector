@@ -140,6 +140,10 @@ in the read memo and parse a fresh copy for each caller. Raw SQLite scalar
 columns need only a copied envelope. These copy strategies preserve unknown
 values, integer precision and caller isolation; they do not change authorization
 or enable storing projections inside a traversal guard.
+Completed operation visibility can return from the existing read memo without
+opening another source savepoint. It first validates any borrowed source scope,
+including loop-turn, owner, mutation and nested-scope depth checks. Active
+guards and repair traversals still enter their original bounded source reader.
 The original execution-verifier visibility reader also reuses only a completed
 boolean for its canonical saved operation ID within that same scope. It has its
 own 64-node depth allowance so verifier wrappers do not shorten supported root

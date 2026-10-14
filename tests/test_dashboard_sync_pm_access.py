@@ -39,9 +39,8 @@ async def test_operation_visibility_reuses_read_but_withdraws_after_membership_w
             assert pm_access.visible(ops.db, OWNER, operation)
             first = len(selects)
             assert pm_access.visible(ops.db, OWNER, operation)
-            # Each independent source reader anchors its own WAL snapshot;
-            # none of the PM visibility queries should repeat.
-            assert selects[first:] == ['SELECT name FROM sqlite_schema LIMIT 1']
+            # A completed grant already belongs to this request's WAL point.
+            assert selects[first:] == []
             assert ops.db.total_changes == before
             # Same ID with a changed projection cannot borrow the original
             # workspace's cached permission. The key includes the full input.

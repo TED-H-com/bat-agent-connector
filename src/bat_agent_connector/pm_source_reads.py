@@ -44,6 +44,21 @@ def _changed():
     return OperationError('PM_SOURCE_READ_CHANGED', 'Original source read must restart in a fresh snapshot', 409)
 
 
+def _parent_scope(db, principal):
+    parent, identity = _READ.get(), _identity(db, principal)
+    if parent is not None and parent['open']:
+        if not _valid(parent):
+            raise _changed()
+        if parent['identity'] != identity and parent['scope_depth'] >= MAX_DEPTH:
+            raise _changed()
+    return parent, identity
+
+
+def validate_scope(db, principal):
+    """Reject invalid borrowed source state before serving a completed read."""
+    _parent_scope(db, principal)
+
+
 @contextmanager
 def scope(db, principal):
     """Join only a live same-caller synchronous scope; otherwise open a new one.
@@ -52,17 +67,13 @@ Callers perform source reads only. No await, transaction boundary or
 write belongs inside this scope. A loop turn, mutation, closed transaction or
 copied asynchronous context invalidates reuse rather than granting access.
 """
-    parent, identity = _READ.get(), _identity(db, principal)
+    parent, identity = _parent_scope(db, principal)
     if parent is not None and parent['open']:
-        if not _valid(parent):
-            raise _changed()
         if parent['identity'] == identity:
             yield parent
             if not _valid(parent):
                 raise _changed()
             return
-        if parent['scope_depth'] >= MAX_DEPTH:
-            raise _changed()
     owned = not db.in_transaction
     if owned:
         db.execute('BEGIN')

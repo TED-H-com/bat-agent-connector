@@ -5,6 +5,8 @@
 - Reuse completed PM source and operation visibility reads during synchronous
   page, step and final-frame validation. Discard memos on writes and before awaits;
   preserve current authority, withdrawal and original-receipt recovery checks.
+  Reuse completed visibility without reopening source savepoints; still reject
+  invalid borrowed source scopes before serving a cached decision.
 
 - Bound repeated original-source traversal in GitHub workload observation checks.
   Share only completed historical decisions within each synchronous policy read,

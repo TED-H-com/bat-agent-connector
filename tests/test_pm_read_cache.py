@@ -367,6 +367,31 @@ def test_json_projection_copies_preserve_values_and_withdraw_after_write(db):
         assert not pm_read_cache._CURRENT.get().scope.values
 
 
+@pytest.mark.parametrize('borrower', ['same_task', 'copied_task'])
+async def test_completed_visibility_still_rejects_invalid_borrowed_scope(db, monkeypatch, borrower):
+    from bat_agent_connector import pm_access, pm_source_reads
+
+    monkeypatch.setattr(pm_access, '_visible', lambda connection, principal, operation: True)
+    operation = {'operation_id': 'original-operation', 'action': 'fixture.read'}
+    async def rejected():
+        with pytest.raises(OperationError) as denied:
+            pm_access.visible(db, OWNER, operation)
+        assert denied.value.code == 'PM_SOURCE_READ_CHANGED'
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        before = db.total_changes
+        assert pm_access.visible(db, OWNER, operation)
+        with pytest.raises(OperationError) as closed:
+            with pm_source_reads.scope(db, OWNER):
+                if borrower == 'same_task':
+                    await asyncio.sleep(0)
+                    await rejected()
+                else:
+                    await asyncio.create_task(rejected())
+        assert closed.value.code == 'PM_SOURCE_READ_CHANGED'
+        assert db.total_changes == before
+
+
 def test_write_during_freeze_cannot_repopulate_scope(db):
     def freeze(value):
         db.execute("UPDATE records SET value='withdrawn'")

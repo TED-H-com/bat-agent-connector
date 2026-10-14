@@ -57,12 +57,20 @@ def inherit_operation_sources(db, operation_id, source_operation_ids):
 
 def visible(db, principal, operation):
     from .pm_maintenance_repairs import source_read_context
-    from .pm_source_reads import MAX_NODES, scope
+    from .pm_source_reads import MAX_NODES, scope, validate_scope
+    validate_scope(db, principal)
+    # A completed same-snapshot grant needs no second source savepoint or WAL
+    # anchor. Validate borrowed state first, including same-task loop turns.
+    selection = {key: operation[key] for key in ('operation_id', 'action', 'target', 'actor') if key in operation}
+    if not pm_read_cache.is_guarded() and not source_read_context(db, principal):
+        with pm_read_cache.scope(db, principal):
+            found, result = pm_read_cache.recall(_visible, (principal, selection))
+        if found and result:
+            return result
     with scope(db, principal) as state:
         # These are the visibility reader's entire inputs. Domain readers load
         # their own canonical records by ID; caller results/contexts are not
         # authority and need not be walked to construct an identical read key.
-        selection = {key: operation[key] for key in ('operation_id', 'action', 'target', 'actor') if key in operation}
         try:
             key = pm_read_cache._key(selection)
         except TypeError:
