@@ -654,13 +654,51 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-ahp pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; }
 .pm-ahp .mono, .pm-ahp small { overflow-wrap: anywhere; }
 .pm-ahp .capture-fields { align-items: end; }
-.pm-ahp label.pm-ahp-session { display: flex; align-items: flex-start; gap: var(--space-2); padding-block: 6px; border-bottom: 1px solid var(--line); }
-.pm-ahp .pm-ahp-session input { width: auto; flex: 0 0 auto; margin-top: 5px; }
-.pm-ahp-session span { min-width: 0; }
+.pm-ahp label.pm-ahp-session { display: flex; align-items: flex-start; justify-content: flex-start; gap: var(--space-2); padding-block: 6px; border-bottom: 1px solid var(--line); }
+.pm-ahp .ui-data-table label.pm-ahp-session { border-bottom: 0; padding-block: 0; }
+.pm-ahp .pm-ahp-session input { width: auto; flex: 0 0 auto; margin-top: 2px; }
+.pm-ahp-session span { min-width: 0; text-align: left; }
 .pm-ahp-session small { display: block; color: var(--muted); }
+:root body .pm-ahp .ui-data-table table { table-layout: auto; }
+:root body .pm-ahp .ui-data-table :is(th, td):first-child,
+:root body .pm-ahp .ui-data-table :is(th, td)[data-column="check"] { width: 1%; white-space: nowrap; text-align: left; vertical-align: top; }
+:root body .pm-ahp .ui-data-table :is(th, td)[data-column="session"] { width: auto; text-align: left; vertical-align: top; }
 .pm-ahp-history-row { display: grid; gap: var(--space-1); margin-block: var(--space-2); }
 .pm-ahp-history-row button { text-align: start; white-space: normal; }
 .pm-ahp-facts p { margin-block: 6px; }
+:root body .pm-ahp .ui-data-table :is(th, td) { overflow: visible; text-overflow: unset; white-space: normal; }
+:root body .pm-ahp .ui-data-table :is(code, .mono) { overflow: visible; overflow-wrap: anywhere; text-overflow: unset; white-space: normal; }
+.pm-tool-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-block: var(--space-2); }
+.pm-tool-head:has(> label) { align-items: end; }
+.pm-tool-head > .ui-icon-button { margin-left: auto; flex: 0 0 auto; }
+.pm-tool-head > label { flex: 1 1 12rem; min-width: 0; max-width: min(28rem, 100%); }
+.pm-tool-head > label > select { width: 100%; max-width: 100%; }
+.pm-tool-head > .pm-tool-note { flex: 1 1 12rem; min-width: 0; }
+/* The inspector panel is about 368px. Below this, Refresh stays on the first line and a secondary action wraps. */
+:is([data-pm-sprints], [data-pm-work-packages], [data-pm-package-handoff], [data-pm-ahp], [data-pm-work-deliveries]) { container-type: inline-size; container-name: pm-c3; }
+@container pm-c3 (max-width: 26rem) {
+  .pm-tool-head:has(> .ui-icon-button) { display: grid; grid-template-columns: minmax(12rem, 1fr) auto; align-items: end; }
+  .pm-tool-head:has(> .ui-icon-button):not(:has(> label)) { align-items: center; }
+  .pm-tool-head:has(> .ui-icon-button) > :is(label, .pm-tool-note) { grid-column: 1; grid-row: 1; max-width: none; min-width: 0; }
+  .pm-tool-head:has(> .ui-icon-button) > .ui-pill { grid-column: 1; grid-row: 1; justify-self: start; }
+  .pm-tool-head:has(> .ui-icon-button) > .ui-icon-button { grid-column: 2; grid-row: 1; margin-left: 0; }
+  .pm-tool-head:has(> .ui-icon-button) > :is(button, .ui-button, a):not(.ui-icon-button) { grid-column: 1; grid-row: 2; justify-self: start; width: auto; }
+}
+@media (max-width: 799px) {
+  .pm-tool-head > label > select { min-height: 44px; }
+}
+.pm-tool-note > :is(p, .error, .ui-inline-error) { margin: 0; }
+.pm-sprint-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.pm-package-name { margin: 0; }
+.pm-sprint-answer { display: grid; gap: var(--space-2); min-width: 0; }
+.pm-sprint-goal { margin: 0; }
+.pm-sprint-work { margin: 0; padding-left: 1.1rem; }
+.pm-sprint-period { margin: 0; color: var(--text-3); font-size: var(--fs-small); }
+.pm-time-field { min-width: 0; }
+.pm-local-time { display: block; margin-top: 4px; color: var(--text-3); font-size: var(--fs-caption); }
+.pm-delivery, .pm-delivery-package { padding-block: var(--space-3); border-top: 1px solid var(--line); min-width: 0; }
+.pm-delivery h4 { margin: 0; font-size: var(--fs-body); }
+.pm-delivery .mono, .pm-delivery-package .mono { overflow-wrap: anywhere; }
 
 [data-pm-source-pending] { visibility: hidden; position: relative; }
 [data-pm-source-pending] > [data-pm-source-loading] { visibility: visible; position: absolute; inset: 0; }

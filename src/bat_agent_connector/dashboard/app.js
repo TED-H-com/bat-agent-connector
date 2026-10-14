@@ -1326,61 +1326,65 @@ var ahpObserverStrings = {
 		ahp_capabilities: "Adapter capabilities and limits",
 		ahp_protocol: "Protocol",
 		ahp_capability_limits: "AHP read subset: catalog and selected snapshots only. Configured protocol support is separate from live host validation; check the original capability document. No session creation, messaging, stopping, writer control or adapter migration.",
-		ahp_no_adapters: "No AHP adapters are configured for this workspace. An operator must configure the central service before observations are available.",
-		ahp_unavailable: "Observation sources could not be reread. Previous source content has been hidden; original request keys are preserved."
+		ahp_no_adapters: "No AHP adapters are configured for this workspace.",
+		ahp_unavailable: "Not available for this workspace. Previous source content has been hidden; original request keys are preserved.",
+		ahp_details: "Details",
+		ahp_catalog_column: "Catalog"
 	},
 	"zh-TW": {
-		ahp_decoder_profile: "原紀錄 decoder profile",
-		ahp_unknown_source_kind: "這份原快照未記錄可支援的來源種類。請從原文件查看保存的 metadata；不以 URI 推定種類。",
+		ahp_decoder_profile: "原紀錄解碼設定",
+		ahp_unknown_source_kind: "這份原快照未記錄可支援的來源種類。請從原文件查看保存的中繼資料；不以 URI 推定種類。",
 		ahp_snapshot_details: "快照詳情",
 		ahp_from_sequence: "快照序號",
 		ahp_later_events: "已記錄後續事件",
 		ahp_yes: "是",
 		ahp_no: "否",
 		ahp_unknown: "未知",
-		ahp_provider: "Provider",
-		ahp_native_lifecycle: "原生回報 lifecycle（非完成證明）",
-		ahp_file_count: "檔案 metadata 紀錄",
-		ahp_title: "AHP 唯讀觀察",
-		ahp_intro: "讀取已設定主機的 catalog 與選定快照。人工及外部 session 維持唯讀；這些觀察不能證明完成、成本或管理權。",
-		ahp_adapter: "已設定的 adapter",
+		ahp_provider: "提供者",
+		ahp_native_lifecycle: "原生回報生命週期（非完成證明）",
+		ahp_file_count: "檔案中繼資料紀錄",
+		ahp_title: "AHP 觀察",
+		ahp_intro: "讀取已設定主機的目錄與選定快照。人工及外部工作階段維持唯讀；這些觀察不能證明完成、成本或管理權。",
+		ahp_adapter: "已設定的轉接器",
 		ahp_refresh: "重讀已保存觀察",
 		ahp_history: "已保存觀察歷史",
 		ahp_more: "下一頁已保存觀察",
-		ahp_invalid: "觀察與原 workspace 或來源不一致。",
+		ahp_invalid: "觀察與原工作空間或來源不一致。",
 		ahp_saved_detail: "已保存的觀察",
 		ahp_captured: "擷取時間",
 		ahp_coverage: "擷取涵蓋範圍",
 		ahp_observed: "已保存有界觀察",
 		ahp_incomplete: "觀察不完整",
-		ahp_catalog_coverage: "Catalog 涵蓋範圍",
-		ahp_catalog_complete: "已列出 catalog 的分頁讀取完整",
-		ahp_catalog_partial: "已列出 catalog 不完整",
+		ahp_catalog_coverage: "目錄涵蓋範圍",
+		ahp_catalog_complete: "已列出目錄的分頁讀取完整",
+		ahp_catalog_partial: "已列出目錄不完整",
 		ahp_reason: "原紀錄原因",
-		ahp_snapshots: "選定快照（含 root）",
-		ahp_events: "事件 metadata 紀錄",
+		ahp_snapshots: "選定快照（含根目錄）",
+		ahp_events: "事件中繼資料紀錄",
 		ahp_gaps: "已記錄的重播缺口",
 		ahp_evidence_limits: "這是有時間與範圍限制的證據。快照之後可能已有事件；缺口及缺失來源保留在原文件中。不擷取逐字稿、檔案內容或完成證明。",
 		ahp_original: "原始來源文件與收據",
 		ahp_hidden: "目前來源權限無法讀取部分原觀察。",
 		ahp_empty: "尚無已保存觀察。",
-		ahp_need_catalog: "先擷取 catalog，再選取 session。",
-		ahp_selection_help: "從這份已保存 catalog 選取最多 8 個 session。擷取時會再次查核主機 catalog。",
-		ahp_selection_unavailable: "原 catalog 選取目前無法讀取。如有待查回請求，先恢復原請求；否則可擷取新 catalog 重新選取。",
+		ahp_need_catalog: "先擷取目錄，再選取工作階段。",
+		ahp_selection_help: "從這份已保存目錄選取最多 8 個工作階段。擷取時會再次查核主機目錄。",
+		ahp_selection_unavailable: "原目錄選取目前無法讀取。如有待查回請求，先恢復原請求；否則可擷取新目錄重新選取。",
 		ahp_select: "選取",
-		ahp_no_sessions: "這份 catalog 未列出 session。",
+		ahp_no_sessions: "這份目錄未列出工作階段。",
 		ahp_changesets: "快照內容",
-		ahp_sessions_only: "僅 session metadata",
-		ahp_include_changesets: "包含已列出的靜態 changeset",
-		ahp_changesets_help: "可選的靜態 changeset 快照包含檔案路徑與 diff 數量，最多 16 份。不讀取動態範本或檔案內容。",
+		ahp_sessions_only: "僅工作階段中繼資料",
+		ahp_include_changesets: "包含已列出的靜態變更集",
+		ahp_changesets_help: "可選的靜態變更集快照包含檔案路徑與差異數量，最多 16 份。不讀取動態範本或檔案內容。",
 		ahp_capture_selected: "擷取選定快照",
-		ahp_capture_catalog: "擷取主機 catalog",
-		ahp_catalog_help: "明確讀取已設定主機。待查回的選取請求保留原內容與 key。",
-		ahp_capabilities: "Adapter 能力與限制",
+		ahp_capture_catalog: "擷取主機目錄",
+		ahp_catalog_help: "明確讀取已設定主機。待查回的選取請求保留原內容與金鑰。",
+		ahp_capabilities: "轉接器能力與限制",
 		ahp_protocol: "協定",
-		ahp_capability_limits: "AHP 唯讀子集：僅 catalog 與選定快照。設定支援的協定與真實主機驗證不同；請查看原能力文件。不提供建立 session、傳訊、停止、writer 控制或 adapter 遷移。",
-		ahp_no_adapters: "此 workspace 尚未設定 AHP adapter。需先由操作人員設定中央服務，才能擷取觀察。",
-		ahp_unavailable: "無法重新讀取觀察來源。已隱藏先前來源內容；原請求 key 仍保留。"
+		ahp_capability_limits: "AHP 唯讀子集：僅目錄與選定快照。設定支援的協定與真實主機驗證不同；請查看原能力文件。不提供建立工作階段、傳訊、停止、寫入者控制或轉接器遷移。",
+		ahp_no_adapters: "此工作空間尚未設定 AHP 轉接器。",
+		ahp_unavailable: "此工作空間目前無法讀取。已隱藏先前來源內容；原請求金鑰仍保留。",
+		ahp_details: "詳細資訊",
+		ahp_catalog_column: "目錄"
 	}
 };
 //#endregion
@@ -1872,6 +1876,13 @@ var workDeliveryStrings = {
 		wd_merged: "Merge observed",
 		wd_merge_verified: "Merge verification",
 		wd_environment: "Environment",
+		wd_package: "Package",
+		wd_digest: "Digest",
+		wd_head: "New head",
+		wd_pinned: "Pinned commit",
+		wd_merged_sha: "Merge commit",
+		wd_source_sha: "Deployed commit",
+		wd_details: "Details",
 		wd_deploy_state: "Deployment state",
 		wd_deploy_verified: "Runtime verification",
 		wd_current: "Current deployment",
@@ -1879,6 +1890,15 @@ var workDeliveryStrings = {
 		wd_yes: "Yes",
 		wd_no: "No",
 		wd_unknown: "Unknown",
+		wd_state_verified: "Verified",
+		wd_state_unverified: "Unverified",
+		wd_state_succeeded: "Succeeded",
+		wd_state_failed: "Failed",
+		wd_state_cancelled: "Cancelled",
+		wd_state_superseded: "Superseded",
+		wd_state_uncertain: "Uncertain",
+		wd_state_needs_attention: "Needs attention",
+		wd_state_drift: "Drift",
 		wd_empty: "No readable delivery records in this page.",
 		wd_loading: "Reading saved delivery evidence…",
 		wd_invalid: "The reply does not match this work and its fixed delivery contract.",
@@ -1903,34 +1923,50 @@ var workDeliveryStrings = {
 	},
 	"zh-TW": {
 		wd_title: "已記錄工程交付",
-		wd_boundary: "已保存的 push、merge 與部署結果是不同事實；需求接受條件與共用品質完成定義仍需各自評估。",
+		wd_boundary: "已保存的推送、合併與部署結果是不同事實。需求與完成定義仍需各自評估。",
 		wd_refresh: "重新讀取交付紀錄",
 		wd_more: "更多交付紀錄",
 		wd_packages: "原始派工工作包",
 		wd_original: "原始派工",
 		wd_operation: "交付操作",
 		wd_status: "操作狀態",
-		wd_pull: "Pull request",
-		wd_pushed: "已記錄 push",
-		wd_merged: "已觀察到 merge",
-		wd_merge_verified: "Merge 驗證",
+		wd_pull: "PR",
+		wd_pushed: "已記錄推送",
+		wd_merged: "已觀察到合併",
+		wd_merge_verified: "合併驗證",
 		wd_environment: "環境",
+		wd_package: "工作包",
+		wd_digest: "摘要",
+		wd_head: "新的遠端版本",
+		wd_pinned: "釘選提交",
+		wd_merged_sha: "合併提交",
+		wd_source_sha: "部署提交",
+		wd_details: "詳細資訊",
 		wd_deploy_state: "部署狀態",
 		wd_deploy_verified: "執行環境驗證",
 		wd_current: "目前部署",
-		wd_run: "Workflow 執行",
+		wd_run: "工作流程執行",
 		wd_yes: "是",
 		wd_no: "否",
 		wd_unknown: "未知",
+		wd_state_verified: "已驗證",
+		wd_state_unverified: "未驗證",
+		wd_state_succeeded: "已成功",
+		wd_state_failed: "失敗",
+		wd_state_cancelled: "已取消",
+		wd_state_superseded: "已取代",
+		wd_state_uncertain: "不確定",
+		wd_state_needs_attention: "需要處理",
+		wd_state_drift: "已偏移",
 		wd_empty: "這一頁沒有目前可讀的交付紀錄。",
 		wd_loading: "正在讀取已保存交付證據…",
 		wd_invalid: "回覆與本工作及固定交付契約不符。",
 		wd_filtered: "部分原始來源無法讀取，這一頁並不完整。",
 		wd_unavailable: "交付證據目前無法讀取；恢復存取後可重新整理。",
 		"wd_action_integration.preview": "整合預覽",
-		"wd_action_integration.apply": "整合 push",
+		"wd_action_integration.apply": "整合推送",
 		"wd_action_integration.handoff": "自有修復交接",
-		"wd_action_github.pr.merge": "Pull request 合併",
+		"wd_action_github.pr.merge": "PR 合併",
 		"wd_action_delivery.merge_and_deploy": "合併與部署",
 		"wd_action_deployment.start": "部署",
 		"wd_action_deployment.rollback": "回復版本",
@@ -1961,6 +1997,8 @@ var pmWorkBatchesStrings = {
 		pmb_intro: "Choose reviewed handoffs, set limits, and track their original operations.",
 		pmb_refresh: "Refresh batch sources",
 		pmb_draft: "New batch selection",
+		pmb_new: "New batch",
+		pmb_record_open: "Record evidence",
 		pmb_selection_help: "Review an engineering handoff and fill its instructions first. Adding it saves that exact request here; later handoff edits do not replace it.",
 		pmb_add: "Add reviewed handoff",
 		pmb_history: "Saved batch",
@@ -1968,10 +2006,13 @@ var pmWorkBatchesStrings = {
 		pmb_stale: "Workspace or lifecycle version changed. Review the current state before using its versions for a new request.",
 		pmb_use_versions: "Use current workspace versions",
 		pmb_rationale: "Reason for this request",
-		pmb_starts: "Maximum starts",
-		pmb_parallel: "Maximum parallel results",
-		pmb_retries: "Proven-unsent retries",
+		pmb_starts: "Starts",
+		pmb_parallel: "Parallel",
+		pmb_retries: "Retries",
 		pmb_deadline: "Deadline (local time)",
+		pmb_deadline_short: "Deadline",
+		pmb_shown: "Shown time",
+		pmb_details: "Details",
 		pmb_budget_help: "Limits count starts and unresolved results. Model usage and provider cost are unmeasured; these limits are not a spending cap.",
 		pmb_boundary: "Dispatch success does not mean engineering is complete. Fixed revision verification does not approve requirements or DoD. Pausing or cancelling stops new admissions; existing sessions retain their original receipts.",
 		pmb_start: "Start selected batch",
@@ -2000,12 +2041,12 @@ var pmWorkBatchesStrings = {
 		pmb_invalid: "The response does not match the original batch or source.",
 		pmb_history_bound: "Source history exceeds this view’s bounded read limit.",
 		pmb_unavailable: "Original batch sources are unavailable. Drafts remain saved; no new batch can start here.",
-		pmb_not_supported: "This central does not advertise the selected batch contract.",
+		pmb_not_supported: "The selected batch contract is not available for this workspace.",
 		pmb_reading: "Reading original batch sources…",
 		pmb_no_history: "No saved batch selected.",
 		pmb_batch: "Batch",
 		pmb_selected_original: "Selected original batch",
-		pmb_saved: "Original batch and result evidence",
+		pmb_saved: "Batch result",
 		pmb_state: "Entry state",
 		pmb_operation_status: "Parent operation",
 		pmb_blocked_reason: "Admission or verification reason",
@@ -2022,7 +2063,7 @@ var pmWorkBatchesStrings = {
 		pmb_result_tree: "Candidate tree",
 		pmb_command_digest: "Required command digest",
 		pmb_evidence: "Record fixed result evidence",
-		pmb_evidence_help: "Choose evidence for the entry’s saved result condition: a qualified original assessment, or a delivered integration receipt and saved GitHub observation. The central checks exact identity, completeness and reported results. Recording evidence does not restart a stopped batch.",
+		pmb_evidence_help: "Choose evidence for the entry’s saved result condition: a qualified original assessment, or a delivered integration receipt and saved GitHub observation. Exact identity, completeness and reported results are checked. Recording evidence does not restart a stopped batch.",
 		pmb_evidence_entry: "Original batch entry",
 		pmb_delivery: "Delivered integration receipt",
 		pmb_observation: "Saved GitHub observation",
@@ -2040,7 +2081,7 @@ var pmWorkBatchesStrings = {
 	},
 	"zh-TW": {
 		pmb_acceptance_profile: "合格原始需求驗收",
-		pmb_acceptance_help: "需要原始套件的全部驗收條件與 DoD、獨立驗證，以及負責審查人的具理由結論。",
+		pmb_acceptance_help: "需要原始套件的全部驗收條件與完成定義、獨立驗證，以及負責審查人的具理由結論。",
 		pmb_changed_dependency: "上游結果條件已變更。請取消並重新選擇前置項目，明確核對這份條件。",
 		pmb_accepted: "原始需求已通過完整合格審查。",
 		pmb_assessment: "合格原始評估",
@@ -2051,6 +2092,8 @@ var pmWorkBatchesStrings = {
 		pmb_intro: "選入已核對的交接、設定限制，並追蹤原始操作。",
 		pmb_refresh: "更新批次來源",
 		pmb_draft: "新批次選擇",
+		pmb_new: "新增批次",
+		pmb_record_open: "記錄結果證據",
 		pmb_selection_help: "先核對工程交接並填寫執行指示。加入時會保存這份確切請求；之後修改交接不會取代已選入的內容。",
 		pmb_add: "加入已核對的交接",
 		pmb_history: "已保存批次",
@@ -2058,12 +2101,15 @@ var pmWorkBatchesStrings = {
 		pmb_stale: "工作空間或生命週期版本已變更。請核對目前狀態，再將目前版本用於新請求。",
 		pmb_use_versions: "使用目前工作空間版本",
 		pmb_rationale: "這次請求的理由",
-		pmb_starts: "最多開始次數",
-		pmb_parallel: "最多並行未結結果",
-		pmb_retries: "確認未送出的重試次數",
+		pmb_starts: "開始上限",
+		pmb_parallel: "並行上限",
+		pmb_retries: "重試上限",
 		pmb_deadline: "截止時間（本地時間）",
+		pmb_deadline_short: "截止時間",
+		pmb_shown: "顯示時間",
+		pmb_details: "詳細資訊",
 		pmb_budget_help: "限制計算開始次數與尚未釐清的結果。模型用量與供應者費用未量測，這些限制不是金額上限。",
-		pmb_boundary: "派送成功不代表工程完成。固定版本驗證不等於需求或 DoD 驗收。暫停或取消會停止新的受理；既有工作階段保留原始收據。",
+		pmb_boundary: "派送成功不代表工程完成。固定版本驗證不等於需求或完成定義驗收。暫停或取消會停止新的受理；既有工作階段保留原始收據。",
 		pmb_start: "開始選定批次",
 		pmb_empty: "尚未選入交接。",
 		pmb_duplicate: "這個 WorkItem 已選入。若要換用另一份交接，請先移除原本的項目。",
@@ -2090,12 +2136,12 @@ var pmWorkBatchesStrings = {
 		pmb_invalid: "回應與原始批次或來源不符。",
 		pmb_history_bound: "來源歷史超出此檢視的有界讀取限制。",
 		pmb_unavailable: "無法讀取原始批次來源。草稿仍已保存，目前不能從這裡開始新批次。",
-		pmb_not_supported: "此中央服務尚未提供選定批次合約。",
+		pmb_not_supported: "此工作空間尚未提供選定的批次合約。",
 		pmb_reading: "正在讀取原始批次來源…",
 		pmb_no_history: "尚未選擇已保存批次。",
 		pmb_batch: "批次",
 		pmb_selected_original: "原本選定的批次",
-		pmb_saved: "原始批次與結果證據",
+		pmb_saved: "批次結果",
 		pmb_state: "項目狀態",
 		pmb_operation_status: "父操作",
 		pmb_blocked_reason: "受理或驗證原因",
@@ -2112,7 +2158,7 @@ var pmWorkBatchesStrings = {
 		pmb_result_tree: "候選檔案樹",
 		pmb_command_digest: "指定命令摘要",
 		pmb_evidence: "記錄固定結果證據",
-		pmb_evidence_help: "依項目保存的結果條件，選擇合格原始評估，或原始已交付整合收據與已保存的 GitHub 觀察。中央服務會核對確切身分、完整性與回報結果。記錄證據不會重新啟動已停止的批次。",
+		pmb_evidence_help: "依項目保存的結果條件，選擇合格原始評估，或原始已交付整合收據與已保存的 GitHub 觀察。送出時會核對確切身分、完整性與回報結果。記錄證據不會重新啟動已停止的批次。",
 		pmb_evidence_entry: "原始批次項目",
 		pmb_delivery: "已交付整合收據",
 		pmb_observation: "已保存 GitHub 觀察",
@@ -3524,10 +3570,10 @@ var pmPackageHandoffStrings = {
 		ph_spec_missing: "The originally selected specification attachment is unavailable.",
 		ph_spec_filtered: "Some specification attachments are hidden by current source access.",
 		ph_workspace: "Selected BAT workspace",
-		ph_title: "Implement the selected work package",
+		ph_title: "Prepare handoff",
 		ph_intro: "Start one managed BAT session from this fixed package. The original specification and work relationship stay attached to the attempt.",
 		ph_select: "Select an engineering work package above to prepare an implementation.",
-		ph_review: "Review fixed implementation base",
+		ph_review: "Review base",
 		ph_reviewed: "Reviewed implementation base",
 		ph_base: "Code starting point",
 		ph_spec: "Specification version",
@@ -3535,17 +3581,18 @@ var pmPackageHandoffStrings = {
 		ph_boundary: "A prepared package is not execution permission. This action starts implementation only; it does not verify quality, merge or deploy.",
 		ph_rationale: "Why use this implementation base?",
 		ph_prompt: "Instructions for this implementation",
-		ph_agent: "BAT agent",
-		ph_agent_help: "Choose Claude or Codex. The central service checks the actual start; a listed choice is not proof that the runtime is ready.",
-		ph_options: "Optional session title and model",
+		ph_agent: "Agent",
+		ph_agent_help: "Choose Claude or Codex. The start is checked when you submit; a listed choice is not proof the destination is ready.",
+		ph_options: "Session options",
 		ph_start: "Start implementation",
 		ph_sources: "Fixed versions and original sources",
-		ph_use_review: "Use this reviewed project version",
+		ph_use_review: "Use this version",
+		ph_details: "Details",
 		ph_stale: "This draft retains an earlier project version. Review the current source and explicitly use that project version before starting a new request.",
 		ph_blocked: "The package has unresolved checks beyond the implementation-base decision. Review the package details above.",
 		ph_target_changed: "The published code or repository binding differs from the fixed package. Prepare a new package with an explicitly chosen base; this preview cannot rewrite it.",
 		ph_unavailable: "Implementation sources or permissions could not be verified. Displayed source facts were removed; local drafts and original requests remain.",
-		ph_not_allowed: "This handoff needs current workspace write membership, observe, manage and start scopes, plus an enabled managed BAT destination.",
+		ph_not_allowed: "This handoff needs workspace write membership, permission to view, manage, and start, and managed work to be allowed.",
 		ph_invalid: "The response does not match the selected fixed engineering package.",
 		ph_reading: "Reading the original package, project and published base…",
 		ph_started: "Implementation was started. Verification and delivery remain unassessed.",
@@ -3567,28 +3614,29 @@ var pmPackageHandoffStrings = {
 		ph_spec_missing: "原選取的規格附件目前無法讀取。",
 		ph_spec_filtered: "部分規格附件因目前來源權限而隱藏。",
 		ph_workspace: "所選 BAT 工作區",
-		ph_title: "實作所選工程工作包",
-		ph_intro: "依這份固定工作包開啟一個自有 BAT session；原始規格與工作關聯會保留在這次執行中。",
+		ph_title: "準備交接",
+		ph_intro: "依這份固定工作包開啟一個自有 BAT 工作階段；原始規格與工作關聯會保留在這次執行中。",
 		ph_select: "先在上方選取工程工作包，再準備實作。",
-		ph_review: "核對固定實作基底",
+		ph_review: "核對基底",
 		ph_reviewed: "已核對實作基底",
 		ph_base: "程式起始版本",
 		ph_spec: "規格版本",
-		ph_separate: "程式與規格可以來自不同 commit。選定此基底不代表已證明相容，也不會略過其餘就緒檢查。",
+		ph_separate: "程式與規格可以來自不同提交。選定此基底不代表已證明相容，也不會略過其餘就緒檢查。",
 		ph_boundary: "工作包準備完成不等於已授權執行。這個操作只開始實作，不代表品質驗證、合併或部署完成。",
 		ph_rationale: "為何使用這個實作基底？",
 		ph_prompt: "這次實作的指示",
-		ph_agent: "BAT 代理",
-		ph_agent_help: "選擇 Claude 或 Codex；中央服務仍會核對實際啟動條件，選單本身不代表執行環境已就緒。",
-		ph_options: "選填 session 標題與模型",
+		ph_agent: "Agent",
+		ph_agent_help: "選擇 Claude 或 Codex。送出時會核對能否啟動；選單上的選項不代表目的地已就緒。",
+		ph_options: "工作階段選項",
 		ph_start: "開始實作",
 		ph_sources: "固定版本與原始來源",
-		ph_use_review: "使用這個已核對的專案版本",
+		ph_use_review: "使用此版本",
+		ph_details: "詳細資訊",
 		ph_stale: "草稿仍保留先前的專案版本。請重新核對目前來源，再明確使用這個專案版本開始新請求。",
 		ph_blocked: "除了實作基底決定外，工作包仍有未解決的檢查；請查看上方工作包詳情。",
 		ph_target_changed: "已發布程式或儲存庫關聯與固定工作包不符。請明確選定基底並準備新工作包；此預覽不會改寫原工作包。",
 		ph_unavailable: "無法核對實作來源或權限，已移除顯示中的來源事實；本地草稿與原請求仍保留。",
-		ph_not_allowed: "此交接需要目前工作區寫入資格、observe／manage／start 權限，以及已允許管理工作的 BAT 目的地。",
+		ph_not_allowed: "需要工作區寫入資格、檢視／管理／啟動權限，並允許受管工作。",
 		ph_invalid: "回應與所選固定工程工作包不符。",
 		ph_reading: "讀取原工作包、專案與已發布基底…",
 		ph_started: "已開始實作；驗證與交付仍未評估。",
@@ -5479,6 +5527,9 @@ var workPackageStrings = {
 		wp_refresh: "Refresh work packages",
 		wp_empty: "No readable work packages on this page.",
 		wp_more: "Load more packages",
+		wp_package: "Package",
+		wp_choose: "Choose…",
+		wp_plan_section: "Plan",
 		wp_partial: "This list covers only the loaded, currently readable packages.",
 		wp_select: "Select a package to review its fixed sources and current checks.",
 		wp_review: "Review package",
@@ -5568,7 +5619,9 @@ var workPackageStrings = {
 		wp_check_source_status_help: "Plan adoption does not confirm an assumption, conflict or unresolved source statement.",
 		wp_check_dependency_help: "The listed dependency outcomes remain unassessed; work claims do not establish readiness.",
 		wp_evidence: "Selected evidence",
-		wp_source_refs: "Specification source references"
+		wp_source_refs: "Specification source references",
+		wp_details: "Details",
+		wp_ready_short: "Ready"
 	},
 	"zh-TW": {
 		wp_title: "工程工作包",
@@ -5576,6 +5629,9 @@ var workPackageStrings = {
 		wp_refresh: "重新整理工作包",
 		wp_empty: "這一頁沒有目前可讀的工程工作包。",
 		wp_more: "載入更多工作包",
+		wp_package: "工作包",
+		wp_choose: "請選擇…",
+		wp_plan_section: "規劃內容",
 		wp_partial: "清單僅涵蓋已載入且目前可讀的工作包。",
 		wp_select: "選取工作包，查看固定來源與目前檢查結果。",
 		wp_review: "檢視工作包",
@@ -5598,7 +5654,7 @@ var workPackageStrings = {
 		wp_unresolved: "未決工程問題",
 		wp_sources: "固定來源與版本",
 		wp_original: "原始規格文件",
-		wp_code: "已發布程式 commit",
+		wp_code: "已發布程式提交",
 		wp_plan: "已採用計畫版本",
 		wp_scope: "已採用範圍版本",
 		wp_digest: "工作包摘要雜湊",
@@ -5620,12 +5676,12 @@ var workPackageStrings = {
 		wp_rollback: "回復",
 		wp_observation: "觀察",
 		wp_reviewable_changes: "可審閱修改",
-		wp_pull_request: "Pull request",
+		wp_pull_request: "PR",
 		wp_integration_pr: "指定整合 PR",
 		wp_requirement_state: "原始資訊身分",
 		wp_source_status_user_confirmed: "使用者已確認",
-		wp_source_status_repo_evidence: "Repo 證據",
-		wp_source_status_agent_assumption: "Agent 假設",
+		wp_source_status_repo_evidence: "儲存庫證據",
+		wp_source_status_agent_assumption: "代理假設",
 		wp_source_status_unresolved: "尚未決定",
 		wp_source_status_conflicting: "存在衝突",
 		wp_source_status_not_applicable: "不適用",
@@ -5633,7 +5689,7 @@ var workPackageStrings = {
 		wp_check_work: "目前工作與明確關聯",
 		wp_check_package_revision: "這份工作最新準備的工作包",
 		wp_check_code_configuration: "程式來源設定",
-		wp_check_project_repository: "專案 repository 關聯",
+		wp_check_project_repository: "專案儲存庫關聯",
 		wp_check_design: "設計或裁適理由",
 		wp_check_delivery_plan: "交付考量",
 		wp_check_unresolved: "未決工程問題",
@@ -5642,7 +5698,7 @@ var workPackageStrings = {
 		wp_check_acceptance: "接受條件的預定驗證",
 		wp_check_source_status: "需求來源已確認",
 		wp_check_dependency: "需求相依",
-		wp_coverage: "目前檢查使用本地狀態；尚未查證遠端 head、執行工具、預算與交付目標。",
+		wp_coverage: "目前檢查使用本地狀態；尚未查證遠端最新版本、執行工具、預算與交付目標。",
 		wp_preparation: "準備紀錄",
 		wp_package_id: "工作包 ID",
 		wp_created: "準備時間",
@@ -5654,18 +5710,20 @@ var workPackageStrings = {
 		wp_check_scope_help: "範圍改變需明確重新規劃；本工作包仍保留原計畫。",
 		wp_check_work_help: "目前有效工作與關聯須符合這份固定工作包。",
 		wp_check_package_revision_help: "較新工作包是另一個選擇，不會替換既有執行依據。",
-		wp_check_code_configuration_help: "程式來源設定須仍一致；此檢查不會重新讀取已發布 head。",
-		wp_check_project_repository_help: "工作所屬專案須仍關聯這個 repository。",
+		wp_check_code_configuration_help: "程式來源設定須仍一致；此檢查不會重新讀取已發布的最新版本。",
+		wp_check_project_repository_help: "工作所屬專案須仍關聯這個儲存庫。",
 		wp_check_design_help: "需有工程設計，或說明不適用的理由。",
 		wp_check_delivery_plan_help: "遷移、上線、回復與觀察需要說明或明確裁適理由。",
 		wp_check_unresolved_help: "未決工程問題會阻擋交接審閱。",
-		wp_check_spec_code_alignment_help: "規格與程式 commit 不同時，需要尚未提供的相容性評估。",
+		wp_check_spec_code_alignment_help: "規格與程式提交不同時，需要尚未提供的相容性評估。",
 		wp_check_task_coverage_help: "每個選定需求都需有對應技術工作。",
 		wp_check_acceptance_help: "每個原始接受條件都需有預定驗證方式；這些方法尚未執行。",
 		wp_check_source_status_help: "採用計畫不會把假設、衝突或未決來源變成已確認資訊。",
 		wp_check_dependency_help: "列出的相依成果尚未評估；工作回報不能證明已就緒。",
 		wp_evidence: "選定證據",
-		wp_source_refs: "規格來源引用"
+		wp_source_refs: "規格來源引用",
+		wp_details: "詳細資訊",
+		wp_ready_short: "可審閱"
 	}
 };
 //#endregion
@@ -5684,6 +5742,9 @@ var pmSprintStrings = {
 		pm_sprint_choose: "Sprint",
 		pm_sprint_empty: "No Sprint has been planned.",
 		pm_sprint_new: "Plan a Sprint",
+		pm_sprint_plan_open: "Plan sprint",
+		pm_sprint_start_open: "Start sprint",
+		pm_sprint_more: "More actions",
 		pm_sprint_refresh: "Refresh Sprint",
 		pm_sprint_review_fresh: "Review updated baseline",
 		pm_sprint_stale: "The saved baseline changed. Your draft is preserved; review the updated baseline before a new request.",
@@ -5748,7 +5809,7 @@ var pmSprintStrings = {
 		pm_sprint_history_selections: "selection",
 		pm_sprint_history_events: "decision",
 		pm_sprint_recorded_by: "Recorded by {actor}",
-		pm_sprint_unassessed: "Unassessed",
+		pm_sprint_unassessed: "Not assessed",
 		pm_sprint_planned: "Planned",
 		pm_sprint_active: "Active",
 		pm_sprint_closed: "Closed",
@@ -5764,7 +5825,11 @@ var pmSprintStrings = {
 		pm_sprint_versions: "Version references",
 		pm_sprint_invalid: "Review the required Sprint fields.",
 		pm_sprint_roles: "Fixed responsibilities",
-		pm_sprint_partial: "This list is incomplete. Load all pages before selecting work."
+		pm_sprint_partial: "This list is incomplete. Load all pages before selecting work.",
+		pm_sprint_details: "Details",
+		pm_sprint_shown: "Shown time",
+		pm_sprint_unknown: "Unknown",
+		pm_sprint_role_owner: "Owner"
 	},
 	"zh-TW": {
 		pm_sprint_artifact_history: "產品承諾版本紀錄",
@@ -5772,48 +5837,51 @@ var pmSprintStrings = {
 		pm_sprint_earlier: "往前",
 		pm_sprint_later: "往後",
 		pm_sprint_remove: "移除",
-		pm_sprint_goal_heading: "本輪目標",
+		pm_sprint_goal_heading: "衝刺目標",
 		pm_sprint_dod_heading: "完成定義",
-		pm_sprint_title: "Sprint 與迭代",
+		pm_sprint_title: "衝刺與迭代",
 		pm_sprint_intro: "在同一處查看固定目標、選入工作與共同品質承諾。",
-		pm_sprint_choose: "Sprint",
-		pm_sprint_empty: "尚未規劃 Sprint。",
-		pm_sprint_new: "規劃 Sprint",
-		pm_sprint_refresh: "重新整理 Sprint",
+		pm_sprint_choose: "衝刺",
+		pm_sprint_empty: "尚未規劃衝刺。",
+		pm_sprint_new: "規劃衝刺",
+		pm_sprint_plan_open: "規劃衝刺",
+		pm_sprint_start_open: "開始衝刺",
+		pm_sprint_more: "其他操作",
+		pm_sprint_refresh: "重新整理衝刺",
 		pm_sprint_review_fresh: "檢視更新後的基準",
 		pm_sprint_stale: "已保存的基準有變動。草稿已保留；請先檢視更新後的基準，再提出新請求。",
 		pm_sprint_commitments: "產品承諾",
-		pm_sprint_product_goal: "Product Goal／產品目標",
-		pm_sprint_dod: "Definition of Done／完成定義",
-		pm_sprint_backlog: "Product Backlog／產品待辦",
+		pm_sprint_product_goal: "產品目標",
+		pm_sprint_dod: "完成定義",
+		pm_sprint_backlog: "產品待辦",
 		pm_sprint_missing: "尚未定義",
-		pm_sprint_fixed: "此 Sprint 的固定版本",
-		pm_sprint_goal: "Sprint Goal／本輪目標",
+		pm_sprint_fixed: "此衝刺的固定版本",
+		pm_sprint_goal: "衝刺目標",
 		pm_sprint_period: "固定期間",
-		pm_sprint_owner: "方向責任人",
+		pm_sprint_owner: "方向負責人",
 		pm_sprint_developers: "開發者",
-		pm_sprint_master: "Scrum Master（選填）",
+		pm_sprint_master: "敏捷引導（選填）",
 		pm_sprint_none: "無",
 		pm_sprint_mode: "管理模式",
 		pm_sprint_personal: "個人迭代",
-		pm_sprint_scrum: "Scrum 產物模式・尚未完整符合",
-		pm_sprint_name: "Sprint 名稱",
+		pm_sprint_scrum: "敏捷產物・尚未完整符合",
+		pm_sprint_name: "衝刺名稱",
 		pm_sprint_start_at: "開始時間（UTC）",
 		pm_sprint_end_at: "結束時間（UTC）",
 		pm_sprint_period_help: "請填 UTC 日期與時間。固定期間必須大於零，且不超過一個日曆月。",
 		pm_sprint_capacity: "可投入資源與時間",
 		pm_sprint_reason: "這項決定的理由",
-		pm_sprint_plan_required: "請先採用計畫，並定義產品目標、DoD 與產品待辦，再規劃 Sprint。",
+		pm_sprint_plan_required: "請先採用計畫，並定義產品目標、完成定義與產品待辦，再規劃衝刺。",
 		pm_sprint_no_members: "目前帳號無法取得工作區成員選項。",
 		pm_sprint_no_work: "尚未選入工作。開始前需明確選擇。",
-		pm_sprint_quality: "DoD 尚未評估。工作完成宣稱或人工批准，不代表已驗證的 Increment。",
+		pm_sprint_quality: "完成定義尚未評估。工作完成宣稱或人工批准，不代表已驗證的增量。",
 		pm_sprint_no_execution: "這些操作記錄管理決定，既有執行工作保持原狀。",
-		pm_sprint_owner_only: "只有原先指定、而且目前仍具 owner 角色的人，可以作出此 Sprint 決定。",
+		pm_sprint_owner_only: "只有原先指定、而且目前仍是負責人的人，可以作出此衝刺決定。",
 		pm_sprint_save_goal: "儲存產品目標版本",
-		pm_sprint_save_dod: "儲存 DoD 版本",
+		pm_sprint_save_dod: "儲存完成定義版本",
 		pm_sprint_save_backlog: "儲存產品待辦版本",
 		pm_sprint_edit_goal: "修訂產品目標",
-		pm_sprint_edit_dod: "修訂 DoD",
+		pm_sprint_edit_dod: "修訂完成定義",
 		pm_sprint_edit_backlog: "選擇產品待辦工作",
 		pm_sprint_dod_lines: "共同品質條件，每行一項",
 		pm_sprint_plan_source: "已採用計畫來源",
@@ -5826,16 +5894,16 @@ var pmSprintStrings = {
 		pm_sprint_how_empty: "尚未記錄實作安排。",
 		pm_sprint_select: "選入工作與填寫自己的安排",
 		pm_sprint_save_selection: "儲存工作選擇",
-		pm_sprint_how_help: "開發者填寫自己的安排。Owner 可以分配工作，但不能代寫其他開發者的安排。",
-		pm_sprint_save: "儲存 Sprint 計畫",
+		pm_sprint_how_help: "開發者填寫自己的安排。負責人可以分配工作，但不能代寫其他開發者的安排。",
+		pm_sprint_save: "儲存衝刺計畫",
 		pm_sprint_revise_goal: "細化尚未開始的目標",
-		pm_sprint_save_sprint_goal: "儲存 Sprint 目標版本",
-		pm_sprint_start: "開始 Sprint",
-		pm_sprint_close: "結束已到期的 Sprint",
-		pm_sprint_cancel: "取消 Sprint",
+		pm_sprint_save_sprint_goal: "儲存衝刺目標版本",
+		pm_sprint_start: "開始衝刺",
+		pm_sprint_close: "結束已到期的衝刺",
+		pm_sprint_cancel: "取消衝刺",
 		pm_sprint_cancel_help: "目標已失效時可取消。原目標與工作歷史都會保留。",
 		pm_sprint_close_help: "結束僅記錄本輪期間落幕。尚未評估的工作，仍待明確重新考慮產品待辦優先序。",
-		pm_sprint_future: "需先明確選入工作，並在固定期間內開始 Sprint。",
+		pm_sprint_future: "需先明確選入工作，並在固定期間內開始衝刺。",
 		pm_sprint_elapsed: "固定期間已到期。結束或取消前，選入工作會保持原狀。",
 		pm_sprint_history: "目標、選擇與決策歷史",
 		pm_sprint_more_history: "載入更多{kind}歷史",
@@ -5843,23 +5911,27 @@ var pmSprintStrings = {
 		pm_sprint_history_selections: "選擇",
 		pm_sprint_history_events: "決策",
 		pm_sprint_recorded_by: "記錄者：{actor}",
-		pm_sprint_unassessed: "尚未評估",
+		pm_sprint_unassessed: "未評估",
 		pm_sprint_planned: "已規劃",
 		pm_sprint_active: "進行中",
 		pm_sprint_closed: "已結束",
 		pm_sprint_cancelled: "已取消",
 		pm_sprint_closure_pending: "本輪結束紀錄尚未載入，仍有後續決策歷史可讀取。",
-		pm_sprint_closure_unavailable: "Sprint 已結束，但回傳的歷史中無法取得本輪結束紀錄。",
+		pm_sprint_closure_unavailable: "衝刺已結束，但回傳的歷史中無法取得本輪結束紀錄。",
 		pm_sprint_load_closure: "載入下一頁決策歷史",
 		pm_sprint_history_loading: "正在載入決策歷史…",
 		pm_sprint_history_partial: "仍有尚未載入的歷史。",
 		pm_sprint_closure: "本輪結束紀錄",
 		pm_sprint_reconsider: "待重新考慮產品待辦",
-		pm_sprint_no_carryover: "不會自動搬入下一輪工作。結束本輪也不代表已完成 Review 或 Retro。",
+		pm_sprint_no_carryover: "不會自動搬入下一輪工作。結束本輪也不代表已完成檢討或回顧。",
 		pm_sprint_versions: "版本引用",
-		pm_sprint_invalid: "請檢查 Sprint 必填資料。",
+		pm_sprint_invalid: "請檢查衝刺必填資料。",
 		pm_sprint_roles: "固定責任分工",
-		pm_sprint_partial: "清單尚未完整。請先讀完所有頁面，再選入工作。"
+		pm_sprint_partial: "清單尚未完整。請先讀完所有頁面，再選入工作。",
+		pm_sprint_details: "詳細資訊",
+		pm_sprint_shown: "顯示時間",
+		pm_sprint_unknown: "未知",
+		pm_sprint_role_owner: "負責人"
 	}
 };
 //#endregion
@@ -19687,19 +19759,20 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		icon: "refresh-cw",
 		label: t("ahp_refresh"),
 		type: "button",
-		class: "secondary",
 		onclick: () => void refresh()
 	});
-	const more = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => void historyPage(cursor)
-	}, t("ahp_more"));
-	const element = h("details", {
+	const more = button({
+		variant: "secondary",
+		label: t("ahp_more"),
+		onClick: () => void historyPage(cursor)
+	});
+	more.hidden = true;
+	const adapterFields = h("div", { class: "capture-fields" }, h("label", {}, t("ahp_adapter"), adapter));
+	const historyDetails = h("details", { "data-ahp-history": "" }, h("summary", {}, t("ahp_history")), history, more);
+	const element = h("section", {
 		class: "panel pm-ahp",
 		"data-pm-ahp": ""
-	}, h("summary", {}, t("ahp_title")), h("p", { class: "muted" }, t("ahp_intro")), h("div", { class: "capture-fields" }, h("label", {}, t("ahp_adapter"), adapter), refreshButton), status, body, h("details", { "data-ahp-history": "" }, h("summary", {}, t("ahp_history")), history, more), detail);
+	}, sectionCard({ body: h("div", {}, h("div", { class: "pm-tool-head" }, statusPill("read_only"), refreshButton), adapterFields, status, body, disclosure({ element: historyDetails }), detail) }));
 	const valid = (ticket) => {
 		try {
 			alive();
@@ -19744,11 +19817,11 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			if (kind === "root") continue;
 			snapshots.append(h("details", {}, h("summary", {}, state.title || snapshot.resource), h("p", { class: "mono" }, snapshot.resource), line("ahp_from_sequence", snapshot.from_seq), line("ahp_later_events", t(snapshot.later_event_observed === true ? "ahp_yes" : snapshot.later_event_observed === false ? "ahp_no" : "ahp_unknown")), ...kind === "session" ? [line("ahp_provider", state.provider), line("ahp_native_lifecycle", state.lifecycle)] : kind === "changeset" ? [line("ahp_file_count", state.files?.length ?? 0)] : [h("p", { class: "muted" }, t("ahp_unknown_source_kind"))]));
 		}
-		const meta = h("details", {}, h("summary", {}, t("ahp_original")), h("p", { class: "mono" }, r.observation_id), h("p", { class: "mono" }, r.document_digest), h("a", { href: `#/op/${r.operation_id}` }, t("pm_operation")), h("pre", {}, JSON.stringify(d, null, 2)));
+		const meta = disclosure({ element: h("details", {}, h("summary", {}, t("ahp_original")), h("p", { class: "mono" }, r.adapter_id), h("p", { class: "mono" }, r.observation_id), h("p", { class: "mono" }, r.document_digest), h("a", { href: `#/op/${r.operation_id}` }, t("pm_operation")), h("pre", {}, JSON.stringify(d, null, 2))) });
 		detail.replaceChildren(h("section", {
 			"data-ahp-detail": "",
 			class: "pm-ahp-facts"
-		}, h("h3", {}, t("ahp_saved_detail")), line("ahp_adapter", r.adapter_id), line("ahp_captured", stamp(d.finished_at)), line("ahp_protocol", e.negotiated_version || e.protocol_version || "—"), ...e.decoder_profile ? [line("ahp_decoder_profile", e.decoder_profile)] : [], line("ahp_coverage", t(e.status === "observed" ? "ahp_observed" : "ahp_incomplete")), line("ahp_catalog_coverage", t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial")), ...e.reason ? [line("ahp_reason", e.reason)] : [], line("ahp_snapshots", e.snapshots.length), line("ahp_events", e.events.length), line("ahp_gaps", e.gaps.length), h("p", { class: "muted" }, t("ahp_evidence_limits")), ...snapshots.children.length > 1 ? [snapshots] : [], meta));
+		}, h("h3", {}, t("ahp_saved_detail")), line("ahp_captured", stamp(d.finished_at)), line("ahp_protocol", e.negotiated_version || e.protocol_version || "—"), ...e.decoder_profile ? [line("ahp_decoder_profile", e.decoder_profile)] : [], line("ahp_coverage", t(e.status === "observed" ? "ahp_observed" : "ahp_incomplete")), line("ahp_catalog_coverage", t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial")), ...e.reason ? [line("ahp_reason", e.reason)] : [], line("ahp_snapshots", e.snapshots.length), line("ahp_events", e.events.length), line("ahp_gaps", e.gaps.length), h("p", { class: "muted" }, t("ahp_evidence_limits")), ...snapshots.children.length > 1 ? [snapshots] : [], meta));
 	}
 	async function showDetail(id) {
 		const ticket = epoch, serial = ++detailEpoch;
@@ -19766,11 +19839,18 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		if (!Array.isArray(value.observations) || typeof value.visibility_filtered !== "boolean" || value.next_cursor !== null && (!Number.isSafeInteger(value.next_cursor) || value.next_cursor <= historyAfter)) throw Error(t("ahp_invalid"));
 		const rows = value.observations.map((r) => row(r));
 		cursor = value.next_cursor;
-		history.replaceChildren(...rows.map((r) => h("div", { class: "pm-ahp-history-row" }, h("button", {
-			type: "button",
-			class: "secondary",
-			onclick: () => void showDetail(r.observation_id)
-		}, r.adapter_id, " · ", stamp(r.created_at), " · ", t(r.coverage_status === "observed" ? "ahp_observed" : "ahp_incomplete")), h("small", { class: "mono" }, r.observation_id))));
+		history.replaceChildren(...rows.map((r) => {
+			const label = h("span", {}, t(r.coverage_status === "observed" ? "ahp_observed" : "ahp_incomplete"), " · ");
+			label.append(stamp(r.created_at));
+			return h("div", { class: "pm-ahp-history-row" }, button({
+				variant: "secondary",
+				label,
+				onClick: () => void showDetail(r.observation_id)
+			}), disclosure({
+				label: t("ahp_details"),
+				body: h("div", {}, h("p", { class: "mono" }, r.adapter_id), h("p", { class: "mono" }, r.observation_id))
+			}));
+		}));
 		if (!rows.length) history.append(emptyState({ title: t(value.visibility_filtered ? "ahp_hidden" : "ahp_empty") }));
 		else if (value.visibility_filtered) history.append(h("p", { class: "muted" }, t("ahp_hidden")));
 		more.hidden = cursor === null;
@@ -19853,45 +19933,70 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		function renderCatalog() {
 			item.catalogBox.replaceChildren();
 			if (!item.catalog) {
-				item.catalogBox.append(h("p", { class: "muted" }, t("ahp_need_catalog")));
+				item.catalogBox.append(emptyState({
+					title: t("ahp_need_catalog"),
+					heading: "h3"
+				}));
 				return;
 			}
-			const e = item.catalog.document.evidence, list = selectedUris(), start = item.page * 20;
-			item.catalogBox.append(h("p", { class: "muted" }, t("ahp_catalog_coverage"), ": ", t(e.catalog_complete ? "ahp_catalog_complete" : "ahp_catalog_partial"), " · ", stamp(item.catalog.document.finished_at)), h("p", {}, t("ahp_selection_help")));
+			const e = item.catalog.document.evidence, list = selectedUris(), start = item.page * 20, pageRows = e.catalog.slice(start, start + 20);
+			item.catalogBox.append(h("div", { class: "pm-tool-head" }, e.catalog_complete ? null : statusPill("partial"), stamp(item.catalog.document.finished_at)));
 			if (list.some((uri) => !e.catalog.some((s) => s.resource === uri))) item.catalogBox.append(h("p", { class: "muted" }, t("ahp_selection_unavailable")));
-			for (const s of e.catalog.slice(start, start + 20)) {
-				const box = h("input", {
-					type: "checkbox",
-					value: s.resource,
-					"aria-label": `${t("ahp_select")} ${s.title}`
+			if (!pageRows.length) item.catalogBox.append(emptyState({
+				title: t("ahp_no_sessions"),
+				heading: "h3"
+			}));
+			else item.catalogBox.append(dataTable({
+				columns: [{
+					key: "check",
+					label: "",
+					render: (s) => {
+						const box = h("input", {
+							type: "checkbox",
+							value: s.resource,
+							"aria-label": `${t("ahp_select")} ${s.title}`
+						});
+						box.addEventListener("change", () => {
+							if (item.observe.locked() || !canRead()) return;
+							const before = selectedUris(), values = box.checked ? [...before, s.resource] : before.filter((uri) => uri !== s.resource);
+							if (values.length <= 8) item.observe.set("session_uris", JSON.stringify(values));
+							item.observe.update();
+							updateChecks();
+						});
+						return h("label", { class: "pm-ahp-session" }, box);
+					}
+				}, {
+					key: "session",
+					label: t("ahp_catalog_column"),
+					render: (s) => h("span", { class: "pm-ahp-session" }, h("strong", {}, s.title || s.resource), h("small", {}, s.provider))
+				}],
+				rows: pageRows,
+				rowKey: (s) => s.resource,
+				expandable: (s) => h("p", { class: "mono" }, s.resource)
+			}));
+			if (e.catalog.length > 20) {
+				const prev = button({
+					variant: "secondary",
+					size: "sm",
+					label: t("pagination_prev"),
+					disabled: item.page === 0,
+					onClick: () => {
+						item.page--;
+						renderCatalog();
+					}
 				});
-				box.addEventListener("change", () => {
-					if (item.observe.locked() || !canRead()) return;
-					const before = selectedUris(), values = box.checked ? [...before, s.resource] : before.filter((uri) => uri !== s.resource);
-					if (values.length <= 8) item.observe.set("session_uris", JSON.stringify(values));
-					item.observe.update();
-					updateChecks();
+				const next = button({
+					variant: "secondary",
+					size: "sm",
+					label: t("pagination_next"),
+					disabled: start + 20 >= e.catalog.length,
+					onClick: () => {
+						item.page++;
+						renderCatalog();
+					}
 				});
-				item.catalogBox.append(h("label", { class: "pm-ahp-session" }, box, h("span", {}, h("strong", {}, s.title || s.resource), h("small", {}, s.provider), h("small", { class: "mono" }, s.resource))));
+				item.catalogBox.append(h("div", { class: "actions" }, prev, h("span", {}, `${start + 1}–${Math.min(start + 20, e.catalog.length)} / ${e.catalog.length}`), next));
 			}
-			if (!e.catalog.length) item.catalogBox.append(h("p", { class: "muted" }, t("ahp_no_sessions")));
-			if (e.catalog.length > 20) item.catalogBox.append(h("div", { class: "actions" }, h("button", {
-				type: "button",
-				class: "secondary",
-				disabled: item.page === 0,
-				onclick: () => {
-					item.page--;
-					renderCatalog();
-				}
-			}, t("pagination_prev")), h("span", {}, `${start + 1}–${Math.min(start + 20, e.catalog.length)} / ${e.catalog.length}`), h("button", {
-				type: "button",
-				class: "secondary",
-				disabled: start + 20 >= e.catalog.length,
-				onclick: () => {
-					item.page++;
-					renderCatalog();
-				}
-			}, t("pagination_next"))));
 			updateChecks();
 		}
 		item.apply = (r) => {
@@ -19927,7 +20032,10 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			onStateChange: () => {
 				if (item.observe) updateChecks();
 			},
-			extra: h("div", {}, item.catalogBox, h("label", {}, t("ahp_changesets"), item.changesets), h("p", { class: "muted" }, t("ahp_changesets_help"))),
+			extra: h("div", {}, item.catalogBox, h("label", {}, t("ahp_changesets"), item.changesets), disclosure({
+				label: t("ahp_details"),
+				body: h("div", {}, h("p", { class: "muted" }, t("ahp_selection_help")), h("p", { class: "muted" }, t("ahp_changesets_help")))
+			})),
 			onSaved: async (result) => {
 				check(result);
 				await refresh();
@@ -19953,7 +20061,7 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			permitted: () => canRead() && !item.observe.locked(),
 			recoverPermitted: canRead,
 			label: "ahp_capture_catalog",
-			extra: h("p", { class: "muted" }, t("ahp_catalog_help")),
+			extra: h("div"),
 			onSaved: async (result) => {
 				check(result);
 				if (!item.observe.locked()) {
@@ -19967,9 +20075,12 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 				await showDetail(result.observation_id);
 			}
 		});
-		for (const f of [item.catalogForm, item.observe]) f.box.querySelector("button[type=submit]").className = "secondary";
+		item.catalogForm.box.querySelector("button[type=submit]").className = "secondary";
 		item.forms = [item.catalogForm, item.observe];
-		item.element = h("div", {}, h("details", {}, h("summary", {}, t("ahp_capabilities")), h("p", {}, `${t("ahp_protocol")}: ${option.protocol_versions?.join(", ") || option.protocol_version || "—"}`), h("p", { class: "muted" }, t("ahp_capability_limits")), h("pre", {}, JSON.stringify(option, null, 2))), item.catalogForm.box, item.observe.box);
+		item.element = h("div", {}, disclosure({
+			label: t("ahp_details"),
+			body: h("div", {}, h("p", { class: "muted" }, t("ahp_intro")), h("p", { class: "muted" }, t("ahp_catalog_help")), h("p", { class: "muted" }, t("ahp_capability_limits")))
+		}), disclosure({ element: h("details", {}, h("summary", {}, t("ahp_capabilities")), h("p", {}, `${t("ahp_protocol")}: ${option.protocol_versions?.join(", ") || option.protocol_version || "—"}`), h("pre", {}, JSON.stringify(option, null, 2))) }), item.catalogForm.box, item.observe.box);
 		editors.set(key, item);
 		return item;
 	}
@@ -19990,7 +20101,10 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			editors.delete(item.key);
 		}
 		if (!key || !choices.has(key)) {
-			body.append(h("p", { class: "muted" }, t("ahp_no_adapters")));
+			body.append(emptyState({
+				title: t("ahp_no_adapters"),
+				heading: "h3"
+			}));
 			return;
 		}
 		const item = editorFor(choices.get(key));
@@ -20020,7 +20134,11 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			if (valid(ticket)) {
 				item.catalog = null;
 				item.catalogBox.replaceChildren(h("p", { class: "muted" }, t("ahp_selection_unavailable")));
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren([
+					401,
+					403,
+					404
+				].includes(error?.status) ? inlineError({ error: { message: t("ahp_unavailable") } }) : errorBox(error));
 				for (const f of item.forms) f.update();
 			}
 		}
@@ -20053,11 +20171,20 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 	}
 	function failure(error) {
 		withdraw();
-		status.append(h("p", { class: "muted" }, t("ahp_unavailable")), errorBox(error));
+		adapterFields.hidden = true;
+		historyDetails.hidden = true;
+		const withdrawn = [
+			401,
+			403,
+			404
+		].includes(error?.status);
+		status.append(inlineError({ error: { message: withdrawn ? t("ahp_unavailable") : error?.message || t("ahp_unavailable") } }));
 	}
 	async function refresh() {
 		const prior = selected;
 		withdraw();
+		adapterFields.hidden = true;
+		historyDetails.hidden = true;
 		const ticket = epoch;
 		refreshButton.disabled = true;
 		try {
@@ -20085,6 +20212,8 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			renderHistory(l);
 			ready = true;
 			adapter.disabled = !choices.size;
+			adapterFields.hidden = false;
+			historyDetails.hidden = false;
 			const key = choices.has(prior) ? prior : choices.keys().next().value || "";
 			adapter.value = key;
 			if (!await selectAdapter(key, c.observation) || !ready) return;
@@ -21234,25 +21363,25 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 //#region src/pm-work-deliveries.js
 function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 	let workId = null, sequence = 0, busy = false, cursor = null, rows = [], packages = [];
-	const status = h("div", { role: "status" }), facts = h("div", {});
+	const status = h("div", { role: "status" }), facts = h("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("wd_refresh"),
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
+		onClick: () => void refresh()
 	});
-	const more = h("button", {
-		type: "button",
-		class: "secondary",
+	const more = button({
+		variant: "secondary",
+		label: t("wd_more"),
 		hidden: true,
-		onclick: () => void read(true)
-	}, t("wd_more"));
+		onClick: () => void read(true)
+	});
+	const head = h("div", { class: "pm-tool-head" }, refreshButton, more);
 	const element = h("details", {
 		"data-pm-work-deliveries": "",
 		class: "pm-spec-card",
 		hidden: true
-	}, h("summary", {}, t("wd_title")), h("p", { class: "muted" }, t("wd_boundary")), h("div", { class: "actions" }, refreshButton, more), status, facts);
+	}, h("summary", {}, t("wd_title")), sectionCard({ body: h("div", {}, head, status, facts) }));
+	disclosure({ element });
 	const valid = (ticket) => {
 		alive();
 		return ticket === sequence;
@@ -21262,15 +21391,73 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 		more.disabled = busy;
 		more.hidden = cursor === null;
 	};
-	const fact = (name, value) => h("p", {}, h("strong", {}, t(name) + ": "), value === null || value === void 0 ? t("wd_unknown") : String(value));
+	const fact = (name, value) => h("p", {}, h("strong", {}, t(name) + ": "), value === null || value === void 0 || value === "" ? t("wd_unknown") : String(value));
 	const boolean = (value) => value === true ? t("wd_yes") : value === false ? t("wd_no") : t("wd_unknown");
-	const code = (value) => h("p", { class: "pm-source" }, String(value ?? ""));
-	const namedStatus = (status) => {
-		const key = "wd_status_" + status, label = t(key);
-		return label === key ? String(status ?? "") : label;
+	const mono = (name, value) => value === null || value === void 0 || value === "" ? null : h("p", { class: "mono" }, t(name) + ": " + String(value));
+	const namedStatus = (value) => {
+		const key = "wd_status_" + value, label = t(key);
+		return label === key ? String(value ?? "") : label;
 	};
+	const deployTones = {
+		verified: "ok",
+		succeeded: "ok",
+		failed: "bad",
+		cancelled: "warn",
+		needs_attention: "warn",
+		uncertain: "warn",
+		drift: "warn",
+		unverified: "neutral",
+		superseded: "neutral"
+	};
+	function deployPill(state) {
+		if (state === null || state === void 0 || state === "") return h("span", {
+			class: "ui-pill tone-neutral",
+			"data-status": "unknown"
+		}, t("wd_unknown"));
+		const key = "wd_state_" + state, label = t(key);
+		if (label === key) return h("span", {
+			class: "ui-pill tone-neutral",
+			"data-status": "unknown"
+		}, t("wd_unknown"));
+		return h("span", {
+			class: `ui-pill tone-${deployTones[state] || "neutral"}`,
+			"data-status": state
+		}, label);
+	}
+	function referenceLine(row) {
+		const repo = row.target?.repository ? String(row.target.repository) : "";
+		const number = row.target?.pull_number;
+		const text = [repo, number === null || number === void 0 || number === "" ? "" : `PR #${number}`].filter(Boolean).join(" · ");
+		return text ? h("p", {}, text) : null;
+	}
+	function showHead(ok) {
+		head.replaceChildren(...ok ? [statusPill("not_assessed"), more] : [], refreshButton);
+	}
 	function render() {
-		place(facts, "replaceChildren", h("p", { class: "muted" }, t("wd_packages")), ...packages.map((ref) => h("div", {}, code(ref.package_id), code(ref.document_digest), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")))), ...rows.map((row) => h("article", { class: "pm-spec-card" }, h("h5", {}, t("wd_action_" + row.action)), fact("wd_status", t("wd_status_" + row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), code(row.target?.repository), row.target?.pull_number ? fact("wd_pull", row.target.pull_number) : null, row.integration ? h("div", {}, fact("wd_pushed", boolean(row.integration.pushed)), code(row.integration.new_head), ...(row.integration.sources || []).map((source) => h("p", { class: "pm-source" }, source.pinned_sha + " · " + namedStatus(source.status)))) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified)), code(row.merge.merged_sha)) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_state", row.deployment.state), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current)), code(row.deployment.source_sha), fact("wd_run", row.deployment.run_id)) : null)), !rows.length ? emptyState({ title: t("wd_empty") }) : null);
+		const notes = [];
+		place(facts, "replaceChildren", packages.length ? h("p", { class: "muted" }, t("wd_packages")) : null, ...packages.map((ref) => {
+			notes.push(mono("wd_package", ref.package_id), mono("wd_digest", ref.document_digest));
+			return h("div", { class: "pm-delivery-package" }, h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, t("wd_original")));
+		}), ...rows.map((row) => {
+			if (row.integration) {
+				notes.push(mono("wd_head", row.integration.new_head));
+				for (const source of row.integration.sources || []) notes.push(mono("wd_pinned", source.pinned_sha ? source.pinned_sha + " · " + namedStatus(source.status) : null));
+			}
+			if (row.merge) notes.push(mono("wd_merged_sha", row.merge.merged_sha));
+			const state = row.deployment?.state;
+			if (row.deployment) {
+				notes.push(mono("wd_source_sha", row.deployment.source_sha), mono("wd_run", row.deployment.run_id));
+				if (state !== null && state !== void 0 && state !== "" && t("wd_state_" + state) === "wd_state_" + state) notes.push(mono("wd_deploy_state", state));
+			}
+			return h("article", { class: "pm-delivery" }, h("div", { class: "pm-tool-head" }, h("h4", {}, t("wd_action_" + row.action)), row.merge?.merged === true ? statusPill("merged") : null, row.deployment ? deployPill(state) : null), fact("wd_status", namedStatus(row.status)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wd_operation")), referenceLine(row), row.integration ? fact("wd_pushed", boolean(row.integration.pushed)) : null, row.merge ? h("div", {}, fact("wd_merged", boolean(row.merge.merged)), fact("wd_merge_verified", boolean(row.merge.verified))) : null, row.deployment ? h("div", {}, fact("wd_environment", row.deployment.environment), fact("wd_deploy_verified", boolean(row.deployment.verified)), fact("wd_current", boolean(row.deployment.is_current))) : null);
+		}), disclosure({
+			label: t("wd_details"),
+			body: h("div", {}, ...notes, h("p", { class: "muted" }, t("wd_boundary")))
+		}), !rows.length ? emptyState({
+			title: t("wd_empty"),
+			heading: "h3"
+		}) : null);
+		showHead(true);
 	}
 	function check(data, id) {
 		if (data?.workspace_id !== workspaceId || data.work_item_id !== id || data.contract !== "pm-engineering-delivery/v1" || data.requirement_acceptance !== "not_evaluated_by_delivery" || !Array.isArray(data.original_packages) || !Array.isArray(data.deliveries) || typeof data.source_visibility_filtered !== "boolean" || data.next_after !== null && (!Number.isSafeInteger(data.next_after) || data.next_after <= 0)) throw Error(t("wd_invalid"));
@@ -21307,7 +21494,7 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			rows = append ? [...rows, ...data.deliveries] : data.deliveries;
 			cursor = data.next_after;
 			render();
-			status.replaceChildren(...data.source_visibility_filtered ? [h("p", { class: "muted" }, t("wd_filtered"))] : []);
+			status.replaceChildren(...data.source_visibility_filtered ? [statusPill("partial"), h("p", { class: "muted" }, t("wd_filtered"))] : []);
 		} catch (error) {
 			try {
 				if (!valid(ticket)) return;
@@ -21318,7 +21505,8 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			packages = [];
 			cursor = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("wd_unavailable")));
+			status.replaceChildren();
+			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error), h("p", { class: "muted" }, t("wd_unavailable"))), refreshButton);
 		} finally {
 			if (ticket === sequence) {
 				busy = false;
@@ -21745,37 +21933,63 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	};
 	const starts = number("pmb_starts", 1, 16, 1), parallel = number("pmb_parallel", 1, 8, 1), retries = number("pmb_retries", 0, 3, 0), deadline = input("pmb_deadline");
 	deadline.type = "datetime-local";
-	const add = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void addReviewed()
-	}, t("pmb_add"));
+	function chosenLocal(field) {
+		const shown = h("span", { "data-pm-chosen-time": "" });
+		const paint = () => {
+			shown.replaceChildren();
+			if (!field.value) {
+				shown.append(statusPill("unknown"));
+				return;
+			}
+			const date = new Date(field.value), stamp = Number.isFinite(date.getTime()) ? timeStamp(date.toISOString()) : statusPill("unknown");
+			shown.append(stamp instanceof Node ? stamp : String(stamp));
+		};
+		field.addEventListener("input", paint);
+		field.addEventListener("change", paint);
+		paint();
+		return shown;
+	}
+	const add = button({
+		variant: "secondary",
+		label: t("pmb_add"),
+		onClick: () => void addReviewed()
+	});
 	const stale = text("pmb_stale");
 	stale.hidden = true;
-	const rebase = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
+	const rebase = button({
+		variant: "secondary",
+		label: t("pmb_use_versions"),
+		onClick: () => {
 			if (ready && !start.locked()) {
 				start.set("_baseline", JSON.stringify(currentPre()));
 				update();
 			}
 		}
-	}, t("pmb_use_versions"));
+	});
+	rebase.hidden = true;
+	const refreshButton = iconButton({
+		icon: "refresh-cw",
+		label: t("pmb_refresh"),
+		onClick: () => void refresh()
+	});
+	const draftDetails = h("details", { "data-batch-draft": "" }, h("summary", {}, t("pmb_draft")), add, stale, rebase, startView);
+	const newBatch = button({
+		variant: "secondary",
+		label: t("pmb_new"),
+		onClick: () => showDraft(true)
+	});
+	const historyLabel = labelled("pmb_history", history);
+	const head = h("div", { class: "pm-tool-head" }, historyLabel, newBatch, refreshButton);
 	const element = h("section", {
 		class: "panel pm-work-batches",
 		"data-pm-work-batches": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pmb_title")), text("pmb_intro")), iconButton({
-		icon: "refresh-cw",
-		label: t("pmb_refresh"),
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
-	})), status, h("details", {
-		"data-batch-draft": "",
-		open: true
-	}, h("summary", {}, t("pmb_draft")), text("pmb_selection_help"), add, stale, rebase, startView), labelled("pmb_history", history), facts, proofView);
+	}, sectionCard({ body: h("div", {}, head, status, disclosure({ element: draftDetails }), facts, proofView) }));
+	function showDraft(open) {
+		draftDetails.hidden = !open;
+		draftDetails.open = open;
+		newBatch.hidden = open || !ready;
+	}
+	showDraft(false);
 	const cap = () => caps()?.features?.pm_workspaces?.work_batches;
 	const supported = () => cap()?.version === 1 && cap()?.actions?.includes(START$1) && cap()?.profiles?.includes(profile.profile);
 	const valid = (ticket) => {
@@ -21886,7 +22100,13 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 	}
 	function failure(err) {
 		withdraw();
-		status.replaceChildren(text("pmb_unavailable"), errorBox(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? error() : err));
+		showDraft(false);
+		newBatch.hidden = true;
+		historyLabel.hidden = true;
+		facts.hidden = true;
+		proofView.hidden = true;
+		head.hidden = true;
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, text("pmb_unavailable"), errorBox(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? error() : err)), refreshButton));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -21999,10 +22219,10 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 				});
 				deps.append(h("label", {}, node, h("span", {}, other.title)));
 			}
-			for (const missing of row.depends_on.filter((edge) => !rows.some((item) => item.key === edge.entry_key))) deps.append(text("pmb_missing_dependency"), h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: () => {
+			for (const missing of row.depends_on.filter((edge) => !rows.some((item) => item.key === edge.entry_key))) deps.append(text("pmb_missing_dependency"), button({
+				variant: "secondary",
+				label: t("pmb_remove_dependency"),
+				onClick: () => {
 					if (start.locked() || !writer()) return;
 					const values = draft();
 					values.find((item) => item.key === row.key).depends_on = values.find((item) => item.key === row.key).depends_on.filter((edge) => edge.entry_key !== missing.entry_key);
@@ -22010,7 +22230,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 					renderEntries();
 					update();
 				}
-			}, t("pmb_remove_dependency")));
+			}));
 			const result = choose("pmb_profile_label", [[profile.profile, t("pmb_github_profile")], ...cap().profiles.includes("accepted_requirements_v1") ? [[acceptanceProfile, t("pmb_acceptance_profile")]] : []]);
 			result.value = condition(row).profile;
 			result.addEventListener("change", () => {
@@ -22032,16 +22252,16 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			entriesView.append(h("article", {
 				class: "pm-batch-entry",
 				"data-batch-entry": row.key
-			}, h("h4", {}, row.title), labelled("pmb_profile_label", result), condition(row).profile === "accepted_requirements_v1" ? text("pmb_acceptance_help") : text("pmb_profile"), details, changed, h("details", {}, h("summary", {}, t("pmb_dependencies")), text("pmb_dependency_help"), deps), h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: () => {
+			}, h("h4", {}, row.title), labelled("pmb_profile_label", result), condition(row).profile === "accepted_requirements_v1" ? text("pmb_acceptance_help") : text("pmb_profile"), details, changed, h("details", {}, h("summary", {}, t("pmb_dependencies")), text("pmb_dependency_help"), deps), button({
+				variant: "secondary",
+				label: t("pmb_remove"),
+				onClick: () => {
 					if (start.locked() || !writer()) return;
 					start.set("entries", JSON.stringify(draft().filter((item) => item.key !== row.key)));
 					renderEntries();
 					update();
 				}
-			}, t("pmb_remove"))));
+			})));
 			[...entriesView.lastElementChild.querySelectorAll("details")].forEach((node, index) => {
 				node.open = expanded.get(row.key)?.[index] || false;
 			});
@@ -22154,7 +22374,10 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			entrySignature = "";
 			await refresh();
 		},
-		extra: h("div", { class: "pm-fields" }, entriesView, h("div", { class: "pm-batch-limits" }, labelled("pmb_starts", starts), labelled("pmb_parallel", parallel), labelled("pmb_retries", retries), labelled("pmb_deadline", deadline)), text("pmb_budget_help"), labelled("pmb_rationale", reason), text("pmb_boundary"))
+		extra: h("div", { class: "pm-fields" }, entriesView, h("div", { class: "pm-batch-limits" }, labelled("pmb_starts", starts), labelled("pmb_parallel", parallel), labelled("pmb_retries", retries), h("div", { class: "pm-time-field" }, h("label", {}, t("pmb_deadline_short"), deadline), h("span", { class: "pm-local-time" }, t("pmb_shown"), " ", chosenLocal(deadline)))), disclosure({
+			label: t("pmb_details"),
+			body: h("div", {}, text("pmb_intro"), text("pmb_selection_help"), text("pmb_budget_help"), text("pmb_boundary"))
+		}), labelled("pmb_rationale", reason))
 	});
 	start.box.addEventListener("submit", () => {
 		firstSubmission = !start.locked();
@@ -22197,7 +22420,10 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			return;
 		}
 		const limits = batch.limits, children = batch.entries.map((entry) => h("article", { class: "pm-batch-entry" }, h("h4", {}, labels.get(entry.key) || entry.key), line("pmb_state", t("pmb_state_" + entry.state) === "pmb_state_" + entry.state ? entry.state : t("pmb_state_" + entry.state)), entry.reason ? h("p", { class: "muted" }, t("pmb_blocked_reason"), " · ", entry.reason) : null, line("pmb_profile_label", t(condition(entry).profile === "accepted_requirements_v1" ? "pmb_acceptance_profile" : condition(entry).profile === profile.profile ? "pmb_github_profile" : "pmb_observed_profile")), entry.operation_id ? h("a", { href: `#/op/${entry.operation_id}` }, t("pmb_child_operation")) : text("pmb_no_child"), h("details", {}, h("summary", {}, t("pmb_fixed_sources")), line("pmb_entry_key", entry.key), line("pmb_package", entry.package_ref.package_id), line("pmb_base", entry.source_sha), ...entry.depends_on.map((edge) => h("p", {}, t("pmb_wait_for"), " ", edge.entry_key))), ...entry.verification_evidence.map(proofFacts)));
-		facts.replaceChildren(h("h3", {}, t("pmb_saved")), line("pmb_operation_status", operationStatusLabel(batch.operation_status)), h("p", {}, `${t("pmb_starts")}: ${limits.max_starts} · ${t("pmb_parallel")}: ${limits.max_parallel} · ${t("pmb_retries")}: ${limits.max_retries}`), line("pmb_deadline", timeStamp(limits.deadline_at)), text("pmb_budget_help"), text("pmb_boundary"), h("a", { href: `#/op/${batch.operation_id}` }, t("pmb_parent_operation")), ...children);
+		facts.replaceChildren(h("h3", {}, t("pmb_saved")), line("pmb_operation_status", operationStatusLabel(batch.operation_status)), h("p", {}, `${t("pmb_starts")}: ${limits.max_starts} · ${t("pmb_parallel")}: ${limits.max_parallel} · ${t("pmb_retries")}: ${limits.max_retries}`), line("pmb_deadline", timeStamp(limits.deadline_at)), disclosure({
+			label: t("pmb_details"),
+			body: h("div", {}, text("pmb_budget_help"), text("pmb_boundary"))
+		}), h("a", { href: `#/op/${batch.operation_id}` }, t("pmb_parent_operation")), ...children);
 	}
 	const receiptKey = (row) => `${row.operation_id}:${row.seq}`;
 	function reviewChoices(entry) {
@@ -22285,18 +22511,18 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 				multiline: true,
 				max: 4e3
 			}), version = hidden(batch.version);
-			const rebase = h("button", {
-				type: "button",
-				class: "secondary",
+			const rebase = button({
+				variant: "secondary",
+				label: t("pmb_use_evidence_version"),
 				hidden: true,
-				onclick: () => {
+				onClick: () => {
 					if (writer() && !proof.locked()) {
 						proofBaseline.version = batch.version;
 						proof.set("_version", JSON.stringify(batch.version));
 						update();
 					}
 				}
-			}, t("pmb_use_evidence_version"));
+			});
 			proofRebase = rebase;
 			proof = form({
 				namespace: `${namespace}.work-batch-evidence`,
@@ -22366,7 +22592,10 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			proof.box.addEventListener("change", update);
 		}
 		syncProofOptions();
-		proofView.replaceChildren(h("details", { open: true }, h("summary", {}, t("pmb_evidence")), proof.box));
+		proofView.replaceChildren(h("details", {
+			"data-batch-evidence": "",
+			open: proof.locked() || null
+		}, h("summary", {}, t("pmb_record_open")), proof.box));
 	}
 	async function refresh() {
 		const ticket = ++serial;
@@ -22407,6 +22636,11 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 			if (selected && !historyData.rows.some((row) => row.batch_id === selected)) history.append(h("option", { value: selected }, t("pmb_selected_original")));
 			history.value = selected;
 			ready = true;
+			historyLabel.hidden = false;
+			facts.hidden = false;
+			head.hidden = false;
+			if (!head.contains(refreshButton)) head.replaceChildren(historyLabel, newBatch, refreshButton);
+			showDraft(!batch || Boolean(start?.locked()));
 			startView.hidden = false;
 			proofView.hidden = !batch;
 			renderEntries();
@@ -24245,31 +24479,35 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 var contract = "pm-engineering-handoff/v1";
 var equal$9 = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, caps, permitted, form, input, labelled, errorBox, namespace, onSourceFailure = () => {}, onReviewChange = () => {} }) {
-	let active = null, prepared = null, serial = 0, reading = false, editor = null, qualityCatalog = [];
+	let active = null, prepared = null, serial = 0, reading = false, editor = null, qualityCatalog = [], broken = false;
 	const editors = new Map(), facts = h("div"), status = h("div", { role: "status" }), editorView = h("div"), outcome = h("div");
-	const summary = h("p", { class: "muted" }, t("ph_select")), availabilityNotice = h("p", {
+	const summary = h("p", { class: "pm-package-name" }, t("ph_select")), availabilityNotice = h("p", {
 		class: "muted",
 		hidden: true
 	}, t("ph_not_allowed"));
-	const review = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void inspect()
-	}, t("ph_review"));
-	const useReview = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
+	const review = button({
+		variant: "secondary",
+		label: t("ph_review"),
+		onClick: () => void inspect()
+	});
+	const useReview = button({
+		variant: "secondary",
+		label: t("ph_use_review"),
+		onClick: () => {
 			if (!editor || editor.locked() || !prepared || !write()) return;
 			editor.set("review", JSON.stringify(prepared.fixed));
 			update();
 		}
-	}, t("ph_use_review"));
+	});
+	useReview.hidden = true;
+	const head = h("div", { class: "pm-tool-head" }, summary);
 	const element = h("section", {
 		class: "pm-packages",
 		"data-pm-package-handoff": ""
-	}, h("details", { "data-pm-package-handoff-controls": "" }, h("summary", {}, t("ph_title")), h("p", { class: "muted" }, t("ph_intro")), summary, h("p", { class: "muted" }, t("ph_boundary")), availabilityNotice, review, status, facts, useReview, editorView, outcome));
+	}, h("details", { "data-pm-package-handoff-controls": "" }, h("summary", {}, t("ph_title")), sectionCard({ body: h("div", {}, head, availabilityNotice, review, status, facts, useReview, editorView, outcome, disclosure({
+		label: t("ph_details"),
+		body: h("div", {}, h("p", { class: "muted" }, t("ph_intro")), h("p", { class: "muted" }, t("ph_boundary")), h("p", { class: "muted" }, t("ph_agent_help")))
+	})) })));
 	const available = () => {
 		const cap = caps()?.features?.pm_workspaces?.package_handoff;
 		return cap?.available === true && cap.action === "repository.continue" && cap.contract === contract && cap.code_basis_required === true && ["bounded_full_prompt", "bounded_full_prompt_or_fixed_spec_artifact"].includes(cap.source_materialization);
@@ -24355,6 +24593,19 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		}
 	}
 	function update() {
+		if (broken) {
+			head.hidden = true;
+			summary.hidden = true;
+			availabilityNotice.hidden = true;
+			review.hidden = true;
+			useReview.hidden = true;
+			editorView.hidden = true;
+			return;
+		}
+		head.hidden = false;
+		summary.hidden = false;
+		editorView.hidden = false;
+		review.hidden = false;
 		review.disabled = !active || reading || !write() || !hostReady(active);
 		availabilityNotice.hidden = !active || Boolean(write() && hostReady(active));
 		if (active) summary.textContent = joinLabel([active.document.title, active.sequence == null ? "" : joinLabel([t("ph_preparation"), active.sequence], " ")]);
@@ -24365,6 +24616,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 	function withdraw() {
 		serial++;
 		reading = false;
+		broken = false;
 		active = null;
 		prepared = null;
 		qualityCatalog = [];
@@ -24386,6 +24638,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		].includes(error.status)) {
 			withdraw();
 			onSourceFailure();
+			broken = true;
 		}
 		prepared = null;
 		facts.replaceChildren();
@@ -24484,7 +24737,7 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 					outcome.replaceChildren(h("p", {}, t("ph_started")), h("a", { href: `#/session/${encodeURIComponent(result.host)}/${encodeURIComponent(result.session_id)}` }, t("ph_open")));
 					update();
 				},
-				extra: h("div", { class: "pm-fields" }, warning, qualityBox, specBox, labelled("ph_rationale", basis), labelled("ph_prompt", prompt), labelled("ph_agent", agent), h("p", { class: "muted" }, t("ph_agent_help")), h("details", {}, h("summary", {}, t("ph_options")), labelled("start_title", title), labelled("start_model", model)))
+				extra: h("div", { class: "pm-fields" }, warning, qualityBox, specBox, labelled("ph_rationale", basis), labelled("ph_prompt", prompt), labelled("ph_agent", agent), disclosure({ element: h("details", {}, h("summary", {}, t("ph_options")), labelled("start_title", title), labelled("start_model", model)) }))
 			});
 			const original = value.update;
 			value.update = () => {
@@ -24651,8 +24904,8 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 					}
 				}
 			};
-			const proof = h("details", {}, h("summary", {}, t("ph_sources")), h("p", { class: "mono" }, `${t("ph_base")}: ${code.source_sha}`), ...(row.document.sources?.documents || []).map((source) => h("p", { class: "mono" }, `${t("ph_spec")}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)), h("p", { class: "mono" }, `${code.host} · ${code.workspace_id}`), h("p", { class: "mono" }, row.package_id), h("p", { class: "mono" }, row.document_digest), h("p", { class: "mono" }, work.work_fingerprint));
-			place(facts, "replaceChildren", h("h4", {}, t("ph_reviewed")), readyForStart ? null : h("p", { class: "muted" }, t("ph_batch_waiting")), h("p", {}, project.name, " · ", code.repository, " · ", code.source_ref.replace(/^refs\/heads\//, "")), h("p", {}, code.host, " · ", response.preview.workspace.name || t("ph_workspace")), h("p", { class: "muted" }, `${t("ph_project_version")} ${project.version}`), h("p", { class: "muted" }, t("ph_separate")), fixedSpec ? h("p", { class: "pm-source" }, t("ph_fixed_attachment"), ": ", fixedSpec.materialization_id, " · ", fixedSpec.artifact_ref.artifact_id, " · ", fixedSpec.document_digest) : null, specs.filtered ? h("p", { class: "muted" }, t("ph_spec_filtered")) : null, proof);
+			const proof = disclosure({ element: h("details", {}, h("summary", {}, t("ph_sources")), h("p", { class: "muted" }, t("ph_separate")), h("p", { class: "mono" }, `${t("ph_base")}: ${code.source_sha}`), ...(row.document.sources?.documents || []).map((source) => h("p", { class: "mono" }, `${t("ph_spec")}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)), h("p", { class: "mono" }, `${code.host} · ${code.workspace_id}`), h("p", { class: "mono" }, row.package_id), h("p", { class: "mono" }, row.document_digest), h("p", { class: "mono" }, work.work_fingerprint)) });
+			place(facts, "replaceChildren", h("h4", {}, t("ph_reviewed")), readyForStart ? null : h("p", { class: "muted" }, t("ph_batch_waiting")), h("p", {}, project.name, " · ", code.repository, " · ", code.source_ref.replace(/^refs\/heads\//, "")), h("p", {}, code.host, " · ", response.preview.workspace.name || t("ph_workspace")), h("p", { class: "muted" }, `${t("ph_project_version")} ${project.version}`), fixedSpec ? h("p", { class: "pm-source" }, t("ph_fixed_attachment"), ": ", fixedSpec.materialization_id, " · ", fixedSpec.artifact_ref.artifact_id, " · ", fixedSpec.document_digest) : null, specs.filtered ? h("p", { class: "muted" }, t("ph_spec_filtered")) : null, proof);
 			status.replaceChildren();
 		} catch (error) {
 			if (valid(ticket)) fail(error);
@@ -27070,33 +27323,42 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSize = 20, onSelection = () => {} }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
 	const idPattern = /^pmwp_[0-9a-f]{32}$/, digestPattern = /^[0-9a-f]{64}$/;
-	let sequence = 0, rows = [], cursor = null, pages = 1, selected = null, busy = false;
+	let sequence = 0, rows = [], cursor = null, pages = 1, selected = null, busy = false, broken = false;
 	const status = h("div", { role: "status" }), list = h("div"), facts = h("div", { "data-pm-wp-detail": "" });
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("wp_refresh"),
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
+		onClick: () => void refresh()
 	});
-	const more = h("button", {
-		type: "button",
-		class: "secondary",
+	const more = button({
+		variant: "secondary",
+		label: t("wp_more"),
 		hidden: true,
-		onclick: () => {
+		onClick: () => {
 			pages++;
 			refresh();
 		}
-	}, t("wp_more"));
+	});
+	const picker = h("select", {
+		"aria-label": t("wp_package"),
+		onchange: () => {
+			if (picker.value) select(picker.value);
+		}
+	});
+	const pickerLabel = h("label", {}, t("wp_package"), picker);
+	const head = h("div", { class: "pm-tool-head" }, pickerLabel, refreshButton);
 	const element = h("section", {
 		class: "pm-packages",
 		"data-pm-work-packages": ""
-	}, h("div", { class: "actions" }, h("h3", {}, t("wp_title")), refreshButton), h("p", { class: "muted" }, t("wp_intro")), status, list, more, facts);
+	}, sectionCard({ body: h("div", {}, head, status, list, more, facts, disclosure({
+		label: t("wp_details"),
+		body: h("p", { class: "muted" }, t("wp_intro"))
+	})) }));
 	const valid = (ticket) => {
 		alive();
 		return element.isConnected && ticket === sequence;
 	};
-	const detail = (title, ...children) => h("details", {}, h("summary", {}, title), ...children);
+	const detail = (title, ...children) => disclosure({ element: h("details", {}, h("summary", {}, title), ...children) });
 	const paragraph = (value) => h("p", { class: "pm-note-text" }, value);
 	const fact = (key, value) => h("p", { class: "pm-source" }, t(key), ": ", value ?? t("wp_unknown"));
 	const refs = (value) => value?.length ? fact("wp_source_refs", value.join(", ")) : null;
@@ -27111,21 +27373,25 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	}
 	function controls() {
 		refreshButton.disabled = busy;
+		picker.disabled = busy || broken;
 		more.disabled = busy;
 		more.hidden = cursor === null;
 	}
 	function renderList() {
-		list.replaceChildren(h("p", { class: "muted" }, t("wp_partial")), ...rows.map((row) => h("div", {
-			class: "pm-workspace-row",
-			"data-pm-wp-row": row.package_id
-		}, h("button", {
-			type: "button",
-			class: "secondary",
-			disabled: busy,
-			"aria-pressed": selected === row.package_id,
-			onclick: () => void select(row.package_id)
-		}, joinLabel([row.document.title, joinLabel([t("wp_preparation"), row.sequence], " ")])))));
-		if (!rows.length) list.append(emptyState({ title: t("wp_empty") }));
+		if (broken) {
+			picker.replaceChildren();
+			pickerLabel.hidden = true;
+			list.replaceChildren();
+			return;
+		}
+		pickerLabel.hidden = false;
+		picker.replaceChildren(h("option", { value: "" }, t("wp_choose")), ...rows.map((row) => h("option", { value: row.package_id }, joinLabel([row.document.title, joinLabel([t("wp_preparation"), row.sequence], " ")]))));
+		picker.value = rows.some((row) => row.package_id === selected) ? selected : "";
+		list.replaceChildren(...cursor === null ? [] : [h("div", { class: "pm-tool-head" }, statusPill("partial"), h("p", { class: "muted" }, t("wp_partial")))]);
+		if (!rows.length && !busy) list.append(emptyState({
+			title: t("wp_empty"),
+			heading: "h3"
+		}));
 	}
 	function render(row, readiness) {
 		const doc = row.document, context = doc.context;
@@ -27143,7 +27409,15 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 			"observation"
 		].map((key) => detail(t("wp_" + key) + " · " + t(delivery[key].status === "unresolved" ? "wp_unresolved_status" : "wp_" + delivery[key].status), paragraph(delivery[key].text))));
 		const sources = detail(t("wp_sources"), fact("wp_package_id", row.package_id), fact("wp_digest", row.document_digest), fact("wp_created", timeStamp(row.created_at, { empty: null })), fact("wp_author", row.actor), fact("wp_plan", context.plan_ref.revision_id), fact("wp_scope", context.plan_ref.scope_revision), fact("wp_code", doc.code_source.repository + "@" + doc.code_source.source_sha), fact("wp_work", row.work_item_id), fact("wp_binding", context.work_ref?.binding_id), fact("wp_work_version", context.work_ref?.work_version), context.dod_ref ? fact("wp_dod_revision", context.dod_ref.revision_id) : null, context.dod_ref ? fact("wp_dod_digest", context.dod_ref.document_digest) : null, row.previous_package_id ? fact("wp_previous", row.previous_package_id) : null, h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("wp_operation")), doc.evidence_refs?.length ? detail(t("wp_evidence"), ...doc.evidence_refs.map((ref) => h("p", { class: "pm-source" }, ref.evidence_id, " · ", ref.fact_digest))) : null, detail(t("wp_original"), ...(doc.sources?.documents || []).map((source) => detail(source.path, paragraph(source.content), h("p", { class: "pm-source" }, source.source_id, " · ", source.commit_sha, " · ", source.sha256)))));
-		facts.replaceChildren(h("h4", {}, doc.title), h("p", { "data-pm-wp-readiness": "" }, t(readiness.status === "ready" ? "wp_ready" : "wp_blocked")), h("p", { class: "muted" }, t("wp_boundary")), labelled("wp_checks", checks), h("p", { class: "muted" }, t("wp_coverage")), labelled("wp_requirements", requirements), detail(t("wp_design"), paragraph(doc.design.text), fact("wp_reason", doc.rationale), refs(doc.design.source_ids)), detail(t("wp_tasks"), tasks), detail(t("wp_verification"), verification), detail(t("wp_delivery"), deliveryNode), detail(t("wp_dod"), h("p", { class: "muted" }, t(doc.dod ? "wp_dod_note" : "wp_no_dod")), doc.dod ? h("ul", {}, ...(doc.dod.criteria || []).map((item) => h("li", {}, item.text))) : null), ...doc.unresolved.length ? [labelled("wp_unresolved", h("ul", {}, ...doc.unresolved.map((value) => h("li", {}, value))))] : [], sources);
+		const ready = readiness.status === "ready";
+		const pill = ready ? h("span", {
+			class: "ui-pill tone-ok",
+			"data-status": "ready"
+		}, t("wp_ready_short")) : statusPill("blocked");
+		facts.replaceChildren(h("div", { class: "pm-tool-head" }, h("h3", {}, doc.title), h("p", { "data-pm-wp-readiness": "" }, pill)), labelled("wp_checks", checks), disclosure({
+			label: t("wp_details"),
+			body: h("div", {}, paragraph(t(ready ? "wp_ready" : "wp_blocked")), paragraph(t("wp_boundary")), paragraph(t("wp_coverage")))
+		}), labelled("wp_requirements", requirements), labelled("wp_plan_section", h("div", {}, detail(t("wp_design"), paragraph(doc.design.text), fact("wp_reason", doc.rationale), refs(doc.design.source_ids)), detail(t("wp_tasks"), tasks), detail(t("wp_verification"), verification), detail(t("wp_delivery"), deliveryNode), detail(t("wp_dod"), h("p", { class: "muted" }, t(doc.dod ? "wp_dod_note" : "wp_no_dod")), doc.dod ? h("ul", {}, ...(doc.dod.criteria || []).map((item) => h("li", {}, item.text))) : null), sources)), ...doc.unresolved.length ? [labelled("wp_unresolved", h("ul", {}, ...doc.unresolved.map((value) => h("li", {}, value))))] : []);
 	}
 	async function readSelected(ticket) {
 		const id = selected;
@@ -27159,24 +27433,34 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		render(row, readiness);
 		onSelection(row);
 	}
+	function restoreHead() {
+		broken = false;
+		head.hidden = false;
+		pickerLabel.hidden = false;
+		if (!head.contains(refreshButton)) head.replaceChildren(pickerLabel, refreshButton);
+	}
 	function failed(error, ticket) {
 		try {
 			if (!valid(ticket)) return;
 		} catch {
 			return;
 		}
+		broken = true;
 		rows = [];
 		cursor = null;
 		list.replaceChildren();
 		facts.replaceChildren();
 		onSelection(null);
-		status.replaceChildren(errorBox(error), paragraph(t("wp_unavailable")));
+		picker.replaceChildren();
+		head.hidden = true;
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error), paragraph(t("wp_unavailable"))), refreshButton));
 	}
 	async function select(id) {
 		if (busy || !idPattern.test(id)) return;
 		selected = id;
 		const ticket = ++sequence;
 		busy = true;
+		restoreHead();
 		facts.replaceChildren();
 		onSelection(null);
 		renderList();
@@ -27200,8 +27484,10 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	async function refresh() {
 		const ticket = ++sequence;
 		busy = true;
+		restoreHead();
 		rows = [];
 		cursor = null;
+		picker.replaceChildren();
 		list.replaceChildren();
 		facts.replaceChildren();
 		onSelection(null);
@@ -27240,12 +27526,17 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 	function withdraw() {
 		sequence++;
 		busy = false;
+		broken = false;
 		rows = [];
 		cursor = null;
+		picker.replaceChildren();
 		list.replaceChildren();
 		facts.replaceChildren();
 		onSelection(null);
 		status.replaceChildren();
+		head.hidden = false;
+		pickerLabel.hidden = false;
+		if (!head.contains(refreshButton)) head.replaceChildren(pickerLabel, refreshButton);
 		controls();
 	}
 	return {
@@ -27268,28 +27559,30 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			refresh(true);
 		}
 	});
-	const review = h("button", {
-		type: "button",
-		class: "secondary",
-		hidden: true,
-		onclick: () => {
+	const review = button({
+		variant: "secondary",
+		label: t("pm_sprint_review_fresh"),
+		onClick: () => {
 			if (loaded) renderEditors(true);
 		}
-	}, t("pm_sprint_review_fresh"));
+	});
+	review.hidden = true;
 	const warning = h("p", {
 		class: "muted",
 		hidden: true
 	}, t("pm_sprint_stale"));
-	const box = h("section", {
-		class: "panel pm-evidence",
-		"data-pm-sprints": ""
-	}, h("header", { class: "pm-heading" }, h("h2", {}, t("pm_sprint_title")), iconButton({
+	const chooseLabel = labelled("pm_sprint_choose", choose);
+	const refreshButton = iconButton({
 		icon: "refresh-cw",
 		label: t("pm_sprint_refresh"),
 		type: "button",
-		class: "secondary",
 		onclick: () => void refresh()
-	})), labelled("pm_sprint_choose", choose), status, warning, review, view, editors);
+	});
+	const toolbar = h("div", { class: "pm-tool-head" }, chooseLabel, review, refreshButton);
+	const box = h("section", {
+		class: "panel pm-evidence",
+		"data-pm-sprints": ""
+	}, sectionCard({ body: h("div", {}, toolbar, status, warning, view, editors) }));
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
 	const actor = () => caps()?.actor;
 	const can = (decide) => loaded && permitted(decide);
@@ -27317,7 +27610,42 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		select.dataset.pmDefault = value;
 		return select;
 	};
-	const fold = (label, contents, open = false) => h("details", { open }, h("summary", {}, t(label)), contents);
+	const fold = (label, contents, open = false) => disclosure({ element: h("details", { open: open || null }, h("summary", {}, t(label)), contents) });
+	const toneFor = {
+		planned: "info",
+		active: "info",
+		closed: "neutral",
+		cancelled: "warn",
+		not_assessed: "neutral",
+		unknown: "neutral"
+	};
+	const sprintPill = (status) => h("span", {
+		class: `ui-pill tone-${toneFor[status] || "neutral"}`,
+		"data-status": status,
+		"data-pm-sprint-status": status === "not_assessed" || status === "unknown" ? null : status
+	}, t(status === "unknown" ? "pm_sprint_unknown" : status === "not_assessed" ? "pm_sprint_unassessed" : "pm_sprint_" + status));
+	function chosenUtc(field) {
+		const shown = h("span", { "data-pm-chosen-time": "" });
+		const paint = () => {
+			shown.replaceChildren();
+			if (!field.value) {
+				shown.append(sprintPill("unknown"));
+				return;
+			}
+			const date = new Date(field.value + "Z");
+			if (!Number.isFinite(date.getTime())) {
+				shown.append(sprintPill("unknown"));
+				return;
+			}
+			const stamp = timeStamp(date.toISOString());
+			shown.append(stamp instanceof Node ? stamp : String(stamp));
+		};
+		field.addEventListener("input", paint);
+		field.addEventListener("change", paint);
+		paint();
+		return shown;
+	}
+	const mono = (value) => h("code", { class: "mono" }, value || t("pm_sprint_missing"));
 	const markDirty = () => {
 		dirty = true;
 	};
@@ -27367,7 +27695,8 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		view.replaceChildren();
 		choose.replaceChildren();
 		editors.hidden = true;
-		status.replaceChildren(errorBox(error));
+		toolbar.hidden = true;
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error)), refreshButton));
 	}
 	const rationale = () => input("pm_sprint_reason", {
 		multiline: true,
@@ -27380,15 +27709,29 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			"data-pm-sprint-work": item.work_item_id
 		}, h("div", { class: "pm-sprint-work-heading" }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item)), item.assignee ? h("span", { class: "muted" }, item.assignee) : ""), item.assignee ? h("p", { class: "pm-note-text" }, item.how || t("pm_sprint_how_empty")) : "", fold("pm_sprint_versions", h("div", {}, note("pm_sprint_unassessed"), source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))) : [note("pm_sprint_no_work")]);
 	}
+	function absoluteStamp(value) {
+		const parsed = new Date(value);
+		if (!Number.isFinite(parsed.getTime())) return timeText(value, { now: 0 });
+		const day = 864e5, yearStart = new Date(parsed.getFullYear(), 0, 1).getTime();
+		return timeText(value, { now: Math.abs(parsed.getTime() - yearStart) >= day ? yearStart : parsed.getTime() + day * 2 });
+	}
 	function renderView() {
 		view.replaceChildren();
 		const data = model?.detail;
 		if (!data) {
-			view.append(note("pm_sprint_empty"));
+			view.append(emptyState({
+				title: t("pm_sprint_empty"),
+				heading: "h3"
+			}));
 			return;
 		}
-		const sprint = data.sprint, def = sprint.definition;
-		view.append(h("div", { class: "pm-plans" }, h("h3", {}, def.title, " · ", t("pm_sprint_" + sprint.status)), h("p", { class: "muted" }, t(def.mode === "scrum" ? "pm_sprint_scrum" : "pm_sprint_personal")), row("pm_sprint_goal_heading", h("p", { class: "pm-note-text" }, h("strong", {}, data.goal.text))), row("pm_sprint_period", h("div", {}, h("p", {}, timeStamp(def.starts_at), " → ", timeStamp(def.ends_at)), data.timebox_elapsed ? note("pm_sprint_elapsed") : "")), fold("pm_sprint_roles", h("dl", { class: "pm-evidence-fields" }, h("dt", {}, t("pm_sprint_owner")), h("dd", {}, def.owner_actor), h("dt", {}, t("pm_sprint_developers")), h("dd", {}, def.developers.join(", ")), h("dt", {}, t("pm_sprint_capacity")), h("dd", {}, def.capacity_note))), row("pm_sprint_work", workRows(data.selected_items || [])), row("pm_sprint_dod_heading", h("div", {}, note(data.quality === "fixed_original_assessments" ? "pq_fixed" : "pm_sprint_unassessed"), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), fold("pm_sprint_fixed", h("div", {}, data.quality === "fixed_original_assessments" ? "" : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, source(def.product_goal_revision_id)), h("p", {}, source(def.dod_revision_id)), h("p", {}, source(def.backlog_revision_id))))))));
+		const sprint = data.sprint, def = sprint.definition, items = data.selected_items || [];
+		const developers = h("span", {});
+		def.developers.forEach((id, index) => {
+			if (index) developers.append(", ");
+			developers.append(mono(id));
+		});
+		view.append(h("div", { class: "pm-sprint-answer" }, h("div", { class: "pm-tool-head" }, sprintPill(sprint.status), data.quality === "fixed_original_assessments" ? null : sprintPill("not_assessed")), h("p", { class: "pm-sprint-goal" }, data.goal.text), items.length ? h("ul", { class: "pm-sprint-work" }, ...items.map((item) => h("li", { "data-pm-sprint-work": item.work_item_id }, h("a", { href: `#/item/${encodeURIComponent(item.work_item_id)}` }, title(item))))) : note("pm_sprint_no_work"), h("p", { class: "pm-sprint-period" }, absoluteStamp(def.starts_at), " – ", absoluteStamp(def.ends_at)), data.timebox_elapsed ? note("pm_sprint_elapsed") : null, fold("pm_sprint_details", h("div", {}, h("p", { class: "muted" }, t(def.mode === "scrum" ? "pm_sprint_scrum" : "pm_sprint_personal")), h("p", {}, t("pm_sprint_owner"), ": ", t("pm_sprint_role_owner"), " ", mono(def.owner_actor)), h("p", {}, t("pm_sprint_developers"), ": ", developers), h("p", {}, t("pm_sprint_capacity"), ": ", def.capacity_note), h("ul", {}, ...model.fixed.dod.document.criteria.map((item) => h("li", {}, item.text))), data.quality === "fixed_original_assessments" ? null : note("pm_sprint_quality"), h("p", {}, t("pm_sprint_product_goal"), ": ", model.fixed.product_goal.document.text), h("p", {}, mono(def.product_goal_revision_id)), h("p", {}, mono(def.dod_revision_id)), h("p", {}, mono(def.backlog_revision_id))))));
 		const ticket = serial, terminal = ["closed", "cancelled"].includes(sprint.status);
 		let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
 		const closure = h("section", {
@@ -27403,18 +27746,20 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			h,
 			t,
 			fact: item.quality_assessment
-		}) : h("p", { class: "pm-note-text" }, t("pm_sprint_unassessed")), h("p", { class: "pm-note-text" }, t(item.counts_as_done ? "pq_increment" : "pm_sprint_reconsider")), h("p", { class: "pm-note-text" }, item.reason), fold("pm_sprint_versions", h("div", {}, source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))));
+		}) : sprintPill("not_assessed"), h("p", { class: "pm-note-text" }, t(item.counts_as_done ? "pq_increment" : "pm_sprint_reconsider")), h("p", { class: "pm-note-text" }, item.reason), fold("pm_sprint_versions", h("div", {}, source(item.binding_id), h("p", {}, source(item.plan_revision_id)), h("p", {}, (item.requirement_ids || []).join(", ")))))));
 		function renderClosure() {
 			if (!terminal) return;
 			closure.replaceChildren(h("h3", {}, t("pm_sprint_closure")));
 			if (ending) closure.append(h("p", { class: "muted" }, t("pm_sprint_recorded_by", { actor: ending.actor })), h("p", { class: "pm-note-text" }, ending.document.rationale), endingItems(ending.document.items || []), note("pm_sprint_no_carryover"));
-			else if (eventCursor != null) closure.append(note("pm_sprint_closure_pending"), h("button", {
-				type: "button",
-				class: "secondary",
-				disabled: eventPending,
-				onclick: () => void loadEventPage?.()
-			}, t(eventPending ? "pm_sprint_history_loading" : "pm_sprint_load_closure")));
-			else closure.append(note("pm_sprint_closure_unavailable"));
+			else if (eventCursor != null) {
+				const loadClosure = button({
+					variant: "secondary",
+					label: t(eventPending ? "pm_sprint_history_loading" : "pm_sprint_load_closure"),
+					onClick: () => void loadEventPage?.()
+				});
+				loadClosure.disabled = eventPending;
+				closure.append(note("pm_sprint_closure_pending"), loadClosure);
+			} else closure.append(note("pm_sprint_closure_unavailable"));
 		}
 		const history = h("div");
 		for (const kind of [
@@ -27439,14 +27784,14 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 					if (entry.text) body.append(h("p", { class: "pm-note-text" }, entry.text));
 					if (entry.items) body.append(workRows(entry.items));
 					if (isEnding) body.append(endingItems(entry.document?.items || []), note("pm_sprint_no_carryover"));
-					holder.append(h("details", {}, h("summary", {}, `#${entry.sequence} · ${t(kind === "events" ? {
+					holder.append(disclosure({ element: h("details", {}, h("summary", {}, `#${entry.sequence} · ${t(kind === "events" ? {
 						"pm.sprint.create": "pm_sprint_save",
 						"pm.sprint.goal.revise": "pm_sprint_save_sprint_goal",
 						"pm.sprint.select": "pm_sprint_save_selection",
 						"pm.sprint.start": "pm_sprint_start",
 						"pm.sprint.close": "pm_sprint_close",
 						"pm.sprint.cancel": "pm_sprint_cancel"
-					}[entry.action] || "pm_sprint_history_events" : "pm_sprint_history_" + kind)}`), body));
+					}[entry.action] || "pm_sprint_history_events" : "pm_sprint_history_" + kind)}`), body) }));
 				}
 				navigation.replaceChildren();
 				holder.append(navigation);
@@ -27455,10 +27800,10 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 					loadEventPage = null;
 				}
 				if (page.next_cursor != null) {
-					const more = h("button", {
-						type: "button",
-						class: "secondary"
-					}, t("pm_sprint_more_history", { kind: t("pm_sprint_history_" + kind) }));
+					const more = button({
+						variant: "secondary",
+						label: t("pm_sprint_more_history", { kind: t("pm_sprint_history_" + kind) })
+					});
 					const load = async () => {
 						if (more.disabled || !loaded || ticket !== serial) return;
 						more.disabled = true;
@@ -27534,22 +27879,25 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 					markDirty();
 					sync();
 				};
-				return h("li", { class: "pm-source" }, label, h("div", { class: "actions" }, h("button", {
-					type: "button",
-					class: "secondary",
+				return h("li", { class: "pm-source" }, label, h("div", { class: "actions" }, button({
+					variant: "ghost",
+					size: "sm",
+					label: t("pm_sprint_earlier"),
 					disabled: locked || index === 0,
-					onclick: () => move(-1)
-				}, t("pm_sprint_earlier")), h("button", {
-					type: "button",
-					class: "secondary",
+					onClick: () => move(-1)
+				}), button({
+					variant: "ghost",
+					size: "sm",
+					label: t("pm_sprint_later"),
 					disabled: locked || index === values.length - 1,
-					onclick: () => move(1)
-				}, t("pm_sprint_later")), h("button", {
-					type: "button",
-					class: "secondary",
+					onClick: () => move(1)
+				}), button({
+					variant: "ghost",
+					size: "sm",
+					label: t("pm_sprint_remove"),
 					disabled: locked,
-					onclick: () => move(null)
-				}, t("pm_sprint_remove"))));
+					onClick: () => move(null)
+				})));
 			}));
 		};
 		return {
@@ -27637,10 +27985,10 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 				}
 				if (page.next_cursor != null) {
 					if (!Number.isInteger(page.next_cursor) || page.next_cursor <= after) throw Error(t("pm_scope_mismatch"));
-					const more = h("button", {
-						type: "button",
-						class: "secondary",
-						onclick: async () => {
+					const more = button({
+						variant: "secondary",
+						label: t("pm_sprint_more_history", { kind: t("pm_sprint_" + kind) }),
+						onClick: async () => {
 							more.disabled = true;
 							try {
 								await show(kind, holder, page.next_cursor);
@@ -27652,7 +28000,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 								more.disabled = false;
 							}
 						}
-					}, t("pm_sprint_more_history", { kind: t("pm_sprint_" + kind) }));
+					});
 					holder.append(more);
 				}
 			}
@@ -27675,7 +28023,13 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			}
 		});
 		content.append(history);
-		return fold("pm_sprint_commitments", content, !artifacts.backlog);
+		return {
+			key: "pm.sprint.commitments",
+			label: t("pm_sprint_commitments"),
+			node: content,
+			hidden: false,
+			locked: false
+		};
 	}
 	function creationEditor() {
 		const artifacts = model.artifacts, members = workspace()?.members || [], ready = artifacts.product_goal && artifacts.dod && artifacts.backlog;
@@ -27734,17 +28088,23 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			permitted: () => can(true) && Boolean(ready) && members.length > 0,
 			label: "pm_sprint_save",
 			onStateChange: picks.sync,
-			extra: h("div", { class: "pm-fields" }, !ready ? note("pm_sprint_plan_required") : "", !members.length ? note("pm_sprint_no_members") : "", labelled("pm_sprint_name", name), labelled("pm_sprint_goal", goal), labelled("pm_sprint_mode", mode), h("div", { class: "capture-fields" }, labelled("pm_sprint_start_at", starts), labelled("pm_sprint_end_at", ends)), note("pm_sprint_period_help"), labelled("pm_sprint_owner", lead), h("div", {}, h("p", {}, t("pm_sprint_developers")), developers, picks.box), labelled("pm_sprint_master", master), labelled("pm_sprint_capacity", capacity), labelled("pm_sprint_reason", reason), note("pm_sprint_no_execution"))
+			extra: h("div", { class: "pm-fields" }, !ready ? note("pm_sprint_plan_required") : "", !members.length ? note("pm_sprint_no_members") : "", labelled("pm_sprint_name", name), labelled("pm_sprint_goal", goal), labelled("pm_sprint_mode", mode), h("div", { class: "capture-fields" }, h("div", { class: "pm-time-field" }, labelled("pm_sprint_start_at", starts), h("span", { class: "pm-local-time" }, t("pm_sprint_shown"), " ", chosenUtc(starts))), h("div", { class: "pm-time-field" }, labelled("pm_sprint_end_at", ends), h("span", { class: "pm-local-time" }, t("pm_sprint_shown"), " ", chosenUtc(ends)))), note("pm_sprint_period_help"), labelled("pm_sprint_owner", lead), h("div", {}, h("p", {}, t("pm_sprint_developers")), developers, picks.box), labelled("pm_sprint_master", master), labelled("pm_sprint_capacity", capacity), labelled("pm_sprint_reason", reason), note("pm_sprint_no_execution"))
 		});
 		picks.sync();
-		return fold("pm_sprint_new", create.box, !model.detail || create.locked());
+		return {
+			key: "pm.sprint.create",
+			label: t("pm_sprint_new"),
+			node: create.box,
+			hidden: false,
+			locked: create.locked()
+		};
 	}
 	function sprintEditors() {
 		const detail = model.detail, sprint = detail.sprint, def = sprint.definition, target = {
 			workspace_id: workspaceId,
 			sprint_id: sprint.sprint_id
 		};
-		const holder = h("div", { class: "pm-plans" }), preconditions = () => ({ expected_version: sprint.version });
+		const sections = [], preconditions = () => ({ expected_version: sprint.version });
 		const currentOwner = () => owner(def), canSelect = () => can(false) && (currentOwner() || def.developers.includes(actor())) && ["planned", "active"].includes(sprint.status) && !(sprint.status === "active" && detail.timebox_elapsed);
 		const items = hidden((detail.selected_items || []).map(({ binding_id, assignee, how }) => ({
 			binding_id,
@@ -27811,7 +28171,13 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			extra: h("div", { class: "pm-fields" }, note("pm_sprint_how_help"), items, workChoices, labelled("pm_sprint_reason", reason))
 		});
 		widgets.forEach((sync) => sync());
-		holder.append(fold("pm_sprint_select", selection.box, selection.locked()));
+		sections.push({
+			key: "pm.sprint.select",
+			label: t("pm_sprint_select"),
+			node: selection.box,
+			hidden: false,
+			locked: selection.locked()
+		});
 		const newGoal = input("pm_sprint_goal", {
 			multiline: true,
 			max: 4e3,
@@ -27830,9 +28196,13 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			label: "pm_sprint_save_sprint_goal",
 			extra: h("div", { class: "pm-fields" }, labelled("pm_sprint_goal", newGoal), labelled("pm_sprint_reason", goalReason))
 		});
-		const goalBox = fold("pm_sprint_revise_goal", goalEditor.box, goalEditor.locked());
-		goalBox.hidden = sprint.status !== "planned" && !goalEditor.locked();
-		holder.append(goalBox);
+		sections.push({
+			key: "pm.sprint.goal.revise",
+			label: t("pm_sprint_revise_goal"),
+			node: goalEditor.box,
+			hidden: sprint.status !== "planned" && !goalEditor.locked(),
+			locked: goalEditor.locked()
+		});
 		for (const action of [
 			"start",
 			"close",
@@ -27877,20 +28247,62 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 				extra: h("div", { class: "pm-fields" }, note(!currentOwner() ? "pm_sprint_owner_only" : action === "close" ? "pm_sprint_close_help" : action === "cancel" ? "pm_sprint_cancel_help" : "pm_sprint_future"), labelled("pm_sprint_reason", reasonField), ...picks.length ? [refs, ...picks.map(({ item, picker }) => h("div", { class: "pm-fact" }, h("p", {}, title(item)), picker.element))] : [])
 			});
 			picks.forEach(({ picker }) => picker.attach(editor));
-			const section = fold("pm_sprint_" + action, editor.box, editor.locked());
-			section.hidden = (action === "start" ? sprint.status !== "planned" : action === "close" ? sprint.status !== "active" : !["planned", "active"].includes(sprint.status)) && !editor.locked();
-			holder.append(section);
+			sections.push({
+				key: `pm.sprint.${action}`,
+				label: t("pm_sprint_" + action),
+				node: editor.box,
+				hidden: (action === "start" ? sprint.status !== "planned" : action === "close" ? sprint.status !== "active" : !["planned", "active"].includes(sprint.status)) && !editor.locked(),
+				locked: editor.locked()
+			});
 		}
-		return holder;
+		return sections;
+	}
+	function presentActions(sections) {
+		const statusName = model.detail?.sprint.status || "";
+		const primaryKey = !model.detail ? "pm.sprint.create" : statusName === "planned" ? "pm.sprint.start" : null;
+		const visible = sections.filter((section) => !section.hidden);
+		const primary = visible.find((section) => section.key === primaryKey) || null;
+		const rest = visible.filter((section) => section !== primary);
+		const parked = h("div", { hidden: true });
+		const slot = h("div", { "data-pm-sprint-slot": "" });
+		const openLocked = visible.find((section) => section.locked) || null;
+		const primaryButton = primary ? button({
+			variant: "primary",
+			label: t(primary.key === "pm.sprint.start" ? "pm_sprint_start_open" : "pm_sprint_plan_open"),
+			"data-pm-sprint-primary": primary.key,
+			onClick: () => reveal(primary.key)
+		}) : null;
+		const menuNode = rest.length ? menu({
+			button: button({
+				variant: "secondary",
+				label: t("pm_sprint_more")
+			}),
+			items: rest.map((section) => ({
+				key: section.key,
+				label: section.label,
+				onSelect: () => reveal(section.key)
+			}))
+		}) : null;
+		function reveal(key) {
+			const shown = sections.find((section) => section.key === key) || null;
+			if (primaryButton) primaryButton.hidden = Boolean(shown && primary && shown.key === primary.key);
+			slot.replaceChildren(...shown ? [shown.node] : []);
+			for (const section of sections) if (section !== shown) parked.append(section.node);
+		}
+		editors.replaceChildren(h("div", { class: "pm-sprint-actions" }, primaryButton, menuNode), slot, parked);
+		if (openLocked) reveal(openLocked.key);
+		else for (const section of sections) parked.append(section.node);
 	}
 	function renderEditors(reviewBaselines = false) {
 		stale = false;
 		dirty = false;
 		forms = [];
 		reviewing = reviewBaselines;
-		editors.replaceChildren();
-		if (model.detail) editors.append(sprintEditors());
-		editors.append(creationEditor(), artifactEditors());
+		presentActions([
+			...model.detail ? sprintEditors() : [],
+			creationEditor(),
+			artifactEditors()
+		]);
 		reviewing = false;
 		update();
 	}
@@ -27992,6 +28404,8 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 			};
 			loaded = true;
 			editors.hidden = false;
+			toolbar.hidden = false;
+			if (!toolbar.contains(refreshButton)) toolbar.append(refreshButton);
 			choose.replaceChildren(...sprints.length ? sprints.map((item) => h("option", { value: item.sprint_id }, `${item.definition.title} · ${t("pm_sprint_" + item.status)}`)) : [h("option", { value: "" }, t("pm_sprint_empty"))]);
 			choose.value = selectedId;
 			renderView();
