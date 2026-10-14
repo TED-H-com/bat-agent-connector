@@ -1,3 +1,4 @@
+import {statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 import {briefExport} from './pm-brief-export.js';
 import {maintenanceFindingsView} from './pm-maintenance-findings.js';
@@ -30,8 +31,7 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
     adapter:['bat_scope_unconfigured','adapter_scope_changed','adapter_disconnected','adapter_not_observed','adapter_coverage_incomplete','linked_session_not_covered','session_workspace_unproven','session_profile_unproven','session_state_unknown'],
     github_gap:['github_repository_coverage_unavailable','linked_pr_current_state_unproven','github_observation_missing','github_observation_context_changed','github_observation_incomplete'],
     github_prs:['github_open_pull_requests'],github_actions:['github_nonterminal_actions']};
-  const overview=h('section',{'data-review-report':''},h('h3',{},review.title),
-    text(t(review.status==='completed'?'pmrv_completed':'pmrv_prepared')),
+  const overview=h('section',{'data-review-report':''},h('div',{class:'pm-answer'},h('h3',{},review.title),statusPill(review.status==='completed'?'done':'in_review')),
     line('pmrv_period',h('span', {}, stamp(report.period.start), ' — ', stamp(report.period.end))),text(t('pmrv_period_help')),
     text(t('pmrv_fixed_help')),text(t('pmrv_samples')),
     line('pmrv_release',`${release.repository} · ${release.channel} · ${release.release_version.value}`),
