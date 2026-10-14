@@ -26,13 +26,13 @@ const labels = {
   en: {send: 'Send', ask: 'Ask PM', retry: 'Check original request', adopted: 'Adopted',
     resolve: 'Resolve issue', resolutionRationale: 'Reason for resolving', resolved: 'Reported resolved', unassessed: 'Not assessed',
     recently: 'Recently decided', resolution: 'The reviewed expiry decision removes the recovery implementation blocker.',
-    accepted: 'Accepted revision', rationale: 'Reason for adopting this update', adopt: 'Adopt this update',
+    accepted: 'Open revision', rationale: 'Reason for adopting this update', adopt: 'Adopt',
     progress: '0 of 2 accepted',
     message: 'Agree a 15-minute reset-link expiry; keep sign-in and recovery, and exclude referral rewards.'},
   'zh-TW': {send: '傳送', ask: '詢問 PM', retry: '查回原請求', adopted: '已採用',
     resolve: '回報解決', resolutionRationale: '回報解決的理由', resolved: '回報已解決', unassessed: '未評估',
     recently: '近期決策', resolution: '已審閱的效期決策解除了密碼重設實作的阻礙。',
-    accepted: '已採用版本', rationale: '採用這組更新的理由', adopt: '採用這組更新',
+    accepted: '檢視版本', rationale: '採用這組更新的理由', adopt: '採用',
     progress: '2 項中 0 項已驗收',
     message: '確認重設連結效期為 15 分鐘；保留登入與密碼重設，推薦獎勵不在本輪範圍。'},
 };
@@ -165,6 +165,11 @@ async function walkthrough(locale, width) {
     await page.locator('[data-discussion-ask]').click();
     const proposal = page.locator('[data-pm-plan-proposals]');
     await expect(proposal).toContainText(copy.summary);
+    if (width < 1200) await page.keyboard.press('Escape');
+    const excludedSummary = proposal.locator('[data-proposal-exclusion="referral"]');
+    await expect(excludedSummary).toBeVisible();
+    await expect(excludedSummary).toContainText(copy.exclusion);
+    await proposal.locator('[data-proposal-review]').click();
     await expect(proposal.locator('[data-proposal-candidate]')).toHaveCount(6);
     const exclusion = proposal.locator('[data-proposal-candidate="referral"]').locator('..');
     await expect(exclusion).toContainText(copy.exclusion);
@@ -173,7 +178,6 @@ async function walkthrough(locale, width) {
     await exclusion.scrollIntoViewIfNeeded();
     await expect(exclusion).toBeInViewport();
     await screenshot(6, 'proposal');
-    await proposal.locator('[data-proposal-review]').click();
     await proposal.getByLabel(l.rationale, {exact: true}).fill(l.message);
     await expect(proposal.getByRole('button', {name: l.adopt, exact: true})).toBeEnabled();
     await screenshot(7, 'review');

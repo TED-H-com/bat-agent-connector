@@ -90,6 +90,11 @@ for (const locale of ['en', 'zh-TW'] as const) {
     const detailsText = await page.locator('[data-session-details]').innerText();
     expect(detailsText).toContain('Codex · example-codex');
     expect(detailsText).not.toMatch(/(^|\n)codex ·/);
+    const details = page.locator('[data-session-details]');
+    await expect(details.locator('dt').filter({hasText: zh ? /^工作階段 ID$/ : /^Session ID$/})).toHaveCount(1);
+    await expect(details.locator('dt').filter({hasText: zh ? /^工作區$/ : /^Workspace$/})).toHaveCount(1);
+    await expect(details.locator('dt').filter({hasText: zh ? /^標題$/ : /^Title$/})).toHaveCount(0);
+    await expect(page.locator('[data-session-details] time + code')).toHaveCount(0);
     await page.locator('[data-session-details] > summary').click();
     await expect(page.locator('.session-work-line')).toHaveText(zh ? '工作 · 電子郵件登入' : 'Work · Email sign-in');
     await expect(page.locator('.session-label-state')).toHaveText(zh ? '無法讀取標籤' : 'Labels unavailable');
@@ -164,7 +169,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await shot(page, `session-${locale}-390`);
     await page.setViewportSize({width: 1440, height: 900});
     await go(page, `#/session/${ids.host}/${ids.sessions.review}`);
-    await expect(page.locator('.session-pill')).toContainText(zh ? '正在詢問' : 'Asking you');
+    await expect(page.locator('.session-pill')).toContainText(zh ? '等待處理' : 'Waiting for you');
     await expect(page.locator('.session-asking')).toContainText(copy.approvalAsk);
     const allowButton = page.getByRole('button', {name: allow, exact: true});
     await expect(allowButton).toBeEnabled();
@@ -177,7 +182,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
     expect(parseDiscussRefs(String(reviewHref).slice(String(reviewHref).indexOf('?') + 1)).refs).toEqual([]);
     await page.keyboard.press('Escape');
     await go(page, `#/session/${ids.host}/${ids.sessions.manual}`);
-    await expect(page.locator('.session-pill')).toContainText(zh ? '唯讀' : 'Read-only');
+    await expect(page.locator('.session-pill .ui-pill')).toHaveCount(0);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
     await expect(page.locator('[data-session-readonly]')).toContainText(zh ? '這裡只能檢視' : 'read-only here');
     await expect(page.getByRole('button', {name: send, exact: true})).toHaveCount(0);
@@ -469,9 +474,10 @@ test('Requirements links keep their return query; Discuss returns to the exact S
   const back = page.locator('[data-discussion-back]');
   await expect(back).toHaveAttribute('href', href);
   await expect(back).toHaveText('Back to Session');
-  await expect(page.locator('[data-discussion-context=work_item]')).toHaveText('Work · Email sign-in');
+  await expect(page.locator('.pd-thread-header [data-discussion-context=work_item]')).toHaveText('Work · Email sign-in');
   await page.reload();
   await expect(back).toHaveAttribute('href', href);
+  await page.setViewportSize({width: 390, height: 844});
   await back.click();
   await expect(page.locator('[data-session-back=requirements]')).toBeVisible();
   await s.context.close();

@@ -110,7 +110,9 @@ async def main():
             "state": state,
             "identity": store.encode(identity),
             "document": store.encode(document),
-            "created_at": time.time() - n - 1,
+            # Anchor history to the saved current deployment; slow asynchronous
+            # setup must not reorder the pagination fixture.
+            "created_at": template["created_at"] - n - 1,
             "run_id": 1000 + n,
         }
         if name != "prod":

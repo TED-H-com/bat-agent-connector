@@ -147,8 +147,13 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   function withdraw(){++serial;ready=false;current=null;rows=[];cursor=null;historyCursor=null;historyLoaded=false;historyRequest=null;workFiltered=false;
     maintenanceNote.textContent='';summary.replaceChildren();work.replaceChildren();retentionChoices.replaceChildren();historyBody.replaceChildren();status.replaceChildren();notify();}
   function unavailable(error){withdraw();status.replaceChildren(errorBox(error),h('p',{class:'muted'},t('pm_lifecycle_unknown')));}
-  async function refresh(){
-    withdraw();const ticket=serial;status.replaceChildren(skeleton(2));
+  async function refresh({event=false}={}){
+    // An unrelated background read does not withdraw the last observed policy.
+    // Disabling a pressed submit button here makes the browser drop its click.
+    // Explicit refreshes and policy changes still close admission before reading.
+    if(!event||!ready||!current){withdraw();status.replaceChildren(skeleton(2));}
+    else ++serial;
+    const ticket=serial;
     try{
       const value=checkScope(await api('GET',endpoint));alive();if(ticket!==serial)return;
       if(!value.lifecycle||!Number.isSafeInteger(value.lifecycle.revision)||value.lifecycle.revision<0

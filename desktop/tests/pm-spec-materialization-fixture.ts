@@ -76,7 +76,8 @@ export async function bootSpec(page:Page,locale='en'){
     }for(const child of children.flat()){if(child===null||child===undefined||child===false)continue;el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};
     const win=window as any,api=async(method:string,path:string,body:any,key:any)=>{const result=await win.specFixtureRequest({method,path,body,idempotency_key:key});
       if(result.status>=400)throw Object.assign(Error(result.data.error.message),{code:result.data.error.code,status:result.status});return result.data;};
-    const errorBox=(error:any)=>h('p',{class:'error'},error.message),input=(label:string,{multiline=false,max=4000,required=true,value=''}:any={})=>{
+    const {createErrorBox}=await import('/__spec_src/test-error-box.js');
+    const errorBox=createErrorBox(h,t,locale),input=(label:string,{multiline=false,max=4000,required=true,value=''}:any={})=>{
       const field=h(multiline?'textarea':'input',{'aria-label':t(label),maxlength:max,required}) as HTMLInputElement;field.value=value;return field;
     },labelled=(key:string,field:any)=>h('label',{},t(key),field),alive=()=>{};
     let caps=await api('GET','/capabilities'),workspace=(await api('GET','/pm/workspaces/'+workspaceId)).workspace,config=await api('GET','/spec-ui-config');

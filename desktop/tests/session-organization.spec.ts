@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 
@@ -8,7 +9,7 @@ function fixture() {
     rows: Array.from({length: 32}, (_, i) => ({host: i < 24 ? 'build-east' : 'build-west', session_id: `session-${String(i).padStart(3, '0')}`,
       title: ['Review parser changes', 'Prepare release notes', 'Investigate flaky test', 'Check migration history'][i % 4] + ` · ${i + 1}`,
       workspace: i < 16 ? 'Connector' : i < 24 ? 'Dashboard' : 'Connector', workspace_id: i < 16 ? 'workspace-connector' : i < 24 ? 'workspace-dashboard' : 'workspace-connector',
-      agent_kind: i % 3 ? 'claude' : 'codex', worktree_branch: i % 4 ? 'fix/parser' : 'main', loaded: true, streaming: i % 4 === 0,
+      agent_kind: i % 3 ? 'claude' : 'codex', worktree_branch: i % 4 ? 'fix/parser' : 'main', loaded: i !== 5, streaming: i === 5 || i === 6 ? null : i % 4 === 0,
       provenance: i % 3 === 0 ? 'manual' : 'connector_managed', api_access: i % 3 === 0 ? 'read_only' : 'managed',
       pending: i === 1 ? {kind: 'ask_user'} : null, fields_stale: i === 1 || i === 4, stale: i === 2, stale_reason: i === 2 ? 'host_unreachable' : null,
       state: {lifecycle: 'unknown', enumeration: i === 3 ? 'gone' : 'present'}, observed_at: '2026-10-08T15:30:00Z', last_activity_at: '2026-10-08T15:25:00Z'}))};
@@ -59,9 +60,18 @@ for (const native of [false, true]) {
     await expect(page.locator('[data-resource-id]')).toHaveCount(24);
     await expect(page.locator('.session-group-heading code')).toHaveCount(0);
     await expect(page.locator('[data-resource-id="build-east/session-000"]')).toContainText('Manual · API read-only');
+    await expect(page.locator('[data-resource-id="build-east/session-000"] .session-entry-heading .chip')).toHaveText('Running');
+    await expect(page.locator('[data-resource-id="build-east/session-001"] .session-entry-heading .chip')).toHaveText('Waiting for you');
     await expect(page.locator('[data-resource-id="build-east/session-003"]')).toContainText('Not in latest scan');
+    await expect(page.locator('[data-resource-id="build-east/session-003"] .session-entry-heading .chip')).toHaveText('Out of sync');
     await expect(page.locator('.session-inventory')).not.toContainText('Ended');
-    await expect(page.locator('[data-resource-id="build-east/session-004"] .chip')).toHaveText('Observation needs updating');
+    await expect(page.locator('[data-resource-id="build-east/session-004"] .chip')).toHaveText('Out of sync');
+    await expect(page.locator('[data-resource-id="build-east/session-005"] .session-entry-heading .chip')).toHaveCount(0);
+    await expect(page.locator('[data-resource-id="build-east/session-006"] .session-entry-heading .chip')).toHaveCount(0);
+    await page.locator('[data-resource-id="build-east/session-005"] .session-row-details > summary').click();
+    await expect(page.locator('[data-resource-id="build-east/session-005"] .session-row-details')).toContainText('Not open in BAT');
+    await page.locator('[data-resource-id="build-east/session-006"] .session-row-details > summary').click();
+    await expect(page.locator('[data-resource-id="build-east/session-006"] .session-row-details')).toContainText('BAT did not report activity');
     await expect(page.locator('[data-resource-id="build-east/session-001"]')).toContainText('Activity and pending requests have not been rechecked.');
     const west = page.locator('.session-workspaces').getByRole('link', {name: 'build-west', exact: true});
     await expect(west).toHaveCount(0);
@@ -96,7 +106,7 @@ for (const native of [false, true]) {
     await expect(row.locator('details').first()).toHaveAttribute('open', '');
     expect(Math.abs(await row.evaluate(el => el.getBoundingClientRect().top) - top)).toBeLessThan(3);
     data.fail = true; data.cursor = 2;
-    await expect(page.locator('#main').getByText('UNAVAILABLE Inventory unavailable')).toBeVisible();
+    await expectErrorDetails(page.locator('#main'), 'Inventory unavailable', 'UNAVAILABLE');
     expect(await saved(page)).toEqual(cp(1));
     data.fail = false;
     await expect.poll(() => saved(page), {timeout: 10000}).toEqual(cp(2));
@@ -119,7 +129,7 @@ for (const native of [false, true]) {
     await expect.poll(() => held).toBe(true);
     await page.getByRole('combobox', {name: 'Host', exact: true}).selectOption('build-west');
     data.fail = true; release();
-    await expect(page.locator('#main').getByText('UNAVAILABLE Inventory unavailable')).toBeVisible();
+    await expectErrorDetails(page.locator('#main'), 'Inventory unavailable', 'UNAVAILABLE');
     expect(await saved(page)).not.toEqual(cp(1));
     data.fail = false;
     await expect.poll(() => saved(page), {timeout: 10000}).toEqual(cp(1));

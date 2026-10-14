@@ -136,7 +136,7 @@ test('B2 S3 requirement inspector shows criteria, work, review, decisions and de
   const inspector = page.locator('[data-work-inspector]');
   await expect(inspector.locator('[data-work-section]')).toHaveCount(6);
   expect(await inspector.locator('[data-work-section]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-work-section')))).toEqual(['criteria', 'work', 'result', 'decisions', 'delivery', 'details']);
-  await expect(inspector.locator('[data-work-section=criteria] [data-status=accepted]')).toHaveCount(2);
+  await expect(inspector.locator('[data-work-section=criteria] [data-status=accepted]')).toHaveCount(1);
   await expect(inspector.locator('[data-work-section=result]')).toContainText('Quality review');
   await expect(inspector.locator('[data-work-section=result]')).not.toContainText('No result recorded');
   await expect(inspector.getByRole('link', {name: 'Approve sign-in'})).toHaveAttribute('href', /issues\?select=decision.review/);
@@ -183,6 +183,7 @@ for (const view of ['requirements', 'board']) test(`S5 M7 ${view} changes opener
   await expect(page.locator(view === 'board' ? `[data-board-open="${f.ids.work.audit}"]` : `[data-rtm-select="${f.ids.work.audit}"]`)).toBeFocused();
   await open(f.ids.work.email);
   await page.locator('[data-work-discuss]').click();
+  await page.setViewportSize({width: 390, height: 844});
   await page.getByRole('link', {name: view === 'board' ? 'Back to Board' : 'Back to Requirements'}).click();
   await expect(page.locator('[data-work-inspector] > header h2')).toHaveText('Email sign-in');
   await page.keyboard.press('Escape');
@@ -296,7 +297,8 @@ for (const locale of ['en', 'zh-TW']) test(`V1 V2 V3 V4 V5 M9 inspector concise 
   await expect(inspector.locator('[data-work-section=blocker] a')).toHaveCount(0);
   await expect(inspector.locator('[data-work-attempt]').first()).toContainText(locale === 'en' ? 'Send not confirmed' : '受理情況未知');
   await expect(inspector.locator('[data-work-section=result]')).toContainText(locale === 'en' ? 'Definition of done not assessed' : '完成定義尚未評估');
-  await expect(inspector.locator('[data-work-section=status]')).not.toContainText(locale === 'en' ? 'Content approved' : '內容已核准');
+  await expect(inspector.locator('[data-work-section=status] .pm-work-inline > .ui-pill')).toHaveText(locale === 'en' ? 'Content approved' : '內容已核准');
+  await expect(inspector.locator('[data-work-section=status] .pm-work-inline > .ui-pill')).not.toHaveText(locale === 'en' ? 'Done' : '完成');
   await expect(page.locator('[data-pm-rtm] > .ui-disclosure')).not.toContainText(locale === 'en' ? 'requirement acceptance' : '需求已通過驗收');
   await expect(page.locator(`[data-rtm-work="${f.ids.work.unlock}"]`)).not.toContainText('×0');
   await page.keyboard.press('Escape');
@@ -368,8 +370,10 @@ for (const view of ['requirements', 'board']) test(`S1 ${view} snapshot conflict
   await f.mount(page, view); await expect(page.locator(view === 'board' ? '[data-pm-kanban-work]' : '[data-rtm-requirement]')).toHaveCount(view === 'board' ? 12 : 8);
   failed = true; await page.locator('[data-pm-refresh]').click();
   const status = page.locator(view === 'board' ? '[data-pm-kanban] > [role=status]' : '[data-pm-rtm] > [role=status]');
-  await expect(status.locator('p').first()).not.toContainText('SNAPSHOT_CHANGED');
-  await expect(status.locator('p').first()).not.toContainText('Private raw');
+  const summary = view === 'board' ? status.getByRole('alert').locator(':scope > span') : status.locator('p').first();
+  await expect(summary).toContainText('The plan changed while reading');
+  await expect(summary).not.toContainText('SNAPSHOT_CHANGED');
+  await expect(summary).not.toContainText('Private raw');
   await expect(status.locator('details')).toContainText('SNAPSHOT_CHANGED');
   failed = false; await status.getByRole('button', {name: /^Retry/}).click();
   await expect(page.locator(view === 'board' ? '[data-pm-kanban-work]' : '[data-rtm-requirement]')).toHaveCount(view === 'board' ? 12 : 8);
@@ -387,7 +391,7 @@ for (const locale of ['en', 'zh-TW']) test(`S1 Board keeps Retry focus and statu
   try {
     await f.mount(page, 'board');
     const status = page.locator('[data-pm-kanban] > [role=status]');
-    const retry = status.getByRole('button', {name: locale === 'en' ? 'Retry work flow' : '重試工作流', exact: true});
+    const retry = status.getByRole('button', {name: locale === 'en' ? 'Retry' : '重試', exact: true});
     await expect(retry).toBeVisible();
     await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
     expect(reads).toBe(1); // Activation and the initial workspace read share one request.

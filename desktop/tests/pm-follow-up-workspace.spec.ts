@@ -83,18 +83,18 @@ function fixture({analysisEnabled=false}={}){
 }
 const route=`/dashboard/#/pm/${workspaceId}`,section=(page:any)=>page.locator('[data-pm-follow-up]'),editor=(page:any)=>page.locator('[data-pm-fu-editor]');
 async function open(page:any){
-  if(!await editor(page).evaluate((node:HTMLDetailsElement)=>node.open))await editor(page).locator(':scope > summary').click();
+  if(!await editor(page).isVisible())await section(page).locator('[data-pm-follow-up-prepare]').click();
   await expect(page.getByLabel('Evidence snapshot',{exact:true})).toBeEnabled();
 }
 async function select(page:any){await open(page);await page.getByLabel('Evidence snapshot',{exact:true}).selectOption(snapshotId);await expect(editor(page)).toContainText('Selections stay fixed.');}
 for(const native of [false,true])test.describe(native?'native workspace Follow-up':'web workspace Follow-up',()=>{
   test('fixed management knowledge and later answers retain their distinct provenance',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');
-    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);
     await expect(page.locator('[data-pm-fu-agenda] ol > li')).toHaveCount(1);
     await expect(page.locator('[data-pm-fu-domain=finance]')).toContainText('The first paid tier price is undecided.');
     await expect(page.locator('[data-pm-fu-domain=finance]')).toContainText('The accepted plan remains unchanged');
-    await expect(section(page)).toContainText('No AI Follow-up, scope change or work execution occurred');
+    await expect(section(page)).toContainText('Preparing saves the selected sources. It does not adopt scope changes or dispatch work.');
     expect(f.followUp.state.writes).toHaveLength(0);await expect(page.getByRole('tab')).toHaveCount(0);
     f.followUp.state.rows.at(-1).document.agenda[0].text='A sourced agenda update from another client';f.base.state.cursor++;
     await expect(section(page)).toContainText('A sourced agenda update from another client',{timeout:10000});
@@ -104,7 +104,7 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');await select(page);f.followUp.state.lost=true;
     await page.getByRole('button',{name:'Save discussion preparation',exact:true}).click();await expect(editor(page)).toContainText('The original reply was lost');
     const original=structuredClone(f.followUp.state.writes[0]);await page.reload();await openPmSection(page, 'issues' , 'ui_follow_up');
-    if(!await editor(page).evaluate((node:HTMLDetailsElement)=>node.open))await editor(page).locator(':scope > summary').click();
+    if(!await editor(page).isVisible())await section(page).locator('[data-pm-follow-up-prepare]').click();
     await page.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect(section(page)).toContainText('Preparation 4');
     expect(f.followUp.state.ops.size).toBe(1);expect(f.followUp.state.writes.at(-1).body).toEqual(original.body);
@@ -122,7 +122,7 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
   });
   test('analysis feature flag keeps existing preparation available without mounting or reading assessments',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');
-    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);
     await expect(page.locator('[data-pm-follow-up-assessments]')).toHaveCount(0);
     await expect(page.locator('[data-pm-follow-up-analyze]')).toHaveCount(0);
     expect(f.analysis.reads).toEqual([]);expect(f.analysis.writes).toEqual([]);
@@ -130,13 +130,13 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
   test('home submits fixed analysis through the shared transport and polls only its original operation',async({page})=>{
     const f=fixture({analysisEnabled:true});f.analysis.pending=true;
     await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');
-    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);
     await page.locator('[data-pm-follow-up-analyze] > summary').click();
     await page.getByLabel('What should PM assess?',{exact:true}).fill('Compare the original recovery commitment with the fixed evidence.');
     await page.getByRole('button',{name:'Analyze this preparation',exact:true}).click();
     const result=page.locator('[data-pm-assessment-record]');await expect(result).toHaveAttribute('data-pm-assessment-record',assessmentId(2));
     await expect(result).toContainText('conclusions have not been verified');
-    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);await expect(page.getByRole('tab')).toHaveCount(0);
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);await expect(page.getByRole('tab')).toHaveCount(0);
     expect(f.analysis.writes).toHaveLength(1);expect(f.analysis.polls).toBe(1);
     expect(f.analysis.writes[0].body).toEqual({action:'pm.follow_up.analyze',target:{workspace_id:workspaceId,thread_id:followUpThreadId},
       params:{intake_id:intakeId(3),purpose:'Compare the original recovery commitment with the fixed evidence.'},
@@ -160,7 +160,7 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
     expect(f.analysis.reads.at(-1)).toBe(`/pm/workspaces/${workspaceId}/follow-up-assessments/${assessmentId(1)}`);
     await assessments.getByRole('button',{name:/^Assessment 2 ·/}).click();
     await expect(assessments).toContainText('Another fixed assessment was saved; no scope decision was adopted.');
-    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+    await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);
     expect(f.analysis.writes).toHaveLength(0);expect(f.followUp.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
   });
   test('home reload keeps a lost analysis admission on the original key and thread CAS',async({page})=>{
@@ -182,7 +182,7 @@ for(const native of [false,true])test.describe(native?'native workspace Follow-u
 });
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`workspace Follow-up layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(8);
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');await expect(page.locator('[data-pm-fu-domain]')).toHaveCount(3);
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.PM_FOLLOW_UP_WORKSPACE_SCREENSHOTS;
   if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}
@@ -193,7 +193,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`struct
   const context=await browser.newContext({baseURL,locale}),page=await context.newPage();try{
   const f=fixture({analysisEnabled:true});f.analysis.structured_analysis=structuredCapability();f.analysis.lost=true;
   await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');
-  const box=page.locator('[data-pm-follow-up-analyze]');await expect(box.locator(':scope > summary')).toHaveText(locale==='zh-TW'?'請 PM 評估這份討論準備':'Ask PM to assess this preparation');await box.locator(':scope > summary').click();
+  const box=page.locator('[data-pm-follow-up-analyze]');await expect(box.locator(':scope > summary')).toHaveText(locale==='zh-TW'?'請 PM 評估':'Ask PM');await box.locator(':scope > summary').click();
   const form=box.locator('form'),choice=form.locator('[data-pm-structured-analysis] select');
   await choice.selectOption(BAT);await form.locator('textarea').fill('A fixed BAT Follow-up');await form.locator('button[type=submit]').click();
   await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
@@ -208,7 +208,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])for(const ad
   const f=fixture({analysisEnabled:true});f.followUp.state.rows.at(-1).document.thread_ref=null;f.analysis.structured_analysis=structuredCapability({native:true});f.analysis.lost=true;
   await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues' , 'ui_follow_up');
   const box=page.locator('[data-pm-follow-up-analyze]'),target=box.locator('select').first(),form=box.locator('form'),runtime=form.locator('[data-pm-structured-analysis] select');
-  await expect(box.locator(':scope > summary')).toHaveText(locale==='zh-TW'?'請 PM 評估這份討論準備':'Ask PM to assess this preparation');
+  await expect(box.locator(':scope > summary')).toHaveText(locale==='zh-TW'?'請 PM 評估':'Ask PM');
   await box.locator(':scope > summary').click();await target.selectOption(followUpThreadId);await runtime.selectOption(adapter);
   await form.locator('textarea').fill('Retain my selected discussion and runtime.');await form.locator('button[type=submit]').click();
   await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
@@ -250,7 +250,7 @@ test('withdrawn original target retains its unknown intent and never substitutes
   await box.locator(':scope > summary').click();await box.locator('select').first().selectOption(followUpThreadId);await form.locator('[data-pm-structured-analysis] select').selectOption(BAT);await form.locator('textarea').fill('Original private discussion');await form.locator('button[type=submit]').click();
   await expect(form).toContainText('Original assessment reply lost');const original=structuredClone(f.analysis.writes[0]);
   withdrawn=true;f.followUp.state.failSource='/threads/'+followUpThreadId;await page.reload();await openPmSection(page, 'issues' , 'ui_follow_up');await box.locator(':scope > summary').click();
-  await expect(page.locator('[data-pm-follow-up]')).toContainText('Your token lacks this scope.');await expect(form).toHaveCount(0);
+  await expect(page.locator('[data-pm-follow-up]')).toContainText('Your account does not have the required scope.');await expect(form).toHaveCount(0);
   expect(f.analysis.writes).toHaveLength(1);expect(reads.some(path=>path.endsWith('/threads/'+other))).toBe(false);
   expect(await page.evaluate(key=>Object.values(localStorage).some(value=>value.includes(key)),original.idempotency_key)).toBe(true);
   withdrawn=false;f.followUp.state.failSource=null;await page.reload();await openPmSection(page, 'issues' , 'ui_follow_up');await box.locator(':scope > summary').click();await expect(box.locator('select').first()).toHaveValue(followUpThreadId);await expect(box.locator('select').first()).toBeDisabled();

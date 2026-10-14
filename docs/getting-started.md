@@ -17,13 +17,27 @@ GitHub artifacts may require sign-in and expire. Windows validation packages are
 
 ## First launch: your local Connector
 
-Install and open the matching package. It contains the Python runtime and prepares one private local central, its data and your personal identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. The initial Dashboard opens **Get ready to work** when no BAT host is configured.
+Install and open the matching package. It contains the Python runtime and prepares one private local central, its data and your personal identity. You do not install Python / uv, enter an actor, edit credential files or copy an API token for this path. With no BAT host configured, the initial Dashboard opens **Settings → Connection**, with **Get ready to work → 1. Connect BAT** expanded.
+
+1. Paste the connection URL copied from BAT into the masked field. It fills the connection details locally.
+2. Check the **Host ID**, then choose **Verify and save host**.
+3. After success, choose **View sessions**. Human sessions remain read-only.
+
+**Bind a GitHub repository** and **Configure verification commands** start collapsed. They are optional for reading sessions. Set them up when dispatch, Git work or Task Service verification needs them. Managed-work permissions also start collapsed; connecting does not grant them.
 
 **Windows Fleet manages local connections and startup; Python Connector / Task Service authorizes and dispatches work; BAT executes it on the selected host.** A remote BAT host does not require BAT to be installed on the Dashboard computer. Windows Fleet settings remain separate from central onboarding.
 
 ### 1. Connect BAT
 
-In **Connection / Fleet → Get ready to work → Connect BAT**, select a **BAT connection profile** if it is importable. Otherwise choose **Configure a host manually** and enter **Host name**, **BAT endpoint**, the trusted **Host certificate SHA-256 fingerprint**, **Workspace profile ID** and **BAT connection token**. Confirm the fingerprint with the host owner. Encrypted or damaged BAT profile credentials are shown as unavailable; enter a valid token in the form rather than bypassing trust checks.
+In **Settings → Connection → Connect BAT**, use **Paste BAT connection URL**. In BAT v3.2.15, copy it from **Settings → Remote → Remote Access → Connection URL → Copy**. With headless BAT, copy the URL from the startup banner's `connect:` line. The password field clears as soon as the address, credential and certificate fingerprint have been filled locally; a check-mark line confirms the address and abbreviated fingerprint without showing the token. Nothing is sent until **Verify and save host**. Editing the endpoint or fingerprint by hand clears that confirmation.
+
+Enter a **Host ID** starting with a letter or number, using only letters, numbers, `-`, `_` or `.` (for example `local`). On first use, a loopback address suggests `local`; this is a name suggestion and does not establish where BAT runs or grant local execution permissions.
+
+**Enter manually** contains the individual **BAT endpoint**, **Certificate fingerprint (SHA-256)**, **BAT workspace profile ID** and **BAT connection token** fields, plus importable **BAT connection profiles**. If profiles cannot be read, a note states that beside the profile control. Use the host and port from BAT's Connection URL, its **Certificate fingerprint (SHA-256)** and **Connection Token** in Remote Access. The endpoint must be a `wss://` origin with an explicit port, without credentials or query parameters. A copied `ws://` URL becomes `wss://`; the port defaults to 9876. Confirm manually entered fingerprints with the host owner. Encrypted or damaged profile credentials require a fresh credential.
+
+Common input errors appear beside the field before credential staging; the token stays in the password field. A proven admission refusal unlocks the form automatically and keeps non-secret drafts. Staged credentials clear from the page; their opaque reference can be reused in the same page for up to one hour. After reloading an editable draft, paste the credential again. A lost or uncertain reply retains the original request and key: use **Check request**, including after reloading. A configuration error alone does not prove that nothing was admitted.
+
+After connecting, **1. Connect BAT** collapses and **View sessions** is the next action. Expand the connection step or choose **Change settings** to edit it again. Later visits start with it collapsed. The setup operation link and status are in **Details**. The page-header **Refresh** reloads setup status while keeping the current draft and credential field. GitHub binding and verification remain optional collapsed steps.
 
 Expand **Allow managed work** when enabling dispatch. Choose the intended conversation / start permissions and dedicated **Remote managed directories**. For Git synchronization, checkpoint and artifact operations, provide the existing trusted **SSH alias configured on this computer**. The SSH account, keys, known host and remote permissions must already be usable; the app does not invent them.
 
@@ -55,7 +69,7 @@ Use **Open Dashboard in browser** or the tray / menu-bar entry. The app hands of
 
 Enable **Start when I sign in** for this installation's login startup. Closing Web or the Dashboard window leaves central running. Explicit desktop Quit retains central work while following the separate Fleet shutdown guards. Reopening recovers the same installation; a newer package upgrades only after the owned service accepts a safe stop. Busy or uncertain work prevents that transition, and older packages do not downgrade the journal.
 
-Configuration changes wait while operations/tasks are active. If a reply is lost, use **Recover original setup request** and **View setup operation**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
+Configuration changes wait while operations/tasks are active. If a reply is lost, use **Check request** and the **Setup operation** link in **Details**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
 
 ## Try one PM workflow
 
@@ -86,9 +100,10 @@ original native proposal and Follow-up behavior.
 1. Use the workspace switcher → **New workspace**. In **Discussions**, start a
    **New discussion** in Idea mode. Save the goal and constraints in ordinary notes—
    for example, member login and password reset, with referral codes outside the first release.
+   Choose **Send** to create the discussion and save the note before opening **Discussion info**.
    The project sidebar keeps Overview, Discussions, Requirements, Schedule, Dependencies,
    Issues & changes, Agents and Board in the same workspace; **Work** opens bound Sessions.
-2. In **Discussions**, open **Thread panel → Context → Prepare discussion context**
+2. In **Discussions**, open **Discussion info → Context → Prepare discussion context**
    → **Save in a PM worktree**. Choose the
    intended existing repository/host/workspace connection, enter the published
    branch and choose **Preview published revision**. Check the fixed commit,
@@ -96,7 +111,7 @@ original native proposal and Follow-up behavior.
    binding and managed Git/start prerequisites described above. **Discussion
    record only** does not prepare the Git worktree needed for adoption or BAT
    analysis. Later requests can select **Use the existing PM worktree**.
-3. In **Thread panel → Context → Analysis options**, choose an available analysis
+3. In **Discussion info → Context → Analysis options**, choose an available analysis
    adapter, then use **Ask PM**. A record's **Discuss with PM** entry opens Discussions
    with its source chip and automatic title. Review the **Proposed update** card. Review its source quotes, retained
    requirements, exclusions, proposed removals and open questions. Edit the
@@ -104,8 +119,9 @@ original native proposal and Follow-up behavior.
    owner authority and the prepared PM-owned Git worktree.
 4. In **Requirements**, inspect the adopted requirements and their bound work.
    The header's **More actions → Work packages** opens the existing package catalogue.
-   Associate the adopted requirements with work, prepare the engineering packages
-   and review their explicit repository/commit destinations. An accepted plan
+   Review each package’s adopted requirements and explicit repository/commit destination.
+   This UI lists existing packages; package creation uses the registered
+   `pm.work_package.create` API action. An accepted plan
    records direction; starting a package is a separate product action.
 5. In **Requirements → More actions → Quality reviews**, verify the fixed result
    using the configured command or original GitHub checks. Appoint a **Quality review** against the fixed criteria and Definition of Done.
@@ -136,7 +152,7 @@ original native proposal and Follow-up behavior.
    unresolved. Open the selected discussion to confirm or select its direction,
    then explicitly prepare Planning or a plan proposal. Importing a candidate
    does not adopt it, create a discussion automatically or start work.
-9. For another analysis, use **Discussions → Thread panel → Context → Analysis options**
+9. For another analysis, use **Discussions → Discussion info → Context → Analysis options**
    to choose the adapter, then **Ask PM**. Under
    **Accepted plan for this analysis (optional)**, preview the accepted revision,
    check complete/omitted file coverage, then select that exact version. Without
@@ -155,8 +171,8 @@ A missing runtime, Git worktree, verifier or original source is reported at its
 step. Resolve that prerequisite before starting a new action. For a lost reply,
 use **Check original request** with the saved draft; recovery retains its original
 version and operation. Human checkouts and manual sessions remain read-only.
-These steps describe available product actions, not a claim that the complete
-14-step M4 live acceptance has run. Record actual operation, source, runtime and
+These steps describe available product actions, not a claim that full
+lifecycle live acceptance has run. Record actual operation, source, runtime and
 delivery receipts separately from offline tests and CI.
 
 ### Read an AHP host catalog

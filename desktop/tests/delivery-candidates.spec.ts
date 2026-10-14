@@ -81,9 +81,11 @@ for (const native of [false, true]) for (const locale of ['en-US', 'zh-TW']) for
       await expect(page.locator('#main')).toContainText(shot === 'worktree' ? work.worktree_id : 'worktree.merge');
       if (!process.env.DELIVERY_BASELINE) {
         if (shot === 'worktree') {
-          await expect(page.locator('#main').getByText('/srv/managed/result', {exact: true})).toBeVisible();
           await expect(page.locator('a[href="#/cleanup/host/fixture"]')).toBeVisible();
-          await expect(page.locator('#main > .panel > details')).not.toHaveAttribute('open', '');
+          const details = page.locator('[data-observed-details]');
+          await expect(details).not.toHaveAttribute('open', '');
+          await details.locator('summary').first().click();
+          await expect(page.locator('#main').getByText('/srv/managed/result', {exact: true})).toBeVisible();
         } else {
           await expect(page.locator('[data-merge-recovery]')).toContainText('/srv/managed/repository');
           await expect(page.locator('[data-merge-recovery]')).toContainText(locale === 'zh-TW' ? '尚無正面 ACK 證據' : 'No positive ACK evidence');
@@ -95,8 +97,8 @@ for (const native of [false, true]) for (const locale of ['en-US', 'zh-TW']) for
     await expect(page.getByText('agent/result-5', {exact: true})).toBeVisible();
     if (!process.env.DELIVERY_BASELINE) {
       const row = (i: number) => page.getByText(`agent/result-${i}`, {exact: true}).locator('..');
-      const labels = locale === 'zh-TW' ? ['輸出中', '未輸出', '等你回答', '觀測待更新', '活動狀態未確認', '已結束']
-        : ['streaming', 'not streaming', 'asking you', 'Observation needs updating', 'Activity unknown', 'ended'];
+      const labels = locale === 'zh-TW' ? ['輸出中', '未輸出', '等你回答', '觀測待更新', 'BAT 未回報活動狀態', '已結束']
+        : ['streaming', 'not streaming', 'asking you', 'Observation needs updating', 'BAT did not report activity', 'ended'];
       for (let i=0; i<6; i++) {
         await expect(row(i)).toContainText(labels[i]);
         await expect(row(i)).toContainText(locale === 'zh-TW' ? '成果尚未驗證' : 'Result unverified');
@@ -107,10 +109,13 @@ for (const native of [false, true]) for (const locale of ['en-US', 'zh-TW']) for
       await page.goto('/dashboard/#/project/'+projectId);
       const dispatched = page.locator('[data-project-work]');
       await expect(dispatched).toContainText('Implement requested work');
+      await expect(dispatched).toContainText(locale === 'zh-TW' ? '成果尚未驗證' : 'Result unverified');
+      await dispatched.getByRole('button', {name: locale === 'zh-TW' ? '更多操作' : 'More actions', exact: true}).click();
       await expect(dispatched.locator('a[href="#/session/fixture/managed-session"]')).toBeVisible();
       await expect(dispatched.locator('a[href="#/worktree/'+work.worktree_id+'"]')).toBeVisible();
+      await page.keyboard.press('Escape');
       await page.screenshot({path: `${process.env.DELIVERY_SCREENSHOTS || 'test-results'}/project-${native ? 'IPC' : 'HTTP'}-${locale}-${width}.png`, fullPage: true});
-      await dispatched.getByRole('link', {name: locale === 'zh-TW' ? '檢視成果並加入 PR' : 'Review result and add to PR'}).click();
+      await dispatched.getByRole('link', {name: locale === 'zh-TW' ? '審閱成果' : 'Review result', exact: true}).click();
       await expect(page.getByPlaceholder('owner/name')).toHaveValue('example/repository');
       await expect(page.getByPlaceholder('123')).toHaveValue('');
       expect(posts).toEqual([]);

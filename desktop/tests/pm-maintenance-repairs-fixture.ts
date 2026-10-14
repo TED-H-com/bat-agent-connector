@@ -72,7 +72,8 @@ export async function bootRepairs(page:Page,locale='en'){
       if(key.startsWith('on'))el.addEventListener(key.slice(2),value as any);else el.setAttribute(key,value===true?'':String(value));}for(const child of children.flat()){if(child!==null&&child!==undefined&&child!==false)el.append(child instanceof Node?child:document.createTextNode(String(child)));}return el;};
     const win=window as any,api=async(method:string,path:string,body:any,key:any)=>{const result=await win.repairFixtureRequest({method,path,body,idempotency_key:key});
       if(result.status>=400)throw Object.assign(Error(result.data.error.message),{code:result.data.error.code,status:result.status,admissionRefused:result.data.error.admission_refused});return result.data;};
-    const errorBox=(error:any)=>h('p',{class:'error'},error.message),input=(label:string,{multiline=false,max=4000,required=true,value=''}:any={})=>{
+    const {createErrorBox}=await import('/__repair_src/test-error-box.js');
+    const errorBox=createErrorBox(h,t,locale),input=(label:string,{multiline=false,max=4000,required=true,value=''}:any={})=>{
       const field=h(multiline?'textarea':'input',{'aria-label':t(label),maxlength:max,required}) as HTMLInputElement;field.value=value;return field;},labelled=(key:string,field:any)=>h('label',{},t(key),field),alive=()=>{};
     let caps=await api('GET','/capabilities'),workspace=(await api('GET','/pm/workspaces/'+workspaceId)).workspace,reviewed=await win.repairHandoff();
     const form=(options:any)=>durableForm({h,t,api,caps:()=>caps,guard:alive,namespace:'repair-ui.'+caps.actor,errorBox,...options});

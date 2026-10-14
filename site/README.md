@@ -11,13 +11,14 @@ problem, discuss it with the PM and review a decision in the same context.
 It retains Windows Fleet, central authority, platform differences and installation guidance.
 
 The redesigned views and sixteen screenshots are a **development preview from merged main**
-pinned to `aba02180e872f798ea54aa003b267b14eb7f5018`.
-Backend #132 merged as `0c354861` on October 13, 2026; #134 merged as `f25e1556`
-on October 14. Frontend #133 merged afterward on October 14 as `cb7e9f42`.
-Nothing is installed or live-tested. CI and browser screenshots do not establish native or live acceptance.
+pinned to `ab960ed23f734944470b982bd2f66b0c30300151`.
+This pin includes the ten UI updates through #161 on October 14, 2026.
+It includes the first-run connection URL flow; repository binding and verification
+are optional collapsed steps. This refresh provides no installation or live evidence.
+CI and browser screenshots do not establish native or live acceptance.
 Keep validation outcomes in the dated [progress report](../docs/product/progress-2026-10-14.md);
 link it from the site. The [October 12 report](../docs/product/progress-2026-10-12.md) retains historical evidence.
-The [handoff](../docs/handoff/2026-10-12-pm-v1.2.md) has development continuation
+The [handoff](../docs/handoff/2026-10-14-docs-ux-v2.md) has development continuation
 steps, while [PM status](../docs/product/pm-v1.2-status.md) retains the full backlog.
 
 ## Edit the source
@@ -45,6 +46,9 @@ Continue the existing design instead of introducing another visual system.
 
 The gallery has eight scenes in two languages: Overview, Discussions, Requirements,
 Issues & changes, Schedule, Dependencies, Board and a read-only manual Session. See [screenshot provenance and reproduction](images/README.md).
+Full-page images retain text below the viewport, including the Overview charter.
+The Requirements scene uses a taller viewport to retain the work inspector.
+The generated gallery uses the manifest’s actual PNG dimensions.
 All are unedited captures of the real shared frontend using one synthetic demo project.
 The discussion proposal is unadopted; unassessed quality and incomplete coverage remain visible.
 Recently decided uses the existing synthetic plan adoption receipts. Named findings and

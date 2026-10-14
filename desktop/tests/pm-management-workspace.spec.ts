@@ -85,7 +85,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
   test('failed workspace authorization hides previous facts and recovers the local draft',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');const region=page.locator('[data-pm-sprints]');
     await expect(region).toContainText('A returning member can sign in');
-    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});await draft.fill('Keep this unsent direction');
     f.base.state.failRead=true;f.publish('pm_workspace');
@@ -97,7 +97,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
   for(const bootstrapFails of [false,true])test(`access reset clears focused private facts and preserves drafts (bootstrap failure: ${bootstrapFails})`,async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
     const region=page.locator('[data-pm-sprints]');await expect(region).toContainText('A returning member can sign in');
-    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});
     await draft.fill('Preserve an unsubmitted direction');await expect(draft).toBeFocused();
@@ -107,7 +107,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(region).toBeHidden();expect(f.sprint.state.writes).toHaveLength(0);
     f.bootstrapFailure(false);f.base.state.failRead=false;f.changeAccess();
     await expect(region).toBeVisible({timeout:15000});
-    await openPmSection(page,'schedule','ui_sprints');await region.locator('summary').filter({hasText:/^Product commitments$/}).click();
+    await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     await expect(draft).toHaveValue('Preserve an unsubmitted direction');expect(f.sprint.state.writes).toHaveLength(0);
   });
@@ -122,7 +122,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await editor.getByLabel('Delivery approach',{exact:true}).fill('Review the fixed selected work');
     await editor.getByLabel('Capacity and availability discussed',{exact:true}).fill('One focused improvement');
     await reason(page,'draft');await editor.getByRole('button',{name:'Save discussion draft',exact:true}).click();
-    await expect(page.getByRole('heading',{name:'Saved discussion draft',exact:true})).toBeVisible();
+    await expect(page.locator('[data-pm-fold=pm_meeting_saved_draft] > summary')).toBeVisible();
     expect(f.meetings.state.meetings[0].meeting.status).toBe('draft');
     await openAction(page,'complete');await action(page,'complete').getByLabel('What was discussed and concluded',{exact:true}).fill('The recorded discussion keeps the direction and unresolved quality checks.');
     await reason(page,'complete');f.meetings.state.lost=true;
@@ -130,6 +130,9 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await expect(action(page,'complete')).toContainText('Reply unavailable');const original=structuredClone(f.meetings.state.writes.at(-1));
     await page.reload();await openPmSection(page,'discussions','ui_meetings');await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
     expect(f.meetings.state.writes.at(-1)).toEqual(original);expect(f.meetings.state.ops.size).toBe(3);
+    await expect(action(page,'complete').getByRole('button',{name:'Check original request',exact:true})).toHaveCount(0);
+    await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();
+    await page.locator('[data-pm-fold=pm_meeting_completed] > summary').click();
     await expect(page.locator('[data-pm-meeting-completion]')).toBeVisible();
     expect(f.sprint.state.writes).toHaveLength(0);expect(f.kanban.state.writes).toHaveLength(0);
   });
@@ -148,7 +151,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`management workspace ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();
   await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'board');
-  await expect(page.locator('[data-pm-sprints] h2')).toHaveText(locale==='en'?'Sprint and iteration':'Sprint 與迭代');
+  await expect(page.locator('[data-pm-sprints] [data-pm-sprint-status]')).toHaveText(locale==='en'?'Planned':'已規劃');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
   await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
   for (const [view, section] of [['board', undefined], ['discussions', 'ui_meetings'], ['schedule', 'ui_sprints']]) {
@@ -161,8 +164,9 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`manag
   await context.close();
 });
 
-test('thread meetings and follow-up reads wait for their visible disclosure', async ({page}) => {
+test('Meeting reads wait for its tab and Follow-ups stays in Issues', async ({page}) => {
   const f = fixture(), reads: string[] = [], prefix = `/pm/workspaces/${workspaceId}`;
+  f.base.state.thread.mode = 'sprint_review';
   await mountConversation(page, false, async (input: any) => {
     const url = new URL(input.path, 'http://fixture'), path = url.pathname;
     if (input.method === 'GET' && path !== '/events') reads.push(path);
@@ -178,18 +182,27 @@ test('thread meetings and follow-up reads wait for their visible disclosure', as
   expect(related()).toHaveLength(0);
   const refresh = page.getByRole('button', {name: 'Refresh', exact: true});
   await refresh.click(); await expect(refresh).toBeEnabled(); expect(related()).toHaveLength(0);
-  const meetings = page.locator('[data-pm-section=ui_meetings] > details'), follow = page.locator('[data-pm-section=ui_follow_up] > details');
-  await meetings.locator(':scope > summary').click(); await expect.poll(() => related().filter(path => path.includes('/meetings')).length).toBe(2);
-  await meetings.locator(':scope > summary').click();
-  await follow.locator(':scope > summary').click(); await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length).toBe(2);
-  await follow.locator(':scope > summary').click(); reads.length = 0;
+  await openThreadTab(page, 'context');
+  const meetingTab = page.getByRole('tab', {name: 'Meeting', exact: true});
+  await expect(page.locator('[data-discussion-tab=context] [data-pm-meetings]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-follow-up]')).toHaveCount(0);
+  await meetingTab.click(); await expect.poll(() => related().filter(path => path.includes('/meetings')).length).toBe(2);
+  await openThreadTab(page, 'context'); reads.length = 0;
   f.base.state.thread.title = 'Thread event read'; f.publish('pm_thread'); await expect(page.locator('[data-discussion-title]')).toHaveText('Thread event read', {timeout: 10000});
   await expect(refresh).toBeEnabled(); expect(related()).toHaveLength(0);
   f.publish('pm_meeting'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
-  expect(related()).toHaveLength(0); await meetings.locator(':scope > summary').click();
+  expect(related()).toHaveLength(0); await meetingTab.click();
   await expect.poll(() => related().filter(path => path.includes('/meetings')).length, {timeout: 10000}).toBe(2);
-  await meetings.locator(':scope > summary').click();
+  await openThreadTab(page, 'context');
   expect(related().filter(path => path.includes('/follow-ups'))).toHaveLength(0); reads.length = 0;
+  f.publish('pm_follow_up'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
+  expect(related()).toHaveLength(0);
+  await page.goto(route + '/issues'); await expect(refresh).toBeEnabled();
+  await openPmSection(page, 'issues', 'ui_follow_up');
+  const follow = page.locator('[data-pm-section=ui_follow_up] > details');
+  await expect(follow.locator('[data-pm-follow-up]')).toBeVisible();
+  await expect(follow.locator('[data-pm-action="pm.follow_up.prepare"]')).toHaveCount(1);
+  await follow.locator(':scope > summary').click(); reads.length = 0;
   f.publish('pm_follow_up'); await expect.poll(() => page.evaluate(token => Object.values(localStorage).some(value => value.includes(token)), 'pm-access-0-' + f.base.state.cursor)).toBe(true);
   expect(related()).toHaveLength(0); await follow.locator(':scope > summary').click();
   await expect.poll(() => related().filter(path => path.includes('/follow-ups')).length, {timeout: 10000}).toBe(2);

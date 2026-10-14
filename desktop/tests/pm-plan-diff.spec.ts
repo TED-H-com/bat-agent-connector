@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {openThreadTab} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
@@ -102,11 +103,11 @@ for(const native of [false,true])test.describe(native?'native comparison bridge'
   test('mismatched response and lost access never leave stale differences visible',async({page})=>{
     const f=fixture();await mount(page,native,f);await choose(page);f.comparison.mismatch=true;
     await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
-    await expect(box(page).getByText('The response does not match the selected comparison.',{exact:true})).toBeVisible();await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
+    await expectErrorDetails(box(page), 'The response does not match the selected comparison.');await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
     f.comparison.mismatch=false;await box(page).getByRole('button',{name:'Compare versions',exact:true}).click();
     await expect(box(page)).toContainText('Changed · login');f.comparison.failure=true;
     await box(page).getByRole('button',{name:'Recheck this comparison',exact:true}).click();
-    await expect(box(page).getByText('Your token lacks this scope.',{exact:true})).toBeVisible();await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
+    await expect(box(page).locator('[data-error-summary]')).toHaveText('The comparison could not be read. No work was changed.');await expectErrorDetails(box(page), 'Comparison no longer visible', 'FORBIDDEN');await expect(box(page).locator('[data-pm-diff-result]')).toBeEmpty();
     expect(f.state.writes).toHaveLength(0);
   });
   test('late read from a changed selection is discarded',async({page})=>{

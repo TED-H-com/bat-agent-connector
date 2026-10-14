@@ -1,6 +1,6 @@
 import {discussHref} from './pm-discuss-link.js';
 import {timeStamp, timeText, timeLabel} from './ui/stamps.js';
-import {emptyState, discussLink, disclosure, iconButton} from './ui/components.js';
+import {emptyState, discussLink, disclosure, iconButton, button} from './ui/components.js';
 import {planDocument} from './pm-plans.js';
 import {briefExport} from './pm-brief-export.js';
 import {viewState} from './ui/view-state.js';
@@ -21,28 +21,51 @@ export function charterSections(snapshot) {
   };
 }
 
+// Match original statement identities across reports, rather than their array positions.
+// Revision/source metadata can change without changing a statement's visible content.
+export function statementChanges(before, after) {
+  const identity = row => row.input_id || row.source?.input_id || row.source?.evidence_id || row.source?.work_item_id;
+  const equal = (a, b) => a.text === b.text && a.status === b.status;
+  const remaining = [...after], unchanged = [], pairs = [];
+  for (const row of before) {
+    const id = identity(row);
+    let index = id ? remaining.findIndex(other => identity(other) === id) : -1;
+    if (index < 0) index = remaining.findIndex(other => equal(row, other));
+    if (index < 0) pairs.push({before: row, after: null});
+    else {
+      const [other] = remaining.splice(index, 1);
+      if (equal(row, other)) unchanged.push(other);
+      else pairs.push({before: row, after: other});
+    }
+  }
+  pairs.push(...remaining.map(row => ({before: null, after: row})));
+  return {pairs, unchanged};
+}
+
 export function workspaceCharter({h, t, api, alive, namespace, workspaceId, permitted, form, input, labelled, errorBox, onDiscuss, caps, canRead, onChange = () => {}, onControls = () => {}}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const preference = viewState(namespace, workspaceId, 'overview');
   let serial = 0, head = null, snapshot = null, selectedId = preference.snapshotId || null, latestId = null, history = [], cursor = null, busy = false, historyPages = 1;
-  const status = h('div', {role: 'status'}), report = h('div', {class: 'pm-charter-report'}), comparison = h('div');
+  const status = h('div', {role: 'status', class: 'pm-report-status', 'data-report-status': ''}), report = h('div', {class: 'pm-charter-report'}), comparison = h('div');
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
     params: values => values.title.trim() ? {title: values.title.trim()} : {},
     preconditions: () => ({expected_plan_version: head.version}), permitted: () => Boolean(head) && !busy && permitted(false),
     recoverPermitted: () => permitted(false), label: 'pm_brief_create', onSaved: result => refresh(result.snapshot_id),
     extra: disclosure({label: t('pm_brief_name_optional'), body: labelled('pm_brief_snapshot_title', title)})});
+  // Keep the durable form's tracked controls and recovery listeners intact.
+  for (const node of create.box.querySelectorAll('button')) node.classList.add('ui-button', 'ui-md');
   const previous = iconButton({icon: 'chevron-left', label: t('wb_previous'), onClick: () => move(-1)});
   const next = iconButton({icon: 'chevron-right', label: t('wb_next'), onClick: () => move(1)});
   const picker = h('select', {'aria-label': t('wb_history'), onchange: () => void select(picker.value)});
-  const compare = h('button', {'data-report-compare': '', type: 'button', class: 'secondary', onclick: () => void comparePrevious()}, t('wb_compare'));
-  const more = h('button', {type: 'button', class: 'secondary', onclick: () => void loadMore()}, t('wb_history_more'));
-  const print = h('button', {'data-report-print': '', type: 'button', class: 'secondary', onclick: () => window.print()}, t('wb_print'));
+  const compare = button({'data-report-compare': '', variant: 'secondary', label: t('wb_compare'), onClick: () => void comparePrevious()});
+  const more = button({variant: 'ghost', label: t('wb_history_more'), onClick: () => void loadMore()});
+  const print = button({'data-report-print': '', variant: 'ghost', label: t('wb_print'), onClick: () => window.print()});
   const primary = discussLink({workspaceId, from:'overview'}, {'data-charter-discuss':''});
   const box = h('section', {class: 'pm-charter', 'data-pm-charter': ''},
     h('header', {class: 'pm-heading'}, h('h2', {}, t('wb_charter')),
       primary),
-    h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print), status, report, comparison,
+    h('div', {class: 'pm-workbench-toolbar'}, previous, picker, next, compare, print, status), report, comparison,
     h('div', {class: 'pm-charter-save'}, create.box, more));
   const exports = caps()?.features?.pm_workspaces?.brief_export ? briefExport({h, t, api, alive, workspaceId, caps,
     snapshot: () => snapshot, readable: canRead, onUnavailable: error => {withdraw(); status.replaceChildren(errorBox(error)); onChange(null, 'error', error);}, errorBox}) : null;
@@ -58,6 +81,9 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   }
   function controls() {
     const index = history.findIndex(row => row.snapshot_id === selectedId);
+    const prior = history[index - 1];
+    if (prior) compare.setAttribute('aria-description', t('wb_compare_previous', {report: t('wb_snapshot', {number: prior.sequence})}));
+    else compare.removeAttribute('aria-description');
     previous.disabled = busy || index <= 0; next.disabled = busy || index < 0 || index >= history.length - 1;
     compare.disabled = previous.disabled; picker.disabled = busy || !history.length; print.disabled = busy || !snapshot;
     more.hidden = cursor === null; more.disabled = busy; create.update(); exports?.update();
@@ -81,7 +107,10 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
   function render() {
     onChange(snapshot, 'updated');
     report.replaceChildren(); comparison.replaceChildren();
-    if (!snapshot) {report.append(h('p', {}, t('wb_no_snapshot'))); historyOptions(); return;}
+    if (!snapshot) {
+      status.replaceChildren(emptyState({title: t('wb_no_reports')}));
+      report.append(h('p', {}, t('wb_no_snapshot'))); historyOptions(); return;
+    }
     const document = snapshot.baseline?.document, groups = charterSections(snapshot);
     report.append(h('div', {class: 'pm-charter-meta'}, h('strong', {}, snapshot.title),
       h('span', {}, t('wb_snapshot', {number: snapshot.sequence})),
@@ -179,14 +208,28 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
       alive(); if (ticket !== serial) return;
       const before = checkedSnapshot(a, prior); snapshot = checkedSnapshot(b, id); status.replaceChildren(); render();
       const left = charterSections(before), right = charterSections(snapshot);
-      const changes = sections.filter(key => JSON.stringify(left[key]) !== JSON.stringify(right[key]));
+      const differences = sections.map(key => ({key, ...statementChanges(left[key], right[key])}));
+      const changes = differences.filter(row => row.pairs.length);
+      const statement = row => h('p', {}, labelSegment(row.text),
+        ['agent_assumption', 'unresolved', 'conflicting', 'repo_evidence'].includes(row.status)
+          ? h('span', {class: 'chip'}, t('pm_status_' + row.status)) : null);
+      const side = (row, label, report, change) => h('div', {'data-report-side': label}, h('strong', {}, t('wb_' + label)),
+        h('span', {class: 'pm-report-identity'}, t('wb_snapshot', {number: report.sequence}), ' · ', report.title),
+        change ? h('span', {'data-report-change': change}, t('wb_' + change)) : null, statement(row));
       comparison.append(h('h3', {}, t('wb_comparison')), changes.length ? h('div', {class: 'pm-charter-comparison'},
-        ...changes.map(key => h('section', {}, h('h4', {}, t('wb_' + key)),
-          h('div', {class: 'pm-charter-grid'}, h('div', {}, h('strong', {}, t('wb_before')), renderItems(left[key])),
-            h('div', {}, h('strong', {}, t('wb_after')), renderItems(right[key])))))) : h('p', {}, t('wb_unchanged')));
+        ...changes.map(({key, pairs, unchanged}) => h('section', {'data-report-section': key}, h('h4', {}, t('wb_' + key)),
+          ...pairs.map(pair => h('div', {class: 'pm-report-pair', 'data-report-pair': ''},
+            pair.before ? side(pair.before, 'before', before, pair.after ? null : 'removed') : null,
+            pair.after ? side(pair.after, 'after', snapshot, pair.before ? null : 'added') : null)),
+          unchanged.length ? disclosure({element: h('details', {'data-report-unchanged': ''},
+            h('summary', {}, t('wb_unchanged_count', {n: unchanged.length})),
+            h('ul', {}, ...unchanged.map(row => h('li', {}, statement(row)))))}) : null))) : h('p', {}, t('wb_unchanged')));
+      if (changes.length) comparison.append(disclosure({label: t('wv_details'), body: h('pre', {class: 'mono'},
+        JSON.stringify({before: {snapshot_id: before.snapshot_id, snapshot_digest: before.snapshot_digest, view_digest: before.view_digest, sections: left},
+          after: {snapshot_id: snapshot.snapshot_id, snapshot_digest: snapshot.snapshot_digest, view_digest: snapshot.view_digest, sections: right}}, null, 2))}));
     } catch (error) {failed(error, ticket);} finally {if (ticket === serial) {busy = false; controls();}}
   }
-  controls(); return {box, primary, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
+  controls(); return {box, primary, status, refresh, withdraw, select, comparison, previous, next, compare, picker, print,
     current: () => snapshot, controls: () => ({busy, previous: previous.disabled, next: next.disabled, compare: compare.disabled, historyPartial: cursor !== null}),
     comparePrevious, history: () => history};
 }

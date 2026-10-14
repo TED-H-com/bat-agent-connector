@@ -18,7 +18,7 @@ function fixture(){
 const importBox=(page:any)=>page.locator('[data-review-candidate-import]');
 async function select(page:any,f:any,locale='en'){
   await importBox(page).locator('summary').first().click();
-  await importBox(page).getByLabel(locale==='en'?'Choose an existing Idea discussion':'選擇既有 Idea 討論',{exact:true}).selectOption(f.state.threads[0].thread_id);
+  await importBox(page).getByLabel(locale==='en'?'Choose an existing Idea discussion':'選擇既有構想討論',{exact:true}).selectOption(f.state.threads[0].thread_id);
 }
 
 test('candidate selection freezes an unconfirmed source and original thread version',async({page})=>{
@@ -55,7 +55,7 @@ test('two candidate receipts and an ordinary input draft keep separate keys for 
     const box=page.locator(`[data-review-candidate-import="${candidate.event_id}"]`);
     await box.locator('summary').first().click();
     await box.getByLabel('Choose an existing Idea discussion',{exact:true}).selectOption(target.thread_id);
-    await expect(box.locator('button[type=submit]')).toHaveText('Add to Idea discussion');f.state.lost=true;
+    await expect(box.locator('button[type=submit]')).toHaveText('Add to discussion');f.state.lost=true;
     await box.locator('button[type=submit]').click();await expect(box).toContainText('Reply unavailable');
     await expect(box.getByLabel('Choose an existing Idea discussion',{exact:true})).toBeDisabled();
   }
@@ -77,7 +77,7 @@ test('a saved draft requires explicit current discussion version review',async({
   const {f}=fixture();await mount(page,f);await select(page,f);await importBox(page).getByLabel('Topic for this candidate',{exact:true}).selectOption('risk');
   f.state.threads[0].version++;await importBox(page).getByRole('button',{name:'Refresh Idea discussions',exact:true}).click();
   await expect(importBox(page)).toContainText('The discussion changed');await expect(importBox(page).locator('button[type=submit]')).toBeDisabled();
-  await importBox(page).getByRole('button',{name:'Use this discussion version',exact:true}).click();await expect(importBox(page).locator('button[type=submit]')).toBeEnabled();
+  await importBox(page).getByRole('button',{name:'Use this version',exact:true}).click();await expect(importBox(page).locator('button[type=submit]')).toBeEnabled();
   expect(f.state.writes).toHaveLength(0);
 });
 

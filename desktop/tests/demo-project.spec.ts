@@ -163,7 +163,8 @@ for (const {locale, width} of cases) {
     await expect(page.locator('[data-discussion-composer]')).toBeFocused();
     expect(fixture.discussion.writes).toHaveLength(0);
     await shot(page, `discuss-launch-${locale}-${width}`);
-    await page.getByRole('link', {name: locale === 'zh-TW' ? '返回專案總覽' : 'Back to Overview', exact: true}).click();
+    if (width < 800) await page.getByRole('link', {name: locale === 'zh-TW' ? '返回專案總覽' : 'Back to Overview', exact: true}).click();
+    else await openView(page, 'overview');
     await expectView(page, locale, width, 'overview', fixture.copy.name);
     await expect(page.locator('[data-overview-status]')).toBeVisible();
     await openView(page, 'issues');
@@ -193,7 +194,8 @@ for (const {locale, width} of cases) {
     await expect(page.locator('[data-discussion-context=plan_revision]').first()).toBeVisible();
     await expect(page.locator('[data-discussion-composer]')).toBeFocused();
     await shot(page, `issues-discuss-launch-${locale}-${width}`);
-    await page.getByRole('link', {name: locale === 'zh-TW' ? '返回問題與變更' : 'Back to Issues & changes', exact: true}).click();
+    if (width < 800) await page.getByRole('link', {name: locale === 'zh-TW' ? '返回問題與變更' : 'Back to Issues & changes', exact: true}).click();
+    else await openView(page, 'issues');
     await expectView(page, locale, width, 'issues', fixture.copy.name);
     await expect(page.locator('[data-reg-type=decision]')).toHaveAttribute('aria-checked', 'true');
     await expectNoJunk(page);

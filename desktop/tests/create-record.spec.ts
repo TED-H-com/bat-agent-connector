@@ -48,7 +48,7 @@ test('creation layout', async ({browser, baseURL}, testInfo) => {
       await page.setViewportSize({width,height:900});
       for (const [name, route] of [['project','projects'],['item','project/'+pid],['locations','settings']]) {
         await page.goto('/dashboard/#/'+route);
-        const details = page.locator(name === 'locations' ? '[data-managed-locations]' : '[data-create-advanced]');
+        const details = page.locator(name === 'locations' ? '[data-connection-card] > details' : '[data-create-advanced]');
         await details.locator('summary').click();
         await expect(details).toHaveAttribute('open','');
         expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -88,7 +88,8 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
   test('work item is created in the displayed project with detailed request and unchecked steps',async({page})=>{
     const f=fixture(); await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/project/'+pid);
     const form=page.locator('[data-create-record="work_item"]');
-    await expect(form).toContainText('Documentation'); await expect(form).toContainText(pid);
+    await expect(page.getByRole('heading',{name:'Documentation',exact:true})).toBeVisible();
+    await expect(form).not.toContainText(pid);
     await form.getByLabel('New work item',{exact:true}).fill('Review changed files');
     await form.locator('summary').click();
     await form.getByLabel('Goal',{exact:true}).fill('Keep the requested behavior');
@@ -122,11 +123,13 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     const f=fixture(); f.state.manage=false; await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects');
     const project=page.locator('[data-create-record="project"]');
     await expect(project.getByLabel('New project name',{exact:true})).toBeDisabled();
-    await expect(project.getByRole('button',{name:'Add',exact:true})).toBeDisabled();
+    await expect(project.getByRole('button',{name:'Add',exact:true,includeHidden:true})).toBeDisabled();
+    await expect(project).toBeHidden();
     f.state.manage=true; f.state.archived=true; await page.reload(); await page.goto('/dashboard/#/project/'+pid);
     const item=page.locator('[data-create-record="work_item"]');
     await expect(item.getByLabel('New work item',{exact:true})).toBeDisabled();
-    await expect(item.getByRole('button',{name:'Add',exact:true})).toBeDisabled();
+    await expect(item.getByRole('button',{name:'Add',exact:true,includeHidden:true})).toBeDisabled();
+    await expect(item).toBeHidden();
     expect(f.state.writes).toHaveLength(0);
   });
 

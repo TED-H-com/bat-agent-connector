@@ -46,6 +46,17 @@ SOFTWARE.
 Source: https://github.com/lucide-icons/lucide (icons/, retrieved 2026-10-13).
 */
 const paths = {
+  "star": [
+    ["polygon", {"points": "12 3 14.8 8.7 21 9.6 16.5 14 17.6 20.2 12 17.3 6.4 20.2 7.5 14 3 9.6 9.2 8.7 12 3"}]
+  ],
+  "grip-vertical": [
+    ["circle", {"cx": "9", "cy": "5", "r": "1"}],
+    ["circle", {"cx": "9", "cy": "12", "r": "1"}],
+    ["circle", {"cx": "9", "cy": "19", "r": "1"}],
+    ["circle", {"cx": "15", "cy": "5", "r": "1"}],
+    ["circle", {"cx": "15", "cy": "12", "r": "1"}],
+    ["circle", {"cx": "15", "cy": "19", "r": "1"}]
+  ],
   "pencil": [
     ["path", {"d": "m16 3 5 5L7 22H2v-5L16 3Z"}],
     ["path", {"d": "m14 5 5 5"}]

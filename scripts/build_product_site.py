@@ -1,11 +1,13 @@
 """Generate the bilingual public introduction. Product data stays on the central."""
 
 import argparse
+import json
 from html import escape
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / "site"
 repo = "https://github.com/teddashh/bat-agent-connector"
+image_sizes = {entry["file"]: entry["image_size"] for entry in json.loads((root / "images/manifest.json").read_text())["images"]}
 
 
 def bi(en, zh, tag="span", cls=""):
@@ -71,8 +73,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "These screenshots come from merged main at aba02180. Backend #132 merged on October 13, 2026; #134 merged on October 14. Frontend #133 merged afterward on October 14 as cb7e9f42. Nothing is installed or live-tested. Match a validated package to its source before installing.",
-        "截圖來自已合併主線的 aba02180。後端 #132 於 2026 年 10 月 13 日合併，#134 於 10 月 14 日合併；前端 #133 隨後於 10 月 14 日以 cb7e9f42 合併。這輪尚未安裝或實機驗收。安裝前請核對套件來源與驗證紀錄。",
+        "Screenshots pin merged main at ab960ed23f734944470b982bd2f66b0c30300151, through #161 on October 14, 2026. They show the merged discussion, register, Board and evidence-view updates. This refresh provides no installation or live acceptance evidence. Match the package to its source before installing.",
+        "截圖固定於已合併主線的 ab960ed23f734944470b982bd2f66b0c30300151，包含 2026 年 10 月 14 日的 #161。展示已合併的討論、登記表、工作看板及證據檢視更新。本次沒有安裝或實機驗收證據；安裝前請核對套件來源。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -84,11 +86,11 @@ shots = [
      "Start with live progress, blockers, open decisions and Recently decided history; saved reports stay separate.",
      "先看即時進度、阻礙、待決事項與近期決策；已存報告保留原快照。"),
     ("discussions", "Discussions", "討論",
-     "Discuss the blocker with its context chip and automatic title; this proposal is ready for review, not adopted.",
-     "從阻礙直接開啟討論，帶入來源標籤與標題；這份提案可供審閱，尚未採用。"),
+     "Discuss the blocker with its context chip and automatic title. Discussion info opens beside the proposal; it is ready for review and remains unadopted.",
+     "從阻礙開啟討論，保留來源標籤與標題。討論資料在提案旁開啟；這份提案可供審閱，尚未採用。"),
     ("requirements", "Requirements", "需求",
-     "Open the RTM inspector to trace a requirement through work, acceptance and delivery evidence.",
-     "展開需求追溯表與詳情，對照工作、驗收及交付證據。"),
+     "Expand the email sign-in row and read its work inspector. Acceptance, merged PRs and partial delivery each retain their evidence.",
+     "展開電子郵件登入需求與工作詳情，分開查看驗收、已合併 PR 及部分交付證據。"),
     ("issues", "Issues &amp; changes", "問題與變更",
      "Read named maintenance findings alongside risks, issues, actions, changes and decisions; open records remain open.",
      "在登記表追蹤具名維護發現、風險、問題、行動、變更與決策；未結案項目保持原狀態。"),
@@ -99,8 +101,8 @@ shots = [
      "Read a pinned inventory graph with evidence styles and explicit partial coverage.",
      "查看固定版本的相依圖，分清證據種類與部分涵蓋。"),
     ("board", "Board", "工作看板",
-     "Follow work in five lanes; content approval, requirement acceptance and deployment are separate.",
-     "用五個欄位追蹤工作；內容核准、需求驗收與部署各有自己的證據。"),
+     "Search or filter twelve demo work items in five lanes. Content approval, requirement acceptance and deployment remain separate.",
+     "搜尋或篩選五欄中的十二項展示工作；內容核准、需求驗收與部署各有自己的證據。"),
     ("session", "Session", "工作階段",
      "Read the manual BAT session on demo-host; Connector cannot send or interrupt it.",
      "閱讀 demo-host 上的人工 BAT 工作階段；Connector 對它保持唯讀。"),
@@ -119,8 +121,9 @@ parts.append("</div>")
 for key, _, _, en, zh in shots:
     parts.append(f'<figure class="product-shot" id="view-{key}">')
     for lang, alt in [("en", en), ("zh", zh)]:
+        size = image_sizes[f"{key}-{lang}.png"]
         parts.append(
-            f'<a class="lang-{lang} image-link" href="images/{key}-{lang}.png" aria-label="{escape(alt)}"><img src="images/{key}-{lang}.png" width="1440" height="960" loading="lazy" alt="{escape(alt)}"></a>'
+            f'<a class="lang-{lang} image-link" href="images/{key}-{lang}.png" aria-label="{escape(alt)}"><img src="images/{key}-{lang}.png" width="{size["width"]}" height="{size["height"]}" loading="lazy" alt="{escape(alt)}"></a>'
         )
     parts.append(
         "<figcaption>"
@@ -226,10 +229,10 @@ parts.append(
 for en, zh, d, dz, path in [
     ("Overview", "專案總覽", "Live goal, progress, blockers and recent decisions. Unknown sources stay distinct from complete empty records; fixed reports remain separate.",
      "看即時目標、進度、阻礙與近期決策。未知來源與完整空紀錄分開呈現，固定報告另讀。", "pm-overview-discussion-context.md"),
-    ("Discussions", "討論", "Source-bound conversations, reviewed adoption and an explicit Resolve issue step. Reported resolution remains unassessed.",
-     "帶著原來源討論，審閱採用後再明確回報問題已解決；這項回報仍標示為未評估。", "pm-overview-discussion-context.md"),
-    ("Requirements", "需求", "Trace requirements through bound work, acceptance criteria, PRs and deployment.",
-     "從需求追到關聯工作、驗收條件、PR 與部署。", "pm-project-control-center.md"),
+    ("Discussions", "討論", "Search source-bound discussions, save notes and review proposed updates. Context, Inputs and Plan open in Discussion info. Reported issue resolution remains unassessed.",
+     "搜尋有來源的討論、儲存筆記並審閱建議更新；討論資料按需開啟脈絡、資訊與計畫。問題解決回報仍為未評估。", "pm-overview-discussion-context.md"),
+    ("Requirements", "需求", "Expand requirements for criteria and bound work. Inspect acceptance, PRs and deployment; unchanged refreshes keep rows and focus stable.",
+     "展開需求查看條件與關聯工作，再開詳情對照驗收、PR 與部署；資料未變的更新保留列位置與焦點。", "pm-project-control-center.md"),
     ("Issues &amp; changes", "問題與變更", "A filterable register with named findings, original records and processing timelines.",
      "用篩選登記表追蹤具名發現、原紀錄與處理時間線。", "pm-register.md"),
     ("Schedule", "時程", "Compare recorded dates on a labelled axis. Missing dates stay unknown.",
@@ -238,8 +241,14 @@ for en, zh, d, dz, path in [
      "用矩陣或相依圖查看固定清冊、證據與有界影響。", "pm-dependencies.md"),
     ("Agents", "Agent 資源", "Sourced usage, rows and daily trends share one consistent read. Reported quota stays separate; unavailable data stays unknown.",
      "以同一次讀取呈現用量、來源列與每日趨勢；回報配額另列，無法取得的資料保持未知。", "agent-resource-observation.md"),
-    ("Board", "工作看板", "Follow work by stage and open its shared evidence inspector.",
-     "按階段追蹤工作，再開啟共用詳情查看證據。", "pm-kanban.md"),
+    ("Board", "工作看板", "Search, filter by requirement or agent, and open the shared work inspector. Work batches are in More actions.",
+     "搜尋、依需求或 Agent 篩選，再開啟共用工作詳情；更多操作可開啟工作批次。", "pm-kanban.md"),
+    ("Governance and meetings", "治理與會議", "Open Governance and Follow-ups from Issues &amp; changes. Meeting threads have a Meeting tab in Discussion info. Outcomes keep their fixed sources.",
+     "從問題與變更開啟治理與後續追蹤；會議類討論的資料面板另有會議分頁。結果保留固定來源。", "pm-governance.md"),
+    ("Maintenance", "維護", "Dependencies holds Release baselines and Maintenance policy. Preview a release before registration; adopted policy keeps explicit repair bounds.",
+     "技術相依提供發布基準與維護政策；登錄前先預覽發布來源，已採用政策保留明確修復限制。", "pm-release-baselines.md"),
+    ("Work tools", "工程工具", "Requirements → More actions opens quality, evidence, specification, package, handoff and issue publication tools.",
+     "需求的更多操作開啟品質、成果證據、規格、工程工作包、工作包交接與議題發布工具。", "pm-work-packages.md"),
     ("Session", "工作階段", "Read conversations and results; authorized managed controls coexist with read-only manual sessions.",
      "一起讀對話與成果；自有工作依權限操作，人工工作階段保持唯讀。", "session-reading.md"),
 ]:
@@ -432,8 +441,8 @@ for en, zh, d, dz in [
     (
         "Connect your environment",
         "連接環境",
-        "Complete BAT trust, repository binding and verification setup. Advanced users can join an existing central.",
-        "完成 BAT 信任、repository 綁定與驗證設定；進階使用者可加入既有中央。",
+        "Get ready to work opens 1. Connect BAT. Paste BAT’s connection URL, check Host ID, then Verify and save host. After success, choose View sessions. Repository binding and verification commands stay collapsed until needed.",
+        "準備開始工作會展開「1. 連線至 BAT」。貼上 BAT 連線網址、核對主機代號，再按「驗證並儲存主機」。成功後按「查看工作階段」；儲存庫與驗證命令需要時再展開。",
     ),
     (
         "Follow one result",
@@ -447,8 +456,8 @@ parts.append(
     '</ol><div class="install-current">'
     + bi("Validate the version you use", "驗證你實際使用的版本", "h3")
     + bi(
-        "GitHub Actions artifacts can expire and may require sign-in. These packages are development validation builds, not a stable signed update channel. Closing the UI leaves central work running.",
-        "GitHub Actions artifacts 會到期，也可能要求登入。這些是開發驗證包，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
+        "Advanced users can explicitly join an existing central. GitHub Actions artifacts can expire and may require sign-in. These packages are development validation builds, not a stable signed update channel. Closing the UI leaves central work running.",
+        "進階使用者可明確加入既有中央。GitHub Actions artifacts 會到期，也可能要求登入。這些是開發驗證包，尚非穩定的簽章更新通道；關閉 UI 仍保留中央工作。",
         "p",
     )
     + '<div class="actions">'
@@ -584,8 +593,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "The redesign connects live Overview, source-bound Discussions, RTM inspectors, the register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough and rounds 5b/6, merged on October 14, 2026 as cb7e9f42; it is not installed or live-tested. M4/M5 retain their separate candidate status.",
-        "改版串起即時總覽、來源討論、需求詳情、登記表、時程、技術相依、Agent 資源、看板與工作階段。前端 #133（含操作旅程腳本及第 5b／6 輪修整）於 2026 年 10 月 14 日以 cb7e9f42 合併；尚未安裝或實機驗收。M4／M5 的候選狀態另列。",
+        "Merged main at ab960ed2 includes the October 14 discussion, register/Board, governance/meeting/follow-up, maintenance, work-tool, Overview/report/Requirements and first-run updates. Worktree/execution details, stable requirement rows and release-preview focus are merged. Installation and live acceptance remain separate.",
+        "已合併主線 ab960ed2 包含 10 月 14 日的討論、登記表／看板、治理／會議／追蹤、維護、工程工具、總覽／報告／需求與首次設定更新。獨立工作目錄／執行詳情、穩定需求列及發布預覽焦點修正已合併；安裝與實機驗收另列。",
     ),
     (
         "Still ahead",
@@ -645,7 +654,7 @@ for i, (en, zh, d, dz, path, zpath) in enumerate(
             "開發交接",
             "Fixed versions, evidence, blockers and the next steps.",
             "固定版本、證據、阻擋與接續步驟。",
-            "docs/handoff/2026-10-12-pm-v1.2.md",
+            "docs/handoff/2026-10-14-docs-ux-v2.md",
             None,
         ),
         (

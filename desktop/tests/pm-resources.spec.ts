@@ -51,7 +51,7 @@ for(const native of [false,true])test.describe(native?'native resources':'web re
   test('source withdrawal removes details, quota and counts',async({page})=>{
     const f=fixture();await open(page,native,f);await resources(page).locator('[data-resource-row="Implementation"]').click();await expect(resources(page).locator('[data-resource-detail]')).toBeVisible();
     f.state.deny=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
-    await expect(resources(page)).toContainText('Your token lacks this scope');await expect(resources(page).locator('[data-resource-row]')).toHaveCount(0);
+    await expect(resources(page)).toContainText('Your account does not have the required scope');await expect(resources(page).locator('[data-resource-row]')).toHaveCount(0);
     await expect(resources(page).locator('[data-resource-detail]')).toBeHidden();await expect(resources(page)).not.toContainText('25%');await expect(resources(page)).not.toContainText('1,000');
   });
   test('unchanged refresh preserves details disclosure and keyboard focus',async({page})=>{
