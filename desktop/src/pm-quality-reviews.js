@@ -1,3 +1,4 @@
+import {iconButton, skeleton} from './ui/components.js';
 import {workspaceExecutionVerification} from './pm-execution-verification.js';
 // Fixed quality conclusions remain central; this view selects original receipts.
 const CREATE='pm.quality.review.create',RECORD='pm.quality.review.record',REVOKE='pm.quality.review.revoke';
@@ -13,7 +14,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   const choice=key=>h('select',{'aria-label':t(key)}),hidden=value=>h('input',{type:'hidden',value:JSON.stringify(value),'data-pm-default':JSON.stringify(value)});
   const element=h('section',{class:'panel pm-quality-reviews','data-pm-quality-reviews':''},
     h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmq_title')),text('pmq_intro')),
-      h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmq_refresh'))),labelled('pmq_work',workChoice),status,
+      iconButton({icon:'refresh-cw', label:t('pmq_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),labelled('pmq_work',workChoice),status,
     h('details',{'data-quality-create':''},h('summary',{},t('pmq_create_heading')),draft),labelled('pmq_history',history),facts,assessment,withdrawal);
   const valid=ticket=>{try{alive();return ticket===serial;}catch{return false;}};
   const member=()=>workspace()?.members?.find(row=>row.actor===caps()?.actor)?.role||workspace()?.membership?.role;
@@ -149,7 +150,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   function remember(){try{localStorage.setItem(navigation,JSON.stringify({workId,review_id:selected}));}catch{}}
   history.addEventListener('change',()=>{selected=history.value;emit(null);remember();renderReview();});
   async function refresh(){
-    const id=workId,ticket=++serial,previous=chosen;clear();filtered=false;if(!supported())return;status.replaceChildren(text('pmq_loading'));
+    const id=workId,ticket=++serial,previous=chosen;clear();filtered=false;if(!supported())return;status.replaceChildren(skeleton(2));
     try{
       const catalog=await pages(`${base}/work-packages`,'packages',ticket);if(!valid(ticket))return;
       if(catalog.some(row=>row.workspace_id!==workspaceId||!/^wi_[0-9a-f]{20}$/.test(row.work_item_id)))throw error();

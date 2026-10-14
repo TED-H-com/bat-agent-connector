@@ -1,3 +1,4 @@
+import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
@@ -81,26 +82,26 @@ for(const native of [false,true]){
  test(`catalog artifact events refresh loaded pages without duplicates and failures hold cursor (${mode})`,async({page})=>{
   const second={...row,artifact_id:'art_'+'7'.repeat(32)},added={...row,artifact_id:'art_'+'8'.repeat(32),display_name:'New ready result'};
   const state=await fixture(page,native,{catalogPages:[[row],[second]]});await page.goto('/dashboard/#/artifact-review');const catalog=page.getByRole('heading',{name:'Saved results from managed sources'}).locator('..');await catalog.getByRole('button',{name:'More',exact:true}).click();await expect(catalog.getByRole('link')).toHaveCount(2);
-  state.catalogPages=[[added,row],[row,second]];state.catalogFail=true;state.events=[{seq:1,kind:'artifact.ready',resource_type:'artifact',resource_id:added.artifact_id}];await expect(page.locator('.live')).toContainText('paused');expect(state.after).toBe(0);await expect(catalog.getByRole('link')).toHaveCount(2);
+  state.catalogPages=[[added,row],[row,second]];state.catalogFail=true;state.events=[{seq:1,kind:'artifact.ready',resource_type:'artifact',resource_id:added.artifact_id}];await expect(page.locator('.live')).toHaveAttribute('data-connection','connected');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);expect(state.after).toBe(0);await expect(catalog.getByRole('link')).toHaveCount(2);
   state.catalogFail=false;await expect(catalog.getByRole('link',{name:'New ready result · r1'})).toBeVisible();await expect.poll(()=>state.after).toBe(1);await expect(catalog.getByRole('link')).toHaveCount(3);expect(state.writes).toHaveLength(0);
  });
  test(`fixed artifact event recovers initial read failure without replacing draft (${mode})`,async({page})=>{
-  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');await page.locator('[data-artifact-accept] textarea').fill('Keep my review draft');state.artifactMissing=true;await page.reload();await expect(page.locator('.error').first()).toContainText('Artifact unavailable');state.artifactMissing=false;state.events=[{seq:1,kind:'artifact.ready',resource_type:'artifact',resource_id:artifactId}];await expect(page.locator('[data-artifact-ready]')).toBeVisible();await expect.poll(()=>state.after).toBe(1);await expect(page.locator('[data-artifact-accept] textarea')).toHaveValue('Keep my review draft');expect(state.writes).toHaveLength(0);
+  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');await page.locator('[data-artifact-accept] textarea').fill('Keep my review draft');state.artifactMissing=true;await page.reload();await expectErrorDetails(page, 'Artifact unavailable');state.artifactMissing=false;state.events=[{seq:1,kind:'artifact.ready',resource_type:'artifact',resource_id:artifactId}];await expect(page.locator('[data-artifact-ready]')).toBeVisible();await expect.poll(()=>state.after).toBe(1);await expect(page.locator('[data-artifact-accept] textarea')).toHaveValue('Keep my review draft');expect(state.writes).toHaveLength(0);
  });
  test(`published-version execution is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'repository.continue'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'repository.continue'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Continue from published version'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`unproven published-version execution stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'repository.continue',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);expect(state.writes).toHaveLength(0);
  });
  test(`successful prompted start is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'session.start'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Start session'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`prompt-free or unknown start stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);
-  await page.goto('/dashboard/#/op/'+executionId);await expect(page.getByRole('link',{name:"Capture and review this execution's file",exact:true})).toHaveCount(0);await page.goto('/dashboard/#/artifact-review/operation/'+executionId);await expect(page.locator('.error')).toContainText('Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
+  await page.goto('/dashboard/#/op/'+executionId);await expect(page.getByRole('link',{name:"Capture and review this execution's file",exact:true})).toHaveCount(0);await page.goto('/dashboard/#/artifact-review/operation/'+executionId);await expectClientError(page, 'Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
  });
  test(`managed capture and acceptance keep separate exact intents (${mode})`,async({page})=>{
   const state=await fixture(page,native),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toContainText(artifactId);
@@ -109,7 +110,7 @@ for(const native of [false,true]){
   await page.reload();await expect(page.locator('[data-artifact-accepted]')).toBeVisible();expect(state.writes).toHaveLength(2);expect(state.errors).toEqual([]);await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));
  });
  test(`lost capture keeps original credential key after source cleanup (${mode})`,async({page})=>{
-  const state=await fixture(page,native,{lostCapture:true}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('.error')).toContainText('Reply lost');
+  const state=await fixture(page,native,{lostCapture:true}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expectErrorDetails(page, 'Reply lost');
   state.sourceGone=true;state.captureError='FORBIDDEN';await page.reload();await page.getByRole('button',{name:'Check original capture',exact:true}).click();await expect(page.getByText('Capture recovery requires the original credential', {exact:false})).toBeVisible();expect(state.writes[1]).toEqual(state.writes[0]);await expect(page.getByRole('button',{name:'Capture another file'})).toBeDisabled();
   state.captureError=null;await page.reload();await page.getByRole('button',{name:'Check original capture',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toBeVisible();expect(state.writes[2]).toEqual(state.writes[0]);await page.reload();await expect(page.locator('[data-artifact-ready]')).toBeVisible();expect(state.writes).toHaveLength(3);expect(state.errors).toEqual([]);
  });
@@ -121,23 +122,23 @@ for(const native of [false,true]){
  });
  test(`lost acceptance keeps text, key and fixed ref on reload (${mode})`,async({page})=>{
   const state=await fixture(page,native,{lostAccept:true});await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');const review=page.locator('[data-artifact-accept]');
-  await review.getByRole('textbox').fill('Original review receipt');await review.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expect(page.locator('.error')).toContainText('Reply lost');
+  await review.getByRole('textbox').fill('Original review receipt');await review.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expectErrorDetails(page, 'Reply lost');
   await page.reload();await expect(review.getByRole('textbox')).toHaveValue('Original review receipt');await expect(review.getByRole('textbox')).toBeDisabled();
   await review.getByRole('button',{name:'Check original review submission',exact:true}).click();await expect(page.locator('[data-artifact-accepted]')).toBeVisible();expect(state.writes[1]).toEqual(state.writes[0]);
   state.artifactMissing=true;await page.reload();await expect(page.locator('[data-artifact-accepted]')).toBeVisible();await expect(page.getByRole('button',{name:'Record another review',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(2);
  });
  test(`new capture rereads task/session context before choosing a later intent (${mode})`,async({page})=>{
-  const state=await fixture(page,native),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toBeVisible();state.sourceGone=true;await page.reload();await expect(page.locator('[data-artifact-ready]')).toBeVisible();await page.getByRole('button',{name:'Capture another file',exact:true}).click();await expect(page.locator('.error')).toContainText('Source removed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(1);
+  const state=await fixture(page,native),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toBeVisible();state.sourceGone=true;await page.reload();await expect(page.locator('[data-artifact-ready]')).toBeVisible();await page.getByRole('button',{name:'Capture another file',exact:true}).click();await expectErrorDetails(page, 'Source removed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(1);
  });
 
  for(const mismatch of ['key','actor','params','ref']) test(`mismatched capture ${mismatch} cannot enable review (${mode})`,async({page})=>{
   const state=await fixture(page,native,{badResult:mismatch}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();
-  await expect(page.locator('.error')).toContainText('does not match');await expect(page.locator('[data-artifact-ready]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Capture another file'})).toBeDisabled();
+  await expectClientError(page, 'does not match');await expect(page.locator('[data-artifact-ready]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Capture another file'})).toBeDisabled();
   expect(state.writes).toHaveLength(1);expect(state.errors).toEqual([]);
  });
  test(`mismatched acceptance receipt never reports reviewed (${mode})`,async({page})=>{
   const state=await fixture(page,native,{badResult:'accept-receipt'});await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');const box=page.locator('[data-artifact-accept]');
-  await box.getByRole('textbox').fill('My exact review');await box.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expect(page.locator('.error')).toContainText('does not match');
+  await box.getByRole('textbox').fill('My exact review');await box.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expectClientError(page, 'does not match');
   await expect(page.locator('[data-artifact-accepted]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Record another review',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(1);
  });
  test(`task selector offers accepted commands and rejects unsafe file paths (${mode})`,async({page})=>{
@@ -148,16 +149,16 @@ for(const native of [false,true]){
  });
  test(`failed operation event read blocks acknowledgment and preserves fixed draft (${mode})`,async({page})=>{
   const state=await fixture(page,native,{captureStatus:'running'}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.getByRole('link',{name:captureId,exact:true})).toBeVisible();
-  state.failRead=true;state.events=[{seq:1,kind:'operation.updated',resource_type:'operation',resource_id:captureId}];await expect(page.locator('.live')).toContainText('paused');expect(state.after).toBe(0);
+  state.failRead=true;state.events=[{seq:1,kind:'operation.updated',resource_type:'operation',resource_id:captureId}];await expect(page.locator('.live')).toHaveAttribute('data-connection','connected');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);expect(state.after).toBe(0);
   state.failRead=false;state.captureStatus='succeeded';await expect(page.locator('[data-artifact-ready]')).toBeVisible();await expect.poll(()=>state.after).toBe(1);expect(state.writes).toHaveLength(1);expect(state.errors).toEqual([]);
  });
  test(`read-only manual context cannot capture or claim managed lineage (${mode})`,async({page})=>{
-  const state=await fixture(page,native,{manual:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.locator('.error')).toContainText('Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
+  const state=await fixture(page,native,{manual:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expectClientError(page, 'Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
  });
 
  test(`preview mismatch and expiry cannot submit managed capture (${mode})`,async({page})=>{
   const state=await fixture(page,native,{badPreview:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');
-  await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(page.locator('.error')).toContainText('does not match');
+  await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expectClientError(page, 'does not match');
   state.badPreview=false;state.expired=true;await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText('Preview expired');await expect(box.getByRole('button',{name:'Save reviewed file',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(0);
  });
  test(`late preview cannot follow navigation into another principal (${mode})`,async({page})=>{
@@ -166,7 +167,7 @@ for(const native of [false,true]){
   await expect(page.getByRole('textbox',{name:'Relative file path'})).toHaveValue('');expect(state.writes).toHaveLength(0);expect(state.errors).toEqual([]);expect(await page.evaluate(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('batc.artifact-review.')).some(([,v])=>v.includes('result.txt')))).toBe(true);
  });
  test(`exact artifact event keeps focused review text and refuses changed revision (${mode})`,async({page})=>{
-  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');const text=page.locator('[data-artifact-accept] textarea');await text.fill('Review text remains focused');state.events=[{seq:1,kind:'artifact.accepted',resource_type:'artifact',resource_id:artifactId}];await expect.poll(()=>state.after).toBe(1);await expect(text).toHaveValue('Review text remains focused');await expect(text).toBeFocused();expect(state.writes).toHaveLength(0);state.changedArtifactRevision=true;state.events.push({seq:2,kind:'artifact.updated',resource_type:'artifact',resource_id:artifactId});await expect(page.locator('.live')).toContainText('paused');expect(state.after).toBe(1);await expect(page.getByRole('button',{name:'Record review of this revision',exact:true})).toBeDisabled();await expect(text).toHaveValue('Review text remains focused');state.changedArtifactRevision=false;await expect.poll(()=>state.after).toBe(2);
+  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/artifact/'+artifactId+'/1');const text=page.locator('[data-artifact-accept] textarea');await text.fill('Review text remains focused');state.events=[{seq:1,kind:'artifact.accepted',resource_type:'artifact',resource_id:artifactId}];await expect.poll(()=>state.after).toBe(1);await expect(text).toHaveValue('Review text remains focused');await expect(text).toBeFocused();expect(state.writes).toHaveLength(0);state.changedArtifactRevision=true;state.events.push({seq:2,kind:'artifact.updated',resource_type:'artifact',resource_id:artifactId});await expect(page.locator('.live')).toHaveAttribute('data-connection','connected');await expect(page.locator('.live')).toHaveAttribute('title',/paused/);expect(state.after).toBe(1);await expect(page.getByRole('button',{name:'Record review of this revision',exact:true})).toBeDisabled();await expect(text).toHaveValue('Review text remains focused');state.changedArtifactRevision=false;await expect.poll(()=>state.after).toBe(2);
  });
 
 }

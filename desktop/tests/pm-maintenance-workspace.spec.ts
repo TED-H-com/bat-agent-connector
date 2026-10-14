@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {repairFixture,workspaceId} from './pm-maintenance-repairs-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
@@ -15,10 +16,11 @@ async function mount(page:any,native:boolean,dispatch:(input:any)=>Promise<any>)
 }
 for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`mounted maintenance repair ${native?'IPC':'browser'} ${locale}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width:locale==='en'?1440:390,height:900}}),page=await context.newPage(),f=repairFixture();
-  await mount(page,native,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);
+  await mount(page,native,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);await openPmSection(page, 'issues', 'ui_repairs');
   const panel=page.locator('[data-pm-maintenance-repairs]'),form=panel.locator('[data-pm-action="pm.maintenance.repair"]');
   await expect(panel).toHaveCount(1);
-  await form.getByLabel(locale==='en'?'Observed Issue':'觀察到的 Issue',{exact:true}).selectOption('pmfn_'+'f'.repeat(32));
+  await panel.locator('[data-repair-start] > summary').click();
+  await form.getByLabel(locale==='en'?'Observed Issue':'觀察到的議題',{exact:true}).selectOption('pmfn_'+'f'.repeat(32));
   await form.getByLabel(locale==='en'?'Adopted repair rule':'已採用的修復規則',{exact:true}).selectOption('docs_fix');
   await form.locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.rule_key).toBe('docs_fix');

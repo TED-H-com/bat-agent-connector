@@ -229,7 +229,7 @@ for (const native of [false, true]) {
     await page.locator('[data-approvals] select').first().selectOption('demo');
     await page.getByRole('button', {name: 'Preview pending requests'}).click();
     await expect.poll(() => Boolean(state.holdPreview)).toBe(true);
-    await page.locator('.workspace-nav-footer').getByRole('link', {name: 'Add / manage projects', exact: true}).click();
+    await page.locator('.workspace-nav-footer').getByRole('link', {name: 'Settings', exact: true}).click();
     await expect(page.locator('[data-approvals]')).toHaveCount(0);
     state.holdPreview();
     const saved = await page.evaluate(() => JSON.parse(Object.entries(localStorage).find(([k]) => k.startsWith('batc.approvals.'))![1]));

@@ -118,7 +118,8 @@ for (const native of [false, true]) {
     await form.getByRole('button', {name: 'Check original operation'}).click();
     expect(state.posts).toHaveLength(1);
     await form.getByRole('link', {name: 'View operation and step receipts'}).click();
-    await expect(page.getByRole('heading', {name: 'session.permissions'})).toBeVisible();
+    await expect(page.getByRole('heading', {name: 'Set session permissions'})).toBeVisible();
+    await expect(page.locator('code', {hasText: 'session.permissions'})).toBeVisible();
     await expect(page.getByText('permission_frame', {exact: true})).toBeVisible();
     expect(state.errors).toEqual([]);
   });

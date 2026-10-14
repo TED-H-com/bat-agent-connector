@@ -12,13 +12,20 @@ for (const native of [false, true]) test(`message-local metadata and visible exc
   page.on('pageerror', error => errors.push(error.message)); await mountConversation(page, native, dispatch);
   await page.goto('/dashboard/#/session/demo/session-1');
   const row = (id: string) => page.locator(`[data-message-id="${id}"]`);
-  await expect(row('new')).toContainText('Message model: message-model'); await expect(row('new')).toContainText('Message agent: codex');
-  await expect(row('new')).toContainText('Message duration: 2500 ms'); await expect(row('old')).not.toContainText('Message model:'); await expect(row('old')).toContainText('Status: failed');
+  await expect(row('new').locator('.message-name')).toHaveText('codex');
+  await expect(row('new').locator('.message-chip')).toHaveText('message-model');
+  await expect(row('new').locator('.message-chip')).toHaveAttribute('title', 'message-model');
+  await expect(row('new')).not.toContainText('Message model:'); await expect(row('new')).not.toContainText('Message agent:');
+  await expect(row('new')).toContainText('2.5 s'); await expect(row('old')).not.toContainText('Message model:');
+  await expect(row('old').locator('.message-chip')).toBeHidden();
+  await expect(row('old').locator('[data-status="failed"]')).toHaveText('Failed');
+  await expect(row('tool-completed').locator('[data-status="done"]')).toHaveText('Done');
+  await expect(row('tool-completed')).not.toContainText('Status:');
   await expect(row('tool-completed').locator('details')).not.toHaveAttribute('open');
-  for (const status of ['error', 'running', 'unknown']) {
-    await expect(row('tool-'+status)).toContainText('Status: '+status);
+  for (const [status, label, key] of [['error', 'Failed', 'failed'], ['running', 'Running', 'running'], ['unknown', 'Unknown', 'unknown']] as const) {
+    await expect(row('tool-'+status).locator('[data-status="'+key+'"]')).toHaveText(label);
     await expect(row('tool-'+status).locator('details')).toHaveAttribute('open', '');
-    await expect(row('tool-'+status).getByText(`Tool ${status} original result`, {exact: true})).toBeVisible();
+    await expect(row('tool-'+status).locator('details > div').getByText(`Tool ${status} original result`, {exact: true})).toBeVisible();
   }
   await row('tool-completed').locator('summary').click();
   f.data.cursor++; await expect.poll(() => f.data.reads).toBeGreaterThan(1);

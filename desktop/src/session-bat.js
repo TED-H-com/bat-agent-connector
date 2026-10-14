@@ -3,7 +3,7 @@ import {nativeDesktop, fleetAvailability, fleetControl} from "./transport/index.
 // A local, explicit profile launch. Session labels and paths never select a profile.
 export function sessionBatPanel({h, t, guard, storageKey, session}) {
   const box = h("section", {class:"session-bat", "aria-label":t("bat_handoff")});
-  const actions = h("div", {class:"actions"}), content = h("div", {hidden:true});
+  const content = h("div", {hidden:true});
   const message = h("p", {class:"muted", role:"status"}), copyFallback = h("div");
   let disposed = false, busy = false, expanded = false, readable = false, overview, chosen = "", intent, receipt, restoredPreview = false, damaged = false;
   const alive = () => {if (disposed) return false; try {guard(); return true;} catch {return false;}};
@@ -62,7 +62,7 @@ export function sessionBatPanel({h, t, guard, storageKey, session}) {
     try {await navigator.clipboard.writeText(value); if (alive()) message.textContent = t("bat_copied");}
     catch {
       if (!alive()) return;
-      const input = h("textarea", {readonly:true, "aria-label":t(field === "title" ? "bat_copy_title" : "bat_copy_id")}, value);
+      const input = h("textarea", {readonly:true, "aria-label":t(field === "title" ? "bat_menu_title" : "bat_menu_id")}, value);
       copyFallback.replaceChildren(h("p", {class:"muted"}, t("bat_copy_manually")), input); input.focus(); input.select();
     }
   };
@@ -94,8 +94,6 @@ export function sessionBatPanel({h, t, guard, storageKey, session}) {
   const render = () => {
     if (!alive()) return;
     const button = (key, fn, disabled=false) => h("button", {class:"secondary",disabled:busy||disabled,onclick:fn},t(key));
-    actions.replaceChildren(button("bat_copy_title",()=>copy("title"),!session()?.title),button("bat_copy_id",()=>copy("id"),!session()?.session_id),
-      button("bat_open",()=>{expanded=true;run(read);}, !nativeDesktop));
     content.hidden = !expanded;
     if (!expanded) return;
     const fixed = !!intent || damaged;
@@ -117,11 +115,11 @@ export function sessionBatPanel({h, t, guard, storageKey, session}) {
     lines.push(h("div",{class:"actions"},...buttons),h("p",{class:"muted"},t("bat_preferences")," ",h("a",{href:"#/settings"},t("nav_settings"))));
     content.replaceChildren(...lines);
   };
-  box.append(actions);
-  if (!nativeDesktop) box.append(h("p",{class:"muted"},t("bat_browser")));
   box.append(content, copyFallback, message);
   render();
   // Reopening only reads the original receipt. It never creates a new preview or launches.
   if (nativeDesktop && expanded) queueMicrotask(()=>run(read));
-  return {box, update:render, dispose:()=>{disposed=true;}};
+  return {box, update:render, dispose:()=>{disposed=true;},
+    copyTitle: () => copy("title"), copyId: () => copy("id"),
+    open: () => {expanded = true; run(read);}};
 }

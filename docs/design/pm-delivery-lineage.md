@@ -100,3 +100,12 @@ with `after` and `limit` only. RPC/MCP use `pm_work_deliveries_list`. Observe an
 current workspace membership are required. The native bridge allows only that
 fixed GET shape. Membership, original packages and receipt facts share one
 SQLite read snapshot; the byte limit counts the ordinary JSON wire encoding.
+
+The Session inspector validates this same contract and groups receipts by provider
+origin, numeric repository ID and PR number. It preserves the last validated rows
+while loading; transient failures mark them Not updated, or Unknown without a prior
+read. Forbidden, gone or removed sources clear their cached receipts and counts.
+Partial pages name only the grouped PR rows shown and retain a more marker.
+Unchanged refreshes retain their DOM and inspector scroll position. PR links use
+the recorded provider origin; a verified current deployment remains distinct from
+a merge or requirement acceptance.

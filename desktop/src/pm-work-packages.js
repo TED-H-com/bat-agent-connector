@@ -1,15 +1,22 @@
+import {button, disclosure, emptyState, iconButton, sectionCard, skeleton, statusPill} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
+import {joinLabel} from './label-text.js';
 // The central service owns preparation and source policy. This view only reads.
 export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSize=20,onSelection=()=>{}}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/work-packages`;
   const idPattern=/^pmwp_[0-9a-f]{32}$/, digestPattern=/^[0-9a-f]{64}$/;
-  let sequence=0,rows=[],cursor=null,pages=1,selected=null,busy=false;
+  let sequence=0,rows=[],cursor=null,pages=1,selected=null,busy=false,broken=false;
   const status=h('div',{role:'status'}),list=h('div'),facts=h('div',{'data-pm-wp-detail':''});
-  const refreshButton=h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('wp_refresh'));
-  const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{pages++;void refresh();}},t('wp_more'));
-  const element=h('section',{class:'pm-packages','data-pm-work-packages':''},
-    h('div',{class:'actions'},h('h3',{},t('wp_title')),refreshButton),h('p',{class:'muted'},t('wp_intro')),status,list,more,facts);
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('wp_refresh'), onClick:()=>void refresh()});
+  const more=button({variant:'secondary', label:t('wp_more'), hidden:true, onClick:()=>{pages++;void refresh();}});
+  const picker=h('select',{'aria-label':t('wp_package'),onchange:()=>{if(picker.value)void select(picker.value);}});
+  const pickerLabel=h('label',{},t('wp_package'),picker);
+  const head=h('div',{class:'pm-tool-head'},pickerLabel,refreshButton);
+  const element=h('section',{class:'pm-packages','data-pm-work-packages':''},sectionCard({body:h('div',{},
+    head,status,list,more,facts,
+    disclosure({label:t('wp_details'),body:h('p',{class:'muted'},t('wp_intro'))}))}));
   const valid=ticket=>{alive();return element.isConnected&&ticket===sequence;};
-  const detail=(title,...children)=>h('details',{},h('summary',{},title),...children);
+  const detail=(title,...children)=>disclosure({element:h('details',{},h('summary',{},title),...children)});
   const paragraph=value=>h('p',{class:'pm-note-text'},value);
   const fact=(key,value)=>h('p',{class:'pm-source'},t(key),': ',value??t('wp_unknown'));
   const refs=value=>value?.length?fact('wp_source_refs',value.join(', ')):null;
@@ -25,13 +32,15 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       ||row.document?.quality_assessment!=='unassessed'||typeof row.document?.title!=='string')throw Error(t('wp_invalid'));
     return row;
   }
-  function controls(){refreshButton.disabled=busy;more.disabled=busy;more.hidden=cursor===null;}
+  function controls(){refreshButton.disabled=busy;picker.disabled=busy||broken;more.disabled=busy;more.hidden=cursor===null;}
   function renderList(){
-    list.replaceChildren(h('p',{class:'muted'},t('wp_partial')),
-      ...rows.map(row=>h('div',{class:'pm-workspace-row','data-pm-wp-row':row.package_id},
-        h('button',{type:'button',class:'secondary',disabled:busy,'aria-pressed':selected===row.package_id,
-          onclick:()=>void select(row.package_id)},row.document.title+' · '+t('wp_preparation')+' '+row.sequence))));
-    if(!rows.length)list.append(h('p',{class:'muted'},t('wp_empty')));
+    if(broken){picker.replaceChildren();pickerLabel.hidden=true;list.replaceChildren();return;}
+    pickerLabel.hidden=false;
+    picker.replaceChildren(h('option',{value:''},t('wp_choose')),...rows.map(row=>h('option',{value:row.package_id},
+      joinLabel([row.document.title, joinLabel([t('wp_preparation'), row.sequence], ' ')]))));
+    picker.value=rows.some(row=>row.package_id===selected)?selected:'';
+    list.replaceChildren(...(cursor===null?[]:[h('div',{class:'pm-tool-head'},statusPill('partial'),h('p',{class:'muted'},t('wp_partial')))]));
+    if(!rows.length&&!busy)list.append(emptyState({title:t('wp_empty'),heading:'h3'}));
   }
   function render(row,readiness){
     const doc=row.document,context=doc.context;
@@ -55,7 +64,7 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       +(delivery.pull_number?' · #'+delivery.pull_number:'')),...['migration','rollout','rollback','observation'].map(key=>
       detail(t('wp_'+key)+' · '+t(delivery[key].status==='unresolved'?'wp_unresolved_status':'wp_'+delivery[key].status),paragraph(delivery[key].text))));
     const sources=detail(t('wp_sources'),fact('wp_package_id',row.package_id),fact('wp_digest',row.document_digest),
-      fact('wp_created',Number.isFinite(row.created_at)?new Date(row.created_at*1000).toISOString():null),fact('wp_author',row.actor),
+      fact('wp_created',timeStamp(row.created_at, {empty:null})),fact('wp_author',row.actor),
       fact('wp_plan',context.plan_ref.revision_id),
       fact('wp_scope',context.plan_ref.scope_revision),fact('wp_code',doc.code_source.repository+'@'+doc.code_source.source_sha),
       fact('wp_work',row.work_item_id),fact('wp_binding',context.work_ref?.binding_id),fact('wp_work_version',context.work_ref?.work_version),
@@ -65,13 +74,17 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       doc.evidence_refs?.length?detail(t('wp_evidence'),...doc.evidence_refs.map(ref=>h('p',{class:'pm-source'},ref.evidence_id,' · ',ref.fact_digest))):null,
       detail(t('wp_original'),...(doc.sources?.documents||[]).map(source=>detail(source.path,
         paragraph(source.content),h('p',{class:'pm-source'},source.source_id,' · ',source.commit_sha,' · ',source.sha256)))));
-    facts.replaceChildren(h('h4',{},doc.title),h('p',{'data-pm-wp-readiness':''},t(readiness.status==='ready'?'wp_ready':'wp_blocked')),
-      h('p',{class:'muted'},t('wp_boundary')),labelled('wp_checks',checks),h('p',{class:'muted'},t('wp_coverage')),
-      labelled('wp_requirements',requirements),detail(t('wp_design'),paragraph(doc.design.text),fact('wp_reason',doc.rationale),refs(doc.design.source_ids)),
-      detail(t('wp_tasks'),tasks),detail(t('wp_verification'),verification),detail(t('wp_delivery'),deliveryNode),
-      detail(t('wp_dod'),h('p',{class:'muted'},t(doc.dod?'wp_dod_note':'wp_no_dod')),
-        doc.dod?h('ul',{},...(doc.dod.criteria||[]).map(item=>h('li',{},item.text))):null),
-      ...(doc.unresolved.length?[labelled('wp_unresolved',h('ul',{},...doc.unresolved.map(value=>h('li',{},value))))]:[]),sources);
+    const ready=readiness.status==='ready';
+    const pill=ready?h('span',{class:'ui-pill tone-ok','data-status':'ready'},t('wp_ready_short')):statusPill('blocked');
+    facts.replaceChildren(h('div',{class:'pm-tool-head'},h('h3',{},doc.title),h('p',{'data-pm-wp-readiness':''},pill)),
+      labelled('wp_checks',checks),
+      disclosure({label:t('wp_details'),body:h('div',{},paragraph(t(ready?'wp_ready':'wp_blocked')),paragraph(t('wp_boundary')),paragraph(t('wp_coverage')))}),
+      labelled('wp_requirements',requirements),
+      labelled('wp_plan_section',h('div',{},detail(t('wp_design'),paragraph(doc.design.text),fact('wp_reason',doc.rationale),refs(doc.design.source_ids)),
+        detail(t('wp_tasks'),tasks),detail(t('wp_verification'),verification),detail(t('wp_delivery'),deliveryNode),
+        detail(t('wp_dod'),h('p',{class:'muted'},t(doc.dod?'wp_dod_note':'wp_no_dod')),
+          doc.dod?h('ul',{},...(doc.dod.criteria||[]).map(item=>h('li',{},item.text))):null),sources)),
+      ...(doc.unresolved.length?[labelled('wp_unresolved',h('ul',{},...doc.unresolved.map(value=>h('li',{},value))))]:[]));
   }
   async function readSelected(ticket){
     const id=selected;
@@ -87,20 +100,22 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
       ||!['ready','blocked'].includes(readiness.status)||!Array.isArray(readiness.checks))throw Error(t('wp_invalid'));
     render(row,readiness);onSelection(row);
   }
+  function restoreHead(){broken=false;head.hidden=false;pickerLabel.hidden=false;if(!head.contains(refreshButton))head.replaceChildren(pickerLabel,refreshButton);}
   function failed(error,ticket){
     try{if(!valid(ticket))return;}catch{return;}
     // A later source/permission failure must not leave an earlier quoted title or document visible.
-    rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);status.replaceChildren(errorBox(error),paragraph(t('wp_unavailable')));
+    broken=true;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);picker.replaceChildren();
+    head.hidden=true;status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},errorBox(error),paragraph(t('wp_unavailable'))),refreshButton));
   }
   async function select(id){
     if(busy||!idPattern.test(id))return;
-    selected=id;const ticket=++sequence;busy=true;facts.replaceChildren();onSelection(null);renderList();controls();status.replaceChildren(paragraph(t('wp_loading')));
+    selected=id;const ticket=++sequence;busy=true;restoreHead();facts.replaceChildren();onSelection(null);renderList();controls();status.replaceChildren(skeleton(2));
     try{await readSelected(ticket);if(valid(ticket))status.replaceChildren();}catch(error){failed(error,ticket);}
     finally{try{if(valid(ticket)){busy=false;renderList();controls();}}catch{}}
   }
   async function refresh(){
-    const ticket=++sequence;busy=true;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);controls();
-    status.replaceChildren(paragraph(t('wp_loading')));
+    const ticket=++sequence;busy=true;restoreHead();rows=[];cursor=null;picker.replaceChildren();list.replaceChildren();facts.replaceChildren();onSelection(null);controls();
+    status.replaceChildren(skeleton(2));
     try{
       let after=0,next=null;const loaded=[];
       for(let page=0;page<pages;page++){
@@ -117,6 +132,6 @@ export function workspaceWorkPackages({h,t,api,alive,workspaceId,errorBox,pageSi
     }catch(error){failed(error,ticket);}
     finally{try{if(valid(ticket)){busy=false;renderList();controls();}}catch{}}
   }
-  function withdraw(){sequence++;busy=false;rows=[];cursor=null;list.replaceChildren();facts.replaceChildren();onSelection(null);status.replaceChildren();controls();}
+  function withdraw(){sequence++;busy=false;broken=false;rows=[];cursor=null;picker.replaceChildren();list.replaceChildren();facts.replaceChildren();onSelection(null);status.replaceChildren();head.hidden=false;pickerLabel.hidden=false;if(!head.contains(refreshButton))head.replaceChildren(pickerLabel,refreshButton);controls();}
   return{element,refresh,withdraw};
 }

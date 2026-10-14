@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 
@@ -69,11 +70,11 @@ for (const native of [false, true]) {
     await expect(page.getByText('Showing 0 · 24 loaded', {exact: true})).toBeVisible();
     await expect(page.getByText('More pages are available. Load more, or adjust your search and filters.')).toBeVisible();
     await page.locator('#main').getByRole('button', {name: 'Load more', exact: true}).click();
-    await expect(page.getByText('Showing 8 · 32 loaded', {exact: true})).toBeVisible();
+    await expect(page.getByText('Showing 8 of 32 sessions', {exact: true})).toBeVisible();
     await expect(west).toHaveAttribute('href', '#/host/build-west');
     await page.locator('#main').getByRole('searchbox').fill('');
     await page.locator('.session-workspaces button').filter({hasText: 'Dashboard'}).click();
-    await expect(page.getByText('Showing 8 · 32 loaded', {exact: true})).toBeVisible();
+    await expect(page.getByText('Showing 8 of 32 sessions', {exact: true})).toBeVisible();
     await expect(page.locator('[data-resource-id]')).toHaveCount(8);
     await page.reload();
     await expect(page.getByText('Showing 8 · 24 loaded', {exact: true})).toBeVisible();
@@ -92,11 +93,11 @@ for (const native of [false, true]) {
     const top = await row.evaluate(el => el.getBoundingClientRect().top);
     data.rows[0].title += ' with a much longer title '.repeat(12); data.cursor = 1;
     await expect.poll(() => saved(page)).toEqual(cp(1));
-    await expect(page.getByText('Showing 32 · 32 loaded', {exact: true})).toHaveCount(1);
+    await expect(page.getByText('Showing 32 of 32 sessions', {exact: true})).toHaveCount(1);
     await expect(row.locator('details').first()).toHaveAttribute('open', '');
     expect(Math.abs(await row.evaluate(el => el.getBoundingClientRect().top) - top)).toBeLessThan(3);
     data.fail = true; data.cursor = 2;
-    await expect(page.locator('#main').getByText('UNAVAILABLE Inventory unavailable')).toBeVisible();
+    await expectErrorDetails(page.locator('#main'), 'Inventory unavailable', 'UNAVAILABLE');
     expect(await saved(page)).toEqual(cp(1));
     data.fail = false;
     await expect.poll(() => saved(page), {timeout: 10000}).toEqual(cp(2));
@@ -119,7 +120,7 @@ for (const native of [false, true]) {
     await expect.poll(() => held).toBe(true);
     await page.getByRole('combobox', {name: 'Host', exact: true}).selectOption('build-west');
     data.fail = true; release();
-    await expect(page.locator('#main').getByText('UNAVAILABLE Inventory unavailable')).toBeVisible();
+    await expectErrorDetails(page.locator('#main'), 'Inventory unavailable', 'UNAVAILABLE');
     expect(await saved(page)).not.toEqual(cp(1));
     data.fail = false;
     await expect.poll(() => saved(page), {timeout: 10000}).toEqual(cp(1));
@@ -184,7 +185,7 @@ test('same-host workspace labels disambiguate by ID while unique names stay clea
   await mount(page, false, dispatch); await page.goto('/dashboard/#/sessions');
   await expect(page.locator('.session-group-heading code')).toHaveText(['workspace-one', 'workspace-two']);
   await expect(page.getByRole('heading', {name: 'workspace-unnamed', exact: true})).toBeVisible();
-  await page.getByRole('button', {name: 'Shared · workspace-two 1 loaded', exact: true}).click();
+  await page.getByRole('button', {name: 'Shared · workspace-two 1 session', exact: true}).click();
   await expect(page.locator('[data-resource-id]')).toHaveCount(1);
   await expect(page.locator('[data-resource-id]')).toHaveAttribute('data-resource-id', 'build-east/session-001');
 });

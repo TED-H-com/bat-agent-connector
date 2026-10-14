@@ -1,0 +1,161 @@
+/* Shared shell. Views keep their content; navigation lives in one persistent rail. */
+.top { height: 48px; min-height: 48px; flex-wrap: nowrap; padding: 0 var(--space-4); gap: var(--space-4); z-index: 30; background: var(--surface); }
+.brand { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-body); font-weight: 600; flex: none; }
+.brand-mark { width: 20px; height: 20px; background: var(--accent); border-radius: var(--r-sm); }
+#nav { flex: 1; flex-wrap: nowrap; align-items: center; min-width: 0; gap: var(--space-2); }
+.shell-top-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; margin-left: auto; }
+.live { display: inline-flex; align-items: center; gap: var(--space-1); margin: 0; width: auto; text-decoration: none; font-size: var(--fs-caption); color: var(--text-2); background: var(--surface-2); padding: 2px var(--space-2); border-radius: var(--r-pill); white-space: nowrap; }
+.live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--neutral); flex: none; }
+.live.ok::before { content: ''; background: var(--ok); }
+.live.down::before { content: ''; background: var(--bad); }
+.live.reconnecting::before { background: var(--warn); }
+.shell-count { font-size: var(--fs-caption); font-variant-numeric: tabular-nums; background: var(--surface-3); color: var(--text-2); padding: 0 6px; border-radius: var(--r-xs); margin-left: auto; }
+.shell-crumb-workspace, .shell-workspace-switch { border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; padding: var(--space-1) 0; display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.shell-workspace-switch { font-size: var(--fs-read); font-weight: 600; text-align: left; overflow-wrap: anywhere; justify-content: space-between; width: 100%; }
+.shell-crumb-workspace { flex-direction: row-reverse; white-space: nowrap; max-width: 28vw; overflow: hidden; text-overflow: ellipsis; }
+.shell-workspace-name { min-width: 0; }
+.shell-crumb-workspace .shell-workspace-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-breadcrumb-divider { color: var(--text-3); }
+.shell-crumb-view { font-size: var(--fs-small); color: var(--text-2); white-space: nowrap; }
+.shell-workspace-block { display: grid; gap: var(--space-2); margin-bottom: var(--space-5); }
+.shell-workspace-block > .ui-menu { width: 100%; }
+.shell-workspace-block > .ui-pill { justify-self: start; }
+.shell-workspace-block .ui-menu-panel { left: 0; right: auto; }
+.shell-nav-label { margin: var(--space-3) var(--space-2) var(--space-2); color: var(--text-3); font-size: var(--fs-caption); font-weight: 500; }
+body.has-workspace #workspace { display: grid; grid-template-columns: var(--workspace-sidebar-width, 248px) minmax(0, 1fr); min-height: calc(100dvh - 48px); }
+body.has-workspace .workspace-nav { display: flex; position: sticky; top: 48px; height: calc(100dvh - 48px); min-width: 0; width: auto; padding: var(--space-4) var(--space-3); overflow-y: auto; background: var(--surface); border-right: 1px solid var(--line); gap: var(--space-2); }
+.workspace-nav .workspace-tree-scroll { flex: 1 0 auto; overflow: visible; }
+.workspace-search { position: relative; }
+.workspace-search > .ui-icon { position: absolute; left: var(--space-2); top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.workspace-search > input { width: 100%; padding-left: var(--space-8); border-color: var(--line-strong); }
+.workspace-nav-footer { margin-top: auto; padding-top: var(--space-4); display: grid; gap: var(--space-1); }
+.workspace-nav-footer > a, .workspace-nav-footer > .ui-menu > button { display: flex; align-items: center; gap: var(--space-2); padding: 6px var(--space-2); min-height: 36px; color: var(--text-2); text-decoration: none; }
+.workspace-nav-footer > .ui-menu { display: flex; }
+.workspace-nav-footer .ui-menu-panel { top: auto; bottom: 100%; left: 0; right: auto; }
+.workspace-nav.has-pm-context .workspace-tree-scroll { flex: 1 0 auto; }
+.workspace-nav.has-pm-context .workspace-tree-empty { font-size: var(--fs-small); }
+.pm-project-views { display: flex; flex-direction: column; gap: var(--space-1); border: 0; margin: 0; padding: 0; }
+.pm-project-views button { display: flex; justify-content: flex-start; gap: var(--space-3); text-align: left; min-height: 36px; width: 100%; padding: 6px var(--space-2); color: var(--text-2); border: 0; background: transparent; font-size: var(--fs-body); }
+.pm-project-views button[aria-current=page], .pm-project-views button[aria-current=page]:hover:not(:disabled) { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.shell-all-projects { display: block; padding: var(--space-2); font-size: var(--fs-small); text-decoration: none; color: var(--text-2); }
+body.has-workspace main { min-width: 0; max-width: 1600px; width: 100%; margin: 0 auto; padding: var(--space-6); }
+body.pm-mode #main { padding: 0; }
+.pm-shell { display: block; min-height: calc(100dvh - 48px); }
+.pm-main { padding: var(--space-6); min-width: 0; }
+.pm-shell > aside { display: none; }
+.pm-main > .ui-page-header { border: 0; }
+.pm-workspace-list { display: grid; gap: var(--space-2); margin-bottom: var(--space-4); }
+.pm-thread-link { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-3); border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.pm-thread-link:hover { background: var(--surface-2); }
+.pm-thread-link small { flex: none; }
+.shell-scrim { position: fixed; inset: 48px 0 0; background: var(--scrim); z-index: 35; }
+#workspace-menu { display: none; }
+@media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace { grid-template-columns: var(--workspace-sidebar-width, 232px) minmax(0, 1fr); } }
+@media (max-width: 999px) {
+  .top { padding: 0 var(--space-3); gap: var(--space-2); }
+  .top .brand, .shell-pending, .shell-top-actions > .ui-icon-button, .shell-breadcrumb-divider, .shell-crumb-view { display: none; }
+  body.has-workspace #workspace { display: block; }
+  body.has-workspace .workspace-nav { display: none; position: fixed; inset: 48px auto 0 0; height: calc(100dvh - 48px); max-height: none; width: min(320px, calc(100vw - 44px)); z-index: 40; box-shadow: var(--shadow-overlay); }
+  body.workspace-nav-open .workspace-nav { display: flex; }
+  .shell-drawer-open { overflow: hidden; }
+  #workspace-menu, .pm-mode #workspace-menu { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border: 0; background: transparent; }
+  .shell-crumb-workspace { max-width: calc(100vw - 112px); white-space: normal; font-weight: 600; text-align: left; }
+  #nav > .ui-menu { min-width: 0; }
+  .shell-top-actions .live { font-size: 0; padding: var(--space-2); background: transparent; min-height: 44px; }
+  .live::before { width: 8px; height: 8px; }
+  body.has-workspace main, .pm-main { padding: var(--space-4); }
+  .workspace-resizer { display: none; }
+  .workspace-nav input { font-size: var(--fs-input-mobile); }
+  .pm-project-views button, .workspace-nav-footer > a, .workspace-tree-link, .workspace-tree-toggle { min-height: 44px; }
+}
+@media print { body.has-workspace #workspace { display: block; } .workspace-nav { display: none !important; } }
+/* Keep the drag target inside the scrolling rail's clip edge. */
+.workspace-nav .workspace-resizer { right: 0; width: 8px; }
+.pm-secondary-content.panel { border: 0; padding: var(--space-3) 0 0; margin: 0; background: transparent; }
+.pm-secondary-content > h2, .pm-secondary-content > header h2 { display: none; }
+.pm-primary-content > .pm-heading { border: 0; margin: 0 0 var(--space-3); }
+.pm-main > [data-pm-region] { min-width: 0; }
+.pm-report-tools .pm-workbench-toolbar { display: flex; align-items: stretch; }
+.pm-report-tools .pm-charter-save { flex-direction: column; }
+.pm-report-tools select { width: 100%; }
+.ui-page-header .ui-menu-panel { z-index: 45; }
+.ui-inspector .pm-lifecycle { margin: 0; border: 0; padding: 0; }
+.ui-inspector .pm-lifecycle > h2 { display: none; }
+.pm-primary-content .pm-heading:empty { display: none; }
+.pm-charter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1199px) { .pm-charter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .pm-charter-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (min-width: 1200px) {
+  main:has(> .ui-inspector) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; }
+  main > .ui-inspector { grid-column: 2; grid-row: 1; }
+}
+
+/* One rail grid: 8px inset, 20px icon, 12px gap, then the text column. */
+.workspace-nav { --rail-icon: 20px; --rail-gap: var(--space-3); --rail-inset: var(--space-2); }
+.pm-project-views button, .workspace-nav-footer > a, .workspace-nav-footer > .ui-menu > button,
+.workspace-session-tree > summary, .workspace-read-error {
+  display: grid; grid-template-columns: var(--rail-icon) minmax(0, 1fr) auto;
+  column-gap: var(--rail-gap); align-items: center; padding: 6px var(--rail-inset); min-height: 36px;
+}
+.workspace-nav-footer .ui-icon { width: var(--rail-icon); height: var(--rail-icon); }
+.workspace-nav-footer > .ui-menu > button { width: 100%; text-align: left; justify-content: start; border: 0; }
+.workspace-session-tree > summary { list-style: none; color: var(--text-2); }
+.workspace-session-tree > summary::-webkit-details-marker, .workspace-read-error summary::-webkit-details-marker { display: none; }
+.workspace-session-tree[open] > summary > .ui-icon { transform: rotate(90deg); }
+.workspace-project-row { gap: var(--rail-gap); padding-left: var(--rail-inset); }
+.workspace-project-row > .workspace-tree-toggle { width: var(--rail-icon); min-width: var(--rail-icon); padding: 0; }
+.workspace-project-row > .workspace-tree-link { padding-left: 0; }
+.workspace-tree-link { gap: var(--rail-gap); padding-left: var(--rail-inset); padding-right: var(--rail-inset); }
+.workspace-tree-link > .workspace-dot { flex: 0 0 var(--rail-icon); background: none; display: grid; place-items: center; }
+.workspace-tree-link > .workspace-dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.workspace-tree-link > .workspace-dot.info::before { background: var(--info); }
+.workspace-tree-link > .workspace-dot.stale::before { background: var(--warn); }
+.workspace-project-row .workspace-dot { display: none; }
+.workspace-tree-hint, .workspace-session-group { padding-left: calc(var(--rail-inset) + var(--rail-icon) + var(--rail-gap)); margin-left: 0; font-size: var(--fs-small); }
+.workspace-read-error { color: var(--bad); align-items: start; }
+.workspace-read-error > .ui-icon { margin-top: 6px; }
+.workspace-read-error > details { min-width: 0; }
+.workspace-read-error summary { cursor: pointer; list-style: none; padding: 6px 0; font-size: var(--fs-caption); }
+.workspace-read-error p { font-size: var(--fs-caption); margin: var(--space-1) 0; }
+.workspace-read-error > .ui-icon-button { color: var(--text-2); }
+@media (max-width: 999px) {
+  .pm-project-views button, .workspace-nav-footer > a, .workspace-nav-footer > .ui-menu > button,
+  .workspace-session-tree > summary { min-height: 44px; }
+}
+
+/* Destination placement follows the breakpoint; the workspace menu lives in the rail. */
+.shell-pending, .shell-mobile-name { display: none; }
+.shell-crumb-workspace { text-decoration: none; flex-direction: row; }
+.shell-work-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.shell-work-header .shell-nav-label { margin-block: 0; }
+.shell-all-projects { display: flex; align-items: center; justify-content: flex-end; min-height: 44px; padding: 0 var(--space-2); font-size: var(--fs-caption); font-weight: 500; color: var(--text-2); }
+.shell-all-projects:hover { color: var(--accent); }
+.workspace-nav-heading { min-height: 32px; margin-top: 0; }
+.workspace-tree-link { height: 36px; min-height: 36px; padding-block: 0; gap: var(--space-2); }
+.workspace-tree-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; word-break: normal; }
+.workspace-tree-state { display: inline-flex; flex: none; align-items: center; gap: var(--space-1); white-space: nowrap; }
+.workspace-tree-state .workspace-dot { display: block; width: 6px; height: 6px; }
+.workspace-tree-toggle { height: 36px; min-height: 36px; }
+.workspace-project-row { margin-top: 0; }
+.workspace-project-row > .workspace-tree-link { padding-right: var(--space-2); }
+.workspace-tree ul ul { margin-left: calc(var(--rail-icon) + var(--rail-gap)); padding-left: 0; border-left: 0; }
+.workspace-nav { container-type: inline-size; }
+@container (max-width: 215px) { .workspace-tree-state-label { display: none; } }
+.workspace-binding-note { color: var(--text-2); font-size: var(--fs-caption); margin: 0 var(--space-2) var(--space-2); }
+@media (max-width: 999px) {
+  .shell-crumb-workspace { display: none; }
+  .shell-mobile-name { display: block; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; padding: 0; min-width: 0; min-height: 44px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+  .shell-top-actions .shell-pending { display: inline-flex; min-width: 44px; min-height: 44px; padding: var(--space-1); gap: var(--space-1); }
+  .workspace-nav-open .shell-pending { visibility: hidden; }
+  .workspace-tree-link, .workspace-tree-toggle { height: 44px; min-height: 44px; }
+}
+
+.workspace-project-row .workspace-tree-state .workspace-dot { display: block; }
+
+/* The sticky rail's surface continues through the entire document. */
+@media (min-width: 1000px) {
+  body.has-workspace #workspace::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--workspace-sidebar-width, 248px); background: var(--surface); border-right: 1px solid var(--line); pointer-events: none; }
+}
+@media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace::before { width: var(--workspace-sidebar-width, 232px); } }
+.workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
+.workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }

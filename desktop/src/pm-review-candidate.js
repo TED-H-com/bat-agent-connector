@@ -1,3 +1,4 @@
+import {button, iconButton, emptyState} from './ui/components.js';
 // A saved candidate is a fixed source. Only the destination and topic are chosen here.
 export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,labelled,event,errorBox,namespace}) {
   let dead=false,ticket=0,loaded=false,reading=false,thread=null,request=null,rows=[],next=null;
@@ -11,8 +12,8 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
   const key=`${namespace}.candidate-destination.${event.event_id}`;
   let selected='';try{selected=localStorage.getItem(key)||'';}catch{}
   const status=h('div',{role:'status'}),body=h('div'),chooser=h('select',{'aria-label':t('pmrv_idea_choose')}),pages=h('div');
-  const refresh=h('button',{type:'button',class:'secondary',onclick:()=>void load()},t('pmrv_idea_refresh'));
-  const element=h('details',{'data-review-candidate-import':event.event_id},h('summary',{},t('pmrv_add_to_idea')),
+  const refresh=iconButton({icon:'refresh-cw', label:t('pmrv_idea_refresh'), ...{type:'button',class:'secondary',onclick:()=>void load()}});
+  const element=h('details',{'data-review-candidate-import':event.event_id},h('summary',{class:'ui-button secondary ui-sm'},t('pmrv_add_to_idea')),
     h('p',{class:'muted'},t('pmrv_idea_help')),labelled('pmrv_idea_choose',chooser),h('div',{class:'actions'},refresh,pages),status,body);
   function controls(){chooser.disabled=reading||Boolean(request?.locked())||!can();refresh.disabled=reading||Boolean(request?.locked());}
   function update(){controls();request?.update();}
@@ -20,7 +21,7 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
     chooser.replaceChildren(h('option',{value:''},t('pmrv_idea_choose')),...rows.filter(row=>row.mode==='idea').map(row=>h('option',{value:row.thread_id},row.title)));
     if(selected&&![...chooser.options].some(row=>row.value===selected))chooser.append(h('option',{value:selected},t('pmrv_idea_saved')));
     chooser.value=selected;pages.replaceChildren();
-    if(next)pages.append(h('button',{type:'button',class:'secondary',onclick:()=>void load(true)},t('pmrv_idea_more')));
+    if(next)pages.append(button({variant:'secondary',size:'sm',label:t('pmrv_idea_more'),onClick:()=>void load(true)}));
     controls();
   }
   async function choose(){
@@ -36,7 +37,7 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
       const version=h('input',{type:'hidden',value:String(data.thread.version)});version.dataset.pmDefault=version.value;
       const stale=()=>Number(version.value)!==thread?.thread.version;
       const warning=h('p',{class:'muted'},t('pmrv_idea_stale'));
-      const rebase=h('button',{type:'button',class:'secondary',onclick:()=>{guard();if(request&&!request.locked()&&can()){request.set('version',String(thread.thread.version));sync();request.update();}}},t('pmrv_idea_use_version'));
+      const rebase=button({variant:'secondary',label:t('pmrv_idea_use_version'),onClick:()=>{guard();if(request&&!request.locked()&&can()){request.set('version',String(thread.thread.version));sync();request.update();}}});
       const sync=()=>{warning.hidden=rebase.hidden=!stale();rebase.disabled=!can()||Boolean(request?.locked());navigation();};
       request=form({action:'pm.input.record',target:{workspace_id:workspaceId,thread_id:selected},guard,
         namespace:`${namespace}.review-candidate.${event.event_id}`,fields:{slot,version},
@@ -59,7 +60,7 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
       if(data.workspace_id!==workspaceId||!Array.isArray(data.threads)||data.threads.some(row=>row.workspace_id!==workspaceId)
         ||data.next_cursor!=null&&(!/^pmt_[0-9a-f]{32}$/.test(data.next_cursor)||data.next_cursor===after))throw Error(t('pmrv_candidate_unavailable'));
       rows=more?[...rows,...data.threads.filter(row=>!rows.some(old=>old.thread_id===row.thread_id))]:data.threads;next=data.next_cursor;loaded=true;navigation();
-      if(!rows.some(row=>row.mode==='idea')&&!selected)status.replaceChildren(h('p',{class:'muted'},t('pmrv_idea_empty')));
+      if(!rows.some(row=>row.mode==='idea')&&!selected)status.replaceChildren(emptyState({title:t('pmrv_idea_empty')}));
       if(selected&&!more)await choose();
     }catch(error){if(n===ticket&&!dead){thread=null;request?.update();status.replaceChildren(errorBox(error));}}
     finally{reading=false;update();}

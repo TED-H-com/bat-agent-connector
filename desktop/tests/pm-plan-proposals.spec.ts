@@ -7,7 +7,7 @@ test('natural discussion prepares and adopts one whole reviewed plan without fie
   await editor(page,PROPOSE).getByRole('button',{name:'Prepare plan update',exact:true}).click();await expect(editor(page)).toBeVisible();
   const row=editor(page).locator('[data-proposal-candidate="login"]');await row.locator('summary').first().click();await row.getByLabel('Reviewed wording').fill('Paid members can log in using their existing account');
   await editor(page).getByLabel('Reason for adopting this update').fill('Adopt the focused paid-member flow and retain provider uncertainty');
-  await editor(page).getByRole('button',{name:'Adopt this update',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
+  await editor(page).getByRole('button',{name:'Adopt',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(2);
   expect(f.state.writes.map((w:any)=>w.body.action)).toEqual([PROPOSE,ADOPT]);const {params,preconditions,target}=f.state.writes[1].body;
   expect(target).toEqual({workspace_id:workspaceId,thread_id:threadId});expect(params.proposal_id).toBe(proposalId);
   expect(params.review.rows).toEqual([{key:'login',text:'Paid members can log in using their existing account',status:'user_confirmed',include:true},
@@ -28,12 +28,12 @@ test('ordinary requirement controls add criteria and keep excluded information o
   const req=editor(page).locator('[data-proposal-requirement]').last();await req.locator('summary').click();await req.getByLabel('Stable requirement ID').fill('password_reset');await req.getByLabel('Requirement source').selectOption('reset');
   await req.getByLabel('Acceptance criteria').selectOption(['reset']);await req.getByLabel('Depends on requirements').selectOption(['member_login']);
   expect(await req.getByLabel('Requirement source').locator('option[value="referral"]').count()).toBe(0);
-  await editor(page).getByLabel('Reason for adopting this update').fill('Select exact information and dependency');await editor(page).getByRole('button',{name:'Adopt this update',exact:true}).click();
+  await editor(page).getByLabel('Reason for adopting this update').fill('Select exact information and dependency');await editor(page).getByRole('button',{name:'Adopt',exact:true}).click();
   await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.review.requirements[1]).toEqual({id:'password_reset',source_key:'reset',acceptance_keys:['reset'],priority:'unresolved',depends_on:['member_login']});
 });
 test('excluding a selected prerequisite blocks apply until review is consistent',async({page})=>{
   const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);const row=editor(page).locator('[data-proposal-candidate="reset"]');await row.locator('summary').first().click();await row.getByLabel('Include in this plan').uncheck();
-  await expect(editor(page).getByRole('button',{name:'Adopt this update',exact:true})).toBeDisabled();await expect(editor(page)).toContainText('Select included information');expect(f.state.writes).toEqual([]);
+  await expect(editor(page).getByRole('button',{name:'Adopt',exact:true})).toBeDisabled();await expect(editor(page)).toContainText('Select included information');expect(f.state.writes).toEqual([]);
 });
 test('every requirement needs an acceptance criterion before adoption',async({page})=>{
   const f=proposalFixture();f.save();await mountProposal(page,f);await selectProposal(page);const req=editor(page).locator('[data-proposal-requirement]');await req.locator('summary').click();
@@ -105,7 +105,7 @@ test('removing original requirements is visible and included in the one reviewed
   p.document.removed_requirement_ids=['referral_codes'];await mountProposal(page,f);await selectProposal(page);const removed=editor(page).locator('[data-proposal-removed]');
   await expect(removed).toContainText('referral_codes');await expect(removed).toContainText('Original paid referral program');await editor(page).locator('[data-proposal-requirement]>summary').click();await editor(page).getByRole('button',{name:'Remove requirement',exact:true}).click();
   await expect(removed).toContainText('Original member login');await editor(page).getByLabel('Reason for adopting this update').fill('Explicitly replace the original commitments with reviewed scope');
-  await editor(page).getByRole('button',{name:'Adopt this update',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
+  await editor(page).getByRole('button',{name:'Adopt',exact:true}).click();await expect.poll(()=>f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.review.removed_requirement_ids).toEqual(['member_login','referral_codes']);
 });
 test('a proposal that omits original commitments without declaring removal fails closed',async({page})=>{

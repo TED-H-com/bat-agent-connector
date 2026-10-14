@@ -45,11 +45,12 @@ try {
   await page.locator('[data-observation="relations"] > summary').click();
   await expect(page.getByRole("link", {name: "h1/sess-claude-0001", exact: true})).toBeVisible();
   await page.getByRole("link", {name: "h1/sess-claude-0001", exact: true}).click();
+  await page.locator("[data-session-details] > summary").click();
   await page.getByRole("link", {name: "h1", exact: true}).click();
   await expect(page.getByRole("heading", {name: "h1 · Discovery coverage"})).toBeVisible();
   await expect(page.getByText("Outside this scan", {exact: true})).toBeVisible();
-  await page.locator(".workspace-tools > summary").click();
-  await page.getByRole("link", {name: "Sessions", exact: true}).click();
+  await page.getByRole('button', {name: 'Tools', exact: true}).click();
+  await page.getByRole("menuitem", {name: "Sessions", exact: true}).click();
   const inventoryRow = page.locator('[data-resource-id="h1/sess-claude-0001"]');
   await expect(inventoryRow).toBeVisible();
   await expect(inventoryRow).toContainText("Connector-managed");

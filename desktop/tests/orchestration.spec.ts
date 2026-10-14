@@ -2,6 +2,25 @@ import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {orchestrationFixture, openOrchestration, chooseTarget, fillOrchestration, operationId, childId} from './orchestration-fixture';
 const primary = (form: any) => form.locator('button.primary');
+for (const locale of ['en-US', 'zh-TW']) test(`orchestration receipt statuses use shared labels ${locale}`, async ({browser}) => {
+  const context = await browser.newContext({locale}), page = await context.newPage();
+  const state = await orchestrationFixture(page, false, {status:'needs_attention'});
+  const form = await openOrchestration(page, 'items');
+  await form.locator('select').first().selectOption('demo');
+  await expect(form.locator('select').nth(1)).toBeEnabled();
+  await form.locator('select').nth(1).selectOption('demo-ws');
+  await form.locator('.orch-item input').fill('Review login');
+  await form.locator('textarea').fill('Retain the original requirements.');
+  await form.locator('.orch-check input').last().check();
+  await primary(form).click();
+  await expect(form.locator(`a[href="#/op/${childId}"]`)).toContainText(locale === 'en-US' ? 'outcome unknown, reading back' : '結果不明，回查中');
+  const steps = form.locator('[data-orchestration-steps]');
+  await steps.locator('summary').click();
+  await expect(steps.locator('li')).toHaveText(locale === 'en-US'
+    ? ['fanout.start.prepare · done', 'child · done'] : ['fanout.start.prepare · 完成', 'child · 完成']);
+  expect(state.posts).toHaveLength(1); expect(state.errors).toEqual([]);
+  await context.close();
+});
 for (const native of [false, true]) for (const mode of ['relay', 'planner', 'items', 'failover']) {
   test(`${native ? 'native' : 'browser'} ${mode}: original envelope survives lost reply and changed selection policy`, async ({page}) => {
     const state = await orchestrationFixture(page, native, {lost: true}); const form = await openOrchestration(page, mode);

@@ -1,0 +1,87 @@
+import {expect, type Page, type Locator} from '@playwright/test';
+// Exercise the real shell and disclosures; never force clicks into a hidden view.
+export async function openPmSection(page: Page, view: string, section?: string) {
+  if (await page.locator('.ui-inspector[aria-modal=true]:visible').count()) await page.keyboard.press('Escape');
+  await expect(page.locator('.pm-main > .ui-page-header')).toBeVisible();
+  await expect.poll(() => page.locator('[data-pm-view]').count()).toBeGreaterThan(0);
+  const entry = page.locator(`[data-pm-view="${view}"]`);
+  if (!await entry.count()) return; // Capability-absence tests retain their zero-read assertions.
+  if (!await entry.isVisible()) await page.locator('#workspace-menu').click();
+  await entry.click();
+  // A thread route remounts the workspace asynchronously before its sections exist.
+  await expect(page.locator(`[data-pm-region="${view}"]`)).toBeVisible();
+  if (section && await page.locator(`[data-pm-view-tools="${view}"]`).count()) {
+    await page.locator(`[data-pm-view-tools="${view}"]`).click();
+    const item = page.locator(`[data-menu-key="${section}"]:visible`);
+    if (await item.count()) await item.click();
+    else await page.keyboard.press('Escape');
+    return;
+  }
+  if (section) {
+    const details = page.locator(`[data-pm-section="${section}"] > details`);
+    if (await details.count() && !await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator(':scope > summary').click();
+  }
+}
+export async function openPmPanel(page: Page, item: 'ui_change_phase' | 'ui_report' | 'ui_workspace_settings') {
+  if (await page.locator('.ui-inspector:visible').count()) await page.keyboard.press('Escape');
+  await expect(page.locator('.pm-main > .ui-page-header')).toBeVisible();
+  if (item === 'ui_report') {
+    await page.locator('[data-pm-report-menu]').click();
+    await page.locator('[data-menu-key=versions]').click();
+  } else {
+    await page.locator('[data-pm-overflow]').click();
+    await page.locator(`[data-menu-key=${item === 'ui_change_phase' ? 'phase' : 'settings'}]`).click();
+  }
+}
+// A withdrawn workspace removes the sidebar context. Exercise its bookmarked view
+// route anyway, so a hidden ancestor cannot make a source-withdrawal assertion pass.
+export async function expectPmWithdrawn(page: Page, view: string, selector: string, section?: string, facts: string[] = []) {
+  await page.evaluate(view => {const parts = location.hash.split('/'); const target = parts.slice(0, 3).join('/') + '/' + view; if (location.hash === target) window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = target;}, view);
+  await expect(page.locator(`[data-pm-region="${view}"]`)).toHaveJSProperty('hidden', false);
+  if (section && await page.locator(`[data-pm-view-tools="${view}"]`).count()) {
+    await page.locator(`[data-pm-view-tools="${view}"]`).click();
+    await page.locator(`[data-menu-key="${section}"]:visible`).click();
+  } else if (section) {
+    const fold = page.locator(`[data-pm-section="${section}"] > details`);
+    if (!await fold.evaluate(node => (node as HTMLDetailsElement).open)) await fold.locator(':scope > summary').click();
+  }
+  await expect(page.locator(selector)).toHaveJSProperty('hidden', true);
+  await expect(page.locator(selector)).toBeHidden();
+  for (const fact of facts) await expect(page.locator('#main')).not.toContainText(fact, {useInnerText: true});
+}
+
+export async function openThreadTab(page: Page, tab: 'context' | 'inputs' | 'plan') {
+  await expect(page.locator('[data-discussion-panel]')).toBeAttached();
+  if (!await page.locator('[data-discussion-panel]').isVisible()) await page.locator('[data-discussion-panel-toggle]').click();
+  const labels = {context: /^(Context|脈絡)$/, inputs: /^(Inputs|資訊)$/, plan: /^(Plan|計畫)$/};
+  await page.getByRole('tab', {name: labels[tab]}).click();
+}
+export async function openThreadAnalysis(page: Page) {
+  await openThreadTab(page, 'context');
+  const panel = page.locator('[data-pm-native-analysis]');
+  if (!await panel.count()) return;
+  const disclosure = panel.locator('..');
+  if (!await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) await disclosure.locator(':scope > summary').click();
+}
+export async function openThreadBrief(page: Page) {
+  await openThreadTab(page, 'plan');
+  const fold = page.locator('[data-pm-section=pm_brief_title] > details');
+  if (!await fold.evaluate(node => (node as HTMLDetailsElement).open)) await fold.locator(':scope > summary').click();
+}
+
+// A receipt may finish between the caller's count and this recovery step. Use
+// the stable form and one DOM task: its old accessible name may already be gone.
+export async function recoverOriginalAdoption(proposal: Locator, retryName: string) {
+  await proposal.locator('[data-pm-action="pm.conversation.adopt"]').evaluateAll((forms, name) => {
+    if (forms.length !== 1) return;
+    const form = forms[0], button = form.querySelector<HTMLButtonElement>('button[type=submit]');
+    if (!button || button.textContent !== name || form.closest('[hidden], [inert]')) return;
+    const disclosures: HTMLDetailsElement[] = [];
+    for (let parent = form.parentElement; parent; parent = parent.parentElement) {
+      if (parent instanceof HTMLDetailsElement && !parent.open) disclosures.unshift(parent);
+    }
+    for (const details of disclosures) details.querySelector<HTMLElement>(':scope > summary')?.click();
+    if (button.isConnected && !button.disabled && button.textContent === name
+      && button.getClientRects().length && getComputedStyle(button).visibility === 'visible') button.click();
+  }, retryName);
+}

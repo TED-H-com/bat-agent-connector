@@ -1,3 +1,4 @@
+import {openPmSection, openPmPanel} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
@@ -56,22 +57,25 @@ function fixture(verdict='rejected'){
 for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`original rejection to evidence and Brief ${native?'Tauri':'Web'} ${locale}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),f=fixture(),zh=locale==='zh-TW';
   await mountConversation(page,native,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);
+  await openPmSection(page, 'requirements', 'ui_quality');
   const quality=page.locator('[data-pm-quality-reviews]');
   await expect.poll(async()=>({options:await quality.locator('select').first().locator('option').count(),reads:f.state.reads,qualityReads:f.quality.state.reads})).toMatchObject({options:2});
   await quality.getByLabel(zh?'審查工作項目':'Work item for review',{exact:true}).selectOption(workId);
   await quality.getByLabel(zh?'已保存審查':'Saved review',{exact:true}).selectOption(f.review.review_id);
   await quality.getByRole('button',{name:zh?'使用這份評估':'Use this assessment',exact:true}).click();
+  await openPmSection(page, 'requirements', 'ui_evidence');
   await page.getByLabel(zh?'Connector 專案':'Connector project',{exact:true}).selectOption(projectId);
   await page.locator('[data-pm-work]>summary').click();
   const capture=page.locator('[data-pm-action="pm.evidence.capture"]');
   await capture.getByRole('button',{name:zh?'納入已選評估':'Include chosen assessment',exact:true}).click();
   f.state.lost=true;await capture.locator('button[type=submit]').click();await expect(capture).toContainText('Reply unavailable');
   const original=structuredClone(f.state.writes[0]);
-  await page.reload();await page.getByLabel(zh?'Connector 專案':'Connector project',{exact:true}).selectOption(projectId);
+  await page.reload();await openPmSection(page, 'requirements', 'ui_evidence');await page.getByLabel(zh?'Connector 專案':'Connector project',{exact:true}).selectOption(projectId);
   await page.locator('[data-pm-work]>summary').click();
   await capture.getByRole('button',{name:zh?'查回原請求':'Check original request',exact:true}).click();
   expect(f.state.writes[1]).toEqual(original);expect(original.body.params.quality_ref).toEqual(f.ref);
-  await page.locator('[data-pm-action="pm.snapshot.create"] button[type=submit]').click();
+  await openPmSection(page, 'overview');await openPmPanel(page, 'ui_report');
+  await page.locator('[data-pm-action="pm.snapshot.create"] button[type=submit]').click();await page.keyboard.press('Escape');
   const deviations=page.locator('[data-pm-brief-section="deviations"]');
   await expect(deviations).toContainText(zh?'審查者否決驗收條件':'Reviewer rejected acceptance criterion');
   await deviations.locator('[data-pm-brief-fact="quality_rejection"]>summary').first().click();
@@ -86,6 +90,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`origin
 for(const verdict of ['accepted','unassessed'])for(const locale of ['en','zh-TW'])test(`selected ${verdict} stays explicit in deviation coverage ${locale}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale}),page=await context.newPage(),f=fixture(verdict);f.state.snapshot=f.saved();
   await mountConversation(page,false,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);
+  await openPmSection(page, 'overview');
   const view=page.locator('[data-pm-brief-section="deviations"]');await view.locator('[data-pm-deviation-coverage]>summary').click();
   await expect(view).toContainText(locale==='en'?(verdict==='accepted'?'Accepted':'Unassessed'):(verdict==='accepted'?'符合':'尚未評估'));
   await expect(view).toContainText(locale==='en'?'does not establish that the project has no deviations':'不代表專案沒有偏差');
@@ -94,6 +99,7 @@ for(const verdict of ['accepted','unassessed'])for(const locale of ['en','zh-TW'
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`quality deviation layout ${locale} ${width}`,async({browser,baseURL},info)=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();f.state.snapshot=f.saved();
   await mountConversation(page,false,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);
+  await openPmSection(page, 'overview');
   const brief=page.locator('[data-pm-brief]'),deviations=brief.locator('[data-pm-brief-section="deviations"]');
   await expect(deviations).toContainText(locale==='en'?'Reviewer rejected':'審查者否決');
   await deviations.locator('[data-pm-deviation-coverage]>summary').click();

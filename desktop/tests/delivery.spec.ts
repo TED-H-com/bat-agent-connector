@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect} from "@playwright/test";
 
 for (const native of [false, true]) {
@@ -9,6 +10,7 @@ for (const native of [false, true]) {
       deploy_recipes: [{name: "prod", repository: "o/r", environment: "production", readiness: {ready: true}, rollback: {supported: true}}]};
     const dep = {deployment_id: "dep_" + "a".repeat(32), operation_id: "op_" + "a".repeat(32),
       recipe: "prod", environment: "production", repository: "o/r", state: "failed", provider_terminal: true,
+      created_at: Date.parse('2026-10-12T09:00:00Z') / 1000,
       identity: {source_sha: "9".repeat(40)}, rollback_eligible: true, rollback: {not_undone: ["database migrations"]}};
     let generation = 2, sequence = 0;
     const events: any[] = [], requests: any[] = [], writes: any[] = [], errors: string[] = [];
@@ -59,6 +61,10 @@ for (const native of [false, true]) {
     await page.goto("/dashboard/#/delivery");
     const card = page.locator('[data-environment="production"]');
     await expect(card).toContainText("Environment generation 2");
+    const created = card.locator('[data-deployment] time').first();
+    await expect(created).toHaveAttribute('datetime', '2026-10-12T09:00:00.000Z');
+    await expect(created).toHaveAttribute('title', /2026/);
+    await expect(card).not.toContainText('[object HTMLTimeElement]');
     const append = (resource_type: string) => { generation++; events.push({seq: ++sequence, resource_type,
       resource_id: dep.deployment_id, kind: "deployment.updated", payload: {}}); };
     append("deployment");
@@ -148,13 +154,13 @@ for (const native of [false, true]) {
     await expect.poll(() => historyReads).toBe(2);
     changed = true;
     await expect.poll(() => delivered).toBe(true);
-    await expect(page.locator("#live")).toContainText("Waiting to refresh");
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     // Both the failed environment read and its still-running history sibling belong to the barrier.
     expect(environmentReads).toBe(2);
     expect(await saved()).toEqual(checkpoints(0));
     release();
-    await expect(card).toContainText("UNAVAILABLE Environment refresh failed");
-    await expect(page.locator("#live")).toContainText("Central offline");
+    await expectErrorDetails(card, "Environment refresh failed", "UNAVAILABLE");
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/actions paused/);
     expect(await saved()).toEqual(checkpoints(0));
     failing = false;
     await expect.poll(saved, {timeout: 10000}).toEqual(checkpoints(1));

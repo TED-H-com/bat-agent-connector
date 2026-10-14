@@ -34,7 +34,7 @@ test('sidebar layout bounds respect min sidebar, max sidebar, and desktop main m
 });
 
 test('sidebar layout constants and storage keys are stable', () => {
-  assert.equal(DEFAULT_SIDEBAR_WIDTH, 260);
+  assert.equal(DEFAULT_SIDEBAR_WIDTH, 248);
   assert.equal(MIN_SIDEBAR_WIDTH, 200);
   assert.equal(MAX_SIDEBAR_WIDTH, 500);
   assert.equal(MIN_MAIN_WIDTH, 360);

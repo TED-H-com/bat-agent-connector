@@ -1,3 +1,34 @@
+import {emptyState, disclosure, statusPill} from './ui/components.js';
+import {timeStamp, timeLabel} from './ui/stamps.js';
+// Source records share a readable surface; the full identity remains copyable in Details.
+export function proof({h, t, value, name, kind}) {
+  const records = Array.isArray(value) ? value : [value];
+  const label = sourceKind => {
+    const key = 'pd_source_' + sourceKind, text = t(key);
+    return text === key ? t('pd_source_record') : text;
+  };
+  const technical = data => {
+    const rows = h('dl', {class: 'pd-source-facts'});
+    function visit(value, path = '') {
+      if (value && typeof value === 'object') {
+        for (const [key, child] of Object.entries(value)) visit(child, path ? path + ' · ' + key : key);
+      } else {
+        const stamp = /(?:_at|as_of)$/.test(path) && value != null ? timeStamp(value) : null;
+        rows.append(h('dt', {class: 'mono'}, path), h('dd', {class: 'mono'}, stamp || (value == null ? t('ui_status_unknown') : typeof value === 'boolean' ? t(value ? 'pd_yes' : 'pd_no') : String(value))));
+      }
+    }
+    visit(data); return rows;
+  };
+  return h('div', {class: 'pd-sources', 'data-readable-sources': ''}, ...records.filter(Boolean).map(row => {
+    const source = row.source || row.source_ref || row;
+    const title = row.title || row.name || name || row.text || row.value || source.label || source.ref;
+    const human = typeof title === 'string' && !/^(?:pm[a-z]*_|op_|wi_)[a-f0-9]{32}$|^[a-f0-9]{40,64}$|^[a-z][a-z\d+.-]*:\/\//i.test(title) ? title : t('ui_status_unknown');
+    const time = row.source_observed_at ?? row.observed_at ?? row.created_at ?? row.as_of;
+    return h('article', {class: 'pd-source-row'}, h('span', {class: 'ui-meta'}, label(kind || source.kind || row.source_kind)),
+      h('p', {}, human), h('div', {class: 'ui-meta'}, t('pd_source_time'), ' · ', time != null ? timeStamp(time) : statusPill('unknown')),
+      disclosure({label: t('pd_details'), body: technical(row)}));
+  }));
+}
 // All five Brief sections render one immutable snapshot, filtered for current source access.
 import {briefExport} from './pm-brief-export.js';
 import {labelSegment} from './label-text.js';
@@ -7,21 +38,38 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   let head = null, snapshot = null, signature = '', serial = 0, selectedSnapshotId = null;
   const title = input('pm_brief_snapshot_title', {max: 160, required: false});
   const view = h('div', {class: 'pm-brief-view'}), history = h('div'), status = h('div', {role: 'status'});
-  const create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
+  const pending = h('p', {id:'pm-brief-pending-'+workspaceId,class:'muted',hidden:true,'data-pm-brief-pending':''});
+  let create = null;
+  const canCreate = () => permitted(false) && caps()?.scopes?.includes('manage')
+    && caps()?.actions?.some(row => row.action === 'pm.snapshot.create' && row.allowed === true);
+  const updateCreate = () => {
+    if (!create) return;
+    const submit = create.box.querySelector('button[type=submit]'), recovering = create.locked();
+    // Hide unavailable write entry points. A retained original request keeps
+    // its recovery controls and draft, including while a fresh head is read.
+    create.box.hidden = !recovering && (!head || !canCreate());
+    submit.hidden = !recovering && !create.canSubmit();
+    pending.hidden = create.box.hidden || submit.hidden || !submit.disabled;
+    pending.textContent = t(create.checking() ? 'pd_report_pending' : 'pd_report_unavailable');
+    if (!pending.hidden) submit.setAttribute('aria-describedby',pending.id);
+    else submit.removeAttribute('aria-describedby');
+  };
+  create = form({action: 'pm.snapshot.create', target: {workspace_id: workspaceId}, fields: {title},
     params: values => values.title.trim() ? {title: values.title.trim()} : {},
     preconditions: () => ({expected_plan_version: head.version}),
     permitted: () => Boolean(head) && permitted(false), recoverPermitted: () => permitted(false),
     label: 'pm_brief_create', onSaved: async result => {await refresh(result.snapshot_id);},
+    onStateChange: updateCreate,
     extra: h('details', {}, h('summary', {}, t('pm_brief_name_optional')), labelled('pm_brief_snapshot_title', title))});
   const box = h('section', {class: 'pm-brief', 'data-pm-brief': ''}, h('header', {class: 'pm-heading'},
-    h('div', {}, h('h2', {}, t('pm_brief_title')), h('p', {class: 'muted'}, t('pm_brief_intro'))), create.box),
+    h('div', {}, h('h2', {}, t('pm_brief_title')), h('p', {class: 'muted'}, t('pm_brief_intro'))), h('div',{},create.box,pending)),
     status, view, h('details', {}, h('summary', {}, t('pm_brief_history')), history));
   const exports=caps?.()?.features?.pm_workspaces?.brief_export
     ?briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:error=>unavailable(error),errorBox}):null;
   if(exports)box.insertBefore(exports.element,box.lastChild);
   function withdraw(){++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();}
   function unavailable(error){withdraw();status.replaceChildren(errorBox(error));}
-  const stamp = value => typeof value === 'number' ? new Date(value * 1000).toLocaleString() : t('pm_evidence_time_unknown');
+  const stamp = value => timeStamp(value, {empty: t('pm_evidence_time_unknown')});
   const check = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const readable = (prefix, value) => {
     const present = labelSegment(value);
@@ -32,11 +80,11 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
   function render(data) {
     snapshot = check(data).snapshot;
     view.replaceChildren();status.replaceChildren();
-    if (!snapshot) {view.append(h('p', {class: 'muted'}, t('pm_brief_empty'))); exports?.update();return;}
+    if (!snapshot) {view.append(emptyState({title:t('pd_report_empty'),text:t('pd_report_empty_help')})); exports?.update();return;}
     if (snapshot.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     selectedSnapshotId=snapshot.snapshot_id;
     view.append(h('p', {class: 'pm-brief-date'}, h('strong', {}, snapshot.title || workspace().name), ' · ',
-      t('pm_brief_as_of', {time: stamp(snapshot.as_of)})), h('p', {class: 'muted'}, t('pm_brief_fixed')));
+      timeLabel(t, 'pm_brief_as_of', {time: stamp(snapshot.as_of)})), h('p', {class: 'muted'}, t('pm_brief_fixed')));
     const sections = h('div', {class: 'pm-brief-sections'});
     for (const name of ['goals','delivery','blockers','deviations','decisions']) {
       const section = snapshot.brief?.[name] || {status:'unavailable', items:[]};
@@ -47,10 +95,10 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       if (name==='deviations'&&section.version===1) values.append(h('p',{class:'muted'},t('pq_deviations_boundary')),
         h('details',{'data-pm-deviation-coverage':''},h('summary',{},t('pq_deviations_coverage')),
           h('p',{},t(section.coverage?.selected_source_coverage_complete?'pq_deviations_selected':'pq_deviations_partial')),
-          ...(section.coverage?.selections||[]).map(selection=>h('div',{},h('a',{href:`#/work/${selection.work_item_id}`},t('pm_evidence_open_work')),
+          ...(section.coverage?.selections||[]).map(selection=>h('div',{},h('a',{href:`#/item/${selection.work_item_id}`},t('pm_evidence_open_work')),
             h('p',{},selection.reason ? t('pq_deviation_reason_'+selection.reason) :
               `${t('pq_acceptance')}: ${t('pq_'+selection.acceptance)} · ${t('pq_dod')}: ${t('pq_'+selection.dod)}`))),
-          h('pre',{class:'pm-brief-proof'},JSON.stringify(section.coverage,null,2))));
+          proof({h,t,value:section.coverage,name:t('pq_deviations_coverage')})));
       for (const item of section.items || []) {
         const source = item.source || {}, details = h('div'), row = h('details', {'data-pm-brief-fact': item.kind || name},
           h('summary', {}, item.kind==='quality_assessment' ? t(item.details?.qualified?'pq_qualified':'pq_not_qualified') :
@@ -59,22 +107,12 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
         if(item.kind==='quality_rejection')details.append(h('p',{},t('pq_recorded_by',{actor:item.details.assessed_by})),
           h('p',{},item.details.assessment.rationale),h('p',{class:'muted'},t('pq_fixed')));
         if (item.status) details.append(h('p', {class: 'muted'}, item.kind==='quality_rejection'?t('pq_rejected'):readable('pm_status_', item.status)));
-        if (source.kind === 'plan_input') details.append(h('p', {class: 'muted'}, t('pm_brief_plan_source')),
-          h('code', {}, source.revision_id), h('p', {}, source.source_ref?.ref || source.source_ref?.message_id || ''));
-        else if (source.kind === 'plan_adoption') details.append(h('p', {class: 'muted'}, t('pm_brief_decision_source')),
-          h('code', {}, source.revision_id));
-        else if (source.kind === 'work_binding') details.append(h('a', {href: `#/work/${source.work_item_id}`}, t('pm_evidence_open_work')));
-        else if (source.kind === 'evidence') {
-          const evidence = (snapshot.evidence || []).find(row => row.evidence_id === source.evidence_id);
-          if (evidence) details.append(h('p', {class: 'muted'}, readable('pm_evidence_kind_', evidence.source_kind), ' · ', stamp(evidence.source_observed_at)));
-          details.append(h('code', {}, source.evidence_id));
-        }
-        const proof = source.kind === 'evidence' ? (snapshot.evidence || []).find(entry => entry.evidence_id === source.evidence_id)
+        const record = source.kind === 'evidence' ? (snapshot.evidence || []).find(entry => entry.evidence_id === source.evidence_id)
           : source.kind === 'plan_input' ? snapshot.baseline?.document?.selected_inputs?.find(entry => entry.input_id === source.input_id)
           : source.kind === 'plan_adoption' ? snapshot.baseline?.adoption : null;
-        if (proof) details.append(h('details', {}, h('summary', {}, t('pm_evidence_original')),
-          h('pre', {class: 'pm-brief-proof'}, JSON.stringify(proof, null, 2))));
-        if (item.details) details.append(h('pre', {class: 'pm-brief-proof'}, JSON.stringify(item.details, null, 2)));
+        details.append(proof({h, t, value: {...source, ...record, ...(item.details && item.kind !== 'quality_assessment' ? {assessment: item.details} : {})}, kind: source.kind,
+          name: source.kind === 'plan_adoption' ? snapshot.baseline?.document?.title : record?.value || source.source_ref?.ref || item.text}));
+        if (source.kind === 'work_binding') details.append(h('a', {href: `#/item/${source.work_item_id}`}, t('pm_evidence_open_work')));
         values.append(row);
       }
       if (!section.items?.length) values.append(h('p', {}, t(name==='deviations'&&section.version===1?'pq_deviations_empty':'pm_brief_empty_' + name)));
@@ -83,8 +121,8 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
     view.append(sections);
     const trace = h('details', {class: 'pm-brief-trace'}, h('summary', {}, t('pm_brief_coverage')),
       h('p', {class: 'muted'}, t('pm_brief_filtered')),
-      h('pre', {class: 'pm-brief-proof'}, JSON.stringify({coverage:snapshot.coverage,visibility:snapshot.visibility,
-        journal_cursor:snapshot.journal_cursor,snapshot_digest:snapshot.snapshot_digest,view_digest:snapshot.view_digest},null,2)));
+      proof({h, t, value: {coverage:snapshot.coverage,visibility:snapshot.visibility,
+        journal_cursor:snapshot.journal_cursor,snapshot_digest:snapshot.snapshot_digest,view_digest:snapshot.view_digest}, name: snapshot.title}));
     view.append(trace);
     exports?.update();
   }
@@ -94,7 +132,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       selectedSnapshotId=entry.snapshot_id;const ticket=++serial;snapshot=null;signature='';view.replaceChildren();exports?.update();
       try {const data=await api('GET',`${endpoint}/snapshots/${entry.snapshot_id}`);alive();if(ticket===serial)render(data);}
       catch(error){if(ticket===serial)unavailable(error);}
-    }}, `${entry.title || t('pm_brief_title')} · ${stamp(entry.as_of)}`));
+    }}, entry.title || t('pm_brief_title'), ' · ', stamp(entry.as_of)));
     if (page.next_cursor !== null && page.next_cursor !== undefined) {
       const more=h('button',{type:'button',class:'secondary',onclick:async()=>{
         more.disabled=true;

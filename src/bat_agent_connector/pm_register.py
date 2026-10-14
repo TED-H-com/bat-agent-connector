@@ -547,10 +547,16 @@ def _finding_row(ops, workspace_id, item, source_kind, ref, rules, policy_id, re
                 next_step=None, next_reason="not_recorded", created=None, updated=None, requirements=[], work_items=work,
                 prs=prs, actions=_finding_actions(ops, workspace_id, item, rules, policy_id, ref, reserved), steps=[],
                 refs=refs, resolved_at=None, blocking=blocking)
-    if row and pull_unknown:
+    if row is None:
+        return None
+    from .pm_maintenance_findings import display_identity
+    identity, gaps = display_identity(item, source_kind=source_kind)
+    # The client composes a localized name. Title stays unset.
+    row["finding"] = identity
+    row["unknowns"].update(gaps)
+    if pull_unknown:
         row["unknowns"]["pull_requests"] = "repository_name_not_stored"
-    if row:
-        row["_source_name"] = source_kind
+    row["_source_name"] = source_kind
     return row
 
 

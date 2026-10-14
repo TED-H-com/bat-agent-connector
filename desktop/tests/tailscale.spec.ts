@@ -30,7 +30,7 @@ async function setup(page:any,options:any={}) {
    throw Error('unexpected action');
   }}})});
  },{options,fleet});
- await page.goto('/dashboard/#/settings');await expect(page.getByRole('region',{name:'Tailscale',exact:true})).toBeVisible();
+ await page.goto('/dashboard/#/settings');if(!options.browser){await page.getByRole('link',{name:/^(Fleet|機群)$/}).click();await expect(page.getByRole('region',{name:'Tailscale',exact:true})).toBeVisible();}
 }
 const panel=(page:any)=>page.getByRole('region',{name:'Tailscale',exact:true});
 const calls=(page:any,action:string)=>page.evaluate((a:string)=>(window as any).__tailscale.calls.filter((c:any)=>c.action===a),action);
@@ -71,8 +71,8 @@ test('malformed draft cannot authorize another launch',async({page})=>{
 for(const state of [{supported:false,scope:null,can_open:false},{installation:'missing',can_open:false},{installation:'incomplete',can_open:false}])test(`unsupported or missing ${JSON.stringify(state)}`,async({page})=>{
  await setup(page,{state});await expect(panel(page).getByRole('button',{name:'Open Tailscale',exact:true})).toBeDisabled();expect(await calls(page,'open')).toHaveLength(0);
 });
-test('browser only explains the local native capability without IPC',async({page})=>{
- await setup(page,{browser:true});await expect(panel(page).getByRole('button')).toHaveCount(0);expect(await calls(page,'status')).toHaveLength(0);
+test('local browser setup has no unrelated Tailscale note or IPC',async({page})=>{
+ await setup(page,{browser:true});await expect(panel(page)).toHaveCount(0);expect(await calls(page,'status')).toHaveLength(0);expect(await calls(page,'open')).toHaveLength(0);
 });
 test('failed read blocks fresh opening and returning to page rereads',async({page})=>{
  await setup(page);await page.evaluate(()=>{(window as any).__tailscale.failRead=true});await refresh(page);await expect(panel(page).getByRole('button',{name:'Open Tailscale',exact:true})).toBeDisabled();await page.evaluate(()=>{(window as any).__tailscale.failRead=false;window.dispatchEvent(new Event('focus'));});await expect(panel(page).getByRole('button',{name:'Open Tailscale',exact:true})).toBeEnabled();

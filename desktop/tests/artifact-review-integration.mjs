@@ -28,7 +28,7 @@ try {
  await page.addInitScript(token=>{if(!sessionStorage.getItem('batc.dashboard.token'))sessionStorage.setItem('batc.dashboard.token',token);},fixture.token);
  await page.goto(origin+'/dashboard/#/session/h1/'+fixture.session_id);
  const sourceLink=page.getByRole('link',{name:"Capture and review this execution's file",exact:true});
- await page.locator('.workspace-evidence > summary').filter({hasText:/^Status and records$/}).click();await sourceLink.click();
+ await expect(sourceLink).toBeVisible();await sourceLink.click();
  let capture=page.locator('[data-managed-capture]');
  await capture.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify({execution_operation_id:fixture.execution_id}));
  await capture.getByRole('textbox',{name:'Relative file path'}).fill('result.bin');await capture.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(capture).toContainText(fixture.digest);

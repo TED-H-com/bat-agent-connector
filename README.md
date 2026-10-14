@@ -1,49 +1,65 @@
 # Better Agent Dashboard
 
-**Keep the plan, agent work and delivery evidence together.**
+**Understand the project. Discuss the problem. Decide with the PM.**
 
-**English** · [繁體中文](README.zh-TW.md) · [Website](https://teddashh.github.io/bat-agent-connector/) · [Install and start](docs/getting-started.md) · [Progress](docs/product/progress-2026-10-12.md)
+**English** · [繁體中文](README.zh-TW.md) · [Website](https://teddashh.github.io/bat-agent-connector/) · [Install and start](docs/getting-started.md) · [Progress](docs/product/progress-2026-10-14.md)
 
-Better Agent Dashboard is a project workspace for people working with coding agents. Discuss an idea, review a proposed plan, dispatch work into the agent's own workspace, and follow the result back to its requirements, tests and delivery. After release, adopted maintenance policies govern observations, repair work and review.
+Better Agent Dashboard keeps project state, PM discussions and decisions in one workspace.
+Start with the live Overview, open a problem's original record, and discuss it with the PM without rebuilding the context.
+Review the proposed update and explicitly adopt it; requirements, work and delivery keep their own evidence.
 
-![Project workspace: project tree, conversation, reply and linked results.](site/images/workspace-en.png)
+![Overview: live project progress, blockers and pending decisions.](site/images/overview-en.png)
 
-*Actual UI · synthetic demonstration data · [capture source](site/images/README.md).*
+*Actual shared UI · synthetic demonstration data · merged-main preview · [capture source](site/images/README.md).*
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** This introduction describes merged source, with screenshots captured from `66246031` (October 12, 2026). PM v1.2 is still being integrated. The [progress report](docs/product/progress-2026-10-12.md) separates the public baseline, M4/M5 candidates and remaining work. Choose a successful package for an exact source commit; a newer draft PR is not a released build.
+> **Development preview.** The screenshots come from merged `main` at `aba02180`.
+> Backend #132 merged on October 13, 2026; #134 merged on October 14. Frontend #133 merged
+> afterward on October 14 as `cb7e9f42`. Nothing is installed or live-tested.
+> The [progress report](docs/product/progress-2026-10-14.md) separates branch, merged, installed and live-tested status.
+> Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
 
 ## What it helps you answer
 
-| Your question | Product workflow |
+| Your question | View and workflow |
 | --- | --- |
-| What did we agree to build? | Idea discussions, source records, reviewable plan proposals and explicit adoption into the PM's own versioned documents. |
-| What should happen next? | Roadmap, Sprint commitments, Kanban and engineering packages reference the adopted requirements and fixed code destinations. |
-| What needs a decision? | Follow-up analysis presents sourced findings, open questions and candidate updates. You review the meaningful changes before adopting them. |
-| Does the result satisfy the plan? | Verification and responsible quality review record fixed evidence, criteria, reasons and acceptance. Passing tests alone does not accept a requirement. |
-| Can dependent work continue? | Explicitly selected accepted requirement evidence can satisfy a package's dependency; missing or inaccessible evidence remains a blocker. |
-| What actually shipped? | Integration, PR merge, deployment verification and release baselines retain their own evidence and history. |
-| What happens after release? | An adopted policy bounds maintenance sources, schedules, repair scope, budget and delivery. Findings and repair receipts feed Maintenance Review. |
-| Where did that session go? | The project tree connects work, conversations and results. Original operation IDs support recovery after refresh or a lost reply. |
+| Where does the project stand? | **Overview** shows the live goal, accepted requirements, blockers, open decisions and Recently decided history. Unread sources stay Unknown; complete empty lists say None recorded. Saved reports retain their fixed snapshots. |
+| What needs a decision? | Open a record and **Discuss with PM**. **Discussions** carries its context chip and automatic title into a reviewable proposal and explicit adoption. An adopted discussion can offer an authorized, editable Resolve issue step; reported resolution remains unassessed. |
+| What is this work meant to satisfy? | **Requirements** traces the adopted requirements through work, criteria, PRs and delivery in the RTM and inspector. |
+| What is still unresolved? | **Issues & changes** keeps risks, issues, actions, changes and decisions in a filterable register with original timelines and named maintenance findings. |
+| Which dates changed? | **Schedule** compares recorded baseline, forecast and actual dates on a labelled axis. Missing dates stay unknown. |
+| What could a dependency change affect? | **Dependencies** shows pinned inventories, evidence and bounded impact in a matrix or graph. |
+| What are the agents using? | **Agents** keeps sourced usage, rows and daily trends on one consistent read, with reported quota windows. Unavailable data stays unknown. |
+| What should happen next? | **Board** follows work by stage. Content approval, requirement acceptance, merge and deployment remain separate. |
+| What happened in that session? | **Session** keeps the conversation and results together. Authorized managed controls are available; manual BAT sessions remain read-only. |
 
-Project Brief, Sprint and Kanban already consume fixed quality records. The M4 candidate extends Roadmap quality and Brief deviation explanations, and verifies the joined lifecycle. See [current limitations](#current-scope-and-limits) before treating the whole workflow as complete.
+These are views of the same project, with secondary tools available on demand.
+The [current scope](#current-scope-and-limits) distinguishes the merged workspace from the full PM v1.2 backlog.
 
 ## Try one small project
 
-1. **Discuss the goal.** Create a PM workspace and an Idea thread. For a membership project, start with login and password reset; record what is outside the first release.
-2. **Review the plan.** Prepare a PM-owned Git worktree at a fixed revision. Ask for a proposal, inspect its sources, requirements and open questions, then explicitly adopt it.
-3. **Start bounded work.** Select the engineering package, repository, BAT host and workspace. Agents use their own managed resources; your checkout stays read-only to Connector.
-4. **Evaluate the result.** Run the configured verifier or select original GitHub checks. Record a quality review against the fixed acceptance criteria and Definition of Done, then select that evidence for the work and dependencies.
-5. **Deliver and maintain.** Review the integration and PR, verify the release baseline, and adopt the maintenance policy. Review findings and repairs before deciding the next plan change.
+1. **Understand the state.** Create a workspace from the workspace switcher and start an Idea in Discussions. For member sign-in and password reset, record the goal and exclusions; use Overview once a plan is adopted.
+2. **Find one problem.** Open its record in Requirements, Issues & changes or Schedule. Inspect the linked evidence and what is still unknown.
+3. **Discuss with PM.** Use that record's Discuss action. Its source chip and title follow you into Discussions. Save a note, then ask the PM for a proposed update.
+4. **Review and adopt.** Prepare the PM-owned Git worktree at a fixed revision. Check sources, proposed wording, retained requirements and open questions. An authorized workspace owner explicitly adopts the reviewed update.
+5. **Follow the evidence.** Inspect the adopted requirements and their work in Requirements, Board and Session. Verification, requirement acceptance, PR merge and deployment each need their own record.
 
-Each stage uses the same project history. Discussion does not automatically adopt a plan; adopting a plan does not start work. A maintenance finding does not itself authorize a repair. [Step-by-step PM guide](docs/getting-started.md#try-one-pm-workflow).
+A discussion does not automatically adopt a plan; adoption does not start work or resolve its source issue. After adoption, an authorized person can explicitly report the issue resolved; this does not accept a requirement.
+Policy-bounded delivery and maintenance remain available through the project's secondary tools.
+[Step-by-step PM guide](docs/getting-started.md#try-one-pm-workflow).
 
-![PM planning: inspect a fixed draft and its sources before adoption.](site/images/pm-planning-en.png)
+![Discussion opened from a blocker: original context and an unadopted proposal ready for review.](site/images/discussions-en.png)
 
-![PM Kanban: follow work and its recorded evidence.](site/images/pm-kanban-en.png)
+![Requirements: expanded RTM row and bound work inspector with separate acceptance and delivery evidence.](site/images/requirements-en.png)
 
-![Project dispatch: instructions, destination and agent settings.](site/images/dispatch-en.png)
+| More views from the same synthetic project | Screenshot |
+| --- | --- |
+| Issues & changes | [Register](site/images/issues-en.png) |
+| Schedule | [Baseline, forecast and actual](site/images/schedule-en.png) |
+| Dependencies | [Pinned partial inventory graph](site/images/dependencies-en.png) |
+| Board | [Work by stage](site/images/board-en.png) |
+| Session | [Read-only manual BAT session](site/images/session-en.png) |
 
 ## Install and connect
 
@@ -90,12 +106,16 @@ flowchart TB
 
 | Status | Scope |
 | --- | --- |
-| Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. |
+| Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
+| Merged workspace | Live Overview, source-bound Discussions and adoption, Requirements inspector, register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough and rounds 5b/6, merged as `cb7e9f42` on October 14, 2026. It is not installed or live-tested. |
 | M4 candidate | Joined Idea → delivery → maintenance → Review → new Idea flow; original runtime completion, manual single-input activity observation, Roadmap quality and Brief deviations. Candidate checks and failures are recorded separately. |
 | M5 local candidate | Persistent workspace analysis-adapter choice and read-only observation of serial manual inputs. Focused checks passed; full candidate/platform validation remains. |
-| Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support and cross-CLI usage/efficiency reporting. |
+| Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |
 
-Cross-CLI token collection is **planned, not running**. Its purpose is to relate usage to accepted delivery and avoid redundant work. Missing usage must remain unknown; token traffic, estimated API prices and subscription quota are different measures. Model or effort changes need adopted policy and apply to future owned work. [Progress and priorities](docs/product/progress-2026-10-12.md).
+Local Codex/Claude usage collection exists; the redesign's Agents view adds sourced daily trends and reported quota windows.
+Remote collection and delivery-efficiency attribution remain planned.
+Missing usage stays unknown; observed tokens, API price estimates and subscription quota are different measures.
+No usage-driven model policy is active. [Progress and priorities](docs/product/progress-2026-10-14.md).
 
 Formal signing, Mac notarization, production update channels and Linux persistent native credential storage are outside the agreed delivery. Real-environment acceptance belongs to the owner and has not been claimed as passed. The full [PM v1.2 plan](docs/product/pm-v1.2-plan.md) remains the scope; M4 is one milestone.
 
@@ -112,7 +132,7 @@ A lost reply does not prove an action failed. Recover the original operation and
 | Need | Start here |
 | --- | --- |
 | Use the product | [First use](docs/getting-started.md) · [Windows Fleet](docs/windows.md) |
-| Understand progress | [Progress report](docs/product/progress-2026-10-12.md) · [PM status](docs/product/pm-v1.2-status.md) · [Implementation history](docs/product/implementation-status.md) |
+| Understand progress | [Progress report](docs/product/progress-2026-10-14.md) · [PM status](docs/product/pm-v1.2-status.md) · [Implementation history](docs/product/implementation-status.md) |
 | Continue development | [Sprint handoff](docs/handoff/2026-10-12-pm-v1.2.md) · [Adopted plan](docs/product/pm-v1.2-plan.md) · [Architecture decisions](docs/product/realignment-v2.md) |
 | Integrate an agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | Follow results | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |

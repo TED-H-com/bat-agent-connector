@@ -1,0 +1,19 @@
+.pm-work-layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; }
+.pm-work-inline { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.pm-work-pr { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.pm-work-pr .ui-context-chip { font-size: var(--fs-caption); white-space: nowrap; }
+.pm-work-inspector > header { flex-wrap: wrap; }
+.pm-work-inspector-actions { display: flex; align-items: center; gap: var(--space-2); flex-basis: 100%; }
+.pm-work-inspector .ui-inspector-body > section { padding-bottom: var(--space-4); margin-bottom: var(--space-4); border-bottom: 1px solid var(--line); }
+.pm-work-inspector .ui-inspector-body h3 { color: var(--text-3); font-size: var(--fs-caption); font-weight: 500; margin: 0 0 var(--space-2); }
+.pm-work-inspector h4 { font-size: var(--fs-small); font-weight: 600; margin: var(--space-3) 0 var(--space-2); }
+.pm-work-inspector p { margin: var(--space-2) 0; }
+.pm-work-inspector :is(p, a, time, pre, li) { overflow-wrap: anywhere; }
+.pm-work-inspector pre { white-space: pre-wrap; }
+.pm-work-inspector ul { padding-left: var(--space-4); }
+.pm-work-attempt { border-top: 1px solid var(--line); padding: var(--space-2) 0; }
+.pm-work-attempt p { margin: 0; }
+.pm-work-inspector .ui-menu-panel { left: 0; right: auto; max-width: min(320px, 80vw); }
+@media (min-width: 1200px) {
+  .pm-work-layout:has(> .pm-work-inspector) { grid-template-columns: minmax(0, 1fr) 400px; gap: var(--space-4); }
+}

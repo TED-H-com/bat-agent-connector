@@ -193,9 +193,23 @@ are hierarchy, not dependencies; creators/execution actors are not assignees.
 Missing capacity/cost is unknown, not zero. Additional W14 work must extend the
 existing authoritative contracts instead of creating a second progress engine.
 
-The column board keeps original runtime completion as a concise card summary;
-expanding the card reads the original receipts and manual observation controls.
-A source failure withdraws rows, column counts, board accounting and observer
-controls together; late receipt reads cannot restore them.
-Retained-session runtime labels are localized with the board, including
-Idle / 閒置中; source IDs and host/session identities remain unchanged.
+## UX v2 Requirements / Board integration
+
+The shared work inspector replaces inline execution disclosures. Its fixed order,
+keyboard behavior, complete/partial counts, session ownership labels and drawer
+entry points are specified in [the frontend design](../../desktop/DESIGN.md#requirements-and-board).
+Read-only joins use original work bindings, session resource IDs and engineering
+receipts. A linked task in `blocked` state is a recorded blocker; a generic work
+`waiting` column is not. The projection supplies neither the task's blocking reason
+nor execution start/end or PR CI results, so the client keeps these unknown. It
+never derives an agent from a session name or an assignee from an execution actor.
+
+M4 retains original-turn completion as a concise card fact. Exact activity receipts,
+localized retained-session runtime labels (including Idle / 閒置中), and the existing
+manual single-input observation form live in the shared inspector's Details.
+Manual sessions remain read-only; recording quiescence grants no session control,
+quality acceptance or proof of process termination. Read-only members have no new
+observation entry point, but may recover an authorized original receipt. A source
+failure withdraws rows, lane counts, accounting, inspector facts and observation
+controls together. Late responses cannot restore them. Drafts and unknown admissions
+retain their original source and operation key; acknowledged receipts recover by GET.

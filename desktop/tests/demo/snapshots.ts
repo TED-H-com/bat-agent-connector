@@ -29,7 +29,7 @@ function snapshot(project: DemoProject, sequence: number, snapshotId: string, ti
     journal_cursor: 40 + sequence, template_version: 1, snapshot_digest: digest(100 + sequence), view_digest: digest(200 + sequence),
     created_by: project.ids.actor, operation_id: hexId('op_', 100 + sequence, 32),
     baseline: {status: 'accepted', document_revision: plan.revision_id, document: plan.document, adoption: plan.adoption},
-    evidence: [], coverage: {cost: 'unknown'}, visibility: {restricted: false}, brief,
+    projects: [], work: [], evidence: [], coverage: {cost: 'unknown'}, visibility: {restricted: false}, brief,
   };
 }
 

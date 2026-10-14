@@ -20,7 +20,7 @@ for (const width of [390, 768, 1440]) {
         {sessions: [], operations: [], hosts: [], work_items: []}});
     });
     await page.goto("/dashboard/");
-    await expect(page.getByRole("heading", {name: "Connection"})).toBeVisible();
+    await expect(page.getByRole("heading", {name: "BAT Dashboard"})).toBeVisible();
     await page.locator('input[type="password"]').fill("fixture-token");
     await page.getByRole("button", {name: "Connect", exact: true}).click();
     await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
@@ -50,7 +50,7 @@ test("desktop UI uses IPC without a WebView credential", async ({page}) => {
   await page.route("**/api/v1/**", route => { networkCalls++; return route.abort(); });
   await page.goto("/dashboard/");
   await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
-  await page.getByRole("link", {name: "Connection", exact: true}).click();
+  await page.locator("#live").click();
   await expect(page.getByRole("heading", {name: "Desktop central connection"})).toBeVisible();
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
   expect(networkCalls).toBe(0);
@@ -72,8 +72,12 @@ test("browser retains observation compatibility when an older central has no boo
   });
   await page.goto("/dashboard/");
   await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
-  await page.getByRole("link", {name: "Connection", exact: true}).click();
-  await expect(page.getByText(/Connected as/)).toBeVisible();
+  await page.locator("#live").click();
+  await expect(page.locator('[data-connection-access]')).toHaveText('View · Operate');
+  await expect(page.locator('[data-connection-access]').locator('xpath=preceding-sibling::dt[1]')).toHaveText('Access');
+  await page.locator('[data-settings-panel=connection] details > summary').click();
+  await expect(page.locator('[data-settings-panel=connection]')).toContainText('fixture-operator');
+  await expect(page.locator('[data-settings-panel=connection]')).toContainText('observe, operate');
 });
 
 test("lost operation reply preserves draft and idempotency key across reopening", async ({page}) => {
@@ -99,10 +103,14 @@ test("lost operation reply preserves draft and idempotency key across reopening"
   const draft = page.locator("textarea").first();
   await draft.fill("Fixture task instructions");
   await page.getByRole("button", {name: "Send", exact: true}).click();
-  await expect(page.locator(".error")).toContainText("Failed to fetch");
+  const error = page.locator('.session-error');
+  await expect(error).toBeVisible();
+  await error.getByText('Error details', {exact: true}).click();
+  await expect(error.locator('details')).toContainText('Failed to fetch');
   await page.reload();
   await expect(draft).toHaveValue("Fixture task instructions");
   await page.getByRole("button", {name: "Send", exact: true}).click();
+  await page.locator(".session-send-record summary").click();
   await expect(page.getByText("op_" + "a".repeat(32), {exact: true})).toBeVisible();
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBeTruthy(); expect(keys[0]).toBe(keys[1]);

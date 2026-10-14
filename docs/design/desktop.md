@@ -313,6 +313,11 @@ converted to ICNS and a minimum system version of macOS 13. Native CI runs on ma
 for Apple Silicon and Intel separately; older supported OS versions are not yet exercised.
 The ordinary workflow sets `APPLE_SIGNING_IDENTITY=-` for an ad-hoc signature. This
 verifies bundle integrity but does not establish a Developer ID identity or notarization.
+The unsigned macOS package step passes `--verbose` so `bundle_dmg.sh` prints the `hdiutil`
+error. If that build fails, the job detaches only disk images this build attached under
+`/Volumes`, using `-force` only when a normal detach fails, removes partial DMG files,
+waits 10 seconds and runs the same verbose build once. Signed and notarized release
+workflows do not retry.
 See the upstream [DMG](https://v2.tauri.app/distribute/dmg/) and
 [macOS signing](https://v2.tauri.app/distribute/sign/macos/) contracts.
 

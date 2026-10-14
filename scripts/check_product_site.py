@@ -3,6 +3,8 @@
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -96,16 +98,20 @@ for path in SITE.glob("*.html"):
 for path in [
     ROOT / "README.md",
     ROOT / "README.zh-TW.md",
+    ROOT / "CHANGELOG.md",
     ROOT / "docs/getting-started.md",
     ROOT / "docs/getting-started.zh-TW.md",
     ROOT / "docs/windows.md",
     ROOT / "docs/windows.zh-TW.md",
     ROOT / "docs/design/managed-installation.md",
     ROOT / "docs/product/progress-2026-10-12.md",
+    ROOT / "docs/product/progress-2026-10-14.md",
+    ROOT / "docs/product/implementation-status.md",
     ROOT / "docs/product/pm-v1.2-status.md",
     ROOT / "docs/product/pm-v1.2-history-through-2026-10-12.md",
     ROOT / "docs/handoff/2026-10-12-pm-v1.2.md",
     SITE / "README.md",
+    SITE / "DESIGN.md",
     SITE / "images/README.md",
 ]:
     for value in re.findall(r"\]\(([^\s)]+)\)", path.read_text()):
@@ -114,15 +120,66 @@ for path in [
 manifest = json.loads((SITE / "images/manifest.json").read_text())
 expected_images = {
     f"{view}-{lang}.png"
-    for view in ("workspace", "dispatch", "pm-planning", "pm-kanban")
+    for view in ("overview", "discussions", "requirements", "issues", "schedule", "dependencies", "board", "session")
     for lang in ("en", "zh")
 }
 if {entry["file"] for entry in manifest["images"]} != expected_images:
-    errors.append("Screenshot manifest must describe all eight public images.")
+    errors.append("Screenshot manifest must describe all sixteen public images.")
+if len(manifest["images"]) != len(expected_images):
+    errors.append("Screenshot manifest contains missing or duplicate images.")
+for field, expected in {"synthetic_data": True, "native_or_live_acceptance": False,
+                        "dom_content_modified": False, "timezone": "UTC"}.items():
+    if manifest.get(field) != expected:
+        errors.append(f"Screenshot manifest has an invalid {field} guarantee.")
+if not re.fullmatch(r"[0-9a-f]{40}", manifest.get("frontend_source_commit", "")):
+    errors.append("Screenshot manifest must pin a full source commit.")
+if manifest.get("source_pin_kind") != "merged":
+    errors.append("Public screenshots must use a merged source pin.")
+if manifest.get("frontend_source_commit") != "aba02180e872f798ea54aa003b267b14eb7f5018":
+    errors.append("Public screenshots must pin merged main at aba02180.")
 for entry in manifest["images"]:
     path = SITE / "images" / entry["file"]
     if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
         errors.append(f"Screenshot does not match its capture manifest: {entry['file']}")
+    language = "zh-TW" if entry["file"].endswith("-zh.png") else "en-US"
+    if entry.get("locale") != language or entry.get("theme") != "light" or entry.get("viewport") != {"width": 1440, "height": 960}:
+        errors.append(f"Screenshot has incorrect capture settings: {entry['file']}")
+    checks = entry.get("responsive_checks", [])
+    if [check.get("viewport") for check in checks] != [390, 768, 1440] or any(
+        check.get("horizontal_overflow") is not False or check.get("content", float("inf")) > check.get("viewport", 0)
+        for check in checks
+    ):
+        errors.append(f"Screenshot is missing passing responsive checks: {entry['file']}")
+
+
+GIT = shutil.which("git")
+if GIT is None:
+    raise SystemExit("Git is required to check screenshot capture sources.")
+
+
+def pinned(spec, text=False):
+    # Resolved executable and fixed read-only verbs.
+    result = subprocess.run([GIT, "-C", str(ROOT), *spec], capture_output=True, text=text)  # noqa: S603
+    return result.stdout if result.returncode == 0 else None
+
+
+# capture_site.mjs requires these paths to equal the pinned commit and reads its tooling from the checkout.
+# Hash frontend sources at the merged pin, so later documentation commits can check the gallery.
+PINNED_PATHS = ("desktop/src/", "desktop/tests/demo/", "src/bat_agent_connector/dashboard/")
+commit = manifest.get("frontend_source_commit", "")
+if pinned(["cat-file", "-e", f"{commit}^{{commit}}"]) is None:
+    errors.append(f"Pinned frontend commit is unavailable; fetch {commit} before checking capture sources.")
+else:
+    if (pinned(["rev-parse", f"{commit}:desktop/src"], text=True) or "").strip() != manifest.get("frontend_source_tree"):
+        errors.append("Screenshot manifest tree does not match its pinned commit.")
+    for entry in manifest["source_files"]:
+        if entry["file"].startswith(PINNED_PATHS):
+            data = pinned(["cat-file", "blob", f"{commit}:{entry['file']}"])
+        else:
+            path = ROOT / entry["file"]
+            data = path.read_bytes() if path.is_file() else None
+        if data is None or hashlib.sha256(data).hexdigest() != entry["sha256"]:
+            errors.append(f"Capture source does not match its manifest: {entry['file']}")
 if errors:
     raise SystemExit("\n".join(errors))
 print(f"Checked {links} links and static assets; no missing local targets, fragments or duplicate IDs.")

@@ -68,7 +68,7 @@ Registry 從 reserve 記 creation snapshot 與實際 options。Resume 與 succes
 - MCP：`checkpoints_list`、`checkpoint_preview`、`checkpoint_create`、`work_continue_from_checkpoint`（後兩個與 `operation_submit` 同樣以 `BATC_API_TOKEN` 的身分執行，需要 `confirm=true`）。CLI：`batc checkpoint create|continue|list|show`。
 - `capabilities.features.checkpoints` 列出能接續的主機（有 SSH alias、managed root、write 與 orchestrate tier）。
 
-Dashboard 的 session 頁有「版本（checkpoint）」區塊：從最近的 commit 中選一個、寫下需求原文後記下版本；列出 checkpoint（來源已有更新的 commit 時會標示），展開後輸入指示即可開始。完成的操作頁有「開啟新 session」，新 session 頁標出它從哪個版本開出。
+Dashboard 的 session 頁有「檢查點」區塊：「記下這個版本」展開提交選單及需求原文；列表的「從這裡接續」在按鈕下方展開指示表單。執行限制放在收合的說明中，仍沿用相同 confinement 與原 operation key。來源已有更新的提交時會標示。接續結果顯示中央操作狀態，中央回傳新工作階段 ID 後才提供開啟連結；操作 ID 留在詳細資料。主機具備能力時不顯示無法開工的說明，檢查點說明的開合狀態依中央連線身分隔離。新 session 頁標出它從哪個版本開出。
 
 ## 設定
 

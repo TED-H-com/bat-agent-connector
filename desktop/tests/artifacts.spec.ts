@@ -1,3 +1,4 @@
+import {expectErrorDetails} from './api-error-assertions.ts';
 import {test, expect, type Page} from "@playwright/test";
 import {createHash} from "node:crypto";
 const aid = "art_" + "a".repeat(32), uploadId = "op_" + "b".repeat(32), applyId = "op_" + "c".repeat(32);
@@ -77,7 +78,7 @@ for (const native of [false, true]) {
     expect(state.bytes).toEqual([...binary]);
     expect(state.writes[0].body.params).toEqual({display_name: "binary-fixture.dat", media_type: "application/octet-stream", size_bytes: binary.length, expected_digest: digest});
     await page.getByRole("button", {name: "Save", exact: true}).click();
-    await expect(page.getByText("LOST Lost apply reply")).toBeVisible();
+    await expectErrorDetails(page, "Lost apply reply", "LOST");
     await page.reload();
     await page.getByRole("button", {name: "More", exact: true}).click();
     await expect(page.locator(".attachment-list")).toContainText(aid);
@@ -92,15 +93,19 @@ for (const native of [false, true]) {
   test(`continuation retry keeps reviewed source after reopening (${native ? "native" : "browser"})`, async ({page}) => {
     const state = await fixture(page, native);
     await page.goto("/dashboard/#/session/demo/session-1");
-    await page.getByRole("button", {name: "Start agent work from this version", exact: true}).click();
+    await page.getByRole("button", {name: "Start from here", exact: true}).click();
     await expect.poll(() => state.sourceReads).toBe(1);
     await page.getByPlaceholder("What should the agent do next…").fill("Use the original attached input");
     await page.getByRole("combobox", {name: "Agent"}).selectOption("codex");
     await page.getByRole("button", {name: "Start agent work", exact: true}).click();
-    await expect(page.getByText("LOST Lost apply reply")).toBeVisible();
+    const error = page.locator('[data-session-error=LOST]');
+    await expect(error).toContainText('Server error');
+    await error.getByText('Error details', {exact: true}).click();
+    await expect(error.locator('details')).toContainText('LOST');
+    await expect(error.locator('details')).toContainText('Lost apply reply');
     state.source = "2".repeat(40);
     await page.reload();
-    await page.getByRole("button", {name: "Start agent work from this version", exact: true}).click();
+    await page.getByRole("button", {name: "Start from here", exact: true}).click();
     await expect.poll(() => state.sourceReads).toBe(2);
     await expect(page.getByPlaceholder("What should the agent do next…")).toHaveValue("Use the original attached input");
     await expect(page.getByRole("combobox", {name: "Agent"})).toHaveValue("codex");
@@ -132,7 +137,7 @@ for (const native of [false, true]) {
     await page.getByRole("button", {name: "More", exact: true}).click();
     await page.locator('input[type="file"]').setInputFiles({name: "delayed.dat", mimeType: "application/octet-stream", buffer: binary});
     await expect.poll(() => page.evaluate(() => (window as any).fixtureReadingFile)).toBe(true);
-    await page.getByRole("link", {name: "Connection", exact: true}).click();
+    await page.locator("#live").click();
     await page.getByRole("button", {name: "Disconnect", exact: true}).click();
     state.actor = "second-artifact-person";
     if (!native) await page.locator('input[type="password"]').fill("second-fixture-token");

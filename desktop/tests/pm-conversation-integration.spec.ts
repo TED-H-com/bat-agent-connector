@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {structuredCapability,BAT} from './pm-structured-analysis-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
@@ -9,7 +10,14 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
   Object.assign(base.state,{actor:'owner',plans:true,start:true,bound:true});base.state.thread.version=4;proposal.save();
   const dispatch=async(input:any)=>{
     const path=new URL(input.path,'http://fixture').pathname;
-    if(path.includes('/conversation-proposals')||input.body?.action?.startsWith('pm.conversation.'))return proposal.dispatch(input);
+    if(path.includes('/conversation-proposals')||input.body?.action?.startsWith('pm.conversation.')){
+      const value=await proposal.dispatch(input);
+      if(input.body?.action===ADOPT&&value.data.operation?.status==='succeeded'){
+        const adopted=proposal.state.proposals.find((row:any)=>row.proposal_id===input.body.params.proposal_id);
+        Object.assign(adopted,{adoptable:false,adoptable_reason:'adopted',adopted_revision_id:value.data.operation.result.revision_id});
+      }
+      return value;
+    }
     const value=await base.dispatch(input);
     if(path===pmPath&&value.status===200)value.data.next_message_cursor=1;
     if(path==='/bootstrap'||path==='/capabilities'){
@@ -26,22 +34,24 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
   },(await dispatch({method:'GET',path:'/capabilities'})).data);
   await page.goto(pmRoute);
   const panel=page.locator('[data-pm-plan-proposals]');await expect(panel).toBeVisible();
-  await panel.getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(proposalId);
+  await openThreadTab(page,'plan');await page.locator('[data-proposal-history] > summary').click();await page.getByRole('combobox',{name:'Saved proposal',exact:true}).selectOption(proposalId);
   const apply=panel.locator(`[data-pm-action="${ADOPT}"]`);
   await expect(apply).toContainText('Add paid member login and password reset');
-  await apply.getByLabel('Reason for adopting this update').fill('Adopt this reviewed member flow');
+  await panel.locator('[data-proposal-review]').click();await apply.getByLabel('Reason for adopting this update').fill('Adopt this reviewed member flow');
   for(const width of [390,768,1440]){
     await page.setViewportSize({width,height:900});
     await page.evaluate(()=>window.scrollTo(0,0));
     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
     await page.screenshot({path:testInfo.outputPath(`${native?'native':'web'}-${width}.png`),fullPage:true});
   }
-  await apply.getByRole('button',{name:'Adopt this update',exact:true}).click();
+  await apply.getByRole('button',{name:'Adopt',exact:true}).click();
   await expect.poll(()=>proposal.state.writes.length).toBe(1);
   expect(base.state.writes).toEqual([]);
   expect(proposal.state.writes[0].body.params.review.rows.find((row:any)=>row.key==='referral').include).toBe(false);
   await expect(page.locator('.pm-notes')).toContainText('Visitors should find their first useful action');
-  await expect(panel.getByRole('combobox',{name:'Saved proposal',exact:true})).toHaveValue('');
+  await expect(panel.locator('[data-proposal-adopted]')).toBeVisible();
+  await expect(panel.locator('[data-status=adopted]')).toHaveText('Adopted');
+  await expect(panel.locator('[data-proposal-adopted-revision]')).toHaveAttribute('href', /revision=pmrev_7{32}$/);
   await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
   base.state.failRead=true;
   await page.getByRole('button',{name:'Load earlier notes',exact:true}).click();
@@ -63,10 +73,10 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`struct
   await mountConversation(page,native,dispatch);
   if(native)await page.addInitScript(caps=>{const ipc=(window as any).__TAURI_INTERNALS__,invoke=ipc.invoke;ipc.invoke=(command:string,args:any)=>command==='connector_connect'?Promise.resolve(caps):invoke(command,args);},(await dispatch({method:'GET',path:'/capabilities'})).data);
   await page.goto(pmRoute);const form=page.locator(`[data-pm-action="${PROPOSE}"]`),choice=form.locator('[data-pm-structured-analysis] select');
-  const heading=page.locator('[data-pm-plan-proposals] > h3'),title=locale==='zh-TW'?'從這段討論整理計畫':'Plan update from this discussion';
+  await openThreadTab(page,'plan');await page.locator('[data-proposal-prepare] > summary').click();const heading=page.locator('[data-discussion-proposal-tools] > header > h3'),title=locale==='zh-TW'?'計畫更新':'Plan updates';
   await expect(heading).toHaveText(title);
   await expect(choice).toBeEnabled();await choice.selectOption(BAT);await form.locator('textarea').fill('Prepare the original member-access conversation.');
-  await page.reload();await expect(heading).toHaveText(title);await expect(choice).toHaveValue(BAT);await expect(form.locator('textarea')).toHaveValue('Prepare the original member-access conversation.');
+  await page.reload();await openThreadTab(page,'plan');await page.locator('[data-proposal-prepare] > summary').click();await expect(heading).toHaveText(title);await expect(choice).toHaveValue(BAT);await expect(form.locator('textarea')).toHaveValue('Prepare the original member-access conversation.');
   await form.locator('button[type=submit]').click();await expect.poll(()=>proposal.state.writes.length).toBe(1);
   expect(proposal.state.writes[0].body.params.adapter).toBe(BAT);expect(base.state.writes).toEqual([]);
   }finally{await context.close();}

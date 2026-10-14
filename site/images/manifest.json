@@ -1,9 +1,10 @@
 {
   "schema": "public_ui_screenshots_v1",
-  "frontend_source_commit": "662460311345db7dd0a9fe65ea8010dc3e5e4897",
-  "frontend_source_tree": "fc56fb3fb1b44124813758a5cc0ea366e9793e1a",
-  "captured_at": "2026-10-12T17:46:31.295Z",
-  "fixture_clock": "2026-10-12T12:00:00Z",
+  "frontend_source_commit": "aba02180e872f798ea54aa003b267b14eb7f5018",
+  "source_pin_kind": "merged",
+  "frontend_source_tree": "994fdcc7081386d819c1670884df2f083fb67f5b",
+  "captured_at": "2026-10-14T09:49:32.530Z",
+  "fixture_clock": "2026-10-13T09:00:00.000Z",
   "timezone": "UTC",
   "browser": "156.0.8078.4",
   "node": "v24.21.0",
@@ -16,40 +17,100 @@
       "sha256": "8cda4fab28d4477d7c2e1504f737ed37a493a72378ee49e68c0b3c61735083b5"
     },
     {
-      "file": "desktop/tests/attention-fixture.ts",
-      "sha256": "bb7823856a329bc4eee89e17be297594f319495fd449c7fc774ac03635345c25"
+      "file": "desktop/src/pm-agents-trend.js",
+      "sha256": "b8f91cbd22ae728902ba424e12fae8c011b75473d5aeda6b605885c573b46894"
     },
     {
       "file": "desktop/tests/conversation-fixture.ts",
       "sha256": "560abaf94e41eb4d0352e851aa0a938b4d1f1ed1c2500380954f5048c7cea78e"
     },
     {
-      "file": "desktop/tests/pm-fixture.ts",
-      "sha256": "199c3508d0e2f6cd1a164c98e378d935f0eb942e1ebb14a0516a836ffa4c5489"
+      "file": "desktop/tests/demo/dependencies.ts",
+      "sha256": "0b8385cf938afe4bd584889e5c64b922aa325150af80a9a266d95363c9f7488c"
     },
     {
-      "file": "desktop/tests/pm-kanban-fixture.ts",
-      "sha256": "67366bba5cd219fdc0f01ed0906f21665aee0fe45fa87bbd45a82854cc4035c2"
+      "file": "desktop/tests/demo/discussions.ts",
+      "sha256": "3a38b72b0f9246bccbd6f70081d1d0dace6dd07992c0df7f1afedb77584dc952"
     },
     {
-      "file": "desktop/tests/repository-start-fixture.ts",
-      "sha256": "7dcecad95a266cd9226beada04ff26e70a69266cd52f12d2aea16d3609afa9bb"
+      "file": "desktop/tests/demo/global.ts",
+      "sha256": "17ea5317ac2d743121f59a5342368aec1111be31bd302f37fe13b9bccf1a709c"
     },
     {
-      "file": "desktop/tests/workspace-fixture.ts",
-      "sha256": "2c961c845474ef8d373d76b0dbb3101359f55769ffcd49dc3b3b75ee3c3292cc"
+      "file": "desktop/tests/demo/index.ts",
+      "sha256": "cf3b8a471d6d14eb9ebb31efd5144898c661d54fb3365036da43fa142248ecf8"
+    },
+    {
+      "file": "desktop/tests/demo/kanban.ts",
+      "sha256": "4880dc1921712d62c51549001a32299b424f1fa871aadb8e85e8ec4b3d55da2a"
+    },
+    {
+      "file": "desktop/tests/demo/overview.ts",
+      "sha256": "8cc6cd8cdcdf21f1e12ceacb53a32fc7111a14c1899d7f28443d10c4987a723f"
+    },
+    {
+      "file": "desktop/tests/demo/plans.ts",
+      "sha256": "d28e27ddc9b1f4d643d8fd384af2004e56cfba611695da8426e1f0472ca093b0"
+    },
+    {
+      "file": "desktop/tests/demo/project.ts",
+      "sha256": "ba60d0a00e97a5d960ce7ef8f9740ca1a3a20cbc6fdba941ef797e220184aeda"
+    },
+    {
+      "file": "desktop/tests/demo/quality.ts",
+      "sha256": "67e8d407d9bc6e861d81fc6bd2c01ea1a06b861cc2112c89e5a07642a025f617"
+    },
+    {
+      "file": "desktop/tests/demo/register.ts",
+      "sha256": "900f7391e4a98409f4e31f464414ab3ce4b7334656bc82d4b0645d6775293a22"
+    },
+    {
+      "file": "desktop/tests/demo/requirements.ts",
+      "sha256": "970d5e41aebfc7df259431da3d607b212a32a4f3cd812c1f179c1be7fe28acff"
+    },
+    {
+      "file": "desktop/tests/demo/resources.ts",
+      "sha256": "064cb6f6bd37df45b4f5132c1042d13046faddbf688bd30097d68d1c65460676"
+    },
+    {
+      "file": "desktop/tests/demo/roadmap.ts",
+      "sha256": "9b41eb17fb2aad0b15c9bd5e41e168e846e6aeebc440c80e00a22f5510d5cc24"
+    },
+    {
+      "file": "desktop/tests/demo/rtm.ts",
+      "sha256": "8ad8487db585126cbe684967ecce12c84d641144f0bd9004974b5cb143df7aff"
+    },
+    {
+      "file": "desktop/tests/demo/schedule.ts",
+      "sha256": "ae7af296c9db5faa5004fe436e377c94dc426f44ea1a5628e97d11dbee50b6da"
+    },
+    {
+      "file": "desktop/tests/demo/session-workspace.ts",
+      "sha256": "f68488763f7d44e1b77d3b05bce6f1bb6038028cf124445c623d9c7ea5d7f964"
+    },
+    {
+      "file": "desktop/tests/demo/sessions.ts",
+      "sha256": "4d12a306288c4fccde3bcd26767d75f1e0dcc593cbca05ca1e54cb65477b3761"
+    },
+    {
+      "file": "desktop/tests/demo/snapshots.ts",
+      "sha256": "c4e5de6092e4c2e9eee670cc4ea02611f5bd340f49eeb0c9cf1b2b0dc89e6a1b"
+    },
+    {
+      "file": "desktop/tests/demo/threads.ts",
+      "sha256": "67466c9b143d0cdfdcc016fca108a723547cf06a943977c2eef754f1c848ff69"
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "703f21b2a33ae00aef972a732e86202c46c136edda7eec2205cb2df276640b93"
+      "sha256": "430b618d59f3f3ef97143157d1b32f41f6e9760fa442815f243743c81942de11"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",
-      "sha256": "0de6a344293b2248ea73f1ca758a2746f5389ce65b3052e304db540a2628431c"
+      "sha256": "ff9a1b1f2105fbec3fef08cf938ea34c08be7309e35c3863da6ead6cd8c27a68"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.js",
-      "sha256": "5b1bd81f59bf0e81b99e179411bdf4141fca078ca52f49b18797c98b75d04470"
+      "sha256": "280f8c216dcda3a5f3d6f6ecd5f33d6cc0cd17a2f6872d40f3bba1b7f315a548"
     },
     {
       "file": "src/bat_agent_connector/dashboard/i18n.js",
@@ -57,25 +118,26 @@
     },
     {
       "file": "src/bat_agent_connector/dashboard/index.html",
-      "sha256": "89b85f1af8d00eee5ae1852ad072fbac56b110f2cff3bc490b2e0ad35f0c9673"
+      "sha256": "c95fdc193177a7dfcc768f121bdb8b012312defdb3846f3b0ce168a493fc56ca"
     }
   ],
   "images": [
     {
-      "file": "workspace-en.png",
-      "sha256": "758834ddd8e20c75d9406c5eccd3be5910fcb96466a115edee56f27074cbbb61",
-      "scenario": "workspace",
+      "file": "overview-en.png",
+      "sha256": "f97c01c518f84bfcf22154c1897282526290b4e4e059c77c8a83dea41beaaed5",
+      "scenario": "overview",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/work/prj_aaaaaaaaaaaaaaaaaaaa/execution/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001",
       "fixture_sources": [
-        "desktop/tests/workspace-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Project tree, original conversation and result inspector; ongoing synthetic work.",
+      "composition": "Live adopted-plan progress, one blocker, two pending decisions, named maintenance finding and recorded milestone dates; Recently decided derives from the demo plan adoption receipts, not the pending count. Not a saved report.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -95,20 +157,21 @@
       ]
     },
     {
-      "file": "dispatch-en.png",
-      "sha256": "84a3aa019c62f98213e5a790df221a6641cc7691124519bc6e5607cc210fa028",
-      "scenario": "dispatch",
+      "file": "discussions-en.png",
+      "sha256": "fcea3d162f1308593b9b7d0a031634069a58d4cbf3dc43092deb17dd817a6a70",
+      "scenario": "discussions",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/dispatch/prj_11111111111111111111",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/discussions/pmt_000000000000000000000000000002bf",
       "fixture_sources": [
-        "desktop/tests/repository-start-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Unsubmitted project dispatch form; no preview or execution requested.",
+      "composition": "Opened from the Overview blocker using its real Discuss link; automatic title, bound context chip and reviewable unadopted proposal. Three synthetic discussion operations; no adoption or dispatch.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -128,20 +191,21 @@
       ]
     },
     {
-      "file": "pm-planning-en.png",
-      "sha256": "000b211c8e96d0f74e11d8c76f67fe257211cf431d311233e82a4c0daa40d1cf",
-      "scenario": "pm-planning",
+      "file": "requirements-en.png",
+      "sha256": "5b096d2f27c5c40a6e8ef7ba74d3023bce06bf7e5994ac639db57c16af2bbc60",
+      "scenario": "requirements",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111/pmt_22222222222222222222222222222222",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/requirements?select=wi_00000000000000000001",
       "fixture_sources": [
-        "desktop/tests/pm-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Fixed, unadopted Planning revision with unresolved decisions; original plan disclosure opened and page scrolled to it.",
+      "composition": "Email sign-in requirement expanded, bound work inspector open; recorded acceptance, PR and deployment evidence stay distinct.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -161,21 +225,21 @@
       ]
     },
     {
-      "file": "pm-kanban-en.png",
-      "sha256": "f0b53e3bf37b9b9e11bb855163a220bec677afb594bf2404f2d05b8901de007a",
-      "scenario": "pm-kanban",
+      "file": "issues-en.png",
+      "sha256": "fa79bf4bac725b6c0075f8443e911bac36babf66c6b99ac21a681986293cca79",
+      "scenario": "issues",
       "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/issues",
       "fixture_sources": [
-        "desktop/tests/pm-fixture.ts",
-        "desktop/tests/pm-kanban-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Seven synthetic work items across the existing five workflow columns; quality remains unassessed, partial sources explicit.",
+      "composition": "Both demo register pages loaded: nine risks, issues, action, proposed change and decision records, including structured finding names; open items remain open.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -195,20 +259,21 @@
       ]
     },
     {
-      "file": "workspace-zh.png",
-      "sha256": "2a15ece9d79a9f55d506724748bdf1b85e4d4a487ac7f8c0947de0b3a3bcf2e5",
-      "scenario": "workspace",
-      "locale": "zh-TW",
+      "file": "schedule-en.png",
+      "sha256": "e3316524cf027b7f12b26aa0318d7cd2f4dc048fb98cb4c4e000f59237a7b52f",
+      "scenario": "schedule",
+      "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/work/prj_aaaaaaaaaaaaaaaaaaaa/execution/op_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/schedule",
       "fixture_sources": [
-        "desktop/tests/workspace-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Project tree, original conversation and result inspector; ongoing synthetic work.",
+      "composition": "Recorded baseline, forecast and actual timeline with readable date axis; Design review collapsed through its normal control to show Recovery review forecast three days late. Phone tracks share a fitted range. Undated session attempts remain unscheduled.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -228,20 +293,21 @@
       ]
     },
     {
-      "file": "dispatch-zh.png",
-      "sha256": "4b5dd8e1cd74b88826d09bbc0f0d43b521ba391afc60747ae799cc5a8de66724",
-      "scenario": "dispatch",
-      "locale": "zh-TW",
+      "file": "dependencies-en.png",
+      "sha256": "b0f2b217d8929bba3a0083f22eed0101af659dee01876bd9989e0631fca291aa",
+      "scenario": "dependencies",
+      "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/dispatch/prj_11111111111111111111",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/dependencies",
       "fixture_sources": [
-        "desktop/tests/repository-start-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Unsubmitted project dispatch form; no preview or execution requested.",
+      "composition": "Bounded graph of the pinned synthetic inventory; Partial remains visible, evidence styles distinguish verified lock versions, declarations and inferences.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -261,20 +327,21 @@
       ]
     },
     {
-      "file": "pm-planning-zh.png",
-      "sha256": "355146e7bde6eac57d77a3c1b9d38928a97037f7742f0a0eaf87b2cee52c308c",
-      "scenario": "pm-planning",
-      "locale": "zh-TW",
+      "file": "board-en.png",
+      "sha256": "9f1cfd8df85461151abdb99c8560f82b9eecc1cc7f2fb6fb4e313c60088adefd",
+      "scenario": "board",
+      "locale": "en-US",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111/pmt_22222222222222222222222222222222",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/board",
       "fixture_sources": [
-        "desktop/tests/pm-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Fixed, unadopted Planning revision with unresolved decisions; original plan disclosure opened and page scrolled to it.",
+      "composition": "Twelve synthetic work items in five workflow lanes; accepted content, work in review and waiting work keep their recorded states.",
       "responsive_checks": [
         {
           "viewport": 390,
@@ -294,21 +361,293 @@
       ]
     },
     {
-      "file": "pm-kanban-zh.png",
-      "sha256": "aa77bb6f74408981c42fe25b432d42114f8068da6bc53224408bb13f4ac76a54",
-      "scenario": "pm-kanban",
+      "file": "session-en.png",
+      "sha256": "f0ba9b8532f2525e792b47c34a40af998f76073b15660fd1876da08add3c1cb5",
+      "scenario": "session",
+      "locale": "en-US",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/session/demo-host/manual-reset-notes?from=overview",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Manual BAT session on demo-host, read-only transcript; no reply, answer or interrupt controls and no writes.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "overview-zh.png",
+      "sha256": "399b717e7ecd13e980bde450224ade12ef9ffe0cbce845ed79c43afee63e6dac",
+      "scenario": "overview",
       "locale": "zh-TW",
       "viewport": {
         "width": 1440,
         "height": 960
       },
       "theme": "light",
-      "route": "/dashboard/#/pm/ws_11111111111111111111111111111111",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001",
       "fixture_sources": [
-        "desktop/tests/pm-fixture.ts",
-        "desktop/tests/pm-kanban-fixture.ts"
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
       ],
-      "composition": "Seven synthetic work items across the existing five workflow columns; quality remains unassessed, partial sources explicit.",
+      "composition": "Live adopted-plan progress, one blocker, two pending decisions, named maintenance finding and recorded milestone dates; Recently decided derives from the demo plan adoption receipts, not the pending count. Not a saved report.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "discussions-zh.png",
+      "sha256": "e956d4dde8eb900b0c85aa47b694976177b44bd22a0e342b14650295474fefd8",
+      "scenario": "discussions",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/discussions/pmt_000000000000000000000000000002bf",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Opened from the Overview blocker using its real Discuss link; automatic title, bound context chip and reviewable unadopted proposal. Three synthetic discussion operations; no adoption or dispatch.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "requirements-zh.png",
+      "sha256": "772a0fa994e49b3ab6330e40f939e03c09eb071ecfdb90856129d8044dcacaa9",
+      "scenario": "requirements",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/requirements?select=wi_00000000000000000001",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Email sign-in requirement expanded, bound work inspector open; recorded acceptance, PR and deployment evidence stay distinct.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "issues-zh.png",
+      "sha256": "dd19eabf3f20b7879b20635a9c38331d70645b2ada70637c80ad6044455e29fe",
+      "scenario": "issues",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/issues",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Both demo register pages loaded: nine risks, issues, action, proposed change and decision records, including structured finding names; open items remain open.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "schedule-zh.png",
+      "sha256": "d5b255ef771ff1fd72f950cea364a036853ba5a0b1343dec9fa00efdd4c2935b",
+      "scenario": "schedule",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/schedule",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Recorded baseline, forecast and actual timeline with readable date axis; Design review collapsed through its normal control to show Recovery review forecast three days late. Phone tracks share a fitted range. Undated session attempts remain unscheduled.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "dependencies-zh.png",
+      "sha256": "a1a856e9e0fbdef7bed012c23daa7fb6f2ce23247029e6b85de4213a9c67d879",
+      "scenario": "dependencies",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/dependencies",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Bounded graph of the pinned synthetic inventory; Partial remains visible, evidence styles distinguish verified lock versions, declarations and inferences.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "board-zh.png",
+      "sha256": "cf64d3cc5be58f3a81c8665bc0cfef20b7f51ab8b81ace7231d3d6b96c9c3293",
+      "scenario": "board",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/pm/ws_00000000000000000000000000000001/board",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Twelve synthetic work items in five workflow lanes; accepted content, work in review and waiting work keep their recorded states.",
+      "responsive_checks": [
+        {
+          "viewport": 390,
+          "content": 390,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 768,
+          "content": 768,
+          "horizontal_overflow": false
+        },
+        {
+          "viewport": 1440,
+          "content": 1440,
+          "horizontal_overflow": false
+        }
+      ]
+    },
+    {
+      "file": "session-zh.png",
+      "sha256": "03979641bacd9d905166124463dde4d190ea0947e0591f882cc67b67411fdba0",
+      "scenario": "session",
+      "locale": "zh-TW",
+      "viewport": {
+        "width": 1440,
+        "height": 960
+      },
+      "theme": "light",
+      "route": "/dashboard/#/session/demo-host/manual-reset-notes?from=overview",
+      "fixture_sources": [
+        "desktop/tests/demo/index.ts",
+        "desktop/tests/conversation-fixture.ts"
+      ],
+      "composition": "Manual BAT session on demo-host, read-only transcript; no reply, answer or interrupt controls and no writes.",
       "responsive_checks": [
         {
           "viewport": 390,

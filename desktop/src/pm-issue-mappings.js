@@ -1,11 +1,12 @@
+import {iconButton, emptyState, skeleton} from './ui/components.js';
 // Publication uses the existing central operation; only explicitly entered text is public.
-import {firstLabel, joinLabel} from './label-text.js';
+import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/issue-mappings`;
   const id=/^pmim_[0-9a-f]{32}$/,revision=/^pmir_[0-9a-f]{32}$/,digest=/^[0-9a-f]{64}$/;
   let serial=0,loaded=false,rows=[],cursor=null,pages=1,filtered=false,packageRow=null,selectedId=null,current=null;
   const publishers=new Map(),cancellers=new Map(),status=h('div',{role:'status'}),catalog=h('div'),selected=h('div'),publication=h('div'),detail=h('div');
-  const refreshButton=h('button',{type:'button',class:'secondary',onclick:()=>void refresh()},t('pmi_refresh'));
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('pmi_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}});
   const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{pages++;void refresh();}},t('pmi_more'));
   const element=h('section',{'data-pm-issue-mappings':'',class:'pm-issues'},
     h('div',{class:'actions'},h('h3',{},t('pmi_title')),refreshButton),h('p',{class:'muted'},t('pmi_intro')),status,catalog,more,selected,publication,detail);
@@ -119,7 +120,7 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
       h('p',{class:'muted'},t('pmi_not_done')),
       fold('pmi_history',...record.revisions.map(item=>{
         const d=item.document,selected=d.selected;
-        return h('details',{},h('summary',{},`${t('pmi_revision')} ${item.sequence} · ${item.actor}`),
+        return h('details',{},h('summary',{},joinLabel([`${t('pmi_revision')} ${labelSegment(item.sequence)}`, item.actor])),
           selected.public_title?h('h4',{},selected.public_title):'',selected.public_body?h('pre',{class:'pm-note-text'},selected.public_body):'',
           selected.public_reason?h('pre',{class:'pm-note-text'},selected.public_reason):'',
           selected.rationale?h('p',{},t('pmi_private_reason'),': ',selected.rationale):'',
@@ -139,7 +140,7 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
   }
   function renderCatalog(){catalog.replaceChildren(...rows.map(row=>h('button',{type:'button',class:'secondary','aria-pressed':row.mapping_id===selectedId,
     onclick:()=>void selectMapping(row.mapping_id)},trackedIssue(row.document,stateLabel(row.document.state)))));
-    if(!rows.length)catalog.append(h('p',{class:'muted'},t('pmi_empty')));
+    if(!rows.length)catalog.append(emptyState({title:t('pmi_empty')}));
     if(filtered)catalog.append(h('p',{class:'muted'},t('pmi_filtered')));
   }
   function withdraw(){serial++;loaded=false;rows=[];cursor=null;filtered=false;current=null;catalog.replaceChildren();detail.replaceChildren();publication.replaceChildren();selected.replaceChildren();update();}
@@ -149,7 +150,7 @@ export function workspaceIssueMappings({h,t,api,alive,workspaceId,permitted,form
     try{await readSelected(ticket);if(!valid(ticket))return;loaded=true;renderCatalog();renderPublication();update();}catch(error){failure(error,ticket);}
   }
   async function refresh(){
-    withdraw();const ticket=serial;status.replaceChildren(h('p',{class:'muted'},t('pmi_loading')));
+    withdraw();const ticket=serial;status.replaceChildren(skeleton(2));
     try{
       let after=0;
       for(let page=0;page<pages;page++){

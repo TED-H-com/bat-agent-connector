@@ -761,7 +761,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("pm_maintenance_schedule_get", workspace_id=workspace_id)
 
     async def pm_overview_get(workspace_id: str) -> dict[str, Any]:
-        """Read live visible project status, separately from fixed saved reports."""
+        """Read live visible project status: confirmed adopted goal (governance.goal before goal/value/problem), progress with stable blocker impacts across plan revisions, pending attention and up to five recent decided plan/governance items with register refs. Incomplete decision totals stay null; inspect coverage. Separate from fixed saved reports; never collects or dispatches."""
         return await pm_daemon("pm_overview_get", workspace_id=workspace_id)
 
     async def pm_resources_get(workspace_id: str, since: str | None = None, until: str | None = None,
@@ -786,11 +786,11 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
 
     async def pm_register_list(workspace_id: str, type: str | None = None, status: str | None = None, owner: str | None = None,
                                q: str | None = None, after: str | None = None, limit: int = 50) -> dict[str, Any]:
-        """Read the issues, actions and changes register. This never discusses, repairs or dispatches."""
+        """Read the issues, actions and changes register. Finding rows keep title null and add a structured finding identity; do not invent an English name. This never discusses, repairs or dispatches."""
         return await pm_daemon("pm_register_list", workspace_id=workspace_id, type=type, status=status, owner=owner, q=q, after=after, limit=limit)
 
     async def pm_register_get(workspace_id: str, row_id: str) -> dict[str, Any]:
-        """Read one register row and the processing chain of its explicit links."""
+        """Read one register row and the processing chain of its explicit links. A finding row keeps title null and includes the same structured finding identity as the list."""
         return await pm_daemon("pm_register_get", workspace_id=workspace_id, row_id=row_id)
 
     async def pm_dependencies_get(workspace_id: str) -> dict[str, Any]:

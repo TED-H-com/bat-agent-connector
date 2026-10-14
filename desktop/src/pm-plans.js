@@ -1,3 +1,5 @@
+import {button, statusPill, disclosure} from './ui/components.js';
+import {discussionLabel} from './pm-discussions.js';
 import {planComparison} from './pm-plan-diff.js';
 import {messageBlocks} from './message-format.js';
 
@@ -27,8 +29,9 @@ export function planDocument(h, markdown) {
 }
 
 // Immutable central plan revisions, displayed beside the source discussion.
-export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox}) {
-  let head = null, capability = null, signature = '', busy = false;
+export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, form, input, labelled, permitted, refresh, errorBox, deferReads = false}) {
+  let head = null, capability = null, signature = '', busy = false, active = !deferReads;
+  const readers = new Map();
   const title = input('pm_revision_title', {max: 200, value: thread().thread.title});
   const markdown = input('pm_revision_markdown', {multiline: true, max: 128000, required: false});
   const structure = h('input', {type: 'hidden', value: '{}'}); structure.dataset.pmDefault = '{}';
@@ -39,32 +42,48 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
     preconditions: () => ({expected_version: thread().thread.version, expected_plan_version: head.version}),
     permitted: () => Boolean(head) && permitted(false) && thread().thread.mode === 'planning',
     onSaved: () => refresh(), extra: h('div', {class: 'pm-fields'}, labelled('pm_revision_title', title),
-      labelled('pm_revision_markdown', markdown), structure, h('p', {class: 'muted'}, t('pm_revision_draft_help')))});
+      labelled('pm_revision_markdown', markdown), structure, disclosure({label: t('pd_details'), body: h('p', {class: 'muted'}, t('pm_revision_draft_help'))}))});
   const draftBox = h('details', {'data-pm-revision-editor': ''}, h('summary', {}, t('pm_revision_new')), editor.box);
   const current = h('div', {'data-pm-accepted-plan': ''}), rows = h('div', {class: 'pm-revision-list'});
   const box = h('section', {class: 'pm-plans', 'data-pm-plans': ''}, h('h3', {}, t('pm_plan_versions')), current, draftBox, rows);
   const comparison = planComparison({h, t, api, alive, workspaceId, errorBox});
-  box.append(h('details', {'data-pm-plan-comparison': ''}, h('summary', {}, t('pm_compare_plans')), comparison.box));
+  const comparisonBox = h('details', {'data-pm-plan-comparison': ''}, h('summary', {}, t('pm_compare_plans')), comparison.box);
+  box.append(comparisonBox);
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans`;
 
   function revisionRow(summary) {
-    const detail = h('div'), item = h('details', {'data-pm-revision': summary.revision_id},
-      h('summary', {}, t('pm_revision_number', {number: summary.sequence}),
-        summary.revision_id === head.accepted_revision_id ? ' · ' + t('pm_plan_accepted') : ''), detail);
+    const detail = h('div', {class: 'pd-revision-detail', hidden: true});
+    const pill = h('span', {}, statusPill(summary.revision_id === head.accepted_revision_id ? 'accepted' : 'unknown'));
+    const open = button({variant: 'ghost', label: t('pm_revision_number', {number: summary.sequence}),
+      'data-pm-revision-open': '', 'aria-expanded': 'false', onClick: () => {
+        const show = detail.hidden;
+        for (const row of rows.querySelectorAll('[data-pm-revision]')) {
+          row.querySelector('.pd-revision-detail').hidden = true;
+          row.querySelector('[data-pm-revision-open]').setAttribute('aria-expanded', 'false');
+        }
+        detail.hidden = !show; open.setAttribute('aria-expanded', String(show));
+        if (show) void read();
+      }});
+    const compare = button({size: 'sm', variant: 'ghost', label: t('ui_compare'), 'data-pm-revision-compare': '', onClick: () => {
+      comparisonBox.open = true;
+      comparison.select(summary.revision_id, head.accepted_revision_id === summary.revision_id ? head.latest_revision_id : head.accepted_revision_id);
+    }});
+    const item = h('div', {'data-pm-revision': summary.revision_id}, h('div', {class: 'pd-revision-row'}, open, pill, compare), detail);
     let pending = false, fetched = false;
-    item.addEventListener('toggle', async () => {
-      if (!item.open || pending || fetched) return;
+    async function read() {
+      if (pending || fetched) return;
       pending = true;
       try {
         const data = await api('GET', `${endpoint}/${encodeURIComponent(summary.revision_id)}`);
         alive(); if (!item.isConnected) return;
         const plan = data.plan;
         if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t('pm_scope_mismatch'));
+        pill.replaceChildren(statusPill(plan.is_current_accepted ? 'accepted' : plan.status === 'adopted' ? 'historical' : plan.status === 'draft' ? 'draft' : 'unknown'));
         const document = plan.document, source = h('div', {class: 'pm-plan-domains'});
         for (const [domain, section] of Object.entries(document.sections || {})) {
-          source.append(h('details', {}, h('summary', {}, t('pm_slot_' + domain)),
+          source.append(h('details', {}, h('summary', {}, discussionLabel(t, 'pm_slot_', domain)),
             ...(section.statements || []).map(statement => h('p', {},
-              h('span', {class: 'chip'}, t('pm_status_' + statement.status)), ' ', statement.value,
+              h('span', {class: 'chip'}, discussionLabel(t, 'pm_status_', statement.status)), ' ', statement.value,
               h('small', {class: 'muted pm-source'}, [statement.source_ref?.ref || statement.source_ref?.message_id,
                 statement.source_ref?.path, statement.source_ref?.revision].filter(Boolean).join(' · ')))),
             section.coverage === 'unresolved' ? h('p', {class: 'muted'}, t('pm_plan_domain_unknown')) : ''));
@@ -110,14 +129,21 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
           adopt.update();
         }
         fetched = true;
-      } catch (error) {if (item.isConnected) detail.replaceChildren(errorBox(error));}
+      } catch (error) {if (item.isConnected) {
+        if ([403, 404].includes(error.status)) item.remove();
+        else {detail.replaceChildren(errorBox(error)); pill.replaceChildren(statusPill('unknown'));}
+      }}
       finally {pending = false;}
-    });
+    }
+    // List summaries omit adoption status. Read central evidence before labelling
+    // an older revision Historical or Draft; never infer it from its sequence.
+    readers.set(summary.revision_id, read);
+    if (active) queueMicrotask(() => {if (item.isConnected) void read();});
     return item;
   }
 
   function renderRows(page, append = false) {
-    if (!append) rows.replaceChildren();
+    if (!append) {rows.replaceChildren(); readers.clear();}
     rows.append(...(page.revisions || []).map(revisionRow));
     if (!rows.children.length) rows.append(h('p', {class: 'muted'}, t('pm_plan_no_revisions')));
     if (page.next_cursor !== null && page.next_cursor !== undefined) {
@@ -136,7 +162,9 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
     }
   }
 
-  return {box, update(page, accepted, capabilities) {
+  return {box, setActive(value) {active = value; if (active) for (const read of readers.values()) void read();},
+    open(id) {const row = [...rows.querySelectorAll('[data-pm-revision]')].find(node => node.dataset.pmRevision === id); if (row) {const control = row.querySelector('[data-pm-revision-open]'); if (control.getAttribute('aria-expanded') !== 'true') control.click(); control.focus();}},
+    update(page, accepted, capabilities) {
     if (page.workspace_id !== workspaceId || accepted.head.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
     if (page.head.accepted_revision_id !== accepted.head.accepted_revision_id) throw Error(t('pm_stale'));
     head = page.head; capability = capabilities; comparison.update(page);
@@ -145,7 +173,8 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
     if (signature !== nextSignature) {
       signature = nextSignature;
       current.replaceChildren(h('p', {}, h('strong', {}, accepted.plan ? accepted.plan.document.title : t('pm_plan_none_accepted'))));
-      if (accepted.plan) current.append(h('p', {class: 'muted'}, t('pm_plan_accepted'), ' · ', h('code', {}, accepted.plan.adoption.commit_sha)));
+      if (accepted.plan) current.append(h('p', {class: 'muted'}, t('pm_revision_number', {number: accepted.plan.sequence}), ' · ', t('pm_plan_accepted')));
+      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: async event => {const details = event.currentTarget.parentElement; try {await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);} catch (error) {if (details.isConnected) details.append(errorBox(error));}}}, t('pd_copy'))));
       renderRows(page);
     }
     editor.update();

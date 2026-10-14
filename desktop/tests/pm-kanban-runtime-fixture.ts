@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
 import {fixture as boardFixture,workId} from './pm-kanban-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
@@ -49,5 +50,5 @@ export async function mountRuntime(page:any,native:boolean,f:ReturnType<typeof r
   if(native)await page.addInitScript((caps:any)=>{const ipc=(window as any).__TAURI_INTERNALS__,invoke=ipc.invoke;
     ipc.invoke=(command:string,args:any)=>command==='connector_connect'?Promise.resolve(caps):invoke(command,args);
   },(await f.dispatch({method:'GET',path:'/capabilities'})).data);
-  await page.goto(route);
+  await page.goto(route);await openPmSection(page, 'board');
 }

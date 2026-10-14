@@ -1,14 +1,23 @@
+import {governanceContext} from './governance-context.ts';
+import {qualityReviews} from './quality.ts';
+import {overview, overviewGovernance} from './overview.ts';
+import {discussionDemo} from './discussions.ts';
 // One dispatcher for the member sign-in demo. Shapes come from the current central reads.
 // Unknown routes throw. A known id that is not in this project is a 404. Nothing here writes.
 import {demoProject, type DemoProject} from './project.ts';
 import {pagePlans, plans} from './plans.ts';
 import {pageSnapshots, snapshots} from './snapshots.ts';
-import {kanbanCard, kanbanPage} from './kanban.ts';
+import {requirementsCard as kanbanCard, requirementsBoard as kanbanPage, requirementsBrowserSession} from './requirements.ts';
 import {deliveryPage, issueMappings, pageIssues} from './rtm.ts';
 import {roadmap, roadmapRevisionList, roadmapView, workBindings} from './roadmap.ts';
+import {schedulePage} from './schedule.ts';
 import {resources} from './resources.ts';
 import {proposalDetail, proposalList, threadDetail, threadList, workspaceCapabilities} from './threads.ts';
-import {bootstrap, capabilities, events, projectDetail, projectList, sessionGet, sessionMessages, workItems, workspaceRecord} from './sessions.ts';
+import {registerDetail, registerList, registerMaintenanceRoutes} from './register.ts';
+import {bootstrap, capabilities, projectDetail, projectList, workItems, workspaceRecord} from './sessions.ts';
+import {dependencyDocument, dependencyImpact, dependencyRevisions} from './dependencies.ts';
+import {globalRoutes} from './global.ts';
+import {sessionWorkspace} from './session-workspace.ts';
 
 export interface DemoRequest {
   method?: string;
@@ -33,6 +42,14 @@ function segment(value: string) {
 
 function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   if (rest === '' || rest === '/') return ok({workspace: workspaceRecord(project)});
+  if (rest === '/quality-reviews') return ok(qualityReviews(project, url));
+  if (rest === '/overview') return ok(overview(project));
+  if (rest === '/governance') return ok({version: 1, workspace_id: project.ids.workspaceId, records: overviewGovernance(project), next_cursor: null});
+  const governance = rest.match(/^\/governance\/([^/]+)$/);
+  if (governance) {const row = overviewGovernance(project).find(row => row.record.record_id === governance[1]); return row ? ok({version: 1, workspace_id: project.ids.workspaceId, ...row}) : notFound();}
+  const governanceHistory = rest.match(/^\/governance\/([^/]+)\/history$/);
+  if (governanceHistory) {const row = overviewGovernance(project).find(row => row.record.record_id === governanceHistory[1]); return row ? ok({workspace_id: project.ids.workspaceId, record_id: row.record.record_id, context: row.record.context, revisions: [row.revision], next_cursor: null}) : notFound();}
+  const context = governanceContext(project, rest); if (context) return ok(context.data);
   if (rest === '/capabilities') return ok(workspaceCapabilities(project));
   if (rest === '/plans/head') return ok({version: 1, head: plans(project).head});
   if (rest === '/plans/accepted') {
@@ -81,6 +98,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     const found = roadmap(project).revisions.find(row => row.revision_id === segment(revision[1]));
     return found ? ok({version: 1, workspace_id: project.ids.workspaceId, revision: found}) : notFound();
   }
+  if (rest === '/schedule') return ok(schedulePage(project, url));
   if (rest === '/roadmap') return ok(roadmapView(project));
   if (rest === '/work') return ok(workBindings(project, url));
   if (rest === '/resources') return ok(resources(project, url));
@@ -90,6 +108,18 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
     const detail = proposalDetail(project);
     return segment(proposal[1]) === detail.proposal.proposal_id ? ok(detail) : notFound();
   }
+  if (rest === '/dependencies/revisions') return ok(dependencyRevisions(project, url));
+  if (rest === '/dependencies/impact') {
+    const key = url.searchParams.get('dependency') || '';
+    if (!/^pmdepkey_[0-9a-f]{32}$/.test(key)) return {status: 400, data: {error: {code: 'BAD_REQUEST', message: 'Invalid dependency'}}};
+    return ok(dependencyImpact(project, key));
+  }
+  if (rest === '/dependencies') return ok(dependencyDocument(project));
+  if (rest === '/register') return registerList(project, url);
+  const registerRow = rest.match(/^\/register\/([^/]+)$/);
+  if (registerRow) return registerDetail(project, segment(registerRow[1]));
+  const maintenance = registerMaintenanceRoutes(project, rest);
+  if (maintenance) return maintenance;
   if (rest === '/threads') return ok(threadList(project, url));
   const thread = rest.match(/^\/threads\/([^/]+)$/);
   if (thread) {
@@ -99,20 +129,25 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   throw new Error(`Unknown demo fixture route GET ${url.pathname}${url.search}`);
 }
 
-export function demoFixture({locale, now}: {locale?: string, now?: number} = {}) {
+export function demoFixture({locale, now, discussions = false, buckets = true, managedSession = false}: {locale?: string, now?: number, discussions?: boolean, buckets?: boolean, managedSession?: boolean} = {}) {
   const project = demoProject(locale, now);
+  const sessions = sessionWorkspace(project);
   const root = `/pm/workspaces/${project.ids.workspaceId}`;
   const dispatch = async (input: DemoRequest) => {
     const method = input.method || 'GET';
     const url = new URL(input.path, 'http://fixture');
     const path = url.pathname;
+    const action = input.body && typeof input.body === 'object' && 'action' in input.body ? String((input.body as {action?: unknown}).action || '') : '';
+    if (method === 'POST' && path === '/operations' && ['session.send', 'session.answer', 'session.interrupt'].includes(action))
+      return sessions.operate(input);
     if (method !== 'GET') throw new Error(`Demo fixture does not perform ${method} ${input.path}`);
     // Web boot probes a managed browser session. This demo uses the bearer token, so the
     // central answer is the ordinary missing-route 404 (no csrf, no managed session).
+    if (path === '/browser-session' && managedSession) return ok(requirementsBrowserSession(project));
     if (path === '/browser-session') return {status: 404, data: {error: {code: 'NOT_FOUND', message: 'no such route'}}};
-    if (path === '/capabilities') return ok(capabilities(project));
-    if (path === '/bootstrap') return ok(bootstrap(project));
-    if (path === '/events') return ok(events(url));
+    if (path === '/capabilities') return ok(capabilities(project, buckets));
+    if (path === '/bootstrap') return ok(bootstrap(project, buckets));
+    if (path === '/events') return ok(sessions.events(url));
     if (path === '/projects') return ok(projectList(project));
     if (path === `/projects/${project.ids.projectId}`) return ok(projectDetail(project));
     if (path.startsWith('/projects/')) return notFound();
@@ -121,21 +156,24 @@ export function demoFixture({locale, now}: {locale?: string, now?: number} = {})
       if (path !== root && !path.startsWith(`${root}/`)) return notFound();
       return workspaceRoutes(project, url, path.slice(root.length));
     }
+    const global = globalRoutes(project, url);
+    if (global) return global.status === 200 ? ok(global.data) : global;
     if (path === '/work-items') return ok(workItems(project, url));
     const messages = path.match(/^\/sessions\/([^/]+)\/([^/]+)\/messages$/);
     if (messages) {
-      const page = sessionMessages(project, segment(messages[1]), segment(messages[2]));
+      const page = sessions.messages(segment(messages[1]), segment(messages[2]));
       return page ? ok(page) : notFound();
     }
     const session = path.match(/^\/sessions\/([^/]+)\/([^/]+)$/);
     if (session) {
-      const page = sessionGet(project, segment(session[1]), segment(session[2]));
+      const page = sessions.document(segment(session[1]), segment(session[2]));
       return page ? ok(page) : notFound();
     }
     if (path === '/checkpoints') return ok({checkpoints: []});
     throw new Error(`Unknown demo fixture route ${method} ${input.path}`);
   };
-  return {dispatch, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates};
+  const discussion = discussions ? discussionDemo(project, dispatch) : null;
+  return {dispatch: discussion?.dispatch || dispatch, discussion: discussion?.state, locale: project.locale, now: project.now, copy: project.copy, ids: project.ids, dates: project.dates, appendSession: sessions.append};
 }
 
 // Workbench view names are in-memory. They are not URL selections, so charter/rtm/board/agents

@@ -1,3 +1,4 @@
+import {emptyState} from './ui/components.js';
 const kinds=['issues','dependabot_pull_requests','dependabot_alerts'];
 const states=['disabled','missing','complete','incomplete','stale','context_changed','stopped'];
 export function findingPolicyView({h,t,config}){
@@ -71,7 +72,7 @@ export function maintenanceFindingsView({h,t,workspaceId,data}){
       return detail;
     });
     rows.push(h('section',{},h('h5',{},t('pmf_'+kind)),h('p',{},t('pmf_state_'+source.status)),
-      source.status==='complete'&&!items.length?h('p',{class:'muted'},t('pmf_empty')):null,...items));
+      source.status==='complete'&&!items.length?emptyState({title:t('pmf_empty')}):null,...items));
   }
   return h('section',{'data-maintenance-findings':''},h('h4',{},t('pmf_title')),h('p',{class:'muted'},t('pmf_boundary')),
     ...(data.visibility_filtered?[h('p',{class:'muted'},t('pmf_hidden'))]:[]),...rows,

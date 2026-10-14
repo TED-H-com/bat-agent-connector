@@ -1,49 +1,65 @@
 # Better Agent Dashboard
 
-**把計畫、Agent 工作與交付證據放在一起。**
+**看懂專案、找到問題，與 PM 完成一次決策。**
 
-[English](README.md) · **繁體中文** · [網站](https://teddashh.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-12.md)
+[English](README.md) · **繁體中文** · [網站](https://teddashh.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-14.md)
 
-Better Agent Dashboard 是人與 coding agents 一起工作的專案工作空間。從討論構想、審閱計畫，到派工給 Agent 的自有工作區，都能把成果接回原需求、測試與交付紀錄。發布後，再依已採用的維護政策觀察問題、處理修復與進行 Review。
+Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作空間。
+先看即時總覽，找到問題，再從原紀錄直接與 PM 討論，不必重新整理脈絡。
+審閱提案後明確採用；需求、工作與交付仍各自保留證據。
 
-![專案工作空間：專案樹、對話、回覆與關聯成果。](site/images/workspace-zh.png)
+![專案總覽：即時進度、阻礙與待決事項。](site/images/overview-zh.png)
 
-*實際介面 · 合成展示資料 · [截圖來源](site/images/README.md)。*
+*實際共用介面 · 合成展示資料 · 主線預覽 · [截圖來源](site/images/README.md)。*
 
-**Web 與 Tauri 桌面版共用介面及 Python 後端。**你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
+**Web 與 Tauri 桌面版共用介面及 Python 後端。** 你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
 
-> **開發預覽。** 本頁介紹已合併的功能，截圖來自 `66246031`（2026 年 10 月 12 日）。PM v1.2 仍在整合；[進度報告](docs/product/progress-2026-10-12.md)分開列出主線、M4／M5 候選與剩餘工作。下載時請核對精確來源及成功的套件驗證，較新的草稿 PR 不等於已發布版本。
+> **開發預覽。** 截圖來自已合併主線 `main` 的 `aba02180`。
+> 後端 #132 於 2026 年 10 月 13 日合併，#134 於 10 月 14 日合併；前端 #133 隨後於
+> 10 月 14 日以 `cb7e9f42` 合併。這輪尚未安裝，也尚未實機驗收。
+> [進度報告](docs/product/progress-2026-10-14.md)分開列出分支、合併、安裝與實機驗收狀態。
+> 下載時請核對套件的精確來源；截圖與 CI 不能代替原生或實機驗收。
 
 ## 它幫你回答什麼
 
-| 你想知道 | 對應工作流程 |
+| 你想知道 | 檢視與操作 |
 | --- | --- |
-| 當初到底答應做什麼？ | Idea 討論、來源紀錄、可審閱的計畫提案，明確採用後保存到 PM 自有的版本化文件。 |
-| 接下來該做什麼？ | Roadmap、Sprint 承諾、Kanban 與工程工作包，引用已採用需求及固定程式碼目的地。 |
-| 哪些事需要我決定？ | Follow-up 分析整理有來源的發現、未決問題與候選更新，讓你審閱有意義的變更後再採用。 |
-| 成果符合計畫嗎？ | 驗證及責任審閱者的品質評估保存固定證據、條件、理由與接受結果；測試通過不會自行接受需求。 |
-| 相依工作可以繼續嗎？ | 明確選定已接受的需求證據，可滿足工作包的前置條件；缺少或無法讀取的證據仍會阻擋。 |
-| 實際交付了什麼？ | 整合、PR merge、部署驗證與發布基準，各自保留證據及歷史。 |
-| 發布後誰來照顧？ | 已採用政策限定維護來源、排程、修復範圍、預算與交付上限；發現與修復回執進入 Maintenance Review。 |
-| 那個 session 跑去哪了？ | 專案樹串起工作、對話與成果；刷新或回覆遺失後，可用原操作身分查回。 |
+| 專案現在怎麼樣？ | **專案總覽**顯示即時目標、已驗收需求、阻礙、待決事項與近期決策；來源尚未讀取時顯示「未知」，完整空清單顯示「尚無紀錄」。已存報告保留當時的固定快照。 |
+| 哪一件事需要決定？ | 開啟紀錄並按**與 PM 討論**，**討論**會帶入來源標籤與標題，讓你審閱提案後明確採用。採用後，有權限的人可以填寫理由並回報問題已解決；這項回報仍標示為未評估。 |
+| 這份工作要滿足什麼？ | 在**需求**的追溯表與詳情面板，對照已採用需求、工作、驗收條件、PR 與交付。 |
+| 哪些事還沒處理完？ | **問題與變更**用可篩選的登記表保留風險、問題、行動、變更、決策與原處理時間線，維護發現以具體名稱呈現。 |
+| 哪些日期變了？ | **時程**在標示日期的時間軸上對照已記錄的基準、預測與實際日期；沒有日期就保持未知。 |
+| 相依套件改了，會影響哪裡？ | **技術相依**用矩陣或相依圖呈現固定清冊、證據與有界影響。 |
+| Agent 用了哪些資源？ | **Agent 資源**以同一次讀取呈現用量、來源列與每日趨勢，另列回報配額窗；讀不到的資料不當成零。 |
+| 接下來該跟進哪份工作？ | **工作看板**按階段追蹤；內容核准、需求驗收、合併與部署是不同事實。 |
+| 那個工作階段發生了什麼？ | **工作階段**一起呈現對話與成果；自有工作依權限操作，人工 BAT 工作階段保持唯讀。 |
 
-Project Brief、Sprint 與 Kanban 已能引用固定品質評估。M4 候選再補上 Roadmap 品質、Brief 偏差說明及完整流程驗證；使用前請看[目前範圍與限制](#目前範圍與限制)，避免把部分完成當成整條流程已交付。
+這些檢視都屬於同一個專案，次要工具需要時再展開。
+[目前範圍](#目前範圍與限制)分開列出已合併工作台與完整 PM v1.2 待辦。
 
 ## 先試一個小專案
 
-1. **討論目標。** 建立 PM workspace 與 Idea。例如會員系統先做登入和忘記密碼，同時記錄第一版不做什麼。
-2. **審閱計畫。** 在固定版本準備 PM 自有 Git worktree；請 Agent 提案，檢視來源、需求與未決事項，再明確採用。
-3. **派出有界工作。** 選工程工作包、repository、BAT 主機與 workspace。Agent 使用自己的 managed 資源，Connector 對人的 checkout 保持唯讀。
-4. **評估成果。** 執行已配置的驗證器或選原始 GitHub checks，依固定接受條件與 Definition of Done 記錄品質審閱，再將評估選入工作及依賴條件。
-5. **交付與維護。** 審閱整合與 PR、核對發布基準、採用維護政策；閱讀發現和修復結果，再決定下一次計畫變更。
+1. **看懂狀況。** 從切換器建立工作空間，在討論開啟「想法」。例如會員登入與忘記密碼，先記下目標及不做的範圍；計畫採用後再用專案總覽掌握狀態。
+2. **找到一個問題。** 從需求、問題與變更或時程開啟原紀錄，查看關聯證據與未知事項。
+3. **與 PM 討論。** 按紀錄上的討論入口，來源標籤與標題會一起帶入。寫下想法並傳送，再請 PM 提出更新。
+4. **審閱並採用。** 在固定版本準備 PM 自有 Git 工作區。核對來源、建議文字、保留需求與未決問題，再由有權限的工作空間擁有者明確採用。
+5. **追蹤證據。** 在需求、工作看板與工作階段對照已採用需求及工作。驗證、需求驗收、PR 合併與部署各自需要紀錄。
 
-每一步保留在同一份專案歷史。討論不會自動採用計畫，採用不會直接開工，發現維護問題也不會自行授權修復。[逐步 PM 使用指南](docs/getting-started.zh-TW.md#試跑一條-pm-工作流程)。
+討論不會自動採用計畫，採用也不會直接開工或將來源問題結案。採用後，有權限的人可明確回報問題已解決；這不代表需求已驗收。
+有界交付與維護仍可從專案的次要工具操作。
+[逐步 PM 使用指南](docs/getting-started.zh-TW.md#試跑一條-pm-工作流程)。
 
-![PM 計畫：檢視固定草稿與來源，再決定是否採用。](site/images/pm-planning-zh.png)
+![從阻礙開啟討論：保留原來源，提案可供審閱但尚未採用。](site/images/discussions-zh.png)
 
-![PM 看板：追蹤工作及其已記錄的證據。](site/images/pm-kanban-zh.png)
+![需求：展開追溯表與關聯工作詳情，分開查看驗收及交付證據。](site/images/requirements-zh.png)
 
-![專案派工：工作指示、目的地與 Agent 設定。](site/images/dispatch-zh.png)
+| 同一個合成專案的其他檢視 | 截圖 |
+| --- | --- |
+| 問題與變更 | [登記表](site/images/issues-zh.png) |
+| 時程 | [基準、預測與實際日期](site/images/schedule-zh.png) |
+| 技術相依 | [固定版本的部分清冊相依圖](site/images/dependencies-zh.png) |
+| 工作看板 | [按階段追蹤工作](site/images/board-zh.png) |
+| 工作階段 | [人工 BAT 工作階段唯讀閱讀](site/images/session-zh.png) |
 
 ## 安裝與連線
 
@@ -56,9 +72,9 @@ Project Brief、Sprint 與 Kanban 已能引用固定品質評估。M4 候選再�
 | Linux | `desktop-Linux-unsigned`：Debian 套件及打包中央 | 連外部中央的原生憑證仍只留在記憶體；持久原生 vault 已排除。 |
 | 瀏覽器 | 開中央的 `/dashboard/`，或從桌面開啟瀏覽器入口 | 共用資料及介面；沒有瀏覽器原生 Fleet 或 credential vault。 |
 
-桌面包會準備相符 Python runtime、私人背景中央、資料與個人身分。接著依引導完成 BAT 信任、repository 綁定及驗證設定。**加入既有中央是明確選擇的進階路徑。**連線失敗不會另外建立專案資料庫，關閉 Dashboard 視窗也不會停止中央工作。
+桌面包會準備相符 Python runtime、私人背景中央、資料與個人身分。接著依引導完成 BAT 信任、repository 綁定及驗證設定。**加入既有中央是明確選擇的進階路徑。** 連線失敗不會另外建立專案資料庫，關閉 Dashboard 視窗也不會停止中央工作。
 
-**PM 分析另有 runtime 前提。**目前有界分析在已配置的 Linux 中央，或合格的 Linux BAT 主機執行，需要指南指定的 PM Codex runtime 及隔離環境。Windows／Mac client 可以使用這些遠端能力，但桌面安裝本身不提供原生 Windows／Mac PM 執行。PM 分析與一般 coding CLI adapter 是不同能力。
+**PM 分析另有 runtime 前提。** 目前有界分析在已配置的 Linux 中央，或合格的 Linux BAT 主機執行，需要指南指定的 PM Codex runtime 及隔離環境。Windows／Mac client 可以使用這些遠端能力，但桌面安裝本身不提供原生 Windows／Mac PM 執行。PM 分析與一般 coding CLI adapter 是不同能力。
 
 [安裝與首次使用](docs/getting-started.zh-TW.md) · [Windows 使用與資源](docs/windows.zh-TW.md) · [恢復及升級](docs/design/managed-installation.md)
 
@@ -90,12 +106,16 @@ flowchart TB
 
 | 狀態 | 範圍 |
 | --- | --- |
-| 已合併主線 | 桌面／中央底座；PM 討論及計畫採用；工程包及有界派工；驗證、需求接受與依賴證據；政策內維護修復；BAT 提案／Follow-up；AHP 唯讀觀察。 |
+| 已合併主線 | 桌面／中央底座；PM 討論及計畫採用；工程包及有界派工；驗證、需求接受與依賴證據；政策內維護修復；BAT 提案／Follow-up；AHP 唯讀觀察。#132 補上中央總覽、討論來源與改名、登記表、時程、技術相依及每日資源桶；#134 補上採用後目標、近期決策及問題解決回報引導。 |
+| 已合併工作台 | 即時總覽、來源討論與採用、需求詳情、登記表、時程、技術相依、Agent 資源、看板及工作階段。前端 #133（含操作旅程腳本及第 5b／6 輪修整）於 2026 年 10 月 14 日以 `cb7e9f42` 合併；尚未安裝或實機驗收。 |
 | M4 候選 | Idea → 交付 → 維護 → Review → 新 Idea 完整流程；原 runtime 完成、人工單次輸入活動觀察、Roadmap 品質及 Brief 偏差。候選檢查與失敗另有紀錄。 |
 | M5 本機候選 | workspace 持久分析 adapter 選擇、人工循序輸入的唯讀觀察；範圍檢查通過，完整候選與平台驗證仍待完成。 |
-| PM v1.2 剩餘工作 | 一般原生 coding adapter、AHP 自建／寫入、其餘文件視圖與簡報、更多 CLI 支援，以及跨 CLI 用量與效率報告。 |
+| PM v1.2 剩餘工作 | 一般原生 coding adapter、AHP 自建／寫入、其餘文件視圖與簡報、更多 CLI 支援、遠端用量收集與交付效率歸因。 |
 
-跨 CLI token 收集**仍在規劃，尚未啟用**。目的在於把用量接回合格交付、減少重複工作；缺資料不能當零，token 流量、API 估價與訂閱配額也不能混算。模型或 effort 調整需有已採用政策，並套用於未來的自有工作。[進度與優先順序](docs/product/progress-2026-10-12.md)。
+已有 Codex／Claude 本機用量收集；這輪 Agent 資源改版補上有來源的每日趨勢與回報配額窗。
+遠端收集與交付效率歸因仍待做。
+缺資料不能當零，觀測 token、API 估價與訂閱配額也不能混算。
+尚未啟用依用量自動改模型的政策。[進度與優先順序](docs/product/progress-2026-10-14.md)。
 
 正式簽章、Mac 公證、正式更新通道與 Linux 原生憑證持久儲存，已排除於本次交付。實際環境驗收由使用者執行，尚未宣稱通過。[完整 PM v1.2 計畫](docs/product/pm-v1.2-plan.md)仍是範圍依據，M4 是其中一個里程碑。
 
@@ -112,7 +132,7 @@ Connector 對人工 session 與 worktree 保持唯讀。Unknown 資源必須有�
 | 需要 | 入口 |
 | --- | --- |
 | 使用產品 | [首次使用](docs/getting-started.zh-TW.md) · [Windows Fleet](docs/windows.zh-TW.md) |
-| 了解進度 | [進度報告](docs/product/progress-2026-10-12.md) · [PM 狀態](docs/product/pm-v1.2-status.md) · [實作歷史](docs/product/implementation-status.md) |
+| 了解進度 | [進度報告](docs/product/progress-2026-10-14.md) · [PM 狀態](docs/product/pm-v1.2-status.md) · [實作歷史](docs/product/implementation-status.md) |
 | 接續開發 | [本輪交接](docs/handoff/2026-10-12-pm-v1.2.md) · [已採用計畫](docs/product/pm-v1.2-plan.md) · [架構決策](docs/product/realignment-v2.md) |
 | 接入 Agent | [Agent skills](docs/agent-skills.md) · [API](docs/design/api-v1.md) · [Protocol](docs/PROTOCOL.md) |
 | 查交付能力 | [Artifacts](docs/design/artifacts.md) · [Delivery](docs/design/delivery.md) · [Cleanup](docs/design/cleanup.md) |

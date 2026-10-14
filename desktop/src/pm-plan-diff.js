@@ -1,3 +1,4 @@
+import {skeleton} from './ui/components.js';
 import {planDiffText} from './pm-plan-diff-strings.js';
 
 // Pure reads of fixed plan/binding IDs. This component never changes work or plans.
@@ -128,7 +129,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
       h('p', {class: 'pm-source'}, candidate.binding.binding_id),
       ...candidate.reasons.map(reason => h('p', {}, text('pm_diff_reason_' + reason))),
       h('p', {class: 'pm-source'}, text('pm_diff_requirements'), ': ', raw(candidate.binding.requirement_ids)),
-      h('a', {href: `#/work/${encodeURIComponent(candidate.binding.work_item_id)}`}, text('pm_diff_open_work'))));
+      h('a', {href: `#/item/${encodeURIComponent(candidate.binding.work_item_id)}`}, text('pm_diff_open_work'))));
     const fixed = detail(text('pm_diff_evidence'), h('p', {class: 'pm-source'}, text('pm_diff_from'), ': ', value.from_revision.revision_id),
       h('p', {class: 'pm-source'}, text('pm_diff_to'), ': ', value.to_revision.revision_id),
       h('p', {class: 'pm-source'}, text('pm_diff_cursor'), ': ', value.context.journal_cursor),
@@ -147,7 +148,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
   async function read() {
     if (busy || !from.value || !to.value) return;
     busy = true; const ticket = ++request, left = from.value, right = to.value, ids = [...selected].sort(), fixedCursor = cursor;
-    controls(); result.replaceChildren(); status.replaceChildren(h('p', {class: 'muted'}, text('pm_diff_loading')));
+    controls(); result.replaceChildren(); status.replaceChildren(skeleton(2, {label:text('pm_diff_loading')}));
     const query = new URLSearchParams({from_revision_id: left, to_revision_id: right});
     if (ids.length) query.set('binding_ids', ids.join(','));
     if (fixedCursor !== null) query.set('journal_cursor', String(fixedCursor));
@@ -169,5 +170,9 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
     finally {if (ticket === request) {busy = false; controls();}}
   }
   options();
-  return {box, update, refreshBindings};
+  return {box, update, refreshBindings, select(left, right) {
+    from.value = plans.has(left) ? left : '';
+    to.value = plans.has(right) && right !== left ? right : [...plans.keys()].find(id => id !== left) || '';
+    changed(); to.focus();
+  }};
 }

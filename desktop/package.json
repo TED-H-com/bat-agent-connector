@@ -30,6 +30,7 @@
     "test:published": "node tests/repository-start-integration.mjs",
     "test:dispatch": "node tests/project-dispatch-integration.mjs",
     "test:pm": "node tests/pm-central-integration.mjs",
+    "test:walkthrough": "node tests/pm-walkthrough.mjs",
     "test:start": "node tests/session-start-integration.mjs",
     "test:artifact-review": "node tests/artifact-review-integration.mjs",
     "test:orchestration": "node tests/orchestration-integration.mjs",

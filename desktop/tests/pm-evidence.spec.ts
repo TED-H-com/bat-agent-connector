@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
@@ -54,7 +55,7 @@ const selectProject=async(page:any)=>{await page.getByLabel('Connector project',
 const openWork=async(page:any)=>{await page.locator('[data-pm-work] > summary').click();};
 for(const native of [false,true])test.describe(native?'native evidence':'web evidence',()=>{
   test('refresh visibly disables association until its fixed source reads finish, without losing the draft',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);
     const bind=action(page,'pm.project.bind'),button=bind.getByRole('button',{name:'Associate project',exact:true});
     const rationale=bind.getByLabel('Why associate this work?',{exact:true});await rationale.fill('Keep this exact association through source revalidation');
     let release!:()=>void;f.state.catalogWait=new Promise<void>(resolve=>{release=resolve;});const before=f.state.catalogReads;
@@ -70,7 +71,7 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     expect(f.state.writes[0].body.preconditions.expected_project_version).toBe(2);
   });
   test('access revalidation preserves a still-readable project selection and unsent association',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);
     const bind=action(page,'pm.project.bind'),rationale=bind.getByLabel('Why associate this work?',{exact:true});
     await rationale.fill('Keep the same project and unsent reason');const before=f.state.bootstraps;f.state.accessVersion++;
     await expect.poll(()=>f.state.bootstraps,{timeout:10000}).toBeGreaterThan(before);
@@ -79,7 +80,7 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     expect(f.state.writes).toHaveLength(0);
   });
   test('explicit project and work association records selected plan requirements without dispatch',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);
     await action(page,'pm.project.bind').getByLabel('Why associate this work?',{exact:true}).fill('Manage reader experience here');
     await action(page,'pm.project.bind').getByRole('button',{name:'Associate project',exact:true}).click();
     await openWork(page);await page.getByText('Track this work',{exact:true}).first().click();
@@ -93,14 +94,14 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     await expect(page.locator('[data-pm-work]')).toContainText('This work references a fixed adopted plan revision.');
   });
   test('lost project association response can recover even after association becomes visible',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);
     const bind=action(page,'pm.project.bind');await bind.getByLabel('Why associate this work?',{exact:true}).fill('Keep original association');f.state.lost=true;
     await bind.getByRole('button',{name:'Associate project',exact:true}).click();await expect(bind).toContainText('Reply unavailable');
     await page.getByRole('button',{name:'Refresh',exact:true}).click();
     await expect(bind.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
     await expect(bind.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Keep original association');
     expect(f.state.writes).toHaveLength(1);
-    await page.reload();await selectProject(page);
+    await page.reload();await openPmSection(page, 'requirements', 'ui_evidence');await selectProject(page);
     const recover=bind.getByRole('button',{name:'Check original request',exact:true});
     let release!:()=>void;f.state.recoveryWait=new Promise<void>(resolve=>{release=resolve;});
     try {
@@ -115,10 +116,10 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
   });
   test('saved claim and coverage do not become verified delivery, and missing reply keeps original capture',async({page})=>{
     const f=fixture();f.state.associated=true;f.state.tracked=true;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);await openWork(page);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);await openWork(page);
     const capture=action(page,'pm.evidence.capture');f.state.lost=true;
     await capture.getByRole('button',{name:'Collect saved evidence',exact:true}).click();await expect(capture).toContainText('Reply unavailable');
-    await page.reload();await selectProject(page);await openWork(page);
+    await page.reload();await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);await openWork(page);
     await capture.getByRole('button',{name:'Check original request',exact:true}).click();
     await expect(page.locator('[data-pm-evidence]')).toContainText('Definition of Done has not been assessed.');
     await expect(page.locator('[data-pm-evidence]')).toContainText('1 unavailable or unsupported sources');
@@ -130,7 +131,7 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
   });
   test('readers can inspect associations but cannot collect new evidence',async({page})=>{
     const f=fixture();f.state.associated=true;f.state.tracked=true;f.base.state.role='reader';f.base.state.manage=false;
-    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await selectProject(page);await openWork(page);
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);await openWork(page);
     await expect(action(page,'pm.work.bind')).toHaveCount(0);
     await expect(action(page,'pm.evidence.capture').getByRole('button')).toBeDisabled();
     expect(f.state.writes).toHaveLength(0);
@@ -139,7 +140,7 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
 for(const locale of ['en','zh-TW'])for(const width of [390,1440])test(`evidence layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({locale,baseURL,viewport:{width,height:1000}}),page=await context.newPage();
   const f=fixture();f.state.associated=true;f.state.tracked=true;
-  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');
   await page.locator('[data-pm-evidence] select').first().selectOption(pid);await openWork(page);
   await action(page,'pm.evidence.capture').getByRole('button',{name:locale==='en'?'Collect saved evidence':'整理已保存的證據',exact:true}).click();
   await page.locator('[data-pm-fact] > summary').click();

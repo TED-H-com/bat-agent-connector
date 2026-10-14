@@ -1,3 +1,5 @@
+import {statusPill} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
 import {briefExport} from './pm-brief-export.js';
 import {maintenanceFindingsView} from './pm-maintenance-findings.js';
 
@@ -8,12 +10,12 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
     ||review.snapshot_id!==snapshot.snapshot_id||!/^pmrevw_[0-9a-f]{32}$/.test(review.review_id)
     ||extension.schema_version!==1||report?.schema_version!==1||report.meeting_completed!==false
     ||report.scope_adopted!==false||report.automatic_maintenance_authorized!==false||!Array.isArray(events))throw Error(t('pmrv_invalid'));
-  const text=value=>h('p',{class:'pm-note-text'},String(value));
-  const line=(key,value)=>h('p',{},h('strong',{},`${t(key)}: `),String(value));
-  const stamp=value=>Number.isFinite(value)?new Date(value*1000).toLocaleString():t('pmrv_unknown');
+  const text=value=>h('p',{class:'pm-note-text'},value);
+  const line=(key,value)=>h('p',{},h('strong',{},`${t(key)}: `),value);
+  const stamp=value=>timeStamp(value, {empty:t('pmrv_unknown')});
   const fold=(key,...nodes)=>h('details',{},h('summary',{},t(key)),...nodes);
   const label=(prefix,value)=>t(`${prefix}_${value}`);
-  const list=values=>values.length?h('ul',{},...values.map(value=>h('li',{class:'pm-note-text'},String(value)))):text(t('pmrv_none'));
+  const list=values=>values.length?h('ul',{},...values.map(value=>h('li',{class:'pm-note-text'},value))):text(t('pmrv_none'));
   const op=id=>h('a',{href:`#/op/${encodeURIComponent(id)}`},t('pm_operation'));
   const sourceById=new Map(report.sources.map(row=>[row.source_id,row]));
   const sourceProof=ids=>h('div',{},...ids.map(id=>{
@@ -29,10 +31,8 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
     adapter:['bat_scope_unconfigured','adapter_scope_changed','adapter_disconnected','adapter_not_observed','adapter_coverage_incomplete','linked_session_not_covered','session_workspace_unproven','session_profile_unproven','session_state_unknown'],
     github_gap:['github_repository_coverage_unavailable','linked_pr_current_state_unproven','github_observation_missing','github_observation_context_changed','github_observation_incomplete'],
     github_prs:['github_open_pull_requests'],github_actions:['github_nonterminal_actions']};
-  const overview=h('section',{'data-review-report':''},h('h3',{},review.title),
-    text(t(review.status==='completed'?'pmrv_completed':'pmrv_prepared')),
-    line('pmrv_period',`${stamp(report.period.start)} — ${stamp(report.period.end)}`),text(t('pmrv_period_help')),
-    text(t('pmrv_fixed_help')),text(t('pmrv_samples')),
+  const overview=h('section',{'data-review-report':''},
+    line('pmrv_period',h('span', {}, stamp(report.period.start), ' — ', stamp(report.period.end))),
     line('pmrv_release',`${release.repository} · ${release.channel} · ${release.release_version.value}`),
     line('pmp_revision',report.policy.version));
   if(report.previous_context?.status==='omitted_source_limit')overview.append(text(t('pmrv_continuity_gap')));
@@ -42,7 +42,11 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
   for(const kind of ['github','workload','checks',...(coverage.repairs?['repairs']:[]),'issues','dependencies','research','quality','model_analysis']){
     const value=coverage[kind],state=typeof value==='string'?value:value.status;
     sources.append(line(`pmrv_source_${kind}`,label('pmrv_coverage',state)));
-    if(Number.isSafeInteger(value.samples))sources.append(h('p',{class:'muted pm-review-count'},`${t('pmrv_sample_count')}: ${value.samples}`));
+    if(value&&typeof value==='object'&&Object.hasOwn(value,'samples')){
+      const count=h('p',{class:'muted pm-review-count','data-review-count':kind},h('strong',{},`${t('pmrv_sample_count')}: `),
+        state==='observed'&&Number.isSafeInteger(value.samples)?String(value.samples):statusPill('unknown'));
+      sources.append(count);
+    }
   }
   const compared=h('section',{},h('h4',{},t('pmrv_changes')),text(label('pmrv_changes',changes.status)));
   if(changes.scope_changed)compared.append(text(t('pmrv_scope_changed')));
@@ -59,14 +63,18 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
     compared.append(findings);
   }
   overview.append(h('div',{class:'pm-review-columns'},sources,compared));
-  const blockers=h('div');
+  const blockers=h('div',{'data-review-blockers':''});
   for(const item of report.current_blockers){
     if(typeof item==='string')blockers.append(text(item));
     else blockers.append(text(t('pmo_reason_'+(Object.keys(reasonGroups).find(key=>reasonGroups[key].includes(item.code))||'unknown'))));
   }
-  if(!report.current_blockers.length)blockers.append(text(t('pmrv_none')));
+  const workloadState=typeof coverage.workload==='string'?coverage.workload:coverage.workload?.status;
+  if(!report.current_blockers.length)blockers.append(workloadState==='observed'?text(t('pmrv_none')):statusPill('unknown'));
+  const checksState=typeof coverage.checks==='string'?coverage.checks:coverage.checks?.status;
+  const effortLine=(key,name,value)=>{const honest=checksState==='observed'&&Number.isSafeInteger(value);
+    return h('p',{'data-review-effort':name},h('strong',{},`${t(key)}: `),honest?String(value):statusPill('unknown'));};
   overview.append(fold('pmrv_blockers',text(t('pmrv_blocker_help')),blockers),
-    line('pmrv_finished_checks',report.effort.completed_checks),line('pmrv_pending_checks',report.effort.pending_checks),text(t('pmrv_effort_unknown')),
+    effortLine('pmrv_finished_checks','finished',report.effort.completed_checks),effortLine('pmrv_pending_checks','pending',report.effort.pending_checks),
     fold('pmrv_proof',line('pmrv_snapshot',snapshot.snapshot_id),line('pmrv_release',release.baseline_id),text(release.commit_sha),
       line('pmrv_as_of',stamp(report.as_of)),text(snapshot.snapshot_digest),sourceProof(report.sources.map(row=>row.source_id)),op(review.operation_id)));
   const samples=h('div');
@@ -106,7 +114,7 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
   const eventView=(event,expectedReviewId=review.review_id)=>{
     if(event.workspace_id!==workspaceId||event.review_id!==expectedReviewId||typeof event.document!=='object')throw Error(t('pmrv_invalid'));
     const d=event.document,box=h('article',{class:'pm-fact','data-review-event':event.event_id},
-      h('h5',{},label('pmrv_event',event.kind.replaceAll('.','_'))),line('pmrv_recorded',`${event.actor} · ${stamp(event.created_at)}`));
+      h('h5',{},label('pmrv_event',event.kind.replaceAll('.','_'))),line('pmrv_recorded',h('span', {}, event.actor, ' · ', stamp(event.created_at))));
     if(event.kind==='note')box.append(text(d.content));
     if(event.kind==='candidate.record'){
       box.append(h('h5',{},d.title),text(t('pmrv_candidate_help')));
@@ -138,7 +146,6 @@ export function maintenanceReviewView({h,t,api,alive,workspaceId,caps,readable,e
     overview.append(history);
   }
   if(completion)discussion.append(eventView(completion));
-  else discussion.append(text(t('pmrv_not_completed')));
   for(const event of events)if(event.event_id!==completion?.event_id)discussion.append(eventView(event));
   const element=h('div',{},overview,discussion);
   return {element,eventView,discussion,update:output.update};

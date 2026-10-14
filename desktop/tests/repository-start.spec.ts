@@ -50,7 +50,7 @@ for (const native of [false, true]) {
   test(`${mode} published: only a proven admission refusal allows explicit replacement`, async ({page}) => {
     const state = await publishedFixture(page, native, {refuse: 'REPOSITORY_NOT_BOUND'}), form = await openPublished(page); await previewPublished(page); await apply(form).click();
     await expect(form).toContainText('REPOSITORY_NOT_BOUND'); await page.reload(); await form.getByRole('button', {name: 'Prepare another published version'}).click();
-    state.refuse = 'FORBIDDEN'; await previewPublished(page); await apply(form).click(); await expect(form).toContainText('Your token lacks this scope');
+    state.refuse = 'FORBIDDEN'; await previewPublished(page); await apply(form).click(); await expect(form).toContainText('Your account does not have the required scope');
     expect(state.posts[0].idempotency_key).not.toBe(state.posts[1].idempotency_key); await expect(form.getByRole('button', {name: 'Prepare another published version'})).toBeHidden();
     state.refuse = 'IDEMPOTENCY_CONFLICT'; await form.getByRole('button', {name: 'Retry original request'}).click(); await expect(form.locator('.error')).toBeVisible(); expect(state.posts[2]).toEqual(state.posts[1]);
   });

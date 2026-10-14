@@ -1,3 +1,4 @@
+import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {test, expect, type Page} from "@playwright/test";
 
 const rid = "wt_" + "a".repeat(32), oid = "op_" + "b".repeat(32);
@@ -102,7 +103,7 @@ for (const native of [false, true]) {
     await page.getByRole('button', {name: 'Preview cleanup', exact: true}).click();
     await page.getByRole('checkbox', {name: 'I reviewed the resources', exact: false}).check();
     await page.getByRole('button', {name: 'Apply reviewed cleanup'}).click();
-    await expect(page.getByText('LOST Lost reply')).toBeVisible();
+    await expectErrorDetails(page, 'Lost reply', 'LOST');
     outcome = 'auth'; await page.reload();
     await page.getByRole('button', {name: 'Apply reviewed cleanup'}).click();
     await expect(page.locator('p.error')).toBeVisible();
@@ -135,7 +136,7 @@ for (const native of [false, true]) {
     await expect(page.getByText("1 resources to reclaim · 0 retained")).toBeVisible();
     await page.getByRole("checkbox", {name: "I reviewed the resources", exact: false}).check();
     await page.getByRole("button", {name: "Apply reviewed cleanup"}).click();
-    await expect(page.getByText("REPLY_LOST Fixture lost reply")).toBeVisible();
+    await expectErrorDetails(page, "Fixture lost reply", "REPLY_LOST");
     delaySnapshot = true;
     await page.reload();
     await expect(page.getByText("1 resources to reclaim · 0 retained")).toBeVisible();
@@ -167,7 +168,7 @@ for (const native of [false, true]) {
     await page.getByRole('button', {name: 'Preview cleanup', exact: true}).click();
     await page.getByRole('checkbox', {name: 'I reviewed the resources', exact: false}).check();
     await page.getByRole('button', {name: 'Apply reviewed cleanup'}).click();
-    await expect(page.locator('.error')).toContainText('does not match');
+    await expectClientError(page, 'does not match');
     await expect(page.getByRole('link', {name: 'View item receipts'})).toHaveCount(0);
     await page.evaluate(() => {for (const key of Object.keys(sessionStorage).filter(k => k.startsWith('batc.cleanup.'))) sessionStorage.removeItem(key);});
     bad = false; await page.reload();
@@ -234,7 +235,7 @@ for (const native of [false, true]) {
     await page.getByRole("button", {name: "Preview cleanup", exact: true}).click();
     await page.getByRole("checkbox", {name: "I reviewed the resources", exact: false}).check();
     await page.getByRole("button", {name: "Apply reviewed cleanup"}).click();
-    await expect(page.getByText("LOST Lost reply")).toBeVisible();
+    await expectErrorDetails(page, "Lost reply", "LOST");
     actor = "second-person";
     await page.reload();
     await expect(page.getByRole("textbox", {name: "Host name or original ID"})).toHaveValue("");
@@ -258,12 +259,15 @@ for (const locale of ["en-US", "zh-TW"]) for (const width of [390, 768, 1440]) {
           commit_sha: "c".repeat(40), branch: "fixture", captured_at: 1, excerpt_messages: 0, dirty: 0}]}};
       });
       await page.goto("/dashboard/#/session/demo/session-1");
+      await expect(page.locator("[data-session-view]")).toBeVisible();
+      const opener = page.getByRole("button", {name: /^(Results|成果)$/, exact: true});
+      if (await opener.isVisible()) await opener.click();
       await page.locator(".workspace-evidence > summary").click();
-      await page.locator("button.secondary").filter({hasText: locale === "en-US" ? "Start agent work from this version" : "從此版本建立 agent 工作"}).click();
+      await page.locator("button.secondary").filter({hasText: locale === "en-US" ? "Start from here" : "從這裡接續"}).click();
       const note = page.locator("[data-confinement-note]");
-      await expect(note).toContainText("acceptEdits");
-      await page.getByRole("combobox", {name: "Agent", exact: true}).selectOption("codex");
-      await expect(note).toContainText("workspace-write");
+      await expect(note).toContainText(locale === "en-US" ? "acceptEdits" : "自動接受編輯");
+      await page.getByRole("combobox", {name: locale === "en-US" ? "Agent" : "代理", exact: true}).selectOption("codex");
+      await expect(note).toContainText(locale === "en-US" ? "workspace-write" : "工作區寫入");
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.evaluate(() => scrollTo(0, 0));
       await page.screenshot({path: `test-results/confinement-${locale}-${width}.png`, fullPage: true});
@@ -299,7 +303,7 @@ for (const native of [false, true]) {
     await page.getByRole("button", {name: "Ask an agent to resolve", exact: true}).click();
     await page.getByRole("combobox", {name: "Agent"}).selectOption("codex");
     changed = true;
-    await expect(page.locator("#live")).toContainText("Waiting to refresh");
+    await expect(page.locator('#live')).toHaveAttribute('data-connection','connected');await expect(page.locator('#live')).toHaveAttribute('title',/Waiting to refresh/);
     await expect(page.getByRole("combobox", {name: "Agent"})).toHaveValue("codex");
     await page.getByRole("button", {name: "Start agent work", exact: true}).click();
     await expect.poll(() => writes.length).toBe(1);

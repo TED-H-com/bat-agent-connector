@@ -1,3 +1,4 @@
+import {openThreadBrief} from './pm-navigation.ts';
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
 import {readFile,mkdir} from 'node:fs/promises';
@@ -70,7 +71,7 @@ async function mount(page:Page,native:boolean,f:ReturnType<typeof fixture>){
     await page.addInitScript(()=>Object.assign(window,{isTauri:true,__TAURI_INTERNALS__:{invoke:(command:string,args:any)=>(window as any).briefNativeCommand(command,args)}}));
     await page.route('**/api/v1/**',()=>{throw Error('Native report must use IPC');});
   }
-  await page.goto(pmRoute);await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
+  await page.goto(pmRoute);await openThreadBrief(page);await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
 }
 const brief=(page:Page)=>page.locator('[data-pm-brief]'),exports=(page:Page)=>page.locator('[data-pm-brief-export]');
 async function open(page:Page){await exports(page).locator(':scope > summary').click();}
@@ -129,7 +130,7 @@ for(const change of ['digest','bytes','scope','view'])test(`report ${change} mis
 
 test('report permission loss removes old private facts and does not request a file',async({page})=>{
   const f=fixture();await mount(page,true,f);await open(page);f.state.reportError=403;await page.getByRole('button',{name:'Save report…',exact:true}).click();
-  await expect(brief(page)).toContainText('Your token lacks this scope');await expect(brief(page)).not.toContainText('Current selected goal');expect(f.state.nativeSaves).toHaveLength(0);
+  await expect(brief(page)).toContainText('Your account does not have the required scope');await expect(brief(page)).not.toContainText('Current selected goal');expect(f.state.nativeSaves).toHaveLength(0);
 });
 
 test('native cancellation and existing destinations do not imply a saved file',async({page})=>{
@@ -146,7 +147,7 @@ test('old desktop versions preserve Brief reading and disclose unavailable repor
 });
 
 test('an older selected snapshot remains the download target after a failed refresh',async({page})=>{
-  const f=fixture();await mount(page,false,f);await page.getByText('Earlier project snapshots',{exact:true}).click();
+  const f=fixture();await mount(page,false,f);await page.getByText('Earlier reports',{exact:true}).click();
   await brief(page).getByRole('button',{name:/^Earlier Brief ·/}).click();await expect(brief(page)).toContainText('Original selected goal');
   f.state.snapshotError=403;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(brief(page)).not.toContainText('Original selected goal');
   f.state.snapshotError=null;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(brief(page)).toContainText('Original selected goal');
@@ -157,7 +158,7 @@ test('an older selected snapshot remains the download target after a failed refr
 test('a delayed report cannot download after a different snapshot is selected',async({page})=>{
   const f=fixture();await mount(page,false,f);await open(page);f.state.holdReport=true;let downloads=0;page.on('download',()=>downloads++);
   await page.getByRole('button',{name:'Download report',exact:true}).click();await expect.poll(()=>f.state.held.length).toBe(1);
-  await page.getByText('Earlier project snapshots',{exact:true}).click();await brief(page).getByRole('button',{name:/^Earlier Brief ·/}).click();
+  await page.getByText('Earlier reports',{exact:true}).click();await brief(page).getByRole('button',{name:/^Earlier Brief ·/}).click();
   await expect(brief(page)).toContainText('Original selected goal');await f.state.held[0]();await expect(page.getByRole('button',{name:'Download report',exact:true})).toBeEnabled();
   expect(downloads).toBe(0);await expect(brief(page)).toContainText('Original selected goal');
 });
@@ -166,6 +167,9 @@ for(const native of [false,true])test(`parent authority failure blocks a late re
   const f=fixture();await mount(page,native,f);await open(page);f.state.holdReport=true;let downloads=0;page.on('download',()=>downloads++);
   await page.getByRole('button',{name:native?'Save report…':'Download report',exact:true}).click();await expect.poll(()=>f.state.held.length).toBe(1);
   f.state.failWorkspace=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(brief(page)).toBeHidden();
+  // The inspector closes on withdrawal; check source removal independently of it.
+  await expect(brief(page)).not.toContainText('Current selected goal');
+  await expect(page.locator('[data-pm-brief-section]')).toHaveCount(0);
   await f.state.held[0]();await expect(page.locator('[data-pm-brief-section]')).toHaveCount(0);
   expect(downloads).toBe(0);expect(f.state.nativeSaves).toHaveLength(0);
 });
@@ -192,7 +196,7 @@ test('a same-snapshot refresh does not hide a delayed report permission failure'
   const before=f.state.reads.length;await page.getByRole('button',{name:'Refresh',exact:true}).click();
   await expect.poll(()=>f.state.reads.length).toBeGreaterThan(before);await expect(page.getByRole('button',{name:'Refresh',exact:true})).toBeEnabled();
   await expect(brief(page)).toContainText('Current selected goal');
-  f.state.held[0]();await expect(brief(page)).toContainText('Your token lacks this scope');await expect(brief(page)).not.toContainText('Current selected goal');
+  f.state.held[0]();await expect(brief(page)).toContainText('Your account does not have the required scope');await expect(brief(page)).not.toContainText('Current selected goal');
 });
 
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Brief download controls stay compact ${locale} ${width}`,async({browser,baseURL},info)=>{

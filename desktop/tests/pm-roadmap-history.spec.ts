@@ -1,3 +1,4 @@
+import {openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {workspaceId} from './pm-fixture.ts';
@@ -44,7 +45,7 @@ function historyFixture(){
 
 for(const native of [false,true])test.describe(native?'native Roadmap recovery and history':'web Roadmap recovery and history',()=>{
   test('newly saved forecast appears in already opened history with its fixed source',async({page})=>{
-    const f=historyFixture();await mountConversation(page,native,f.dispatch);await page.goto(path);
+    const f=historyFixture();await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');
     const history=page.locator('[data-pm-roadmap-history]');await history.locator(':scope > summary').click();
     await expect(history.locator('details')).toHaveCount(1);
     await page.getByText('Update a forecast',{exact:true}).click();const form=page.locator('[data-pm-action="pm.roadmap.forecast.set"]');
@@ -57,7 +58,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
   });
 
   test('explicit current-baseline reset adopts the current title and current CAS together',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(path);const form=await openEditor(page);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const form=await openEditor(page);
     await form.getByLabel('Roadmap name',{exact:true}).fill('Old local name');await form.getByLabel('Milestone',{exact:true}).fill('Old local work');
     f.state.version=4;f.state.baseline.document.title='A different owner renamed this';f.state.baseline.document.milestones[0].title='Current agreed work';
     await refresh(page);await expect(page.locator('[data-pm-milestone]')).toContainText('Current agreed work');
@@ -73,12 +74,12 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
   });
 
   test('lost baseline response restores a visible read-only original draft and original key',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(path);let form=await openEditor(page);
+    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');let form=await openEditor(page);
     await form.getByLabel('Milestone',{exact:true}).fill('The submitted original work');
     await form.getByLabel('Reason for this change',{exact:true}).fill('Freeze this original request');f.state.lost=true;
     await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Reply unavailable');
     const original=structuredClone(f.state.writes[0]);f.state.version=7;f.state.baseline.document.milestones[0].title='Later unrelated baseline';
-    await page.reload();form=await openEditor(page);
+    await page.reload();await openPmSection(page, 'schedule');form=await openEditor(page);
     await expect(form.getByLabel('Milestone',{exact:true})).toHaveValue('The submitted original work');
     await expect(form.getByLabel('Milestone',{exact:true})).toBeDisabled();
     await expect(page.locator('[data-pm-milestone]')).toContainText('Later unrelated baseline');
@@ -89,7 +90,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
 
   test('incompatible scoped work stays disabled until matching requirements are explicitly chosen',async({page})=>{
     const f=fixture();f.state.bindings=[binding()];f.state.baseline.document.milestones[0].requirement_ids=[];
-    await mountConversation(page,native,f.dispatch);await page.goto(path);const form=await openEditor(page);
+    await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const form=await openEditor(page);
     await form.getByText('Associated work',{exact:true}).click();const work=form.locator(`[data-pm-work-binding="${oldBinding}"]`);
     await expect(work).toBeDisabled();await form.getByText('Linked requirements',{exact:true}).click();
     await form.getByRole('checkbox',{name:'Members can sign in',exact:true}).check();await expect(work).toBeEnabled();await work.check();
@@ -103,7 +104,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
 
   test('work rebinding during an unfinished draft preserves the rendered fixed association safely',async({page})=>{
     const f=fixture(),errors:string[]=[];f.state.bindings=[binding()];f.state.baseline.document.milestones[0].work_binding_ids=[oldBinding];
-    page.on('pageerror',error=>errors.push(error.message));await mountConversation(page,native,f.dispatch);await page.goto(path);const form=await openEditor(page);
+    page.on('pageerror',error=>errors.push(error.message));await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const form=await openEditor(page);
     await form.getByText('Associated work',{exact:true}).click();await form.getByText('Linked requirements',{exact:true}).click();
     f.state.bindings=[binding(newBinding)];await refresh(page);
     const selected=form.getByRole('checkbox',{name:'Members can sign in',exact:true});await selected.uncheck();await selected.check();
@@ -115,7 +116,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
 
   test('historical work can be unchecked and rechecked without visually hiding a scope removal',async({page})=>{
     const f=fixture();f.state.baseline.document.milestones[0].work_binding_ids=[oldBinding];f.state.bindings=[binding(newBinding)];
-    await mountConversation(page,native,f.dispatch);await page.goto(path);const form=await openEditor(page);
+    await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const form=await openEditor(page);
     await form.getByText('Associated work',{exact:true}).click();const historical=form.getByRole('checkbox',{name:/Previously selected work association/});
     await historical.uncheck();await historical.check();
     await form.getByLabel('Reason for this change',{exact:true}).fill('Keep the exact earlier association');
@@ -127,7 +128,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
     const f=historyFixture(),observation='pmro_'+'3'.repeat(32);f.history.rows.push({revision_id:observation,workspace_id:workspaceId,
       sequence:2,kind:'observation',created_at:stamp+1,baseline_revision_id:bid,
       document:{rationale:'Saved observation',milestones:[{milestone_id:'first_release',actual:{facts:[{source_id:'PREVIOUSLY_VISIBLE_SOURCE'}]}}]}});
-    await mountConversation(page,native,f.dispatch);await page.goto(path);const history=page.locator('[data-pm-roadmap-history]');
+    await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const history=page.locator('[data-pm-roadmap-history]');
     await history.locator(':scope > summary').click();let detail=history.locator('details').filter({has:page.locator('summary',{hasText:'Saved result observation'})});
     await detail.locator('summary').click();await expect(detail).toContainText('PREVIOUSLY_VISIBLE_SOURCE');
     f.history.hideSource=true;await refresh(page);await expect(history).not.toContainText('PREVIOUSLY_VISIBLE_SOURCE');
@@ -139,10 +140,10 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
   test('failed history pagination retains its exact retry cursor',async({page})=>{
     const f=historyFixture();for(let index=2;index<=21;index++)f.history.rows.push({revision_id:'pmrf_'+String(index).padStart(32,'0'),
       sequence:index,workspace_id:workspaceId,kind:'forecast',created_at:stamp+index,baseline_revision_id:bid,document:{milestones:[]}});
-    await mountConversation(page,native,f.dispatch);await page.goto(path);const history=page.locator('[data-pm-roadmap-history]');
+    await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const history=page.locator('[data-pm-roadmap-history]');
     await history.locator(':scope > summary').click();await expect(history.locator('details')).toHaveCount(20);
     const more=history.getByRole('button');f.history.failMore=true;await more.click();await expect(history).toContainText('History page unavailable');
-    await expect(more).toBeEnabled();await more.click();await expect(history.locator('details')).toHaveCount(21);
+    await expect(more).toBeEnabled();await more.click();await expect(history.locator(':scope > div > details')).toHaveCount(21);
     expect(f.history.pages).toEqual([0,20,20]);
   });
 });

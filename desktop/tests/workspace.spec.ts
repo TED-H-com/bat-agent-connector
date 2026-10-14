@@ -14,7 +14,7 @@ for (const native of [false,true]) {
     await expect(draft).toHaveValue('Keep this draft'); await expect(draft).toBeFocused();
     await expect(tree.getByRole('link',{name:/Improve empty search results/})).toHaveAttribute('aria-current','page');
     await expect(page.locator('.workspace-session-heading')).not.toContainText('Completed');
-    await tree.getByRole('link',{name:'Documentation search',exact:true}).click();await page.goBack(); await expect(draft).toHaveValue('Keep this draft');
+    await tree.getByRole('link',{name:/^Documentation search$/}).click();await page.goBack(); await expect(draft).toHaveValue('Keep this draft');
     await draft.fill('Continue with the tests'); await page.getByRole('button',{name:'Send',exact:true}).click();
     await expect.poll(()=>f.data.posts.length).toBe(1);
     expect(f.data.posts[0].body).toMatchObject({action:'session.send',target:{host:'demo',session_id:'search-results'},params:{text:'Continue with the tests'}});
@@ -77,7 +77,8 @@ for (const native of [false,true]) {
     const f=workspaceFixture(); f.data.session.api_access='read_only'; f.data.session.provenance='manual';
     await mountWorkspace(page,native,f); await page.goto('/dashboard/'+workspaceRoute);
     await expect(page.getByRole('button',{name:'Send',exact:true})).toBeHidden();
-    await expect(page.locator('.workspace-composer')).toContainText('API never writes to it');expect(f.data.posts).toEqual([]);
+    await expect(page.locator('[data-session-readonly]')).toContainText("read-only here");
+    await expect(page.locator('.workspace-composer')).toBeHidden();expect(f.data.posts).toEqual([]);
   });
 }
 for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`workspace layout ${locale} ${width}`,async({page})=>{

@@ -1,4 +1,5 @@
 // Exact linked manual sources only. A read receipt never grants session control.
+import {timeStamp} from './ui/stamps.js';
 export function kanbanObservation({h,t,api,alive,workspaceId,workId,caps,permitted,form,errorBox,onSourceFailure}) {
   const action='pm.session.quiescence.observe',sources=new Map();
   let ready=false,generation=0,editor=null;
@@ -10,9 +11,11 @@ export function kanbanObservation({h,t,api,alive,workspaceId,workId,caps,permitt
   const source=()=>{const row=selected();if(!row?.available)throw Error(t('pm_kanban_manual_unavailable'));return row;};
   const reason=row=>t('pm_kanban_'+({manual_native_identity_unavailable:'manual_identity',manual_multiple_inputs_unsupported:'manual_multiple',manual_native_turn_active:'manual_active'}[row?.reason]||'manual_unavailable'));
   function describe(){select.disabled=Boolean(editor?.locked())||!writer()||!caps()?.actions?.some(row=>row.action===action&&row.allowed);
+    if (editor) editor.box.querySelector('button[type=submit]').hidden = !writer() && !editor.locked();
     context.replaceChildren(t(!permitted(false)||!caps()?.scopes?.includes('observe')
     ||!caps()?.actions?.some(row=>row.action===action&&row.allowed)?'pm_kanban_manual_authority':!ready||!selected()?'pm_kanban_manual_unavailable':selected().available?'pm_kanban_manual_ready':'pm_kanban_manual_unavailable'));if(selected()?.reason)context.append(' ',reason(selected()));}
   editor=form({action,target:{workspace_id:workspaceId,work_item_id:workId},fields:{source:select},requiredScope:'observe',
+    statusText: status => {const key='reg_status_'+status,label=t(key);return label===key?t('ui_status_unknown'):label;},
     params:()=>({link_id:source().link_id}),preconditions:()=>{const row=source();return {
       expected_link_operation_id:row.expected_link_operation_id,expected_project_binding_id:row.expected_project_binding_id,
       expected_session_identity_digest:row.expected_session_identity_digest};},
@@ -24,13 +27,12 @@ export function kanbanObservation({h,t,api,alive,workspaceId,workId,caps,permitt
         ||receipt.ownership!=='manual_read_only'||receipt.work_acceptance!=='not_evaluated'
         ||!/^op_[0-9a-f]{32}$/.test(receipt.observation_operation_id||'')||!/^[0-9a-f]{64}$/.test(receipt.document_digest||'')
         ||!Number.isFinite(receipt.recorded_at))throw Error(t('pm_kanban_scope_error'));
-      const recorded=new Date(receipt.recorded_at*1000).toISOString();
       result.replaceChildren(h('p',{class:'pm-kanban-note'},t('pm_kanban_manual_recorded')),h('p',{class:'pm-kanban-note'},t('pm_kanban_runtime_limits')),
-        h('p',{},t('pm_kanban_source_time'),': ',h('time',{datetime:recorded},recorded)),h('code',{class:'pm-source'},receipt.document_digest));
+        h('p',{},t('pm_kanban_source_time'),': ',timeStamp(receipt.recorded_at)),h('code',{class:'pm-source'},receipt.document_digest));
     },api:async(...args)=>{const ticket=generation;try{const data=await api(...args);alive();
       if(ticket!==generation)throw Object.assign(Error(),{code:'PM_DISPOSED'});return data;
     }catch(error){alive();if(ticket===generation&&[401,403,404].includes(error.status))onSourceFailure(error);throw error;}},errorBox});
-  editor.box.querySelector('button[type=submit]').className='secondary';
+  editor.box.querySelector('button[type=submit]').className='ui-button secondary ui-sm';
   select.addEventListener('change',()=>{result.replaceChildren();editor.update();});
   const box=h('div',{'data-pm-manual-observation':workId},h('h4',{},t('pm_kanban_manual_title')),editor.box,result);
   function update(rows){

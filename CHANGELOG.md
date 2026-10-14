@@ -2,6 +2,92 @@
 
 ## Next release (unreleased)
 
+- Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
+  build once after detaching only this job's leftover `/Volumes` images.
+
+- Keep Board recovery controls and keyboard focus stable across repeated read
+  failures, and reuse the initial activation read during workspace loading.
+
+- First-run BAT setup accepts a masked Connection URL paste, confirms the address
+  and abbreviated fingerprint without exposing credentials, and validates fields
+  before staging. Only proven admission refusals release the request; uncertain
+  replies retain its original key. English and zh-TW errors and connection terms
+  are readable, with technical facts in Details. Connected actions stay together,
+  completed steps collapse with even spacing, and one Settings Refresh preserves
+  page-only credentials and drafts. IME Escape keeps inspectors and menus open.
+
+- Reserve the returning Issues inspector before its reads finish, so related
+  chips do not disappear under the pointer when the side panel arrives.
+
+- Schedule at phone width fits every bar to the shared date range, with a range
+  caption and the Today line, and does not offer Day zoom there. Week ticks label
+  week starts only, so a partial opening week is not crowded under the sticky column.
+  Redrawing the board while it is scrolled does not drop those labels. Open ends
+  stay Open in English and zh-TW.
+
+- Governance, Meetings and Follow-ups use shared cards, compact context, localized
+  details and date-time editing. Register handoffs select and focus the requested
+  durable form without submitting it; original drafts and recovery keys remain intact.
+  Creation has one entry with focus and Cancel, read-only access explains its permission
+  requirement, and missing follow-up baseline areas are named in both languages.
+  Read-only reasons stay beside Refresh; unselected register governance shows a
+  selection hint, and finding toggles retain their label when selected.
+  Unavailable write entry points are hidden using each action's existing permissions;
+  drafts and original requests return when permission is restored.
+
+- Reviewed handoff facts no longer print empty placeholders. The issues register
+  names `format_valid` as "Format checked" / "格式已核對" (structure and cited
+  sources only; conclusions stay unaccepted). zh-TW operation, agent and provider
+  words use the existing label tables.
+
+- Sprints, AHP observations, work packages, package handoff, work batches and
+  delivery receipts open on the answer: a status pill, one main action, and
+  identifiers in Details. zh-TW uses 衝刺, 工作階段, 完成定義, 推送, 合併 and
+  工作流程執行. A saved merge, a deployment and an acceptance stay separate facts.
+
+- Those work tools keep Refresh on the first line, at the top right of the
+  selector or status. In a narrow row, including the inspector, a secondary
+  action such as New batch wraps under the selector. A new batch, result
+  evidence and every sprint form except the one next action stay closed until
+  asked. A failed read shows the error without an empty
+  catalog or an empty Sprint selector. Sprint dates are both absolute. A
+  delivery state is a pill, `PR #12` stays with its repository, and handoff
+  names the permission in words.
+
+- Name maintenance findings from the structured `finding` identity in the issues
+  register, Overview attention and discussion chips, in English and zh-TW.
+  Servers that omit `finding` keep the previous fallback. A withdrawn chip stays
+  unavailable and shows no identity. A row named from `finding` does not also
+  list a missing title. A neutral record says it is listed as an issue because
+  it has no type of its own. Disclosure chevrons snap to the open mark instead
+  of turning through a corner.
+
+- Add a repeatable real-central PM decision walkthrough in English and zh-TW,
+  with scripted native analysis, temporary Git, explicit issue resolution,
+  original-key adoption and resolution recovery, and step screenshots. Keep hidden
+  lifecycle admission fresh when events supersede Refresh, and pause original-key
+  retry controls while Central sending is paused;
+  see [walkthrough status](docs/design/pm-decision-walkthrough.md).
+
+- Refresh the English and Traditional Chinese README, PM first-use navigation and public
+  website around the project-to-decision journey. Replace the gallery with eight bilingual
+  scenes from one synthetic project, pinned to merged main `aba02180` with capture hashes.
+  Record which PRs are merged, and separate branch, installation and live evidence, in the
+  [October 14 progress report](docs/product/progress-2026-10-14.md).
+
+- Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
+  reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
+  `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
+  and withdrawn sources lose rows and counts together.
+  See the [dependency contract](docs/design/pm-dependencies.md).
+
+- Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
+  decisions, deviations and recent deliveries, retaining confirmed goals and recent
+  decided history and unresolved requirement blockers across plan revisions,
+  separate from fixed saved reports.
+  Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
+  See the [overview contract](docs/design/pm-overview-discussion-context.md).
+
 - Reuse completed PM source and operation visibility reads during synchronous
   page, step and final-frame validation. Discard memos on writes and before awaits;
   preserve current authority, withdrawal and original-receipt recovery checks.
@@ -24,16 +110,25 @@
   evidence. Candidate versions remain
   core 0.2.6 and desktop 0.1.2, upgrading from the fixed core 0.2.5 fixture.
 
-- Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
-  reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
-  `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,
-  and withdrawn sources lose rows and counts together.
-  See the [dependency contract](docs/design/pm-dependencies.md).
+- Apply the same worker diagnostics and failure cleanup to joined maintenance's
+  captured attempt waves, without changing the 60-second bound or durable receipts.
 
-- Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
-  decisions, deviations and recent deliveries, separate from fixed saved reports.
-  Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
-  See the [overview contract](docs/design/pm-overview-discussion-context.md).
+- Overview distinguishes unread milestone, delivery and charter sources from known
+  empty records in English and Traditional Chinese. Live updates keep the attention
+  row being read at its viewport position and preserve Progress Details focus and
+  open state. Attention stays in Central's severity/age order during passive viewing
+  and on return to Overview; focus, hover or text selection holds the existing order.
+  Passive anchoring starts after scrolling into the list; new top rows otherwise
+  appear in place without moving the page.
+  A text selection anchors its own row when rows above it change height.
+  Withdrawn rows and their counts still disappear immediately.
+
+- Make compact Requirements rows hide their table header, size report controls for
+  touch, and compare only changed statements with unchanged context collapsed.
+  Requirement inspectors show acceptance criteria once and identify the qualifying
+  review. Overview keeps decision text clear and explains delivered work awaiting
+  this round's acceptance, with Requirements and sourced PM discussion links in
+  English and Traditional Chinese.
 
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
@@ -42,11 +137,47 @@
   The PM profile catalog uses version 3; version 2 plans still read and adopt.
   See the [discussion contract](docs/design/pm-overview-discussion-context.md).
 
+- Issues & changes filters by shared status, open age and opening week. An age bar
+  or a week point filters the loaded rows and shows a removable chip. Status choices are the
+  shared groups, and an unknown status stays under Other. Counts say how many rows
+  are shown unless the catalogue is complete; a loaded count appears once in the
+  header. The type, title, status and next step
+  stay visible as the table narrows. A mapping row without a title uses its source
+  name. Board lanes fill the width in whole columns, keep each count, and ellipsize
+  the lane name. The board toolbar wraps whole controls. Filtered empty results
+  offer Clear filters; genuinely empty and incomplete reads have distinct states.
+  Board counts append the number shown while filtered, and horizontal lanes share
+  the tallest content height. Both panels keep Retry beside the read error, with
+  Board error Details inside the full-width banner. Empty filtered register results
+  hide trends until cleared, omit zero type counts and say None shown.
+  Register rows, inspector facts and timelines retain exact decision and operation
+  statuses such as Adopted and Reported done; status groups only filter rows.
+  Board cards and work inspectors retain Content approved without implying Done
+  or a passing completion definition.
+
 - Add a read-only issues, actions and changes register via `pm_register_list` and
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.
   Totals and summaries require complete relevant sources; hidden or withdrawn records
   are omitted from rows and aggregates together, while other readable records remain.
   See the [register contract](docs/design/pm-register.md).
+
+- Expose a structured `finding` identity on maintenance findings in `pm_register_list`,
+  `pm_register_get`, overview attention and discussion context chips. `title` stays null.
+  Missing or unproven facts are omitted and listed in `unknowns`. A withdrawn source
+  removes the row and the identity together.
+  See the [register contract](docs/design/pm-register.md).
+
+- Maintenance repairs, maintenance review, maintenance policy and release baselines
+  open on the current state, in English and zh-TW. Status uses a shared pill.
+  Record identifiers, digests and the limit note stay in Details, and each durable
+  form stays behind one action. "Turn into work" binds the finding and its matching
+  rule. "Record evidence" selects that saved repair. Nothing is written until submit,
+  and an unknown result still recovers with the original operation key.
+  The state sits beside Refresh. A repair limit reads as "4 per 24 h". Counts from
+  a source that was not observed stay Unknown. Each panel has one Details disclosure,
+  and review keeps one primary action with the rest under More actions.
+  Policy and release baselines keep that state on the Refresh row, with one divider.
+  A baseline's channel pills sit on the next line, under the selection.
 
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
   dates, including unscheduled work and execution attempts for a future schedule view.
@@ -58,6 +189,234 @@
   covering up to 92 local dates for usage charts. Complete days are settled, not frozen.
   Missing counters stay null; withdrawn sources lose buckets and totals together.
   See the [resource contract](docs/design/agent-resource-observation.md).
+
+- Keep PM discussion disclosures as the reader left them during live updates and
+  Refresh. A pending original request still opens Inputs when the thread is first
+  shown, including after a reload, and does not expand that section again later.
+
+- Add the shared Discuss with PM link builder and parser for exact context identities,
+  ordered deduplication and bounded Unicode titles across project views.
+
+- Keep each shell destination in one place per breakpoint; put All projects in the
+  Work header, truncate tree names accessibly and disclose partial project bindings.
+- Keep healthy connections Connected during view/source refreshes, canonicalize
+  unavailable PM view links and forget workspace preferences after access withdrawal.
+- Strengthen PM withdrawal tests across visible views; preserve icon license notices
+  in generated clients and desktop bundle resources, and improve muted text contrast.
+
+- Align sidebar rows on one icon/text grid; show Work read failures with compact
+  details and Retry, while unsupported or empty Work sources stay quiet.
+
+- Add shared UX v2 light/dark tokens, accessible UI primitives and local Lucide icons.
+  Unify headers, disclosures, Discuss links, search fields, filter chips, empty/loading
+  states and Refresh icons. Keep full accessible titles in narrow columns, identifiers
+  intact, compact chips with invisible mobile touch targets, and workspace chevrons after
+  their labels. Use bilingual action and operation-status labels across lifecycle,
+  work, capture and delivery flows; complete counts omit loaded markers, and missing
+  facts retain their unknown state.
+  Share compact bilingual timestamps, timezone tooltips, calendar-safe dates and one
+  visibility-aware minute ticker that retains selected text. Missing message times stay
+  empty after refreshes. Search and filters fit their columns, with a measured select
+  fallback for segmented controls. Narrow tables hide secondary columns beside
+  inspectors, Operations uses mobile rows, and the selected rail extends through long pages.
+- Coalesce event reads for the visible view and open tools across authenticated routes,
+  preserving parent authorization, drafts and original-key recovery. Mark hidden sources
+  stale and mask their facts until fresh activation reads settle. Ordinary work events
+  do not reload the sidebar catalog.
+- Unify the Web/Tauri workspace shell with compact navigation, explicit bound work,
+  a mobile drawer, canonical PM view routes and namespace-scoped view preferences.
+- Organize existing PM tools into Overview, Discussions, Requirements, Schedule,
+  Dependencies, Issues & changes, Agents and Board. Keep secondary tools in disclosures;
+  expose reports and lifecycle through header menus without changing durable actions.
+- Track durable PM forms by connection, releasing discarded forms and receipt subscribers
+  and restoring current gates immediately after refresh or inspector reattachment. Explain a gate that
+  closes during submission or receipt checking while preserving drafts and original keys.
+- Show live project status and what needs attention first in Overview, with compact charter cards
+  and saved reports on demand. Unknown values stay explicit and saved reports never mix in
+  live data. Open Overview issue and risk
+  attention items in the Issues & changes inspector, retaining the exact source and a meaningful
+  title for Discuss with PM. Label the pending count Open decisions (待決事項), show Recently decided
+  with visible completed decision titles, times and actors, linking their exact register
+  inspectors. An adopted discussion offers an authorized, editable Resolve issue form;
+  reported resolution preserves the original finding and remains unassessed. Leave not-started
+  progress as empty track, retain colored states at their true proportions, and omit repeated
+  plan provenance from the live Goal card. Completed decisions say just now or use “ago”;
+  attention keeps compact waiting ages, and both advance on live refresh.
+- Polish Discussions with inline renaming, compact context and thread rows, and a paired composer
+  toolbar. Proposal freshness follows central adoptability, an adopted proposal links its accepted
+  revision, and first-message drafts and original-key recovery survive reloads. Keep unsent PM
+  discussions focused on their draft; defer thread tools until the central discussion is created,
+  even when all PM capabilities are available. Reveal and focus the accepted PM revision when its
+  link opens the mobile Plan sheet, after the sheet establishes its focus boundary. Preserve the
+  central Adopted status and accepted-revision link immediately after a PM proposal adoption,
+  including recovery of its original receipt. Keep checking acknowledged PM operations while central
+  waits for child operations or checks, using the original receipt and bounded backoff. Name
+  every discussion context from central records in draft and saved threads, retaining
+  identity-only request params and the source's actual kind (including Issue / 問題).
+  Keep chips on one line with complete labels, use 決策 for decision records, retain
+  local drafts and prevent sending when a source becomes unavailable. Keep saved-context
+  captions, ages and analysis status in one readable text flow in the thread panel.
+- Show acceptance, PR merge and deployment evidence for each requirement in a shared work inspector,
+  with list rows on narrow screens and readable columns beside the docked inspector. Board adds
+  filters, keyboard navigation, one-line cards and mobile lanes, and keeps existing PM tools in
+  drawers. Requirements distinguishes accepted, unassessed and unknown quality coverage, marks
+  partial delivery evidence, and shows the requirement traceability chain. Auxiliary failures stay
+  local; live inspector actions retain focus and open menus. Board cards expose their recorded facts
+  to assistive technology, retain selected delivery pages across refreshes, and restore selection
+  and focus on return. Empty Boards show one empty state; paged lanes label counts as loaded.
+  Requirement inspectors show saved verification evidence when no qualifying review is available.
+  Withdrawal clears selection and returns focus to the view heading; snapshot conflicts expose raw
+  codes only in Details and offer a local retry. Live refresh of a Requirements milestone selection
+  preserves search and group-heading focus. Requirements work links open authorized unassigned work
+  even before a plan is adopted. Keep Board card metadata on one centred line with wider fallback
+  fonts, truncating flexible labels while preserving their full accessible names and delivery
+  evidence. Keep title columns readable beside inspectors, preserve search focus and row
+  expansion keys, and fit complete acceptance labels with wider fallback fonts. Verify
+  background preservation after the initial detail read settles.
+- Add the Schedule view: Day, Week and Month zoom over the central schedule projection, with dashed
+  baselines, outlined forecasts, filled actuals and an Open marker for an actual without end
+  evidence. Partial reads keep a Partial pill, and narrow screens get list rows with mini timelines.
+  Schedule shows "End time not recorded" for a terminal attempt with no end time, and "Open" only
+  when the projection marks the span open. Unscheduled omits rows already in the tree. The tree
+  keeps one tab stop. A hidden Schedule does not fetch. Day labels and the Today mark do not
+  collide, and narrow layouts share one timeline origin. Month ticks use short month names;
+  attempt actions and interval tooltips use shared localized labels and calendar dates.
+  Keep bar and delta labels above Today and beneath sticky titles, and fill the grid
+  without stretching its date scale.
+- Add the Dependencies view, which answers which checks to re-run when a dependency changes: a
+  component matrix with evidence styles, a bounded graph, and an inspector with the pinned version,
+  owner, tests to re-run and affected components. Capture again stays the durable header action.
+  Preserve distinct dependency declarations alongside captured relations and hide empty view hosts
+  after failed reads. Move Dependencies capture reasons below header actions; improve form layout,
+  touch targets, dark chip contrast, graph spacing and selected-cell outlines. Apply Dependencies
+  graph filters to cross-repository links and bound large matrix, graph and narrow list views with
+  explicit shown-versus-loaded counts and legends. Clear Dependencies form options and hide source
+  surfaces on failed reads, while retaining drafts and original operation keys. Refresh open impact
+  inspectors and restore inferred relation drafts in both languages. Count owner declarations
+  throughout Dependencies and disclose bounded impact, catalog gaps and declared-only results.
+  Component inspectors name their dependencies; Discuss with PM titles include the selected item and
+  captured commit. Preserve Dependencies keyboard focus across activation, live reads and inspector
+  close in the matrix, graph and narrow list; expose valid selection semantics.
+  Dim edges outside a selection, give a component from another repository its own
+  node and legend entry, and state partial impact, omitted tests and contract,
+  reference or service versions in plain language in English and zh-TW.
+- Show the central register in Issues & changes: type counts and the summary appear only when
+  coverage is complete, pagination stays honest, and a processing timeline offers Discuss and
+  Propose change. A selected row survives refreshes, and states read in the reader's language.
+- Show sourced token totals, a daily usage trend per CLI aligned to local days, and quota per pool
+  and window in Agents. The trend is requested only when the server offers daily buckets, and an
+  unavailable or withdrawn source leaves the totals, chart and inspector together.
+  Paused source snapshots remain fixed during event refreshes. Localized chart dates
+  keep a measured gap on narrow screens without dropping daily observations.
+- Keep Agents headings, totals, rows, inspectors and daily usage in one consistent
+  window when returning or receiving new usage. Refresh mismatched cached trends
+  together with totals, preserving immediate withdrawal. Use human tool names and
+  translated roles for sources and Discuss drafts, shared Unknown pills for missing
+  facts, and complete the Traditional Chinese usage labels. Reuse trends while
+  readable row facts are unchanged, including idle and partially observed sources.
+- Give the global screens (Pending, Operations, Delivery, Settings, first run and Projects) the
+  shared page header, inbox groups, operations table and inspector. Pending opens each operation
+  from its inspector and reports a failed read instead of an empty inbox, and every registered
+  action has an English and Traditional Chinese label. A failed Pending refresh shows no count, with
+  one Retry when every group fails; operation durations use a compact day and hour form.
+- Lay out the session transcript on one message grid with an inline agent chip. Tool events, labels
+  and checkpoints share the inspector's disclosures, and a linked work item reads Work · title. Keep
+  Session reply controls visible before focusing the input and after resizing. Complete the
+  Traditional Chinese execution-limit explanations. Preserve Session return locations through reload
+  and discussion drafts. Project inspector links carry their view, and Discuss returns to the exact
+  session. Make Session checkpoints quiet at rest, distinguish capable hosts and preserve disclosure
+  choices per connection. Continue forms expand below their actions and link to the new session only
+  when the central result identifies it. Withdraw unavailable Sessions as one inline state, retain
+  drafts and original retry keys, back off failed reads, and render message failures inside the
+  transcript. Validate and group Session Delivery receipts without clearing them during refresh;
+  distinguish transient failures, withdrawn sources and partial pages. Keep Session approval and
+  question actions visible without keyboard scrolling; cap prompt content, preserve transcript space
+  and use the shared Results drawer widths. Simplify manual-session copy and distinguish unknown
+  titles, agents and disclosures. Keep Session transcript position and tool disclosures stable
+  during live updates and resizing; restore focus on Back to latest and follow successful replies.
+  Show received message counts, consistent agent marks, compact durations and Person on manual
+  turns. Give mobile Session titles the full header width so wider fonts leave room for a whole
+  pending answer input. Keep Info and Compose distinct on narrow screens, age Sent
+  receipts from central completion times, and retain the shared inspector width and
+  heading hierarchy.
+
+- Add durable pinned-commit dependency inventories through the existing PM Git carrier, with
+  lockfile evidence, Build/Test classification, CI verification hints, sourced owner declarations,
+  immutable history and bounded reverse impact reads. HTTP, MCP/RPC and native read routes share
+  current membership and source withdrawal; capture never executes repository code. Lockfile
+  versions count as verified only for components the lockfile covers (never by name alone),
+  unsupported fields make a capture partial, and freshness stays unknown until a repository head
+  is observed. Optional extras and tool-specific dev groups keep their roles; an oversized
+  manifest is stored as a deterministic partial capture with its omission count.
+
+- Add the central live PM overview (`pm_overview_get` / workspace `/overview`),
+  with adopted-requirement progress, explicit blockers, decisions, schedule/quality
+  deviations that retain revoked acceptance until reacceptance, current review/proposal
+  state, rollback evidence and bounded source
+  coverage. Hidden lifecycle transitions and filtered pending operations remain
+  incomplete. Hidden or oversized sources stay partial with distinct unavailability
+  and size-limit reasons; source references respect
+  the whole document's limit without withdrawing complete source counts. Reads share a snapshot and request-local source cache.
+  Saved reports retain their fixed snapshot semantics.
+- Bind up to eight original context items when creating a PM discussion and rename
+  threads with durable version checks while preserving title-only proposal adoption.
+  Renaming waits for any in-flight adoption to finish, protecting its original children.
+  Proposal views publish the same adoptability rule used by admission; the shared
+  UI uses it after a rename. Version 3 profiles retain compatibility with version 2 plan documents. Bound
+  analysis references use each original revision's operation. Source withdrawal redacts chips and
+  protects analysis derived from their frozen context; English and Traditional
+  Chinese validation messages accompany the new context errors.
+
+- Add a read-only issues, actions and changes register (`pm_register_list`, `pm_register_get`).
+  Each row keeps its source record's identity and canonical status. Totals, open-item age, the
+  last 12 weeks and blocking reasons are included only when every source that matches the active
+  type filter was read completely. One skipped 409 or 413 record stays out of that source and
+  marks it partial, so the totals and the summary are null; the other readable records stay
+  listed. A withdrawn source leaves the remaining rows and the counts together. Detail
+  timelines follow each stored foreign key one hop in both directions. A hidden target is
+  skipped. A target that returns 409 or 413 stays off the timeline and marks that source
+  partial. A lineage-hidden repair does not remove a visible finding's repair action.
+  A meeting read that starts after a follow-up sequence reports that cutoff in
+  `coverage.histories.follow_ups.after`. Adopted plan rows are ordered by the
+  immutable plan revision sequence.
+  A hidden row is
+  omitted from rows, counts and summary together and does not fail the page. Row ids are
+  path-safe (`governance.pmgov_…`) and cursors are opaque sequence tokens. The projection adds
+  no write actions.
+
+- Add a read-only project schedule projection (`GET /api/v1/pm/workspaces/{workspace_id}/schedule`,
+  `pm_schedule_get`). Baseline and forecast dates come only from the current roadmap revisions.
+  Actual intervals come only from explicit execution evidence. Manual sessions stay read-only.
+  The read does not compute a forecast, a critical path, phase rows, or per-work token use.
+  A visible session link with no observation stays an unknown read-only attempt. A linked
+  operation or task with no record is omitted, marked partial, and does not publish the id.
+  The page is cut by encoded size and by a 64-root lineage budget. `next_cursor` is an
+  opaque base64url keyset, so the next page resumes without gaps. Requirement text is kept
+  verbatim. Withdrawn work items, runs, operations, sessions, and tasks leave together with
+  the dates derived from them, and their ids do not appear in rows or cursors.
+  A hidden run does not take a session's run slot or remove the visible `run_id`. The
+  per-session scan stops at a second visible run, or after 64 rows when that choice is
+  still open, and then omits `run_id`. A hidden issue mapping does not consume the
+  200-row issue cap or mark the page partial. A link to a hidden operation, task,
+  or session does not consume the attempt-link caps or withhold a visible attempt.
+  A task's `waiting.since` uses the latest transition into the current state,
+  including named task events. Every schedule cursor the server issues is accepted
+  back, including a row id that contains a control character. A plan or one issue
+  mapping that lineage refuses is hidden; it does not fail the schedule read.
+  A cancelled or failed operation ends at the matching status event, including a
+  failure that never recorded a failed step. An attempt whose own lineage does not
+  fit is omitted before its work's dates and status are derived.
+  See `docs/design/pm-schedule.md`.
+
+- Add opt-in daily usage buckets to the existing PM resources read. `pm_resources_get`
+  returns per-source local days only when `buckets=day` is set; `tz` is then an exact IANA
+  name and defaults to UTC. The window is still at most 366 days. Daily buckets additionally
+  cover at most 92 local dates. A day is complete only when the collector's read started at
+  or after that local day's end plus a settle margin (`max(15 minutes, 3 × interval)`), the
+  stored cursor had reached EOF, and the window contains the whole day. A later Claude
+  refinement can still land on its first-fragment day, so `complete` is settled coverage
+  rather than a frozen total. Missing counters and uncovered days stay null, and withdrawn
+  sources omit buckets together with their totals.
 
 - Windows desktop: give the read-only Fleet contract process its own bounded PowerShell
   startup phase (at most 60 seconds) before the unchanged 10-second request deadline.
@@ -72,9 +431,8 @@
 - Diagnose durable-operation test timeouts with worker/step details and join failed
   test workers before journal teardown, preserving the existing deadline and original-key
   recovery.
-
-- Apply the same worker diagnostics and failure cleanup to joined maintenance's
-  captured attempt waves, without changing the 60-second bound or durable receipts.
+- The cleanup integration test keeps reading the same operation until its status is terminal
+  before the existing success checks, so early item receipts no longer fail a still-running cleanup.
 
 - Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
@@ -91,10 +449,6 @@
 - Formal signing, Mac notarization, production update channels and Linux persistent native
   credential enrollment are outside this delivery. Real-environment acceptance is user-owned;
   these exclusions do not claim corresponding features or tests are complete.
-
-- Keep PM discussion disclosures as the reader left them during live updates and
-  Refresh. A pending original request still opens Inputs when the thread is first
-  shown, including after a reload, and does not expand that section again later.
 
 - Backport the official GLib iterator fix for RUSTSEC-2024-0429 into the Linux
   desktop dependency graph. Preserve the original crate version/license and exact
@@ -117,6 +471,8 @@
   worktrees for reviewed cleanup. Publish the same workflow in canonical agent skill `.8`.
 - Add fixed-selection batch approval and managed artifact capture/review to the shared UI. Preserve
   each original request, operation and immutable revision across reloads and partial outcomes.
+- Keep engineering handoff prerequisite selectors disabled while their sources are read. A slow read
+  can no longer drop a selected assessment, and batch preflight refuses unavailable sources.
 - Add Task Service reviewed cleanup and automatic eligible lifecycle cleanup using the same central
   ownership, control-version and live-consumer checks. Retain dirty/unique content and task history.
 - Add native file picker/drop uploads, bounded literal text/static PNG preview, and Save As for an
@@ -513,11 +869,6 @@
   Only the first inserted receipt emits history, preserving its code without PR text; legacy receipts use the
   same sanitized backfill. Delivery DDL checks use the journal's latest allocated data-step constant.
 
-- Record the [Tauri v2 product scope](docs/product/realignment-v2.md) and
-  [integration status](docs/product/implementation-status.md) (R00). Keep the central Python backend and
-  share the browser/desktop UI; exclude Hub import and redefine B05 as Connector data preservation.
-  Desktop, Fleet parity and live acceptance remain tracked work, not completed capabilities.
-
 - Keep deployment rollback/retry keys stable across drawer close, live refresh and page reload for the same
   reviewed request. Let explicit PR loading proceed while environment details remain open, render only HTTPS
   provider links, and translate the new deployment labels in zh-TW. Browser regressions use a local daemon
@@ -907,6 +1258,30 @@
   and log reference. Jev and `BAT-STATUS` remain completion claims, not test evidence.
 - In-process writes now serialize per host. The remaining GUI workspace-save race and cross-process
   ownership limits are documented in `docs/design/next-gen-connector.md`.
+- Split CI into pytest shards and separate frontend, browser and central UI jobs.
+  Balance files by measured times, verify full coverage and preserve native checks.
+
+- Overview now shows live project status and attention first, with compact charter cards and saved reports
+  on demand. Unknown values remain explicit, and saved reports never mix in live data.
+- Added a bilingual Schedule timeline with recorded baseline, forecast and actual evidence, accessible
+  inspection, bounded paging, and preserved roadmap and sprint actions.
+
+- Dependencies view: technology matrix, layered graph and impact for a captured inventory, with durable
+  capture, declare and retract, and honest partial, stale and omitted states in English and zh-TW.
+
+- Discussions open from any 'Discuss with PM' link with the record already attached, an automatic title and
+  the composer focused. Threads support inline renaming, compact context chips and a paired Send / Ask PM
+  composer, and proposal adoption follows the central adoptability state while preserving drafts and
+  original-key recovery.
+
+- Global screens (Pending, Operations, Delivery, Settings, first run, Projects) share the page header,
+  inbox groups, an operations table with an inspector, and settings sections. Pending uses one segmented
+  switch and one list per group, browser Settings shows one section at a time, and rail rows show a status
+  mark instead of a status word.
+
+- Issues & changes reads the central register: type counts and the summary appear only when coverage is
+  complete, with honest pagination, a compact summary strip, list rows on narrow screens, and a processing
+  timeline with Discuss and Propose change.
 
 ## 0.2.4 (unreleased)
 
