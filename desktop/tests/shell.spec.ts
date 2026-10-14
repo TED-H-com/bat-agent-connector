@@ -88,8 +88,8 @@ for (const kind of ['pm_evidence', 'project']) test(`binding withdrawal removes 
   await expect(page.locator('.workspace-tree-status')).toContainText('scope');
   await expect(page.locator('.workspace-tree-status')).not.toContainText('Last observed work is retained');
   const failure = page.locator('[data-work-read-error]');
-  await expect(failure.locator('summary')).toHaveText('Work links unavailable');
-  await expect(failure.locator('details')).not.toHaveAttribute('open', '');
+  await expect(failure.locator(':scope > details > summary')).toHaveText('Work links unavailable');
+  await expect(failure.locator(':scope > details')).not.toHaveAttribute('open', '');
   await expect(failure.getByRole('button', {name: 'Retry', exact: true})).toBeVisible();
   f.state.denyBindings = false;
   await failure.getByRole('button', {name: 'Retry', exact: true}).click();
@@ -403,4 +403,11 @@ test('global Projects starts at the rail padding and New workspace remains disco
   expect(first!.y-bounds!.y).toBe(16);
   await rail.getByRole('button',{name:'Tools',exact:true}).click();
   await expect(rail.getByRole('menuitem',{name:'New workspace',exact:true})).toBeVisible();
+});
+
+for (const composing of [{isComposing:true}, {keyCode:229}]) test(`IME Escape keeps the mobile drawer open ${JSON.stringify(composing)}`, async ({page}) => {
+  await page.setViewportSize({width:390,height:844});const f=fixture();await mountConversation(page,false,f.dispatch);await page.goto(route);
+  const opener=page.locator('#workspace-menu');await opener.click();const drawer=page.locator('.workspace-nav');
+  await drawer.dispatchEvent('keydown',{key:'Escape',bubbles:true,...composing});await expect(drawer).toBeVisible();await expect(drawer).toHaveAttribute('aria-modal','true');
+  await page.keyboard.press('Escape');await expect(drawer).toBeHidden();await expect(opener).toBeFocused();expect(f.pm.base.state.writes).toHaveLength(0);
 });

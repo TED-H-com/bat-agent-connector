@@ -430,7 +430,8 @@ test('a second analysis with a lost reply shows Retry and never reuses a complet
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-discussion-working]')).toHaveText('PM finished');
   await page.locator('[data-discussion-ask]').click();
-  const status = page.locator('[data-discussion-working]'); await expect(status).toContainText('Original reply unavailable');
+  const status = page.locator('[data-discussion-working]'); await expect(status).toContainText('This request could not be completed. Check Details.');
+  await expect(page.locator('[data-pm-action="pm.conversation.propose"] [data-error-details]')).toContainText('Original reply unavailable');
   await expect(status).not.toContainText('PM finished');
   await status.getByRole('button', {name: 'Retry', exact: true}).click(); await expect(status).toHaveText('PM finished');
   expect(f.discussion.writes).toHaveLength(3); expect(f.discussion.writes[2]).toEqual(f.discussion.writes[1]); expect(f.discussion.operations.size).toBe(2);

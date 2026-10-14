@@ -1,7 +1,7 @@
 // Register pages for the member sign-in demo. Shapes follow pm_register._view / get_register.
 // The unfiltered list ends after three rows, the way a lineage-root budget ends a page early.
 // The cursor is opaque. Callers pass it back unchanged.
-import {digest, hexId, type DemoProject} from './project.ts';
+import {digest, hexId, iso, type DemoProject} from './project.ts';
 
 export const REGISTER_PAGE_CURSOR = 'cmVnMQ';
 
@@ -64,12 +64,12 @@ function row(project: DemoProject, spec: {
   impact?: string | null, priority?: string | null, next_step?: string | null, due?: string | null,
   source: {kind: string, id: string}, requirements?: string[], work?: string[], prs?: {repository: string, number: number}[],
   actions?: {action: string, target: Record<string, unknown>, required: Record<string, unknown>}[],
-  unknowns?: Record<string, string>, finding?: Record<string, unknown>,
+  unknowns?: Record<string, string>, finding?: Record<string, unknown>, created_at?: string | null,
 }) {
   const value: Record<string, unknown> = {
     row_id: spec.row_id, type: spec.type, type_basis: spec.basis, title: spec.title, status: spec.status,
     owner: spec.owner, due: spec.due ?? null, impact: spec.impact ?? null, priority: spec.priority ?? null,
-    next_step: spec.next_step ?? null, created_at: null, updated_at: null, source: spec.source,
+    next_step: spec.next_step ?? null, created_at: spec.created_at ?? null, updated_at: null, source: spec.source,
     related: {requirement_ids: spec.requirements || [], work_item_ids: spec.work || [], prs: spec.prs || []},
     available_actions: spec.actions || [], unknowns: spec.unknowns || {},
   };
@@ -83,7 +83,7 @@ function rowsFor(project: DemoProject) {
   const findings = demoFindings(project);
   const observed = {type: 'issue', basis: 'neutral', title: null, status: 'observed_open', owner: null, next_step: null};
   return [
-    row(project, {row_id: ids.finding, ...observed, impact: text.impact, priority: text.priority, source: {kind: 'finding', id: findings.issue.id},
+    row(project, {row_id: ids.finding, ...observed, impact: text.impact, priority: text.priority, created_at: iso(project.now, 0), source: {kind: 'finding', id: findings.issue.id},
       requirements: [project.ids.requirements.email], work: [project.ids.work.email],
       prs: [{repository: project.ids.repository, number: 87}],
       actions: [{action: 'pm.maintenance.repair', target: {workspace_id: project.ids.workspaceId}, required: {
@@ -92,19 +92,19 @@ function rowsFor(project: DemoProject) {
       }}, {action: 'pm.maintenance.repair.evidence.record', target: {workspace_id: project.ids.workspaceId, repair_id: hexId('pmrp_', 1, 32)}, required: {}}],
       unknowns: {owner: 'not_recorded'}, finding: findings.issue.finding}),
     row(project, {row_id: ids.decision, type: 'decision', basis: 'explicit', title: project.copy.decisions.budget, status: 'open', owner: project.ids.actor,
-      due: '2026-10-20T12:00:00.000+00:00', source: {kind: 'plan_revision', id: project.ids.planV3}}),
+      due: '2026-10-20T12:00:00.000+00:00', created_at: iso(project.now, -1), source: {kind: 'plan_revision', id: project.ids.planV3}}),
     row(project, {row_id: ids.change, type: 'change', basis: 'explicit', title: project.copy.proposalTitle, status: 'proposed', owner: project.ids.actor,
-      source: {kind: 'proposal', id: project.ids.proposalId}}),
+      created_at: iso(project.now, -12), source: {kind: 'proposal', id: project.ids.proposalId}}),
     row(project, {row_id: ids.mapping, type: 'issue', basis: 'explicit', title: null, status: 'tracking', owner: null,
       source: {kind: 'issue_mapping', id: project.ids.issueMapping}, unknowns: {title: 'not_recorded', owner: 'not_recorded'}}),
     row(project, {row_id: ids.risk, type: 'risk', basis: 'explicit', title: text.risk, status: 'blocked', owner: project.ids.actor,
-      source: {kind: 'governance', id: riskId()},
+      created_at: iso(project.now, -40), source: {kind: 'governance', id: riskId()},
       actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId, record_id: riskId()}, required: {}}]}),
     row(project, {row_id: ids.action, type: 'action', basis: 'explicit', title: text.action, status: 'in_progress', owner: project.ids.actor,
-      source: {kind: 'follow_up', id: followId()}}),
-    row(project, {...observed, row_id: ids.pull, source: {kind: 'finding', id: findings.pull.id}, finding: findings.pull.finding, unknowns: {title: 'not_recorded'}}),
-    row(project, {...observed, row_id: ids.alert, source: {kind: 'finding', id: findings.alert.id}, finding: findings.alert.finding, unknowns: {title: 'not_recorded'}}),
-    row(project, {...observed, row_id: ids.bare, source: {kind: 'finding', id: findings.bare.id}, finding: findings.bare.finding,
+      created_at: iso(project.now, -100), source: {kind: 'follow_up', id: followId()}}),
+    row(project, {...observed, row_id: ids.pull, created_at: iso(project.now, -15), source: {kind: 'finding', id: findings.pull.id}, finding: findings.pull.finding, unknowns: {title: 'not_recorded'}}),
+    row(project, {...observed, row_id: ids.alert, created_at: iso(project.now, -50), source: {kind: 'finding', id: findings.alert.id}, finding: findings.alert.finding, unknowns: {title: 'not_recorded'}}),
+    row(project, {...observed, row_id: ids.bare, created_at: iso(project.now, -120), source: {kind: 'finding', id: findings.bare.id}, finding: findings.bare.finding,
       unknowns: {title: 'not_recorded', 'finding.package': 'not_recorded'}}),
   ];
 }
@@ -122,15 +122,23 @@ function ages(counts: Record<string, number>) {
 function summary(project: DemoProject, selected: ReturnType<typeof rowsFor>, reasons: {reason: string, count: number}[]) {
   const open = selected.filter(item => ['open', 'monitoring', 'observed_open', 'blocked', 'tracking', 'needs_review', 'proposed', 'in_progress', 'draft'].includes(item.status || ''));
   const counts = {'0-7d': 0, '8-30d': 0, '31-90d': 0, '90d+': 0};
-  if (open.some(item => item.type === 'decision')) counts['0-7d'] += open.filter(item => item.type === 'decision' || item.type === 'action').length;
-  else if (open.some(item => item.type === 'change')) counts['8-30d'] = open.length;
-  else {
-    counts['0-7d'] = 2; counts['8-30d'] = 1; counts['31-90d'] = 1; counts['90d+'] = 1;
+  for (const item of open) {
+    if (typeof item.created_at !== 'string') continue;
+    const days = (project.now - Date.parse(item.created_at)) / 86400000;
+    if (!Number.isFinite(days) || days < 0) continue;
+    const bucket = days < 8 ? '0-7d' : days < 31 ? '8-30d' : days < 91 ? '31-90d' : '90d+';
+    counts[bucket]++;
   }
   const weeks = weekStarts(project.now);
+  const monday = (value: unknown) => {
+    if (typeof value !== 'string') return null;
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return null;
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - (date.getUTCDay() + 6) % 7)).toISOString().slice(0, 10);
+  };
   return {
     open_by_age: ages(counts),
-    weekly: weeks.map((week_start, index) => ({week_start, opened: index === weeks.length - 1 ? (reasons.length ? 2 : 1) : 0, resolved: index === weeks.length - 1 ? 1 : 0})),
+    weekly: weeks.map(week_start => ({week_start, opened: selected.filter(item => monday(item.created_at) === week_start).length, resolved: 0})),
     blocking_reasons: reasons,
   };
 }

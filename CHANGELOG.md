@@ -8,6 +8,14 @@
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.
 
+- First-run BAT setup accepts a masked Connection URL paste, confirms the address
+  and abbreviated fingerprint without exposing credentials, and validates fields
+  before staging. Only proven admission refusals release the request; uncertain
+  replies retain its original key. English and zh-TW errors and connection terms
+  are readable, with technical facts in Details. Connected actions stay together,
+  completed steps collapse with even spacing, and one Settings Refresh preserves
+  page-only credentials and drafts. IME Escape keeps inspectors and menus open.
+
 - Reserve the returning Issues inspector before its reads finish, so related
   chips do not disappear under the pointer when the side panel arrives.
 
@@ -118,6 +126,24 @@
   Withdrawn context is redacted and access to analysis derived from it remains protected.
   The PM profile catalog uses version 3; version 2 plans still read and adopt.
   See the [discussion contract](docs/design/pm-overview-discussion-context.md).
+
+- Issues & changes filters by shared status, open age and opening week. An age bar
+  or a week point filters the loaded rows and shows a removable chip. Status choices are the
+  shared groups, and an unknown status stays under Other. Counts say how many rows
+  are shown unless the catalogue is complete; a loaded count appears once in the
+  header. The type, title, status and next step
+  stay visible as the table narrows. A mapping row without a title uses its source
+  name. Board lanes fill the width in whole columns, keep each count, and ellipsize
+  the lane name. The board toolbar wraps whole controls. Filtered empty results
+  offer Clear filters; genuinely empty and incomplete reads have distinct states.
+  Board counts append the number shown while filtered, and horizontal lanes share
+  the tallest content height. Both panels keep Retry beside the read error, with
+  Board error Details inside the full-width banner. Empty filtered register results
+  hide trends until cleared, omit zero type counts and say None shown.
+  Register rows, inspector facts and timelines retain exact decision and operation
+  statuses such as Adopted and Reported done; status groups only filter rows.
+  Board cards and work inspectors retain Content approved without implying Done
+  or a passing completion definition.
 
 - Add a read-only issues, actions and changes register via `pm_register_list` and
   `pm_register_get`, with source identities, recorded statuses and linked detail timelines.

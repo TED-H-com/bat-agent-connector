@@ -48,7 +48,7 @@ test('creation layout', async ({browser, baseURL}, testInfo) => {
       await page.setViewportSize({width,height:900});
       for (const [name, route] of [['project','projects'],['item','project/'+pid],['locations','settings']]) {
         await page.goto('/dashboard/#/'+route);
-        const details = page.locator(name === 'locations' ? '[data-managed-locations]' : '[data-create-advanced]');
+        const details = page.locator(name === 'locations' ? '[data-connection-card] > details' : '[data-create-advanced]');
         await details.locator('summary').click();
         await expect(details).toHaveAttribute('open','');
         expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);

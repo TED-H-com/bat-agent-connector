@@ -290,3 +290,12 @@ for (const locale of ['en', 'zh-TW']) test(`search chrome and chip names ${local
   expect(await page.locator('.ui-context-chip button').evaluate(node => getComputedStyle(node,'::before').content)).not.toBe('none');
   await context.close();
 });
+
+for (const composing of [{isComposing:true}, {keyCode:229}]) test(`IME Escape keeps the menu and inspector open ${JSON.stringify(composing)}`, async ({page}) => {
+  await mount(page);const trigger=page.getByRole('button',{name:'Actions',exact:true});await trigger.click();
+  await page.getByRole('menuitem',{name:'First',exact:true}).dispatchEvent('keydown',{key:'Escape',bubbles:true,...composing});
+  await expect(page.getByRole('menu')).toBeVisible();await page.keyboard.press('Escape');await expect(page.getByRole('menu')).toBeHidden();await expect(trigger).toBeFocused();
+  await page.getByRole('button',{name:'Inspect',exact:true}).click();const panel=page.locator('.ui-inspector');
+  await panel.dispatchEvent('keydown',{key:'Escape',bubbles:true,...composing});await expect(panel).toBeVisible();
+  await page.keyboard.press('Escape');await expect(panel).toHaveCount(0);await expect(page.getByRole('button',{name:'Inspect',exact:true})).toBeFocused();
+});

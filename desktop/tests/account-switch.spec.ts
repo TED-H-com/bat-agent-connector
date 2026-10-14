@@ -1,3 +1,4 @@
+import {expectClientError} from './api-error-assertions.ts';
 import {test, expect} from "@playwright/test";
 
 for (const pause of ["digest", "lookup"]) {
@@ -77,6 +78,6 @@ test("native bootstrap mismatch returns to connection settings without reading d
   });
   await page.goto("/dashboard/");
   await expect(page.getByRole("heading", {name: "Desktop central connection"})).toBeVisible();
-  await expect(page.getByText("Invalid central bootstrap identity")).toBeVisible();
+  await expectClientError(page, "Invalid central bootstrap identity");
   expect(await page.evaluate(() => (window as any).__requests)).toEqual(["/bootstrap"]);
 });
