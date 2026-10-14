@@ -2,8 +2,26 @@
 
 ## Next release (unreleased)
 
+- PM background updates no longer disable a pressed Save button and lose a plan
+  revision submission. Explicit refreshes, lifecycle changes and source withdrawal
+  still close admission gates, with late-response protection preserved.
+
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
+
+- Sessions show a status pill in the list, rail and header only when they need
+  attention or are active (`Waiting for you` / `等待處理`, `Running` / `執行中`,
+  `Out of sync` / `未同步`, or managed failure/attention). Unloaded tabs with
+  unknown activity stay quiet in the list and note "Not open in BAT" /
+  "BAT 中未開啟" in Details; loaded tabs without a reported streaming flag note
+  "BAT did not report activity" / "BAT 未回報活動狀態" in Details.
+  `GET /api/v1/sessions/{host}/{id}/messages` adds `reading.incomplete_reasons`
+  (`archive_unconfirmed`, `archive_budget`, `message_ids`) and optional
+  `reading.unindexed_count`, and the conversation header replaces the generic
+  "Partial history" warning with reason-specific quiet notes and `N+` unread
+  lower bounds, including alongside archive budget and unconfirmed-history notes.
+  Session details label the Session ID correctly, translate Workspace as 工作區 in
+  zh-TW, and show the formatted observed time once without a duplicate raw ISO code tag.
 
 - Keep Board recovery controls and keyboard focus stable across repeated read
   failures, and reuse the initial activation read during workspace loading.

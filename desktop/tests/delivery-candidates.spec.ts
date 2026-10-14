@@ -97,8 +97,8 @@ for (const native of [false, true]) for (const locale of ['en-US', 'zh-TW']) for
     await expect(page.getByText('agent/result-5', {exact: true})).toBeVisible();
     if (!process.env.DELIVERY_BASELINE) {
       const row = (i: number) => page.getByText(`agent/result-${i}`, {exact: true}).locator('..');
-      const labels = locale === 'zh-TW' ? ['輸出中', '未輸出', '等你回答', '觀測待更新', '活動狀態未確認', '已結束']
-        : ['streaming', 'not streaming', 'asking you', 'Observation needs updating', 'Activity unknown', 'ended'];
+      const labels = locale === 'zh-TW' ? ['輸出中', '未輸出', '等你回答', '觀測待更新', 'BAT 未回報活動狀態', '已結束']
+        : ['streaming', 'not streaming', 'asking you', 'Observation needs updating', 'BAT did not report activity', 'ended'];
       for (let i=0; i<6; i++) {
         await expect(row(i)).toContainText(labels[i]);
         await expect(row(i)).toContainText(locale === 'zh-TW' ? '成果尚未驗證' : 'Result unverified');

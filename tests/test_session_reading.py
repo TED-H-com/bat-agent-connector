@@ -287,3 +287,62 @@ async def test_tool_rows_change_page_offsets_without_entering_read_counts(daemon
     with_tools = reading.observe(daemon.journal, READER, document(True), generation=old)
     assert with_tools["reading"]["position"]["page_offset"] == 2
     assert with_tools["reading"]["unread_count"] == 2
+
+
+async def test_incomplete_reasons_and_unindexed_count_follow_current_read_with_mock_bat(served, mock):
+    d, port = served
+    auth = api.token(d, "reader", "observe")
+    path = "/api/v1/sessions/h1/sess-claude/messages?last_n=5"
+
+    # Complete read has no incomplete_reasons and no unindexed_count.
+    status, doc = await api.http(port, "GET", path, tok=auth)
+    assert status == 200 and doc["reading"]["complete"] is True
+    assert doc["reading"]["incomplete_reasons"] == []
+    assert "unindexed_count" not in doc["reading"]
+
+    # hasMore missing -> archive_unconfirmed.
+    mock.handlers["claude:load-archived"] = lambda p: {
+        "messages": [{"id": "arch-missing-flag", "role": "user", "content": "archived"}],
+        "total": 1,
+    }
+    status, doc = await api.http(port, "GET", path, tok=auth)
+    assert status == 200 and doc["reading"]["complete"] is False
+    assert doc["reading"]["incomplete_reasons"] == ["archive_unconfirmed"]
+    assert "unindexed_count" not in doc["reading"]
+
+    # Non-dict answer -> archive_unconfirmed.
+    mock.handlers["claude:load-archived"] = lambda p: ["not-a-dict"]
+    status, doc = await api.http(port, "GET", path, tok=auth)
+    assert status == 200 and doc["reading"]["complete"] is False
+    assert doc["reading"]["incomplete_reasons"] == ["archive_unconfirmed"]
+    assert "unindexed_count" not in doc["reading"]
+
+    # 3,000-message budget reached -> archive_budget.
+    mock.handlers["claude:load-archived"] = lambda p: {
+        "messages": [
+            {"id": f"budget-{p['offset'] + i}", "role": "assistant", "content": f"item {p['offset'] + i}"}
+            for i in range(p["limit"])
+        ],
+        "hasMore": True,
+        "total": 3500,
+    }
+    status, doc = await api.http(port, "GET", path, tok=auth)
+    assert status == 200 and doc["reading"]["complete"] is False
+    assert doc["reading"]["incomplete_reasons"] == ["archive_budget"]
+    assert "unindexed_count" not in doc["reading"]
+
+    # Duplicate ID and missing ID -> message_ids + unindexed_count.
+    mock.handlers["claude:load-archived"] = lambda p: {
+        "messages": [
+            {"id": "dup-id", "role": "assistant", "content": "first"},
+            {"id": "dup-id", "role": "assistant", "content": "second"},
+            {"role": "assistant", "content": "missing id"},
+        ],
+        "hasMore": False,
+        "total": 3,
+    }
+    status, doc = await api.http(port, "GET", path, tok=auth)
+    assert status == 200 and doc["reading"]["complete"] is False
+    assert doc["reading"]["incomplete_reasons"] == ["message_ids"]
+    assert doc["reading"]["unindexed_count"] == 3
+

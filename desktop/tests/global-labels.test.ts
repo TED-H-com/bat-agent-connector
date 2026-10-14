@@ -48,6 +48,11 @@ test('rail words are loud only when the user is needed', () => {
   assert.equal(asking?.labelKey, 'rail_asking');
   assert.equal(railPresentation({key: 'workspace_needs_you'})?.loud, true);
   assert.equal(railPresentation({key: 'workspace_needs_you'})?.labelKey, 'rail_needs_you');
+  assert.equal(railPresentation({key: 'sessions_stale'})?.loud, true);
+  assert.equal(railPresentation({key: 'sessions_stale'})?.labelKey, 'sessions_pill_stale');
+  assert.equal(railPresentation({key: 'sessions_not_seen'})?.labelKey, 'sessions_pill_stale');
+  assert.equal(railPresentation({key: 'sessions_not_loaded'}), null);
+  assert.equal(railPresentation({key: 'sessions_activity_unknown'}), null);
   assert.equal(railPresentation({key: 'wi_state_doing', tone: ''}), null);
   assert.equal(railPresentation({key: 'op_failed'})?.labelKey, 'rail_failed');
   assert.equal(railPresentation(null), null);

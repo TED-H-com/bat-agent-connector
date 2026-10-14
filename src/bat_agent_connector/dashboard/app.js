@@ -4778,7 +4778,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_pausing: "已停止新投入，既有工作待核對",
 		pm_lifecycle_closing: "已停止新投入，結案工作待核對",
 		pm_lifecycle_active_help: "這是整個工作區的管理階段；各討論、Sprint 承諾與執行授權仍各自保留。",
-		pm_lifecycle_stopped_help: "已停止受理新的受管理工作。既有結果仍可查回，其他控制者的 session 保持原狀。",
+		pm_lifecycle_stopped_help: "已停止受理新的受管理工作。既有結果仍可查回，其他控制者的工作階段保持原狀。",
 		pm_lifecycle_legacy_help: "這個工作區尚未記錄管理階段，系統未重新歸類原有工作。",
 		pm_lifecycle_unknown: "目前無法讀取工作區狀態，重新取得資料後才能調整投入。",
 		pm_lifecycle_manage: "調整專案投入",
@@ -7922,7 +7922,11 @@ var STRINGS = {
 		sessions_runtime_stale: "活動與待回覆資訊尚未重新確認。",
 		sessions_not_seen: "最近掃描未見",
 		sessions_stale: "觀測待更新",
-		sessions_activity_unknown: "活動狀態未確認",
+		sessions_activity_unknown: "BAT 未回報活動狀態",
+		sessions_not_loaded: "BAT 中未開啟",
+		sessions_pill_waiting: "等待處理",
+		sessions_pill_stale: "未同步",
+		sessions_pill_running: "執行中",
 		permissions_title: "工作階段權限",
 		permissions_mode: "要求的模式",
 		permissions_default: "一般權限",
@@ -8583,9 +8587,14 @@ var STRINGS = {
 		conversation_remember: "記住閱讀位置",
 		conversation_older: "更早的訊息",
 		conversation_unread: "上次觀察：{count} 則未讀",
-		conversation_partial: "部分紀錄：{count} 則未讀",
+		conversation_unread_lower_bound: "{count}+ 則未讀",
+		conversation_message_ids_detail: "部分訊息沒有 ID，未計入未讀數。",
+		conversation_archive_budget: "顯示最近 3,000 則訊息",
+		conversation_archive_unconfirmed: "較早的訊息可能未載入",
+		conversation_archive_unconfirmed_detail: "BAT 未確認歷史紀錄是否已到結尾。",
+		conversation_partial: "{count}+ 則未讀 · 較早的訊息可能未載入",
 		conversation_unknown: "尚未讀取對話紀錄",
-		conversation_count_note: "中央記錄已觀察訊息的版本；新內容須重新讀取才會計入，部分紀錄不代表完整總數。捲動與事件同步不會標記已讀。",
+		conversation_count_note: "中央記錄已觀察訊息的版本；新內容須重新讀取才會計入，未完整索引時僅代表下限。捲動與事件同步不會標記已讀。",
 		conversation_badge: "{count} 未讀",
 		composer_shortcut: "送出快捷鍵",
 		composer_shortcut_modified: "Ctrl／⌘ + Enter",
@@ -8710,7 +8719,7 @@ var STRINGS = {
 		pending_ask_user: "等你回答",
 		pending_permission: "等待權限",
 		host: "主機",
-		workspace: "Workspace",
+		workspace: "工作區",
 		title: "標題",
 		agent: "Agent",
 		state: "狀態",
@@ -9588,7 +9597,11 @@ var STRINGS = {
 		sessions_runtime_stale: "Activity and pending requests have not been rechecked.",
 		sessions_not_seen: "Not in latest scan",
 		sessions_stale: "Observation needs updating",
-		sessions_activity_unknown: "Activity unknown",
+		sessions_activity_unknown: "BAT did not report activity",
+		sessions_not_loaded: "Not open in BAT",
+		sessions_pill_waiting: "Waiting for you",
+		sessions_pill_stale: "Out of sync",
+		sessions_pill_running: "Running",
 		permissions_title: "Session permissions",
 		permissions_mode: "Requested mode",
 		permissions_default: "Normal permissions",
@@ -10207,9 +10220,14 @@ var STRINGS = {
 		conversation_remember: "Remember reading position",
 		conversation_older: "Earlier messages",
 		conversation_unread: "Last observed: {count} unread",
-		conversation_partial: "Partial history: {count} unread",
+		conversation_unread_lower_bound: "{count}+ unread",
+		conversation_message_ids_detail: "Some messages have no ID and are not counted.",
+		conversation_archive_budget: "Showing the latest 3,000 messages",
+		conversation_archive_unconfirmed: "Earlier messages may not be loaded",
+		conversation_archive_unconfirmed_detail: "BAT did not confirm the end of the history.",
+		conversation_partial: "{count}+ unread · earlier messages may not be loaded",
 		conversation_unknown: "Conversation has not been observed",
-		conversation_count_note: "Central tracks observed message revisions. New content is counted after refreshing; partial history is not a complete total. Scrolling and event sync never mark messages read.",
+		conversation_count_note: "Central tracks observed message revisions. New content is counted after refreshing; incomplete indexing is a lower bound, not a complete total. Scrolling and event sync never mark messages read.",
 		conversation_badge: "{count} unread",
 		composer_shortcut: "Send shortcut",
 		composer_shortcut_modified: "Ctrl / ⌘ + Enter",
@@ -12751,6 +12769,11 @@ function railPresentation(state) {
 	};
 	if (state.key === "workspace_needs_you" || state.key === "pending_permission" || state.key === "wi_state_awaiting_approval") return {
 		labelKey: "rail_needs_you",
+		loud: true,
+		tone: state.tone || "stale"
+	};
+	if (state.key === "sessions_stale" || state.key === "sessions_not_seen") return {
+		labelKey: "sessions_pill_stale",
 		loud: true,
 		tone: state.tone || "stale"
 	};
@@ -26865,10 +26888,12 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		withdraw();
 		status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_lifecycle_unknown")));
 	}
-	async function refresh() {
-		withdraw();
+	async function refresh({ event = false } = {}) {
+		if (!event || !ready || !current) {
+			withdraw();
+			status.replaceChildren(skeleton(2));
+		} else ++serial;
 		const ticket = serial;
-		status.replaceChildren(skeleton(2));
 		try {
 			const value = checkScope(await api("GET", endpoint));
 			alive();
@@ -40038,10 +40063,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 		if (id === "issues" && staleSections.has(register)) setHeaderMeta("");
 	}
-	async function refreshSection(section, activation = false) {
+	async function refreshSection(section, activation = false, event = false) {
 		const read = activation ? activationReads.get(section) : null;
 		activationReads.delete(section);
-		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section.refresh()));
+		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section === lifecycle ? section.refresh({ event }) : section.refresh()));
 		alive();
 		if (sectionRequired(section)) revealSource(section);
 	}
@@ -41082,7 +41107,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden) && (!threadId || section !== meetings || sectionVisible(section))) {
 					const activation = !initialReadComplete && activationReads.get(section);
 					activationReads.delete(section);
-					await (activation || section.refresh());
+					await (activation || (section === lifecycle ? section.refresh({ event }) : section.refresh()));
 					if (sectionRequired(section)) revealSource(section);
 				}
 				alive();
@@ -41339,6 +41364,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		const kind = event.resource_type;
 		if (!pmEvent(kind) && !liveEvent(kind)) return;
 		invalidateSections();
+		const lifecycleChanged = ["pm_workspace", "pm_lifecycle"].includes(kind) && event.resource_id === workspaceId;
+		if (lifecycleChanged) lifecycle?.withdraw();
 		if (threadId && pmEvent(kind)) return eventRead(load, () => load({ event: true }));
 		const reads = [];
 		if (!pmEvent(kind) && (threadId || workbench?.selected() === "discussions")) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
@@ -41346,7 +41373,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		for (const section of sectionModules()) if (sectionRequired(section)) {
 			if (section === issues && kind !== "pm_workspace" && !kind.startsWith("pm_issue")) continue;
 			if (section === dependencies && !pmEvent(kind) && !["project", "integration"].includes(kind)) continue;
-			reads.push(eventRead(section, () => refreshSection(section)));
+			reads.push(eventRead(section, () => refreshSection(section, false, !lifecycleChanged)));
 		}
 		if (!threadId && workbench?.selected() === "discussions" && pmEvent(kind)) reads.push(eventRead(refreshDiscussionSources, refreshDiscussionSources));
 		return settleRefreshes(reads);
@@ -41439,6 +41466,25 @@ function sessionActivity(session) {
 		key: "pending_" + session.pending.kind,
 		tone: "stale"
 	};
+	if (session.api_access === "managed") {
+		const st = session.status || session.state?.status;
+		if (st === "failed" || st === "error") return {
+			key: "op_failed",
+			tone: "bad"
+		};
+		if ([
+			"needs_ted",
+			"needs_you",
+			"needs_attention",
+			"waiting_permission",
+			"awaiting_approval",
+			"uncertain",
+			"blocked"
+		].includes(st)) return {
+			key: "workspace_needs_you",
+			tone: "stale"
+		};
+	}
 	if (session.state?.lifecycle === "ended") return {
 		key: "obs_value_ended",
 		tone: ""
@@ -41459,21 +41505,60 @@ function sessionActivity(session) {
 		key: "obs_value_not_streaming",
 		tone: ""
 	};
+	if (session.loaded === false || session.state?.loading === "not_loaded") return {
+		key: "sessions_not_loaded",
+		tone: ""
+	};
 	return {
 		key: "sessions_activity_unknown",
 		tone: ""
 	};
 }
 function sessionStatus(session) {
-	if (session?.api_access !== "managed") return "read_only";
+	if (!session) return null;
 	const kind = session.pending?.kind;
 	if (kind === "permission" || kind === "ask_user") return "asking_you";
 	if (session.pending) return "needs_you";
-	if (session.state?.lifecycle === "ended" || session.gone_at || ["gone", "missing"].includes(session.state?.enumeration)) return "stopped";
-	if (runtimeStale(session)) return "stale";
-	if (session.streaming === true) return "running";
-	if (session.streaming === false) return "waiting";
-	return "unknown";
+	if (session.api_access === "managed") {
+		const st = session.status || session.state?.status;
+		if (st === "failed" || st === "error") return "failed";
+		if ([
+			"needs_ted",
+			"needs_you",
+			"needs_attention",
+			"waiting_permission",
+			"awaiting_approval",
+			"uncertain",
+			"blocked"
+		].includes(st)) return "needs_you";
+	}
+	if (session.gone_at || ["gone", "missing"].includes(session.state?.enumeration) || runtimeStale(session)) return "stale";
+	if (session.state?.lifecycle !== "ended" && session.streaming === true) return "running";
+	return null;
+}
+function sessionPill(session) {
+	const status = sessionStatus(session);
+	if (status === "asking_you" || status === "needs_you") return {
+		key: "sessions_pill_waiting",
+		tone: "stale",
+		status
+	};
+	if (status === "failed") return {
+		key: "op_failed",
+		tone: "bad",
+		status
+	};
+	if (status === "stale") return {
+		key: "sessions_pill_stale",
+		tone: "stale",
+		status
+	};
+	if (status === "running") return {
+		key: "sessions_pill_running",
+		tone: "info",
+		status
+	};
+	return null;
 }
 //#endregion
 //#region src/observed-resource-strings.js
@@ -41689,7 +41774,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 			unreadCount ? t("conversation_badge", { count: reading.unread_count }) + (reading.complete === false ? "+" : "") : ""
 		]);
 		let glyph = null;
-		if (presented?.labelKey === "rail_needs_you" || presented?.labelKey === "rail_asking") {
+		if (presented?.labelKey === "rail_needs_you" || presented?.labelKey === "rail_asking" || presented?.labelKey === "sessions_pill_stale") {
 			glyph = icon("circle-alert", { size: 14 });
 			glyph.classList.add("workspace-rail-alert");
 		} else if (presented?.labelKey === "rail_failed") {
@@ -43856,6 +43941,35 @@ function messageDuration(t, ms) {
 		s
 	}) : t("message_minutes_even", { m });
 }
+function readingSummary(t, reading) {
+	if (!reading || reading.unread_count == null) return {
+		line: t("conversation_unknown"),
+		detail: ""
+	};
+	if (reading.complete) return {
+		line: t("conversation_unread", { count: reading.unread_count }),
+		detail: ""
+	};
+	const reasons = Array.isArray(reading.incomplete_reasons) ? reading.incomplete_reasons : [];
+	const lowerBound = t("conversation_unread_lower_bound", { count: reading.unread_count });
+	const idDetail = reasons.includes("message_ids") ? t("conversation_message_ids_detail") : "";
+	if (reasons.includes("archive_budget")) return {
+		line: `${lowerBound} · ${t("conversation_archive_budget")}`,
+		detail: idDetail
+	};
+	if (reasons.includes("archive_unconfirmed")) return {
+		line: `${lowerBound} · ${t("conversation_archive_unconfirmed")}`,
+		detail: [t("conversation_archive_unconfirmed_detail"), idDetail].filter(Boolean).join(" ")
+	};
+	if (reasons.includes("message_ids")) return {
+		line: lowerBound,
+		detail: idDetail
+	};
+	return {
+		line: t("conversation_partial", { count: reading.unread_count }),
+		detail: ""
+	};
+}
 function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
@@ -44224,8 +44338,9 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 				if (older.parentElement === caption) readingBar?.append(older);
 				caption.textContent = countCaption(next.size, false);
 			}
-			progress.textContent = reading?.unread_count == null ? t("conversation_unknown") : t(reading.complete ? "conversation_unread" : "conversation_partial", { count: reading.unread_count });
-			progress.title = t("conversation_count_note");
+			const summary = readingSummary(t, reading);
+			progress.textContent = summary.line;
+			progress.title = [summary.detail, t("conversation_count_note")].filter(Boolean).join(" ");
 		} else caption.textContent = countCaption(next.size, more);
 		if (!initialized || followNow || savedScroll || state?.latest || state?.restore) pinned = atBottom() || followNow;
 		initialized = true;
@@ -53115,11 +53230,12 @@ async function viewSessions(main) {
 		sessionStorage.setItem(storageKey, values.toString());
 	};
 	const row = (session) => {
-		const id = `${session.host}/${session.session_id}`, activity = sessionActivity(session);
+		const id = `${session.host}/${session.session_id}`, activity = sessionActivity(session), pill = sessionPill(session);
 		const origin = session.provenance === "manual" ? "sessions_manual" : session.provenance === "connector_managed" ? "sessions_connector" : "sessions_origin_unknown";
 		const access = session.api_access === "managed" ? "managed" : session.api_access === "read_only" ? "read_only" : "sessions_access_unknown";
+		const outOfSync = session.gone_at || ["gone", "missing"].includes(session.state?.enumeration);
 		const evidence = () => [
-			h("dl", { class: "kv" }, h("dt", {}, t("sessions_label")), h("dd", {}, session.title || session.session_id), h("dt", {}, t("sessions_workspace")), h("dd", {}, session.workspace || t("sessions_workspace_unknown")), h("dt", {}, t("sessions_workspace_id")), h("dd", {}, h("code", {}, session.workspace_id || t("obs_unknown"))), h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, session.session_id)), h("dt", {}, t("activity")), h("dd", {}, observationTime(session.last_activity_at)), h("dt", {}, t("observed")), h("dd", {}, observationTime(session.observed_at))),
+			h("dl", { class: "kv" }, h("dt", {}, t("sessions_label")), h("dd", {}, session.title || session.session_id), h("dt", {}, t("sessions_workspace")), h("dd", {}, session.workspace || t("sessions_workspace_unknown")), h("dt", {}, t("sessions_workspace_id")), h("dd", {}, h("code", {}, session.workspace_id || t("obs_unknown"))), h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, session.session_id)), h("dt", {}, t("obs_axis_activity")), h("dd", {}, t(activity.key)), h("dt", {}, t("activity")), h("dd", {}, observationTime(session.last_activity_at)), h("dt", {}, t("observed")), h("dd", {}, observationTime(session.observed_at))),
 			h("p", { class: "muted" }, confinementLabel(session)),
 			confinementDetails(session),
 			observationState(session)
@@ -53150,7 +53266,7 @@ async function viewSessions(main) {
 			class: "title",
 			title: session.title || session.session_id,
 			href: `#/session/${encodeURIComponent(session.host)}/${encodeURIComponent(session.session_id)}`
-		}, session.title || session.session_id), chip(t(activity.key), activity.tone)), h("div", { class: "session-entry-meta" }, h("span", { class: session.api_access === "managed" ? "" : "session-readonly" }, session.provenance === "connector_managed" && session.api_access === "managed" ? t(access) : `${t(origin)} · ${t(access)}`), h("span", {}, [cliName(session.agent_kind), session.worktree_branch].filter(Boolean).join(" · "))), runtimeStale(session) ? h("p", { class: "session-stale muted" }, t("sessions_stale"), " · ", session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale")) : null, validLabels(session.connector_metadata?.labels) && session.connector_metadata.labels.length ? h("div", {
+		}, session.title || session.session_id), pill ? chip(t(pill.key), pill.tone) : null), h("div", { class: "session-entry-meta" }, h("span", { class: session.api_access === "managed" ? "" : "session-readonly" }, session.provenance === "connector_managed" && session.api_access === "managed" ? t(access) : `${t(origin)} · ${t(access)}`), h("span", {}, [cliName(session.agent_kind), session.worktree_branch].filter(Boolean).join(" · "))), runtimeStale(session) ? h("p", { class: "session-stale muted" }, t("sessions_stale"), " · ", session.stale_reason === "gone" ? t("sessions_not_seen") : session.stale_reason ? t("stale_reason_" + session.stale_reason) : t("sessions_runtime_stale")) : outOfSync ? h("p", { class: "session-stale muted" }, t("sessions_not_seen")) : null, validLabels(session.connector_metadata?.labels) && session.connector_metadata.labels.length ? h("div", {
 			class: "actions session-entry-meta",
 			"aria-label": t("labels_title")
 		}, ...session.connector_metadata.labels.slice(0, 2).map((v) => chip(v)), session.connector_metadata.labels.length > 2 ? h("span", {
@@ -53319,7 +53435,9 @@ function observationState(row) {
 		"freshness"
 	].flatMap((axis) => {
 		const evidence = row.state?.evidence?.[axis];
-		return [h("dt", {}, t("obs_axis_" + axis)), h("dd", {}, t("obs_value_" + (row.state?.[axis] || "unknown")), evidence?.stale ? [" · ", chip(t("stale"), "stale")] : null, h("div", { class: "muted" }, observationTime(evidence?.observed_at), " · ", evidence?.source_ref || t("obs_unknown")))];
+		const raw = row.state?.[axis] || "unknown";
+		const label = axis === "activity" && raw === "unknown" ? t(sessionActivity(row).key) : t("obs_value_" + raw);
+		return [h("dt", {}, t("obs_axis_" + axis)), h("dd", {}, label, evidence?.stale ? [" · ", chip(t("stale"), "stale")] : null, h("div", { class: "muted" }, observationTime(evidence?.observed_at), " · ", evidence?.source_ref || t("obs_unknown")))];
 	})));
 }
 function discoveryEvidence(scopes) {
@@ -54435,6 +54553,18 @@ async function viewSession(main, host, sid, context = null) {
 		sendReason.textContent = reason;
 		for (const control of pending.querySelectorAll("[data-answer-action]")) control.disabled = !row?.pending?.toolUseId || !allowed("session.answer");
 	};
+	let lastReading = null;
+	const readingDetail = h("p", {
+		class: "muted note",
+		"data-session-reading-detail": "",
+		hidden: true
+	});
+	const paintReadingDetail = (readingData) => {
+		if (readingData !== void 0) lastReading = readingData;
+		const summary = readingSummary(t, lastReading || row?.reading);
+		readingDetail.textContent = summary.detail;
+		readingDetail.hidden = !summary.detail;
+	};
 	const applyObservation = (data) => {
 		row = data.session || (data.cleanup?.length ? {
 			host,
@@ -54455,7 +54585,12 @@ async function viewSession(main, host, sid, context = null) {
 		}
 		titleNode.textContent = row.title || t("session_untitled");
 		markSlot.replaceChildren(agentMark(row.agent_kind));
-		pillSlot.replaceChildren(statusPill(sessionStatus(row)));
+		const headerPill = sessionPill(row);
+		const pillTone = headerPill?.tone === "stale" ? "warn" : headerPill?.tone || "neutral";
+		pillSlot.replaceChildren(...headerPill ? [h("span", {
+			class: `ui-pill tone-${pillTone}`,
+			"data-status": headerPill.status
+		}, t(headerPill.key))] : []);
 		const metaBits = [];
 		if (context?.project?.name) metaBits.push({
 			kind: "link",
@@ -54486,11 +54621,12 @@ async function viewSession(main, host, sid, context = null) {
 		}));
 		paintOrigin();
 		mobileLayout?.updateInfo();
-		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_label")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
+		paintReadingDetail();
+		metadata.replaceChildren(h("div", { class: "actions" }, ...sessionBadges(row)), h("dl", { class: "kv" }, h("dt", {}, t("host")), h("dd", {}, h("a", { href: `#/host/${encodeURIComponent(host)}` }, row.host)), h("dt", {}, t("workspace")), h("dd", {}, row.workspace || ""), h("dt", {}, t("sessions_id")), h("dd", {}, h("code", {}, row.session_id)), h("dt", {}, t("agent")), h("dd", {}, [cliName(row.agent_kind), row.model].filter(Boolean).join(" · ") || t("obs_unknown")), h("dt", {}, t("session_origin")), h("dd", {}, t("provenance_" + ([
 			"manual",
 			"connector_managed",
 			"unknown"
-		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, { empty: t("obs_unknown") }), row.observed_at != null && row.observed_at !== "" ? h("code", {}, String(row.observed_at)) : null)), observationState(row), confinementDetails(row));
+		].includes(row.provenance) ? row.provenance : "unknown"))), h("dt", {}, t("obs_axis_activity")), h("dd", {}, t(sessionActivity(row).key)), h("dt", {}, t("observed")), h("dd", {}, timeStamp(row.observed_at, { empty: t("obs_unknown") }))), readingDetail, observationState(row), confinementDetails(row));
 		if (!batHandoff) batHandoff = sessionBatPanel({
 			h,
 			t,
@@ -54630,6 +54766,7 @@ async function viewSession(main, host, sid, context = null) {
 			messageOffset = offset;
 			nextMessageOffset = read.next_offset;
 			firstMessages = false;
+			paintReadingDetail(readingSupported ? read.reading : null);
 			conversation.update(read.messages, readingSupported ? {
 				...read,
 				restore,
