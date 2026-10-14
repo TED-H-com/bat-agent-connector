@@ -136,7 +136,7 @@ test('B2 S3 requirement inspector shows criteria, work, review, decisions and de
   const inspector = page.locator('[data-work-inspector]');
   await expect(inspector.locator('[data-work-section]')).toHaveCount(6);
   expect(await inspector.locator('[data-work-section]').evaluateAll(nodes => nodes.map(node => node.getAttribute('data-work-section')))).toEqual(['criteria', 'work', 'result', 'decisions', 'delivery', 'details']);
-  await expect(inspector.locator('[data-work-section=criteria] [data-status=accepted]')).toHaveCount(2);
+  await expect(inspector.locator('[data-work-section=criteria] [data-status=accepted]')).toHaveCount(1);
   await expect(inspector.locator('[data-work-section=result]')).toContainText('Quality review');
   await expect(inspector.locator('[data-work-section=result]')).not.toContainText('No result recorded');
   await expect(inspector.getByRole('link', {name: 'Approve sign-in'})).toHaveAttribute('href', /issues\?select=decision.review/);

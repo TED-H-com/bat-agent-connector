@@ -10,13 +10,13 @@ Review the proposed update and explicitly adopt it; requirements, work and deliv
 
 ![Overview: live project progress, blockers and pending decisions.](site/images/overview-en.png)
 
-*Actual shared UI · synthetic demonstration data · candidate preview · [capture source](site/images/README.md).*
+*Actual shared UI · synthetic demonstration data · merged-main preview · [capture source](site/images/README.md).*
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** The screenshots show the redesigned frontend from candidate commit `944a854f`
-> (PR #133, in review). Backends #132 (`0c354861`) and #134 (`f25e1556`) merged into main on
-> October 13, 2026; neither is installed or live-tested. The gallery will be recaptured from main after #133 merges.
+> **Development preview.** The screenshots come from merged `main` at `aba02180`.
+> Backend #132 merged on October 13, 2026; #134 merged on October 14. Frontend #133 merged
+> afterward on October 14 as `cb7e9f42`. Nothing is installed or live-tested.
 > The [progress report](docs/product/progress-2026-10-14.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
 
@@ -24,18 +24,18 @@ The **Web and Tauri desktop apps share one interface and one Python backend**. Y
 
 | Your question | View and workflow |
 | --- | --- |
-| Where does the project stand? | **Overview** shows the live goal, accepted requirements, blockers and pending decisions. Saved reports retain their fixed snapshots. |
-| What needs a decision? | Open a record and **Discuss with PM**. **Discussions** carries its context chip and automatic title into a reviewable proposal and explicit adoption. |
+| Where does the project stand? | **Overview** shows the live goal, accepted requirements, blockers, open decisions and Recently decided history. Unread sources stay Unknown; complete empty lists say None recorded. Saved reports retain their fixed snapshots. |
+| What needs a decision? | Open a record and **Discuss with PM**. **Discussions** carries its context chip and automatic title into a reviewable proposal and explicit adoption. An adopted discussion can offer an authorized, editable Resolve issue step; reported resolution remains unassessed. |
 | What is this work meant to satisfy? | **Requirements** traces the adopted requirements through work, criteria, PRs and delivery in the RTM and inspector. |
-| What is still unresolved? | **Issues & changes** keeps risks, issues, actions, changes and decisions in a filterable register with original timelines. |
-| Which dates changed? | **Schedule** compares recorded baseline, forecast and actual dates. Missing dates stay unknown. |
+| What is still unresolved? | **Issues & changes** keeps risks, issues, actions, changes and decisions in a filterable register with original timelines and named maintenance findings. |
+| Which dates changed? | **Schedule** compares recorded baseline, forecast and actual dates on a labelled axis. Missing dates stay unknown. |
 | What could a dependency change affect? | **Dependencies** shows pinned inventories, evidence and bounded impact in a matrix or graph. |
-| What are the agents using? | **Agents** shows sourced usage, daily trends where available and reported quota windows. Unavailable data stays unknown. |
+| What are the agents using? | **Agents** keeps sourced usage, rows and daily trends on one consistent read, with reported quota windows. Unavailable data stays unknown. |
 | What should happen next? | **Board** follows work by stage. Content approval, requirement acceptance, merge and deployment remain separate. |
 | What happened in that session? | **Session** keeps the conversation and results together. Authorized managed controls are available; manual BAT sessions remain read-only. |
 
 These are views of the same project, with secondary tools available on demand.
-The [current scope](#current-scope-and-limits) distinguishes this redesign candidate from the full PM v1.2 backlog.
+The [current scope](#current-scope-and-limits) distinguishes the merged workspace from the full PM v1.2 backlog.
 
 ## Try one small project
 
@@ -45,7 +45,7 @@ The [current scope](#current-scope-and-limits) distinguishes this redesign candi
 4. **Review and adopt.** Prepare the PM-owned Git worktree at a fixed revision. Check sources, proposed wording, retained requirements and open questions. An authorized workspace owner explicitly adopts the reviewed update.
 5. **Follow the evidence.** Inspect the adopted requirements and their work in Requirements, Board and Session. Verification, requirement acceptance, PR merge and deployment each need their own record.
 
-A discussion does not automatically adopt a plan; adoption does not start work or resolve its source issue.
+A discussion does not automatically adopt a plan; adoption does not start work or resolve its source issue. After adoption, an authorized person can explicitly report the issue resolved; this does not accept a requirement.
 Policy-bounded delivery and maintenance remain available through the project's secondary tools.
 [Step-by-step PM guide](docs/getting-started.md#try-one-pm-workflow).
 
@@ -107,7 +107,7 @@ flowchart TB
 | Status | Scope |
 | --- | --- |
 | Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
-| Redesign candidate | Live Overview, source-bound Discussions and adoption, Requirements inspector, register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough, is in review and not merged yet. |
+| Merged workspace | Live Overview, source-bound Discussions and adoption, Requirements inspector, register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough and rounds 5b/6, merged as `cb7e9f42` on October 14, 2026. It is not installed or live-tested. |
 | M4 candidate | Joined Idea → delivery → maintenance → Review → new Idea flow; original runtime completion, manual single-input activity observation, Roadmap quality and Brief deviations. Candidate checks and failures are recorded separately. |
 | M5 local candidate | Persistent workspace analysis-adapter choice and read-only observation of serial manual inputs. Focused checks passed; full candidate/platform validation remains. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |

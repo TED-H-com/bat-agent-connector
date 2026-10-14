@@ -133,6 +133,10 @@ for field, expected in {"synthetic_data": True, "native_or_live_acceptance": Fal
         errors.append(f"Screenshot manifest has an invalid {field} guarantee.")
 if not re.fullmatch(r"[0-9a-f]{40}", manifest.get("frontend_source_commit", "")):
     errors.append("Screenshot manifest must pin a full source commit.")
+if manifest.get("source_pin_kind") != "merged":
+    errors.append("Public screenshots must use a merged source pin.")
+if manifest.get("frontend_source_commit") != "aba02180e872f798ea54aa003b267b14eb7f5018":
+    errors.append("Public screenshots must pin merged main at aba02180.")
 for entry in manifest["images"]:
     path = SITE / "images" / entry["file"]
     if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
@@ -160,7 +164,7 @@ def pinned(spec, text=False):
 
 
 # capture_site.mjs requires these paths to equal the pinned commit and reads its tooling from the checkout.
-# Hash frontend sources at that commit, so a gallery pinned to a candidate branch still checks on main.
+# Hash frontend sources at the merged pin, so later documentation commits can check the gallery.
 PINNED_PATHS = ("desktop/src/", "desktop/tests/demo/", "src/bat_agent_connector/dashboard/")
 commit = manifest.get("frontend_source_commit", "")
 if pinned(["cat-file", "-e", f"{commit}^{{commit}}"]) is None:
