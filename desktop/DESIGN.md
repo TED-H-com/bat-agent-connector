@@ -624,6 +624,10 @@ It is primary only when this member can run it. Otherwise it is a secondary butt
 where it wraps without displacing Refresh. Maintenance policy, release baselines, maintenance checks, and
 workload observations stay in the secondary cards.
 
+Release source previews update the existing repository editor in place. A preview
+arriving while the owner enters a rationale preserves textarea focus and keyboard
+input; registration still requires reviewed source evidence and the original CAS.
+
 The header names the capture commit and its UTC date. A Stale pill is shown only when
 the projection says `stale` is true. Unknown freshness stays out of the header and is
 stated once under Details. A Partial pill and the omitted total describe the returned

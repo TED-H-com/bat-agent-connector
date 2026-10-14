@@ -191,6 +191,7 @@ for(const language of ['en','zh-TW'])for(const native of [false,true])test(`${na
     await expect.poll(()=>f.state.reads.some(path=>path.includes('preview'))).toBe(true);
     const rationale=register(page).getByLabel(chinese?'選定此基準的理由':'Reason for selecting this baseline',{exact:true});
     const save=register(page).getByRole('button',{name:chinese?'登記發布基準':'Record release baseline',exact:true});
+    // A fill focuses the field before inserting text. Deliver the response at that boundary.
     await expect(save).toBeDisabled();await rationale.focus();
     release();await expect(section(page).getByRole('heading',{name:chinese?'已檢視來源':'Reviewed source',exact:true})).toBeVisible();
     await expect(rationale).toBeFocused();
