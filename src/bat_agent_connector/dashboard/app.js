@@ -17159,6 +17159,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 	return {
 		box,
 		primary,
+		status,
 		refresh,
 		withdraw,
 		select,
@@ -17253,6 +17254,7 @@ function workspaceOverview(options) {
 		onChange: reportChanged,
 		onControls: reportControls
 	});
+	const reportStatus = reports.status, reportStatusHome = reportStatus.parentNode;
 	for (const node of reports.box.querySelectorAll(":scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]")) reportTools.append(node);
 	reportTools.append(reports.comparison);
 	const back = button({
@@ -17338,7 +17340,10 @@ function workspaceOverview(options) {
 			closeReader();
 			signature = "";
 		}
-		if (event === "error" && mode === "saved") status.replaceChildren(...reportTools.querySelector("[data-report-status]").childNodes);
+		if (event === "error") {
+			if (mode === "saved") status.replaceChildren(reportStatus);
+			else reportStatusHome.append(reportStatus);
+		}
 		if (mode === "saved") render();
 	}
 	function attentionTitle(row) {
@@ -17871,6 +17876,7 @@ function workspaceOverview(options) {
 		}
 	}
 	function renderContent(resetOrder) {
+		if (mode === "live" && reportStatus.parentNode !== reportStatusHome) reportStatusHome.append(reportStatus);
 		header();
 		savedBar.hidden = mode !== "saved";
 		box.dataset.overviewMode = mode;
@@ -22534,7 +22540,7 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 	}
 	function fail(error) {
 		clear();
-		status.replaceChildren(errorBox(error, { summary: t("psm_unavailable") }));
+		status.replaceChildren(errorBox(error, { summary: t(error.message?.startsWith("PM_SPEC_") ? "psm_invalid" : "psm_unavailable") }));
 		if ([
 			401,
 			403,
@@ -22980,7 +22986,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		facts.hidden = true;
 		proofView.hidden = true;
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, { summary: t("pmb_unavailable") })), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, { summary: t(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? "pmb_invalid" : "pmb_unavailable") })), refreshButton));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -25881,7 +25887,8 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		prepared = null;
 		facts.replaceChildren();
 		outcome.replaceChildren();
-		status.replaceChildren(errorBox(error, error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t("ph_unavailable") }));
+		const mismatch = error.message?.startsWith("PM_SPEC_") || error.code === "PM_REQUIREMENT_QUALITY_INVALID";
+		status.replaceChildren(errorBox(error, error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t(mismatch ? "ph_invalid" : "ph_unavailable") }));
 		update();
 	}
 	function bindEditor(row) {
@@ -31372,7 +31379,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		"aria-expanded": "false",
 		onClick: () => reveal("pm.meeting.create")
 	});
-	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, h("h3", {}, t("pm_meeting_title")), launch, readOnly, iconButton({
+	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, h("div", { class: "pm-meeting-heading-text" }, h("h3", {}, t("pm_meeting_title")), readOnly), launch, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_meeting_refresh"),
 		onClick: () => void refresh()
@@ -31663,7 +31670,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		view.replaceChildren();
 		const detail = model.detail;
 		if (!detail) {
-			view.append(note("pm_meeting_empty"));
+			view.append(note(can() && !model.sprints.length ? "pm_meeting_sprint_required" : "pm_meeting_empty"));
 			return;
 		}
 		const context = detail.context.document;

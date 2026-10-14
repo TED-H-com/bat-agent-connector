@@ -17,7 +17,10 @@ meeting context, draft and explicit completion.
 
 The shared Meetings card keeps its title and Refresh on the first row. A successful
 read with no meetings shows one short sentence in that card, in English or zh-TW,
-without a nested empty-state card. A failed read retains the existing error, source
+without a nested empty-state card. If the person can create meetings but no Sprint
+exists, that sentence explains the Sprint prerequisite; readers see the empty-record
+sentence. In a narrow inspector, the read-only reason can wrap under the title
+while Refresh stays on the title's row. A failed read retains the existing error, source
 withdrawal and write gates; it never becomes an empty list.
 
 Creating a meeting requires an explicit Sprint ID, its expected current version

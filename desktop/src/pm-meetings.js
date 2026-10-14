@@ -21,7 +21,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const rebase = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
   const readOnly = h('p', {class: 'ui-meta', hidden: true, 'data-pm-panel-readonly': ''}, t('pm_panel_read_only'));
   const launch = button({variant: 'primary', label: t('pm_meeting_new'), 'data-pm-meeting-create': '', 'aria-controls': createId, 'aria-expanded': 'false', onClick: () => reveal('pm.meeting.create')});
-  const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, h('h3', {}, t('pm_meeting_title')), launch, readOnly,
+  const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, h('div', {class: 'pm-meeting-heading-text'}, h('h3', {}, t('pm_meeting_title')), readOnly), launch,
     iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), onClick: () => void refresh()})),
     selection, status, warning, rebase, view, editors)});
   element.classList.add('pm-evidence', 'pm-meetings'); element.dataset.pmMeetings = '';
@@ -186,7 +186,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   function renderView() {
     view.replaceChildren(); const detail = model.detail;
     if (!detail) {
-      view.append(note('pm_meeting_empty')); return;
+      view.append(note(can()&&!model.sprints.length?'pm_meeting_sprint_required':'pm_meeting_empty')); return;
     }
     const context = detail.context.document;
     const facts = h('div', {}, h('p', {}, context.sprint_definition.title),

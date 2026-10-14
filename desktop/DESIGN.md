@@ -1061,7 +1061,11 @@ inspectors and the mobile drawer open; ordinary Escape retains focus restoration
 PM panels with their own failure sentence pass that sentence as the error summary.
 The original error reaches the renderer unchanged, so its code and server message
 remain in one Details disclosure and the refresh gate retains the failure. Retry
-stays adjacent. Report reads retain the rendered Charter error in the inspector
-in live mode; saved mode moves that message into Overview without a second error
-in Versions. Meetings uses one plain empty sentence
-inside its own card, with its title and Refresh on the first row.
+stays adjacent. Fixed-source mismatch failures keep the panel's mismatch sentence;
+other failures keep its unavailable sentence. Report reads reuse Charter's status
+element by reference in the live inspector or saved Overview, preserving its
+children and withdrawal/retry ownership without a second error in Versions.
+Meetings uses one plain empty sentence inside its own card: writers without a
+Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
+Its title and Refresh stay on the first row; the read-only reason wraps beneath
+the title when the inspector is narrow instead of being squeezed between them.

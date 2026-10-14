@@ -27,10 +27,18 @@ const panels = [
   ['meetings', 'workspaceMeetings', 'error_generic'],
 ];
 const code = 'PM_PANEL_READ_FAILED', serverMessage = 'Original English source diagnostics <b>stay text</b>';
+const failures = panels.map(([name, factory, key]) => ({name, factory, key, cause: 'unavailable', code, message: serverMessage, detached: false}));
+failures.push(
+  {name: 'package-handoff', factory: 'workspacePackageHandoff', key: 'ph_invalid', cause: 'spec-mismatch', code, message: 'PM_SPEC_RESPONSE_MISMATCH', detached: false},
+  {name: 'package-handoff', factory: 'workspacePackageHandoff', key: 'ph_invalid', cause: 'quality-mismatch', code: 'PM_REQUIREMENT_QUALITY_INVALID', message: serverMessage, detached: false},
+  {name: 'spec-materialization', factory: 'workspaceSpecMaterialization', key: 'psm_invalid', cause: 'spec-mismatch', code, message: 'PM_SPEC_RESPONSE_MISMATCH', detached: false},
+  {name: 'work-batches', factory: 'workspaceWorkBatches', key: 'pmb_invalid', cause: 'quality-mismatch', code: 'PM_REQUIREMENT_QUALITY_INVALID', message: serverMessage, detached: false},
+  ...failures.filter(row => row.name.startsWith('overview')).map(row => ({...row, cause: 'detached-status', detached: true})),
+);
 
 // Use the production errorBox, including refresh-cycle recording, without
 // booting the application shell. Existing panel suites exercise durable recovery.
-async function mountFailure(page: Page, name: string, factory: string, status: number) {
+async function mountFailure(page: Page, name: string, factory: string, status: number, failure: {code: string, message: string, detached: boolean}) {
   const f = specFixture(), bootstrap = await f.dispatch({method: 'GET', path: '/bootstrap'});
   const caps = bootstrap.data.capabilities, row = handoffFixture().row;
   const workspace = (await f.dispatch({method: 'GET', path: `/pm/workspaces/${row.workspace_id}`})).data.workspace;
@@ -40,7 +48,7 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
   let reads = 0, writes = 0;
   await page.exposeFunction('c4Request', (method: string) => {
     if (method === 'GET') reads++; else writes++;
-    return {status, data: {error: {code, message: serverMessage}}};
+    return {status, data: {error: {code: failure.code, message: failure.message}}};
   });
   await page.route('**/__c4-error.js', async route => {
     const app = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
@@ -60,7 +68,7 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
   });
   await unavailableBriefTransport(page, 'src');
   await page.goto('/ui-components.html');
-  await page.evaluate(async ({name, factory, caps, workspace, row}) => {
+  await page.evaluate(async ({name, factory, caps, workspace, row, detached}) => {
     const {h} = await import('/src/ui/dom.js'), {t} = await import('/src/i18n.js');
     const {errorBox, state} = await import('/__c4-error.js'), {durableForm} = await import('/__c4-form.js');
     const module = await import(`/src/pm-${name === 'overview-saved' ? 'overview' : name}.js`), win = window as any;
@@ -94,19 +102,24 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
     } else if (name === 'spec-materialization') {root.querySelector(':scope > details').open = true; await ui.setPackage(row);}
     else if (name === 'work-deliveries') ui.setWork('wi_' + '7'.repeat(20));
     else if (name === 'dependencies') await ui.setActive(true);
-    else if (name.startsWith('overview')) {main.append(ui.reportTools); await ui.prepareReports();}
+    else if (name.startsWith('overview')) {
+      main.append(ui.reportTools); win.c4ReportStatus = ui.reportTools.querySelector('[data-report-status]');
+      if (detached) win.c4ReportStatus.remove();
+      await ui.prepareReports();
+    }
     else await ui.refresh();
-  }, {name, factory, caps, workspace, row});
+  }, {name, factory, caps, workspace, row, detached: failure.detached});
   return {reads: () => reads, writes: () => writes};
 }
 
 for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
   test.use({locale: locale === 'en' ? 'en-US' : 'zh-TW', colorScheme: 'light', reducedMotion: 'reduce'});
-  for (const width of [1440, 390]) for (const [name, factory, key] of panels) {
-    test(`${name} one failure message ${width}`, async ({page}) => {
+  for (const width of [1440, 390]) for (const failure of failures) {
+    const {name, factory, key, cause, code, message} = failure;
+    test(`${name} ${cause} one failure message ${width}`, async ({page}) => {
       await page.setViewportSize({width, height: width === 390 ? 844 : 900});
       const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-      const f = await mountFailure(page, name, factory, name === 'ahp-observer' ? 503 : 403);
+      const f = await mountFailure(page, name, factory, name === 'ahp-observer' ? 503 : 403, failure);
       const root = page.locator('#fixture'), summary = root.locator('[data-error-summary]');
       await expect(summary).toHaveCount(1); await expect(summary).toBeVisible();
       const sentence = await page.evaluate(key => (window as any).c4Text(key), key);
@@ -116,31 +129,47 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
       await expect(root.locator('.error:visible, .ui-inline-error:visible')).toHaveCount(1);
       if (name.startsWith('overview')) {
         await expect(root.locator('[data-pm-overview] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 1 : 0);
-        await expect(root.locator('[data-report-status] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 0 : 1);
+        await expect(root.locator('[data-pm-report-tools] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 0 : 1);
+        expect(await page.evaluate(() => document.querySelector('[data-report-status]') === (window as any).c4ReportStatus)).toBe(true);
       }
       await expect(root.locator('form button[type=submit]:visible:enabled')).toHaveCount(0);
       await expect(root.locator('[data-error-details]')).toBeHidden();
-      expect(await root.innerText()).not.toContain(serverMessage);
+      expect(await root.innerText()).not.toContain(message);
       expect(await root.innerText()).not.toContain(code);
       expect(await page.evaluate(() => (window as any).c4State.refreshCycle.error.code)).toBe(code);
       const shots = process.env.BATC_C4_SHOTS;
-      if (shots) {await mkdir(shots, {recursive: true}); await page.screenshot({path: `${shots}/c4-${name}-${locale}-${width}-closed.png`});}
+      if (shots) {await mkdir(shots, {recursive: true}); await page.screenshot({path: `${shots}/c4-r2-${name}-${cause}-${locale}-${width}-closed.png`});}
       await root.locator('[data-api-error] summary').click();
       await expect(root.locator('[data-error-details] code')).toHaveText(code);
-      await expect(root.locator('[data-error-details]')).toContainText(serverMessage);
+      await expect(root.locator('[data-error-details]')).toContainText(message);
       await expect(root.locator('[data-error-details] b')).toHaveCount(0);
-      if (shots) await page.screenshot({path: `${shots}/c4-${name}-${locale}-${width}-open.png`});
+      if (shots) await page.screenshot({path: `${shots}/c4-r2-${name}-${cause}-${locale}-${width}-open.png`});
+      if (name.startsWith('overview')) {
+        await page.evaluate(() => (window as any).c4Ui.withdraw());
+        await expect(summary).toHaveCount(0);
+        await page.evaluate(() => (window as any).c4Ui.prepareReports());
+        await expect(summary).toHaveCount(1); await expect(summary).toHaveText(sentence);
+        expect(await page.evaluate(() => document.querySelector('[data-report-status]') === (window as any).c4ReportStatus)).toBe(true);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       expect(f.reads()).toBeGreaterThan(0); expect(f.writes()).toBe(0); expect(errors).toEqual([]);
     });
   }
-  for (const width of [1440, 768, 390]) test(`meetings empty uses one card and first-row refresh ${width}`, async ({page}) => {
+  for (const role of ['owner', 'reader']) for (const width of [1440, 768, 390]) test(`meetings ${role} empty uses one card and first-row refresh ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: width === 390 ? 844 : 900});
-    const f = meetingFixture(); f.state.meetings = []; f.state.sprints = []; await mountMeetings(page, f, locale);
+    const f = meetingFixture(); f.state.meetings = []; f.state.sprints = []; f.state.role = role;
+    if (role === 'reader') {f.state.actor = 'reader'; f.state.manage = false;}
+    await mountMeetings(page, f, locale);
     const panel = page.locator('[data-pm-meetings]'), header = panel.locator('.pm-heading');
     await expect(panel.getByRole('heading', {name: locale === 'en' ? 'Sprint discussions' : '衝刺討論', exact: true})).toBeVisible();
-    await expect(panel.getByText(locale === 'en' ? 'No meeting has been recorded.' : '尚未建立會議紀錄。', {exact: true})).toHaveCount(1);
-    await expect(panel.locator('p:visible')).toHaveCount(1);
+    const empty = role === 'owner' ? locale === 'en' ? 'Plan a Sprint before creating a meeting.' : '請先規劃衝刺，再建立會議。'
+      : locale === 'en' ? 'No meeting has been recorded.' : '尚未建立會議紀錄。';
+    await expect(panel.getByText(empty, {exact: true})).toHaveCount(1);
+    await expect(panel.locator('.pm-note-text:visible')).toHaveText(empty);
+    await expect(panel.locator('p:visible')).toHaveCount(role === 'reader' ? 2 : 1);
+    await expect(panel.locator('[data-pm-panel-readonly]')).toHaveCount(1);
+    if (role === 'reader') await expect(panel.locator('[data-pm-panel-readonly]')).toBeVisible();
+    else await expect(panel.locator('[data-pm-panel-readonly]')).toBeHidden();
     await expect(panel.locator('.ui-empty, .ui-section-card')).toHaveCount(0);
     await expect(panel.locator('[data-pm-meeting-create]')).toBeHidden();
     const delta = await header.evaluate(node => {
@@ -150,7 +179,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     expect(delta).toBeLessThanOrEqual(4);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const shots = process.env.BATC_C4_SHOTS;
-    if (shots) {await mkdir(shots, {recursive: true}); await page.screenshot({path: `${shots}/c4-meetings-empty-${locale}-${width}.png`});}
+    if (shots) {await mkdir(shots, {recursive: true}); await page.screenshot({path: `${shots}/c4-r2-meetings-empty-${role}-${locale}-${width}.png`});}
     expect(f.state.writes).toEqual([]);
   });
 });
