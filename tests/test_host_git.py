@@ -102,6 +102,18 @@ def test_golden_legacy_reader_binding():
         assert merge._reader_binding(SimpleNamespace(context={"git_runner": runner}), "fixture") == GOLDEN
 
 
+def test_execution_metadata_is_separate_from_the_complete_task_incarnation():
+    from bat_agent_connector.orchestration_operations import task_binding
+
+    location = host_git.HostGitRunner(config(), {"fixture": "fixture-bat"}).execution_binding("fixture")
+    task = {"task_id": "fixture-task", "control_version": 7, "host": "fixture", "session_id": "fixture-session",
+            "role": "lead", "future_task_field": "must-remain-bound"}
+    metadata = {"git_execution": {"fixture": location}, "controller_authority": {"actor": "fixture-operator"},
+                "session_controller": {"controller_incarnation": "fixture-incarnation"}}
+    assert task_binding({**task, **metadata}) == task
+    assert task_binding(metadata) is None
+
+
 def test_local_reader_binds_installation_server_transport_and_host():
     first = host_git.HostGitRunner(config("local"), {"fixture": "unused"}, installation_id="fixture-install", server_id="fixture-server")
     second = host_git.HostGitRunner(config("local"), {}, installation_id="other-install", server_id="fixture-server")
@@ -239,13 +251,14 @@ async def test_new_admission_and_step_bind_location_and_replay_completed_receipt
     async def handler(ctx):
         async def effect():
             return {"evidence": await ops.context["git_runner"].run("fixture", "fixed-script")}
-        return await ctx.step("git-effect", effect)
+        return await ctx.step("git-effect", effect, request={"fixture_request": "preserve-exact"})
     op = create(ops, handler)
     location = op["external_refs"]["admission_binding"]["git_execution"]["fixture"]
     assert location["transport"] == "ssh" and location["server_id"] == "fixture-server"
     await ops._execute(op["operation_id"])
     step = ops.db.execute("SELECT request FROM operation_steps WHERE operation_id=?", (op["operation_id"],)).fetchone()
-    assert json.loads(step["request"])["git_execution"]["fixture"] == location
+    assert json.loads(step["request"]) == {"fixture_request": "preserve-exact"}
+    assert ops._row(op["operation_id"])["external_refs"]["git_execution_steps"]["git-effect"]["fixture"] == location
     assert len(calls) == 1
     # A persisted completed step remains readable without invoking a new runner.
     from bat_agent_connector.operations import OpContext
@@ -253,6 +266,35 @@ async def test_new_admission_and_step_bind_location_and_replay_completed_receipt
     with host_git.execution(ops, op["operation_id"]):
         assert await handler(OpContext(ops, ops._row(op["operation_id"]))) == {"evidence": "fixed-evidence"}
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("change", ["step_disagrees", "admission_lost"])
+async def test_step_location_fences_new_effects_while_completed_receipts_remain_readable(operations, change):
+    from bat_agent_connector.operations import OpContext
+
+    ops = operations
+    calls = []
+    async def handler(ctx):
+        async def effect():
+            calls.append("effect")
+            return {"fixed": "receipt"}
+        return await ctx.step("git-effect", effect)
+    op = create(ops, handler)
+    await ops._execute(op["operation_id"])
+    refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
+    if change == "admission_lost":
+        del refs["admission_binding"]["git_execution"]
+        ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {})
+    else:
+        refs["git_execution_steps"]["git-effect"]["fixture"]["transport"] = "local"
+    with ops.journal.tx():
+        ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
+    with host_git.execution(ops, op["operation_id"]):
+        assert await handler(OpContext(ops, ops._row(op["operation_id"]))) == {"fixed": "receipt"}
+        with pytest.raises(NeedsAttention) as error:
+            host_git.require_execution("fixture")
+        assert error.value.code == "GIT_EXECUTION_LOCATION_CHANGED"
+    assert calls == ["effect"]
 
 
 @pytest.mark.parametrize("legacy", [False, True])
@@ -276,6 +318,7 @@ async def test_unresolved_ssh_never_redirects_to_local_after_reload(operations, 
     if legacy:
         refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
         del refs["admission_binding"]["git_execution"]
+        del refs["git_execution_steps"]
         with ops.journal.tx():
             ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
     ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {"fixture": "fixture-bat"})
@@ -362,6 +405,7 @@ async def test_unresolved_location_drift_precedes_domain_availability_refusal(op
     if legacy:
         refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
         del refs["admission_binding"]["git_execution"]
+        del refs["git_execution_steps"]
         with ops.journal.tx():
             ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
     ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {"fixture": "fixture-bat"})
@@ -391,6 +435,7 @@ async def test_legacy_ssh_recovery_ignores_unrelated_local_declaration(operation
     await ops._execute(op["operation_id"])
     refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
     del refs["admission_binding"]["git_execution"]
+    del refs["git_execution_steps"]
     with ops.journal.tx():
         ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
     cfg = config()

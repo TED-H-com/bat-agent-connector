@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .checkpoints import _LOCKED_CHECK, SshGitRunner
 from .config import git_transport
-from .operations import NeedsAttention, StepFailed
+from .operations import NeedsAttention, StepFailed, _canonical
 
 LOCAL_GIT_REASONS = frozenset({"local_git_not_enabled", "local_git_platform_unsupported", "local_git_tools_missing"})
 _EXECUTION = contextvars.ContextVar("host_git_execution", default=None)
@@ -171,6 +171,24 @@ def admission_bindings(ops, action, target, params, binding):
     return {**(binding or {}), "git_execution": locations}
 
 
+def bind_step(ops, operation_id, name):
+    # Effect requests are domain evidence: permission ACKs and repair recovery
+    # compare their exact bytes. Freeze location separately, in the same step
+    # transaction, without altering those requests or allocating a schema step.
+    refs = ops._row(operation_id).get("external_refs") or {}
+    locations = (refs.get("admission_binding") or {}).get("git_execution")
+    if locations is None:
+        return None
+    steps = refs.get("git_execution_steps") or {}
+    if name in steps:
+        if steps[name] != locations:
+            raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git step location changed")
+    else:
+        ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?",
+            (_canonical({**refs, "git_execution_steps": {**steps, name: locations}}), operation_id))
+    return locations
+
+
 @contextlib.contextmanager
 def execution(ops, operation_id):
     token = _EXECUTION.set((ops, operation_id))
@@ -199,7 +217,13 @@ def require_execution(host=None):
     op = ops._row(operation_id)
     if op["action"].startswith("setup."):
         return  # Setup separately binds before/after configuration revisions.
-    locations = ((op.get("external_refs") or {}).get("admission_binding") or {}).get("git_execution")
+    refs = op.get("external_refs") or {}
+    locations = (refs.get("admission_binding") or {}).get("git_execution")
+    steps = list((refs.get("git_execution_steps") or {}).values())
+    if steps:
+        locations = locations if locations is not None else steps[0]
+        if any(saved != locations for saved in steps):
+            raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git step location changed")
     if locations is None:
         # Legacy unresolved operations predate opt-in. They may read/reconcile
         # on SSH; an explicit local declaration never redirects their effects.
