@@ -19,7 +19,7 @@ The exact [129-file test inventory](2026-10-13-m4-visibility-cost-tests.txt)
 is preserved with this note. The affected runs select its 127 files other than
 the joined lifecycle and operation helpers, which are measured separately.
 
-## Continuation: identifying the interrupted failures
+## Continuation (2026-10-14): identifying the interrupted failures
 
 The first complete continuation run used that same ordered 127-file affected
 selection on Python 3.14.5, without stopping at the first failure. It records
@@ -88,18 +88,38 @@ Each of these seven cases was then run alone on both source trees, in sequence:
 
 Together with the originals, this is **18 separate invocations, 18 passed,
 zero failures/errors/skips**. All nine head/base pairs have separate
-`resume-isolate-N-{head,base}-py314.log` and `.xml` files. No product source,
-test assertion, timeout, settle bound or provider simulation changed between
-the broad failure and these comparisons.
+`resume-isolate-N-{head,base}-py314.log` and `.xml` files. The candidate's product
+source, test assertions, timeouts, settle bounds and provider simulations
+remained unchanged from the broad failure through these comparisons. The base
+was always the unmodified `2d9a2deb` export.
 
 The long broad run also supplied direct storage-wait evidence. At 131 minutes
 elapsed its pytest process had used less than ten minutes of CPU and was
 observed in `jbd2_log_wait_commit`; other samples showed `submit_bio_wait`.
 One device sample reported approximately 559 ms average write await. These
 observations support storage contention as a contributor, without proving the
-individual cause of every timeout. No unrelated process or shared lock was
-stopped or modified. Task-owned heavy commands were sequential, including
-temporary-directory cleanup.
+individual cause of every timeout. No unrelated process was stopped, and no
+shared lock was cleared or reconfigured. Task-owned heavy commands were
+sequential, including temporary-directory cleanup.
+
+During the ordered repeat, the same private-baseline preparation failure
+recurred. Its original observation again reports `observation_time_limit`,
+this time after 24 pages and one traversal. The original parent retains its
+required-CI observation-interval wait; its frozen fixture clock has not advanced
+to that interval. All recorded page steps succeeded. This is not evidence that
+the private-token assertions failed.
+
+A scratch monitor sampled only the pytest process's progress log and `/proc`
+CPU counters. Sampled portions of three error intervals took
+**62.89 / 0.05**, **91.55 / 0.83** and
+**71.55 / 0.62 seconds wall / CPU**, respectively. The first and third ended
+with the process sampled in disk wait. A separate sample at 1:56:28 elapsed
+showed 10:50 CPU, about 181 MiB resident memory, and
+`jbd2_log_wait_commit`. These measurements show that main-process visibility
+CPU did not dominate the sampled intervals; they do not identify every
+underlying delay or supply whole-case CPU measurements. Reports are
+`resume-repeat-resource-intervals.json`,
+`resume-resource-monitor.log` and `resume-repeat-io-samples.log`.
 
 ### Fresh joined measurements
 
@@ -128,10 +148,154 @@ below, rather than being replaced by the quieter run's measurements.
 Artifacts are `resume-joined-{py314,py310}.log` / `.xml` and
 `resume-native-{py314,py310}-timing.json`, under `$TMPDIR/visibility-cost/`.
 
-At this checkpoint the complete Python 3.10 affected selection is running.
-A single additional Python 3.14 run of the same ordered selection is planned
-afterward to check for reproducible order dependence. The first failed run will
-remain part of the final validation record.
+The complete Python 3.10 affected selection records **2,172 passed in
+2,774.48 seconds**, with zero failures, errors or skips
+(`resume-affected-py310.log` / `.xml`).
+
+A single optional Python 3.14 repeat of the same ordered selection was
+interrupted intentionally after it confirmed the recurring baseline
+preparation failure and three other setup stalls. The required complete rerun
+above remains the broad Python 3.14 result. The optional repeat is **partial**:
+its JUnit report and progress markers agree on **1,385 passed / 1 failed /
+3 errors**, zero skips, over **7,381.234 seconds**. It did not reach either
+original interrupted case. It is not a passing or completed affected selection.
+
+`resume2-affected-py314.xml` preserves all four problem tracebacks. The
+interruption also triggered a pytest `tmp_path` teardown `KeyError` in
+`_pytest.stash`; the wrapper exited 1. The text log has this infrastructure
+traceback instead of a normal final failure summary. The JUnit report remains
+parseable and includes every reported failure and setup error:
+
+| Case | Captured result |
+| --- | --- |
+| `tests/test_pm_maintenance_repair_baseline.py::test_private_baseline_uses_bounded_http_and_current_token[True]` | Same preparation failure as above, before private-token assertions; incomplete observation after 24 pages. |
+| `tests/test_pm_maintenance_repair_guards.py::test_rule_does_not_gain_unproven_version_paths_or_execution_fields[release]` | Setup expects a complete original observation but gets `observation_time_limit`, after five pages and zero completed traversals. |
+| `tests/test_pm_maintenance_repair_quality.py::test_publication_requires_exact_original_revision_and_coverage[candidate]` | Setup exceeds the unchanged settle bound in the original `repository.continue`, at `session.start` awaiting a workspace response. |
+| `tests/test_pm_quality_projections.py::test_brief_deduplicates_requirements_and_unreviewed_contributions_remain_unknown` | Setup exceeds the unchanged settle bound in the original `repository.continue`, at `verify.start` awaiting client connection. |
+
+The three sampled error intervals above correspond to these three setup errors
+in order. The first sample began partway through setup and must not be read as
+its entire duration. No source, assertion, budget or simulation was changed to
+make these outcomes disappear.
+
+The subsequent complete baseline-file candidate run records **6 passed /
+1 failed in 428.82 seconds**. The failure is
+`tests/test_pm_maintenance_repair_baseline.py::test_stop_before_selection_preserves_delivery_and_original_baseline[pause]`,
+at the same `finish_deployment` child-preparation assertion, before it applies
+pause. The private-baseline cases both pass in this complete file.
+`resume-baseline-file-head-py314-timing.json` records **428.96 s wall /
+43.10 s CPU** for the session; the failing body is **65.11 / 3.13 s**.
+All 245 measured settles return successfully, but the slowest takes
+**64.57 s wall / 2.94 s CPU**. The unchanged asynchronous settle bound cannot
+preempt synchronous storage waits. This is a separate baseline-file diagnostic,
+not the successful joined-lifecycle measurement above, and it demonstrates that
+host stalls remain relevant even after the visibility CPU reduction.
+
+The unmodified `2d9a2deb` export's complete baseline file also records
+**6 passed / 1 failed in 390.68 seconds**, at
+`tests/test_pm_maintenance_repair_baseline.py::test_private_baseline_uses_bounded_http_and_current_token[False]`.
+Its traceback ends at the same `finish_deployment` assertion, before any code
+depending on `token_missing`. The session measures **390.77 s wall / 65.29 s
+CPU**, with 249 successful settles and a maximum of **85.98 s wall / 4.04 s
+CPU**. This reproduces the preparation-failure class on the published base,
+independently of the candidate's visibility optimization. The different
+per-case outcomes and variable storage waits prevent treating these two
+failed-file durations as a performance comparison.
+
+The candidate and base share the same baseline assertion and scenario. The
+candidate adds assertion diagnostics and the previously documented controlled
+credential-clock alignment in `test_pm_maintenance_repairs.py`; the base export
+retains its original fixture. Neither was edited for these comparisons. The
+base failure occurs before token handling, just as the candidate's pause case
+fails before applying pause. These failures do not demonstrate a pause-policy
+or private-token defect. The base's failed journal had already been removed by
+the wrapper before an additional read-only capture was attempted; its JUnit
+traceback is retained, and its exact observation document is unavailable.
+
+All five newly exposed cases were then checked alone on both source trees:
+
+| Case | Candidate | `2d9a2deb` |
+| --- | ---: | ---: |
+| `tests/test_pm_maintenance_repair_guards.py::test_rule_does_not_gain_unproven_version_paths_or_execution_fields[release]` | 1 passed, 60.52 s | 1 passed, 47.23 s |
+| `tests/test_pm_maintenance_repair_quality.py::test_publication_requires_exact_original_revision_and_coverage[candidate]` | 1 passed, 55.55 s | 1 passed, 35.21 s |
+| `tests/test_pm_quality_projections.py::test_brief_deduplicates_requirements_and_unreviewed_contributions_remain_unknown` | 1 passed, 22.49 s | 1 passed, 3.93 s |
+| `tests/test_pm_maintenance_repair_baseline.py::test_stop_before_selection_preserves_delivery_and_original_baseline[pause]` | 1 passed, 19.99 s | 1 passed, 42.86 s |
+| `tests/test_pm_maintenance_repair_baseline.py::test_private_baseline_uses_bounded_http_and_current_token[False]` | 1 passed, 36.14 s | 1 passed, 20.51 s |
+
+These durations are each invocation's complete JUnit session time, rounded to
+two decimals, not an individual settle. The ten invocations record **10 passed,
+zero failures/errors/skips**. Reports are
+`resume-repeat-isolate-N-{head,base}-py314.log` / `.xml`; exact commands and
+statuses are in `resume-repeat-isolates.json`. With the first nine pairs, this
+continuation records **28 passed individual invocations across 14 head/base
+pairs**, without changing product source or assertions. None of the original
+two failures or the subsequently exposed problems reproduced in these
+individual comparisons. This supports the preparation-stall assessment while
+leaving the original lost exceptions and each specific external delay unknown.
+
+### Continuation command forms
+
+The first affected run loaded the scratch `affected-files.txt`; it is
+byte-for-byte identical to the committed inventory. The same ordered 127
+arguments are reproduced by:
+
+```bash
+out="$TMPDIR/visibility-cost"
+mapfile -t m4_test_files < <(rg -v '^(tests/test_pm_joined_lifecycle.py|tests/test_operation_helpers.py)$' docs/handoff/2026-10-13-m4-visibility-cost-tests.txt)
+test "${#m4_test_files[@]}" -eq 127
+```
+
+All following commands ran from the repository root, except the base
+invocations, whose working directory was `$TMPDIR/base`, and npm commands,
+whose working directory was `desktop`.
+
+| Selection | Command; each invocation used a distinct report path |
+| --- | --- |
+| Affected Python 3.14, first and repeat | `heavy pytest-disktmp uv run pytest -q -rfE "${m4_test_files[@]}" -o junit_family=legacy --junitxml="$report"` |
+| Affected Python 3.10 | `UV_PROJECT_ENVIRONMENT="$TMPDIR/py310" heavy pytest-disktmp uv run --python 3.10 --extra dev pytest -q -rfE "${m4_test_files[@]}" -o junit_family=legacy --junitxml="$report"` |
+| Joined/helper Python 3.14 | `M4_PROFILE_LABEL=resume-native-py314 PYTHONPATH="$out:$PWD" heavy pytest-disktmp uv run pytest -q -rfE -p profile_joined tests/test_pm_joined_lifecycle.py tests/test_operation_helpers.py -o junit_family=legacy --junitxml="$report"` |
+| Joined/helper Python 3.10 | `UV_PROJECT_ENVIRONMENT="$TMPDIR/py310" M4_PROFILE_LABEL=resume-native-py310 PYTHONPATH="$out:$PWD" heavy pytest-disktmp uv run --python 3.10 --extra dev pytest -q -rfE -p profile_joined tests/test_pm_joined_lifecycle.py tests/test_operation_helpers.py -o junit_family=legacy --junitxml="$report"` |
+| Each individual candidate case | `heavy pytest-disktmp uv run pytest -q -rfE "$node" -o junit_family=legacy --junitxml="$report"` |
+| Each individual base case | `UV_PROJECT_ENVIRONMENT="$TMPDIR/base-py314" heavy pytest-disktmp uv run pytest -q -rfE "$node" -o junit_family=legacy --junitxml="$report"` |
+| Complete candidate baseline file | `M4_PROFILE_LABEL=resume-baseline-file-head-py314 PYTHONPATH="$out:$PWD" heavy pytest-disktmp uv run pytest -q -rfE -p profile_joined tests/test_pm_maintenance_repair_baseline.py -o junit_family=legacy --junitxml="$report"` |
+| Complete base baseline file | `UV_PROJECT_ENVIRONMENT="$TMPDIR/base-py314" M4_PROFILE_LABEL=resume-baseline-file-base-py314 PYTHONPATH="$out:$PWD" heavy pytest-disktmp uv run pytest -q -rfE -p profile_joined tests/test_pm_maintenance_repair_baseline.py -o junit_family=legacy --junitxml="$report"` |
+
+`$node` is one of the full node IDs listed above. Reports use the matching
+artifact stem documented in each results section. The base export command was
+`git archive 2d9a2deb | tar -x -C "$TMPDIR/base"`; its separate environment was
+prepared with `UV_PROJECT_ENVIRONMENT="$TMPDIR/base-py314" uv sync --directory
+"$TMPDIR/base" --python 3.14 --extra dev`. The scratch timing plugin is the same
+one used for the original measurements and is not a repository test change.
+
+### Continuation static and frontend checks
+
+The following checks completed with exit 0 during this continuation. The
+`resume-final-checks.json` manifest records each exact command, status and wall
+time; separate `resume-final-*.log` files retain their output.
+
+| Command | Result |
+| --- | --- |
+| `uv run ruff check .` | All checks passed. |
+| `python3 scripts/check_public_content.py` | Passed. |
+| `python3 scripts/generate_agent_skills.py --check` | Passed; generated skills are current. |
+| `git diff --check` | Passed. |
+| `git diff --check 2d9a2deb..HEAD` | Passed. |
+| `cd desktop && npm run build` | Passed, including TypeScript checking. |
+| `cd desktop && npm run build:browser` | Passed. |
+| `cd desktop && npm run check:browser` | Passed. |
+| `git diff --exit-code HEAD -- src/bat_agent_connector/dashboard` | Passed; regeneration leaves the browser assets unchanged. |
+| `cd desktop && npm test` | 37 passed, zero failed, cancelled or skipped (`resume-node.log`). |
+
+No source, test, generated asset or product behavior changed in this
+continuation. No full Python suite, Playwright, native build, installation or
+live-provider test was run. Screenshots are not applicable to these diagnostic
+and documentation changes.
+
+All fresh pytest commands used the disk-temp wrapper. The original interrupted
+run's orphaned basetemp was removed after verifying byte-for-byte backups of
+its two relevant journals under `$TMPDIR/visibility-cost/original-journals/`.
+Only this task's original temporary directory was removed. The raw journals,
+JUnit reports, profiles and machine-specific scratch output are not committed.
 
 ## Backend merge
 
