@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
@@ -147,8 +148,14 @@ for entry in manifest["images"]:
         errors.append(f"Screenshot is missing passing responsive checks: {entry['file']}")
 
 
+GIT = shutil.which("git")
+if GIT is None:
+    raise SystemExit("Git is required to check screenshot capture sources.")
+
+
 def pinned(spec, text=False):
-    result = subprocess.run(["git", "-C", str(ROOT), *spec], capture_output=True, text=text)
+    # Resolved executable and fixed read-only verbs.
+    result = subprocess.run([GIT, "-C", str(ROOT), *spec], capture_output=True, text=text)  # noqa: S603
     return result.stdout if result.returncode == 0 else None
 
 
