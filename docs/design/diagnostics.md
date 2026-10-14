@@ -18,6 +18,9 @@ reference and workspace list are excluded. The builder accepts optional BAT fiel
 Capabilities supply policy booleans. `/managed/setup` is read only for a managed
 installation with `manage`; other existing reads require `observe`. Session facts
 come from prior successful client reads and contain no conversation content.
+History reasons are sampled from message responses' top-level `reading` object;
+inventory refreshes retain that separate snapshot fact, and a later message read
+without reasons replaces it with unknown. Message content is never cached here.
 Revocation clears cached counts and the preview; a revision fence rejects late
 reads. Connection changes clear the failure ring and retire previews.
 

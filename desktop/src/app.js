@@ -239,14 +239,24 @@ async function api(method, path, body, key, collectReceipt) {
   try {
     const data=await apiRequest(method,path,body,key,collectReceipt);
     if(epoch===state.epoch && revision===diagnosticRevision && method==='GET' && /^\/sessions(?:[/?]|$)/.test(path)) {
+      const previous = new Map(diagnosticSessions);
       if(Array.isArray(data.sessions)) {
         if(!new URLSearchParams(path.split('?')[1] || '').has('cursor'))diagnosticSessions.clear();
         diagnosticSessionsRead=true;
       } else if(data.session)diagnosticSessionsRead=true;
       for(const session of data.sessions || (data.session?[data.session]:[])) {
-        const facts=sessionFacts(session);
-        diagnosticSessions.set(`${session.host}/${session.session_id}`, {loaded:facts.loaded,streaming:facts.streaming,stale:facts.stale,
-          pending:facts.pending===true?{}:facts.pending===false?null:undefined,reading:{incomplete_reasons:facts.history_reasons}});
+        const facts=sessionFacts(session), id=`${session.host}/${session.session_id}`;
+        // Inventory reading summaries do not carry message-snapshot history reasons.
+        const history = facts.history_reasons ?? previous.get(id)?.reading?.incomplete_reasons ?? null;
+        diagnosticSessions.set(id, {loaded:facts.loaded,streaming:facts.streaming,stale:facts.stale,
+          pending:facts.pending===true?{}:facts.pending===false?null:undefined,reading:{incomplete_reasons:history}});
+      }
+      const messages = path.match(/^\/sessions\/([^/?]+)\/([^/?]+)\/messages(?:[/?]|$)/);
+      if(messages && data.reading) {
+        const id=messages.slice(1).map(decodeURIComponent).join('/');
+        const history=sessionFacts({reading:data.reading}).history_reasons;
+        diagnosticSessions.set(id, {...diagnosticSessions.get(id),reading:{incomplete_reasons:history}});
+        diagnosticSessionsRead=true;
       }
     }
     return data;
