@@ -37,13 +37,15 @@ for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
   await expect(page.getByRole('dialog').getByRole('status')).toHaveText(locale==='en'?'Saved':'已儲存');
   expect(Object.keys(state.saved[0]).sort()).toEqual(['content','filename','locale']);expect(JSON.parse(state.saved[0].content).client.app_commit).toBe('b'.repeat(40));
  });
- test('failed read exports its template through error Details',async({page})=>{
-  await diagnosticsFixture(page);await page.goto('/dashboard/#/session/private-box.internal/private-session');
+ for(const native of [false,true])test(`failed read exports its template through error Details first (${native?'native':'browser'})`,async({page})=>{
+  await diagnosticsFixture(page,native);await page.goto('/dashboard/#/session/private-box.internal/private-session');
   await expect(page.locator('[data-session-error]').first()).toBeVisible();await page.locator('[data-session-error]').first().locator('summary').click();
   await page.locator('[data-session-error]').first().locator('[data-export-diagnostics]').click();await expect(page.locator('[data-diagnostics-json]')).toContainText('batc.diagnostics.v1');
   const bundle=JSON.parse((await page.locator('[data-diagnostics-json]').textContent())!);
   expect(bundle.recent_errors.some(e=>e.path_template==='/v1/sessions/:host/:session'&&e.status===503&&e.code==='BAT_ERROR')).toBe(true);
   expect(JSON.stringify(bundle)).not.toMatch(/private-box|private-session/);
+  if(native){expect(bundle.client.app_version).toBe('0.1.1');expect(bundle.client.app_commit).toBe('b'.repeat(40));
+   await expect(page.locator('[data-diagnostics-summary]')).toContainText(locale==='en'?'Desktop 0.1.1 (bbbbbbb)':'桌面版 0.1.1（bbbbbbb）');}
  });
 });
 test('session summary reflects client reads, then removes them after scope loss',async({page})=>{

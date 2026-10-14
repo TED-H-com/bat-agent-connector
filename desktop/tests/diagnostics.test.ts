@@ -39,6 +39,39 @@ test('serialized scrubber removes tokens, fingerprints, URLs, IPs, paths and ema
  const result=scrubDiagnostics(JSON.stringify({message:planted.join(' ')}));assert.doesNotThrow(()=>JSON.parse(result));
  for(const value of planted)assert.ok(!result.includes(value),value);
 });
+test('final scrubber rejects every review probe as a whole string value',()=>{
+ const probes=['C:\\Users\\John Smith\\AppData\\x.log','/home/John Smith/p','~jane/work','devbox.corp.internal',
+  'host.example.com:7777?token=synthetic','wss%3A%2F%2Fhost.example.com%3Ftoken%3Dsynthetic',
+  'fp=synthetic','Authorization: Basic c3ludGhldGlj','api_key=synthetic','passwd=synthetic','user@devbox',
+  'unrecognized free text','malformed%escape wss%3A%2F%2Fhost.example.com'];
+ for(const probe of probes)assert.equal(JSON.parse(scrubDiagnostics(JSON.stringify({probe}))).probe,'[redacted]',probe);
+ const out=buildDiagnostics(fixture());
+ assert.deepEqual(out.client,clientIdentity(fixture()));
+ assert.equal(out.schema,'batc.diagnostics.v1');assert.equal(out.operations[0].action,'session.send');
+ assert.equal(out.hosts[0].alias,'host-1');assert.equal(out.recent_errors[0].path_template,'/v1/sessions/:host/:session');
+});
+test('host versions cannot carry names and protocols come only from the fixed list',()=>{
+ for(const value of ['2.1.0-jane-macbook.corp-lan','1.0+ted-devbox']){
+  const input=fixture();input.hosts[0].bat.version=value;input.hosts[0].bat.protocol=value;
+  assert.equal(buildDiagnostics(input).hosts[0].bat.version,null);assert.equal(buildDiagnostics(input).hosts[0].bat.protocol,null);
+  const fallback={...input,hosts:[{...input.hosts[0],server_version:value,bat:{...input.hosts[0].bat,version:undefined}}]};
+  assert.equal(buildDiagnostics(fallback).hosts[0].bat.version,null);
+ }
+ for(const value of ['2.1','2.1.0','2.1.0-rc.2','2.1.0-dev12']){
+  const input=fixture();input.hosts[0].bat.version=value;assert.equal(buildDiagnostics(input).hosts[0].bat.version,value);
+ }
+ const input=fixture();input.hosts[0].bat.protocol='1.0';assert.equal(buildDiagnostics(input).hosts[0].bat.protocol,null);
+});
+test('frontend commits use the same complete hash format as Connector and native',()=>{
+ for(const length of [40,64])assert.equal(clientIdentity({caps:{build:{commit:'a'.repeat(length)}}}).connector_commit,'a'.repeat(length));
+ for(const length of [7,39,41,63,65])assert.equal(clientIdentity({caps:{build:{commit:'a'.repeat(length)}}}).connector_commit,null);
+ assert.equal(clientIdentity({caps:{build:{commit:'A'.repeat(40)}}}).connector_commit,null);
+});
+test('real session history reasons each count once per loaded read',()=>{
+ const reading={incomplete_reasons:['archive_unconfirmed','archive_budget','message_ids']};
+ const out=buildDiagnostics({sessions:[{loaded:true,reading},{loaded:false,reading:{incomplete_reasons:['message_ids']}}]});
+ assert.deepEqual(out.sessions.history_reasons,{archive_unconfirmed:1,archive_budget:1,message_ids:2});
+});
 test('missing sources and unreported metrics stay unknown; reasons are optional',()=>{
  const out=buildDiagnostics({});assert.equal(out.sessions.loaded,null);assert.equal(out.operations,null);assert.deepEqual(out.hosts,[]);assert.equal(out.sources.hosts,'not_available');
  const locations=buildDiagnostics({os:'windows'}).log_locations;

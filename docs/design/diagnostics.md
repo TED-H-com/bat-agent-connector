@@ -25,16 +25,28 @@ Never copied: tokens/secret refs, fingerprints, hostnames/endpoints/SSH aliases,
 paths/managed roots, titles/messages/prompts/drafts, repositories/remotes/branches,
 actors/emails. Hosts sort by internal logical key and become `host-1`, `host-2`, …;
 no key is serialized. Opaque operation IDs, enum error codes and fixed timestamps
-are allowed. Server free-text errors are omitted. JSON string scrubbing removes
-common token formats, fingerprints, URLs, IP addresses, absolute POSIX/Windows
-paths and email addresses; only generated route and default-location templates
-are exempt from path scrubbing.
+are allowed. Server free-text errors are omitted. The final pass parses the
+serialized JSON and percent-decodes each string value when its escapes are valid.
+Fixed protocols, valid timestamps/contract dates and module-generated route/log
+templates are preserved. Pattern rules cover common tokens and credential forms
+(including Basic authorization, `api_key`, `passwd` and `fp`), fingerprints, URLs,
+common hostname suffixes, IP addresses, email/user-at-host strings and POSIX,
+Windows, UNC and tilde paths, including spaces. After those rules, a value survives
+only if it matches a module-owned code/reason, strict numeric version with a
+bounded alpha/beta/rc/dev suffix, full commit, operation ID/action or host alias
+format, or a fixed schema/locale string. Everything else becomes `[redacted]` in
+full; free text cannot survive as a partially redacted fragment. Keys come from
+the named-field projection (history keys are validated reason codes).
+Host protocols have no numeric fallback, and host versions containing names are
+null. All commit validators accept only 40 or 64 lowercase hexadecimal characters.
 
 ## Build identity
 
 Capabilities adds `build: {version, commit, source}`. Git installs use installed
-PEP 610 `direct_url.json` (`vcs_info.commit_id`); plain packages and editable local
-checkouts without VCS metadata have a null commit. A frozen runtime reads only
+PEP 610 `direct_url.json` (`vcs_info.commit_id`) only when the distribution's package
+directory resolves to the running package's directory; a different site-packages
+copy cannot identify a checkout on `PYTHONPATH`. Plain packages and editable local
+checkouts without matching VCS metadata have a null commit. A frozen runtime reads only
 its packaged `build-info.json`. No runtime Git process is invoked. The packaging
 job supplies `BATC_BUILD_COMMIT` to PyInstaller and Rust `option_env!`; native
 version comes from `CARGO_PKG_VERSION`. Missing commit means unknown in both

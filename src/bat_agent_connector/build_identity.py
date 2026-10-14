@@ -11,7 +11,7 @@ from . import __version__
 
 
 def _commit(value):
-    return value if isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{40,64}", value) else None
+    return value if isinstance(value, str) and re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", value) else None
 
 
 def build_identity() -> dict:
@@ -22,7 +22,10 @@ def build_identity() -> dict:
             doc = json.loads(Path(__file__).with_name("build-info.json").read_text(encoding="utf-8"))
             result["commit"] = _commit(doc.get("commit"))
         else:
-            raw = metadata.distribution("bat-agent-connector").read_text("direct_url.json")
+            distribution = metadata.distribution("bat-agent-connector")
+            if Path(distribution.locate_file("bat_agent_connector")).resolve() != Path(__file__).resolve().parent:
+                return result  # A different installed copy cannot identify the running checkout.
+            raw = distribution.read_text("direct_url.json")
             doc = json.loads(raw) if raw else {}
             vcs = doc.get("vcs_info", {})
             if vcs.get("vcs") == "git":

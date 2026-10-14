@@ -75,6 +75,9 @@ async function openDiagnostics() {
   if(diagnosticsPreview)return;
   const epoch=state.epoch;
   diagnosticsPreview=diagnosticsDialog({h,t,onClose:()=>{diagnosticsPreview=null;}, load:async()=>{
+    if(nativeDesktop && !desktopBuild){
+      try {desktopBuild=(await nativeStatus()).app_build;} catch { /* Build remains explicitly unknown. */ }
+    }
     let caps=null;
     try {caps=await api('GET','/capabilities');} catch { /* Current caller only; no credential fallback. */ }
     if(epoch!==state.epoch)throw Error('Connection changed');

@@ -22,8 +22,11 @@ var __exportAll = (all, no_symbols) => {
 //#region src/diagnostics.js
 var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-var version$2 = (value) => typeof value === "string" && /^[0-9][0-9a-z.+-]{0,39}$/i.test(value) ? value : null;
-var commit = (value) => typeof value === "string" && /^[0-9a-f]{7,64}$/i.test(value) ? value : null;
+var version$2 = (value) => typeof value === "string" && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+var commit = (value) => typeof value === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
+var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
+var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
+var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 var bool = (value) => typeof value === "boolean" ? value : null;
 var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 var time = (value) => {
@@ -99,7 +102,7 @@ function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", local
 			"bundled"
 		]),
 		api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
-		contract_version: typeof caps?.contract_version === "string" && /^\d{4}-\d{2}-\d{2}$/.test(caps.contract_version) ? caps.contract_version : null,
+		contract_version: contractVersion(caps?.contract_version),
 		platform: desktop ? "desktop" : "browser",
 		os_family: select(os, [
 			"windows",
@@ -149,14 +152,16 @@ function scrubDiagnostics(text) {
 		"macos",
 		"windows"
 	].flatMap((os) => [false, true].map((managed) => logLocations(os, managed).state_database)));
-	return text.replace(/"(?:\\.|[^"\\])*"/g, (encoded) => {
-		let value = JSON.parse(encoded);
-		if (time(value) || ["bat-remote/v2", "bat-remote/legacy-v1"].includes(value)) return encoded;
-		const safeRoute = /^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x));
-		value = value.replace(/(?:bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]");
-		if (!safeRoute && !safeLogs.has(value)) value = value.replace(/(?:[a-z]:[\\/]|\\\\)[^\s"<>]+|\/(?:[^\s"<>/]+\/)*[^\s"<>]+/gi, "[redacted]");
-		return JSON.stringify(value);
-	});
+	return JSON.stringify(JSON.parse(text, (_key, input) => {
+		if (typeof input !== "string") return input;
+		let value = input;
+		try {
+			value = decodeURIComponent(value);
+		} catch {}
+		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
+		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$3(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+	}));
 }
 function sessionFacts(session) {
 	return {
@@ -221,7 +226,7 @@ function buildDiagnostics(input) {
 						"unknown"
 					]),
 					version: version$2(host.bat?.version ?? host.server_version),
-					protocol: select(host.bat?.protocol, ["bat-remote/v2", "bat-remote/legacy-v1"]) || version$2(host.bat?.protocol),
+					protocol: select(host.bat?.protocol, protocols),
 					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
 						"claude",
 						"codex",
@@ -255,7 +260,7 @@ function buildDiagnostics(input) {
 		},
 		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
 			id: operationId$3(op.operation_id),
-			action: typeof op.action === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(op.action) ? op.action : null,
+			action: action(op.action),
 			status: op.status,
 			error_code: code(op.error_code ?? op.error?.code),
 			created_at: time(op.created_at),
@@ -49881,6 +49886,9 @@ async function openDiagnostics() {
 			diagnosticsPreview = null;
 		},
 		load: async () => {
+			if (nativeDesktop && !desktopBuild) try {
+				desktopBuild = (await nativeStatus()).app_build;
+			} catch {}
 			let caps = null;
 			try {
 				caps = await api("GET", "/capabilities");

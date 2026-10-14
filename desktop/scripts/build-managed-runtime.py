@@ -31,7 +31,7 @@ def main() -> None:
     BUILD.mkdir(parents=True, exist_ok=True)
     OUTPUT.mkdir(parents=True, exist_ok=True)
     commit = os.environ.get("BATC_BUILD_COMMIT")
-    if commit and not re.fullmatch(r"[0-9a-f]{40,64}", commit):
+    if commit and not re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", commit):
         raise SystemExit("BATC_BUILD_COMMIT must be a full commit hash")
     build_info = BUILD / "build-info.json"
     build_info.write_text(json.dumps({"commit": commit or None}) + "\n", encoding="utf-8")

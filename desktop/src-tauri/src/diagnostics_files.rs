@@ -12,13 +12,17 @@ pub struct AppBuild {
     commit: Option<&'static str>,
 }
 pub fn app_build() -> AppBuild {
-    let commit = option_env!("BATC_BUILD_COMMIT").filter(|value| {
-        matches!(value.len(), 40 | 64) && value.bytes().all(|c| c.is_ascii_hexdigit())
-    });
+    let commit = option_env!("BATC_BUILD_COMMIT").filter(|value| valid_commit(value));
     AppBuild {
         version: env!("CARGO_PKG_VERSION"),
         commit,
     }
+}
+fn valid_commit(value: &str) -> bool {
+    matches!(value.len(), 40 | 64)
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
 }
 
 #[derive(Deserialize)]
@@ -73,6 +77,17 @@ pub struct Receipt {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn full_commit_format_matches_connector_and_frontend() {
+        for length in [40, 64] {
+            assert!(valid_commit(&"a".repeat(length)));
+        }
+        for length in [7, 39, 41, 63, 65] {
+            assert!(!valid_commit(&"a".repeat(length)));
+        }
+        assert!(!valid_commit(&"A".repeat(40)));
+        assert!(!valid_commit(&"g".repeat(40)));
+    }
     fn input() -> Input {
         Input {
             content: r#"{"schema":"batc.diagnostics.v1","note":"字"}"#.into(),

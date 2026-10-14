@@ -1,8 +1,11 @@
 // An explicit projection. Never spread server/client objects into an export.
 const code = value => typeof value === 'string' && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
 const reason = value => typeof value === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-const version = value => typeof value === 'string' && /^[0-9][0-9a-z.+-]{0,39}$/i.test(value) ? value : null;
-const commit = value => typeof value === 'string' && /^[0-9a-f]{7,64}$/i.test(value) ? value : null;
+const version = value => typeof value === 'string' && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+const commit = value => typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
+const action = value => typeof value === 'string' && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
+const protocols = ['bat-remote/v2','bat-remote/legacy-v1'];
+const contractVersion = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 const bool = value => typeof value === 'boolean' ? value : null;
 const operationId = value => typeof value === 'string' && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
 const time = value => {
@@ -40,7 +43,7 @@ export function clientIdentity({caps, appBuild, desktop = false, os = 'unknown',
     app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
     connector_version: version(caps?.build?.version ?? caps?.connector), connector_commit: commit(caps?.build?.commit),
     connector_source: select(caps?.build?.source, ['vcs','package','bundled']), api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
-    contract_version: typeof caps?.contract_version === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(caps.contract_version) ? caps.contract_version : null,
+    contract_version: contractVersion(caps?.contract_version),
     platform: desktop ? 'desktop' : 'browser', os_family: select(os,['windows','macos','linux']) || 'unknown',
     locale: locale === 'zh-TW' ? 'zh-TW' : 'en', viewport_class: width > 0 ? width < 800 ? 'small' : width < 1200 ? 'medium' : 'large' : 'unknown'};
 }
@@ -58,22 +61,26 @@ export function logLocations(os, managed) {
 }
 const databaseTemplates = managed => Object.fromEntries(['linux','macos','windows'].map(os => [os,logLocations(os,managed).state_database]));
 export function scrubDiagnostics(text) {
-  // Scrub JSON string values, preserving valid JSON escapes. Only generated route/log
-  // templates are exempt from path detection; they contain no caller supplied parts.
+  // Parse the serialized JSON so values can be replaced in full, never partially.
+  // Only module-owned formats/templates survive this independent final gate.
   const safeLogs = new Set(['linux','macos','windows'].flatMap(os => [false,true].map(managed => logLocations(os,managed).state_database)));
-  return text.replace(/"(?:\\.|[^"\\])*"/g, encoded => {
-    let value = JSON.parse(encoded);
-    if(time(value) || ['bat-remote/v2','bat-remote/legacy-v1'].includes(value))return encoded;
+  return JSON.stringify(JSON.parse(text, (_key, input) => {
+    if(typeof input !== 'string')return input;
+    let value = input;
+    try {value=decodeURIComponent(value);} catch { /* Malformed escapes still face the format gate. */ }
     const safeRoute = /^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split('/').filter(Boolean).every(x => x.startsWith(':') || routeWords.has(x));
-    value = value.replace(/(?:bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password)\s*[=:]\s*\S+)/gi, '[redacted]')
+    if(safeRoute || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value))return value;
+    value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, '[redacted]')
       .replace(/SHA256:[^\s"',;]+/gi, '[redacted]')
       .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, '[redacted]')
-      .replace(/\b[\w.+-]+@[\w.-]+\.[a-z]{2,}\b/gi, '[redacted]')
+      .replace(/\b[\w.+-]+@[\w.-]+\b/gi, '[redacted]')
+      .replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, '[redacted]')
       .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[redacted]')
-      .replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, '[redacted]');
-    if (!safeRoute && !safeLogs.has(value)) value = value.replace(/(?:[a-z]:[\\/]|\\\\)[^\s"<>]+|\/(?:[^\s"<>/]+\/)*[^\s"<>]+/gi, '[redacted]');
-    return JSON.stringify(value);
-  });
+      .replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, '[redacted]')
+      .replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, '[redacted]');
+    return code(value) || reason(value) || version(value) || commit(value) || operationId(value) || action(value)
+      || /^host-[1-9]\d*$/.test(value) || ['batc.diagnostics.v1','zh-TW'].includes(value) ? value : '[redacted]';
+  }));
 }
 export function sessionFacts(session) {
   return {loaded: bool(session.loaded), streaming: bool(session.streaming),
@@ -101,14 +108,14 @@ export function buildDiagnostics(input) {
       const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find(scan => scan.profile_id === policy.profile_id) : null;
       return {alias:`host-${i+1}`, connection_state: select(host.connection_state, ['connected','disconnected','reconnecting','never_connected','stale']) || (host.reachable === true ? 'reachable' : host.reachable === false ? 'unreachable' : 'unknown'),
         stale: bool(host.stale), stale_reason: reason(host.stale_reason), last_error_code: code(host.last_error?.code ?? discovery?.error_code),
-        bat: {status: select(host.bat?.status,['ready','unavailable','unknown']), version: version(host.bat?.version ?? host.server_version), protocol: select(host.bat?.protocol, ['bat-remote/v2','bat-remote/legacy-v1']) || version(host.bat?.protocol),
+        bat: {status: select(host.bat?.status,['ready','unavailable','unknown']), version: version(host.bat?.version ?? host.server_version), protocol: select(host.bat?.protocol, protocols),
           capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, ['claude','codex','terminal','git'])},
         coverage: {basis:'configured_profile_enumeration', complete:bool(discovery?.complete_enumeration), reasons:Array.isArray(discovery?.outside_scan) ? [...new Set(discovery.outside_scan.map(item => reason(item.reason)).filter(Boolean))] : null},
         policy: policyFlags};
     }),
     sessions: {basis:'client_loaded_reads', sampled: sessions?.length ?? null, loaded: count('loaded'), streaming:count('streaming'), unknown_activity:count('unknown_activity'), stale:count('stale'), pending:count('pending'), history_reasons: history, unreported: Object.fromEntries(['loaded','streaming','stale','pending'].map(key => [key, sessions ? sessions.filter(s => s[key] === null).length : null]))},
     operations: Array.isArray(input.operations) ? input.operations.filter(op => ['failed','uncertain'].includes(op.status)).slice(0,50).map(op => ({id:operationId(op.operation_id),
-      action: typeof op.action === 'string' && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(op.action) ? op.action : null,
+      action: action(op.action),
       status:op.status, error_code:code(op.error_code ?? op.error?.code), created_at:time(op.created_at), updated_at:time(op.updated_at)})) : null,
     coverage: {complete:bool(input.observation?.coverage?.complete), reasons:Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null},
     operations_basis:'loaded_page', recent_errors:(input.recentErrors || []).slice(-50).map(e => failedCall({at:e.at,method:e.method,path:e.path_template,status:e.status,code:e.code,admissionRefused:e.admission_refused,operation:{operation_id:e.operation_id}})),
