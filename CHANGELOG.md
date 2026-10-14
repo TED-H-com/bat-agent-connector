@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Pull requests select the Python matrix and native builds from changed paths;
+  `main` keeps full coverage. Every selected Python version retains all five
+  pytest shards and the exact-partition check; job summaries explain each selection.
+
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
 
