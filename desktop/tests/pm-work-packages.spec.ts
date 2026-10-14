@@ -131,7 +131,7 @@ for(const native of [false,true])test.describe(native?'native saved engineering 
     };
     await mountConversation(page,native,dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await review(page);
     await openPmSection(page,'requirements','ui_packages');
-    const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator('summary').click();
+    const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator(':scope > summary').click();
     await expect(box).toContainText('This page is incomplete.');
     expect((await box.innerText()).toLowerCase()).not.toContain('null');expect((await box.innerText()).toLowerCase()).not.toContain('undefined');
     await box.getByRole('button',{name:'More delivery records',exact:true}).click();

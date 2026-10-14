@@ -1,5 +1,5 @@
 import {operationStatusLabel} from './global-labels.js';
-import {iconButton} from './ui/components.js';
+import {button, disclosure, iconButton, sectionCard, statusPill} from './ui/components.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 import {acceptanceProfile,requirementCondition,readRequirementReviews,matchesRequirementReview,referenceKey,checkRequirementMap} from './pm-requirement-quality.js';
 import {checkSpecMaterialization,fixedSpecSelection} from './pm-spec-materialization.js';
@@ -22,14 +22,21 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
   const entries=hidden([]),baseline=hidden(null),reason=input('pmb_rationale',{multiline:true,max:4000});
   const number=(label,min,max,value)=>{const field=input(label,{value:String(value)});field.type='number';field.min=String(min);field.max=String(max);field.step='1';field.dataset.pmDefault=String(value);return field;};
   const starts=number('pmb_starts',1,16,1),parallel=number('pmb_parallel',1,8,1),retries=number('pmb_retries',0,3,0),deadline=input('pmb_deadline');deadline.type='datetime-local';
-  const add=h('button',{type:'button',class:'secondary',onclick:()=>void addReviewed()},t('pmb_add'));
+  function chosenLocal(field){
+    const shown=h('span',{'data-pm-chosen-time':''});
+    const paint=()=>{shown.replaceChildren();if(!field.value){shown.append(statusPill('unknown'));return;}
+      const date=new Date(field.value),stamp=Number.isFinite(date.getTime())?timeStamp(date.toISOString()):statusPill('unknown');
+      shown.append(stamp instanceof Node?stamp:String(stamp));};
+    field.addEventListener('input',paint);field.addEventListener('change',paint);paint();return shown;
+  }
+  const add=button({variant:'secondary', label:t('pmb_add'), onClick:()=>void addReviewed()});
   const stale=text('pmb_stale');stale.hidden=true;
-  const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(ready&&!start.locked()){start.set('_baseline',JSON.stringify(currentPre()));update();}}},t('pmb_use_versions'));
-  const element=h('section',{class:'panel pm-work-batches','data-pm-work-batches':''},
-    h('header',{class:'pm-heading'},h('div',{},h('h2',{},t('pmb_title')),text('pmb_intro')),
-      iconButton({icon:'refresh-cw', label:t('pmb_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}})),status,
-    h('details',{'data-batch-draft':'',open:true},h('summary',{},t('pmb_draft')),text('pmb_selection_help'),add,stale,rebase,startView),
-    labelled('pmb_history',history),facts,proofView);
+  const rebase=button({variant:'secondary', label:t('pmb_use_versions'), onClick:()=>{if(ready&&!start.locked()){start.set('_baseline',JSON.stringify(currentPre()));update();}}});
+  rebase.hidden=true;
+  const draftDetails=h('details',{'data-batch-draft':'',open:true},h('summary',{},t('pmb_draft')),add,stale,rebase,startView);
+  const element=h('section',{class:'panel pm-work-batches','data-pm-work-batches':''},sectionCard({body:h('div',{},
+    h('div',{class:'pm-tool-head'},iconButton({icon:'refresh-cw', label:t('pmb_refresh'), onClick:()=>void refresh()})),status,
+    disclosure({element:draftDetails}),labelled('pmb_history',history),facts,proofView)}));
   const cap=()=>caps()?.features?.pm_workspaces?.work_batches;
   const supported=()=>cap()?.version===1&&cap()?.actions?.includes(START)&&cap()?.profiles?.includes(profile.profile);
   const valid=ticket=>{try{alive();return ticket===serial;}catch{return false;}};
@@ -105,9 +112,9 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
           start.set('entries',JSON.stringify(values));entrySignature=JSON.stringify(values);
           const notice=entriesView.querySelector(`[data-batch-entry="${row.key}"] [data-condition-changed]`);if(notice)notice.hidden=!current.depends_on.some(edge=>!same(edge.condition,condition(values.find(item=>item.key===edge.entry_key)||{})));update();});deps.append(h('label',{},node,h('span',{},other.title)));
       }
-      for(const missing of row.depends_on.filter(edge=>!rows.some(item=>item.key===edge.entry_key))){deps.append(text('pmb_missing_dependency'),h('button',{type:'button',class:'secondary',onclick:()=>{
+      for(const missing of row.depends_on.filter(edge=>!rows.some(item=>item.key===edge.entry_key))){deps.append(text('pmb_missing_dependency'),button({variant:'secondary',label:t('pmb_remove_dependency'),onClick:()=>{
         if(start.locked()||!writer())return;const values=draft();values.find(item=>item.key===row.key).depends_on=values.find(item=>item.key===row.key).depends_on.filter(edge=>edge.entry_key!==missing.entry_key);
-        start.set('entries',JSON.stringify(values));renderEntries();update();}},t('pmb_remove_dependency')));}
+        start.set('entries',JSON.stringify(values));renderEntries();update();}}));}
       const result=choose('pmb_profile_label',[[profile.profile,t('pmb_github_profile')],...(cap().profiles.includes(acceptanceProfile)?[[acceptanceProfile,t('pmb_acceptance_profile')]]:[])]);result.value=condition(row).profile;
       result.addEventListener('change',()=>{if(start.locked()||!writer())return;try{const values=draft();values.find(item=>item.key===row.key).result_condition=result.value===acceptanceProfile?requirementCondition(packages.get(row.handoff.params.pm_package_ref.package_id)):clone(profile);start.set('entries',JSON.stringify(values));renderEntries(true);update();}catch(err){failure(err);}});
       const changed=text('pmb_changed_dependency');changed.dataset.conditionChanged='';changed.hidden=!row.depends_on.some(edge=>!same(edge.condition,condition(rows.find(other=>other.key===edge.entry_key)||{})));
@@ -115,8 +122,8 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
         line('pmb_package',row.handoff.params.pm_package_ref.package_id),h('p',{class:'pm-note-text'},row.handoff.params.prompt),h('p',{class:'pm-note-text'},row.handoff.params.pm_code_basis.rationale),
         row.handoff.params.pm_spec_ref?line('pmb_attachment',row.handoff.params.pm_spec_ref.materialization_id):null);
       entriesView.append(h('article',{class:'pm-batch-entry','data-batch-entry':row.key},h('h4',{},row.title),labelled('pmb_profile_label',result),condition(row).profile===acceptanceProfile?text('pmb_acceptance_help'):text('pmb_profile'),details,changed,
-        h('details',{},h('summary',{},t('pmb_dependencies')),text('pmb_dependency_help'),deps),h('button',{type:'button',class:'secondary',onclick:()=>{
-          if(start.locked()||!writer())return;start.set('entries',JSON.stringify(draft().filter(item=>item.key!==row.key)));renderEntries();update();}},t('pmb_remove'))));
+        h('details',{},h('summary',{},t('pmb_dependencies')),text('pmb_dependency_help'),deps),button({variant:'secondary',label:t('pmb_remove'),onClick:()=>{
+          if(start.locked()||!writer())return;start.set('entries',JSON.stringify(draft().filter(item=>item.key!==row.key)));renderEntries();update();}})));
       const article=entriesView.lastElementChild;[...article.querySelectorAll('details')].forEach((node,index)=>{node.open=expanded.get(row.key)?.[index]||false;});
     }
   }
@@ -146,8 +153,10 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
     preconditions:()=>JSON.parse(baseline.value),permitted:()=>starter()&&!draftStale(),recoverPermitted:writer,label:'pmb_start',
     onStateChange:()=>{if(start){if(!start.locked()&&!validateDraft())start.box.querySelector('button[type=submit]').disabled=true;stale.hidden=rebase.hidden=!ready||start.locked()||!draftStale();}},
     onSaved:async result=>{if(result?.batch_id){selected=result.batch_id;remember();}entrySignature='';await refresh();},
-    extra:h('div',{class:'pm-fields'},entriesView,h('div',{class:'pm-batch-limits'},labelled('pmb_starts',starts),labelled('pmb_parallel',parallel),labelled('pmb_retries',retries),labelled('pmb_deadline',deadline)),
-      text('pmb_budget_help'),labelled('pmb_rationale',reason),text('pmb_boundary'))});
+    extra:h('div',{class:'pm-fields'},entriesView,h('div',{class:'pm-batch-limits'},labelled('pmb_starts',starts),labelled('pmb_parallel',parallel),labelled('pmb_retries',retries),
+      h('div',{class:'pm-time-field'},h('label',{},t('pmb_deadline_short'),deadline),h('span',{class:'pm-local-time'},t('pmb_shown'),' ',chosenLocal(deadline)))),
+      disclosure({label:t('pmb_details'),body:h('div',{},text('pmb_intro'),text('pmb_selection_help'),text('pmb_budget_help'),text('pmb_boundary'))}),
+      labelled('pmb_rationale',reason))});
   start.box.addEventListener('submit',()=>{firstSubmission=!start.locked();},true);start.box.addEventListener('input',update);start.box.addEventListener('change',update);startView.append(start.box);
   function remember(){try{localStorage.setItem(navigation,selected);}catch{}}
   history.addEventListener('change',()=>{selected=history.value;remember();void refresh();});
@@ -175,7 +184,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
       ...entry.verification_evidence.map(proofFacts)));
     facts.replaceChildren(h('h3',{},t('pmb_saved')),line('pmb_operation_status',operationStatusLabel(batch.operation_status)),
       h('p',{},`${t('pmb_starts')}: ${limits.max_starts} · ${t('pmb_parallel')}: ${limits.max_parallel} · ${t('pmb_retries')}: ${limits.max_retries}`),
-      line('pmb_deadline',timeStamp(limits.deadline_at)),text('pmb_budget_help'),text('pmb_boundary'),
+      line('pmb_deadline',timeStamp(limits.deadline_at)),disclosure({label:t('pmb_details'),body:h('div',{},text('pmb_budget_help'),text('pmb_boundary'))}),
       h('a',{href:`#/op/${batch.operation_id}`},t('pmb_parent_operation')),...children);
   }
   const receiptKey=row=>`${row.operation_id}:${row.seq}`;
@@ -214,7 +223,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
     if(proofBaseline?.batch_id!==batch.batch_id||!proof){
       proof?.dispose?.();proofChoices=null;proofBaseline={batch_id:batch.batch_id,version:batch.version};
       const entry=choose('pmb_evidence_entry',[]),receipt=choose('pmb_delivery',[]),observation=choose('pmb_observation',[]),assessment=choose('pmb_assessment',[]),rationale=input('pmb_rationale',{multiline:true,max:4000}),version=hidden(batch.version);
-      const rebase=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{if(writer()&&!proof.locked()){proofBaseline.version=batch.version;proof.set('_version',JSON.stringify(batch.version));update();}}},t('pmb_use_evidence_version'));proofRebase=rebase;
+      const rebase=button({variant:'secondary',label:t('pmb_use_evidence_version'),hidden:true,onClick:()=>{if(writer()&&!proof.locked()){proofBaseline.version=batch.version;proof.set('_version',JSON.stringify(batch.version));update();}}});proofRebase=rebase;
       proof=form({namespace:`${namespace}.work-batch-evidence`,api:request,action:RECORD,target:{workspace_id:workspaceId,batch_id:batch.batch_id},fields:{entry,receipt,observation,assessment,rationale,_version:version},
         params:values=>{if(!validProof())throw Error(t('pmb_selection_required'));const selected=batch.entries.find(row=>row.key===values.entry);
           if(condition(selected).profile===acceptanceProfile){const chosen=reviewChoices(selected).find(row=>row.key===values.assessment);return {evidence:[{entry_key:values.entry,condition:clone(condition(selected)),reference:JSON.parse(referenceKey(chosen.review))}],rationale:values.rationale};}

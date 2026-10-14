@@ -1,4 +1,5 @@
 import {place} from './ui/dom.js';
+import {button, disclosure, sectionCard} from './ui/components.js';
 import {joinLabel} from './label-text.js';
 import {readRequirementReviews,matchesRequirementReview,requirementSelection,boundedQualityMap} from './pm-requirement-quality.js';
 import {checkSpecMaterialization,readSpecMaterializations,fixedSpecSelection} from './pm-spec-materialization.js';
@@ -10,13 +11,15 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
   let active=null,prepared=null,serial=0,reading=false,editor=null,qualityCatalog=[];
   const editors=new Map(),facts=h('div'),status=h('div',{role:'status'}),editorView=h('div'),outcome=h('div');
   const summary=h('p',{class:'muted'},t('ph_select')),availabilityNotice=h('p',{class:'muted',hidden:true},t('ph_not_allowed'));
-  const review=h('button',{type:'button',class:'secondary',onclick:()=>void inspect()},t('ph_review'));
-  const useReview=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>{
+  const review=button({variant:'secondary', label:t('ph_review'), onClick:()=>void inspect()});
+  const useReview=button({variant:'secondary', label:t('ph_use_review'), onClick:()=>{
     if(!editor||editor.locked()||!prepared||!write())return;
     editor.set('review',JSON.stringify(prepared.fixed));update();
-  }},t('ph_use_review'));
+  }});
+  useReview.hidden=true;
   const controls=h('details',{'data-pm-package-handoff-controls':''},h('summary',{},t('ph_title')),
-    h('p',{class:'muted'},t('ph_intro')),summary,h('p',{class:'muted'},t('ph_boundary')),availabilityNotice,review,status,facts,useReview,editorView,outcome);
+    sectionCard({body:h('div',{},summary,availabilityNotice,review,status,facts,useReview,editorView,outcome,
+      disclosure({label:t('ph_details'),body:h('div',{},h('p',{class:'muted'},t('ph_intro')),h('p',{class:'muted'},t('ph_boundary')))}))}));
   const element=h('section',{class:'pm-packages','data-pm-package-handoff':''},controls);
   const available=()=>{const cap=caps()?.features?.pm_workspaces?.package_handoff;return cap?.available===true&&cap.action==='repository.continue'&&cap.contract===contract&&cap.code_basis_required===true&&['bounded_full_prompt','bounded_full_prompt_or_fixed_spec_artifact'].includes(cap.source_materialization);};
   const writer=()=>permitted(false)&&['owner','contributor'].includes(workspace()?.membership?.role)&&['observe','manage','start'].every(scope=>caps()?.scopes?.includes(scope))
@@ -107,8 +110,9 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
           if(!resultMatches(result))throw Error(t('ph_invalid'));
           prepared=null;facts.replaceChildren();outcome.replaceChildren(h('p',{},t('ph_started')),
             h('a',{href:`#/session/${encodeURIComponent(result.host)}/${encodeURIComponent(result.session_id)}`},t('ph_open')));update();
-        },extra:h('div',{class:'pm-fields'},warning,qualityBox,specBox,labelled('ph_rationale',basis),labelled('ph_prompt',prompt),labelled('ph_agent',agent),h('p',{class:'muted'},t('ph_agent_help')),
-          h('details',{},h('summary',{},t('ph_options')),labelled('start_title',title),labelled('start_model',model)))});
+        },extra:h('div',{class:'pm-fields'},warning,qualityBox,specBox,labelled('ph_rationale',basis),labelled('ph_prompt',prompt),labelled('ph_agent',agent),
+          disclosure({label:t('ph_details'),body:h('p',{class:'muted'},t('ph_agent_help'))}),
+          disclosure({element:h('details',{},h('summary',{},t('ph_options')),labelled('start_title',title),labelled('start_model',model))}))});
       const original=value.update;
       value.update=()=>{if(syncing)return;syncing=true;try{
         if(!value.locked()&&!fixed.value&&prepared&&active?.package_id===row.package_id){fixed.value=JSON.stringify(prepared.fixed);value.changed();}
@@ -184,12 +188,12 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
       prepared={row,project,readyForStart,fixed:{params:{source_ref:code.source_ref,source_sha:code.source_sha,project_id:work.project_id,work_item_id:work.work_item_id,
         pm_package_ref:{workspace_id:workspaceId,package_id:id,document_digest:row.document_digest},...(hasQuality?{pm_requirement_quality_refs:quality}:{}),...(fixedSpec?fixedSpecSelection(fixedSpec,workspaceId):{})},
         preconditions:{repository_id:code.repository_id,binding_digest:code.binding_digest,expected_project_version:project.version,expected_work_item_fingerprint:work.work_fingerprint}}};
-      const proof=h('details',{},h('summary',{},t('ph_sources')),h('p',{class:'mono'},`${t('ph_base')}: ${code.source_sha}`),
+      const proof=disclosure({element:h('details',{},h('summary',{},t('ph_sources')),h('p',{class:'muted'},t('ph_separate')),h('p',{class:'mono'},`${t('ph_base')}: ${code.source_sha}`),
         ...(row.document.sources?.documents||[]).map(source=>h('p',{class:'mono'},`${t('ph_spec')}: ${source.path} · ${source.commit_sha} · SHA-256 ${source.sha256}`)),
-        h('p',{class:'mono'},`${code.host} · ${code.workspace_id}`),h('p',{class:'mono'},row.package_id),h('p',{class:'mono'},row.document_digest),h('p',{class:'mono'},work.work_fingerprint));
+        h('p',{class:'mono'},`${code.host} · ${code.workspace_id}`),h('p',{class:'mono'},row.package_id),h('p',{class:'mono'},row.document_digest),h('p',{class:'mono'},work.work_fingerprint))});
       place(facts,'replaceChildren',h('h4',{},t('ph_reviewed')),readyForStart?null:h('p',{class:'muted'},t('ph_batch_waiting')),h('p',{},project.name,' · ',code.repository,' · ',code.source_ref.replace(/^refs\/heads\//,'')),
         h('p',{},code.host,' · ',response.preview.workspace.name||t('ph_workspace')),h('p',{class:'muted'},`${t('ph_project_version')} ${project.version}`),
-        h('p',{class:'muted'},t('ph_separate')),fixedSpec?h('p',{class:'pm-source'},t('ph_fixed_attachment'),': ',fixedSpec.materialization_id,' · ',fixedSpec.artifact_ref.artifact_id,' · ',fixedSpec.document_digest):null,
+        fixedSpec?h('p',{class:'pm-source'},t('ph_fixed_attachment'),': ',fixedSpec.materialization_id,' · ',fixedSpec.artifact_ref.artifact_id,' · ',fixedSpec.document_digest):null,
         specs.filtered?h('p',{class:'muted'},t('ph_spec_filtered')):null,proof);status.replaceChildren();
     }catch(error){if(valid(ticket))fail(error);}finally{if(valid(ticket)){reading=false;update();}}
   }

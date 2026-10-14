@@ -1,33 +1,53 @@
 import {place} from './ui/dom.js';
-import {iconButton, emptyState, skeleton} from './ui/components.js';
+import {button, disclosure, emptyState, iconButton, sectionCard, skeleton, statusPill} from './ui/components.js';
 // Read only saved central receipts for the selected, explicitly associated work.
 export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
   let workId=null, sequence=0, busy=false, cursor=null, rows=[], packages=[];
-  const status=h('div',{role:'status'}), facts=h('div',{});
-  const refreshButton=iconButton({icon:'refresh-cw', label:t('wd_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}});
-  const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void read(true)},t('wd_more'));
+  const status=h('div',{role:'status'}), facts=h('div');
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('wd_refresh'), onClick:()=>void refresh()});
+  const more=button({variant:'secondary', label:t('wd_more'), hidden:true, onClick:()=>void read(true)});
   const element=h('details',{'data-pm-work-deliveries':'',class:'pm-spec-card',hidden:true},h('summary',{},t('wd_title')),
-    h('p',{class:'muted'},t('wd_boundary')),h('div',{class:'actions'},refreshButton,more),status,facts);
+    sectionCard({body:h('div',{},h('div',{class:'pm-tool-head'},refreshButton,more),status,facts)}));
+  disclosure({element});
   const valid=ticket=>{alive();return ticket===sequence;};
   const controls=()=>{refreshButton.disabled=busy||!workId;more.disabled=busy;more.hidden=cursor===null;};
-  const fact=(name,value)=>h('p',{},h('strong',{},t(name)+': '),value===null||value===undefined?t('wd_unknown'):String(value));
+  const fact=(name,value)=>h('p',{},h('strong',{},t(name)+': '),value===null||value===undefined||value===''?t('wd_unknown'):String(value));
   const boolean=value=>value===true?t('wd_yes'):value===false?t('wd_no'):t('wd_unknown');
-  const code=value=>h('p',{class:'pm-source'},String(value??''));
-  const namedStatus=status=>{const key='wd_status_'+status,label=t(key);return label===key?String(status??''):label;};
+  const mono=(name,value)=>value===null||value===undefined||value===''?null:h('p',{class:'mono'},t(name)+': '+String(value));
+  const namedStatus=value=>{const key='wd_status_'+value,label=t(key);return label===key?String(value??''):label;};
+  const details=(...nodes)=>nodes.some(Boolean)?disclosure({label:t('wd_details'),body:h('div',{},...nodes)}):null;
   function render() {
-    place(facts,'replaceChildren',h('p',{class:'muted'},t('wd_packages')),
-      ...packages.map(ref=>h('div',{},code(ref.package_id),code(ref.document_digest),h('a',{href:`#/op/${encodeURIComponent(ref.operation_id)}`},t('wd_original')))),
-      ...rows.map(row=>h('article',{class:'pm-spec-card'},h('h5',{},t('wd_action_'+row.action)),
-        fact('wd_status',t('wd_status_'+row.status)),
-        h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('wd_operation')),code(row.target?.repository),
-        row.target?.pull_number?fact('wd_pull',row.target.pull_number):null,
-        row.integration?h('div',{},fact('wd_pushed',boolean(row.integration.pushed)),code(row.integration.new_head),
-          ...(row.integration.sources||[]).map(source=>h('p',{class:'pm-source'},source.pinned_sha+' · '+namedStatus(source.status)))):null,
-        row.merge?h('div',{},fact('wd_merged',boolean(row.merge.merged)),fact('wd_merge_verified',boolean(row.merge.verified)),code(row.merge.merged_sha)):null,
-        row.deployment?h('div',{},fact('wd_environment',row.deployment.environment),fact('wd_deploy_state',row.deployment.state),
-          fact('wd_deploy_verified',boolean(row.deployment.verified)),fact('wd_current',boolean(row.deployment.is_current)),
-          code(row.deployment.source_sha),fact('wd_run',row.deployment.run_id)):null)),
-      !rows.length?emptyState({title:t('wd_empty')}):null);
+    place(facts,'replaceChildren',
+      h('div',{class:'pm-tool-head'},statusPill('not_assessed')),
+      packages.length?h('p',{class:'muted'},t('wd_packages')):null,
+      ...packages.map(ref=>h('div',{class:'pm-delivery-package'},
+        h('a',{href:`#/op/${encodeURIComponent(ref.operation_id)}`},t('wd_original')),
+        details(mono('wd_package',ref.package_id),mono('wd_digest',ref.document_digest)))),
+      ...rows.map(row=>{
+        const commits=[];
+        if(row.integration){
+          commits.push(mono('wd_head',row.integration.new_head));
+          for(const source of row.integration.sources||[])commits.push(mono('wd_pinned',source.pinned_sha?(source.pinned_sha+' · '+namedStatus(source.status)):null));
+        }
+        if(row.merge)commits.push(mono('wd_merged_sha',row.merge.merged_sha));
+        if(row.deployment){
+          commits.push(mono('wd_source_sha',row.deployment.source_sha));
+          commits.push(mono('wd_run',row.deployment.run_id));
+        }
+        return h('article',{class:'pm-delivery'},
+          h('div',{class:'pm-tool-head'},h('h4',{},t('wd_action_'+row.action)),row.merge?.merged===true?statusPill('merged'):null),
+          fact('wd_status',namedStatus(row.status)),
+          h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('wd_operation')),
+          row.target?.repository?h('p',{},String(row.target.repository)):null,
+          row.target?.pull_number?fact('wd_pull',row.target.pull_number):null,
+          row.integration?fact('wd_pushed',boolean(row.integration.pushed)):null,
+          row.merge?h('div',{},fact('wd_merged',boolean(row.merge.merged)),fact('wd_merge_verified',boolean(row.merge.verified))):null,
+          row.deployment?h('div',{},fact('wd_environment',row.deployment.environment),fact('wd_deploy_state',row.deployment.state),
+            fact('wd_deploy_verified',boolean(row.deployment.verified)),fact('wd_current',boolean(row.deployment.is_current))):null,
+          details(...commits));
+      }),
+      details(h('p',{class:'muted'},t('wd_boundary'))),
+      !rows.length?emptyState({title:t('wd_empty'),heading:'h3'}):null);
   }
   function check(data,id) {
     if(data?.workspace_id!==workspaceId||data.work_item_id!==id||data.contract!=='pm-engineering-delivery/v1'
@@ -50,7 +70,7 @@ export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
       if(!valid(ticket)||workId!==id)return;
       if(data.next_after!==null&&data.next_after<=after)throw Error(t('wd_invalid'));
       packages=data.original_packages;rows=append?[...rows,...data.deliveries]:data.deliveries;cursor=data.next_after;
-      render();status.replaceChildren(...(data.source_visibility_filtered?[h('p',{class:'muted'},t('wd_filtered'))]:[]));
+      render();status.replaceChildren(...(data.source_visibility_filtered?[statusPill('partial'),h('p',{class:'muted'},t('wd_filtered'))]:[]));
     }catch(error){try{if(!valid(ticket))return;}catch{return;}
       rows=[];packages=[];cursor=null;facts.replaceChildren();status.replaceChildren(errorBox(error),h('p',{class:'muted'},t('wd_unavailable')));
     }finally{if(ticket===sequence){busy=false;controls();}}

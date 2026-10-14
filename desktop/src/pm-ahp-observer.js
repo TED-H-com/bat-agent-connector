@@ -1,4 +1,4 @@
-import {emptyState, iconButton} from './ui/components.js';
+import {button, dataTable, disclosure, emptyState, iconButton, inlineError, sectionCard, statusPill} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // A catalog selection is an original source, never managed-session authority.
 export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,workspace,form,errorBox}) {
@@ -7,11 +7,13 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
   let epoch=0,detailEpoch=0,ready=false,selected='',cursor=null,historyAfter=0,historyBusy=false,disposed=false;
   try{selected=localStorage.getItem(selectionStorage)||'';}catch{ /* preference only; durable requests enforce their own storage gate */ }
   const status=h('div',{role:'status'}),adapter=h('select',{'aria-label':t('ahp_adapter')}),body=h('div'),history=h('div'),detail=h('div');
-  const refreshButton=iconButton({icon:'refresh-cw', label:t('ahp_refresh'), ...{type:'button',class:'secondary',onclick:()=>void refresh()}});
-  const more=h('button',{type:'button',class:'secondary',hidden:true,onclick:()=>void historyPage(cursor)},t('ahp_more'));
-  const element=h('details',{class:'panel pm-ahp','data-pm-ahp':''},h('summary',{},t('ahp_title')),
-    h('p',{class:'muted'},t('ahp_intro')),h('div',{class:'capture-fields'},h('label',{},t('ahp_adapter'),adapter),refreshButton),status,body,
-    h('details',{'data-ahp-history':''},h('summary',{},t('ahp_history')),history,more),detail);
+  const refreshButton=iconButton({icon:'refresh-cw', label:t('ahp_refresh'), ...{type:'button',onclick:()=>void refresh()}});
+  const more=button({variant:'secondary', label:t('ahp_more'), onClick:()=>void historyPage(cursor)});
+  more.hidden=true;
+  const element=h('section',{class:'panel pm-ahp','data-pm-ahp':''},sectionCard({body:h('div',{},
+    h('div',{class:'pm-tool-head'},statusPill('read_only'),refreshButton),
+    h('div',{class:'capture-fields'},h('label',{},t('ahp_adapter'),adapter)),status,body,
+    disclosure({element:h('details',{'data-ahp-history':''},h('summary',{},t('ahp_history')),history,more)}),detail)}));
   const valid=ticket=>{try{alive();return !disposed&&ticket===epoch;}catch{return false;}};
   const check=value=>{if(value?.workspace_id!==workspaceId)throw Error(t('ahp_invalid'));return value;};
   const stamp=value=>timeStamp(value);
@@ -41,9 +43,9 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
         ...(kind==='session'?[line('ahp_provider',state.provider),line('ahp_native_lifecycle',state.lifecycle)]:kind==='changeset'
           ?[line('ahp_file_count',state.files?.length??0)]:[h('p',{class:'muted'},t('ahp_unknown_source_kind'))])));
     }
-    const meta=h('details',{},h('summary',{},t('ahp_original')),h('p',{class:'mono'},r.observation_id),h('p',{class:'mono'},r.document_digest),
-      h('a',{href:`#/op/${r.operation_id}`},t('pm_operation')),h('pre',{},JSON.stringify(d,null,2)));
-    detail.replaceChildren(h('section',{'data-ahp-detail':'',class:'pm-ahp-facts'},h('h3',{},t('ahp_saved_detail')),line('ahp_adapter',r.adapter_id),line('ahp_captured',stamp(d.finished_at)),
+    const meta=disclosure({element:h('details',{},h('summary',{},t('ahp_original')),h('p',{class:'mono'},r.adapter_id),h('p',{class:'mono'},r.observation_id),h('p',{class:'mono'},r.document_digest),
+      h('a',{href:`#/op/${r.operation_id}`},t('pm_operation')),h('pre',{},JSON.stringify(d,null,2)))});
+    detail.replaceChildren(h('section',{'data-ahp-detail':'',class:'pm-ahp-facts'},h('h3',{},t('ahp_saved_detail')),line('ahp_captured',stamp(d.finished_at)),
       line('ahp_protocol',e.negotiated_version||e.protocol_version||'—'),
       ...(e.decoder_profile?[line('ahp_decoder_profile',e.decoder_profile)]:[]),
       line('ahp_coverage',t(e.status==='observed'?'ahp_observed':'ahp_incomplete')),line('ahp_catalog_coverage',t(e.catalog_complete?'ahp_catalog_complete':'ahp_catalog_partial')),
@@ -56,8 +58,11 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
   function renderHistory(value){
     check(value);if(!Array.isArray(value.observations)||typeof value.visibility_filtered!=='boolean'||value.next_cursor!==null&&(!Number.isSafeInteger(value.next_cursor)||value.next_cursor<=historyAfter))throw Error(t('ahp_invalid'));
     const rows=value.observations.map(r=>row(r));cursor=value.next_cursor;
-    history.replaceChildren(...rows.map(r=>h('div',{class:'pm-ahp-history-row'},h('button',{type:'button',class:'secondary',onclick:()=>void showDetail(r.observation_id)},
-      r.adapter_id, ' · ', stamp(r.created_at), ' · ', t(r.coverage_status==='observed'?'ahp_observed':'ahp_incomplete')),h('small',{class:'mono'},r.observation_id))));
+    history.replaceChildren(...rows.map(r=>{
+      const label=h('span',{},t(r.coverage_status==='observed'?'ahp_observed':'ahp_incomplete'),' · ');label.append(stamp(r.created_at));
+      return h('div',{class:'pm-ahp-history-row'},button({variant:'secondary',label,onClick:()=>void showDetail(r.observation_id)}),
+        disclosure({label:t('ahp_details'),body:h('div',{},h('p',{class:'mono'},r.adapter_id),h('p',{class:'mono'},r.observation_id))}));
+    }));
     if(!rows.length)history.append(emptyState({title:t(value.visibility_filtered?'ahp_hidden':'ahp_empty')}));
     else if(value.visibility_filtered)history.append(h('p',{class:'muted'},t('ahp_hidden')));
     more.hidden=cursor===null;more.disabled=false;
@@ -78,20 +83,20 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
     const selectionValid=()=>{try{const list=selectedUris();return Boolean(item.catalog&&list.length&&list.every(uri=>item.catalog.document.evidence.catalog.some(s=>s.resource===uri)));}catch{return false;}};
     const updateChecks=()=>{const list=selectedUris();for(const box of item.catalogBox.querySelectorAll('input[type=checkbox]')){box.checked=list.includes(box.value);box.disabled=item.observe.locked()||!canRead()||list.length>=8&&!box.checked;}};
     function renderCatalog(){
-      item.catalogBox.replaceChildren();if(!item.catalog){item.catalogBox.append(h('p',{class:'muted'},t('ahp_need_catalog')));return;}
-      const e=item.catalog.document.evidence,list=selectedUris(),start=item.page*20;
-      item.catalogBox.append(h('p',{class:'muted'},t('ahp_catalog_coverage'), ': ', t(e.catalog_complete?'ahp_catalog_complete':'ahp_catalog_partial'), ' · ', stamp(item.catalog.document.finished_at)),
-        h('p',{},t('ahp_selection_help')));
+      item.catalogBox.replaceChildren();if(!item.catalog){item.catalogBox.append(emptyState({title:t('ahp_need_catalog'),heading:'h3'}));return;}
+      const e=item.catalog.document.evidence,list=selectedUris(),start=item.page*20,pageRows=e.catalog.slice(start,start+20);
+      item.catalogBox.append(h('div',{class:'pm-tool-head'},e.catalog_complete?null:statusPill('partial'),stamp(item.catalog.document.finished_at)));
       if(list.some(uri=>!e.catalog.some(s=>s.resource===uri)))item.catalogBox.append(h('p',{class:'muted'},t('ahp_selection_unavailable')));
-      for(const s of e.catalog.slice(start,start+20)){
+      if(!pageRows.length)item.catalogBox.append(emptyState({title:t('ahp_no_sessions'),heading:'h3'}));
+      else item.catalogBox.append(dataTable({columns:[{key:'session',label:t('ahp_catalog_column'),render:s=>{
         const box=h('input',{type:'checkbox',value:s.resource,'aria-label':`${t('ahp_select')} ${s.title}`});
         box.addEventListener('change',()=>{if(item.observe.locked()||!canRead())return;const before=selectedUris(),values=box.checked?[...before,s.resource]:before.filter(uri=>uri!==s.resource);
           if(values.length<=8)item.observe.set('session_uris',JSON.stringify(values));item.observe.update();updateChecks();});
-        item.catalogBox.append(h('label',{class:'pm-ahp-session'},box,h('span',{},h('strong',{},s.title||s.resource),h('small',{},s.provider),h('small',{class:'mono'},s.resource))));
-      }
-      if(!e.catalog.length)item.catalogBox.append(h('p',{class:'muted'},t('ahp_no_sessions')));
-      if(e.catalog.length>20)item.catalogBox.append(h('div',{class:'actions'},h('button',{type:'button',class:'secondary',disabled:item.page===0,onclick:()=>{item.page--;renderCatalog();}},t('pagination_prev')),
-        h('span',{},`${start+1}–${Math.min(start+20,e.catalog.length)} / ${e.catalog.length}`),h('button',{type:'button',class:'secondary',disabled:start+20>=e.catalog.length,onclick:()=>{item.page++;renderCatalog();}},t('pagination_next'))));
+        return h('label',{class:'pm-ahp-session'},box,h('span',{},h('strong',{},s.title||s.resource),h('small',{},s.provider)));
+      }}],rows:pageRows,rowKey:s=>s.resource,expandable:s=>h('p',{class:'mono'},s.resource)}));
+      if(e.catalog.length>20){const prev=button({variant:'secondary',size:'sm',label:t('pagination_prev'),disabled:item.page===0,onClick:()=>{item.page--;renderCatalog();}});
+        const next=button({variant:'secondary',size:'sm',label:t('pagination_next'),disabled:start+20>=e.catalog.length,onClick:()=>{item.page++;renderCatalog();}});
+        item.catalogBox.append(h('div',{class:'actions'},prev,h('span',{},`${start+1}–${Math.min(start+20,e.catalog.length)} / ${e.catalog.length}`),next));}
       updateChecks();
     }
     item.apply=r=>{row(r,true);if(r.adapter_id!==option.adapter_id||r.document.binding_digest!==option.binding_digest)throw Error(t('ahp_invalid'));
@@ -99,16 +104,20 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
     item.observe=form({namespace:`${namespace}.ahp.${key}.selection`,action,target:{workspace_id:workspaceId,adapter_id:option.adapter_id},fields,api:request,guard,requiredScope:'observe',
       params:()=>{if(!selectionValid())throw Error(t('ahp_selection_unavailable'));return {session_uris:selectedUris(),include_changesets:item.changesets.value==='true'};},preconditions:()=>({}),
       permitted:()=>canRead()&&selectionValid(),recoverPermitted:canRead,label:'ahp_capture_selected',onStateChange:()=>{if(item.observe)updateChecks();},
-      extra:h('div',{},item.catalogBox,h('label',{},t('ahp_changesets'),item.changesets),h('p',{class:'muted'},t('ahp_changesets_help'))),
+      extra:h('div',{},item.catalogBox,h('label',{},t('ahp_changesets'),item.changesets),
+        disclosure({label:t('ahp_details'),body:h('div',{},h('p',{class:'muted'},t('ahp_selection_help')),h('p',{class:'muted'},t('ahp_changesets_help')))})),
       onSaved:async result=>{check(result);await refresh();await showDetail(result.observation_id);}});
     item.catalogForm=form({namespace:`${namespace}.ahp.${key}.catalog`,action,target:{workspace_id:workspaceId,adapter_id:option.adapter_id},fields:{},api:request,guard,requiredScope:'observe',
       params:()=>({session_uris:[],include_changesets:false}),preconditions:()=>({}),permitted:()=>canRead()&&!item.observe.locked(),recoverPermitted:canRead,label:'ahp_capture_catalog',
-      extra:h('p',{class:'muted'},t('ahp_catalog_help')),onSaved:async result=>{check(result);if(!item.observe.locked()){
+      extra:h('div'),onSaved:async result=>{check(result);if(!item.observe.locked()){
         item.observe.set('catalog_ref',JSON.stringify({observation_id:result.observation_id,document_digest:result.document_digest}));item.observe.set('session_uris','[]');}
         await refresh();await showDetail(result.observation_id);}});
-    for(const f of [item.catalogForm,item.observe])f.box.querySelector('button[type=submit]').className='secondary';
-    item.forms=[item.catalogForm,item.observe];item.element=h('div',{},h('details',{},h('summary',{},t('ahp_capabilities')),
-      h('p',{},`${t('ahp_protocol')}: ${option.protocol_versions?.join(', ')||option.protocol_version||'—'}`),h('p',{class:'muted'},t('ahp_capability_limits')),h('pre',{},JSON.stringify(option,null,2))),item.catalogForm.box,item.observe.box);
+    item.catalogForm.box.querySelector('button[type=submit]').className='secondary';
+    item.forms=[item.catalogForm,item.observe];item.element=h('div',{},
+      disclosure({label:t('ahp_details'),body:h('div',{},h('p',{class:'muted'},t('ahp_intro')),h('p',{class:'muted'},t('ahp_catalog_help')),h('p',{class:'muted'},t('ahp_capability_limits')))}),
+      disclosure({element:h('details',{},h('summary',{},t('ahp_capabilities')),
+        h('p',{},`${t('ahp_protocol')}: ${option.protocol_versions?.join(', ')||option.protocol_version||'—'}`),h('pre',{},JSON.stringify(option,null,2)))}),
+      item.catalogForm.box,item.observe.box);
     editors.set(key,item);return item;
   }
   async function selectAdapter(key,current=null){
@@ -119,7 +128,7 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
       // adapter was selected. The old collector may only enrich its original key.
       for(const f of item.forms)f.dispose();editors.delete(item.key);
     }
-    if(!key||!choices.has(key)){body.append(h('p',{class:'muted'},t('ahp_no_adapters')));return;}
+    if(!key||!choices.has(key)){body.append(emptyState({title:t('ahp_no_adapters'),heading:'h3'}));return;}
     const item=editorFor(choices.get(key));body.append(item.element);
     try{
       let r=null;const saved=item.source.value;
@@ -131,12 +140,14 @@ export function workspaceAhpObserver({h,t,api,alive,caps,namespace,workspaceId,w
       }
       if(r)item.apply(r);else item.catalogBox.append(h('p',{class:'muted'},t('ahp_need_catalog')));
       for(const f of item.forms)f.update();return valid(ticket);
-    }catch(error){if(valid(ticket)){item.catalog=null;item.catalogBox.replaceChildren(h('p',{class:'muted'},t('ahp_selection_unavailable')));status.replaceChildren(errorBox(error));for(const f of item.forms)f.update();}}
+    }catch(error){if(valid(ticket)){item.catalog=null;item.catalogBox.replaceChildren(h('p',{class:'muted'},t('ahp_selection_unavailable')));
+      status.replaceChildren([401,403,404].includes(error?.status)?inlineError({error:{message:t('ahp_unavailable')}}):errorBox(error));for(const f of item.forms)f.update();}}
   }
   adapter.addEventListener('change',()=>{try{alive();localStorage.setItem(selectionStorage,adapter.value);}catch{ /* preference only */ }void selectAdapter(adapter.value);});
   function withdraw(){epoch++;detailEpoch++;ready=false;historyBusy=false;choices.clear();body.replaceChildren();history.replaceChildren();detail.replaceChildren();status.replaceChildren();adapter.replaceChildren();adapter.disabled=true;more.hidden=true;
     for(const item of editors.values()){item.catalog=null;item.catalogBox.replaceChildren();for(const f of item.forms)f.update();}}
-  function failure(error){withdraw();status.append(h('p',{class:'muted'},t('ahp_unavailable')),errorBox(error));}
+  function failure(error){withdraw();const withdrawn=[401,403,404].includes(error?.status);
+    status.append(inlineError({error:{message:withdrawn?t('ahp_unavailable'):(error?.message||t('ahp_unavailable'))}}));}
   async function refresh(){const prior=selected;withdraw();const ticket=epoch;refreshButton.disabled=true;try{
     const [a,c,l]=await Promise.all(['ahp-adapters','ahp-observations/current','ahp-observations?after=0&limit=20'].map(path=>request('GET',`${base}/${path}`)));
     if(!valid(ticket))return;check(a);check(c);check(l);

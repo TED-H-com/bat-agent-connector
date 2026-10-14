@@ -64,7 +64,7 @@ for(const native of [false,true])test.describe(native?'native Sprint workspace':
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`mounted Sprint ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fullFixture();
   await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'schedule' , 'ui_sprints');const region=page.locator('[data-pm-sprints]');
-  await expect(region.locator('h2')).toHaveText(locale==='en'?'Sprint and iteration':'Sprint 與迭代');
+  await expect(region.locator('[data-pm-sprint-status]')).toHaveText(locale==='en'?'Planned':'已規劃');
   expect(await region.innerText()).not.toMatch(/pm_sprint_|\bundefined\b/);expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const directory=process.env.BATC_PM_SPRINT_WORKSPACE_SCREENSHOTS;if(directory){await mkdir(directory,{recursive:true});await page.screenshot({path:`${directory}/sprint-${locale}-${width}.png`,fullPage:true});}
   await context.close();
@@ -103,7 +103,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`mounte
   await quality.getByLabel(locale==='en'?'Work item for review':'審查工作項目',{exact:true}).selectOption(f.bindings[0].work_item_id);
   await quality.locator('select').filter({has:page.locator(`option[value="${f.row.review_id}"]`)}).selectOption(f.row.review_id);
   await quality.getByRole('button',{name:locale==='en'?'Use this assessment':'使用這份評估',exact:true}).click();
-  await openPmSection(page,'schedule','ui_sprints');const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的 Sprint$/}).click();
+  await openPmSection(page,'schedule','ui_sprints');const region=page.locator('[data-pm-sprints]');await region.locator('summary').filter({hasText:locale==='en'?/^Close elapsed Sprint$/:/^結束已到期的衝刺$/}).click();
   const form=region.locator('[data-pm-action="pm.sprint.close"]');
   await form.getByRole('button',{name:locale==='en'?'Include chosen assessment':'納入已選評估',exact:true}).click();
   await expect(form.locator('[data-pm-quality-picker]')).toContainText(f.row.context.native_result.candidate_commit);

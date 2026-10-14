@@ -148,7 +148,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`management workspace ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();
   await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'board');
-  await expect(page.locator('[data-pm-sprints] h2')).toHaveText(locale==='en'?'Sprint and iteration':'Sprint 與迭代');
+  await expect(page.locator('[data-pm-sprints] [data-pm-sprint-status]')).toHaveText(locale==='en'?'Planned':'已規劃');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
   await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
   for (const [view, section] of [['board', undefined], ['discussions', 'ui_meetings'], ['schedule', 'ui_sprints']]) {

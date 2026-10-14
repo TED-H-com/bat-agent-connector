@@ -5,7 +5,7 @@ test.use({timezoneId: 'Asia/Taipei'});
 import {mountConversation} from './conversation-fixture.ts';
 import {mkdir} from 'node:fs/promises';
 import {batchFixture,mountBatch,bootBatch,panel,start,proof,handoff,workspaceId,START,RECORD} from './pm-work-batches-fixture.ts';
-const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();
+const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Review base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();
   await handoff(page).getByLabel('Why use this implementation base?',{exact:true}).fill('Implement this original reviewed base');await handoff(page).getByLabel('Instructions for this implementation',{exact:true}).fill('Preserve source identity and verify fixed result.');};
 const add=async(page:any)=>{await review(page);await panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true}).click();await expect(start(page).locator('.pm-batch-entry')).toHaveCount(1);};
 const fill=async(page:any)=>{await start(page).getByLabel('Reason for this request',{exact:true}).fill('Run the selected bounded work');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill(await futureLocalTime(page));};
@@ -86,7 +86,7 @@ test('source withdrawal during fresh-start preflight sends no operation',async({
 
 test('re-reviewed handoff becomes explicitly selectable without replacing previous entry',async({page})=>{
   const f=batchFixture();await mountBatch(page,f);await add(page);f.base.state.version=4;await review(page);await expect(panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true})).toBeDisabled();
-  await handoff(page).getByRole('button',{name:'Use this reviewed project version',exact:true}).click();await expect(panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true})).toBeEnabled();await fill(page);await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.entries[0].handoff.preconditions.expected_project_version).toBe(3);
+  await handoff(page).getByRole('button',{name:'Use this version',exact:true}).click();await expect(panel(page).getByRole('button',{name:'Add reviewed handoff',exact:true})).toBeEnabled();await fill(page);await start(page).locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.entries[0].handoff.preconditions.expected_project_version).toBe(3);
 });
 
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`batch view ${locale} ${width}`,async({page},info)=>{
@@ -103,8 +103,8 @@ test('observed runner result remains readable without invented verification ID i
 });
 
 test('parallel capacity and absolute future deadline are validated before a request is saved',async({page})=>{
-  const f=batchFixture();await mountBatch(page,f);await add(page);await fill(page);await start(page).getByLabel('Maximum parallel results',{exact:true}).fill('2');await start(page).locator('button[type=submit]').click();await expect(start(page)).toContainText('Parallel capacity must not exceed the start limit');expect(f.state.writes).toHaveLength(0);
-  await start(page).getByLabel('Maximum parallel results',{exact:true}).fill('1');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill('2020-01-01T12:00');await start(page).locator('button[type=submit]').click();await expect(start(page)).toContainText('Choose a future deadline within the next 24 hours');expect(f.state.writes).toHaveLength(0);
+  const f=batchFixture();await mountBatch(page,f);await add(page);await fill(page);await start(page).getByLabel('Parallel',{exact:true}).fill('2');await start(page).locator('button[type=submit]').click();await expect(start(page)).toContainText('Parallel capacity must not exceed the start limit');expect(f.state.writes).toHaveLength(0);
+  await start(page).getByLabel('Parallel',{exact:true}).fill('1');await start(page).getByLabel('Deadline (local time)',{exact:true}).fill('2020-01-01T12:00');await start(page).locator('button[type=submit]').click();await expect(start(page)).toContainText('Choose a future deadline within the next 24 hours');expect(f.state.writes).toHaveLength(0);
 });
 
  test('new evidence version requires explicit rebase without replacing selected originals',async({page})=>{

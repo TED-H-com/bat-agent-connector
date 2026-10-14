@@ -13,6 +13,11 @@
   sources only; conclusions stay unaccepted). zh-TW operation, agent and provider
   words use the existing label tables.
 
+- Sprints, AHP observations, work packages, package handoff, work batches and
+  delivery receipts open on the answer: a status pill, one main action, and
+  identifiers in Details. zh-TW uses 衝刺, 工作階段, 完成定義, 推送, 合併 and
+  工作流程執行. A saved merge, a deployment and an acceptance stay separate facts.
+
 - Name maintenance findings from the structured `finding` identity in the issues
   register, Overview attention and discussion chips, in English and zh-TW.
   Servers that omit `finding` keep the previous fallback. A withdrawn chip stays

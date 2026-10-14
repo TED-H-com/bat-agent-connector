@@ -1,4 +1,4 @@
-import {iconButton} from './ui/components.js';
+import {button, disclosure, emptyState, iconButton, sectionCard} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // Central Sprint management, with fixed references and the shared durable operation forms.
 import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
@@ -8,12 +8,13 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   let forms = [], titles = new Map();
   const status = h('div', {role: 'status'}), view = h('div'), editors = h('div');
   const choose = h('select', {'aria-label': t('pm_sprint_choose'), onchange: () => {selectedId = choose.value; void refresh(true);}});
-  const review = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_sprint_review_fresh'));
+  const review = button({variant: 'secondary', label: t('pm_sprint_review_fresh'), onClick: () => {if (loaded) renderEditors(true);}});
+  review.hidden = true;
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_sprint_stale'));
+  const toolbar = h('div', {class: 'pm-tool-head'}, labelled('pm_sprint_choose', choose), review,
+    iconButton({icon:'refresh-cw', label:t('pm_sprint_refresh'), ...{type: 'button', onclick: () => void refresh()}}));
   const box = h('section', {class: 'panel pm-evidence', 'data-pm-sprints': ''},
-    h('header', {class: 'pm-heading'}, h('h2', {}, t('pm_sprint_title')),
-      iconButton({icon:'refresh-cw', label:t('pm_sprint_refresh'), ...{type: 'button', class: 'secondary', onclick: () => void refresh()}})),
-    labelled('pm_sprint_choose', choose), status, warning, review, view, editors);
+    sectionCard({body: h('div', {}, toolbar, status, warning, view, editors)}));
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
   const actor = () => caps()?.actor;
   const can = decide => loaded && permitted(decide);
@@ -29,7 +30,24 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     const select = h('select', {'aria-label': t(label)}, ...entries.map(([key, text]) => h('option', {value: key}, text)));
     select.value = value; select.dataset.pmDefault = value; return select;
   };
-  const fold = (label, contents, open = false) => h('details', {open}, h('summary', {}, t(label)), contents);
+  const fold = (label, contents, open = false) => disclosure({element: h('details', {open: open || null}, h('summary', {}, t(label)), contents)});
+  const toneFor = {planned: 'info', active: 'info', closed: 'neutral', cancelled: 'warn', not_assessed: 'neutral', unknown: 'neutral'};
+  const sprintPill = status => h('span', {class: `ui-pill tone-${toneFor[status] || 'neutral'}`, 'data-status': status,
+    'data-pm-sprint-status': status === 'not_assessed' || status === 'unknown' ? null : status}, t(status === 'unknown' ? 'pm_sprint_unknown' : status === 'not_assessed' ? 'pm_sprint_unassessed' : 'pm_sprint_' + status));
+  function chosenUtc(field) {
+    const shown = h('span', {'data-pm-chosen-time': ''});
+    const paint = () => {
+      shown.replaceChildren();
+      if (!field.value) {shown.append(sprintPill('unknown')); return;}
+      const date = new Date(field.value + 'Z');
+      if (!Number.isFinite(date.getTime())) {shown.append(sprintPill('unknown')); return;}
+      const stamp = timeStamp(date.toISOString());
+      shown.append(stamp instanceof Node ? stamp : String(stamp));
+    };
+    field.addEventListener('input', paint); field.addEventListener('change', paint); paint();
+    return shown;
+  }
+  const mono = value => h('code', {class: 'mono'}, value || t('pm_sprint_missing'));
   const markDirty = () => {dirty = true;};
   function localForm(options) {
     const expected = JSON.stringify({preconditions: options.preconditions(), binding: options.binding || null});
@@ -69,19 +87,26 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   function renderView() {
     view.replaceChildren();
     const data = model?.detail;
-    if (!data) {view.append(note('pm_sprint_empty')); return;}
-    const sprint = data.sprint, def = sprint.definition;
-    view.append(h('div', {class: 'pm-plans'}, h('h3', {}, def.title, ' · ', t('pm_sprint_' + sprint.status)),
-      h('p', {class: 'muted'}, t(def.mode === 'scrum' ? 'pm_sprint_scrum' : 'pm_sprint_personal')),
-      row('pm_sprint_goal_heading', h('p', {class: 'pm-note-text'}, h('strong', {}, data.goal.text))),
-      row('pm_sprint_period', h('div', {}, h('p', {}, timeStamp(def.starts_at),
-        ' → ', timeStamp(def.ends_at)), data.timebox_elapsed ? note('pm_sprint_elapsed') : '')),
-      fold('pm_sprint_roles', h('dl', {class: 'pm-evidence-fields'}, h('dt', {}, t('pm_sprint_owner')), h('dd', {}, def.owner_actor),
-        h('dt', {}, t('pm_sprint_developers')), h('dd', {}, def.developers.join(', ')), h('dt', {}, t('pm_sprint_capacity')), h('dd', {}, def.capacity_note))),
-      row('pm_sprint_work', workRows(data.selected_items || [])),
-      row('pm_sprint_dod_heading', h('div', {}, note(data.quality==='fixed_original_assessments'?'pq_fixed':'pm_sprint_unassessed'), h('ul', {}, ...model.fixed.dod.document.criteria.map(item => h('li', {}, item.text))),
-        fold('pm_sprint_fixed', h('div', {}, data.quality==='fixed_original_assessments' ? '' : note('pm_sprint_quality'), h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
-          h('p', {}, source(def.product_goal_revision_id)), h('p', {}, source(def.dod_revision_id)), h('p', {}, source(def.backlog_revision_id))))))));
+    if (!data) {view.append(emptyState({title: t('pm_sprint_empty'), heading: 'h3'})); return;}
+    const sprint = data.sprint, def = sprint.definition, items = data.selected_items || [];
+    const developers = h('span', {});
+    def.developers.forEach((id, index) => {if (index) developers.append(', '); developers.append(mono(id));});
+    view.append(h('div', {class: 'pm-sprint-answer'},
+      h('div', {class: 'pm-tool-head'}, sprintPill(sprint.status), data.quality === 'fixed_original_assessments' ? null : sprintPill('not_assessed')),
+      h('p', {class: 'pm-sprint-goal'}, data.goal.text),
+      items.length ? h('ul', {class: 'pm-sprint-work'}, ...items.map(item => h('li', {'data-pm-sprint-work': item.work_item_id},
+        h('a', {href: `#/item/${encodeURIComponent(item.work_item_id)}`}, title(item))))) : note('pm_sprint_no_work'),
+      h('p', {class: 'pm-sprint-period'}, timeStamp(def.starts_at), ' – ', timeStamp(def.ends_at)),
+      data.timebox_elapsed ? note('pm_sprint_elapsed') : null,
+      fold('pm_sprint_details', h('div', {},
+        h('p', {class: 'muted'}, t(def.mode === 'scrum' ? 'pm_sprint_scrum' : 'pm_sprint_personal')),
+        h('p', {}, t('pm_sprint_owner'), ': ', t('pm_sprint_role_owner'), ' ', mono(def.owner_actor)),
+        h('p', {}, t('pm_sprint_developers'), ': ', developers),
+        h('p', {}, t('pm_sprint_capacity'), ': ', def.capacity_note),
+        h('ul', {}, ...model.fixed.dod.document.criteria.map(item => h('li', {}, item.text))),
+        data.quality === 'fixed_original_assessments' ? null : note('pm_sprint_quality'),
+        h('p', {}, t('pm_sprint_product_goal'), ': ', model.fixed.product_goal.document.text),
+        h('p', {}, mono(def.product_goal_revision_id)), h('p', {}, mono(def.dod_revision_id)), h('p', {}, mono(def.backlog_revision_id))))));
     const ticket = serial, terminal = ['closed', 'cancelled'].includes(sprint.status);
     let ending = null, eventCursor = data.history_next_cursors?.events ?? null, eventPending = false, loadEventPage = null;
     const closure = h('section', {class: 'pm-plans', 'data-pm-sprint-closure': ''});
@@ -89,7 +114,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
     const endingItems = items => h('div', {class: 'pm-evidence-rows'}, ...items.map(item =>
       h('article', {class: 'pm-fact', 'data-pm-sprint-ended-work': item.work_item_id},
         h('a', {href: `#/item/${encodeURIComponent(item.work_item_id)}`}, title(item)),
-        item.quality_assessment ? qualityFact({h,t,fact:item.quality_assessment}) : h('p', {class: 'pm-note-text'}, t('pm_sprint_unassessed')),
+        item.quality_assessment ? qualityFact({h,t,fact:item.quality_assessment}) : sprintPill('not_assessed'),
         h('p', {class: 'pm-note-text'}, t(item.counts_as_done ? 'pq_increment' : 'pm_sprint_reconsider')),
         h('p', {class: 'pm-note-text'}, item.reason),
         fold('pm_sprint_versions', h('div', {}, source(item.binding_id), h('p', {}, source(item.plan_revision_id)),
@@ -102,8 +127,9 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
           h('p', {class: 'pm-note-text'}, ending.document.rationale), endingItems(ending.document.items || []),
           note('pm_sprint_no_carryover'));
       } else if (eventCursor != null) {
-        closure.append(note('pm_sprint_closure_pending'), h('button', {type: 'button', class: 'secondary', disabled: eventPending,
-          onclick: () => void loadEventPage?.()}, t(eventPending ? 'pm_sprint_history_loading' : 'pm_sprint_load_closure')));
+        const loadClosure = button({variant: 'secondary', label: t(eventPending ? 'pm_sprint_history_loading' : 'pm_sprint_load_closure'), onClick: () => void loadEventPage?.()});
+        loadClosure.disabled = eventPending;
+        closure.append(note('pm_sprint_closure_pending'), loadClosure);
       } else closure.append(note('pm_sprint_closure_unavailable'));
     }
     const history = h('div');
@@ -129,12 +155,12 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
           const labels = {'pm.sprint.create': 'pm_sprint_save', 'pm.sprint.goal.revise': 'pm_sprint_save_sprint_goal',
             'pm.sprint.select': 'pm_sprint_save_selection', 'pm.sprint.start': 'pm_sprint_start',
             'pm.sprint.close': 'pm_sprint_close', 'pm.sprint.cancel': 'pm_sprint_cancel'};
-          holder.append(h('details', {}, h('summary', {}, `#${entry.sequence} · ${t(kind === 'events' ? labels[entry.action] || 'pm_sprint_history_events' : 'pm_sprint_history_' + kind)}`), body));
+          holder.append(disclosure({element: h('details', {}, h('summary', {}, `#${entry.sequence} · ${t(kind === 'events' ? labels[entry.action] || 'pm_sprint_history_events' : 'pm_sprint_history_' + kind)}`), body)}));
         }
         navigation.replaceChildren(); holder.append(navigation);
         if (kind === 'events') {eventCursor = page.next_cursor ?? null; loadEventPage = null;}
         if (page.next_cursor != null) {
-          const more = h('button', {type: 'button', class: 'secondary'}, t('pm_sprint_more_history', {kind: t('pm_sprint_history_' + kind)}));
+          const more = button({variant: 'secondary', label: t('pm_sprint_more_history', {kind: t('pm_sprint_history_' + kind)})});
           const load = async () => {
             if (more.disabled || !loaded || ticket !== serial) return;
             more.disabled = true;
@@ -187,9 +213,9 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
           field.value = JSON.stringify(next); editorRef().changed(); markDirty(); sync();
         };
         return h('li', {class: 'pm-source'}, label, h('div', {class: 'actions'},
-          h('button', {type: 'button', class: 'secondary', disabled: locked || index === 0, onclick: () => move(-1)}, t('pm_sprint_earlier')),
-          h('button', {type: 'button', class: 'secondary', disabled: locked || index === values.length - 1, onclick: () => move(1)}, t('pm_sprint_later')),
-          h('button', {type: 'button', class: 'secondary', disabled: locked, onclick: () => move(null)}, t('pm_sprint_remove'))));
+          button({variant: 'ghost', size: 'sm', label: t('pm_sprint_earlier'), disabled: locked || index === 0, onClick: () => move(-1)}),
+          button({variant: 'ghost', size: 'sm', label: t('pm_sprint_later'), disabled: locked || index === values.length - 1, onClick: () => move(1)}),
+          button({variant: 'ghost', size: 'sm', label: t('pm_sprint_remove'), disabled: locked, onClick: () => move(null)})));
       }));
     };
     return {box: holder, sync};
@@ -241,11 +267,11 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
         }
         if (page.next_cursor != null) {
           if (!Number.isInteger(page.next_cursor) || page.next_cursor <= after) throw Error(t('pm_scope_mismatch'));
-          const more = h('button', {type: 'button', class: 'secondary', onclick: async () => {
+          const more = button({variant: 'secondary', label: t('pm_sprint_more_history', {kind: t('pm_sprint_' + kind)}), onClick: async () => {
             more.disabled = true;
             try {await show(kind, holder, page.next_cursor); alive(); more.remove();}
             catch (error) {if (more.isConnected) unavailable(error);} finally {more.disabled = false;}
-          }}, t('pm_sprint_more_history', {kind: t('pm_sprint_' + kind)})); holder.append(more);
+          }}); holder.append(more);
         }
       }
       try {
@@ -282,7 +308,9 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       label: 'pm_sprint_save', onStateChange: picks.sync,
       extra: h('div', {class: 'pm-fields'}, !ready ? note('pm_sprint_plan_required') : '', !members.length ? note('pm_sprint_no_members') : '',
         labelled('pm_sprint_name', name), labelled('pm_sprint_goal', goal), labelled('pm_sprint_mode', mode),
-        h('div', {class: 'capture-fields'}, labelled('pm_sprint_start_at', starts), labelled('pm_sprint_end_at', ends)), note('pm_sprint_period_help'),
+        h('div', {class: 'capture-fields'},
+          h('div', {class: 'pm-time-field'}, labelled('pm_sprint_start_at', starts), h('span', {class: 'pm-local-time'}, t('pm_sprint_shown'), ' ', chosenUtc(starts))),
+          h('div', {class: 'pm-time-field'}, labelled('pm_sprint_end_at', ends), h('span', {class: 'pm-local-time'}, t('pm_sprint_shown'), ' ', chosenUtc(ends)))), note('pm_sprint_period_help'),
         labelled('pm_sprint_owner', lead), h('div', {}, h('p', {}, t('pm_sprint_developers')), developers, picks.box),
         labelled('pm_sprint_master', master), labelled('pm_sprint_capacity', capacity), labelled('pm_sprint_reason', reason), note('pm_sprint_no_execution'))});
     picks.sync(); return fold('pm_sprint_new', create.box, !model.detail || create.locked());

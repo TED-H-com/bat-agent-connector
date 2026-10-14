@@ -3,9 +3,9 @@ import {mountConversation} from './conversation-fixture.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {bootSpec,mountSpec,specFixture,panel,handoff,materialize,startForm,workspaceId,packageId} from './pm-spec-materialization-fixture.ts';
-const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();};
+const review=async(page:any)=>{await handoff(page).getByRole('button',{name:'Review base',exact:true}).click();await expect(handoff(page).getByRole('heading',{name:'Reviewed implementation base',exact:true})).toBeVisible();};
 const fill=async(page:any)=>{await startForm(page).getByLabel('Why use this implementation base?',{exact:true}).fill('Use the selected fixed base');await startForm(page).getByLabel('Instructions for this implementation',{exact:true}).fill('Implement fixed requirements and verify results.');};
-const choose=async(page:any,id:string)=>{await review(page);await startForm(page).getByLabel('Specification delivery',{exact:true}).selectOption(id);await expect(startForm(page).locator('button[type=submit]')).toBeDisabled();await review(page);await handoff(page).getByRole('button',{name:'Use this reviewed project version',exact:true}).click();};
+const choose=async(page:any,id:string)=>{await review(page);await startForm(page).getByLabel('Specification delivery',{exact:true}).selectOption(id);await expect(startForm(page).locator('button[type=submit]')).toBeDisabled();await review(page);await handoff(page).getByRole('button',{name:'Use this version',exact:true}).click();};
 
 test('materialization fixes package digest and string scope without starting implementation',async({page})=>{
   const f=specFixture();await mountSpec(page,f);expect(f.state.writes).toHaveLength(0);await materialize(page).locator('button[type=submit]').click();
@@ -72,7 +72,7 @@ test('lost attachment handoff survives reload and pause without changing its req
 
 test('withdrawn selected attachment never falls back to inline specification',async({page})=>{
   const f=specFixture(),row=f.save();await mountSpec(page,f);await review(page);await startForm(page).getByLabel('Specification delivery',{exact:true}).selectOption(row.materialization_id);
-  f.state.rows=[];f.state.filtered=true;await handoff(page).getByRole('button',{name:'Review fixed implementation base',exact:true}).click();await expect(handoff(page)).toContainText('originally selected specification attachment is unavailable');
+  f.state.rows=[];f.state.filtered=true;await handoff(page).getByRole('button',{name:'Review base',exact:true}).click();await expect(handoff(page)).toContainText('originally selected specification attachment is unavailable');
   await expect(startForm(page).locator('button[type=submit]')).toBeDisabled();expect(f.base.state.writes).toHaveLength(0);
 });
 
