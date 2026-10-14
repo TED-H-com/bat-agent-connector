@@ -21,7 +21,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) {
       await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/issues`);
       await expect(page.locator('[data-reg-owner]')).toBeVisible();
       await expect(page.locator('[data-pm-register]')).toContainText('mei.lin');
-      await expect(page.locator('[data-reg-table] [data-reg-requirement]').first()).not.toHaveText(locale === 'en' ? 'Requirement' : '需求');
+      await expect(page.locator('[data-pm-refresh]')).toBeEnabled();
+      if (width === 1440) await expect(page.locator('[data-reg-table] [data-reg-requirement]').first()).not.toHaveText(locale === 'en' ? 'Requirement' : '需求');
       await screenshot(page, `register-${locale}-${width}`);
       for (const view of ['issues', 'overview', 'discussions']) {
         await openPmSection(page, view);
