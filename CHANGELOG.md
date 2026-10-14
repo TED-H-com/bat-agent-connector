@@ -53,6 +53,16 @@
   Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
   See the [overview contract](docs/design/pm-overview-discussion-context.md).
 
+- Overview distinguishes unread milestone, delivery and charter sources from known
+  empty records in English and Traditional Chinese. Live updates keep the attention
+  row being read at its viewport position and preserve Progress Details focus and
+  open state. Attention stays in Central's severity/age order during passive viewing
+  and on return to Overview; focus, hover or text selection holds the existing order.
+  Passive anchoring starts after scrolling into the list; new top rows otherwise
+  appear in place without moving the page.
+  A text selection anchors its own row when rows above it change height.
+  Withdrawn rows and their counts still disappear immediately.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.

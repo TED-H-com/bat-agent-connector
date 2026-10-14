@@ -276,6 +276,13 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
+Empty milestone and delivery lists say None recorded / 尚無紀錄 only with complete
+roadmap or recent-delivery coverage, including any delivery output-reference limit.
+Otherwise they show Unknown and the recorded localized reason. Empty charter cards
+require a readable complete plan (or an unrestricted complete saved report); open
+decisions require a complete known zero.
+Missing coverage never establishes absence.
+
 The Open decisions card (待決事項) retains the central pending count and adds Recently decided:
 up to five visible completed decisions, with their title, relative time and actor.
 Each row opens the exact Issues & changes register inspector. Missing history is
@@ -306,7 +313,19 @@ passed to `discussHref`. A maintenance finding shows the shared finding name
 instead of the provider number, and a severity word when `finding.severity` is
 present. Its Discuss link uses that same name. A server that omits `finding`
 keeps the provider number and does not invent a severity word. Reading rows keep their DOM node and focus during refresh; replaced links recover focus
-by identity within their own part. Cached ages advance with the projection timestamp.
+by identity within their own part, including the Progress Details summary and its open state.
+Before updating any Overview region, a focused or hovered attention row anchors
+the viewport. Next in priority is the row containing a non-collapsed selection's
+focus node, falling back to its anchor node. Without interaction, the first
+visible row anchors only after the list's top has scrolled above its scroller's
+visible area; while the list's top is in view, new rows push the rest down without
+compensating scroll. Focus, hover or a non-collapsed text selection
+inside the attention list preserves its existing order and appends new rows. Passive
+visibility uses Central's severity/age order; returning to Overview re-sorts even
+unchanged data. Overview compensates its actual scrolling container after layout,
+with native CSS anchoring disabled so Chromium and WebKit have the same behavior.
+A withdrawn anchor is removed immediately
+and receives no scroll compensation. Cached ages advance with the projection timestamp.
 Overview records its scroll position before a view switch hides it and restores it after
 the destination header has finished laying out. Repeated selection
 of the active view does not scroll. Related inspectors return focus to the destination
