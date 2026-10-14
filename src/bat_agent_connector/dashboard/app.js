@@ -3560,8 +3560,26 @@ var pmPackageHandoffStrings = {
 //#region src/pm-discussions-strings.js
 var discussionStrings = {
 	en: {
+		pd_saved: "Saved",
+		pd_search_empty: "No matching discussions",
+		pd_clear_search: "Clear search",
+		pd_tab_meeting: "Meeting",
+		pd_source_time: "Recorded",
+		pd_source_record: "Source",
+		pd_source_plan_input: "Plan input",
+		pd_source_plan_adoption: "Plan adoption",
+		pd_source_plan_revision: "Plan",
+		pd_source_evidence: "Evidence",
+		pd_source_statement: "Statement",
+		pd_source_message: "Message",
+		pd_source_repository: "Repository",
+		pd_source_external: "Reference",
+		pd_source_work_binding: "Linked work",
+		pd_yes: "Yes",
+		pd_no: "No",
+		pm_plan_worktree_required: "Adoption needs a PM-owned worktree and owner access with permission to create work",
 		pd_status_unchecked: "Status not checked",
-		pd_accepted_revision: "Accepted revision",
+		pd_accepted_revision: "Open revision",
 		pd_save: "Save",
 		pd_cancel: "Cancel",
 		pd_finished: "PM finished",
@@ -3581,8 +3599,8 @@ var discussionStrings = {
 		pd_rename: "Rename",
 		pd_unavailable: "Unavailable",
 		pd_bound_label: "Originally: {label}",
-		pd_not_connected: "PM agent not connected",
-		pd_setup: "Set up",
+		pd_not_connected: "Messages are saved. The PM is not connected and will not reply.",
+		pd_setup: "Set up PM",
 		pd_working: "PM is working",
 		pd_proposed: "Proposed update",
 		pd_review: "Review & adopt",
@@ -3631,8 +3649,26 @@ var discussionStrings = {
 		pm_mode_follow_up: "Follow-up"
 	},
 	"zh-TW": {
+		pd_saved: "已儲存",
+		pd_search_empty: "沒有符合的討論",
+		pd_clear_search: "清除搜尋",
+		pd_tab_meeting: "會議",
+		pd_source_time: "記錄時間",
+		pd_source_record: "來源",
+		pd_source_plan_input: "計畫資訊",
+		pd_source_plan_adoption: "計畫採用",
+		pd_source_plan_revision: "計畫",
+		pd_source_evidence: "證據",
+		pd_source_statement: "陳述",
+		pd_source_message: "訊息",
+		pd_source_repository: "儲存庫",
+		pd_source_external: "參考資料",
+		pd_source_work_binding: "連結工作",
+		pd_yes: "是",
+		pd_no: "否",
+		pm_plan_worktree_required: "採用前需要 PM 專用的工作目錄，以及擁有者和建立工作的權限。",
 		pd_status_unchecked: "尚未查詢狀態",
-		pd_accepted_revision: "已採用版本",
+		pd_accepted_revision: "檢視版本",
 		pd_save: "儲存",
 		pd_cancel: "取消",
 		pd_finished: "PM 已完成",
@@ -3652,8 +3688,8 @@ var discussionStrings = {
 		pd_rename: "重新命名",
 		pd_unavailable: "無法取得",
 		pd_bound_label: "建立討論時：{label}",
-		pd_not_connected: "尚未連接 PM Agent",
-		pd_setup: "設定",
+		pd_not_connected: "訊息會儲存；PM 尚未連線，不會回覆。",
+		pd_setup: "設定 PM",
 		pd_working: "PM 處理中",
 		pd_proposed: "建議更新",
 		pd_review: "審閱並採用",
@@ -3661,7 +3697,7 @@ var discussionStrings = {
 		pd_stale: "已過期",
 		pd_again: "再次詢問 PM",
 		pd_adopted: "已採用更新",
-		pd_details: "詳細資料",
+		pd_details: "詳細資訊",
 		pd_copy: "複製摘要碼",
 		pd_answer: "你的回答",
 		pd_answer_send: "傳送回答",
@@ -3694,8 +3730,8 @@ var discussionStrings = {
 		pd_op_pending: "待處理",
 		pd_op_accepted: "已受理",
 		pm_mode_refinement: "需求釐清",
-		pm_mode_sprint_planning: "Sprint 規劃",
-		pm_mode_sprint_review: "Sprint 審查",
+		pm_mode_sprint_planning: "衝刺規劃",
+		pm_mode_sprint_review: "衝刺審閱",
 		pm_mode_retrospective: "回顧改進",
 		pm_mode_maintenance_review: "維護審查",
 		pm_mode_closure_reopen: "結案／重啟",
@@ -4102,7 +4138,7 @@ var pmPlanProposalStrings = {
 		pcp_resolve_rationale: "Reason for resolving",
 		pcp_resolve_default: "Issue resolved following adoption of {title} (revision #{number}).",
 		pcp_plan_context: "Plan context",
-		pcp_title: "Plan update from this discussion",
+		pcp_title: "Plan updates",
 		pcp_help: "Prepare a sourced proposal, review the whole change, then adopt it once.",
 		pcp_purpose: "What should this plan update cover?",
 		pcp_prepare: "Prepare plan update",
@@ -4131,9 +4167,9 @@ var pmPlanProposalStrings = {
 		pcp_remove_requirement: "Remove requirement",
 		pcp_no_requirements: "No requirements selected. Add them from the reviewed information when appropriate.",
 		pcp_rationale: "Reason for adopting this update",
-		pcp_adopt: "Adopt this update",
-		pcp_questions: "Questions still to resolve",
-		pcp_before: "Accepted plan before this update",
+		pcp_adopt: "Adopt",
+		pcp_questions: "Open questions",
+		pcp_before: "Current plan",
 		pcp_first: "No plan has been adopted yet.",
 		pcp_baseline: "Original accepted revision",
 		pcp_review_help: "Adoption records your reviewed wording and status together. Assumptions and unresolved points remain explicit; adoption does not dispatch work.",
@@ -4142,7 +4178,7 @@ var pmPlanProposalStrings = {
 		pcp_stale: "The discussion or plan has changed. Keep this draft, then prepare a proposal against the current version.",
 		pcp_readonly: "A workspace owner with plan adoption permission can adopt this update.",
 		pcp_unavailable: "Plan proposals are unavailable on this connection.",
-		pcp_runtime: "The selected central runtime must be ready before preparing a proposal.",
+		pcp_runtime: "The selected runtime must be ready before preparing a proposal.",
 		pcp_mismatch: "The proposal does not match its original discussion or sources.",
 		pcp_partial: "This is a partial list. More proposals may be available.",
 		pcp_missing: "Select included information for every requirement and acceptance criterion.",
@@ -4170,7 +4206,7 @@ var pmPlanProposalStrings = {
 		pcp_resolve_rationale: "回報解決的理由",
 		pcp_resolve_default: "採用「{title}」（修訂 #{number}）後，回報此問題已解決。",
 		pcp_plan_context: "計畫脈絡",
-		pcp_title: "從這段討論整理計畫",
+		pcp_title: "計畫更新",
 		pcp_help: "先整理有來源的提案，審閱整組變更，再一次採用。",
 		pcp_purpose: "這次計畫要整理哪些內容？",
 		pcp_prepare: "整理成計畫",
@@ -4199,16 +4235,16 @@ var pmPlanProposalStrings = {
 		pcp_remove_requirement: "移除需求",
 		pcp_no_requirements: "尚未選入需求；可依需要從已審閱資訊建立。",
 		pcp_rationale: "採用這組更新的理由",
-		pcp_adopt: "採用這組更新",
-		pcp_questions: "仍待釐清的問題",
-		pcp_before: "更新前的採用計畫",
+		pcp_adopt: "採用",
+		pcp_questions: "待釐清問題",
+		pcp_before: "目前計畫",
 		pcp_first: "尚未採用任何計畫。",
 		pcp_baseline: "原採用版本",
 		pcp_review_help: "一次保存你審閱後的文字與狀態；假設與未決事項仍明確保留。採用不會直接派工。",
 		pcp_invalid: "回覆內容需要檢視，目前還不能作為計畫提案。",
 		pcp_raw: "原始分析回覆",
 		pcp_stale: "討論或計畫已有變更。草稿已保留，請以目前版本重新整理提案。",
-		pcp_readonly: "具有計畫採用權限的 workspace 負責者可採用這組更新。",
+		pcp_readonly: "具有計畫採用權限的工作空間擁有者可採用這組更新。",
 		pcp_unavailable: "此連線尚未提供計畫提案。",
 		pcp_runtime: "中央執行環境就緒後才能整理提案。",
 		pcp_mismatch: "提案與原討論或來源不符。",
@@ -13074,7 +13110,7 @@ function discussionLabel(t, prefix, value) {
 	const key = prefix + value, label = t(key);
 	return label === key ? t("ui_status_unknown") : label;
 }
-function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
+function discussionContext(t, refs = [], { limit = refs.length, onMore, title, onOpen } = {}) {
 	const chips = refs.slice(0, limit).map((ref) => {
 		const kind = [
 			"risk",
@@ -13084,13 +13120,30 @@ function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
 			"decision"
 		].includes(ref.record_type) ? t("reg_type_" + ref.record_type) : discussionLabel(t, "pd_kind_", ref.kind);
 		const text = (ref.available !== false && ref.kind === "finding" ? findingName(ref.finding, locale, "") : "") || `${kind} · ${ref.available === false ? t("pd_unavailable") : ref.label || t("pd_unavailable")}`;
-		const chip = contextChip({ text });
+		const chip = onOpen ? button({
+			variant: "ghost",
+			label: h$1("span", { class: "ui-chip-label" }, text),
+			class: "ui-context-chip pd-context-trigger",
+			onClick: (event) => onOpen(event.currentTarget)
+		}) : contextChip({ text });
 		chip.dataset.discussionContext = ref.kind;
 		chip.title = text;
 		chip.setAttribute("aria-label", text);
 		if (ref.available !== false && ref.bound_label && ref.bound_label !== ref.label) chip.title += "\n" + t("pd_bound_label", { label: ref.bound_label });
 		return chip;
 	});
+	if (!refs.length && title) {
+		const chip = onOpen ? button({
+			variant: "ghost",
+			label: h$1("span", { class: "ui-chip-label" }, title),
+			class: "ui-context-chip pd-context-trigger",
+			onClick: (event) => onOpen(event.currentTarget)
+		}) : contextChip({ text: title });
+		chip.dataset.discussionContextTitle = "";
+		chip.setAttribute("aria-label", title);
+		chip.title = title;
+		chips.push(chip);
+	}
 	if (refs.length > limit && onMore) chips.push(button({
 		size: "sm",
 		variant: "ghost",
@@ -13102,7 +13155,11 @@ function discussionContext(t, refs = [], { limit = refs.length, onMore } = {}) {
 	return chips;
 }
 var discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
-	const node = create(tag, attrs, ...children);
+	const node = tag === "button" && ["primary", "secondary"].includes(attrs?.class) ? button({
+		...Object.fromEntries(Object.entries(attrs).filter(([key]) => key !== "class")),
+		variant: attrs.class,
+		label: children
+	}) : create(tag, attrs, ...children);
 	const identity = Object.entries(attrs || {}).find(([name]) => [
 		"data-pm-information",
 		"data-pm-add-input",
@@ -13166,7 +13223,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 	edit.classList.add("pd-title-edit");
 	edit.querySelector(".actions").append(cancel);
 	edit.addEventListener("keydown", (event) => {
-		if (event.key === "Escape") {
+		if (event.key === "Escape" && !event.isComposing && event.keyCode !== 229) {
 			event.preventDefault();
 			event.stopPropagation();
 			cancel.click();
@@ -13204,10 +13261,12 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		}
 	};
 }
+var discussionSettingsHref = () => "#/settings?section=agents&from=" + encodeURIComponent(location.hash);
 function discussionComposer({ t, form, analysis, details, draft = false }) {
 	const actions = form.box.querySelector(":scope > .actions");
 	const status = h$1("div", { class: "pd-composer-status" }, form.box.querySelector(":scope > [role=status]"));
 	const receipt = form.box.querySelector(":scope > .pm-receipt");
+	receipt.dataset.discussionReceipt = draft ? "create" : "message";
 	if (details) details.append(receipt);
 	else status.append(disclosure({
 		label: t("pd_details"),
@@ -13218,8 +13277,9 @@ function discussionComposer({ t, form, analysis, details, draft = false }) {
 	if (analysis) {
 		actions.append(analysis.querySelector("[data-discussion-ask]"));
 		status.append(analysis);
-	} else if (!draft) status.append(h$1("p", { class: "muted" }, h$1("span", {}, t("pd_not_connected")), " · ", h$1("a", { href: "#/settings" }, t("pd_setup"))));
+	} else status.append(h$1("p", { class: "muted" }, h$1("span", {}, t("pd_not_connected")), " · ", h$1("a", { href: discussionSettingsHref() }, t("pd_setup"))));
 	form.box.append(h$1("div", { class: "pd-composer-row" }, status, actions));
+	if (details) form.box.append(details);
 	return h$1("div", { class: "pd-composer" }, form.box);
 }
 function discussionFeedback({ t, request, node, eligible }) {
@@ -13269,54 +13329,100 @@ function discussionFeedback({ t, request, node, eligible }) {
 		}));
 	}
 }
-function discussionPanel({ t, namespace, workspaceId, panes, onSelect = () => {} }) {
-	const state = viewState(namespace, workspaceId, "discussion-panel");
-	if (!Object.hasOwn(panes, state.tab)) state.tab = Object.keys(panes)[0];
-	const home = h$1("aside", { class: "pd-panel-home" }), body = h$1("div", {
+function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, onSelect = () => {} }) {
+	const state = viewState(namespace, workspaceId, "discussion-panel." + threadId);
+	if (!Object.hasOwn(panes, state.tab)) state.tab = "context";
+	const home = h$1("aside", {
+		class: "pd-panel-home",
+		hidden: true
+	}), body = h$1("div", {
 		class: "pd-panel",
 		"data-discussion-panel": ""
 	});
+	let overlay = null, opener = null, disposed = false;
+	const media = matchMedia("(min-width: 1200px)");
 	const select = (key) => {
+		if (!Object.hasOwn(panes, key)) return;
 		state.tab = key;
 		for (const [id, node] of Object.entries(panes)) node.hidden = id !== key;
-		onSelect(key);
+		onSelect(overlay ? key : null);
 	};
 	const controls = tabs({
 		label: t("pd_panel"),
-		value: state.tab || "context",
+		value: state.tab,
 		options: Object.keys(panes).map((value) => ({
 			value,
 			label: t("pd_tab_" + value),
 			panel: panes[value]
 		})),
-		onChange: select
+		onChange: (key) => {
+			state.explicit = true;
+			select(key);
+		}
 	});
 	body.append(controls, ...Object.values(panes));
 	home.append(body);
-	select(state.tab || "context");
-	let overlay = null;
+	select(state.tab);
 	const trigger = iconButton({
 		icon: "panel-right",
-		label: t("pd_panel"),
+		label: t("pd_tab_context"),
 		"data-discussion-panel-toggle": "",
-		onClick: () => {
-			if (overlay) {
-				overlay.close();
-				return;
-			}
+		"aria-expanded": "false",
+		onClick: () => overlay ? close(true) : open("context", {
+			explicit: true,
+			returnFocus: trigger
+		})
+	});
+	trigger.classList.add("pd-panel-toggle");
+	function locate() {
+		if (overlay) (media.matches ? home : document.getElementById("main")).append(overlay);
+	}
+	function close(explicit = false) {
+		if (explicit) {
+			state.explicit = true;
+			state.open = false;
+		}
+		overlay?.close();
+	}
+	function open(key = "context", { explicit = true, returnFocus, focus = explicit } = {}) {
+		if (disposed) return;
+		state.open = true;
+		if (explicit) state.explicit = true;
+		if (returnFocus) opener = returnFocus;
+		select(key);
+		controls.setValue(key);
+		if (!overlay) {
+			home.hidden = false;
 			overlay = inspector({
 				title: t("pd_panel"),
+				returnFocus: () => (typeof opener === "function" ? opener() : opener) || trigger,
 				onClose: () => {
 					home.append(body);
+					home.hidden = true;
 					overlay = null;
+					trigger.setAttribute("aria-expanded", "false");
+					if (!disposed) {
+						state.open = false;
+						state.explicit = true;
+					}
+					onSelect(null);
 				}
 			});
 			overlay.classList.add("pd-panel-overlay");
 			overlay.body.append(body);
-			document.getElementById("main").append(overlay);
+			locate();
+			if (!focus && media.matches) {
+				const previous = document.activeElement;
+				queueMicrotask(() => {
+					if (previous?.isConnected && !previous.closest("[hidden], [inert]")) previous.focus({ preventScroll: true });
+				});
+			}
+			trigger.setAttribute("aria-expanded", "true");
 		}
-	});
-	trigger.classList.add("pd-panel-toggle");
+		onSelect(key);
+		if (focus) queueMicrotask(() => controls.querySelector("[aria-selected=true]")?.focus());
+	}
+	media.addEventListener("change", locate);
 	return {
 		home,
 		trigger,
@@ -13324,16 +13430,24 @@ function discussionPanel({ t, namespace, workspaceId, panes, onSelect = () => {}
 			select(key);
 			controls.setValue(key);
 		},
-		open(key) {
-			select(key);
-			controls.setValue(key);
-			if (matchMedia("(max-width: 1199px)").matches && !overlay) trigger.click();
-			else controls.querySelector("[aria-selected=true]")?.focus();
+		open(key, options) {
+			open(key, options);
+		},
+		sync({ proposalId = null, pending = false, inputs = false } = {}) {
+			const arrived = proposalId && state.proposalId !== proposalId;
+			if (arrived) {
+				state.proposalId = proposalId;
+				state.explicit = false;
+			}
+			if (arrived || !state.explicit && (pending || inputs || proposalId)) open(inputs && !pending && !proposalId ? "inputs" : "plan", { explicit: false });
+			else if (!overlay && state.open) open(state.tab, { explicit: false });
 		},
 		close() {
-			overlay?.close();
+			close();
 		},
 		dispose() {
+			disposed = true;
+			media.removeEventListener("change", locate);
 			overlay?.close();
 		}
 	};
@@ -14761,6 +14875,549 @@ function savedFilter(value) {
 		value: ""
 	};
 }
+var init_tslib_es6 = __esmMin((() => {}));
+async function invoke(cmd, args = {}, options) {
+	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
+}
+function isTauri() {
+	return !!(globalThis || window).isTauri;
+}
+var init_core = __esmMin((() => {
+	init_tslib_es6();
+}));
+//#endregion
+//#region src/transport/index.ts
+async function restoreBrowserSession() {
+	if (nativeDesktop) return false;
+	const response = await fetch("/api/v1/browser-session", {
+		credentials: "same-origin",
+		mode: "same-origin",
+		cache: "no-store",
+		redirect: "error"
+	});
+	if (!response.ok) return false;
+	const data = await response.json();
+	if (typeof data.csrf !== "string" || data.csrf.length < 32) return false;
+	browserCsrf = data.csrf;
+	return true;
+}
+function browserAuthHeaders(token) {
+	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
+	if (!browserCsrf) throw new Error("Browser session needs to be restored");
+	return { "X-Batc-CSRF": browserCsrf };
+}
+function forgetBrowserSession() {
+	if (!browserCsrf) return;
+	const headers = {
+		...browserAuthHeaders(browserSessionToken),
+		"Content-Type": "application/json"
+	};
+	browserCsrf = null;
+	return fetch("/api/v1/browser-session/logout", {
+		method: "POST",
+		credentials: "same-origin",
+		mode: "same-origin",
+		redirect: "error",
+		headers,
+		body: "{}"
+	});
+}
+async function nativeStatus() {
+	const status = await invoke("native_status");
+	nativeFileSupport = status.file_transfers === true;
+	nativeBriefExportSupport = status.brief_exports === true;
+	return status;
+}
+async function connectorRequest(method, path, body, key, browserToken) {
+	if (nativeDesktop) return invoke("connector_request", { input: {
+		method,
+		path,
+		body: body ?? null,
+		idempotency_key: key ?? null
+	} });
+	const headers = browserAuthHeaders(browserToken);
+	if (body !== void 0) headers["Content-Type"] = "application/json";
+	if (key) headers["Idempotency-Key"] = key;
+	const res = await fetch(`/api/v1${path}`, {
+		method,
+		headers,
+		credentials: "same-origin",
+		redirect: "error",
+		body: body === void 0 ? void 0 : JSON.stringify(body)
+	});
+	return {
+		status: res.status,
+		data: await res.json().catch(() => ({}))
+	};
+}
+async function connectorUploadArtifact(operationId, bytes, browserToken) {
+	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
+	if (nativeDesktop) {
+		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
+		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
+	}
+	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
+		method: "POST",
+		redirect: "error",
+		credentials: "same-origin",
+		headers: {
+			...browserAuthHeaders(browserToken),
+			"Content-Type": "application/octet-stream"
+		},
+		body: bytes
+	});
+	return {
+		status: res.status,
+		data: await res.json().catch(() => ({}))
+	};
+}
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var init_transport = __esmMin((() => {
+	init_core();
+	nativeDesktop = isTauri();
+	nativeFileSupport = false;
+	nativeBriefExportSupport = false;
+	browserSessionToken = "managed-browser-session";
+	browserCsrf = null;
+	nativeFilesStatus = () => invoke("native_files_status");
+	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
+	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
+	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
+		draftId,
+		enabled
+	});
+	nativeFilesControl = (transferId, action) => invoke("native_files_control", {
+		transferId,
+		action
+	});
+	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
+	nativeBriefSave = (reference) => invoke("native_brief_save", { reference });
+	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
+	nativeConnect = () => invoke("connector_connect");
+	managedControl = (input) => invoke("managed_control", { input });
+	nativeDisconnect = () => invoke("connector_disconnect");
+	nativeEnroll = () => invoke("connector_enroll", { locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US" });
+	nativeReloadConfiguration = () => invoke("connector_reload_configuration");
+	nativeSetupConfiguration = (config) => invoke("connector_setup_configuration", {
+		config,
+		locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
+	});
+	nativeForgetCredential = () => invoke("connector_forget_credential");
+	openExternal = (url) => invoke("open_external", { url });
+	fleetAvailability = () => invoke("fleet_availability");
+	fleetBootstrap = (input) => invoke("fleet_bootstrap", { input });
+	tailscaleControl = (input) => invoke("tailscale_control", { input });
+	fleetControl = (input) => invoke("fleet_control", { input });
+	fleetRequest = (input) => invoke("fleet_request", { input });
+	updateRequest = (input) => invoke("desktop_update", { input });
+}));
+//#endregion
+//#region src/pm-brief-export.js
+init_transport();
+function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, onUnavailable, errorBox }) {
+	const actor = caps()?.actor, formats = {
+		markdown: ["md", "text/markdown; charset=utf-8"],
+		html: ["html", "text/html; charset=utf-8"],
+		svg: ["svg", "image/svg+xml; charset=utf-8"]
+	};
+	let busy = false, selection = "", pendingReceipt = null;
+	const format = h("select", { "aria-label": t("pm_export_format") }, ...Object.keys(formats).map((key) => h("option", { value: key }, key === "markdown" ? "Markdown" : key.toUpperCase())));
+	const locale = h("select", { "aria-label": t("pm_export_language") }, h("option", { value: "en" }, "English"), h("option", { value: "zh-TW" }, "繁體中文"));
+	locale.value = navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en";
+	const status = h("div", { role: "status" }), note = h("p", { class: "muted" }, t("pm_export_help"));
+	const button = h("button", {
+		type: "button",
+		class: "secondary",
+		onclick: () => void save()
+	}, t(nativeDesktop ? "pm_export_save" : "pm_export_download"));
+	const element = disclosure({
+		label: t("pm_export_title"),
+		body: h("div", {}, note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button), status)
+	});
+	element.dataset.pmBriefExport = "";
+	const allowed = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.snapshot_id && caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value) && caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value) && (!nativeDesktop || nativeBriefExportSupport);
+	const identity = () => JSON.stringify([
+		snapshot()?.snapshot_id,
+		snapshot()?.snapshot_digest,
+		snapshot()?.view_digest
+	]);
+	function update() {
+		const next = identity();
+		if (selection !== next) {
+			selection = next;
+			status.replaceChildren();
+		}
+		element.hidden = !snapshot();
+		button.disabled = busy || !allowed();
+		format.disabled = locale.disabled = busy;
+		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
+		if (pendingReceipt && caps()?.actor === actor) {
+			if (pendingReceipt.error) {
+				status.replaceChildren(errorBox(pendingReceipt.error));
+				return;
+			}
+			const value = pendingReceipt.receipt;
+			status.replaceChildren(h("p", { class: "muted" }, value === null ? t("pm_export_cancelled") : allowed() && identity() === pendingReceipt.expected ? `${t("pm_export_saved")}: ${value.display_name}` : t("pm_export_prior_saved")));
+		}
+	}
+	function live(expected) {
+		alive();
+		if (caps()?.actor !== actor || !allowed() || identity() !== expected) throw Object.assign(Error(t("pm_export_changed")), { code: "PM_EXPORT_VIEW_CHANGED" });
+	}
+	async function save() {
+		if (busy || !allowed()) return;
+		busy = true;
+		pendingReceipt = null;
+		update();
+		const expected = identity(), source = snapshot(), kind = format.value, language = locale.value;
+		let nativeSaveStarted = false;
+		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
+		try {
+			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
+			live(expected);
+			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
+			const bytes = new TextEncoder().encode(report.content);
+			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
+			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
+			live(expected);
+			if (digest !== report.output_digest) throw Error(t("pm_export_changed"));
+			if (nativeDesktop) {
+				nativeSaveStarted = true;
+				const receipt = await nativeBriefSave({
+					workspace_id: workspaceId,
+					snapshot_id: source.snapshot_id,
+					format: kind,
+					locale: language,
+					expected_view_digest: report.view_digest,
+					expected_output_digest: report.output_digest
+				});
+				alive();
+				if (caps()?.actor !== actor) return;
+				if (receipt !== null && (receipt?.stage !== "saved" || receipt.workspace_id !== workspaceId || receipt.snapshot_id !== source.snapshot_id || receipt.format !== kind || receipt.locale !== language || receipt.view_digest !== report.view_digest || receipt.output_digest !== digest || receipt.byte_length !== bytes.length || typeof receipt.display_name !== "string")) throw Error(t("pm_export_changed"));
+				pendingReceipt = {
+					expected,
+					receipt
+				};
+				update();
+			} else {
+				const url = URL.createObjectURL(new Blob([bytes], { type: report.media_type }));
+				try {
+					const link = document.createElement("a");
+					link.href = url;
+					link.download = `pm-brief-${source.snapshot_id}-${language}.${formats[kind][0]}`;
+					link.click();
+				} finally {
+					setTimeout(() => URL.revokeObjectURL(url), 1e3);
+				}
+				status.replaceChildren(h("p", { class: "muted" }, t("pm_export_requested")));
+			}
+		} catch (error) {
+			try {
+				alive();
+			} catch {
+				return;
+			}
+			if (caps()?.actor !== actor) return;
+			const code = String(error?.code || error?.message || error);
+			const key = Object.entries({
+				BRIEF_EXPORT_CHANGED: "pm_export_changed",
+				BRIEF_EXPORT_UNAVAILABLE: "pm_export_unavailable",
+				BRIEF_EXPORT_SAVE_INTERRUPTED: "pm_export_interrupted",
+				DESTINATION_EXISTS: "pm_export_exists",
+				DESTINATION_UNAVAILABLE: "pm_export_destination"
+			}).find(([prefix]) => code.includes(prefix))?.[1];
+			const rendered = key ? Error(t(key)) : error;
+			if (nativeSaveStarted && [
+				"pm_export_exists",
+				"pm_export_destination",
+				"pm_export_interrupted"
+			].includes(key)) {
+				pendingReceipt = {
+					expected,
+					error: rendered
+				};
+				update();
+				return;
+			}
+			if (identity() !== expected) return;
+			onUnavailable(rendered);
+			status.replaceChildren(errorBox(rendered));
+		} finally {
+			busy = false;
+			update();
+		}
+	}
+	format.addEventListener("change", update);
+	locale.addEventListener("change", update);
+	update();
+	return {
+		element,
+		update
+	};
+}
+//#endregion
+//#region src/pm-brief.js
+function proof({ h, t, value, name, kind }) {
+	const records = Array.isArray(value) ? value : [value];
+	const label = (sourceKind) => {
+		const key = "pd_source_" + sourceKind, text = t(key);
+		return text === key ? t("pd_source_record") : text;
+	};
+	const technical = (data) => {
+		const rows = h("dl", { class: "pd-source-facts" });
+		function visit(value, path = "") {
+			if (value && typeof value === "object") for (const [key, child] of Object.entries(value)) visit(child, path ? path + " · " + key : key);
+			else {
+				const stamp = /(?:_at|as_of)$/.test(path) && value != null ? timeStamp(value) : null;
+				rows.append(h("dt", { class: "mono" }, path), h("dd", { class: "mono" }, stamp || (value == null ? t("ui_status_unknown") : typeof value === "boolean" ? t(value ? "pd_yes" : "pd_no") : String(value))));
+			}
+		}
+		visit(data);
+		return rows;
+	};
+	return h("div", {
+		class: "pd-sources",
+		"data-readable-sources": ""
+	}, ...records.filter(Boolean).map((row) => {
+		const source = row.source || row.source_ref || row;
+		const title = row.title || row.name || name || row.text || row.value || source.label || source.ref;
+		const human = typeof title === "string" && !/^(?:pm[a-z]*_|op_|wi_)[a-f0-9]{32}$|^[a-f0-9]{40,64}$|^[a-z][a-z\d+.-]*:\/\//i.test(title) ? title : t("ui_status_unknown");
+		const time = row.source_observed_at ?? row.observed_at ?? row.created_at ?? row.as_of;
+		return h("article", { class: "pd-source-row" }, h("span", { class: "ui-meta" }, label(kind || source.kind || row.source_kind)), h("p", {}, human), h("div", { class: "ui-meta" }, t("pd_source_time"), " · ", time != null ? timeStamp(time) : statusPill("unknown")), disclosure({
+			label: t("pd_details"),
+			body: technical(row)
+		}));
+	}));
+}
+function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, canRead = () => true }) {
+	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
+	let head = null, snapshot = null, signature = "", serial = 0, selectedSnapshotId = null;
+	const title = input("pm_brief_snapshot_title", {
+		max: 160,
+		required: false
+	});
+	const view = h("div", { class: "pm-brief-view" }), history = h("div"), status = h("div", { role: "status" });
+	const create = form({
+		action: "pm.snapshot.create",
+		target: { workspace_id: workspaceId },
+		fields: { title },
+		params: (values) => values.title.trim() ? { title: values.title.trim() } : {},
+		preconditions: () => ({ expected_plan_version: head.version }),
+		permitted: () => Boolean(head) && permitted(false),
+		recoverPermitted: () => permitted(false),
+		label: "pm_brief_create",
+		onSaved: async (result) => {
+			await refresh(result.snapshot_id);
+		},
+		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title))
+	});
+	const box = h("section", {
+		class: "pm-brief",
+		"data-pm-brief": ""
+	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_brief_title")), h("p", { class: "muted" }, t("pm_brief_intro"))), create.box), status, view, h("details", {}, h("summary", {}, t("pm_brief_history")), history));
+	const exports = caps?.()?.features?.pm_workspaces?.brief_export ? briefExport({
+		h,
+		t,
+		api,
+		alive,
+		workspaceId,
+		caps,
+		snapshot: () => snapshot,
+		readable: canRead,
+		onUnavailable: (error) => unavailable(error),
+		errorBox
+	}) : null;
+	if (exports) box.insertBefore(exports.element, box.lastChild);
+	function withdraw() {
+		++serial;
+		head = null;
+		snapshot = null;
+		signature = "";
+		view.replaceChildren();
+		history.replaceChildren();
+		create.update();
+		exports?.update();
+	}
+	function unavailable(error) {
+		withdraw();
+		status.replaceChildren(errorBox(error));
+	}
+	const stamp = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
+	const check = (data) => {
+		if (data.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		return data;
+	};
+	const readable = (prefix, value) => {
+		const present = labelSegment(value);
+		if (!present) return t("pm_label_unknown");
+		const key = prefix + present, text = t(key);
+		return text === key ? present : text;
+	};
+	function render(data) {
+		snapshot = check(data).snapshot;
+		view.replaceChildren();
+		status.replaceChildren();
+		if (!snapshot) {
+			view.append(emptyState({ title: t("pm_brief_empty") }));
+			exports?.update();
+			return;
+		}
+		if (snapshot.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+		selectedSnapshotId = snapshot.snapshot_id;
+		view.append(h("p", { class: "pm-brief-date" }, h("strong", {}, snapshot.title || workspace().name), " · ", timeLabel(t, "pm_brief_as_of", { time: stamp(snapshot.as_of) })), h("p", { class: "muted" }, t("pm_brief_fixed")));
+		const sections = h("div", { class: "pm-brief-sections" });
+		for (const name of [
+			"goals",
+			"delivery",
+			"blockers",
+			"deviations",
+			"decisions"
+		]) {
+			const section = snapshot.brief?.[name] || {
+				status: "unavailable",
+				items: []
+			};
+			const values = h("div", { class: "pm-brief-values" });
+			values.append(h("p", { class: "muted" }, readable("pm_brief_status_", section.status)));
+			if (section.quality) values.append(h("p", {}, h("strong", {}, t("pq_count", {
+				qualified: section.quality.qualified_requirements,
+				total: section.quality.total_requirements
+			}))), h("p", { class: "muted" }, t("pq_coverage")));
+			for (const item of section.items || []) {
+				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.text), details);
+				if (item.kind === "quality_assessment") details.append(qualityFact({
+					h,
+					t,
+					fact: item.details
+				}));
+				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
+				const record = source.kind === "evidence" ? (snapshot.evidence || []).find((entry) => entry.evidence_id === source.evidence_id) : source.kind === "plan_input" ? snapshot.baseline?.document?.selected_inputs?.find((entry) => entry.input_id === source.input_id) : source.kind === "plan_adoption" ? snapshot.baseline?.adoption : null;
+				details.append(proof({
+					h,
+					t,
+					value: {
+						...source,
+						...record
+					},
+					kind: source.kind,
+					name: source.kind === "plan_adoption" ? snapshot.baseline?.document?.title : record?.value || source.source_ref?.ref || item.text
+				}));
+				if (source.kind === "work_binding") details.append(h("a", { href: `#/item/${source.work_item_id}` }, t("pm_evidence_open_work")));
+				if (item.details && item.kind !== "quality_assessment") details.append(disclosure({
+					label: t("pd_details"),
+					body: proof({
+						h,
+						t,
+						value: item.details,
+						name: item.text
+					})
+				}));
+				values.append(row);
+			}
+			if (!section.items?.length) values.append(h("p", {}, t("pm_brief_empty_" + name)));
+			sections.append(h("section", {
+				class: "pm-brief-row",
+				"data-pm-brief-section": name
+			}, h("h3", {}, t("pm_brief_" + name)), values));
+		}
+		view.append(sections);
+		const trace = h("details", { class: "pm-brief-trace" }, h("summary", {}, t("pm_brief_coverage")), h("p", { class: "muted" }, t("pm_brief_filtered")), proof({
+			h,
+			t,
+			value: {
+				coverage: snapshot.coverage,
+				visibility: snapshot.visibility,
+				journal_cursor: snapshot.journal_cursor,
+				snapshot_digest: snapshot.snapshot_digest,
+				view_digest: snapshot.view_digest
+			},
+			name: snapshot.title
+		}));
+		view.append(trace);
+		exports?.update();
+	}
+	function renderHistory(page, append = false) {
+		if (!append) history.replaceChildren();
+		for (const entry of page.snapshots || []) history.append(h("button", {
+			type: "button",
+			class: "secondary",
+			onclick: async () => {
+				selectedSnapshotId = entry.snapshot_id;
+				const ticket = ++serial;
+				snapshot = null;
+				signature = "";
+				view.replaceChildren();
+				exports?.update();
+				try {
+					const data = await api("GET", `${endpoint}/snapshots/${entry.snapshot_id}`);
+					alive();
+					if (ticket === serial) render(data);
+				} catch (error) {
+					if (ticket === serial) unavailable(error);
+				}
+			}
+		}, entry.title || t("pm_brief_title"), " · ", stamp(entry.as_of)));
+		if (page.next_cursor !== null && page.next_cursor !== void 0) {
+			const more = h("button", {
+				type: "button",
+				class: "secondary",
+				onclick: async () => {
+					more.disabled = true;
+					try {
+						const next = check(await api("GET", `${endpoint}/snapshots?after=${page.next_cursor}&limit=20`));
+						alive();
+						if (!more.isConnected) return;
+						more.remove();
+						renderHistory(next, true);
+					} catch (error) {
+						if (more.isConnected) unavailable(error);
+					}
+				}
+			}, t("pm_brief_more"));
+			history.append(more);
+		}
+	}
+	async function refresh(selectedId = null) {
+		const selected = selectedId || selectedSnapshotId || "latest";
+		if (selectedId) selectedSnapshotId = selectedId;
+		const ticket = ++serial;
+		head = null;
+		snapshot = null;
+		signature = "";
+		view.replaceChildren();
+		history.replaceChildren();
+		create.update();
+		exports?.update();
+		try {
+			const [latest, listing, current] = await Promise.all([
+				api("GET", `${endpoint}/snapshots/${selected}`),
+				api("GET", `${endpoint}/snapshots?limit=20`),
+				api("GET", `${endpoint}/plans/head`)
+			]);
+			alive();
+			if (ticket !== serial) return;
+			check(latest);
+			check(listing);
+			if (current.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
+			head = current.head;
+			status.replaceChildren();
+			const next = JSON.stringify([latest, listing]);
+			if (signature !== next) {
+				signature = next;
+				render(latest);
+				renderHistory(listing);
+			}
+			create.update();
+		} catch (error) {
+			if (ticket === serial) unavailable(error);
+		}
+	}
+	return {
+		box,
+		refresh,
+		withdraw
+	};
+}
 //#endregion
 //#region src/pm-plan-diff-strings.js
 var planDiffStrings = {
@@ -15603,286 +16260,6 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 		}
 	};
 }
-var init_tslib_es6 = __esmMin((() => {}));
-async function invoke(cmd, args = {}, options) {
-	return window.__TAURI_INTERNALS__.invoke(cmd, args, options);
-}
-function isTauri() {
-	return !!(globalThis || window).isTauri;
-}
-var init_core = __esmMin((() => {
-	init_tslib_es6();
-}));
-//#endregion
-//#region src/transport/index.ts
-async function restoreBrowserSession() {
-	if (nativeDesktop) return false;
-	const response = await fetch("/api/v1/browser-session", {
-		credentials: "same-origin",
-		mode: "same-origin",
-		cache: "no-store",
-		redirect: "error"
-	});
-	if (!response.ok) return false;
-	const data = await response.json();
-	if (typeof data.csrf !== "string" || data.csrf.length < 32) return false;
-	browserCsrf = data.csrf;
-	return true;
-}
-function browserAuthHeaders(token) {
-	if (token !== "managed-browser-session") return { Authorization: `Bearer ${token}` };
-	if (!browserCsrf) throw new Error("Browser session needs to be restored");
-	return { "X-Batc-CSRF": browserCsrf };
-}
-function forgetBrowserSession() {
-	if (!browserCsrf) return;
-	const headers = {
-		...browserAuthHeaders(browserSessionToken),
-		"Content-Type": "application/json"
-	};
-	browserCsrf = null;
-	return fetch("/api/v1/browser-session/logout", {
-		method: "POST",
-		credentials: "same-origin",
-		mode: "same-origin",
-		redirect: "error",
-		headers,
-		body: "{}"
-	});
-}
-async function nativeStatus() {
-	const status = await invoke("native_status");
-	nativeFileSupport = status.file_transfers === true;
-	nativeBriefExportSupport = status.brief_exports === true;
-	return status;
-}
-async function connectorRequest(method, path, body, key, browserToken) {
-	if (nativeDesktop) return invoke("connector_request", { input: {
-		method,
-		path,
-		body: body ?? null,
-		idempotency_key: key ?? null
-	} });
-	const headers = browserAuthHeaders(browserToken);
-	if (body !== void 0) headers["Content-Type"] = "application/json";
-	if (key) headers["Idempotency-Key"] = key;
-	const res = await fetch(`/api/v1${path}`, {
-		method,
-		headers,
-		credentials: "same-origin",
-		redirect: "error",
-		body: body === void 0 ? void 0 : JSON.stringify(body)
-	});
-	return {
-		status: res.status,
-		data: await res.json().catch(() => ({}))
-	};
-}
-async function connectorUploadArtifact(operationId, bytes, browserToken) {
-	if (!/^op_[0-9a-f]{32}$/.test(operationId)) throw new Error("Invalid artifact upload operation ID");
-	if (nativeDesktop) {
-		if (bytes.byteLength > 16777216) throw new Error("Artifact exceeds the native 16 MiB upload limit");
-		return invoke("connector_upload_artifact", bytes, { headers: { "x-batc-upload-operation": operationId } });
-	}
-	const res = await fetch(`/api/v1/artifacts/uploads/${operationId}/content`, {
-		method: "POST",
-		redirect: "error",
-		credentials: "same-origin",
-		headers: {
-			...browserAuthHeaders(browserToken),
-			"Content-Type": "application/octet-stream"
-		},
-		body: bytes
-	});
-	return {
-		status: res.status,
-		data: await res.json().catch(() => ({}))
-	};
-}
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
-var init_transport = __esmMin((() => {
-	init_core();
-	nativeDesktop = isTauri();
-	nativeFileSupport = false;
-	nativeBriefExportSupport = false;
-	browserSessionToken = "managed-browser-session";
-	browserCsrf = null;
-	nativeFilesStatus = () => invoke("native_files_status");
-	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
-	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
-	nativeFilesDropTarget = (draftId, enabled) => invoke("native_files_drop_target", {
-		draftId,
-		enabled
-	});
-	nativeFilesControl = (transferId, action) => invoke("native_files_control", {
-		transferId,
-		action
-	});
-	nativeFilesSave = (reference) => invoke("native_files_save", { reference });
-	nativeBriefSave = (reference) => invoke("native_brief_save", { reference });
-	nativeFilesPreview = (reference) => invoke("native_files_preview", { reference });
-	nativeConnect = () => invoke("connector_connect");
-	managedControl = (input) => invoke("managed_control", { input });
-	nativeDisconnect = () => invoke("connector_disconnect");
-	nativeEnroll = () => invoke("connector_enroll", { locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US" });
-	nativeReloadConfiguration = () => invoke("connector_reload_configuration");
-	nativeSetupConfiguration = (config) => invoke("connector_setup_configuration", {
-		config,
-		locale: navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en-US"
-	});
-	nativeForgetCredential = () => invoke("connector_forget_credential");
-	openExternal = (url) => invoke("open_external", { url });
-	fleetAvailability = () => invoke("fleet_availability");
-	fleetBootstrap = (input) => invoke("fleet_bootstrap", { input });
-	tailscaleControl = (input) => invoke("tailscale_control", { input });
-	fleetControl = (input) => invoke("fleet_control", { input });
-	fleetRequest = (input) => invoke("fleet_request", { input });
-	updateRequest = (input) => invoke("desktop_update", { input });
-}));
-//#endregion
-//#region src/pm-brief-export.js
-init_transport();
-function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, onUnavailable, errorBox }) {
-	const actor = caps()?.actor, formats = {
-		markdown: ["md", "text/markdown; charset=utf-8"],
-		html: ["html", "text/html; charset=utf-8"],
-		svg: ["svg", "image/svg+xml; charset=utf-8"]
-	};
-	let busy = false, selection = "", pendingReceipt = null;
-	const format = h("select", { "aria-label": t("pm_export_format") }, ...Object.keys(formats).map((key) => h("option", { value: key }, key === "markdown" ? "Markdown" : key.toUpperCase())));
-	const locale = h("select", { "aria-label": t("pm_export_language") }, h("option", { value: "en" }, "English"), h("option", { value: "zh-TW" }, "繁體中文"));
-	locale.value = navigator.language.toLowerCase().startsWith("zh") ? "zh-TW" : "en";
-	const status = h("div", { role: "status" }), note = h("p", { class: "muted" }, t("pm_export_help"));
-	const button = h("button", {
-		type: "button",
-		class: "secondary",
-		onclick: () => void save()
-	}, t(nativeDesktop ? "pm_export_save" : "pm_export_download"));
-	const element = disclosure({
-		label: t("pm_export_title"),
-		body: h("div", {}, note, h("div", { class: "pm-export-fields" }, h("label", {}, t("pm_export_format"), format), h("label", {}, t("pm_export_language"), locale)), h("div", { class: "actions" }, button), status)
-	});
-	element.dataset.pmBriefExport = "";
-	const allowed = () => readable() && caps()?.actor === actor && caps()?.scopes?.includes("observe") && snapshot()?.snapshot_id && caps()?.features?.pm_workspaces?.brief_export?.formats?.includes(format.value) && caps()?.features?.pm_workspaces?.brief_export?.locales?.includes(locale.value) && (!nativeDesktop || nativeBriefExportSupport);
-	const identity = () => JSON.stringify([
-		snapshot()?.snapshot_id,
-		snapshot()?.snapshot_digest,
-		snapshot()?.view_digest
-	]);
-	function update() {
-		const next = identity();
-		if (selection !== next) {
-			selection = next;
-			status.replaceChildren();
-		}
-		element.hidden = !snapshot();
-		button.disabled = busy || !allowed();
-		format.disabled = locale.disabled = busy;
-		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
-		if (pendingReceipt && caps()?.actor === actor) {
-			if (pendingReceipt.error) {
-				status.replaceChildren(errorBox(pendingReceipt.error));
-				return;
-			}
-			const value = pendingReceipt.receipt;
-			status.replaceChildren(h("p", { class: "muted" }, value === null ? t("pm_export_cancelled") : allowed() && identity() === pendingReceipt.expected ? `${t("pm_export_saved")}: ${value.display_name}` : t("pm_export_prior_saved")));
-		}
-	}
-	function live(expected) {
-		alive();
-		if (caps()?.actor !== actor || !allowed() || identity() !== expected) throw Object.assign(Error(t("pm_export_changed")), { code: "PM_EXPORT_VIEW_CHANGED" });
-	}
-	async function save() {
-		if (busy || !allowed()) return;
-		busy = true;
-		pendingReceipt = null;
-		update();
-		const expected = identity(), source = snapshot(), kind = format.value, language = locale.value;
-		let nativeSaveStarted = false;
-		status.replaceChildren(h("p", { class: "muted" }, t("pm_export_reading")));
-		try {
-			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
-			live(expected);
-			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
-			const bytes = new TextEncoder().encode(report.content);
-			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
-			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
-			live(expected);
-			if (digest !== report.output_digest) throw Error(t("pm_export_changed"));
-			if (nativeDesktop) {
-				nativeSaveStarted = true;
-				const receipt = await nativeBriefSave({
-					workspace_id: workspaceId,
-					snapshot_id: source.snapshot_id,
-					format: kind,
-					locale: language,
-					expected_view_digest: report.view_digest,
-					expected_output_digest: report.output_digest
-				});
-				alive();
-				if (caps()?.actor !== actor) return;
-				if (receipt !== null && (receipt?.stage !== "saved" || receipt.workspace_id !== workspaceId || receipt.snapshot_id !== source.snapshot_id || receipt.format !== kind || receipt.locale !== language || receipt.view_digest !== report.view_digest || receipt.output_digest !== digest || receipt.byte_length !== bytes.length || typeof receipt.display_name !== "string")) throw Error(t("pm_export_changed"));
-				pendingReceipt = {
-					expected,
-					receipt
-				};
-				update();
-			} else {
-				const url = URL.createObjectURL(new Blob([bytes], { type: report.media_type }));
-				try {
-					const link = document.createElement("a");
-					link.href = url;
-					link.download = `pm-brief-${source.snapshot_id}-${language}.${formats[kind][0]}`;
-					link.click();
-				} finally {
-					setTimeout(() => URL.revokeObjectURL(url), 1e3);
-				}
-				status.replaceChildren(h("p", { class: "muted" }, t("pm_export_requested")));
-			}
-		} catch (error) {
-			try {
-				alive();
-			} catch {
-				return;
-			}
-			if (caps()?.actor !== actor) return;
-			const code = String(error?.code || error?.message || error);
-			const key = Object.entries({
-				BRIEF_EXPORT_CHANGED: "pm_export_changed",
-				BRIEF_EXPORT_UNAVAILABLE: "pm_export_unavailable",
-				BRIEF_EXPORT_SAVE_INTERRUPTED: "pm_export_interrupted",
-				DESTINATION_EXISTS: "pm_export_exists",
-				DESTINATION_UNAVAILABLE: "pm_export_destination"
-			}).find(([prefix]) => code.includes(prefix))?.[1];
-			const rendered = key ? Error(t(key)) : error;
-			if (nativeSaveStarted && [
-				"pm_export_exists",
-				"pm_export_destination",
-				"pm_export_interrupted"
-			].includes(key)) {
-				pendingReceipt = {
-					expected,
-					error: rendered
-				};
-				update();
-				return;
-			}
-			if (identity() !== expected) return;
-			onUnavailable(rendered);
-			status.replaceChildren(errorBox(rendered));
-		} finally {
-			busy = false;
-			update();
-		}
-	}
-	format.addEventListener("change", update);
-	locale.addEventListener("change", update);
-	update();
-	return {
-		element,
-		update
-	};
-}
 //#endregion
 //#region src/pm-charter.js
 var sections = [
@@ -16723,7 +17100,14 @@ function workspaceOverview(options) {
 			const sources = disclosure({
 				label: t("ov_sources"),
 				key: `${namespace}:${workspaceId}:overview-source:${key}`,
-				body: h("pre", { class: "pm-brief-proof" }, JSON.stringify(rows, null, 2))
+				body: proof({
+					h,
+					t,
+					value: rows.map((row) => ({
+						...row,
+						...document?.selected_inputs?.find((input) => input.input_id === row.input_id) || {}
+					}))
+				})
 			});
 			sources.classList.add("pm-overview-sources");
 			sources.querySelector("summary").setAttribute("aria-label", `${t("ov_sources")} · ${t("wb_" + key)}`);
@@ -20390,13 +20774,13 @@ function validRequirements(values, included) {
 		"unresolved"
 	].includes(row.priority) && refs$1(row.depends_on, ids, 0)) && !cyclic(values);
 }
-function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {}, onRevision = () => {} }) {
+function planProposals({ h, t, api, alive, form, input, labelled, caps, workspaceId, threadId, thread, permitted, refresh: refreshParent, errorBox, conversation = false, backLink = () => null, onFollowUp = () => {}, onAnswer = () => {}, onRevision = () => {}, onActivity = () => {} }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, endpoint = base + "/conversation-proposals", target = {
 		workspace_id: workspaceId,
 		thread_id: threadId
 	};
-	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt, preferredId = null;
-	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adoptedId = null, reviewShell = false, adapterInitialized = false;
+	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt, preferredId = null, latestId = null;
+	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adoptedId = null, reviewOpen = false, reviewButton = null, adapterInitialized = false;
 	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
 	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
 	const deciding = () => writing() && permitted(true) && thread()?.capabilities?.decide === true && caps()?.scopes?.includes("start") && caps()?.actions?.some((row) => row.action === ADOPT && row.allowed === true) && capability?.plan_adoption_available !== false;
@@ -20409,6 +20793,11 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			return null;
 		}
 	};
+	const actionButton = (attrs, label) => button({
+		...Object.fromEntries(Object.entries(attrs).filter(([key]) => key !== "class")),
+		variant: attrs.class === "primary" ? "primary" : "secondary",
+		label
+	});
 	const note = (key) => h("p", { class: "muted" }, t(key));
 	const acceptedDocument = (p) => p.context.accepted_plan?.document || p.context.accepted_plan;
 	const removed = (p, requirements) => (acceptedDocument(p)?.requirements || []).filter((row) => !requirements.some((item) => item.id === row.id)).map((row) => row.id);
@@ -20522,7 +20911,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		onStateChange: () => {
 			if (ready) updateControls();
 		},
-		extra: h("div", {}, review, content, labelled("pcp_rationale", rationale), note("pcp_review_help"))
+		extra: h("div", { "data-proposal-adopt-panel": "" }, review, content, labelled("pcp_rationale", rationale), disclosure({
+			label: t("pd_details"),
+			body: note("pcp_review_help")
+		}))
 	});
 	const resolution = conversation ? issueResolution({
 		h,
@@ -20539,7 +20931,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		errorBox,
 		refreshParent
 	}) : null;
-	const more = h("button", {
+	const more = actionButton({
 		type: "button",
 		class: "secondary",
 		hidden: true,
@@ -20558,6 +20950,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		class: "pm-plans",
 		"data-pm-plan-proposals": ""
 	}, h("h3", {}, t(conversation ? "pd_proposed" : "pcp_title")), conversation ? "" : note("pcp_help"), prepareBox, h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)), notice, detail);
+	const pendingPill = statusPill("in_progress");
+	pendingPill.hidden = true;
+	box.append(pendingPill);
 	const tools = h("div", { "data-discussion-proposal-tools": "" });
 	if (conversation) {
 		prepareBox.open = false;
@@ -20628,6 +21023,21 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	}
 	function updateControls() {
 		if (!ready) return;
+		if (conversation) {
+			const pending = prepare.locked() || adopt.locked();
+			box.hidden = !active && !pending && !notice.querySelector(".error, [role=alert]");
+			pendingPill.hidden = !pending || Boolean(active);
+			onActivity({
+				proposalId: fresh() ? active?.proposal_id : null,
+				pending,
+				reviewable: fresh()
+			});
+			if (reviewButton) {
+				reviewButton.classList.toggle("primary", !reviewOpen);
+				reviewButton.classList.toggle("secondary", reviewOpen);
+				reviewButton.setAttribute("aria-expanded", String(reviewOpen));
+			}
+		}
 		const locked = adopt.locked() || !deciding();
 		picker.disabled = loading || adopt.locked();
 		reload.disabled = loading;
@@ -20646,7 +21056,6 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			});
 		}
 		for (const element of content.querySelectorAll("input,textarea,select,button")) element.disabled = locked;
-		const reviewButton = adopt.box.querySelector("[data-proposal-review]");
 		if (reviewButton) reviewButton.disabled = !fresh() && !adopt.locked();
 		if (active && active.validation.status === "format_valid") {
 			const rawReason = content.querySelector("[data-proposal-adoptable-reason]");
@@ -20660,7 +21069,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 					if (label !== t("pd_stale")) reasons.textContent += " · " + label;
 				}
 				reasons.hidden = !reason;
-				const retry = content.querySelector("[data-proposal-again]");
+				const summaryReason = detail.querySelector("[data-proposal-summary-reason]");
+				if (summaryReason) {
+					summaryReason.textContent = reason ? t(reason) : "";
+					summaryReason.hidden = !reason;
+				}
+				const retry = detail.querySelector("[data-proposal-again]");
 				if (retry) {
 					retry.hidden = fresh() || adopted();
 					retry.disabled = !prepare.canSubmit();
@@ -20710,6 +21124,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			return;
 		}
 		rendered = sig;
+		reviewButton = null;
+		reviewOpen = adopt.locked();
 		candidateFields = [];
 		requirementFields = [];
 		detail.replaceChildren();
@@ -20717,7 +21133,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		detail.append(h("h4", {}, p.document?.title || t("pcp_review")));
 		if (conversation && adopted()) {
 			const confirmation = h("div", { "data-proposal-adopted": "" }, statusPill("adopted"));
-			if (typeof p.adopted_revision_id === "string" && /^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id)) confirmation.append(" · ", h("a", {
+			if (typeof p.adopted_revision_id === "string" && /^pmrev_[0-9a-f]{32}$/.test(p.adopted_revision_id)) confirmation.append(" ", h("a", {
 				"data-proposal-adopted-revision": "",
 				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(threadId)}?revision=${encodeURIComponent(p.adopted_revision_id)}`,
 				onclick: (event) => {
@@ -20725,11 +21141,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 					onRevision(p.adopted_revision_id);
 				}
 			}, t("pd_accepted_revision")));
+			adopt.box.hidden = false;
 			detail.append(h("p", {}, p.document?.summary || ""), confirmation, resolution.box);
 			if (adopt.locked()) {
 				adopt.box.firstElementChild.hidden = true;
 				adopt.box.append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
-				detail.append(h("details", {}, h("summary", {}, t("pd_details")), adopt.box));
+				detail.append(h("details", { "data-proposal-recovery": "" }, h("summary", {}, t("pd_details")), adopt.box));
 			}
 			return;
 		}
@@ -20776,13 +21193,26 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			value: edited.title
 		});
 		const accepted = acceptedDocument(p);
-		if (conversation) detail.append(h("p", { class: "pm-note-text" }, p.document.summary));
+		if (conversation) detail.append(h("p", { class: "pm-note-text" }, p.document.summary), h("div", {
+			class: "pd-impact",
+			"data-proposal-impact": ""
+		}, ...[...new Set(p.document.candidates.map((row) => row.kind))].map((kind) => {
+			const pill = statusPill({
+				proposal: "in_review",
+				assumption: "unconfirmed",
+				unknown: "unknown",
+				conflict: "blocked",
+				excluded: "read_only"
+			}[kind]);
+			pill.textContent = t("pcp_" + kind);
+			return pill;
+		})));
 		const before = h("details", {}, h("summary", {}, t("pcp_before")), accepted ? h("div", {}, h("strong", {}, accepted.title || ""), h("p", { class: "pm-note-text" }, accepted.markdown || ""), h("ul", {}, ...(accepted.requirements || []).map((row) => h("li", {}, row.id, " · ", row.text))), h("small", { class: "pm-source" }, t("pcp_baseline"), " · ", p.context.plan_head.accepted_revision_id)) : note("pcp_first"));
 		const technical = h("details", { "data-proposal-details": "" }, h("summary", {}, t("pd_details")), labelled("pcp_name", title), h("code", {}, p.proposal_id), h("code", { "data-proposal-adoptable-reason": "" }, p.adoptable_reason || ""), before);
 		if (!conversation) content.append(h("p", { class: "pm-note-text" }, p.document.summary), before, labelled("pcp_name", title));
 		content.append(h("h4", {}, t("pcp_candidates")));
 		title.addEventListener("input", () => saveEditor(title));
-		const requirementBox = h("div"), add = h("button", {
+		const requirementBox = h("div"), add = actionButton({
 			type: "button",
 			class: "secondary",
 			onclick: () => {
@@ -20885,7 +21315,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				dependencies
 			};
 			requirementFields.push(row);
-			const remove = h("button", {
+			const remove = actionButton({
 				type: "button",
 				class: "secondary",
 				onclick: () => {
@@ -20936,7 +21366,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				});
 				questions.append(h("label", {}, question.question, answer));
 			});
-			questions.append(h("button", {
+			questions.append(actionButton({
 				type: "button",
 				class: "secondary",
 				onclick: () => {
@@ -20946,7 +21376,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			}, t("pd_answer_send")));
 			content.append(questions);
 		}
-		content.prepend(h("button", {
+		if (!conversation) content.prepend(actionButton({
 			type: "button",
 			class: "secondary",
 			"data-proposal-again": "",
@@ -20965,34 +21395,37 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			content.append(technical);
 		} else content.append(raw);
 		adopt.box.firstElementChild.hidden = false;
-		if (reviewShell) adopt.box.querySelector("[data-proposal-owner-review]").append(adopt.box.querySelector("button[type=submit]").closest(".actions"));
-		detail.append(adopt.box);
-		if (conversation && !reviewShell) {
-			reviewShell = true;
-			const reviewBody = adopt.box.firstElementChild;
-			const extra = [...reviewBody.children].filter((node) => node !== review && node !== content);
-			const reviewMore = h("details", {
-				"data-proposal-owner-review": "",
-				open: adopt.locked()
-			}, h("summary", {}, t("pd_review")), ...extra);
-			const actions = adopt.box.querySelector(":scope > .actions");
-			reviewMore.append(actions);
-			reviewBody.append(reviewMore);
-			const choices = h("div", { class: "actions pd-review-actions" }, h("button", {
-				type: "button",
-				class: "primary",
+		if (conversation) {
+			adopt.box.hidden = !reviewOpen;
+			reviewButton = button({
+				variant: reviewOpen ? "secondary" : "primary",
+				label: t("pd_review"),
 				"data-proposal-review": "",
-				onclick: () => {
-					reviewMore.open = true;
-					rationale.focus();
+				"aria-expanded": String(reviewOpen),
+				onClick: () => {
+					reviewOpen = !reviewOpen;
+					adopt.box.hidden = !reviewOpen;
+					updateControls();
+					if (reviewOpen) {
+						content.scrollIntoView({ block: "nearest" });
+						content.querySelector("input[type=checkbox]")?.focus();
+					}
 				}
-			}, t("pd_review")), h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: onFollowUp
-			}, t("pd_follow_up")));
-			reviewBody.insertBefore(choices, content);
-		}
+			});
+			detail.append(h("p", {
+				class: "ui-meta",
+				"data-proposal-summary-reason": "",
+				hidden: true
+			}), h("div", { class: "actions pd-review-actions" }, reviewButton, button({
+				label: t("pd_follow_up"),
+				onClick: onFollowUp
+			}), button({
+				label: t("pd_again"),
+				"data-proposal-again": "",
+				hidden: fresh(),
+				onClick: () => ask?.click()
+			})), adopt.box);
+		} else detail.append(adopt.box);
 		adopt.update();
 	}
 	async function choose(id) {
@@ -21021,6 +21454,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (own === ticket) {
 				withdraw();
 				notice.replaceChildren(errorBox(error));
+				box.hidden = false;
 			}
 		}
 	}
@@ -21034,7 +21468,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		picker.replaceChildren(h("option", { value: "" }, t("pcp_choose")), ...rows.map((row) => h("option", { value: row.proposal_id }, [row.title ?? t("pd_proposed"), row.adoptable_reason === "adopted" ? t("ui_status_adopted") : row.validation?.status !== "format_valid" ? proposalReasonLabel(t, "invalid_proposal") : t(row.adoptable === false ? "pd_stale" : "pcp_proposal")].join(" · "))));
 		picker.value = selected;
 		more.hidden = cursor === null;
-		notice.replaceChildren(...!rows.length ? [note("pcp_empty")] : [], ...cursor !== null ? [note("pcp_partial")] : []);
+		notice.replaceChildren(...!rows.length && !conversation ? [note("pcp_empty")] : [], ...cursor !== null ? [note("pcp_partial")] : []);
 	}
 	async function refresh(preferred) {
 		if (!enabled()) {
@@ -21055,7 +21489,9 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			visible = true;
 			box.hidden = false;
 			page(list);
-			const id = preferred || preferredId || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? rows.at(-1)?.proposal_id : null);
+			const newest = rows.at(-1)?.proposal_id, newArrival = conversation && latestId && newest !== latestId;
+			latestId = newest;
+			const id = preferred || preferredId || (adopt.locked() ? original()?.proposal_id : null) || (newArrival ? newest : null) || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? newest : null);
 			if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, t("pd_proposed")));
 			picker.value = id || "";
 			preferredId = null;
@@ -21075,6 +21511,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (own === ticket) {
 				withdraw();
 				notice.replaceChildren(errorBox(error));
+				box.hidden = false;
 			}
 		} finally {
 			if (own === ticket || !visible) {
@@ -21099,6 +21536,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			if (own === ticket) {
 				withdraw();
 				notice.replaceChildren(errorBox(error));
+				box.hidden = false;
 			}
 		} finally {
 			loading = false;
@@ -21108,7 +21546,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	function withdraw() {
 		ticket++;
 		visible = false;
-		active = head = null;
+		active = head = latestId = null;
 		rows = [];
 		cursor = null;
 		rendered = "";
@@ -21119,12 +21557,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		content.replaceChildren();
 		notice.replaceChildren();
 		more.hidden = true;
+		reviewButton = null;
 		resolution?.withdraw();
 		prepare?.update();
 		adopt?.update();
 	}
 	function composer(textarea) {
-		ask = h("button", {
+		ask = actionButton({
 			type: "button",
 			class: "secondary",
 			"data-discussion-ask": "",
@@ -21134,7 +21573,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				prepare.submit();
 			}
 		}, t("pd_ask"));
-		connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: "#/settings" }, t("pd_setup")));
+		connection = h("p", { class: "muted" }, h("span", {}, t("pd_not_connected")), " · ", h("a", { href: discussionSettingsHref() }, t("pd_setup")));
 		working = h("p", {
 			"data-discussion-working": "",
 			role: "status",
@@ -21152,6 +21591,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		updateControls();
 		return composerNode;
 	}
+	if (conversation) box.querySelector(":scope > h3").remove();
 	ready = true;
 	updateControls();
 	return {
@@ -31810,222 +32250,6 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 	};
 }
 //#endregion
-//#region src/pm-brief.js
-function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, canRead = () => true }) {
-	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
-	let head = null, snapshot = null, signature = "", serial = 0, selectedSnapshotId = null;
-	const title = input("pm_brief_snapshot_title", {
-		max: 160,
-		required: false
-	});
-	const view = h("div", { class: "pm-brief-view" }), history = h("div"), status = h("div", { role: "status" });
-	const create = form({
-		action: "pm.snapshot.create",
-		target: { workspace_id: workspaceId },
-		fields: { title },
-		params: (values) => values.title.trim() ? { title: values.title.trim() } : {},
-		preconditions: () => ({ expected_plan_version: head.version }),
-		permitted: () => Boolean(head) && permitted(false),
-		recoverPermitted: () => permitted(false),
-		label: "pm_brief_create",
-		onSaved: async (result) => {
-			await refresh(result.snapshot_id);
-		},
-		extra: h("details", {}, h("summary", {}, t("pm_brief_name_optional")), labelled("pm_brief_snapshot_title", title))
-	});
-	const box = h("section", {
-		class: "pm-brief",
-		"data-pm-brief": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_brief_title")), h("p", { class: "muted" }, t("pm_brief_intro"))), create.box), status, view, h("details", {}, h("summary", {}, t("pm_brief_history")), history));
-	const exports = caps?.()?.features?.pm_workspaces?.brief_export ? briefExport({
-		h,
-		t,
-		api,
-		alive,
-		workspaceId,
-		caps,
-		snapshot: () => snapshot,
-		readable: canRead,
-		onUnavailable: (error) => unavailable(error),
-		errorBox
-	}) : null;
-	if (exports) box.insertBefore(exports.element, box.lastChild);
-	function withdraw() {
-		++serial;
-		head = null;
-		snapshot = null;
-		signature = "";
-		view.replaceChildren();
-		history.replaceChildren();
-		create.update();
-		exports?.update();
-	}
-	function unavailable(error) {
-		withdraw();
-		status.replaceChildren(errorBox(error));
-	}
-	const stamp = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
-	const check = (data) => {
-		if (data.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
-		return data;
-	};
-	const readable = (prefix, value) => {
-		const present = labelSegment(value);
-		if (!present) return t("pm_label_unknown");
-		const key = prefix + present, text = t(key);
-		return text === key ? present : text;
-	};
-	function render(data) {
-		snapshot = check(data).snapshot;
-		view.replaceChildren();
-		status.replaceChildren();
-		if (!snapshot) {
-			view.append(emptyState({ title: t("pm_brief_empty") }));
-			exports?.update();
-			return;
-		}
-		if (snapshot.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
-		selectedSnapshotId = snapshot.snapshot_id;
-		view.append(h("p", { class: "pm-brief-date" }, h("strong", {}, snapshot.title || workspace().name), " · ", timeLabel(t, "pm_brief_as_of", { time: stamp(snapshot.as_of) })), h("p", { class: "muted" }, t("pm_brief_fixed")));
-		const sections = h("div", { class: "pm-brief-sections" });
-		for (const name of [
-			"goals",
-			"delivery",
-			"blockers",
-			"deviations",
-			"decisions"
-		]) {
-			const section = snapshot.brief?.[name] || {
-				status: "unavailable",
-				items: []
-			};
-			const values = h("div", { class: "pm-brief-values" });
-			values.append(h("p", { class: "muted" }, readable("pm_brief_status_", section.status)));
-			if (section.quality) values.append(h("p", {}, h("strong", {}, t("pq_count", {
-				qualified: section.quality.qualified_requirements,
-				total: section.quality.total_requirements
-			}))), h("p", { class: "muted" }, t("pq_coverage")));
-			for (const item of section.items || []) {
-				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.text), details);
-				if (item.kind === "quality_assessment") details.append(qualityFact({
-					h,
-					t,
-					fact: item.details
-				}));
-				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
-				if (source.kind === "plan_input") details.append(h("p", { class: "muted" }, t("pm_brief_plan_source")), h("code", {}, source.revision_id), h("p", {}, source.source_ref?.ref || source.source_ref?.message_id || ""));
-				else if (source.kind === "plan_adoption") details.append(h("p", { class: "muted" }, t("pm_brief_decision_source")), h("code", {}, source.revision_id));
-				else if (source.kind === "work_binding") details.append(h("a", { href: `#/item/${source.work_item_id}` }, t("pm_evidence_open_work")));
-				else if (source.kind === "evidence") {
-					const evidence = (snapshot.evidence || []).find((row) => row.evidence_id === source.evidence_id);
-					if (evidence) details.append(h("p", { class: "muted" }, readable("pm_evidence_kind_", evidence.source_kind), " · ", stamp(evidence.source_observed_at)));
-					details.append(h("code", {}, source.evidence_id));
-				}
-				const proof = source.kind === "evidence" ? (snapshot.evidence || []).find((entry) => entry.evidence_id === source.evidence_id) : source.kind === "plan_input" ? snapshot.baseline?.document?.selected_inputs?.find((entry) => entry.input_id === source.input_id) : source.kind === "plan_adoption" ? snapshot.baseline?.adoption : null;
-				if (proof) details.append(h("details", {}, h("summary", {}, t("pm_evidence_original")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(proof, null, 2))));
-				if (item.details) details.append(h("pre", { class: "pm-brief-proof" }, JSON.stringify(item.details, null, 2)));
-				values.append(row);
-			}
-			if (!section.items?.length) values.append(h("p", {}, t("pm_brief_empty_" + name)));
-			sections.append(h("section", {
-				class: "pm-brief-row",
-				"data-pm-brief-section": name
-			}, h("h3", {}, t("pm_brief_" + name)), values));
-		}
-		view.append(sections);
-		const trace = h("details", { class: "pm-brief-trace" }, h("summary", {}, t("pm_brief_coverage")), h("p", { class: "muted" }, t("pm_brief_filtered")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
-			coverage: snapshot.coverage,
-			visibility: snapshot.visibility,
-			journal_cursor: snapshot.journal_cursor,
-			snapshot_digest: snapshot.snapshot_digest,
-			view_digest: snapshot.view_digest
-		}, null, 2)));
-		view.append(trace);
-		exports?.update();
-	}
-	function renderHistory(page, append = false) {
-		if (!append) history.replaceChildren();
-		for (const entry of page.snapshots || []) history.append(h("button", {
-			type: "button",
-			class: "secondary",
-			onclick: async () => {
-				selectedSnapshotId = entry.snapshot_id;
-				const ticket = ++serial;
-				snapshot = null;
-				signature = "";
-				view.replaceChildren();
-				exports?.update();
-				try {
-					const data = await api("GET", `${endpoint}/snapshots/${entry.snapshot_id}`);
-					alive();
-					if (ticket === serial) render(data);
-				} catch (error) {
-					if (ticket === serial) unavailable(error);
-				}
-			}
-		}, entry.title || t("pm_brief_title"), " · ", stamp(entry.as_of)));
-		if (page.next_cursor !== null && page.next_cursor !== void 0) {
-			const more = h("button", {
-				type: "button",
-				class: "secondary",
-				onclick: async () => {
-					more.disabled = true;
-					try {
-						const next = check(await api("GET", `${endpoint}/snapshots?after=${page.next_cursor}&limit=20`));
-						alive();
-						if (!more.isConnected) return;
-						more.remove();
-						renderHistory(next, true);
-					} catch (error) {
-						if (more.isConnected) unavailable(error);
-					}
-				}
-			}, t("pm_brief_more"));
-			history.append(more);
-		}
-	}
-	async function refresh(selectedId = null) {
-		const selected = selectedId || selectedSnapshotId || "latest";
-		if (selectedId) selectedSnapshotId = selectedId;
-		const ticket = ++serial;
-		head = null;
-		snapshot = null;
-		signature = "";
-		view.replaceChildren();
-		history.replaceChildren();
-		create.update();
-		exports?.update();
-		try {
-			const [latest, listing, current] = await Promise.all([
-				api("GET", `${endpoint}/snapshots/${selected}`),
-				api("GET", `${endpoint}/snapshots?limit=20`),
-				api("GET", `${endpoint}/plans/head`)
-			]);
-			alive();
-			if (ticket !== serial) return;
-			check(latest);
-			check(listing);
-			if (current.head.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
-			head = current.head;
-			status.replaceChildren();
-			const next = JSON.stringify([latest, listing]);
-			if (signature !== next) {
-				signature = next;
-				render(latest);
-				renderHistory(listing);
-			}
-			create.update();
-		} catch (error) {
-			if (ticket === serial) unavailable(error);
-		}
-	}
-	return {
-		box,
-		refresh,
-		withdraw
-	};
-}
-//#endregion
 //#region src/pm-maintenance-findings.js
 var kinds = [
 	"issues",
@@ -37230,7 +37454,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		qualitySelection
 	}) : null;
 	if (sprints) body.insertBefore(sprints.box, content);
-	const meetings = workspaceId && threadId !== "new" && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
+	let meetings = workspaceId && !threadId && caps()?.features?.pm_workspaces?.meetings ? workspaceMeetings({
 		h,
 		t,
 		api,
@@ -37333,7 +37557,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		if (threadId) body.append(specifications.element);
 		else body.insertBefore(specifications.element, content);
 	}
-	const followUp = workspaceId && threadId !== "new" && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
+	const followUp = workspaceId && !threadId && caps()?.features?.pm_workspaces?.follow_up_prepare ? workspaceFollowUp({
 		h,
 		t,
 		api,
@@ -38121,7 +38345,11 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				},
 				extra: threadTitle
 			});
-			const threadDetails = h("details", { "data-discussion-details": "" }, h("summary", {}, t("pd_details")), renameForm.box.querySelector(".pm-receipt"));
+			renameForm.box.querySelector(".pm-receipt").dataset.discussionReceipt = "rename";
+			const threadDetails = h("details", {
+				"data-discussion-details": "",
+				open: true
+			}, h("summary", {}, t("pd_details")), renameForm.box.querySelector(".pm-receipt"));
 			titleView = discussionTitle({
 				t,
 				field: threadTitle,
@@ -38175,6 +38403,15 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 								return;
 							}
 							revisions?.open(id);
+						});
+					},
+					onActivity: (activity) => {
+						const send = noteForm.box.querySelector("button[type=submit]");
+						send.classList.toggle("primary", !activity.reviewable);
+						send.classList.toggle("secondary", activity.reviewable);
+						discussionTools?.sync({
+							...activity,
+							inputs: planForm?.locked() || factForm?.locked() || planningRevisionForm?.locked()
 						});
 					},
 					onFollowUp: () => text.focus(),
@@ -38380,27 +38617,55 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			const information = h("details", {
 				"data-pm-information": "",
 				open: true
-			}, h("summary", {}, t("pm_information")), permissions, facts, h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box));
-			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext, threadDetails);
+			}, h("summary", {}, t("pm_information")), permissions, facts, disclosure({
+				label: t("pd_details"),
+				body: h("p", { class: "muted" }, t("pm_unverified"))
+			}), h("details", { "data-pm-add-input": "" }, h("summary", {}, t("pm_add_input")), factForm.box));
+			const contextPane = h("section", { "data-discussion-tab": "context" }, panelContext);
 			for (const node of [...column.querySelectorAll(":scope > .pm-package-preparation, :scope > .pm-packages")]) contextPane.append(node);
 			if (nativeAnalysis) contextPane.append(h("details", {}, h("summary", {}, t("pd_analysis")), nativeAnalysis.box));
-			if (meetings) contextPane.append(secondary("ui_meetings", meetings.element));
-			if (followUp) contextPane.append(secondary("ui_follow_up", followUp.element));
+			if ([
+				"sprint_planning",
+				"sprint_review",
+				"retrospective",
+				"maintenance_review"
+			].includes(thread.mode) && caps()?.features?.pm_workspaces?.meetings) meetings = workspaceMeetings({
+				h,
+				t,
+				api,
+				alive,
+				namespace,
+				workspaceId,
+				workspace: () => workspace,
+				permitted,
+				form,
+				input,
+				labelled,
+				errorBox,
+				caps
+			});
+			if (thread.mode === "follow_up" && caps()?.features?.pm_workspaces?.follow_up_prepare) contextPane.append(h("a", {
+				class: "ui-button secondary ui-sm",
+				"data-discussion-follow-up": "",
+				href: `#/pm/${encodeURIComponent(workspaceId)}/issues`
+			}, t("ui_follow_up")));
 			if (specifications) contextPane.append(secondary("ui_specs", specifications.element));
 			if (evidence) drawersHome.append(evidence.box);
-			const planPane = h("section", { "data-discussion-tab": "plan" }, draft, h("section", { "data-pm-plan": "" }, h("h2", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "", proposalReview?.tools || "", revisions?.box || "", brief ? secondary("pm_brief_title", brief.box) : "");
+			const planPane = h("section", { "data-discussion-tab": "plan" }, draft, h("details", { "data-pm-plan": "" }, h("summary", {}, t("pm_direction")), planForm.box), planningRevisionForm ? h("details", { "data-pm-planning-revision": "" }, h("summary", {}, t("pm_planning_revision_title")), planningRevisionForm.box) : "", proposalReview?.tools || "", revisions?.box || "", brief ? secondary("pm_brief_title", brief.box) : "");
 			discussionTools = discussionPanel({
 				t,
 				namespace,
 				workspaceId,
+				threadId,
 				panes: {
 					context: contextPane,
 					inputs: h("section", { "data-discussion-tab": "inputs" }, information),
-					plan: planPane
+					plan: planPane,
+					...meetings ? { meeting: h("section", { "data-discussion-tab": "meeting" }, meetings.element) } : {}
 				},
 				onSelect: (key) => {
 					revisions?.setActive(key === "plan");
-					if (key === "context" && initialReadComplete) {
+					if (["context", "meeting"].includes(key) && initialReadComplete) {
 						for (const [section, details] of lazyThreadSections) if (details.open) refreshSection(section);
 					}
 				}
@@ -38416,28 +38681,39 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			content.append(h("div", { class: "pm-thread-layout" }, column, discussionTools.home));
 			if (!threadState.inputsInitialized && (planForm.locked() || factForm.locked() || planningRevisionForm?.locked())) {
 				information.open = true;
+				if (factForm.locked()) information.querySelector("[data-pm-add-input]").open = true;
 				discussionTools.open("inputs");
 			}
 			threadState.inputsInitialized = true;
+			discussionTools.sync({ inputs: planForm.locked() || factForm.locked() || planningRevisionForm?.locked() });
 		}
 		if (!renameForm.locked() && document.activeElement !== threadTitle && !threadTitle.value) threadTitle.value = thread.title;
 		titleView.update(thread.title);
 		mode.textContent = discussionLabel(t, "pm_mode_", thread.mode);
+		mode.hidden = thread.title.trim().toLocaleLowerCase() === mode.textContent.toLocaleLowerCase();
 		boundContext.replaceChildren(...discussionContext(t, thread.context, {
-			limit: 3,
-			onMore: () => discussionTools.open("context")
+			limit: 1,
+			onMore: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-more-context]") }),
+			onOpen: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-context]") })
 		}));
 		panelContext.replaceChildren(...discussionContext(t, thread.context), ...thread.context?.length ? [] : [h("p", { class: "muted" }, t("pd_no_context"))]);
 		discussionHint.textContent = "";
 		const transcript = notes.closest(".pd-transcript");
 		const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
-		notes.replaceChildren(...(data.messages || []).map((message) => pmDiscussionMessage({
-			h,
-			t,
-			message,
-			time,
-			timestamp
-		})));
+		notes.replaceChildren(...(data.messages || []).map((message) => {
+			const row = pmDiscussionMessage({
+				h,
+				t,
+				message,
+				time,
+				timestamp
+			});
+			if (message.role === "user") row.querySelector(".pm-note-stamp").append(h("span", {
+				class: "ui-meta",
+				"data-discussion-saved": ""
+			}, t("pd_saved")));
+			return row;
+		}));
 		if (!data.messages?.length) notes.append(emptyState({ title: t("pm_no_notes") }));
 		transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
 		earlier.hidden = !historyCursor;
@@ -38479,14 +38755,22 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						sourceForm.set("selected", JSON.stringify([...selected]));
 					}
 				});
+				const pill = statusPill({
+					user_confirmed: "accepted",
+					unresolved: "unknown",
+					conflicting: "blocked",
+					agent_assumption: "unconfirmed",
+					repo_evidence: "in_review",
+					not_applicable: "read_only"
+				}[item.status]);
+				pill.textContent = discussionLabel(t, "pm_status_", item.status);
 				const row = h("article", {
 					class: "pm-fact",
 					"data-input-id": item.input_id
-				}, h("div", { class: "pm-fact-heading" }, checkbox, h("strong", {}, discussionLabel(t, "pm_slot_", item.slot) === "pm_slot_" + item.slot ? item.slot : discussionLabel(t, "pm_slot_", item.slot)), h("span", { class: `chip ${item.status === "user_confirmed" ? "ok" : [
-					"unresolved",
-					"conflicting",
-					"agent_assumption"
-				].includes(item.status) ? "warn" : ""}` }, discussionLabel(t, "pm_status_", item.status))), h("p", { class: "pm-note-text" }, item.value), h("p", { class: "muted pm-source" }, sourceText(item)), h("p", { class: "muted" }, item.status === "user_confirmed" ? t("pm_confirmed_by", { actor: item.confirmed_by || item.recorded_by }) : t("pm_unverified")));
+				}, h("div", { class: "pm-fact-heading" }, checkbox, h("strong", {}, discussionLabel(t, "pm_slot_", item.slot) === "pm_slot_" + item.slot ? item.slot : discussionLabel(t, "pm_slot_", item.slot)), pill), h("p", { class: "pm-note-text" }, item.value), h("p", { class: "muted pm-source" }, sourceText(item)), disclosure({
+					label: t("pd_details"),
+					body: h("div", {}, h("code", { class: "mono" }, item.input_id), item.status === "user_confirmed" ? h("p", {}, t("pm_confirmed_by", { actor: item.confirmed_by || item.recorded_by })) : null)
+				}));
 				if (item.source_candidate) row.append(reviewCandidateProof({
 					h,
 					t,
@@ -38664,15 +38948,41 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 	}
 	function filterThreads() {
-		for (const row of workspaceList.querySelectorAll(".pm-thread-link")) row.hidden = !row.textContent.toLocaleLowerCase().includes((uiState.search || "").toLocaleLowerCase());
+		const query = (uiState.search || "").trim().toLocaleLowerCase();
+		const rows = [...threadRows.querySelectorAll(".pm-thread-link")];
+		for (const row of rows) row.hidden = !row.dataset.threadSearch.includes(query);
+		threadRows.querySelector("[data-discussion-search-empty]")?.remove();
+		if (query && !rows.some((row) => !row.hidden)) {
+			const empty = emptyState({
+				icon: "search",
+				title: t("pd_search_empty"),
+				action: button({
+					variant: "ghost",
+					label: t("pd_clear_search"),
+					onClick: () => {
+						uiState.search = "";
+						threadSearch.value = "";
+						filterThreads();
+						threadSearch.focus();
+					}
+				})
+			});
+			empty.dataset.discussionSearchEmpty = "";
+			threadRows.append(empty);
+		}
 	}
 	function renderThreadRows(page) {
-		threadRows.replaceChildren(...(page?.threads || []).map((thread) => h("a", {
-			class: "pm-thread-link",
-			href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
-			"aria-current": thread.thread_id === threadId ? "page" : null,
-			onclick: () => rememberOrigin(thread.thread_id, { from: "discussions" })
-		}, h("strong", { title: thread.title }, thread.title), h("span", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, discussionLabel(t, "pm_mode_", thread.mode)), time(thread.updated_at)), ...discussionContext(t, thread.context?.slice(0, 1)))));
+		threadRows.replaceChildren(...(page?.threads || []).map((thread) => {
+			const context = discussionContext(t, thread.context?.slice(0, 1));
+			const modeLabel = discussionLabel(t, "pm_mode_", thread.mode);
+			return h("a", {
+				class: "pm-thread-link",
+				href: `#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(thread.thread_id)}`,
+				"data-thread-search": [thread.title, ...context.map((chip) => chip.textContent)].join(" ").toLocaleLowerCase(),
+				"aria-current": thread.thread_id === threadId ? "page" : null,
+				onclick: () => rememberOrigin(thread.thread_id, { from: "discussions" })
+			}, h("strong", { title: thread.title }, thread.title), h("span", { class: "pd-thread-meta" }, thread.title.trim().toLocaleLowerCase() === modeLabel.toLocaleLowerCase() ? null : h("span", { class: "ui-pill tone-neutral" }, modeLabel), time(thread.updated_at)), ...context);
+		}));
 		filterThreads();
 	}
 	async function load({ event = false } = {}) {
@@ -38844,29 +39154,32 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						value: name.value,
 						local: true
 					}) : null;
-					const contextDraft = h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, draftRefs || launch.refs));
+					const contextDraft = h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, draftRefs || launch.refs, { title: launch.title }));
 					const draftPanel = discussionPanel({
 						t,
 						namespace,
 						workspaceId,
+						threadId,
 						panes: { context: contextDraft }
 					});
 					if (threadId === "new") discussionTools = draftPanel;
 					boundContext = h("div", { class: "pd-context" });
 					panelContext = contextDraft;
-					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, h("div", { class: "pd-header-main" }, h("div", { class: "pd-heading" }, backLink(), titleDraft?.box || h("h2", {}, t("pd_new")))), h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), boundContext)), h("div", { class: "pd-transcript" }, emptyState({ title: t("pd_empty") })), discussionComposer({
+					content.append(h("div", { class: "pm-thread-layout pd-new-layout" }, h("section", { class: "pm-discussion" }, h("header", { class: "pd-thread-header" }, h("div", { class: "pd-header-main" }, h("div", { class: "pd-heading" }, backLink(), titleDraft?.box || h("h2", {}, t("pd_new"))), draftPanel.trigger), h("div", { class: "pd-thread-meta" }, h("span", { class: "ui-pill tone-neutral" }, t("ui_status_draft")), boundContext)), h("div", { class: "pd-transcript" }, emptyState({ title: t("pd_empty") })), discussionComposer({
 						t,
 						form: create,
 						draft: true
-					})), launch.refs.length > 3 ? draftPanel.home : ""));
+					})), draftPanel.home));
 				}
 			}
 			if (threadId === "new" && draftRefs && boundContext) {
 				boundContext.replaceChildren(...discussionContext(t, draftRefs, {
-					limit: 3,
-					onMore: () => discussionTools.open("context")
+					limit: 1,
+					title: launch.title,
+					onMore: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-more-context]") }),
+					onOpen: () => discussionTools.open("context", { returnFocus: () => boundContext.querySelector("[data-discussion-context]") })
 				}));
-				panelContext.replaceChildren(...discussionContext(t, draftRefs));
+				panelContext.replaceChildren(...discussionContext(t, draftRefs, { title: launch.title }));
 			}
 			if (!workspaceList.isConnected) content.prepend(workspaceList);
 			if (runs) {

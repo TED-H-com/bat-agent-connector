@@ -63,6 +63,11 @@
   A text selection anchors its own row when rows above it change height.
   Withdrawn rows and their counts still disappear immediately.
 
+- Give Discussions room with an on-demand thread panel, readable source rows,
+  composer-side receipts and title/context search. Proposal scope opens for review
+  with one primary action; IME renames preserve drafts. English and zh-TW explain
+  saved messages without a connected PM, and meetings appear only in meeting threads.
+
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;
   proposal reads include visible adoption receipts and list titles.
