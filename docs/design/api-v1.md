@@ -163,7 +163,7 @@ History／relations 的 opaque cursor 在任何 journal read 前驗證 version�
 | `GET /api/v1/sessions/{host}/{id}/history`、`…/relations` | observe | Journal-only 分頁 timeline／使用區間；history 固定 as_of、actor evidence、版本 |
 | `GET /api/v1/worktrees/{wt_id}`、`…/history`、`…/relations` | observe | 只讀已知 creation intent 身分；不掃主機／Git，沒有 ownership grant |
 | `GET /api/v1/tasks/{task_id}/sessions`、`…/history` | observe | Execution 的 lead/reviewer/follow-up 關係分頁；不以最新 session pointer 取代歷史 |
-| `GET /api/v1/sessions/{host}/{id}/messages` | observe | 經 read-only fleet 讀對話 |
+| `GET /api/v1/sessions/{host}/{id}/messages` | observe | 經 read-only fleet 讀對話；`reading` 隨當次讀取附 `incomplete_reasons`（`archive_unconfirmed`／`archive_budget`／`message_ids`）與可選 `unindexed_count`，見 [session-reading.md](session-reading.md) |
 | `GET /api/v1/policy` | observe | mutation 清單與各主機設定 |
 | `GET/POST /api/v1/operations` | observe／依 action | 列表；建立（`Idempotency-Key` 標頭或 `idempotency_key`，`?wait=0-60` 秒，格式錯誤時在保存前回 422） |
 | `GET /api/v1/operations/{id}`、`POST …/cancel`、`POST …/resume` | observe／actor 或 action scope | 含步驟；取消見上；resume 只用於 `needs_attention` |

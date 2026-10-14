@@ -11,12 +11,19 @@ effective principal（actor／scopes／admin digest）、完整 host／session I
   `include_tools=true` 時工具佔用頁面 offset；回傳的位置以該次請求的 filter 計算，
   不借用另一個並行請求的頁碼。
 - 同一 ID 的文字改變會有新 revision，舊 receipt 不會清除新版未讀。沒有唯一穩定 ID
-  的訊息仍可閱讀，但不虛構閱讀 ID，完整度標示為部分紀錄。
+  的訊息仍可閱讀，但不虛構閱讀 ID，`complete` 為 `false` 並於 `incomplete_reasons` 記為 `message_ids`。
 - `messages` 回傳個別 `reading={revision,unread,can_mark}` 與整體 `reading`；後者包含
-  `unread_count,known_count,complete,observed_at,position`。列表／詳情／project work／bootstrap
+  `unread_count,known_count,complete,observed_at,position`，以及隨當次讀取回傳的
+  `incomplete_reasons`（由 `archive_unconfirmed`、`archive_budget`、`message_ids` 組成）與
+  缺少唯一字串 ID 的可見訊息數 `unindexed_count`（`> 0` 時附帶）。列表／詳情／project work／bootstrap
   也讀取同一狀態。沒有觀察過的 session 回傳 null 未讀數，不冒稱為零。
 - 數字是**上次觀察的訊息版本**，不是 BAT 即時精確總數。每次觀察保留原有 deadline 與
-  archive 3,000 raw items 掃描上限；archive 尚未掃完、缺 ID 或有重複 ID 時顯示部分紀錄。
+  archive 3,000 raw items 掃描上限：BAT 省略 `hasMore`、回傳非物件或方法不可用時記為
+  `archive_unconfirmed`；掃描達到 3,000 則上限記為 `archive_budget`；缺 ID 或有重複 ID
+  記為 `message_ids` 並附 `unindexed_count`。完整讀取的 `incomplete_reasons` 為 `[]`。
+  對話列與工作階段詳情依原因安靜提示（僅 `message_ids` 且 archive 完整時顯示 `N+` 未讀下界並在詳情說明
+  部分訊息無 ID；`archive_budget` 顯示最近 3,000 則訊息；`archive_unconfirmed` 顯示較早訊息可能未載入
+  並在詳情說明 BAT 未確認歷史結尾；舊版 central 未附原因時顯示中性提示），不使用錯誤色或「部分紀錄」字樣。
   BAT live／archive 不是 atomic snapshot；不從 idle、時間、event ACK 推算完整對話。
 - 觀察請求在網路 I/O 前取得中央遞增序號。較舊請求晚回來仍可顯示其原版本，但不得
   回寫較新的 index／順序。已顯示的舊 revision 仍可提交自己的 receipt。
