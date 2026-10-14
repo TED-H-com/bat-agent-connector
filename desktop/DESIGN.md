@@ -531,6 +531,8 @@ catalogue withdrawal clears the view. Inspector actions retain their nodes acros
 age updates, and closing returns to the current selection.
 Milestone destinations apply once for the current route. Live refresh retains the
 reader's search and restores group-heading focus by central milestone identity.
+Unchanged delivery reads retain row nodes, position and focus regardless of response
+completion order; change fingerprints order sources by stable work-item ID.
 An authorized unassigned-work read can resolve a work destination without an adopted plan.
 
 Existing quality, evidence, specs, package, handoff and publication controls move
@@ -877,6 +879,8 @@ An unchanged read failure keeps its status, Details and Retry nodes, including
 keyboard focus, while another read is pending and when the same error returns.
 Initial activation and the workspace load share that first projection read;
 later events still start their own reads and invalidate older responses.
+Agent filter options use stable work-item order rather than source response order,
+so identical background reads retain the options and current keyboard focus.
 Selections use `?select=` in both views and reopen after returning from another
 view. Current requirement chips link to Requirements; earlier-plan text is read
 from its bound revision and never replaced by a raw ID in a chip or filter.
