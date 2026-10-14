@@ -19,6 +19,35 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      native: ${{ steps.select.outputs.native }}
+      builds: ${{ steps.select.outputs.builds }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The PR checkout is refs/pull/N/merge; its first parent is the target branch tip.
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Select native builds from the PR merge diff
+        id: select
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          paths="$RUNNER_TEMP/ci-scope-paths.txt"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            if git -c core.quotepath=false diff --no-renames --name-only HEAD^1 HEAD > "$paths"; then
+              python3 scripts/ci_scope.py --workflow desktop --event-name "$EVENT_NAME" < "$paths" >> "$GITHUB_OUTPUT"
+            else
+              python3 scripts/ci_scope.py --workflow desktop --event-name "$EVENT_NAME" --diff-failed < /dev/null >> "$GITHUB_OUTPUT"
+            fi
+          else
+            python3 scripts/ci_scope.py --workflow desktop --event-name "$EVENT_NAME" < /dev/null >> "$GITHUB_OUTPUT"
+          fi
+
   frontend:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -195,22 +224,14 @@ jobs:
       - name: Fleet contracts and owned Windows fixtures (continue through independent targets)
         run: cargo test --locked --manifest-path desktop/fleet-core/Cargo.toml --no-fail-fast
   build:
+    name: build (${{ matrix.os }}, ${{ matrix.bundle }}, ${{ matrix.artifact }})
+    needs: scope
+    if: ${{ needs.scope.outputs.native != 'none' }}
     strategy:
       fail-fast: false
+      # Include-only matrix: exactly the selected entries, with no Cartesian axes.
       matrix:
-        include:
-          - os: ubuntu-24.04
-            bundle: deb
-            artifact: desktop-Linux-unsigned
-          - os: windows-latest
-            bundle: nsis
-            artifact: desktop-Windows-unsigned
-          - os: macos-15
-            bundle: app,dmg
-            artifact: desktop-macOS-arm64-validation
-          - os: macos-15-intel
-            bundle: app,dmg
-            artifact: desktop-macOS-x64-validation
+        include: ${{ fromJSON(needs.scope.outputs.builds) }}
     runs-on: ${{ matrix.os }}
     defaults:
       run:

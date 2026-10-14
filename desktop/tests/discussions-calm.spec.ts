@@ -130,6 +130,41 @@ test('IME Escape preserves the rename draft while plain Escape cancels', async (
   expect(f.discussion.writes).toEqual([]);
 });
 
+for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) test(`${native ? 'Native' : 'Web'} restored rename can cancel while initial proposal reads are pending ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale}), page = await context.newPage();
+  const f = demoFixture({locale, discussions: true}), zh = locale === 'zh-TW';
+  let hold = false, held = false, release!: () => void;
+  const response = new Promise<void>(resolve => {release = resolve;});
+  try {
+    await mountConversation(page, native, async input => {
+      const result = await f.dispatch(input);
+      if (hold && input.method === 'GET' && input.path.includes('/conversation-proposals?')) {held = true; await response;}
+      return result;
+    });
+    await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
+    const rename = page.getByRole('button', {name: zh ? '重新命名' : 'Rename', exact: true});
+    const field = page.getByLabel(zh ? '討論標題' : 'Discussion title', {exact: true});
+    const save = page.getByRole('button', {name: zh ? '儲存' : 'Save', exact: true});
+    await rename.click(); await field.fill('尚未完成的輸入');
+    hold = true; await page.reload();
+    await expect.poll(() => held).toBe(true);
+    await expect(field).toBeVisible(); await expect(field).toHaveValue('尚未完成的輸入');
+    await expect(save).toBeDisabled(); await expect(page.locator('[data-discussion-rename]')).toBeDisabled();
+    await field.focus(); await expect(field).toBeFocused(); await expect(field).not.toBeEditable();
+    for (const init of [{isComposing: true}, {keyCode: 229}]) {
+      await field.evaluate((node, init) => node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, ...init})), init);
+      await expect(field).toBeVisible(); await expect(field).toHaveValue('尚未完成的輸入');
+    }
+    await field.press('Enter'); expect(f.discussion.writes).toEqual([]);
+    await field.press('Escape'); await expect(field).toBeHidden();
+    release(); await expect(rename).toBeEnabled(); await expect(rename).toBeFocused();
+    await expect(field).toBeHidden();
+    await page.reload(); await expect(rename).toBeEnabled(); await expect(field).toBeHidden();
+    await rename.click(); await expect(field).toHaveValue(f.discussion.details.get(f.ids.threadIdea).thread.title);
+    expect(f.discussion.writes).toEqual([]);
+  } finally {release(); await context.close();}
+});
+
 for (const width of [1440, 1000]) test(`rename receipts survive Plan and a closed panel with original-key recovery ${width}`, async ({page}) => {
   await page.setViewportSize({width, height: 900}); const f = demoFixture({discussions: true}); let lost = true;
   await mountConversation(page, false, async input => {

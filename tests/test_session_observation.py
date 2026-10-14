@@ -238,16 +238,40 @@ async def test_busy_limits_do_not_construct_more_clients(served, mock, tracked, 
 
 async def test_wall_deadline_returns_explicit_error_and_releases_client(served, mock, tracked, monkeypatch):
     d, port = served
-    monkeypatch.setattr(observation, "READ_DEADLINE", .05)
+    monkeypatch.setattr(observation, "REAUTH_S", .02)
     entered = asyncio.Event()
     async def blocked(client):
         await client.connect()
         entered.set()
+        monkeypatch.setattr(observation, "READ_DEADLINE", .02)
         await asyncio.Event().wait()
     monkeypatch.setattr(observation.service, "_workspace", blocked)
     code, out = await rpc(port, api.token(d, "reader", "observe"), host="h1", session_id=SID)
     assert entered.is_set() and code == 400 and out["error"] == "OBSERVATION_TIMEOUT"
     assert d.api.session_observation.active == 0 and not tracked[0]._clients["h1"].connected
+
+
+async def test_wall_deadline_during_connect_closes_half_open_socket(served, mock, tracked, monkeypatch):
+    from bat_agent_connector import client as client_mod
+    d, port = served
+    monkeypatch.setattr(observation, "REAUTH_S", .02)
+    connecting = asyncio.Event()
+    orig_connect = client_mod.connect
+    async def stalled_connect(*args, **kwargs):
+        ws = await orig_connect(*args, **kwargs)
+        async def blocked_recv():
+            await eventually(lambda: len(mock.conns) == 1)
+            connecting.set()
+            monkeypatch.setattr(observation, "READ_DEADLINE", .02)
+            await asyncio.Event().wait()
+        monkeypatch.setattr(ws, "recv", blocked_recv)
+        return ws
+    monkeypatch.setattr(client_mod, "connect", stalled_connect)
+    code, out = await rpc(port, api.token(d, "reader", "observe"), host="h1", session_id=SID)
+    assert connecting.is_set() and code == 400 and out["error"] == "OBSERVATION_TIMEOUT"
+    assert d.api.session_observation.active == 0
+    assert not tracked[0]._clients["h1"].connected and tracked[0]._clients["h1"]._ws is None
+    await eventually(lambda: not mock.conns)
 
 
 @pytest.mark.parametrize("principal_only", [False, True])
