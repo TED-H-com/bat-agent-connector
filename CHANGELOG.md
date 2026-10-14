@@ -34,6 +34,12 @@
   are omitted from rows and aggregates together, while other readable records remain.
   See the [register contract](docs/design/pm-register.md).
 
+- Expose a structured `finding` identity on maintenance findings in `pm_register_list`,
+  `pm_register_get`, overview attention and discussion context chips. `title` stays null.
+  Missing or unproven facts are omitted and listed in `unknowns`. A withdrawn source
+  removes the row and the identity together.
+  See the [register contract](docs/design/pm-register.md).
+
 - Add the read-only `pm_schedule_get` projection of recorded baseline, forecast and actual
   dates, including unscheduled work and execution attempts for a future schedule view.
   Partial pages never claim totals; withdrawn sources lose rows and derived dates together,

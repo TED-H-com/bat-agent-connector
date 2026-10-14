@@ -19,7 +19,7 @@
 | `progress` | `{basis: {revision_id}, requirements, accepted, in_review, in_progress, blocked, not_started, complete, unknown_reason}` 或 null |
 | `next_milestone` | 依已記錄 forecast／baseline 日期排序的第一個未驗收里程碑，或 null |
 | `milestones` | 最多 20 筆 `{milestone_id, title, baseline_date, forecast_date, delta_days, status, ref}`；另附 `milestones_truncated` |
-| `attention` | 最多 20 筆 `{key, kind, title, severity, since, context, ref}`；先嚴重度再年齡，穩定 key 打破同序；未知年齡排最後 |
+| `attention` | 最多 20 筆 `{key, kind, title, severity, since, context, ref}`；維護 finding 另附 `finding`，只有事實缺失或無法證明時才附 `unknowns`。先嚴重度再年齡，穩定 key 打破同序；未知年齡排最後 |
 | `attention_counts` | blocker／decision／deviation／risk 各自的可見來源筆數；該種類來源不完整時為 null，不能以顯示的 20 筆當總數 |
 | `attention_truncated` | 來源掃描未完成或顯示上限截斷時為 true |
 | `recent_decisions` | 最多五筆 `{key, title, decided_at, actor, status, ref, operation_id}`，依決策時間由新到舊；key 與 register row_id 相同 |
@@ -77,7 +77,11 @@ Attention 只使用明確中央關係：未決 change、仍可採用的 conversa
 被明確 revoke 且尚未重新驗收。以目前 review heads 為掃描單位，並讀同一 subject 最新的合格驗收撤回；開啟或撤回尚未驗收的新審閱不清除偏差，
 只有目前有效驗收會清除同需求的撤回偏差。治理 drift 的主張不自動升格為已證實偏差。Severity 是投影分類：
 blocker／品質撤回／生命週期待處理為 high，一般決策／治理風險／日期偏差為 medium；
-finding 沿用原 severity，未提供則 low。這不是模型風險評分。
+finding 沿用原 severity，未提供或不在 `low`／`medium`／`high`／`critical` 則分類為 low。這不是模型風險評分。
+目前 finding 的 `title` 是已證明的 provider number 十進位字串；number 無法證明時為 null，不把無效值轉成標題。
+同一筆另附結構化 `finding`（欄位與 [登記合約](pm-register.md#finding-身分) 相同）。`unknowns` 只在有事實
+缺失或無法證明時出現。來源撤回，或 `visibility_filtered` 的 payload 仍列出 finding 時，不產生 attention 列，
+該來源不算完整的零筆，`attention_counts.risk` 因此為 null。
 
 `attention_counts.decision` 與 decision attention 仍只表示待處理決策。採用後的提案從 pending 移除，
 不以已完成的決策補回 attention 或增加 pending count。
@@ -185,11 +189,13 @@ revision 與 source walk 只在該次請求內快取；下一次讀取重新驗�
 Rows 以 thread／position 為主鍵、operation／position 去重；UPDATE／DELETE 被禁止。
 原 admission 的 label 與 operation ID 原樣保存，最後記錄前重查來源權限。
 尚無人類標題的 finding／follow-up 使用原 native number／intake ID，不創造標題。
+可見的 finding chip 另附與登記相同的 `finding`；`unknowns` 只在事實缺失或無法證明時出現。
+這個物件在讀取時計算，不寫進 `pm_thread_contexts`。
 
 Thread get 的 `thread.context` 及 list 的每列 `context` 回傳同一有序陣列。
 可見項目為 `{kind, id, position, label, available: true, bound_label, ...必要額外識別欄位}`；
 `label` 是今日來源標題，`bound_label` 是 admission 時看到的標題。UI 可直接取第一項當 chip。
-來源撤回時僅回傳 `{kind, position, available: false}`，ID、目前 label、bound label 與內容
+來源撤回時僅回傳 `{kind, position, available: false}`，ID、目前 label、bound label、`finding` 與內容
 全部移除；含私有來源的 create operation envelope 也不可讀。Thread 的原 operation ID
 在 chip 不可用時省略，避免通用 source barrier 將已安全遮蔽的討論整筆拒絕。
 既有訊息／輸入的原始來源保護仍適用；既有衍生訊息來源失效可使整個討論讀取拒絕。
