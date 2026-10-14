@@ -36,11 +36,12 @@ def affects_python(path: str) -> bool:
 
 def native_safe(path: str) -> bool:
     # Tauri rebuilds desktop/dist from shared source; browser/Node tests run separately.
-    # Do not allow all desktop/tests: build uses .mjs/.py/PS fixtures and their data.
+    # Native build steps/imports must stay independent of desktop/tests/**/*.ts;
+    # test_ci_scope_native_guard.py guards this. Other fixture scripts/data stay out.
     # Dashboard assets use the separate Linux level; notices are Tauri resources.
     return (
         path.startswith(("desktop/src/", "docs/"))
-        or (path.startswith("desktop/tests/") and path.endswith((".spec.ts", ".test.ts")))
+        or (path.startswith("desktop/tests/") and path.endswith(".ts"))
         or path in NATIVE_SAFE_DOCS
     )
 

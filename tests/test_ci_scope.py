@@ -39,7 +39,7 @@ src/bat_agent_connector/dashboard/app.js""".splitlines()
 
 
 @pytest.mark.parametrize("paths,pythons,native", [
-    (PR_157_PATHS, ["3.10"], "all"),
+    (PR_157_PATHS, ["3.10"], "linux"),
     (["desktop/src/app.js", "desktop/src/app.css", "desktop/tests/dashboard.spec.ts"], ["3.10"], "none"),
     (["src/bat_agent_connector/service.py"], FULL_PYTHONS, "all"),
     (["src/bat_agent_connector/service.pyi"], FULL_PYTHONS, "all"),
@@ -69,6 +69,8 @@ def test_python_tooling_and_fixture_data_keep_full_matrix(path):
 @pytest.mark.parametrize("path", [
     "desktop/src/app.js", "desktop/src/transport/index.ts", "desktop/src/pm-kanban.css",
     "desktop/tests/dashboard.spec.ts", "desktop/tests/managed-setup.test.ts",
+    "desktop/tests/demo/register.ts", "desktop/tests/register-status-fixture.ts",
+    "desktop/tests/new-browser-helper.ts",
     "docs/design/desktop.md", "docs/product/implementation-status.md",
     "AGENTS.md", "CHANGELOG.md", "CONTRIBUTING.md", "README.zh-TW.md", "desktop/DESIGN.md",
 ])
@@ -82,7 +84,9 @@ def test_each_native_allowlist_entry(path):
     "desktop/index.html", "desktop/src-tauri/tauri.conf.json",
     "desktop/tests/macos-installed-smoke.mjs", "desktop/tests/windows-bundle.mjs",
     "desktop/tests/fixtures/fleet-contract.ps1", "desktop/tests/fixtures/fleet-status.json",
-    "desktop/tests/new-native-fixture.ts", "desktop/src-other/input.js", "docs-other/design.md",
+    "desktop/tests/new-native-fixture.swift", "desktop/tests/managed-runtime-fixture.py",
+    "desktop/tests/fixtures/nested/data.json", "desktop/tests/fixtures/script.js",
+    "desktop/tests/helper.ts.json", "desktop/src-other/input.js", "docs-other/design.md",
 ])
 def test_packaged_inputs_native_fixtures_and_unknown_paths_require_builds(path):
     assert select_scope([path])[1] == "all"

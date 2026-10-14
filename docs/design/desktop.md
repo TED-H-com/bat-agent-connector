@@ -26,6 +26,10 @@ with `git diff --no-renames --name-only HEAD^1 HEAD`, excluding unrelated change
 made only on `main`. The shared [`ci_scope.py`](../../scripts/ci_scope.py) selects
 native level `none` for allowlisted paths, `linux` for those paths plus generated
 dashboard assets, and `all` for anything else, non-PR events or fallback cases.
+All TypeScript under `desktop/tests/`, including demo and browser helpers, is
+allowlisted; `.mjs`, `.py`, `.swift`, `.ps1`, JSON and other fixture data are not.
+The native dependency guard parses build steps and follows relative imports,
+requiring removal of the TypeScript allowlist if native steps start loading it.
 Linux retains its packaged managed-setup and deb fixtures; Windows/macOS only copy
 the generated browser assets. One checked-in build list supplies an include-only
 JSON matrix with explicit OS/bundle/artifact job names. Frontend, browser UI,

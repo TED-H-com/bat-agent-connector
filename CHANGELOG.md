@@ -6,6 +6,8 @@
   merge diff. Existing desktop path filters remain; workflows triggered on `main`
   keep full coverage. Every selected Python version retains all five pytest shards
   and the exact-partition check; each workflow summary explains its selection.
+  Frontend TypeScript test helpers are allowlisted, with a guard preventing native
+  build steps or their relative imports from depending on them.
 
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
