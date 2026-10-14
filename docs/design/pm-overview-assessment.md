@@ -10,8 +10,8 @@ All unqualified `file:line` references below refer to the backend baseline.
 The owner review asks for a short PM interpretation of the current goal:
 what matters most, what fits existing arrangements, what needs watching, and
 what needs the owner's decision. Add one compact assessment below the factual
-status strip. Reuse the registered bounded analysis operations with a new
-output contract and an Overview-only frozen bundle. Store each verified result
+status strip. Register `pm.overview.assess` as a structured sink over the existing
+analysis executor and an Overview-only frozen bundle. Store each verified result
 as immutable history. Opening or refreshing factual Overview data never spends
 model budget. This document does not authorize implementation or adopt a policy.
 
@@ -26,16 +26,19 @@ model budget. This document does not authorize implementation or adopt a policy.
 | `as_of` is wall-clock read time, not an event cursor or data revision. Even an unchanged read advances it. | `src/bat_agent_connector/pm_overview.py:572`; `#133:desktop/src/pm-overview.js:348` deliberately excludes it from the render signature. A timestamp comparison alone cannot establish staleness. |
 | Source scans and displayed rows have separate bounds; source loss, scan limits and omitted lineage can make coverage incomplete. | `src/bat_agent_connector/pm_overview.py:34`, `src/bat_agent_connector/pm_overview.py:529`, `docs/design/pm-overview-discussion-context.md:123`. Displayed rows are not project totals. |
 | The candidate UI separates live facts from saved reports, holds reading position/focus and clears the reader on withdrawal. | `#133:desktop/src/pm-overview.js:17`, `#133:desktop/src/pm-overview.js:327`, `#133:desktop/src/pm-overview.js:393`. Assessment must join these lifecycle hooks. |
-| `pm.run.analyze` requires observe/manage/start, owner or contributor membership, a thread and exact thread version. Its allowed parameters do not yet include an assessment mode. | `src/bat_agent_connector/pm_native_operations.py:21`, `src/bat_agent_connector/pm_native_operations.py:26`, `src/bat_agent_connector/pm_native_capabilities.py:7`. This proposal extends admission; it is not supported today. |
+| `pm.run.analyze` requires observe/manage/start, owner or contributor membership, a thread and exact thread version. Its ordinary validators have a closed parameter set. | `src/bat_agent_connector/pm_native_operations.py:21`, `src/bat_agent_connector/pm_native_operations.py:26`, `src/bat_agent_connector/pm_native_capabilities.py:7`. Borrow this authority contract for the new action; leave ordinary analysis unchanged. |
 | Native analysis already has trusted prepare/import callbacks, original-process reconciliation and a source check before send and import. Its ordinary sink imports prose into a discussion. | `src/bat_agent_connector/pm_native_operations.py:94`, `src/bat_agent_connector/pm_native_operations.py:180`, `src/bat_agent_connector/pm_native_operations.py:220`, `src/bat_agent_connector/pm_native_journal.py:219`. Use a trusted assessment sink instead. |
 | `bat_analysis` advertises the separate registered `pm.run.bat.analyze` action; reading eligibility launches nothing. BAT also supports the trusted structured sink callbacks. | `src/bat_agent_connector/pm_discussions.py:391`, `src/bat_agent_connector/pm_bat_operations.py:132`, `src/bat_agent_connector/pm_bat_operations.py:410`, `src/bat_agent_connector/pm_bat_operations.py:513`. There is no arbitrary adapter parameter on ordinary native analysis today. |
-| Structured adapter selection is limited to conversation proposals and Follow-up; `pm_bat_structured_analysis` is a test module, not another production engine. | `src/bat_agent_connector/pm_analysis_adapters.py:11`, `tests/test_pm_bat_structured_analysis.py:1`, `tests/test_pm_bat_structured_analysis.py:102`. Extend the trusted mapping explicitly. |
+| Both existing structured sinks have their own registered manage action, `pm.follow_up.analyze` and `pm.conversation.propose`, and select an advertised backend through `params.adapter`. | `src/bat_agent_connector/pm_follow_up_analysis.py:21`, `src/bat_agent_connector/pm_follow_up_analysis.py:53`, `src/bat_agent_connector/pm_conversation_proposals.py:23`, `src/bat_agent_connector/pm_conversation_proposals.py:59`, `src/bat_agent_connector/pm_analysis_adapters.py:18`. Follow this precedent for `pm.overview.assess`. |
+| Structured sinks share trusted admission/prepare/execution/reply verification through `pm_analysis_adapters`; `pm_bat_structured_analysis` is a test module, not another production engine. | `src/bat_agent_connector/pm_analysis_adapters.py:30`, `src/bat_agent_connector/pm_analysis_adapters.py:52`, `src/bat_agent_connector/pm_analysis_adapters.py:66`, `src/bat_agent_connector/pm_analysis_adapters.py:74`, `tests/test_pm_bat_structured_analysis.py:1`, `tests/test_pm_bat_structured_analysis.py:102`. Add one destination mapping, not another executor. |
 | Accepted-document bundles already preserve original file digests, adoption/Git evidence, source gates and a 256 KiB ceiling. They still include bounded discussion messages/inputs. | `src/bat_agent_connector/pm_context_bundles.py:11`, `src/bat_agent_connector/pm_context_bundles.py:112`, `src/bat_agent_connector/pm_context_bundles.py:207`; [bundle contract](pm-context-bundle.md). Reusing that context unchanged would import material outside Overview. |
 | A fixed context factory is currently allowed only when the action, admission, destination, adapter and digest agree. Runs reserve one workspace writer. | `src/bat_agent_connector/pm_runs.py:296`, `src/bat_agent_connector/pm_analysis_adapters.py:37`. Keep these checks; do not make arbitrary contexts public. |
+| Every run needs a carrier thread: `pm_runs.thread_id` is NOT NULL and references `pm_threads`. | `src/bat_agent_connector/pm_runs.py:48`. Reuse its explicit ID from central assessment history; client cache/title matching cannot establish it. |
+| Structured-output access and cancellation already dispatch on action names at the event, run, workspace, lineage and operation boundaries. | `src/bat_agent_connector/pm_access.py:152`, `src/bat_agent_connector/pm_runs.py:190`, `src/bat_agent_connector/pm_workspace.py:193`, `src/bat_agent_connector/pm_source_lineage.py:207`, `src/bat_agent_connector/operations.py:677`. Add the new action at each site without making ordinary-analysis gates parse a mode parameter. |
 | Native tools/configuration are constrained and checked by the runtime; BAT requires an attested fresh bounded profile. JSON alone is not completion proof. | `src/bat_agent_connector/pm_native_runtime.py:130`, `src/bat_agent_connector/pm_native_runtime.py:504`, `src/bat_agent_connector/pm_native_journal.py:196`, `src/bat_agent_connector/pm_bat_runtime.py:36`. Preserve the limits and their recorded protocol limitations. |
 | Follow-up assessments demonstrate a small immutable table and atomic verified-output import. Snapshots preserve an as-of cursor, but Brief facts and filtered history differ from the live Overview projection. | `src/bat_agent_connector/pm_follow_up_analysis.py:31`, `src/bat_agent_connector/pm_follow_up_analysis.py:171`, `src/bat_agent_connector/pm_snapshots.py:37`, `src/bat_agent_connector/pm_snapshots.py:267`, `src/bat_agent_connector/pm_snapshots.py:410`; [Brief exports](pm-brief-exports.md). Reuse the pattern, not the Follow-up intake schema or a reconstructed Brief. |
 | Discuss already binds original item refs; proposal review and adoption are separate authorized operations. | `#133:desktop/src/pm-overview.js:77`, `docs/design/pm-conversation-proposals.md:50`, `docs/design/pm-conversation-review-ui.md:7`. The assessment offers Discuss, never Adopt or Close. |
-| Operations hash action/target/params/preconditions and check actor/workspace key replay before fresh admission. Uncertain effects reconcile their original receipts. | `src/bat_agent_connector/operations.py:505`, `docs/design/operations-unification.md:130`, `docs/design/operations-unification.md:251`. Mode, bundle selector and limits belong to the immutable request. |
+| Operations hash action/target/params/preconditions and check actor/workspace key replay before fresh admission. Uncertain effects reconcile their original receipts. | `src/bat_agent_connector/operations.py:505`, `docs/design/operations-unification.md:130`, `docs/design/operations-unification.md:251`. Action, adapter, bundle selector and limits belong to the immutable request. |
 
 The main-tree `desktop/DESIGN.md` still describes the earlier shell. Placement
 below follows the task's fully reviewed Design v2 brief and the inspected #133
@@ -45,16 +48,30 @@ Settings implementation. Product status remains the recorded baseline in
 
 ## Reuse and operation contract
 
-Add `params.analysis_mode = "overview_assessment"` to **both** existing analysis
-actions, with a versioned `overview_assessment` output destination selected by
-trusted central code. Omitted mode preserves ordinary analysis byte/hash behavior.
-Use `pm.run.analyze` for the advertised native adapter and `pm.run.bat.analyze`
-for the advertised BAT adapter. Bind the choice at admission. No automatic
-fallback, new task engine, queue, provider shell, or workspace-wide phase switch.
+Register **one new action**, `pm.overview.assess`, like `pm.follow_up.analyze`.
+Its `ActionDef` uses the manage scope with admission/replay/control checks for
+observe/manage/start and current owner/contributor membership, plus the existing
+authenticated administrator override and original-requester/controller rules.
+Both `pm.run.analyze` and `pm.run.bat.analyze`, including their validators and
+request contracts, remain byte-for-byte unchanged. No automatic fallback, new
+task engine, queue, provider shell or workspace-wide phase switch.
 
-Keep `target = {workspace_id, thread_id}` and
-`preconditions = {expected_version}`. Extend `context_bundle_ref` as a strict
-discriminated selector, preserving the accepted-document selector unchanged:
+The action has the following closed request contract:
+
+```text
+action: pm.overview.assess
+target: {workspace_id, thread_id}
+preconditions: {expected_version}
+params:
+  adapter: <explicit value from the advertised structured-analysis set>
+  context_bundle_ref: <pm_overview_bundle_v1 selector below>
+  model: <optional supported model>
+  max_chars: <optional, within the assessment ceiling>
+  timeout_s: <optional, within the assessment ceiling>
+```
+
+The required Overview selector is separate from accepted-document selection;
+the existing accepted-document selector and ordinary analysis remain unchanged:
 
 ```text
 context_bundle_ref:
@@ -62,16 +79,36 @@ context_bundle_ref:
   projection_digest: <digest returned by central preview>
 ```
 
-Keep the existing `purpose`, optional `model`, `max_chars` and `timeout_s`
-fields. For this mode, purpose must equal the fixed purpose advertised by
-central; the card supplies it without a free-text prompt. Model selection must
-match the explicitly chosen supported configuration, and limits cannot exceed
-the assessment ceilings below. Ordinary discussion analysis keeps its existing
-free-form bounded purpose. Request mode is a registered enum, not model authority.
+Purpose is fixed by central, stored in the frozen context/run, and **not a request
+parameter**. Reject a caller-supplied purpose. Model selection must match the
+explicitly chosen supported configuration, and limits cannot exceed the ceilings
+below. Adapter is bound in the original request/admission and never substituted
+on recovery. Ordinary discussion analysis retains its free-form bounded purpose.
 
-Assessment mode requires this selector; it cannot be combined with accepted-file
+Use `pm_analysis_adapters.admission` for backend authority/binding. The trusted
+assessment admitter first validates/freezes the Overview selector, then passes
+that helper an internal ordinary-parameter view containing the fixed purpose,
+adapter, model and bounds. The Overview selector stays in the assessment binding;
+it is not forwarded to the unchanged accepted-document selector validator. This
+normalization is internal to the new action, never a client bypass or rewrite
+of the saved operation envelope. Recheck the same authority/version on freeze
+without rebuilding the admitted bundle. The existing helper's ordinary-parameter
+filter is at `src/bat_agent_connector/pm_analysis_adapters.py:25`.
+
+Add exactly this trusted mapping:
+
+```python
+DESTINATIONS['pm.overview.assess'] = ('overview_assessment', 'overview_assessment')
+```
+
+Use `pm_analysis_adapters.prepare`, `run_analysis` and `verified_reply` with the
+assessment's trusted prepare/import callbacks. Only this action can select the
+`overview_assessment` admission binding and output destination. The registered
+handler cannot fall through to the ordinary discussion sink.
+
+Assessment requires the Overview selector; it cannot be combined with accepted-file
 selection. Caller-supplied context bytes, output destinations, source lists,
-cursor values or unadvertised modes are rejected. The digest must match a fresh
+cursor values or unexpected parameters are rejected. The digest must match a fresh
 central projection/registry in the admission transaction; a changed projection
 returns 409 before a model launch. Central freezes the exact context, actual
 as-of time and cursor in the original admission binding. Execution loads those
@@ -83,33 +120,63 @@ Extend the existing context-bundle preview read with an explicit
 The default read stays unchanged. This preview is read-only and supplies the
 selector, coverage and limits; it does not save a snapshot, reserve a model or
 start work. Advertise a versioned `overview_assessment` capability with supported
-actions, bundle/output versions, eligible/authorized flags and enforced limits.
+action `pm.overview.assess`, advertised adapters, bundle/output versions,
+eligible/authorized flags and enforced limits.
 Old clients/servers retain ordinary analysis; the new card requires this capability.
 
 The UI uses an ordinary Idea/Planning discussion as the carrier because current
-`pm_runs.create` requires one. On first explicit Assess, use the existing
-contextual thread-create flow with a localized title and visible plan/item refs,
-then retain its returned thread ID. Thread creation has its own saved key and
-must finish or recover before analysis submission; no analysis is sent while
-creation is uncertain. Reuse only that explicit ID, never a name/path match.
+`pm_runs.create` requires one. **Reuse comes from central:** read the latest-first
+assessment list under the caller's current authority and take `thread_id` from
+the newest visible assessment row, resolving its get read if needed. This applies
+across clients/reloads and includes a visible needs-review record. Read the current
+thread version for the new request. A client cache may hold an in-flight envelope,
+but cannot be the only reuse record; never match a discussion by title or path.
+
+Only when the central lookup establishes that no visible assessment row exists
+does the first explicit Assess use the existing contextual thread-create flow,
+with visible plan/item refs and the fixed localized creation title
+**「PM 重點判讀」 / "PM assessment"**. An empty page with remaining or unknown
+coverage does not establish absence: follow the cursor or complete the central
+lookup; unavailable lookup cannot create another carrier. A complete empty
+visible list does allow creation, even if inaccessible records were filtered out.
+Thread creation has its own saved key and must finish or recover
+before analysis submission; no analysis is sent while creation is uncertain.
+The imported assessment row then records the explicit thread ID for later reuse.
 Do not create a thread on page load. Read authorization/configuration eligibility
 first; runtime preflight remains inside the accepted analysis operation. If later
 admission fails, the created discussion remains ordinary history.
 
-The carrier can contain user messages, but **none enters the assessment bundle**.
+Two clients racing before either assessment is recorded may each create a
+carrier. This is acceptable and bounded to one thread creation per explicit
+first-assessment intent; recovery retains each creation key, and existing writer/
+admission limits still bound model work. No auto-cleanup or hidden-thread merge.
+Later fresh requests reuse the carrier from the newest visible assessment row.
+History selection and a concurrently newer row never retarget an already saved
+or uncertain request: it retains its original carrier/key/version.
+
+The carrier stays visible as an ordinary discussion in this contract. A person
+can open it and post messages, but **none enters the assessment bundle**.
 Thread ID/version are coordination metadata. Thread mode and messages are not
 changed by assessment import. Use an output-profile overlay within this operation,
 preserving the carrier's existing Idea/Planning mode and runtime restrictions;
 do not mark currently contract-only `follow_up` executable. Decisions are then
 discussed in the existing item-bound discussion flow.
 
-Central integration work must explicitly extend parameter validators, preview
-selection, the action/mode mapping in `pm_analysis_adapters.fixed_context`,
-context factories, both trusted
-prepare/import dispatchers, ordinary sink destination guards, run/operation/event
-source gates and capability/API generation together. In particular,
+Central integration work adds the ActionDef/domain admission and sink, preview
+selection, one `pm_analysis_adapters.DESTINATIONS` entry, the trusted fixed-context
+factory and capability/API generation together. Extend all five action-name
+branches cited in the foundations table for the complete source gates and existing
+PM cancellation/reconciliation path. Do not add parameter-mode parsing
+to these gates or broaden ordinary analysis validators. In particular,
 `pm_native_journal.import_reply` must reject this destination rather than letting
-it fall through to prose. These are bounded extensions to the existing runner.
+it fall through to prose, as defense in depth beyond registered-handler routing.
+
+Cost: one registered action/domain sink, one destination entry and action-name
+branches at the five existing gates, with canonical capability/API generation
+and focused regressions. The bundle/table/read work was already required. Central
+carrier lookup adds a bounded read; first use may add a thread-create operation.
+This introduces no executor, schema data step, carrier table or background model
+spending, and does not increase the assessment's per-run budget.
 
 ## Frozen Overview bundle
 
@@ -308,8 +375,9 @@ steps 1–3 remain reserved. Derive latest/history from insertion sequence, not 
 mutable latest pointer. Preserve failed-validation records with their real state.
 
 Add bounded member/source-gated assessment get/list reads to the existing read
-registry and transports; no assessment-create write action. Initial metadata
-page size is ten, maximum fifty, with an opaque continuation cursor and explicit
+registry and transports; creation uses only `pm.overview.assess`. Initial metadata
+page size is ten, maximum fifty, newest insertion sequence first, with an opaque
+continuation cursor and explicit
 filtering/partial flags. Do not report loaded history as a total. History uses
 the saved templates/version and original frozen labels/numbers; keep old renderer
 versions readable. New locale selection re-renders the same slots without a
@@ -336,7 +404,7 @@ historical/out of date; it cannot replace the current basis. Offline/unverifiabl
 freshness says “Freshness unknown” / 「無法確認是否為最新」, not Current.
 
 Assessment Refresh explicitly previews the new bundle, then submits the selected
-registered analysis action with **a new key for that new intent**. Save the exact
+`pm.overview.assess` action with **a new key for that new intent**. Save the exact
 envelope before POST. Factual page-refresh remains a read; give the two refresh
 icons distinct accessible names and scope. A stale-preview 409 asks the user to
 refresh/review again and does not silently submit a rewritten request.
@@ -389,8 +457,9 @@ read but cannot launch Refresh. Use current caller authority on every get/list,
 raw run, operation and event read; never borrow the analyst's scopes. Preserve
 lifecycle gates, including paused/closed restrictions on fresh investment.
 
-Register the assessment boundary in `pm_runs.source_visible`, accepted/Overview
-bundle gates, `pm_workspace.operation_visible` and event/lineage traversal before
+Register the assessment boundary by `pm.overview.assess` action name in
+`pm_runs.source_visible`, `pm_workspace.operation_visible` and event/lineage
+traversal, using its original Overview admission/source gate before
 advertising the capability. Existing membership-only success must not expose a
 more privileged requester's raw context. Any original included source withdrawal
 withdraws the entire assessment: even uncited material could have influenced
@@ -495,7 +564,7 @@ state transitions once in a polite live region without stealing focus.
 | Adopted PM plan and revised shared product direction | Adds the decision interpretation layer to existing W10/W12/W32 foundations; does not replace lifecycle management with session summaries or call this the full PM plan. |
 | Python central authority; native responsibility | Context, validation, limits, source access, storage and effects remain central. Tauri only transports the same operations/reads and manages existing local UI/credentials/Fleet. |
 | Manual resources read-only; unknown requires creation evidence | No takeover or inferred ownership. BAT retains the original proven PM carrier/session/resource-policy checks. No manual checkout/worktree writes or new checkpoint transport. |
-| Registered scopes/actions/coordinator/durable operations | Extends two registered analysis contracts; no task engine. Preserves original request keys, final-frame/source/controller/lifecycle checks and sent-effect reconciliation. |
+| Registered scopes/actions/coordinator/durable operations | One registered `pm.overview.assess` structured sink reuses existing adapter admission/execution and authority; ordinary analysis actions stay unchanged. Preserves original request keys, final-frame/source/controller/lifecycle checks and sent-effect reconciliation. |
 | No unknown-result resend or lock clearing | Uncertain UI offers original request readback only; writer retained until original terminal/death evidence. |
 | No Hub importer; Connector identity/history | New native assessment IDs reference original Connector runs and stable source IDs. No Hub parser, mappings, importer dependency or ID rewrite. |
 | Shared frontend/generated assets | Future UI changes only `desktop/src`, followed by browser regeneration and build. This document touches no source or generated assets. |
@@ -516,7 +585,10 @@ The main implementation risk is a source-gate omission on raw run, operation,
 event or history reads, especially when an owner can see more than a reader.
 The gate must cover the entire bundle, not only visible basis chips. A second
 risk is admitting caller contexts by loosening the existing fixed-context allowlist.
-Extend only this exact action/mode/destination combination and test rejection.
+Extend only the exact `pm.overview.assess` action/destination/admission combination
+and test rejection. A separate action follows the structured-sink precedent and
+keeps ordinary gates independent of parameters; routing plus the destination
+guard must both prevent an assessment from entering the prose sink.
 
 Structured slots prevent model quantities and forged confirmation; they cannot
 prove that the chosen priority is wise. Templates constrain nuance. Use mock
@@ -527,8 +599,11 @@ owner exercise. Do not claim a goal relationship where source edges are missing.
 Projection digests must include relevant source identity/coverage changes without
 expiring on unrelated journal noise. Cross-read enrichment or new history caching
 could violate the frozen boundary. Carrier discussions may clutter the thread
-list; reuse explicit IDs and evaluate the experience before adding hidden-thread
-semantics. Old template renderers and whole-bundle withdrawal add maintenance cost.
+list, including the bounded two-client race. Central newest-visible-row reuse
+prevents a carrier per reload; partial lookup must not be mistaken for no prior
+assessment. Whether to hide carriers remains an owner decision; no hidden-thread
+semantics are introduced here. Old template renderers and whole-bundle withdrawal
+add maintenance cost.
 Settings agents deep-link support is an external UI dependency; coordinate its
 return route and workspace restoration with that PR, without implementing it here.
 
@@ -539,9 +614,10 @@ Owner decisions before implementing the affected PR:
 2. Accept one turn, 300 seconds and the proposed admission caps as the initial
    spending budget, or require an enforceable token/dollar cap? A hard monetary
    requirement blocks launch on today's unproven runtime capability.
-3. Accept Live-only placement with separate assessment history and the use of
-   an ordinary retained discussion carrier? Saved-report attachment and hidden
-   carrier discussions are outside this first contract.
+3. Confirm Live-only placement with separate assessment history and decide whether
+   carriers should be hidden from the ordinary discussion list in a later change.
+   This contract keeps the centrally reused carrier ordinary and visible;
+   saved-report attachment and hidden-thread semantics remain outside it.
 
 ## Verification plan for implementation
 
@@ -553,9 +629,14 @@ assertions; do not reduce write counts or weaken recovery/withdrawal guarantees.
 
 Central acceptance scenarios:
 
-1. Legacy absent-mode requests retain canonical hashes/contexts/results. Both
-   registered assessment modes admit the exact selector and source snapshot;
-   native and BAT import the same valid structure without a new executor.
+1. `pm.overview.assess` alone admits the exact selector and source snapshot with
+   either advertised adapter; native and BAT import the same valid structure
+   through the shared helper/executor. The unchanged ordinary analysis validators
+   still reject assessment-only adapter/new parameter fields and the Overview
+   selector. The new action rejects caller purpose, arbitrary destinations and
+   unadvertised adapters; central injects the fixed purpose only internally.
+   All five gate branches recognize the new action, and ordinary prose import
+   rejects the assessment destination even if handler routing is bypassed.
 2. Reject foreign/unknown/omitted/wrong-version refs, duplicate keys, wrong shapes,
    oversized context/output, every forbidden prose/count slot, forged actor/
    confirmation fields and arbitrary output destinations before usable import.
@@ -590,6 +671,13 @@ Central acceptance scenarios:
 10. Atomic admission caps under concurrent actors/restarts; replay consumes no new
     allowance, new failures do. Time/context/output limits and provider refusal
     never cause auto-repair/spend; unknown monetary usage is not zero.
+11. Across reloads/two clients, carrier reuse comes from the central newest visible
+    assessment row, not cached state or title matches. A visible invalid-output
+    row still supplies its thread ID; withdrawal hides inaccessible carrier refs.
+    Empty partial pages do not create a thread. Complete empty lookup allows one
+    keyed create per explicit intent; two racing creates are acceptable and later
+    reuse selects the newest visible row. Posting in either ordinary carrier
+    advances its thread version but never enters the frozen provider bundle.
 
 Example focused invocation (repeat with each version; filenames are planned
 implementation targets, not tests executed for this design):
@@ -612,6 +700,11 @@ real-central/mock-runtime integration fixture for complete operation recovery:
 - Opening Overview, source polling, page Refresh, locale changes, history and
   Settings navigation make **zero model writes**. Explicit Assess submits once;
   admission/queued/running/ready states follow original central evidence.
+- Reload/new client reads the newest visible assessment's carrier ID from central.
+  First use creates a discussion with the exact localized title only after a
+  complete empty lookup; two racing clients can each create once, then converge
+  on central's newest visible assessment row for future requests. A person can
+  post in the ordinary carrier without leaking messages into a subsequent bundle.
 - Discuss from either decision binds the original context, preserves return to
   Overview and focuses the composer. Proposal review/adoption stays a separate
   owner action; reading a suggestion cannot change a decision or acceptance count.
@@ -651,7 +744,7 @@ provider, native or live acceptance was executed for this documentation change.
 
 | Stage | Scope and exit evidence |
 | --- | --- |
-| 1. Backend contract | Extend existing actions and frozen preview/context/output validation, digest/cursor, immutable sink, central limits and complete source gates. Add get/list read registry/capability and generated protocol contracts together. Focused Python 3.10–3.13 tests prove both adapters, no domain mutations, original-key recovery, privacy and idempotent DDL. Record owner budget/template decisions. No card or automatic spending. |
+| 1. Backend contract | Register `pm.overview.assess`, add its exact DESTINATIONS entry and use shared adapter admission/prepare/run_analysis/verified_reply. Add frozen preview/context/output validation, digest/cursor, immutable sink, central limits and all five action-name source/cancellation gate extensions. Add newest-first get/list carrier reuse, read registry/capability and generated protocol contracts together. Focused Python 3.10–3.13 tests prove both adapters, unchanged legacy validator rejection, no domain mutations, original-key recovery, privacy, carrier selection/races and idempotent DDL. Record owner budget/template decisions. No card or automatic spending. |
 | 2. UI card | Shared `desktop/src` card/strings and existing Overview hooks; explicit initial Assess, provenance/Details, Discuss, honest states and Settings deep link. Regenerate browser assets, pass Node/tsc/Vite and focused Playwright, inspect bilingual viewport screenshots. Require #133 integration and Settings route contracts; no fallback to unsupported APIs. |
 | 3. Refresh/history | Add explicit new-bundle Refresh, selected history inspector/pagination, durable reload recovery and stale/withdrawal races in shared UI. Core keys, immutable records and source gates already land in stage 1; they are not deferred safety work. Keep factual page Refresh read-only; history uses original templates/bases. Regenerate and verify assets/tests again. Saved-report attachment and automatic policies remain separate proposals. |
 
