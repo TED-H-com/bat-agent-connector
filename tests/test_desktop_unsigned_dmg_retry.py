@@ -3,6 +3,8 @@
 import subprocess
 from pathlib import Path
 
+from scripts.ci_scope import NATIVE_BUILDS
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "desktop/scripts/package-unsigned-macos.sh"
 DESKTOP_WORKFLOW = ROOT / ".github/workflows/desktop.yml"
@@ -64,8 +66,12 @@ def test_linux_and_windows_package_command_stays_exact_and_signed_workflows_do_n
     assert 'run: bash scripts/package-unsigned-macos.sh "${{ matrix.bundle }}"\n' in mac
     assert "APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}" in non_mac
     assert "APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}" in mac
-    assert "desktop-macOS-arm64-validation" in workflow
-    assert "desktop-macOS-x64-validation" in workflow
+    assert {
+        "os": "macos-15", "bundle": "app,dmg", "artifact": "desktop-macOS-arm64-validation",
+    } in NATIVE_BUILDS
+    assert {
+        "os": "macos-15-intel", "bundle": "app,dmg", "artifact": "desktop-macOS-x64-validation",
+    } in NATIVE_BUILDS
     assert "desktop/src-tauri/target/release/bundle/dmg/*.dmg" in workflow
     assert "Installed macOS DMG, WebView, Dock reopen and normal Quit fixture" in mac
     for path in SIGNED_WORKFLOWS:

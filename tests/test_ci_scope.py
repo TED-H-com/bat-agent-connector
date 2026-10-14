@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from scripts.ci_complete import verify_manifests
 from scripts.ci_scope import FULL_PYTHONS, native_builds, select_scope
@@ -143,6 +144,22 @@ def test_generated_build_list_has_exact_entries_and_no_stray_combinations(level)
     assert builds == EXPECTED_BUILDS[level]
     assert len({entry["os"] for entry in builds}) == len(builds)
     assert all(set(entry) == {"os", "bundle", "artifact"} for entry in builds)
+
+
+def test_desktop_build_matrix_uses_complete_scope_output_without_hardcoded_entries():
+    jobs = yaml.safe_load((ROOT / ".github/workflows/desktop.yml").read_text())["jobs"]
+    assert jobs["scope"]["outputs"]["builds"] == "${{ steps.select.outputs.builds }}"
+    build = jobs["build"]
+    assert build["needs"] == "scope"
+    assert build["if"] == "${{ needs.scope.outputs.native != 'none' }}"
+    assert build["strategy"]["matrix"] == {"include": "${{ fromJSON(needs.scope.outputs.builds) }}"}
+    assert build["runs-on"] == "${{ matrix.os }}"
+    assert build["name"] == "build (${{ matrix.os }}, ${{ matrix.bundle }}, ${{ matrix.artifact }})"
+    assert any(
+        step.get("uses", "").startswith("actions/upload-artifact@")
+        and step["with"]["name"] == "${{ matrix.artifact }}"
+        for step in build["steps"]
+    )
 
 
 def test_unknown_native_level_is_rejected():
