@@ -23,6 +23,7 @@ const panels = [
   ['ahp-observer', 'workspaceAhpObserver', 'ahp_unavailable'],
   ['dependencies', 'workspaceDependencies', 'error_generic'],
   ['overview', 'workspaceOverview', 'error_generic'],
+  ['overview-saved', 'workspaceOverview', 'error_generic'],
   ['meetings', 'workspaceMeetings', 'error_generic'],
 ];
 const code = 'PM_PANEL_READ_FAILED', serverMessage = 'Original English source diagnostics <b>stay text</b>';
@@ -62,7 +63,7 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
   await page.evaluate(async ({name, factory, caps, workspace, row}) => {
     const {h} = await import('/src/ui/dom.js'), {t} = await import('/src/i18n.js');
     const {errorBox, state} = await import('/__c4-error.js'), {durableForm} = await import('/__c4-form.js');
-    const module = await import(`/src/pm-${name}.js`), win = window as any;
+    const module = await import(`/src/pm-${name === 'overview-saved' ? 'overview' : name}.js`), win = window as any;
     const {planDiffText} = await import('/src/pm-plan-diff-strings.js');
     const api = async (method: string) => {
       const result = await win.c4Request(method);
@@ -74,6 +75,10 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
     const alive = () => {}, getCaps = () => caps;
     const form = (options: any) => durableForm({h, t, api, caps: getCaps, guard: alive, namespace: 'c4', errorBox, ...options});
     const main = document.getElementById('fixture')!;
+    if (name === 'overview-saved') {
+      const {viewState} = await import('/src/ui/view-state.js');
+      viewState('c4', row.workspace_id, 'overview').mode = 'saved';
+    }
     const ui = module[factory]({h, t, api, alive, namespace: 'c4', workspaceId: row.workspace_id, workspace: () => workspace,
       caps: getCaps, permitted: () => true, canRead: () => true, form, input, labelled, errorBox, main, onDiscuss: () => {}});
     const root = ui.element || ui.box; main.append(root); root.hidden = false;
@@ -89,7 +94,7 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
     } else if (name === 'spec-materialization') {root.querySelector(':scope > details').open = true; await ui.setPackage(row);}
     else if (name === 'work-deliveries') ui.setWork('wi_' + '7'.repeat(20));
     else if (name === 'dependencies') await ui.setActive(true);
-    else if (name === 'overview') {main.append(ui.reportTools); await ui.prepareReports();}
+    else if (name.startsWith('overview')) {main.append(ui.reportTools); await ui.prepareReports();}
     else await ui.refresh();
   }, {name, factory, caps, workspace, row});
   return {reads: () => reads, writes: () => writes};
@@ -109,6 +114,10 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
       await expect(summary).toHaveText(sentence);
       await expect(root.getByText(sentence, {exact: true})).toHaveCount(1);
       await expect(root.locator('.error:visible, .ui-inline-error:visible')).toHaveCount(1);
+      if (name.startsWith('overview')) {
+        await expect(root.locator('[data-pm-overview] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 1 : 0);
+        await expect(root.locator('[data-report-status] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 0 : 1);
+      }
       await expect(root.locator('form button[type=submit]:visible:enabled')).toHaveCount(0);
       await expect(root.locator('[data-error-details]')).toBeHidden();
       expect(await root.innerText()).not.toContain(serverMessage);

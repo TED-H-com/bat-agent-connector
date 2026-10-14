@@ -61,15 +61,15 @@ export function workspaceOverview(options) {
     const phase = mode === 'live' && current?.lifecycle?.stage;
     onHeader({meta, phase: phaseNames.includes(phase) ? t('ui_phase_' + phase) : null, active});
   }
-  function reportChanged(value, event, error) {
+  function reportChanged(value, event) {
     if (event === 'loading' || event === 'selected') reportLoading = true;
     if (['updated', 'withdrawn', 'error'].includes(event)) reportLoading = false;
     if (event === 'selected') {mode = preference.mode = 'saved'; saved = null; closeReader(); signature = '';}
     if (event === 'updated') saved = value;
     if (event === 'withdrawn') {saved = null; closeReader(); signature = '';}
-    // Charter already rendered and recorded this failed read. Move its message
-    // into the visible overview without a second error in the report tools.
-    if (event === 'error') status.replaceChildren(...reportTools.querySelector('[data-report-status]').childNodes);
+    // Charter already rendered and recorded this failed read. Keep it in the
+    // report inspector in live mode; saved mode reuses it in the report view.
+    if (event === 'error' && mode === 'saved') status.replaceChildren(...reportTools.querySelector('[data-report-status]').childNodes);
     // Construction does not notify; callbacks run after the controls are mounted.
     if (mode === 'saved') render();
   }

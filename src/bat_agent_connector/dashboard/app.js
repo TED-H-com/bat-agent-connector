@@ -17319,7 +17319,7 @@ function workspaceOverview(options) {
 			active
 		});
 	}
-	function reportChanged(value, event, error) {
+	function reportChanged(value, event) {
 		if (event === "loading" || event === "selected") reportLoading = true;
 		if ([
 			"updated",
@@ -17338,7 +17338,7 @@ function workspaceOverview(options) {
 			closeReader();
 			signature = "";
 		}
-		if (event === "error") status.replaceChildren(...reportTools.querySelector("[data-report-status]").childNodes);
+		if (event === "error" && mode === "saved") status.replaceChildren(...reportTools.querySelector("[data-report-status]").childNodes);
 		if (mode === "saved") render();
 	}
 	function attentionTitle(row) {
