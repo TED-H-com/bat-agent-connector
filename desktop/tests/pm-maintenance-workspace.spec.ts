@@ -19,6 +19,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`mounte
   await mount(page,native,f.dispatch);await page.goto(`/dashboard/#/pm/${workspaceId}`);await openPmSection(page, 'issues', 'ui_repairs');
   const panel=page.locator('[data-pm-maintenance-repairs]'),form=panel.locator('[data-pm-action="pm.maintenance.repair"]');
   await expect(panel).toHaveCount(1);
+  await panel.locator('[data-repair-start] > summary').click();
   await form.getByLabel(locale==='en'?'Observed Issue':'觀察到的 Issue',{exact:true}).selectOption('pmfn_'+'f'.repeat(32));
   await form.getByLabel(locale==='en'?'Adopted repair rule':'已採用的修復規則',{exact:true}).selectOption('docs_fix');
   await form.locator('button[type=submit]').click();await expect.poll(()=>f.state.writes.length).toBe(1);

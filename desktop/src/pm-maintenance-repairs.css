@@ -6,6 +6,8 @@
 .pm-maintenance-repairs .pm-source,.pm-repair-rule .pm-source {font-size: var(--fs-body);overflow-wrap:anywhere}
 [data-policy-group=pmr_rules]>label {display:grid;gap:6px;margin-block:var(--space-2)}
 [data-policy-group=pmr_rules] textarea {min-height:72px}
+.pm-maintenance-repairs .pm-answer {display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-2)}
+.pm-maintenance-repairs .pm-answer h3 {margin:0}
 .pm-maintenance-repairs .pm-heading {display:flex;flex-wrap:wrap;align-items:flex-start;gap:var(--space-3)}
 .pm-maintenance-repairs .pm-heading>div {flex:1 1 220px;min-width:0}
 .pm-maintenance-repairs .pm-heading h2 {margin:0 0 6px;font-size: var(--fs-section)}
