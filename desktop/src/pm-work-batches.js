@@ -72,7 +72,7 @@ export function workspaceWorkBatches({h,t,api,alive,workspaceId,workspace,caps,p
     if(proof){proofChoices ||= Object.fromEntries(['entry','receipt','observation','assessment'].map(name=>[name,proof.fields[name].value]));for(const name of ['entry','receipt','observation','assessment'])proof.fields[name].replaceChildren();}}
   function withdraw(){serial++;ready=false;context=null;batch=null;clearSources();status.replaceChildren();update();}
   function failure(err){withdraw();showDraft(false);newBatch.hidden=true;historyLabel.hidden=true;facts.hidden=true;proofView.hidden=true;head.hidden=true;
-    status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},text('pmb_unavailable'),errorBox(err.code==='PM_REQUIREMENT_QUALITY_INVALID'?error():err, {within:status})),refreshButton));}
+    status.replaceChildren(h('div',{class:'pm-tool-head'},h('div',{class:'pm-tool-note'},errorBox(err,{summary:t(err.code==='PM_REQUIREMENT_QUALITY_INVALID'?'pmb_invalid':'pmb_unavailable'), within:status})),refreshButton));}
   const request=async(...args)=>{const ticket=serial;try{return await api(...args);}catch(err){if(valid(ticket)&&[401,403,404].includes(err.status))failure(err);throw err;}};
   async function readContext(){
     const [w,l]=await Promise.all([api('GET',base),api('GET',`${base}/lifecycle`)]);

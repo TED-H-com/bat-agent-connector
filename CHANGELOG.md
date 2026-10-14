@@ -67,6 +67,13 @@
   Unavailable write entry points are hidden using each action's existing permissions;
   drafts and original requests return when permission is restored.
 
+- PM panel failures show one localized sentence, preserving specific fixed-source
+  mismatch explanations, with the original code and server
+  message in Details. Withdrawal, read gates, Retry and original request recovery
+  remain in place. Meetings explains the Sprint prerequisite to writers without a
+  Sprint; readers see one empty message. Its card keeps the title
+  and Refresh on the first row in English and Traditional Chinese.
+
 - Reviewed handoff facts no longer print empty placeholders. The issues register
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited
   sources only; conclusions stay unaccepted). zh-TW operation, agent and provider

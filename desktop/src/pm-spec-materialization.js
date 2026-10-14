@@ -71,7 +71,7 @@ export function workspaceSpecMaterialization({h,t,api,alive,workspaceId,workspac
   }
   function clear(){ready=false;eligible=false;record=null;facts.replaceChildren();status.replaceChildren();editorView.hidden=true;update();}
   function withdraw(){serial++;selected=null;clear();editorView.replaceChildren();editor=null;}
-  function fail(error){clear();status.replaceChildren(text('psm_unavailable'),errorBox(error.message?.startsWith('PM_SPEC_')?Error(t('psm_invalid')):error, {within:status}));
+  function fail(error){clear();status.replaceChildren(errorBox(error,{summary:t(error.message?.startsWith('PM_SPEC_')?'psm_invalid':'psm_unavailable'), within:status}));
     if([401,403,404].includes(error.status)){selected=null;editorView.replaceChildren();editor=null;onSourceFailure();update();}}
   function bind(row){
     if(!editors.has(row.package_id)){

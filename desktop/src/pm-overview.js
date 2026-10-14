@@ -35,6 +35,7 @@ export function workspaceOverview(options) {
     const node = savedBar.querySelector(`[data-overview-report-control="${key}"]`); if (node) node.disabled = disabled;
   }};
   const reports = workspaceCharter({...options, onChange: reportChanged, onControls: reportControls});
+  const reportStatus = reports.status, reportStatusHome = reportStatus.parentNode;
   for (const node of reports.box.querySelectorAll(':scope > .pm-workbench-toolbar, :scope > .pm-charter-save, :scope > [data-pm-brief-export]')) reportTools.append(node);
   // Reuse the original comparison, pagination, export and durable form controls.
   reportTools.append(reports.comparison);
@@ -61,13 +62,18 @@ export function workspaceOverview(options) {
     const phase = mode === 'live' && current?.lifecycle?.stage;
     onHeader({meta, phase: phaseNames.includes(phase) ? t('ui_phase_' + phase) : null, active});
   }
-  function reportChanged(value, event, error) {
+  function reportChanged(value, event) {
     if (event === 'loading' || event === 'selected') reportLoading = true;
     if (['updated', 'withdrawn', 'error'].includes(event)) reportLoading = false;
     if (event === 'selected') {mode = preference.mode = 'saved'; saved = null; closeReader(); signature = '';}
     if (event === 'updated') saved = value;
     if (event === 'withdrawn') {saved = null; closeReader(); signature = '';}
-    if (event === 'error') status.replaceChildren(options.errorBox(error, {within:status}));
+    // Keep Charter's status element intact: withdrawal and retry still clear the
+    // same node, even when saved mode displays it in the report view.
+    if (event === 'error') {
+      if (mode === 'saved') status.replaceChildren(reportStatus);
+      else reportStatusHome.append(reportStatus);
+    }
     // Construction does not notify; callbacks run after the controls are mounted.
     if (mode === 'saved') render();
   }
@@ -335,6 +341,7 @@ export function workspaceOverview(options) {
     try {renderContent(resetOrder);} finally {restoreAnchor(anchor);}
   }
   function renderContent(resetOrder) {
+    if (mode === 'live' && reportStatus.parentNode !== reportStatusHome) reportStatusHome.append(reportStatus);
     header(); savedBar.hidden = mode !== 'saved'; box.dataset.overviewMode = mode;
     if (mode === 'saved') {
       reportPartial.hidden = !savedPartial();
