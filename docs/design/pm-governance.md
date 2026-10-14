@@ -228,3 +228,7 @@ unrecognized query is accepted. The native bridge validates the same route/query
 shape; backend membership and original source checks remain authoritative.
 Shared `operation_get`, operation lists and event feeds apply the original
 admission source gate before returning any governance narration.
+
+## 共用次要工具呈現
+
+治理工具在問題登記表可用時，只提供記錄事項及所選紀錄的修訂、決策和採用連結表單；不重複登記表與詳情。登記動作依 record_id 開啟對應表單並聚焦第一欄，不會送出操作。舊伺服器仍顯示精簡事項列。受影響需求與相關事項以名稱選取，保留原身分；檢視時間用本地日期時間編輯，送出含時區的 ISO 值。固定來源、歷史與技術資訊收在詳細資訊，快照時間使用共用格式。

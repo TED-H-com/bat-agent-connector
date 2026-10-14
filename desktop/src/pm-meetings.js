@@ -1,5 +1,5 @@
-import {iconButton} from './ui/components.js';
-import {timeStamp} from './ui/stamps.js';
+import {iconButton, button, sectionCard, statusPill, disclosure, contextChip, emptyState} from './ui/components.js';
+import {timeStamp, timeText} from './ui/stamps.js';
 // Meeting records share the existing durable command forms. A draft is not a completed discussion.
 export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
@@ -13,14 +13,15 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const remember = (key,value) => {navigation[key]=value;try {localStorage.setItem(navigationKey,JSON.stringify(navigation));} catch { /* Request durability remains the shared form's responsibility. */ }};
   const choose = h('select', {'aria-label': t('pm_meeting_choose'), onchange: () => {selectedId = choose.value; remember('meeting_id',selectedId); void refresh(true);}});
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_meeting_stale'));
-  const rebase = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
-  const element = h('section', {class: 'panel pm-evidence', 'data-pm-meetings': ''},
-    h('header', {class: 'pm-heading'}, h('div', {}, h('h2', {}, t('pm_meeting_title')), h('p', {class: 'muted'}, t('pm_meeting_intro'))),
-      iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), ...{type: 'button', class: 'secondary', onclick: () => void refresh()}})),
-    labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors);
+  const rebase = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
+  const launch = button({variant: 'primary', label: t('pm_meeting_new'), onClick: () => reveal('pm.meeting.create')});
+  const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, launch,
+    iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), onClick: () => void refresh()})),
+    labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors)});
+  element.classList.add('pm-evidence', 'pm-meetings'); element.dataset.pmMeetings = '';
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
-  const fold = (key, contents, open = false) => h('details', {open, 'data-pm-fold': key}, h('summary', {}, t(key)), contents);
-  const source = id => h('code', {class: 'pm-source'}, id || t('pm_meeting_unknown'));
+  const fold = (key, body, open = false) => {const node = disclosure({label: t(key), body, open}); node.dataset.pmFold = key; return node;};
+  const source = id => h('code', {class: 'mono pm-source'}, id || t('pm_meeting_unknown'));
   const check = data => {if (data?.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const can = () => loaded && permitted(false);
   const role = actor => workspace()?.members?.find(member => member.actor === actor)?.role
@@ -31,14 +32,14 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const hidden = value => {const node = h('input', {type: 'hidden', value: JSON.stringify(value)}); node.dataset.pmDefault = JSON.stringify(value); return node;};
   const options = (key, entries, value = '') => {
     const node = h('select', {'aria-label': t(key)}, ...entries.map(([id, text]) => h('option', {value: id}, text)));
-    if(value&&!entries.some(([id])=>id===value))node.append(h('option',{value},value));
+    if(value&&!entries.some(([id])=>id===value))node.append(h('option',{value},t('pm_meeting_source_unavailable')));
     node.value = value; node.dataset.pmDefault = value; return node;
   };
   const target = () => ({workspace_id: workspaceId, meeting_id: model.detail.meeting.meeting_id});
   const pre = () => ({expected_version: model.detail.meeting.version});
   function update() {
     forms.forEach(editor => editor.update()); warning.hidden = rebase.hidden = !stale;
-    rebase.disabled = !loaded; choose.disabled = !loaded;
+    rebase.disabled = !loaded; choose.disabled = !loaded; launch.disabled = !can();
   }
   function unavailable(error) {
     loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
@@ -71,7 +72,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
         .map(row => ({kind: 'note', id: row.note_id, label: row.content}))];
   }
   function refsView(refs = []) {
-    return h('ul', {class: 'pm-source'}, ...refs.map(ref => h('li', {}, t('pm_meeting_' + ref.kind), ' · ', source(ref.id))));
+    return refs.length ? fold('pm_meeting_details', h('ul', {}, ...refs.map(ref => h('li', {}, t('pm_meeting_' + ref.kind), ' · ', source(ref.id))))) : '';
   }
   function refsControl(field, getEditor) {
     const holder = h('div'), choices = sourceChoices();
@@ -86,7 +87,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
         if (checkbox.checked) refs.push({kind: choice.kind, id: choice.id});
         field.value = JSON.stringify(refs); getEditor().changed(); dirty = true;
       });
-      holder.append(h('label', {class: 'pm-fact-heading'}, checkbox, h('span', {class: 'pm-source'}, choice.label, ' · ', source(choice.id))));
+      holder.append(h('label', {class: 'pm-fact-heading'}, checkbox, h('span', {class: 'pm-source'}, choice.label)));
       return [checkbox, key(choice)];
     });
     const sync = () => {const selected = JSON.parse(field.value || '[]').map(key); for (const [node, id] of controls) {
@@ -95,10 +96,8 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     return {element: fold('pm_meeting_sources', h('div', {}, note('pm_meeting_source_help'), holder)), sync};
   }
   function workView(items) {
-    return h('div', {class: 'pm-evidence-rows'}, ...items.map(item => h('article', {class: 'pm-fact'},
-      h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`, class: 'pm-source'}, item.title || item.work_item_id),
-      h('p', {}, item.assignee), h('p', {class: 'pm-note-text'}, item.how || t('pm_meeting_how_missing')),
-      source(item.binding_id))));
+    return h('div', {class: 'pm-meeting-work'}, ...items.map(item => h('a', {href: `#/work/${encodeURIComponent(item.work_item_id)}`},
+      contextChip({text: item.title || t('pm_meeting_source_unavailable')}))));
   }
   function outputView(document) {
     const output = document.output, holder = h('div', {'data-pm-meeting-output': document.kind});
@@ -109,25 +108,25 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
       list('dependency_notes', output.dependency_notes);
     } else if (document.kind === 'review') {
       prose('goal_review', output.goal_review);
-      for (const item of output.outcomes || []) holder.append(h('p', {class: 'pm-note-text'}, item.observation), source(item.binding_id));
+      for (const item of output.outcomes || []) holder.append(h('p', {class: 'pm-note-text'}, item.observation), fold('pm_meeting_details', source(item.binding_id)));
       for (const key of ['feedback', 'environment_changes', 'next_steps']) list(key, output[key]);
-      if (output.unreviewed_binding_ids?.length) holder.append(note('pm_meeting_unreviewed'), ...output.unreviewed_binding_ids.map(source));
+      if (output.unreviewed_binding_ids?.length) holder.append(note('pm_meeting_unreviewed'), fold('pm_meeting_details', h('div', {}, ...output.unreviewed_binding_ids.map(source))));
     } else {
       list('observations', output.observations); prose('previous_improvement_review', output.previous_improvement_review);
       if (output.no_improvement_rationale) prose('no_improvement_rationale', output.no_improvement_rationale);
     }
-    for (const item of document.decisions || []) holder.append(h('article', {class: 'pm-fact'}, h('h4', {}, item.text),
+    for (const item of document.decisions || []) holder.append(h('article', {class: 'pm-fact'}, h('h4', {}, item.text || item.title || t('pm_meeting_unknown')),
       note('pm_meeting_proposal'), h('p', {class: 'pm-note-text'}, item.rationale), refsView(item.source_refs)));
-    for (const item of document.follow_ups || []) holder.append(h('article', {class: 'pm-fact'}, h('h4', {}, item.text),
+    for (const item of document.follow_ups || []) holder.append(h('article', {class: 'pm-fact'}, h('h4', {}, item.text || item.title || t('pm_meeting_unknown')),
       h('p', {}, t('pm_meeting_assigned', {actor: item.owner_actor})), h('p', {class: 'pm-note-text'}, item.expected_effect),
       h('p', {class: 'pm-note-text'}, t('pm_meeting_verification'), ': ', item.verification), refsView(item.source_refs)));
-    list('unresolved_questions', document.unresolved_questions); holder.append(refsView(document.source_refs), note('pm_meeting_quality'));
+    list('unresolved_questions', document.unresolved_questions); holder.append(refsView(document.source_refs));
     return holder;
   }
   function historyView(detail) {
     const holder = h('div');
     for (const kind of ['notes', 'follow_ups', 'contexts', 'drafts']) {
-      const section = h('section', {}, h('h4', {}, t('pm_meeting_history_' + kind))); holder.append(section);
+      const section = h('div'); holder.append(fold('pm_meeting_history_' + kind, section));
       const append = (records, cursor) => {
         for (const record of records) {
           if (record.meeting_id !== detail.meeting.meeting_id) throw Error(t('pm_scope_mismatch'));
@@ -137,12 +136,12 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
               : kind === 'drafts' ? outputView(document) : kind === 'contexts' ? h('div', {}, h('p', {class: 'pm-note-text'}, document.sprint_goal.text),
                 source(document.snapshot_ref.snapshot_id), source(record.context_revision_id))
                 : h('div', {}, h('p', {}, t('pm_meeting_' + document.status)), h('p', {class: 'pm-note-text'}, document.result),
-                  note('pm_meeting_quality'), source(document.follow_up_id), source(document.snapshot_ref.snapshot_id), refsView(document.source_refs)),
+                  statusPill('not_assessed'), source(document.follow_up_id), source(document.snapshot_ref.snapshot_id), refsView(document.source_refs)),
             source(record.context_revision_id || record.event_id || record.revision_id)));
         }
         if (cursor != null) {
           if (!Number.isInteger(cursor) || cursor < 0) throw Error(t('pm_scope_mismatch'));
-          const more = h('button', {type: 'button', class: 'secondary', onclick: async () => {
+          const more = h('button', {type: 'button', class: 'ui-button secondary ui-sm', onclick: async () => {
             more.disabled = true;
             try {
               const page = check(await api('GET', `${endpoint}/meetings/${detail.meeting.meeting_id}/history/${kind}?after=${cursor}&limit=20`)); alive();
@@ -161,32 +160,34 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   }
   function renderView() {
     view.replaceChildren(); const detail = model.detail;
-    if (!detail) {view.append(note('pm_meeting_empty')); return;}
+    if (!detail) {view.append(emptyState({title: t('pm_meeting_empty')})); return;}
     const context = detail.context.document;
-    view.append(h('section', {class: 'pm-plans'}, h('h3', {}, detail.meeting.title, ' · ', t('pm_meeting_' + detail.meeting.status)),
-      h('p', {}, t('pm_meeting_' + detail.meeting.kind)), h('h4', {}, t('pm_meeting_goal')),
-      h('p', {class: 'pm-note-text'}, context.sprint_goal.text),
-      fold('pm_meeting_fixed_context', h('div', {}, h('p', {}, context.sprint_definition.title),
-        h('p', {}, t('pm_meeting_snapshot'), ' · ', timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id),
-        h('p', {}, source(detail.context.context_revision_id)), h('p', {}, source(context.sprint_goal.revision_id)),
-        workView(context.selected_items), h('h4', {}, t('pm_meeting_dod')),
-        h('ul', {}, ...context.artifacts.dod.document.criteria.map(item => h('li', {}, item.text))), note('pm_meeting_quality'))),
-      note('pm_meeting_source_frozen')));
-    if (detail.draft) view.append(h('section', {class: 'pm-plans'}, h('h3', {}, t('pm_meeting_saved_draft')),
-      note('pm_meeting_draft_help'), outputView(detail.draft.document), source(detail.draft.revision_id)));
+    const facts = h('div', {}, h('p', {}, context.sprint_definition.title),
+      h('p', {}, t('pm_meeting_snapshot'), ' · ', timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id),
+      source(detail.context.context_revision_id), source(context.sprint_goal.revision_id),
+      ...context.selected_items.map(item => source(item.binding_id)), h('h4', {}, t('pm_meeting_dod')),
+      h('ul', {}, ...context.artifacts.dod.document.criteria.map(item => h('li', {}, item.text))), h('p',{class:'muted'},t('pm_meeting_quality'),detail.completion ? ' ' + t('pm_meeting_completion_help') : ''), historyView(detail));
+    view.append(h('div', {class: 'pm-meeting-summary', 'data-pm-meeting-selected': detail.meeting.meeting_id},
+      h('div', {class: 'pm-fact-heading'}, h('span', {class: 'ui-pill tone-neutral'}, t('pm_meeting_' + detail.meeting.kind)),
+        statusPill(detail.meeting.status === 'completed' ? 'done' : 'draft'), statusPill('not_assessed')),
+      h('p', {class: 'pm-note-text'}, context.sprint_goal.text), workView(context.selected_items)));
+    if (detail.draft) {
+      view.append(fold('pm_meeting_saved_draft', outputView(detail.draft.document)));
+      facts.append(source(detail.draft.revision_id));
+    }
     if (detail.completion) {
       const record = detail.completion;
-      view.append(h('section', {class: 'pm-plans', 'data-pm-meeting-completion': ''}, h('h3', {}, t('pm_meeting_completed')),
+      view.append(fold('pm_meeting_completed', h('div', {'data-pm-meeting-completion': ''},
         h('p', {class: 'pm-note-text'}, record.document.discussion_summary), h('p', {}, t('pm_meeting_recorded_by', {actor: record.actor})),
-        ...(record.document.decisions || []).map(item => h('p', {class: 'pm-note-text'}, item.text, ' · ',
-          t(item.disposition === 'recorded_discussion_decision' ? 'pm_meeting_recorded_decision' : 'pm_meeting_proposal'))),
-        note('pm_meeting_completion_help'), source(record.completion_id)));
+        ...(record.document.decisions || []).map(item => h('p', {class: 'pm-note-text'}, item.text || item.title,
+          ' · ', t(item.disposition === 'recorded_discussion_decision' ? 'pm_meeting_recorded_decision' : 'pm_meeting_proposal'))))));
+      facts.append(source(record.completion_id));
     }
-    view.append(historyView(detail));
+    view.append(fold('pm_meeting_details', facts));
   }
   // Collections use ordinary labelled controls; only the durable storage field is serialized.
   function collection(field, getEditor, definitions, limit, key) {
-    const rows = h('div'), add = h('button', {type: 'button', class: 'secondary'}, t('pm_meeting_add_' + key));
+    const rows = h('div'), add = h('button', {type: 'button', class: 'ui-button secondary ui-sm'}, t('pm_meeting_add_' + key));
     const holder = h('div', {}, rows, add); let controls = [];
     const change = values => {if (!getEditor() || getEditor().locked() || !can() || stale) return;
       field.value = JSON.stringify(values); getEditor().changed(); dirty = true;};
@@ -198,7 +199,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
           node.addEventListener('input', () => {const values = JSON.parse(field.value || '[]'), row = values.find(value => value.id === item.id);
             if (row) {row[def.name] = node.value; change(values);}}); controls.push(node); return labelled(def.label, node);
         });
-        const remove = h('button', {type: 'button', class: 'secondary', onclick: () => {change(JSON.parse(field.value || '[]').filter(row => row.id !== item.id)); render(); sync();}}, t('pm_meeting_remove'));
+        const remove = h('button', {type: 'button', class: 'ui-button secondary ui-sm', onclick: () => {change(JSON.parse(field.value || '[]').filter(row => row.id !== item.id)); render(); sync();}}, t('pm_meeting_remove'));
         controls.push(remove); rows.append(h('article', {class: 'pm-fact pm-fields'}, ...fields, refsView(item.source_refs), remove));
       }
     }
@@ -229,7 +230,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
       textField('previous_improvement_review', output.previous_improvement_review || '');
       textField('no_improvement_rationale', output.no_improvement_rationale || '', false); body.append(note('pm_meeting_retro_help'));
     }
-    fields.decisions = hidden((saved?.decisions || []).map(({id,text,rationale,alternatives,source_refs}) => ({id,text,rationale,alternatives,source_refs})));
+    fields.decisions = hidden((saved?.decisions || []).map(({id,text,title,rationale,alternatives,source_refs}) => ({id,text:text || title,rationale,alternatives,source_refs})));
     fields.follow_ups = hidden((saved?.follow_ups || []).map(({id,text,owner_actor,expected_effect,verification,source_refs}) => ({id,text,owner_actor,expected_effect,verification,source_refs})));
     const writers = (workspace()?.members || []).filter(member => ['owner','contributor'].includes(member.role)).map(member => [member.actor, member.actor]);
     const decision = collection(fields.decisions, () => editor, [{name:'text',label:'pm_meeting_decision_text'}, {name:'rationale',label:'pm_meeting_decision_reason'}], 10, 'decision');
@@ -265,7 +266,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
           const change=values=>{if(!can()||stale||editor.locked())return;fields.outcomes.value=JSON.stringify(values);editor.changed();dirty=true;};
           node.addEventListener('input',()=>change([...JSON.parse(fields.outcomes.value).filter(row=>row.binding_id!==item.binding_id),{binding_id:item.binding_id,observation:node.value}]));
           const label=h('label',{},t('pm_meeting_outcome'),' · ',h('span',{class:'pm-source'},item.title||item.work_item_id||item.binding_id),node);outcomeHolder.append(label);
-          if(item.unavailable){const remove=h('button',{type:'button',class:'secondary',onclick:()=>{change(JSON.parse(fields.outcomes.value).filter(row=>row.binding_id!==item.binding_id));render();sync();}},t('pm_meeting_remove'));
+          if(item.unavailable){const remove=h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>{change(JSON.parse(fields.outcomes.value).filter(row=>row.binding_id!==item.binding_id));render();sync();}},t('pm_meeting_remove'));
             nodes.push(remove);outcomeHolder.append(note('pm_meeting_source_unavailable'),remove);}
         }
       };render();widgets.push({sync});sync();
@@ -291,7 +292,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
         if (!completion || completion.locked() || !owner() || stale) return;
         const values=JSON.parse(selected.value).filter(id=>id!==item.id); if(node.checked) values.push(item.id);
         selected.value=JSON.stringify(values);completion.changed();dirty=true;
-      }}); choices.append(h('label',{class:'pm-fact-heading'},node,item.text)); decisionControls.push([node,item.id]);
+      }}); choices.append(h('label',{class:'pm-fact-heading'},node,item.text || item.title)); decisionControls.push([node,item.id]);
     };
     (detail.draft?.document.decisions || []).forEach(addDecision);
     const syncDecisions = () => {for(const [node,id]of decisionControls){node.checked=JSON.parse(selected.value).includes(id);node.disabled=!owner()||stale||Boolean(completion?.locked());}};
@@ -303,7 +304,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     for(const id of JSON.parse(selected.value))if(!decisionControls.some(([,key])=>key===id))addDecision({id,text:`${t('pm_meeting_source_unavailable')} · ${id}`});
     if(reviewing&&!completion.locked())completion.set('draft_revision_id',JSON.stringify(detail.draft?.revision_id||null));syncDecisions();
     const completeBox=fold('pm_meeting_complete',completion.box,completion.locked());completeBox.hidden=detail.meeting.status==='completed'&&!completion.locked();holder.append(completeBox);
-    const snapshots=options('pm_meeting_snapshot',model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${row.as_of}`]),context.snapshot_ref.snapshot_id),contextReason=reason();
+    const snapshots=options('pm_meeting_snapshot',model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${timeText(row.as_of)}`]),context.snapshot_ref.snapshot_id),contextReason=reason();
     const sprint=model.sprints.find(row=>row.sprint_id===detail.meeting.sprint_id);
     const revise=localForm({action:'pm.meeting.context.revise',target:target(),fields:{snapshot_id:snapshots,rationale:contextReason},preconditions:()=>({...pre(),expected_sprint_version:sprint?.version}),
       context:detail.context.context_revision_id,permitted:()=>can()&&Boolean(sprint)&&model.detail.meeting.status==='draft',label:'pm_meeting_context_save',params:values=>values,
@@ -311,9 +312,9 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     const reviseBox=fold('pm_meeting_context_change',revise.box,revise.locked());reviseBox.hidden=detail.meeting.status==='completed'&&!revise.locked();holder.append(reviseBox);
     // Always construct this form so a lost completion/follow-up response can be recovered after reload.
     const items=detail.completion?.document.follow_ups||[],allowedItems=items.filter(item=>owner()||item.owner_actor===caps()?.actor),
-      followId=options('pm_meeting_follow_choice',allowedItems.map(item=>[item.id,`${item.text} · ${item.owner_actor}`]),allowedItems[0]?.id||'');
+      followId=options('pm_meeting_follow_choice',allowedItems.map(item=>[item.id,`${item.text || item.title} · ${item.owner_actor}`]),allowedItems[0]?.id||'');
     const state=options('pm_meeting_follow_status',['open','blocked','reported_done'].map(key=>[key,t('pm_meeting_'+key)]),'open'),result=input('pm_meeting_follow_result',{multiline:true,max:8000}),followReason=reason();
-    const snapshot=options('pm_meeting_result_snapshot',[['',t('pm_meeting_keep_snapshot')],...model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${row.as_of}`])]);
+    const snapshot=options('pm_meeting_result_snapshot',[['',t('pm_meeting_keep_snapshot')],...model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${timeText(row.as_of)}`])]);
     const follow=localForm({action:'pm.meeting.follow_up.record',target:target(),fields:{follow_up_id:followId,status:state,result,rationale:followReason,snapshot_id:snapshot},preconditions:pre,
       context:detail.meeting.completion_id,permitted:()=>can()&&detail.meeting.status==='completed'&&items.some(item=>item.id===followId.value&&(owner()||item.owner_actor===caps()?.actor&&['owner','contributor'].includes(role(caps()?.actor)))),
       label:'pm_meeting_save_result',params:values=>{const{snapshot_id,...rest}=values;return {...rest,...(snapshot_id?{snapshot_id}:{}),source_refs:[]};},
@@ -329,14 +330,14 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     const render=()=>{
       const selected=model.sprints.find(row=>row.sprint_id===sprint.value);if(!selected){slot.replaceChildren(note('pm_meeting_sprint_required'));return;}
       const title=input('pm_meeting_name',{max:200}),kind=options('pm_meeting_kind',['planning','review','retro'].map(key=>[key,t('pm_meeting_'+key)]),'planning'),
-        snapshot=options('pm_meeting_snapshot',model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${row.as_of}`]),model.snapshots.at(-1)?.snapshot_id||''),rationale=reason();
+        snapshot=options('pm_meeting_snapshot',model.snapshots.map(row=>[row.snapshot_id,`${row.title} · ${timeText(row.as_of)}`]),model.snapshots.at(-1)?.snapshot_id||''),rationale=reason();
       current=localForm({action:'pm.meeting.create',target:{workspace_id:workspaceId,sprint_id:selected.sprint_id},fields:{title,kind,snapshot_id:snapshot,rationale},
         preconditions:()=>({expected_sprint_version:selected.version}),permitted:()=>can()&&model.snapshots.length>0&&(kind.value==='planning'||Boolean(selected.started_at)),label:'pm_meeting_create',params:values=>values,
         extra:h('div',{class:'pm-fields'},labelled('pm_meeting_name',title),labelled('pm_meeting_kind',kind),note('pm_meeting_started_help'),
           labelled('pm_meeting_snapshot',snapshot),!model.snapshots.length?note('pm_meeting_snapshot_required'):'',labelled('pm_meeting_reason',rationale))});
       kind.addEventListener('change',()=>current.update());slot.replaceChildren(current.box);update();
     };sprint.addEventListener('change',()=>{remember('sprint_id',sprint.value);render();});render();
-    return fold('pm_meeting_new',holder,!model.detail||Boolean(current?.locked()));
+    return fold('pm_meeting_new',holder,Boolean(current?.locked()));
   }
   function renderEditors(reviewBaselines=false) {
     const meetingId=model.detail?.meeting.meeting_id || null;
@@ -346,7 +347,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     const field=focused?.getAttribute('aria-label');
     const selection=focused&&typeof focused.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd]:null;
     stale=false;dirty=false;forms=[];reviewing=reviewBaselines;editors.replaceChildren();
-    if(model.detail)editors.append(meetingEditors());editors.append(creationEditor());reviewing=false;update();
+    if(model.detail) {const actions = meetingEditors(); editors.append(fold('pm_meeting_actions', actions, Boolean(actions.querySelector('details[open]'))));} editors.append(creationEditor());reviewing=false;update();
     for(const node of editors.querySelectorAll('details[data-pm-fold]'))if(expanded.has(node.dataset.pmFold))node.open=true;
     if(editorMeetingId===meetingId&&action&&field){
       const replacement=editors.querySelector(`[data-pm-action="${CSS.escape(action)}"] [aria-label="${CSS.escape(field)}"]`);
@@ -385,5 +386,24 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
       if(focused?.isConnected&&!focused.disabled&&document.activeElement===document.body){focused.focus({preventScroll:true});if(selection)focused.setSelectionRange(...selection);}
     }catch(error){if(ticket===serial)unavailable(error);}
   }
-  return {element,refresh};
+  function reveal(action, followUpId) {
+    const editor = forms.find(row => row.box.dataset.pmAction === action);
+    if (!loaded || !editor) return;
+    if (followUpId && action === 'pm.meeting.follow_up.record') {
+      const field = editor.fields.follow_up_id;
+      if (![...field.options].some(option => option.value === followUpId)) return;
+      if (editor.locked() && field.value !== followUpId) return;
+      if (!editor.locked()) editor.set('follow_up_id', followUpId);
+      editor.update();
+    }
+    for (let node = editor.box.parentElement; node && node !== element; node = node.parentElement) if (node instanceof HTMLDetailsElement) {node.hidden = false; node.open = true;}
+    editor.box.querySelector('input:not([type="hidden"]), select, textarea')?.focus(); editor.box.scrollIntoView({block: 'nearest'});
+  }
+  async function openRef(target, {form: requested = 'follow_up.record'} = {}) {
+    if (!target?.meeting_id) return;
+    selectedId = target.meeting_id; remember('meeting_id', selectedId); await refresh(true);
+    if (model?.detail?.meeting.meeting_id !== target.meeting_id) return;
+    reveal('pm.meeting.' + requested, target.follow_up_id);
+  }
+  return {element,refresh,openRef};
 }

@@ -1,4 +1,4 @@
-import {statusPill} from './ui/components.js';
+import {statusPill, button} from './ui/components.js';
 
 const ACTION = 'pm.governance.revise';
 const findingFields = ['title', 'description', 'owner_actor', 'affected_requirement_ids', 'trigger', 'response',
@@ -53,16 +53,16 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
         await api('GET', base + '/overview'); alive();
         await refreshParent?.();
       }});
-    entry.editor.box.querySelector('button[type=submit]').className = 'secondary';
+    entry.editor.box.querySelector('button[type=submit]').className = 'ui-button secondary';
     const defaultRationale = t('pcp_resolve_default', {title: plan.document.title, number: plan.sequence});
     if (!entry.editor.locked() && !rationale.value) entry.editor.set('rationale', defaultRationale);
     // The prefilled draft is not an instruction to send a resolution.
     entry.editor.box.hidden = !entry.editor.locked() && rationale.value === defaultRationale;
-    entry.launch = h('button', {type: 'button', class: 'secondary', 'data-issue-resolve-open': '', onclick: () => {
+    entry.launch = h('button', {type: 'button', class: 'ui-button secondary ui-sm', 'data-issue-resolve-open': '', onclick: () => {
       if (!authorized(entry) || !open(entry)) return;
       entry.editor.box.hidden = false; entry.launch.hidden = true; rationale.focus();
     }}, t('pcp_resolve_issue'));
-    entry.review = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {
+    entry.review = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {
       if (!authorized(entry) || entry.editor.locked()) return;
       entry.editor.set('finding', JSON.stringify({version: entry.value.record.version, params: params(entry.value.revision.document)}));
       entry.editor.update(); render();

@@ -4274,11 +4274,12 @@ var pmContextBundleStrings = {
 //#region src/pm-governance-strings.js
 var pmGovernanceStrings = {
 	en: {
+		pm_gov_details: "Details",
 		pm_gov_title: "Risks, changes and decisions",
 		pm_gov_intro: "What needs attention, why it matters, and which direction was chosen.",
 		pm_gov_refresh: "Refresh findings",
 		pm_gov_unknown: "Unknown",
-		pm_gov_empty: "No readable findings on this page.",
+		pm_gov_empty: "No findings",
 		pm_gov_inspect: "View finding",
 		pm_gov_selected: "Selected finding",
 		pm_gov_risk: "Risk",
@@ -4289,7 +4290,7 @@ var pmGovernanceStrings = {
 		pm_gov_change: "Change proposal",
 		pm_gov_open: "Open",
 		pm_gov_monitoring: "Monitoring",
-		pm_gov_reported_resolved: "Reported resolved · unassessed",
+		pm_gov_reported_resolved: "Reported resolved",
 		pm_gov_status: "Management status",
 		pm_gov_scope: "Scope",
 		pm_gov_schedule: "Schedule",
@@ -4302,24 +4303,24 @@ var pmGovernanceStrings = {
 		pm_gov_trigger_unknown: "Trigger is not defined.",
 		pm_gov_review_at: "Review time",
 		pm_gov_unscheduled: "Not scheduled",
-		pm_gov_review_time: "Review time (ISO timestamp with timezone, optional)",
+		pm_gov_review_time: "Review time",
 		pm_gov_no_schedule: "This records an intended review time; it does not schedule automatic work.",
 		pm_gov_assessment: "Assessment",
-		pm_gov_unassessed: "Verification is unassessed. A management report does not establish Done or verified delivery.",
+		pm_gov_unassessed: "A reported resolution does not verify delivery or authorize execution.",
 		pm_gov_assumption_basis: "This is an attributed assumption, not a confirmed requirement.",
 		pm_gov_finding_basis: "This finding is the recording actor’s interpretation of its fixed sources.",
 		pm_gov_affected: "Affected requirements",
-		pm_gov_affected_ids: "Affected requirement IDs (comma separated, optional)",
+		pm_gov_affected_ids: "Affected requirements",
 		pm_gov_alternatives: "Alternatives considered",
 		pm_gov_alternatives_lines: "Alternatives (one per line, optional)",
 		pm_gov_decision: "Direction decision",
 		pm_gov_adopted_direction: "Direction adopted",
 		pm_gov_rejected: "Direction rejected",
 		pm_gov_direction_only: "A direction decision does not adopt a plan or authorize execution.",
-		pm_gov_adoption: "Link to actual plan adoption",
+		pm_gov_adoption: "Link adoption",
 		pm_gov_adoption_historical: "Historical adoption verified by the original operation. Whether this is the current accepted plan is not assessed.",
 		pm_gov_proposed: "Fixed proposed plan",
-		pm_gov_proposed_id: "Proposed plan revision ID (change proposals only)",
+		pm_gov_proposed_id: "Proposed plan version",
 		pm_gov_proposed_help: "Choose an existing immutable plan revision. Drafting and adoption remain separate actions.",
 		pm_gov_sources: "Fixed sources",
 		pm_gov_source_help: "Select 1–50 sources from this exact snapshot. Revisions retain all original sources.",
@@ -4337,34 +4338,34 @@ var pmGovernanceStrings = {
 		pm_gov_info_not_applicable: "Not applicable",
 		pm_gov_info_unassessed: "Unassessed",
 		pm_gov_distinction: "Related findings and distinction",
-		pm_gov_related_ids: "Related finding IDs (comma separated, optional)",
+		pm_gov_related_ids: "Related findings",
 		pm_gov_distinction_reason: "Why this is a different cause",
 		pm_gov_reason: "Reason for this record",
-		pm_gov_baseline: "Original baseline and snapshot",
+		pm_gov_baseline: "Fixed baseline",
 		pm_gov_root: "Explicit root cause key",
 		pm_gov_kind: "Kind",
 		pm_gov_snapshot: "Source snapshot",
 		pm_gov_name: "Finding title",
 		pm_gov_description: "What was observed and why it matters",
-		pm_gov_response_fields: "Response, impact and intended review",
-		pm_gov_options: "Alternatives, proposed plan and related findings",
+		pm_gov_response_fields: "Response & impact",
+		pm_gov_options: "Alternatives & related",
 		pm_gov_no_snapshot: "Create a Project Brief snapshot containing an adopted plan before recording a finding.",
 		pm_gov_revision_fixed: "This revision keeps the original snapshot and baseline. Revise the management finding without replacing its source history.",
-		pm_gov_new: "Record a finding",
-		pm_gov_edit: "Revise this finding",
+		pm_gov_new: "Record finding",
+		pm_gov_edit: "Revise finding",
 		pm_gov_save: "Save finding",
 		pm_gov_save_revision: "Save finding revision",
-		pm_gov_decide: "Record a direction decision",
+		pm_gov_decide: "Decide direction",
 		pm_gov_disposition: "Direction",
 		pm_gov_save_decision: "Save direction decision",
-		pm_gov_operation_id: "Successful plan adoption operation ID",
+		pm_gov_operation_id: "Adoption operation",
 		pm_gov_inspect_adoption: "Read original adoption",
 		pm_gov_link_adoption: "Link verified adoption",
 		pm_gov_link_help: "Link an existing successful adoption of this exact proposed revision from the original baseline. This does not adopt or dispatch again.",
 		pm_gov_inspect_plan: "Read proposed revision",
 		pm_gov_invalid_id: "Supply an exact existing ID.",
 		pm_gov_adoption_mismatch: "The operation does not prove adoption of this proposal from its fixed baseline.",
-		pm_gov_history: "Finding and decision history",
+		pm_gov_history: "History",
 		pm_gov_more_history: "More history",
 		pm_gov_more: "More findings",
 		pm_gov_partial: "Showing loaded findings first. More records remain; this is not a complete workspace count.",
@@ -4380,11 +4381,12 @@ var pmGovernanceStrings = {
 		pm_gov_drift_help: "Reported drift needs an affected dimension, an observed evidence fact, and a fixed plan input or requirement. The interpretation remains unassessed."
 	},
 	"zh-TW": {
+		pm_gov_details: "詳細資訊",
 		pm_gov_title: "風險、變更與決策",
 		pm_gov_intro: "哪些事項需要關注、為何重要，以及已選擇的方向。",
 		pm_gov_refresh: "重新讀取事項",
 		pm_gov_unknown: "未知",
-		pm_gov_empty: "本頁沒有可讀取的事項。",
+		pm_gov_empty: "尚無事項",
 		pm_gov_inspect: "查看事項",
 		pm_gov_selected: "目前選取",
 		pm_gov_risk: "風險",
@@ -4395,7 +4397,7 @@ var pmGovernanceStrings = {
 		pm_gov_change: "變更提案",
 		pm_gov_open: "待處理",
 		pm_gov_monitoring: "持續觀察",
-		pm_gov_reported_resolved: "回報已解決 · 尚未評估",
+		pm_gov_reported_resolved: "回報已解決",
 		pm_gov_status: "管理狀態",
 		pm_gov_scope: "範圍",
 		pm_gov_schedule: "時程",
@@ -4408,14 +4410,14 @@ var pmGovernanceStrings = {
 		pm_gov_trigger_unknown: "尚未定義觸發條件。",
 		pm_gov_review_at: "檢視時間",
 		pm_gov_unscheduled: "未安排",
-		pm_gov_review_time: "檢視時間（含時區的 ISO 時間，可留空）",
+		pm_gov_review_time: "檢視時間",
 		pm_gov_no_schedule: "這裡記錄預期檢視時間，不會自動排程工作。",
 		pm_gov_assessment: "評估",
-		pm_gov_unassessed: "驗證尚未評估。管理回報不代表符合 Done 或已驗證交付。",
+		pm_gov_unassessed: "回報解決不代表已驗證交付，也不會授權執行。",
 		pm_gov_assumption_basis: "這是有記錄者的假設，尚未成為已確認需求。",
 		pm_gov_finding_basis: "這筆事項是記錄者對固定來源的解讀。",
 		pm_gov_affected: "受影響需求",
-		pm_gov_affected_ids: "受影響需求 ID（逗號分隔，可留空）",
+		pm_gov_affected_ids: "受影響需求",
 		pm_gov_alternatives: "曾考慮的替代方案",
 		pm_gov_alternatives_lines: "替代方案（每行一項，可留空）",
 		pm_gov_decision: "方向決策",
@@ -4425,7 +4427,7 @@ var pmGovernanceStrings = {
 		pm_gov_adoption: "連結實際計畫採用",
 		pm_gov_adoption_historical: "原操作已證明這次歷史採用；尚未評估它是否仍為目前採用的計畫。",
 		pm_gov_proposed: "固定版本提案計畫",
-		pm_gov_proposed_id: "提案計畫版本 ID（僅限變更提案）",
+		pm_gov_proposed_id: "提案計畫版本",
 		pm_gov_proposed_help: "選取既有且不可變的計畫版本。建立草稿與採用計畫仍是獨立操作。",
 		pm_gov_sources: "固定來源",
 		pm_gov_source_help: "從這份固定快照選取 1–50 筆來源。修訂會保留所有原始來源。",
@@ -4436,14 +4438,14 @@ var pmGovernanceStrings = {
 		pm_gov_source_work_binding: "工作關聯",
 		pm_gov_exact_source: "原始來源與資訊身分",
 		pm_gov_info_user_confirmed: "使用者已確認",
-		pm_gov_info_agent_assumption: "Agent 假設",
+		pm_gov_info_agent_assumption: "代理程式假設",
 		pm_gov_info_source_supported: "來源支持",
 		pm_gov_info_unresolved: "尚未決定",
 		pm_gov_info_conflicting: "存在衝突",
 		pm_gov_info_not_applicable: "不適用",
 		pm_gov_info_unassessed: "尚未評估",
 		pm_gov_distinction: "相關事項與區別",
-		pm_gov_related_ids: "相關事項 ID（逗號分隔，可留空）",
+		pm_gov_related_ids: "相關事項",
 		pm_gov_distinction_reason: "為何是不同成因",
 		pm_gov_reason: "本次記錄的理由",
 		pm_gov_baseline: "原始基準與快照",
@@ -4463,14 +4465,14 @@ var pmGovernanceStrings = {
 		pm_gov_decide: "記錄方向決策",
 		pm_gov_disposition: "方向",
 		pm_gov_save_decision: "儲存方向決策",
-		pm_gov_operation_id: "成功採用計畫的操作 ID",
+		pm_gov_operation_id: "採用操作",
 		pm_gov_inspect_adoption: "查回原採用操作",
 		pm_gov_link_adoption: "連結已驗證採用",
 		pm_gov_link_help: "連結從原基準成功採用這份提案版本的既有操作。不會再次採用或派工。",
 		pm_gov_inspect_plan: "讀取提案版本",
 		pm_gov_invalid_id: "請提供既有物件的完整 ID。",
 		pm_gov_adoption_mismatch: "這筆操作無法證明從固定基準採用了此提案。",
-		pm_gov_history: "事項與決策歷史",
+		pm_gov_history: "歷史",
 		pm_gov_more_history: "更多歷史",
 		pm_gov_more: "更多事項",
 		pm_gov_partial: "目前先顯示已讀取事項，仍有其他記錄；這不是工作空間的完整統計。",
@@ -5007,12 +5009,13 @@ function specSourceText(t, key, values = {}) {
 //#region src/pm-follow-up-strings.js
 var pmFollowUpStrings = {
 	en: {
+		pm_fu_details: "Details",
 		pm_fu_title: "Follow-up preparation",
 		pm_fu_intro: "Review fixed evidence and recorded answers before the next discussion.",
-		pm_fu_refresh: "Refresh Follow-up",
-		pm_fu_retry: "Retry Follow-up",
+		pm_fu_refresh: "Refresh preparation",
+		pm_fu_retry: "Retry preparation",
 		pm_fu_loading: "Reading fixed sources…",
-		pm_fu_empty: "No Follow-up preparation has been saved.",
+		pm_fu_empty: "No saved preparation",
 		pm_fu_version: "Preparation {version}",
 		pm_fu_latest_unavailable: "The latest preparation’s original sources are unavailable. Its facts are withheld.",
 		pm_fu_selected_unavailable: "This preparation’s original sources are unavailable. Its facts are withheld.",
@@ -5024,6 +5027,7 @@ var pmFollowUpStrings = {
 		pm_fu_preparation_only: "This is saved discussion preparation. No AI Follow-up, scope change or work execution occurred.",
 		pm_fu_agenda: "Discussion agenda",
 		pm_fu_no_agenda: "No agenda items arise from the selected records. Unknown fields do not create questions.",
+		pm_fu_missing_areas: "{count} areas have no baseline input",
 		pm_fu_knowledge: "Project knowledge",
 		pm_fu_domain_governance: "Governance",
 		pm_fu_domain_scope: "Scope",
@@ -5067,16 +5071,16 @@ var pmFollowUpStrings = {
 		pm_fu_evidence_truncated: "The evidence snapshot includes only part of the available evidence.",
 		pm_fu_bytes_truncated: "The evidence snapshot reached its document size limit.",
 		pm_fu_all_issues: "All recorded issues",
-		pm_fu_comparison: "Comparison with previous preparation",
+		pm_fu_comparison: "Changes",
 		pm_fu_comparison_help: "A source no longer selected in this preparation has not been declared resolved.",
 		pm_fu_change_added: "Newly selected issues",
-		pm_fu_change_changed: "Changed source or reported status",
+		pm_fu_change_changed: "Changed sources",
 		pm_fu_change_unchanged: "Unchanged issues",
-		pm_fu_change_no_longer_selected: "No longer selected — resolution not assessed",
+		pm_fu_change_no_longer_selected: "Omitted sources",
 		pm_fu_history: "Preparation history",
 		pm_fu_history_choose: "Saved preparation",
 		pm_fu_latest: "Latest preparation",
-		pm_fu_more: "Load more preparation history",
+		pm_fu_more: "Load more",
 		pm_fu_prepare: "Prepare a discussion",
 		pm_fu_save: "Save discussion preparation",
 		pm_fu_prepare_help: "Select a fixed evidence snapshot. Optional discussion, governance and meeting sources keep their exact versions.",
@@ -5087,14 +5091,14 @@ var pmFollowUpStrings = {
 		pm_fu_no_comparison: "No comparison",
 		pm_fu_optional: "Additional sources (optional)",
 		pm_fu_governance: "Governance findings",
-		pm_fu_meetings: "Completed meeting follow-ups",
-		pm_fu_meeting_choose: "Choose a completed meeting",
+		pm_fu_meetings: "Meeting follow-ups",
+		pm_fu_meeting_choose: "Completed meeting",
 		pm_fu_result: "Fixed follow-up result",
 		pm_fu_original_assignment: "Original assignment only",
 		pm_fu_select_follow_up: "Select this follow-up",
 		pm_fu_selected_follow_up: "Selected original follow-up",
 		pm_fu_remove: "Remove selection",
-		pm_fu_more_results: "Load more result history",
+		pm_fu_more_results: "More results",
 		pm_fu_more_snapshots: "More snapshots",
 		pm_fu_more_threads: "More discussions",
 		pm_fu_more_governance: "More governance findings",
@@ -5105,7 +5109,7 @@ var pmFollowUpStrings = {
 		pm_fu_source_wait: "Select an adopted-plan snapshot and wait for the selected sources to be checked.",
 		pm_fu_read_only: "Preparation requires current workspace write access and manage scope.",
 		pm_fu_stale: "Versions changed. Review your saved selections before using the current versions.",
-		pm_fu_use_versions: "Use current versions with these selections",
+		pm_fu_use_versions: "Use current versions",
 		pm_fu_actor_changed: "The signed-in actor changed. Reopen this workspace to use that actor’s drafts.",
 		pm_fu_scope_error: "The Follow-up response does not match this workspace, source or page.",
 		pm_fu_basis_explicit_review_at_reached: "Recorded review time reached",
@@ -5135,12 +5139,13 @@ var pmFollowUpStrings = {
 		pm_fu_state_multiple_captured_states: "Several historical states; current state not checked"
 	},
 	"zh-TW": {
-		pm_fu_title: "Follow-up 討論準備",
+		pm_fu_details: "詳細資訊",
+		pm_fu_title: "後續追蹤準備",
 		pm_fu_intro: "先整理固定證據與已記錄的回答，再進行下一次討論。",
-		pm_fu_refresh: "重新整理 Follow-up",
-		pm_fu_retry: "重試 Follow-up",
+		pm_fu_refresh: "重新整理 後續追蹤",
+		pm_fu_retry: "重試 後續追蹤",
 		pm_fu_loading: "正在讀取固定來源…",
-		pm_fu_empty: "尚未保存 Follow-up 討論準備。",
+		pm_fu_empty: "尚未保存 後續追蹤準備。",
 		pm_fu_version: "第 {version} 份討論準備",
 		pm_fu_latest_unavailable: "最新討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
 		pm_fu_selected_unavailable: "這份討論準備的原始來源目前無法讀取，因此不顯示其中的事實。",
@@ -5149,9 +5154,10 @@ var pmFollowUpStrings = {
 		pm_fu_snapshot_at: "證據快照時間",
 		pm_fu_unknown: "未知",
 		pm_fu_none: "未選取",
-		pm_fu_preparation_only: "這是已保存的討論準備；尚未執行 AI Follow-up、變更範圍或派工。",
+		pm_fu_preparation_only: "這是已保存的討論準備；尚未執行 自動後續追蹤、變更範圍或派工。",
 		pm_fu_agenda: "討論議程",
 		pm_fu_no_agenda: "所選紀錄未產生議程項目。缺少欄位不會自動變成追問。",
+		pm_fu_missing_areas: "{count} 個面向尚無基準輸入",
 		pm_fu_knowledge: "專案資訊",
 		pm_fu_domain_governance: "治理",
 		pm_fu_domain_scope: "範圍",
@@ -5231,11 +5237,11 @@ var pmFollowUpStrings = {
 		pm_fu_source_help: "所選版本保持固定；準備資料不會確認假設，也不會驗證回報的完成結果。",
 		pm_fu_accepted_required: "請選取包含已明確採用計畫的快照。",
 		pm_fu_source_wait: "請選取已採用計畫的快照，並等待所選來源完成核對。",
-		pm_fu_read_only: "準備討論需要目前工作區的寫入權限與 manage 範圍。",
+		pm_fu_read_only: "準備討論需要目前工作區的寫入權限與 管理權限範圍。",
 		pm_fu_stale: "版本已變動；請核對已保存的選取內容，再改用目前版本。",
 		pm_fu_use_versions: "保留選取內容，改用目前版本",
 		pm_fu_actor_changed: "登入身分已改變；請重新開啟工作區，使用該身分的草稿。",
-		pm_fu_scope_error: "Follow-up 回應與這個工作區、來源或分頁不符。",
+		pm_fu_scope_error: "後續追蹤 回應與這個工作區、來源或分頁不符。",
 		pm_fu_basis_explicit_review_at_reached: "已到明確記錄的檢視時間",
 		pm_fu_basis_observed_central_attention_state: "已保存的中央狀態需要處理",
 		pm_fu_basis_explicit_follow_up_blocked_report: "追蹤項目明確回報阻塞",
@@ -5245,7 +5251,7 @@ var pmFollowUpStrings = {
 		pm_fu_basis_reported_resolution_verification_unassessed: "已回報解決，驗證尚未評估",
 		pm_fu_state_user_confirmed: "使用者已確認",
 		pm_fu_state_repo_evidence: "有歸屬的儲存庫證據",
-		pm_fu_state_agent_assumption: "Agent 假設",
+		pm_fu_state_agent_assumption: "代理程式假設",
 		pm_fu_state_unresolved: "尚未決定",
 		pm_fu_state_conflicting: "存在衝突",
 		pm_fu_state_not_applicable: "已記錄不適用",
@@ -5267,18 +5273,20 @@ var pmFollowUpStrings = {
 //#region src/pm-follow-up-analysis-strings.js
 var followUpAnalysisStrings = {
 	en: {
+		pm_fa_details: "Details",
 		pm_fa_thread: "PM discussion",
 		pm_fa_thread_choose: "Select a discussion",
 		pm_fa_more_threads: "Load more discussions",
-		pm_fa_analyze_prepare: "Ask PM to assess this preparation",
+		pm_fa_analyze_prepare: "Ask PM",
 		pm_fa_analyze_help: "Choose the purpose of this analysis. The PM reads this complete fixed preparation and saves an assessment without changing scope or dispatching work.",
 		pm_fa_loading_thread: "Checking the selected discussion…",
 		pm_fa_purpose: "What should PM assess?",
 		pm_fa_analyze: "Analyze this preparation",
 		pm_fa_thread_stale: "This draft uses an earlier discussion version. Review it before using the current version.",
-		pm_fa_use_thread_version: "Use the current discussion version",
+		pm_fa_use_thread_version: "Use current version",
 		pm_fa_model_optional: "Model preference (optional)",
 		pm_fa_preparation_basis: "This preparation preserves the selected facts. Saved PM assessments appear below; they do not change the accepted plan or authorize execution.",
+		pm_fa_read_failed: "Could not read assessments.",
 		pm_fa_title: "PM assessment",
 		pm_fa_boundary: "Saved analysis of this preparation. Recommendations remain proposals until explicitly adopted.",
 		pm_fa_actor_changed: "The signed-in actor changed. Reopen this workspace.",
@@ -5292,19 +5300,19 @@ var followUpAnalysisStrings = {
 		pm_fa_needs_review: "Response needs review",
 		pm_fa_empty: "No readable assessment for this preparation.",
 		pm_fa_filtered_page: "No readable assessment on this page; more history is available.",
-		pm_fa_sources: "Read the quoted preparation sources",
+		pm_fa_sources: "Sources",
 		pm_fa_unverified: "Agent analysis; conclusions have not been verified. The accepted plan and execution remain unchanged.",
 		pm_fa_none: "None proposed in this assessment.",
 		pm_fa_findings: "Findings and impact",
 		pm_fa_tradeoffs: "Choices and consequences",
-		pm_fa_questions: "Questions for a decision",
+		pm_fa_questions: "Decision questions",
 		pm_fa_recommendations: "Proposed next steps",
 		pm_fa_impact: "Potential impact",
 		pm_fa_why: "Why discuss this now",
 		pm_fa_proposed_owner: "Suggested owner — not assigned",
 		pm_fa_raw_review: "This reply did not pass the structured response checks. Review the original text; it is not a validated assessment.",
 		pm_fa_raw: "Original agent reply",
-		pm_fa_provenance: "Analysis source and receipt",
+		pm_fa_provenance: "Source & receipt",
 		pm_fa_intake: "Fixed discussion preparation",
 		pm_fa_model: "Model",
 		pm_fa_run: "Analysis run",
@@ -5320,10 +5328,11 @@ var followUpAnalysisStrings = {
 		pm_fa_kind_decision_effect: "Decision effect"
 	},
 	"zh-TW": {
+		pm_fa_details: "詳細資訊",
 		pm_fa_thread: "PM 討論",
 		pm_fa_thread_choose: "選擇討論",
 		pm_fa_more_threads: "載入更多討論",
-		pm_fa_analyze_prepare: "請 PM 評估這份討論準備",
+		pm_fa_analyze_prepare: "請 PM 評估",
 		pm_fa_analyze_help: "指定這次分析的目的。PM 會讀取完整的固定討論準備並保存評估，不改範圍或派工。",
 		pm_fa_loading_thread: "核對選定的討論…",
 		pm_fa_purpose: "希望 PM 評估什麼？",
@@ -5332,6 +5341,7 @@ var followUpAnalysisStrings = {
 		pm_fa_use_thread_version: "使用目前討論版本",
 		pm_fa_model_optional: "模型偏好（選填）",
 		pm_fa_preparation_basis: "這份討論準備保存選定的事實。PM 評估列在下方，不會改動已採用計畫或授權執行。",
+		pm_fa_read_failed: "無法讀取評估紀錄。",
 		pm_fa_title: "PM 評估",
 		pm_fa_boundary: "依這份討論準備保存的分析。建議需經明確採用，才會成為決定。",
 		pm_fa_actor_changed: "登入身分已變更，請重新開啟工作空間。",
@@ -5346,7 +5356,7 @@ var followUpAnalysisStrings = {
 		pm_fa_empty: "這份討論準備尚無可讀的評估。",
 		pm_fa_filtered_page: "這頁沒有可讀評估，仍可繼續讀取歷史。",
 		pm_fa_sources: "閱讀引用的討論準備來源",
-		pm_fa_unverified: "這是 agent 分析，結論尚未驗證；已採用計畫及執行安排維持原狀。",
+		pm_fa_unverified: "這是 代理程式分析，結論尚未驗證；已採用計畫及執行安排維持原狀。",
 		pm_fa_none: "這份評估未提出此類項目。",
 		pm_fa_findings: "發現與影響",
 		pm_fa_tradeoffs: "選項與後果",
@@ -6045,13 +6055,15 @@ var pmKanbanStrings = {
 //#region src/pm-meetings-strings.js
 var pmMeetingStrings = {
 	en: {
+		pm_meeting_details: "Details",
+		pm_meeting_actions: "Record",
 		pm_meeting_title: "Sprint discussions",
 		pm_meeting_intro: "Plan the work, inspect results and improve collaboration with the original evidence in view.",
 		pm_meeting_choose: "Meeting",
 		pm_meeting_refresh: "Refresh meetings",
 		pm_meeting_empty: "No meeting has been recorded.",
 		pm_meeting_stale: "The source version changed. Your draft and any original request are preserved. Review the updated baseline before a new submission.",
-		pm_meeting_rebase: "Review updated meeting baseline",
+		pm_meeting_rebase: "Update baseline",
 		pm_meeting_unknown: "Unknown",
 		pm_meeting_reason: "Reason for this record",
 		pm_meeting_snapshot: "Saved project snapshot",
@@ -6068,7 +6080,7 @@ var pmMeetingStrings = {
 		pm_meeting_source_help: "Choose references from this fixed context. Discussion claims remain unverified.",
 		pm_meeting_how_missing: "Implementation approach is not recorded.",
 		pm_meeting_quality: "DoD and improvement effects are unassessed. A discussion record does not prove completion of the work.",
-		pm_meeting_fixed_context: "Fixed context: selected work and quality commitments",
+		pm_meeting_fixed_context: "Fixed context",
 		pm_meeting_source_frozen: "This meeting keeps its saved source versions. Refreshing the page does not replace them.",
 		pm_meeting_draft: "Draft",
 		pm_meeting_completed: "Discussion completed",
@@ -6082,7 +6094,7 @@ var pmMeetingStrings = {
 		pm_meeting_capacity_discussion: "Capacity and availability discussed",
 		pm_meeting_dependency_notes: "Dependencies (one per line)",
 		pm_meeting_what_how: "What and each developer’s How come from the fixed Sprint selection above.",
-		pm_meeting_goal_review: "What the results mean for the Goal",
+		pm_meeting_goal_review: "Goal impact",
 		pm_meeting_outcome: "Observed result",
 		pm_meeting_feedback: "Feedback (one point per line)",
 		pm_meeting_environment_changes: "Relevant changes (one per line)",
@@ -6090,7 +6102,7 @@ var pmMeetingStrings = {
 		pm_meeting_review_help: "Review needs feedback and a next direction. Continuing the current direction or observing is valid; new work is optional.",
 		pm_meeting_unreviewed: "These selected items have not been discussed in the saved outcomes:",
 		pm_meeting_observations: "Process and collaboration observations (one per line)",
-		pm_meeting_previous_improvement_review: "What happened to previous improvements",
+		pm_meeting_previous_improvement_review: "Previous improvements",
 		pm_meeting_no_improvement_rationale: "If adopting no improvement, explain why",
 		pm_meeting_retro_help: "Choose a few owned improvements, or explain why this reflection adopts none.",
 		pm_meeting_decisions: "Decision proposals",
@@ -6116,13 +6128,13 @@ var pmMeetingStrings = {
 		pm_meeting_summary: "What was discussed and concluded",
 		pm_meeting_complete: "Complete discussion",
 		pm_meeting_complete_help: "Complete the exact saved draft after recording the actual discussion. This is a meeting record, not a quality or delivery approval.",
-		pm_meeting_owner_only: "Only the Sprint’s designated owner, with current workspace owner access, can complete this discussion.",
+		pm_meeting_owner_only: "Only the Sprint’s designated owner, with current 工作空間 owner access, can complete this discussion.",
 		pm_meeting_decision_help: "Select the proposals actually decided in this discussion. Recording them does not adopt scope changes.",
 		pm_meeting_recorded_decision: "Recorded discussion decision; scope is unchanged",
 		pm_meeting_recorded_by: "Recorded by {actor}",
 		pm_meeting_completion_help: "The designated owner recorded the discussion. Attendance and quality are not independently verified.",
 		pm_meeting_context_change: "Update fixed context",
-		pm_meeting_context_save: "Save new meeting context",
+		pm_meeting_context_save: "Save context",
 		pm_meeting_context_help: "Explicitly capture the current Sprint and a chosen snapshot. The previous notes and draft stay in history; a new draft and discussion are needed for this context.",
 		pm_meeting_follow_choice: "Follow-up to update",
 		pm_meeting_follow_status: "Reported status",
@@ -6133,7 +6145,7 @@ var pmMeetingStrings = {
 		pm_meeting_result_snapshot: "Evidence snapshot for this result",
 		pm_meeting_keep_snapshot: "Keep the meeting’s original snapshot",
 		pm_meeting_save_result: "Record follow-up result",
-		pm_meeting_record_result: "Follow up on improvements",
+		pm_meeting_record_result: "Record result",
 		pm_meeting_sprint: "Sprint",
 		pm_meeting_sprint_required: "Plan a Sprint before creating a meeting.",
 		pm_meeting_snapshot_required: "Save a visible project snapshot before creating a meeting.",
@@ -6141,17 +6153,19 @@ var pmMeetingStrings = {
 		pm_meeting_kind: "Discussion type",
 		pm_meeting_started_help: "Review and Retrospective require a Sprint that has actually started.",
 		pm_meeting_create: "Create meeting draft",
-		pm_meeting_new: "New Sprint discussion",
-		pm_meeting_partial: "The source list is incomplete. Narrow the workspace or retry before creating a record.",
-		pm_meeting_history: "Discussion and source history",
+		pm_meeting_new: "New discussion",
+		pm_meeting_partial: "The source list is incomplete. Narrow the 工作空間 or retry before creating a record.",
+		pm_meeting_history: "History",
 		pm_meeting_history_notes: "Discussion notes",
 		pm_meeting_history_follow_ups: "Follow-up results",
 		pm_meeting_history_contexts: "Context revisions",
 		pm_meeting_history_drafts: "Draft revisions",
-		pm_meeting_more: "More {kind}"
+		pm_meeting_more: "Load more"
 	},
 	"zh-TW": {
-		pm_meeting_title: "Sprint 討論",
+		pm_meeting_details: "詳細資訊",
+		pm_meeting_actions: "記錄",
+		pm_meeting_title: "衝刺討論",
 		pm_meeting_intro: "根據原始證據規劃工作、檢視成果，並改善合作方式。",
 		pm_meeting_choose: "會議",
 		pm_meeting_refresh: "更新會議資料",
@@ -6161,39 +6175,39 @@ var pmMeetingStrings = {
 		pm_meeting_unknown: "未知",
 		pm_meeting_reason: "記錄理由",
 		pm_meeting_snapshot: "已儲存的專案快照",
-		pm_meeting_goal: "Sprint Goal",
-		pm_meeting_sprint_goal: "Sprint Goal 版本",
+		pm_meeting_goal: "衝刺目標",
+		pm_meeting_sprint_goal: "衝刺目標版本",
 		pm_meeting_selection: "選入工作版本",
-		pm_meeting_product_goal: "Product Goal",
-		pm_meeting_backlog: "Product Backlog",
-		pm_meeting_dod: "Definition of Done",
+		pm_meeting_product_goal: "產品目標",
+		pm_meeting_backlog: "產品待辦清單",
+		pm_meeting_dod: "完成定義",
 		pm_meeting_evidence: "證據",
 		pm_meeting_note: "討論紀錄",
 		pm_meeting_source_unavailable: "來源不在目前脈絡中，請先移除再儲存",
 		pm_meeting_sources: "來源引用",
 		pm_meeting_source_help: "選擇此固定脈絡內的來源。討論中的說法仍未經驗證。",
 		pm_meeting_how_missing: "尚未記錄實作方式。",
-		pm_meeting_quality: "DoD 與改善效果尚未評估。討論紀錄無法證明工作已完成。",
+		pm_meeting_quality: "完成定義 與改善效果尚未評估。討論紀錄無法證明工作已完成。",
 		pm_meeting_fixed_context: "固定脈絡：選入工作與品質要求",
 		pm_meeting_source_frozen: "會議保留已儲存的來源版本，重新整理畫面不會替換來源。",
 		pm_meeting_draft: "草稿",
 		pm_meeting_completed: "討論已完成",
-		pm_meeting_planning: "Planning 規劃",
-		pm_meeting_review: "Review 成果檢視",
-		pm_meeting_retro: "Retrospective 回顧改善",
+		pm_meeting_planning: "規劃",
+		pm_meeting_review: "成果檢視",
+		pm_meeting_retro: "回顧改善",
 		pm_meeting_saved_draft: "已儲存的討論草稿",
 		pm_meeting_draft_help: "儲存大綱或報告後，會議仍維持草稿狀態。",
-		pm_meeting_why: "這輪 Sprint 的價值",
+		pm_meeting_why: "這輪 衝刺 的價值",
 		pm_meeting_delivery_approach: "交付安排",
 		pm_meeting_capacity_discussion: "討論過的容量與可用時間",
 		pm_meeting_dependency_notes: "依賴事項（每行一項）",
-		pm_meeting_what_how: "What 與每位開發者的 How，沿用上方固定的 Sprint 選入工作。",
-		pm_meeting_goal_review: "成果對 Goal 的意義",
+		pm_meeting_what_how: "交付項目與每位開發者的實作方式，沿用固定的衝刺選入工作。",
+		pm_meeting_goal_review: "目標成果",
 		pm_meeting_outcome: "觀察到的成果",
 		pm_meeting_feedback: "回饋（每行一項）",
 		pm_meeting_environment_changes: "相關環境變化（每行一項）",
 		pm_meeting_next_steps: "後續方向（每行一項）",
-		pm_meeting_review_help: "Review 需要實際回饋與後續方向。可以維持方向或繼續觀察，不必新增工作。",
+		pm_meeting_review_help: "成果檢視需要實際回饋與後續方向。可以維持方向或繼續觀察，不必新增工作。",
 		pm_meeting_unreviewed: "這些選入工作尚未記錄成果討論：",
 		pm_meeting_observations: "流程與合作觀察（每行一項）",
 		pm_meeting_previous_improvement_review: "先前改善事項的結果",
@@ -6222,14 +6236,14 @@ var pmMeetingStrings = {
 		pm_meeting_summary: "實際討論內容與結論",
 		pm_meeting_complete: "完成討論",
 		pm_meeting_complete_help: "記錄實際討論後，明確完成指定草稿。這是會議紀錄，不代表品質或交付已通過。",
-		pm_meeting_owner_only: "只有 Sprint 指定負責人，且仍具 workspace owner 權限，才能完成討論。",
+		pm_meeting_owner_only: "只有 衝刺 指定負責人，且仍具 工作空間擁有者 權限，才能完成討論。",
 		pm_meeting_decision_help: "勾選本次確實決定的提案。記錄決策不會直接採用範圍變更。",
 		pm_meeting_recorded_decision: "已記錄的討論決策；尚未改變範圍",
 		pm_meeting_recorded_by: "記錄者：{actor}",
 		pm_meeting_completion_help: "指定負責人已記錄討論；出席與品質尚未獨立查驗。",
 		pm_meeting_context_change: "更新固定脈絡",
 		pm_meeting_context_save: "儲存新會議脈絡",
-		pm_meeting_context_help: "明確擷取目前 Sprint 與選定快照。舊紀錄及草稿保留在歷史中；此脈絡需要重新準備草稿並討論。",
+		pm_meeting_context_help: "明確擷取目前 衝刺 與選定快照。舊紀錄及草稿保留在歷史中；此脈絡需要重新準備草稿並討論。",
 		pm_meeting_follow_choice: "要更新的追蹤事項",
 		pm_meeting_follow_status: "回報狀態",
 		pm_meeting_open: "待處理",
@@ -6240,15 +6254,15 @@ var pmMeetingStrings = {
 		pm_meeting_keep_snapshot: "保留會議原有快照",
 		pm_meeting_save_result: "記錄追蹤結果",
 		pm_meeting_record_result: "追蹤改善結果",
-		pm_meeting_sprint: "Sprint",
-		pm_meeting_sprint_required: "請先規劃 Sprint，再建立會議。",
+		pm_meeting_sprint: "衝刺",
+		pm_meeting_sprint_required: "請先規劃 衝刺，再建立會議。",
 		pm_meeting_snapshot_required: "請先儲存可見的專案快照，再建立會議。",
 		pm_meeting_name: "會議標題",
 		pm_meeting_kind: "討論類型",
-		pm_meeting_started_help: "Review 與 Retrospective 需要已實際開始的 Sprint。",
+		pm_meeting_started_help: "成果檢視與回顧改善 需要已實際開始的 衝刺。",
 		pm_meeting_create: "建立會議草稿",
-		pm_meeting_new: "新增 Sprint 討論",
-		pm_meeting_partial: "來源清單尚未完整載入。請縮小 workspace 或重試後再新增紀錄。",
+		pm_meeting_new: "新增 衝刺討論",
+		pm_meeting_partial: "來源清單尚未完整載入。請縮小 工作空間 或重試後再新增紀錄。",
 		pm_meeting_history: "討論與來源歷史",
 		pm_meeting_history_notes: "討論紀錄",
 		pm_meeting_history_follow_ups: "追蹤結果",
@@ -20060,7 +20074,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 				await refreshParent?.();
 			}
 		});
-		entry.editor.box.querySelector("button[type=submit]").className = "secondary";
+		entry.editor.box.querySelector("button[type=submit]").className = "ui-button secondary";
 		const defaultRationale = t("pcp_resolve_default", {
 			title: plan.document.title,
 			number: plan.sequence
@@ -20069,7 +20083,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 		entry.editor.box.hidden = !entry.editor.locked() && rationale.value === defaultRationale;
 		entry.launch = h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			"data-issue-resolve-open": "",
 			onclick: () => {
 				if (!authorized(entry) || !open(entry)) return;
@@ -20080,7 +20094,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 		}, t("pcp_resolve_issue"));
 		entry.review = h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			hidden: true,
 			onclick: () => {
 				if (!authorized(entry) || entry.editor.locked()) return;
@@ -22239,7 +22253,7 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 }
 //#endregion
 //#region src/pm-governance.js
-function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps }) {
+function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => "" }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = [
 		"risk",
 		"assumption",
@@ -22267,24 +22281,27 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		class: "muted",
 		hidden: true
 	}, t("pm_gov_stale"));
-	const review = h("button", {
-		class: "secondary",
-		type: "button",
+	const review = button({
+		variant: "secondary",
 		hidden: true,
-		onclick: () => {
+		onClick: () => {
 			if (loaded) renderEditors(true);
-		}
-	}, t("pm_gov_review_fresh"));
-	const element = h("section", {
-		class: "panel pm-evidence",
-		"data-pm-governance": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_gov_title")), h("p", { class: "muted" }, t("pm_gov_intro"))), iconButton({
+		},
+		label: t("pm_gov_review_fresh")
+	});
+	const launch = button({
+		variant: "primary",
+		label: t("pm_gov_new"),
+		"data-pm-governance-record": "",
+		onClick: () => void openRef({ kind: "governance" }, { form: "record" })
+	});
+	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_gov_refresh"),
-		class: "secondary",
-		type: "button",
-		onclick: () => void refresh()
-	})), status, list, detail, warning, review, editors);
+		onClick: () => void refresh()
+	})), status, list, detail, warning, review, editors) });
+	element.classList.add("pm-evidence", "pm-governance");
+	element.dataset.pmGovernance = "";
 	const actor = () => caps()?.actor;
 	const can = () => loaded && permitted(false);
 	const owner = () => {
@@ -22295,9 +22312,13 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		if (value?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 		return value;
 	};
-	const id = (value) => h("code", { class: "pm-source" }, value || t("pm_gov_unknown"));
+	const id = (value) => h("code", { class: "mono pm-source" }, value || t("pm_gov_unknown"));
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
-	const fold = (key, content, open = false) => h("details", { open }, h("summary", {}, t(key)), content);
+	const fold = (key, body, open = false) => disclosure({
+		label: t(key),
+		body,
+		open
+	});
 	const line = (key, value) => h("section", { class: "pm-brief-row" }, h("h3", {}, t(key)), h("div", { class: "pm-brief-values" }, value));
 	const text = (value) => h("p", { class: "pm-note-text" }, value || t("pm_gov_unknown"));
 	const hidden = (value) => {
@@ -22334,6 +22355,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 	function update() {
 		forms.forEach((editor) => editor.update());
 		widgets.forEach((widget) => widget());
+		launch.disabled = !can();
 		warning.hidden = !stale;
 		review.hidden = !stale;
 		review.disabled = !loaded;
@@ -22345,6 +22367,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		detail.replaceChildren();
 		editors.hidden = true;
 		update();
+		launch.disabled = true;
 		status.replaceChildren(errorBox(error));
 	}
 	async function currentWorkspace() {
@@ -22469,7 +22492,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			return {
 				choice,
 				checkbox,
-				element: h("label", { class: "pm-fact-heading" }, checkbox, h("span", { class: "pm-source" }, label, " · ", id(choice.id)))
+				element: h("label", { class: "pm-fact-heading" }, checkbox, h("span", {}, label))
 			};
 		});
 		const sync = () => {
@@ -22479,13 +22502,13 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				checkbox.disabled = !can() || stale || getEditor().locked() || getEditor().fields.title.disabled || required.has(key(choice));
 			}
 		};
-		holder.replaceChildren(note("pm_gov_source_help"), ...controls.map((row) => row.element));
+		holder.replaceChildren(...controls.map((row) => row.element));
 		sync();
 		return sync;
 	}
 	function documentView(entry) {
 		const d = entry.document;
-		return h("div", {}, text(d.description), line("pm_gov_owner", text(d.owner_actor)), line("pm_gov_response", h("div", {}, text(d.response), d.trigger ? text(t("pm_gov_trigger") + ": " + d.trigger) : note("pm_gov_trigger_unknown"), text(t("pm_gov_review_at") + ": " + (d.review_at || t("pm_gov_unscheduled"))))), d.dimension ? line("pm_gov_dimension", text(t("pm_gov_" + d.dimension))) : "", line("pm_gov_assessment", h("div", {}, note("pm_gov_unassessed"), note(d.assessment_basis === "attributed_assumption" ? "pm_gov_assumption_basis" : "pm_gov_finding_basis"))), d.affected_requirement_ids.length ? line("pm_gov_affected", text(d.affected_requirement_ids.join(", "))) : "", d.alternatives.length ? line("pm_gov_alternatives", h("ul", {}, ...d.alternatives.map((value) => h("li", { class: "pm-note-text" }, value)))) : "", d.decision ? line("pm_gov_decision", h("div", {}, text(t("pm_gov_" + d.decision.disposition)), text(d.decision.rationale), text(d.decision.recorded_by), note("pm_gov_direction_only"))) : "", d.adoption ? line("pm_gov_adoption", h("div", {}, note("pm_gov_adoption_historical"), id(d.adoption.revision_id), h("p", {}, h("a", { href: `#/op/${d.adoption.operation_id}` }, t("pm_operation"))), text(d.adoption.adopted_by))) : "", d.proposed_revision ? fold("pm_gov_proposed", h("div", {}, id(d.proposed_revision.revision_id), text(d.proposed_revision.document_digest), note("pm_gov_direction_only"))) : "", fold("pm_gov_sources", h("div", {}, ...d.sources.map((ref) => h("article", { class: "pm-fact" }, text(sourceLabel(ref.kind, ref.source)), id(ref.id), fold("pm_gov_exact_source", h("pre", { class: "pm-brief-proof" }, JSON.stringify(ref.source, null, 2))))))), d.disambiguation ? fold("pm_gov_distinction", h("div", {}, text(d.disambiguation.rationale), ...d.disambiguation.record_ids.map(id))) : "", line("pm_gov_reason", text(d.rationale)));
+		return h("div", {}, text(d.description), line("pm_gov_owner", text(d.owner_actor)), line("pm_gov_response", h("div", {}, text(d.response), d.trigger ? text(t("pm_gov_trigger") + ": " + d.trigger) : note("pm_gov_trigger_unknown"), h("p", {}, t("pm_gov_review_at"), ": ", d.review_at ? timeStamp(d.review_at) : t("pm_gov_unscheduled")))), d.dimension ? line("pm_gov_dimension", text(t("pm_gov_" + d.dimension))) : "", line("pm_gov_assessment", statusPill("not_assessed")), d.affected_requirement_ids.length ? line("pm_gov_affected", text(d.affected_requirement_ids.map((value) => nameFor("requirement", value) || value).join(", "))) : "", d.alternatives.length ? line("pm_gov_alternatives", h("ul", {}, ...d.alternatives.map((value) => h("li", { class: "pm-note-text" }, value)))) : "", d.decision ? line("pm_gov_decision", h("div", {}, text(t("pm_gov_" + d.decision.disposition)), text(d.decision.rationale), text(d.decision.recorded_by))) : "", d.adoption ? line("pm_gov_adoption", h("div", {}, statusPill("historical"), id(d.adoption.revision_id), h("p", {}, h("a", { href: `#/op/${d.adoption.operation_id}` }, t("pm_operation"))), text(d.adoption.adopted_by))) : "", d.proposed_revision ? fold("pm_gov_proposed", h("div", {}, id(d.proposed_revision.revision_id), id(d.proposed_revision.document_digest))) : "", fold("pm_gov_sources", h("div", {}, ...d.sources.map((ref) => h("article", { class: "pm-fact" }, text(sourceLabel(ref.kind, ref.source)), id(ref.id), fold("pm_gov_exact_source", h("pre", { class: "pm-brief-proof" }, JSON.stringify(ref.source, null, 2))))))), d.disambiguation ? fold("pm_gov_distinction", h("div", {}, text(d.disambiguation.rationale), ...d.disambiguation.record_ids.map(id))) : "", line("pm_gov_reason", text(d.rationale)));
 	}
 	function historyView(record) {
 		const holder = h("div"), container = fold("pm_gov_history", holder);
@@ -22502,7 +22525,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				for (const row of page.revisions) {
 					if (row.record_id !== record.record_id || !Number.isSafeInteger(row.sequence) || row.sequence <= last) invalid();
 					last = row.sequence;
-					holder.append(h("details", {}, h("summary", {}, `#${row.version} · ${row.actor} · ${t("pm_gov_action_" + row.action.split(".").slice(2).join("_"))}`), documentView(row), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation"))));
+					holder.append(h("details", {}, h("summary", {}, `#${row.version} · ${row.actor} · ${t("pm_gov_action_" + row.action.split(".").slice(2).join("_"))}`), documentView(row), timeStamp(row.created_at), h("a", { href: `#/op/${row.operation_id}` }, t("pm_operation"))));
 				}
 				more.remove();
 				cursor = page.next_cursor;
@@ -22516,7 +22539,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		};
 		const more = h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			onclick: () => {
 				more.disabled = true;
 				load();
@@ -22535,30 +22558,69 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			const score = (row) => row.revision.document.status === "reported_resolved" ? 2 : row.revision.document.status === "monitoring" ? 1 : 0;
 			return score(a) - score(b) || (a.record.kind === "change" ? -1 : 0) - (b.record.kind === "change" ? -1 : 0) || a.record.sequence - b.record.sequence;
 		});
-		list.replaceChildren(...ordered.length ? ordered.map(({ record, revision }) => h("article", {
+		list.replaceChildren(...!withRegister && ordered.length ? ordered.map(({ record, revision }) => h("article", {
 			class: "pm-fact",
 			"data-pm-governance-row": record.record_id
-		}, h("div", { class: "pm-fact-heading" }, h("strong", { class: "pm-source" }, revision.document.title), h("span", { class: "muted" }, t("pm_gov_" + record.kind))), h("p", { class: "muted" }, t("pm_gov_" + revision.document.status), " · ", revision.document.owner_actor, revision.document.decision ? " · " + t("pm_gov_" + revision.document.decision.disposition) : ""), h("button", {
+		}, h("div", { class: "pm-fact-heading" }, h("strong", { class: "pm-source" }, revision.document.title), h("span", { class: "muted" }, t("pm_gov_" + record.kind))), h("p", { class: "muted" }, statusPill(revision.document.status === "reported_resolved" ? "not_assessed" : revision.document.status === "monitoring" ? "waiting" : "not_started"), " · ", revision.document.owner_actor, revision.document.decision ? " · " + t("pm_gov_" + revision.document.decision.disposition) : ""), h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			"aria-pressed": String(selectedId === record.record_id),
 			onclick: () => {
 				selectRecord(record.record_id);
 				refresh(true);
 			}
-		}, t(selectedId === record.record_id ? "pm_gov_selected" : "pm_gov_inspect")))) : [note("pm_gov_empty")]);
-		if (model.nextCursor != null) list.append(note("pm_gov_partial"), h("button", {
+		}, t(selectedId === record.record_id ? "pm_gov_selected" : "pm_gov_inspect")))) : withRegister ? [] : [emptyState({ title: t("pm_gov_empty") })]);
+		if (!withRegister && model.nextCursor != null) list.append(note("pm_gov_partial"), h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			onclick: () => {
 				pageCount++;
 				refresh();
 			}
 		}, t("pm_gov_more")));
 		detail.replaceChildren();
-		if (!model.detail) return;
+		if (withRegister || !model.detail) return;
 		const { record, revision } = model.detail;
-		detail.append(h("section", { "data-pm-governance-detail": record.record_id }, h("h3", { class: "pm-source" }, revision.document.title), documentView(revision), fold("pm_gov_baseline", h("div", {}, id(record.context.plan_revision_id), text(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id), text(record.context.snapshot_ref.as_of), text(t("pm_gov_root") + ": " + record.root_cause_key))), historyView(record)));
+		detail.append(h("section", { "data-pm-governance-detail": record.record_id }, h("h3", { class: "pm-source" }, revision.document.title), statusPill("not_assessed"), fold("pm_gov_details", h("div", {}, documentView(revision), note("pm_gov_unassessed"), fold("pm_gov_baseline", h("div", {}, id(record.context.plan_revision_id), id(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id), timeStamp(record.context.snapshot_ref.as_of), text(t("pm_gov_root") + ": " + record.root_cause_key))), historyView(record)))));
+	}
+	function namedChoices(field, entries, label) {
+		field.type = "hidden";
+		const rows = h("div"), controls = [];
+		const sync = () => {
+			const values = field.value.split(",").map((value) => value.trim());
+			for (const [node, value] of controls) {
+				node.checked = values.includes(value);
+				node.disabled = field.disabled;
+			}
+		};
+		const rebuild = (entries) => {
+			rows.replaceChildren();
+			controls.length = 0;
+			const saved = field.value.split(",").map((value) => value.trim()).filter(Boolean);
+			for (const value of saved) if (!entries.some(([id]) => id === value)) entries.push([value, nameFor("requirement", value) || t("pm_gov_source_missing")]);
+			for (const [value, text] of entries) {
+				const node = h("input", {
+					type: "checkbox",
+					onchange: () => {
+						if (field.disabled) return;
+						const values = field.value.split(",").map((value) => value.trim()).filter((item) => item && item !== value);
+						if (node.checked) values.push(value);
+						field.value = values.join(", ");
+						field.dispatchEvent(new Event("input", { bubbles: true }));
+						sync();
+					}
+				});
+				controls.push([node, value]);
+				rows.append(h("label", { class: "pm-fact-heading" }, node, h("span", {}, text)));
+			}
+			sync();
+		};
+		rebuild(entries);
+		return {
+			element: h("fieldset", {}, h("legend", {}, t(label)), field, rows),
+			sync,
+			rebuild
+		};
 	}
 	function findingEditor(existing, rebase) {
 		const doc = existing?.revision.document, creating = !existing, snapshot = creating ? null : model.fixed;
@@ -22604,7 +22666,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			}),
 			review_at: input("pm_gov_review_time", {
 				required: false,
-				value: doc?.review_at || ""
+				value: doc?.review_at ? new Date(new Date(doc.review_at).getTime() - new Date(doc.review_at).getTimezoneOffset() * 6e4).toISOString().slice(0, 16) : ""
 			}),
 			dimension: select("pm_gov_dimension", [["", t("pm_gov_unknown")], ...[
 				"scope",
@@ -22637,12 +22699,18 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			fields.root_cause_key = input("pm_gov_root", { max: 120 });
 			fields.snapshot_id = select("pm_gov_snapshot", model.snapshots.map((row) => [row.snapshot_id, row.title || row.snapshot_id]), model.snapshots.at(-1)?.snapshot_id || "");
 		}
+		fields.review_at.type = "datetime-local";
+		const reviewValue = h("span", { class: "ui-meta" });
+		const showReview = () => {
+			reviewValue.replaceChildren(fields.review_at.value ? timeStamp(new Date(fields.review_at.value)) : t("pm_gov_unscheduled"));
+		};
+		fields.review_at.addEventListener("input", showReview);
 		const sourceHolder = h("div"), sourceStatus = h("div", { role: "status" }), proofStatus = h("div", { role: "status" }), driftHint = note("pm_gov_drift_help");
 		let editor, sourceSync = () => {}, proof = doc?.proposed_revision?.revision_id || "", proofSerial = 0;
 		const allowed = () => can() && (creating || owner() || doc.owner_actor === actor());
 		const inspect = h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			onclick: async () => {
 				const candidate = fields.proposed_revision_id.value.trim(), ticket = ++proofSerial;
 				proof = "";
@@ -22669,7 +22737,9 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			proofStatus.replaceChildren();
 			update();
 		});
-		const extra = h("div", { class: "pm-fields" }, creating ? h("div", { class: "capture-fields" }, labelled("pm_gov_kind", fields.kind), labelled("pm_gov_snapshot", fields.snapshot_id)) : "", creating ? labelled("pm_gov_root", fields.root_cause_key) : note("pm_gov_revision_fixed"), labelled("pm_gov_name", fields.title), labelled("pm_gov_description", fields.description), h("div", { class: "capture-fields" }, labelled("pm_gov_owner", fields.owner_actor), labelled("pm_gov_status", fields.status)), driftHint, fold("pm_gov_sources", h("div", {}, sourceStatus, sourceHolder), true), fold("pm_gov_response_fields", h("div", { class: "pm-fields" }, labelled("pm_gov_trigger", fields.trigger), labelled("pm_gov_response", fields.response), labelled("pm_gov_review_time", fields.review_at), note("pm_gov_no_schedule"), labelled("pm_gov_affected_ids", fields.affected_requirement_ids), labelled("pm_gov_dimension", fields.dimension))), fold("pm_gov_options", h("div", { class: "pm-fields" }, labelled("pm_gov_alternatives_lines", fields.alternatives), labelled("pm_gov_proposed_id", fields.proposed_revision_id), inspect, proofStatus, note("pm_gov_proposed_help"), labelled("pm_gov_related_ids", fields.related_ids), labelled("pm_gov_distinction_reason", fields.distinction))), labelled("pm_gov_reason", fields.rationale));
+		const affected = namedChoices(fields.affected_requirement_ids, sourceChoices(creating ? createSnapshot : snapshot).filter((row) => row.kind === "requirement").map((row) => [row.id, sourceLabel(row.kind, row.source)]), "pm_gov_affected_ids");
+		const related = namedChoices(fields.related_ids, model.records.map((row) => [row.record.record_id, row.revision.document.title]), "pm_gov_related_ids");
+		const extra = h("div", { class: "pm-fields" }, creating ? h("div", { class: "capture-fields" }, labelled("pm_gov_kind", fields.kind), labelled("pm_gov_snapshot", fields.snapshot_id)) : "", creating ? labelled("pm_gov_root", fields.root_cause_key) : note("pm_gov_revision_fixed"), labelled("pm_gov_name", fields.title), labelled("pm_gov_description", fields.description), h("div", { class: "capture-fields" }, labelled("pm_gov_owner", fields.owner_actor), labelled("pm_gov_status", fields.status)), driftHint, fold("pm_gov_sources", h("div", {}, sourceStatus, sourceHolder), true), fold("pm_gov_response_fields", h("div", { class: "pm-fields" }, labelled("pm_gov_trigger", fields.trigger), labelled("pm_gov_response", fields.response), labelled("pm_gov_review_time", fields.review_at), reviewValue, affected.element, labelled("pm_gov_dimension", fields.dimension))), fold("pm_gov_options", h("div", { class: "pm-fields" }, labelled("pm_gov_alternatives_lines", fields.alternatives), labelled("pm_gov_proposed_id", fields.proposed_revision_id), inspect, proofStatus, note("pm_gov_proposed_help"), related.element, labelled("pm_gov_distinction_reason", fields.distinction))), labelled("pm_gov_reason", fields.rationale));
 		editor = localForm({
 			action: "pm.governance." + (creating ? "record" : "revise"),
 			target: creating ? { workspace_id: workspaceId } : target(),
@@ -22685,6 +22755,9 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			},
 			onStateChange: () => {
 				sourceSync();
+				affected.sync();
+				related.sync();
+				showReview();
 				inspect.disabled = !allowed() || stale || Boolean(editor?.locked());
 				driftHint.hidden = (creating ? fields.kind.value : existing.record.kind) !== "drift";
 			},
@@ -22697,7 +22770,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					alternatives: values.alternatives.split("\n").map((value) => value.trim()).filter(Boolean),
 					trigger: values.trigger.trim() || null,
 					response: values.response.trim() || null,
-					review_at: values.review_at.trim() || null,
+					review_at: values.review_at ? new Date(values.review_at).toISOString() : null,
 					dimension: values.dimension || null,
 					proposed_revision_id: values.proposed_revision_id.trim() || null
 				};
@@ -22735,6 +22808,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 						return;
 					}
 					createSnapshot = result.snapshot;
+					affected.rebuild(sourceChoices(createSnapshot).filter((row) => row.kind === "requirement").map((row) => [row.id, sourceLabel(row.kind, row.source)]));
 					sourceSync = refsWidget(fields.source_refs, sourceHolder, createSnapshot, () => editor);
 					update();
 				} catch (error) {
@@ -22795,7 +22869,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		let proof = "", editor, ticket = 0;
 		const inspect = h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			onclick: async () => {
 				const value = adoption_operation_id.value.trim(), request = ++ticket;
 				proof = "";
@@ -22846,7 +22920,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		clearEditors();
 		dirty = false;
 		stale = false;
-		if (model.detail) editors.append(findingEditor(model.detail, rebase).element, decisionEditors(rebase));
+		if (model.detail) editors.append(h("strong", { "data-pm-governance-selected": selectedId }, model.detail.revision.document.title), findingEditor(model.detail, rebase).element, decisionEditors(rebase));
 		const create = findingEditor(null, rebase);
 		editors.append(create.element);
 		update();
@@ -22894,7 +22968,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			alive();
 			if (ticket !== serial) return;
 			check(accepted.head);
-			if (!selectedId) selectedId = records.find((row) => row.revision.document.status === "open")?.record.record_id || records[0]?.record.record_id || "";
+			if (!selectedId && !withRegister) selectedId = records.find((row) => row.revision.document.status === "open")?.record.record_id || records[0]?.record.record_id || "";
 			let current = null, fixed = null;
 			if (selectedId) try {
 				current = check(await api("GET", `${endpoint}/governance/${selectedId}`));
@@ -22961,17 +23035,25 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 			if (ticket === serial) unavailable(error);
 		}
 	}
+	async function openRef(ref, { form: requested = "revise" } = {}) {
+		if (ref.kind !== "governance") return;
+		if (requested !== "record") {
+			if (!/^pmgov_[0-9a-f]{32}$/.test(ref.id || "")) return;
+			selectRecord(ref.id);
+		}
+		await refresh(true);
+		const action = requested === "record" ? "record" : requested === "decide" ? "decide" : requested === "adoption.link" ? "adoption.link" : "revise";
+		const editor = forms.find((row) => row.box.dataset.pmAction === "pm.governance." + action);
+		if (!loaded || !editor) return;
+		if (requested === "resolve" && !editor.locked()) editor.set("status", "reported_resolved");
+		for (let parent = editor.box.parentElement; parent && parent !== element; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
+		editor.box.querySelector("input:not([type=\"hidden\"]), select, textarea")?.focus();
+		editor.box.scrollIntoView({ block: "nearest" });
+	}
 	return {
 		element,
 		refresh,
-		openRef: async (ref) => {
-			if (ref.kind !== "governance") return;
-			selectRecord(ref.id);
-			await refresh(true);
-			const row = list.querySelector(`[data-pm-governance-row="${CSS.escape(ref.id)}"]`);
-			row?.querySelector("button")?.focus();
-			row?.scrollIntoView({ block: "nearest" });
-		}
+		openRef
 	};
 }
 //#endregion
@@ -25756,8 +25838,11 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 	let serial = 0, intake = null, rows = [], next = null, reading = false, selected = "", retired = false;
 	const selections = new Map(), status = h("div", { role: "status" }), list = h("div"), detail = h("div");
 	const note = (key) => h("p", { class: "muted" }, t(key));
-	const code = (value) => h("code", { class: "pm-source" }, String(value ?? "—"));
-	const fold = (key, ...children) => h("details", {}, h("summary", {}, t(key)), ...children);
+	const code = (value) => h("code", { class: "mono pm-source" }, String(value ?? "—"));
+	const fold = (key, ...children) => disclosure({
+		label: t(key),
+		body: h("div", {}, ...children)
+	});
 	const current = (ticket) => {
 		alive();
 		if (actor !== caps()?.actor) {
@@ -25773,14 +25858,14 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 	const date = (value) => timeStamp(value);
 	const more = h("button", {
 		type: "button",
-		class: "secondary",
+		class: "ui-button secondary ui-sm",
 		hidden: true,
 		onclick: () => void loadMore()
 	}, t("pm_fa_more"));
 	const element = h("section", {
 		"data-pm-follow-up-assessments": "",
 		class: "pm-fu-assessments"
-	}, h("h3", {}, t("pm_fa_title")), note("pm_fa_boundary"), status, list, more, detail);
+	}, h("h3", {}, t("pm_fa_title")), status, list, more, detail);
 	function clear() {
 		++serial;
 		intake = null;
@@ -25801,7 +25886,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 		list.replaceChildren();
 		detail.replaceChildren();
 		more.hidden = true;
-		status.replaceChildren(errorBox(error), note("pm_fa_unavailable"));
+		status.replaceChildren([t("pm_fa_mismatch"), t("pm_fa_read_failed")].includes(error.message) ? inlineError({ error: error.message }) : errorBox(error));
 		onAccessFailure(error);
 	}
 	function valid(row) {
@@ -25823,7 +25908,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 	function navigation() {
 		list.replaceChildren(...rows.map((row) => h("p", {}, h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			"aria-pressed": selected === row.assessment_id,
 			onclick: () => {
 				selected = row.assessment_id;
@@ -25852,14 +25937,14 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 		if (typeof row.raw_reply !== "string" || !refs || typeof refs !== "object" || Array.isArray(refs) || row.provenance.intake_id !== intake.intake_id || row.provenance.intake_digest !== intake.document_digest || row.provenance.run_id !== row.run_id || row.provenance.context_digest !== row.context_digest) throw Error(t("pm_fa_mismatch"));
 		const sources = (keys) => {
 			if (!Array.isArray(keys) || keys.some((key) => typeof key !== "string" || !Object.hasOwn(refs, key))) throw Error(t("pm_fa_mismatch"));
-			return fold("pm_fa_sources", ...keys.map((key) => {
+			return fold("pm_fa_details", ...keys.map((key) => {
 				const ref = refs[key];
 				if (!/^[0-9a-f]{64}$/.test(ref?.digest || "")) throw Error(t("pm_fa_mismatch"));
 				const value = sourceValue(ref.pointer);
 				return h("div", {}, code(key), code(ref.pointer), h("pre", { class: "pm-note-text" }, typeof value === "string" ? value : JSON.stringify(value, null, 2)), code(ref.digest));
 			}));
 		};
-		const content = h("div", { "data-pm-assessment-record": row.assessment_id }, h("h4", {}, t("pm_fa_record", { sequence: row.sequence })), h("p", { class: "muted" }, date(row.created_at), " · ", row.created_by), h("p", { "data-pm-assessment-validation": "" }, t("pm_fa_" + row.validation.status)), note("pm_fa_unverified"));
+		const content = h("div", { "data-pm-assessment-record": row.assessment_id }, h("h4", {}, t("pm_fa_record", { sequence: row.sequence })), h("p", { class: "muted" }, date(row.created_at), " · ", row.created_by), h("p", { "data-pm-assessment-validation": "" }, t("pm_fa_" + row.validation.status)), statusPill("not_assessed"));
 		if (row.validation.status === "format_valid") {
 			const doc = row.document;
 			if (doc?.version !== 1 || typeof doc.summary?.text !== "string" || ![
@@ -25902,7 +25987,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 				return [h("p", { class: "pm-note-text" }, item.text), item.proposed_owner ? h("p", {}, t("pm_fa_proposed_owner"), ": ", item.proposed_owner) : ""];
 			}));
 		} else content.append(note("pm_fa_raw_review"), h("ul", {}, ...row.validation.errors.map((error) => h("li", {}, String(error)))));
-		content.append(fold("pm_fa_raw", h("pre", { class: "pm-note-text" }, row.raw_reply)), fold("pm_fa_provenance", h("p", {}, t("pm_fa_intake"), code(row.intake_id), code(row.intake_digest)), h("p", {}, t("pm_native_origin"), " ", row.provenance.adapter || t("pm_native_unknown_source")), h("p", {}, t("pm_fa_model"), ": ", row.provenance.actual_model || "—"), h("p", {}, t("pm_fa_run"), code(row.run_id)), h("p", {}, t("pm_fa_context"), code(row.context_digest)), h("p", {}, t("pm_fa_reply_digest"), code(row.raw_reply_digest)), h("p", {}, t("pm_fa_document_digest"), code(row.document_digest)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation"))));
+		content.append(fold("pm_fa_details", note("pm_fa_unverified"), fold("pm_fa_raw", h("pre", { class: "pm-note-text" }, row.raw_reply)), fold("pm_fa_provenance", h("p", {}, t("pm_fa_intake"), code(row.intake_id), code(row.intake_digest)), h("p", {}, t("pm_native_origin"), " ", row.provenance.adapter || t("pm_native_unknown_source")), h("p", {}, t("pm_fa_model"), ": ", row.provenance.actual_model || "—"), h("p", {}, t("pm_fa_run"), code(row.run_id)), h("p", {}, t("pm_fa_context"), code(row.context_digest)), h("p", {}, t("pm_fa_reply_digest"), code(row.raw_reply_digest)), h("p", {}, t("pm_fa_document_digest"), code(row.document_digest)), h("a", { href: `#/op/${encodeURIComponent(row.operation_id)}` }, t("pm_operation")))));
 		detail.replaceChildren(content);
 	}
 	async function read(id) {
@@ -25934,7 +26019,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			next = data.next_cursor;
 			navigation();
 		} catch (error) {
-			if (ticket === serial) fail(error);
+			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		} finally {
 			if (ticket === serial) {
 				reading = false;
@@ -25958,7 +26043,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 			if (selected) await read(selected);
 			else if (rows.length) detail.append(note("pm_fa_select"));
 		} catch (error) {
-			if (ticket === serial) fail(error);
+			if (ticket === serial) fail(error.message === t("pm_fa_mismatch") ? Error(t("pm_fa_read_failed")) : error);
 		}
 	}
 	async function showResult(result) {
@@ -25982,7 +26067,11 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 	let serial = 0, intake = null, capability = null, thread = null, request = null, retired = false, next = null, rows = [], targetLocked = false;
 	const choices = new Map(), status = h("div", { role: "status" }), body = h("div"), chooser = h("select", { "aria-label": t("pm_fa_thread") });
 	const note = (key) => h("p", { class: "muted" }, t(key));
-	const element = h("details", { "data-pm-follow-up-analyze": "" }, h("summary", {}, t("pm_fa_analyze_prepare")), note("pm_fa_analyze_help"), status, body);
+	const element = disclosure({
+		label: t("pm_fa_analyze_prepare"),
+		body: h("div", {}, status, body)
+	});
+	element.dataset.pmFollowUpAnalyze = "";
 	const current = (ticket) => {
 		alive();
 		if (caps()?.actor !== actor) {
@@ -26087,7 +26176,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		navigation();
 		if (next != null) body.append(h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			onclick: () => void readThreads(next)
 		}, t("pm_fa_more_threads")));
 		if (!chooser.value) return;
@@ -26132,7 +26221,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 			const stale = () => version.value !== String(thread?.thread.version);
 			const rebase = h("button", {
 				type: "button",
-				class: "secondary",
+				class: "ui-button secondary ui-sm",
 				onclick: () => {
 					if (request && !request.locked() && authorized()) {
 						request.set("_version", String(thread.thread.version));
@@ -26276,13 +26365,16 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	let sourcePages = {}, snapshot = null, thread = null, editor = null, reading = false, sourceSerial = 0, retired = false, verifiedRole = null;
 	const status = h("div", { role: "status" }), view = h("div"), sourceStatus = h("div", { role: "status" }), choices = h("div"), meetingChoices = h("div");
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
-	const code = (value) => h("code", { class: "pm-source" }, value || t("pm_fu_unknown"));
+	const code = (value) => h("code", { class: "mono pm-source" }, value || t("pm_fu_unknown"));
 	const state = (value) => {
 		const key = "pm_fu_state_" + value;
 		return t(key) === key ? String(value || t("pm_fu_unknown")).replaceAll("_", " ") : t(key);
 	};
 	const date = (value) => timeStamp(value, { empty: t("pm_fu_unknown") });
-	const fold = (key, ...nodes) => h("details", {}, h("summary", {}, t(key)), ...nodes);
+	const fold = (key, ...nodes) => disclosure({
+		label: t(key),
+		body: h("div", {}, ...nodes)
+	});
 	const check = (data) => {
 		if (data?.workspace_id !== workspaceId) throw Error(t("pm_fu_scope_error"));
 		return data;
@@ -26405,14 +26497,14 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		if (retired) editor?.box.remove();
 		status.replaceChildren(errorBox(error), h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			onclick: () => void refresh()
 		}, t("pm_fu_retry")));
 	}
 	function render(row) {
 		view.replaceChildren();
 		if (!row) {
-			view.append(note("pm_fu_empty"));
+			view.append(emptyState({ title: t("pm_fu_empty") }));
 			return;
 		}
 		const doc = row.document;
@@ -26424,22 +26516,28 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			"bytes_truncated"
 		].filter((key) => doc.coverage?.snapshot?.[key] === true).map((key) => "pm_fu_" + key);
 		if (doc.coverage?.thread?.truncated) gaps.push("pm_fu_truncated");
-		const coverageWarning = gaps.length ? h("aside", {
-			class: "pm-fact",
-			"data-pm-fu-partial": ""
-		}, h("h3", {}, t("pm_fu_partial")), note("pm_fu_partial_help"), h("ul", {}, ...gaps.map((key) => h("li", {}, t(key))))) : "";
+		const coverageWarning = gaps.length ? h("aside", { "data-pm-fu-partial": "" }, statusPill("partial"), note("pm_fu_partial_help"), h("ul", {}, ...gaps.map((key) => h("li", {}, t(key))))) : "";
 		const agenda = h("section", { "data-pm-fu-agenda": "" }, h("h3", {}, t("pm_fu_agenda")));
 		if (!doc.agenda.length) agenda.append(note("pm_fu_no_agenda"));
-		else agenda.append(h("ol", {}, ...doc.agenda.map((item) => h("li", { class: "pm-fact" }, h("strong", { class: "pm-note-text" }, item.text), h("p", { class: "muted" }, t("pm_fu_basis_" + item.ordering_basis)), fold("pm_fu_sources", sourceRefs(item.source_refs))))));
+		else agenda.append(h("ol", {}, ...doc.agenda.map((item) => h("li", { class: "pm-fact" }, h("strong", { class: "pm-note-text" }, item.text), h("p", { class: "muted" }, t("pm_fu_basis_" + item.ordering_basis)), ""))));
 		const knowledge = h("section", { "data-pm-fu-knowledge": "" }, h("h3", {}, t("pm_fu_knowledge")));
+		let missingBaseline = 0;
+		const knowledgeSources = h("div");
 		for (const domain of domains) {
 			const entry = doc.knowledge[domain], inputs = entry.baseline_inputs || [], later = entry.supplemental_inputs || [], links = entry.answer_links || [];
+			if (!inputs.length) missingBaseline++;
+			if (!inputs.length && !later.length && !links.length) continue;
+			knowledgeSources.append(h("h4", {}, t("pm_fu_domain_" + domain)), ...inputs.map((value) => h("p", {}, code(value.input_id))), ...later.map((value) => h("p", {}, code(value.input_id))), sourceRefs(links));
 			const item = h("div", {
 				class: "pm-fu-domain",
 				"data-pm-fu-domain": domain
-			}, h("h4", {}, t("pm_fu_domain_" + domain)), h("div", {}, ...inputs.map((value) => h("p", { class: "pm-note-text" }, value.value, " · ", h("span", { class: "muted" }, state(value.status)))), !inputs.length ? note("pm_fu_domain_unknown") : "", ...later.map((value) => h("p", { class: "pm-note-text" }, h("span", { class: "muted" }, t("pm_fu_supplement"), ": "), value.value, " · ", state(value.status))), links.length ? note("pm_fu_answer_recorded") : "", inputs.length || later.length ? fold("pm_fu_input_sources", ...inputs.map((value) => h("p", {}, code(value.input_id))), ...later.map((value) => h("p", {}, code(value.input_id))), links.length ? sourceRefs(links) : "") : ""));
+			}, h("h4", {}, t("pm_fu_domain_" + domain)), h("div", {}, ...inputs.map((value) => h("p", { class: "pm-note-text" }, value.value, " · ", h("span", { class: "muted" }, state(value.status)))), !inputs.length ? statusPill("unknown") : "", ...later.map((value) => h("p", { class: "pm-note-text" }, h("span", { class: "muted" }, t("pm_fu_supplement"), ": "), value.value, " · ", state(value.status))), links.length ? note("pm_fu_answer_recorded") : "", ""));
 			knowledge.append(item);
 		}
+		if (missingBaseline) knowledge.append(h("p", {
+			class: "ui-meta",
+			"data-pm-fu-missing": ""
+		}, t("pm_fu_missing_areas", { count: missingBaseline })));
 		const issues = fold("pm_fu_all_issues", ...(doc.issues || []).map((issue) => h("article", { class: "pm-fact" }, h("h4", {}, issue.text), h("p", {}, state(issue.status)), issue.details?.answer_link ? note(issue.kind === "input" ? "pm_fu_answer_recorded" : "pm_fu_direction_only") : "", issue.details?.owner_actor ? h("p", {}, t("pm_fu_owner"), ": ", issue.details.owner_actor) : "", issue.details?.adoption ? h("p", {}, t("pm_fu_prior_adoption"), h("a", { href: `#/op/${encodeURIComponent(issue.details.adoption.operation_id)}` }, code(issue.details.adoption.operation_id))) : "", issue.details?.result ? h("p", { class: "pm-note-text" }, issue.details.result) : "", sourceRefs(issue.source_refs), code(issue.issue_id))));
 		const changes = fold("pm_fu_comparison", note("pm_fu_comparison_help"), ...[
 			"added",
@@ -26447,8 +26545,8 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			"unchanged",
 			"no_longer_selected"
 		].map((kind) => h("div", {}, h("h4", {}, t("pm_fu_change_" + kind)), ...(doc.changes?.[kind] || []).map((identifier) => h("p", {}, code(identifier))), !doc.changes?.[kind]?.length ? note("pm_fu_none") : "")), doc.previous_intake_id ? code(doc.previous_intake_id) : note("pm_fu_no_comparison"));
-		const sources = fold("pm_fu_fixed_sources", h("p", {}, t("pm_fu_snapshot"), code(doc.snapshot_ref.snapshot_id)), h("p", {}, t("pm_fu_plan"), code(doc.plan_ref.document_revision)), h("p", {}, t("pm_fu_scope_revision"), code(doc.plan_ref.scope_revision)), h("p", {}, t("pm_fu_digest"), code(row.document_digest)), doc.thread_ref ? h("p", {}, t("pm_fu_thread"), code(doc.thread_ref.thread_id), " · ", doc.thread_ref.version) : "", ...(doc.selected_governance_refs || []).map((value) => h("p", {}, value.document.title, code(value.revision_id))), ...(doc.selected_meeting_follow_up_refs || []).map((value) => h("p", {}, value.follow_up.text, code(value.completion_id), code(value.follow_up_id), value.result_event_id ? code(value.result_event_id) : "", h("span", { class: "muted" }, t("pm_fu_original_snapshot")), code(value.original_snapshot_ref.snapshot_id), value.result ? h("span", {}, t("pm_fu_result_snapshot"), code(value.result.document.snapshot_ref.snapshot_id)) : "")), note("pm_fu_coverage"));
-		view.append(summary, note(assessments ? "pm_fa_preparation_basis" : "pm_fu_preparation_only"), coverageWarning, agenda, knowledge, issues, changes, sources);
+		const sources = h("div", {}, knowledgeSources, ...doc.agenda.map((item) => sourceRefs(item.source_refs)), h("p", {}, t("pm_fu_snapshot"), code(doc.snapshot_ref.snapshot_id)), h("p", {}, t("pm_fu_plan"), code(doc.plan_ref.document_revision)), h("p", {}, t("pm_fu_scope_revision"), code(doc.plan_ref.scope_revision)), h("p", {}, t("pm_fu_digest"), code(row.document_digest)), doc.thread_ref ? h("p", {}, t("pm_fu_thread"), code(doc.thread_ref.thread_id), " · ", doc.thread_ref.version) : "", ...(doc.selected_governance_refs || []).map((value) => h("p", {}, value.document.title, code(value.revision_id))), ...(doc.selected_meeting_follow_up_refs || []).map((value) => h("p", {}, value.follow_up.text, code(value.completion_id), code(value.follow_up_id), value.result_event_id ? code(value.result_event_id) : "", h("span", { class: "muted" }, t("pm_fu_original_snapshot")), code(value.original_snapshot_ref.snapshot_id), value.result ? h("span", {}, t("pm_fu_result_snapshot"), code(value.result.document.snapshot_ref.snapshot_id)) : "")), note("pm_fu_coverage"));
+		view.append(summary, statusPill("not_assessed"), ...gaps.length ? [statusPill("partial")] : [], agenda, knowledge, fold("pm_fu_details", note("pm_fu_preparation_only"), coverageWarning, issues, changes, sources));
 		if (assessments) {
 			view.insertBefore(assessments.element, knowledge);
 			view.insertBefore(analysis.element, knowledge);
@@ -26487,10 +26585,11 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		versionWarning.hidden = !stale();
 		writeWarning.hidden = can();
 		editorFold.hidden = !loaded;
+		if (typeof launch !== "undefined") launch.disabled = !can();
 	}
 	const rebase = h("button", {
 		type: "button",
-		class: "secondary",
+		class: "ui-button secondary ui-sm",
 		onclick: () => {
 			bindVersions();
 			editor.update();
@@ -26498,7 +26597,8 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	}, t("pm_fu_use_versions"));
 	const versionWarning = note("pm_fu_stale"), writeWarning = note("pm_fu_read_only");
 	const optional = fold("pm_fu_optional", labelled("pm_fu_thread", threadChoice), labelled("pm_fu_compare", previousChoice), choices, meetingChoices);
-	const editorFold = h("details", { "data-pm-fu-editor": "" }, h("summary", {}, t("pm_fu_prepare")), sourceStatus, writeWarning, versionWarning, rebase);
+	const editorFold = fold("pm_fu_prepare", sourceStatus, writeWarning, versionWarning, rebase);
+	editorFold.dataset.pmFuEditor = "";
 	editor = form({
 		action: "pm.follow_up.prepare",
 		target: { workspace_id: workspaceId },
@@ -26530,20 +26630,25 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	editorFold.append(editor.box);
 	const more = h("button", {
 		type: "button",
-		class: "secondary",
+		class: "ui-button secondary ui-sm",
 		hidden: true,
 		onclick: () => void loadMetadata(next)
 	}, t("pm_fu_more"));
-	const element = h("section", {
-		class: "panel pm-follow-up",
-		"data-pm-follow-up": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_fu_title")), note("pm_fu_intro")), iconButton({
+	const launch = button({
+		variant: "primary",
+		label: t("pm_fu_prepare"),
+		onClick: () => {
+			editorFold.open = true;
+			queueMicrotask(() => snapshotChoice.focus());
+		}
+	});
+	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_fu_refresh"),
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
-	})), status, view, fold("pm_fu_history", labelled("pm_fu_history_choose", choose), more), editorFold);
+		onClick: () => void refresh()
+	})), status, view, fold("pm_fu_history", labelled("pm_fu_history_choose", choose), more), editorFold) });
+	element.classList.add("pm-follow-up");
+	element.dataset.pmFollowUp = "";
 	function metadataPage(data, after) {
 		check(data);
 		if (!number(data.head_version) || !Array.isArray(data.intakes) || data.next_cursor != null && (!number(data.next_cursor) || data.next_cursor <= after)) throw Error(t("pm_fu_scope_error"));
@@ -26633,18 +26738,18 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 				}
 				editor.set("governance", JSON.stringify(values));
 			});
-			section.append(h("label", { class: "pm-fact-heading" }, box, h("span", {}, row.revision.document.title, " · ", t("pm_fu_version", { version: row.revision.version }), code(row.revision.revision_id))));
+			section.append(h("label", { class: "pm-fact-heading" }, box, h("span", {}, row.revision.document.title, " · ", t("pm_fu_version", { version: row.revision.version }))));
 		}
 		for (const id of saved.filter((id) => !rows.some((row) => row.revision.revision_id === id))) {
 			const remove = h("button", {
 				type: "button",
-				class: "secondary",
+				class: "ui-button secondary ui-sm",
 				onclick: () => {
 					editor.set("governance", JSON.stringify(json(governance).filter((value) => value !== id)));
 					renderSourceChoices();
 				}
 			}, t("pm_fu_remove"));
-			section.append(h("p", {}, t("pm_fu_saved_selection"), code(id), remove));
+			section.append(h("p", {}, t("pm_fu_saved_selection"), fold("pm_fu_details", code(id)), remove));
 		}
 		if (!rows.length) section.append(note("pm_fu_none"));
 		return section;
@@ -26662,7 +26767,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			const page = sourcePages[kind];
 			if (page?.next != null) choices.append(h("button", {
 				type: "button",
-				class: "secondary",
+				class: "ui-button secondary ui-sm",
 				onclick: () => void loadSourcePage(kind, page.next)
 			}, t("pm_fu_more_" + kind)));
 		}
@@ -26675,9 +26780,9 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		updateOptions(chooser, (sourcePages.meetings?.records || []).filter((row) => row.completion_id).map((row) => [row.meeting_id, row.title]), "pm_fu_none");
 		const content = h("div");
 		meetingChoices.append(labelled("pm_fu_meeting_choose", chooser), content);
-		for (const ref of json(meetings)) meetingChoices.append(h("div", { class: "pm-fact" }, t("pm_fu_selected_follow_up"), sourceRefs([ref]), h("button", {
+		for (const ref of json(meetings)) meetingChoices.append(h("div", { class: "pm-fact" }, t("pm_fu_selected_follow_up"), fold("pm_fu_details", sourceRefs([ref])), h("button", {
 			type: "button",
-			class: "secondary",
+			class: "ui-button secondary ui-sm",
 			onclick: () => {
 				if (editor.locked() || !can()) return;
 				editor.set("meetings", JSON.stringify(json(meetings).filter((item) => item.completion_id !== ref.completion_id || item.follow_up_id !== ref.follow_up_id)));
@@ -26708,7 +26813,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 					updateOptions(result, events.filter((row) => row.follow_up_id === follow.id).map((row) => [row.event_id, state(row.document.status) + " · " + row.document.result]), "pm_fu_original_assignment");
 					const add = h("button", {
 						type: "button",
-						class: "secondary",
+						class: "ui-button secondary ui-sm",
 						onclick: () => {
 							if (editor.locked() || !can()) return;
 							const values = json(meetings).filter((row) => row.completion_id !== data.completion.completion_id || row.follow_up_id !== follow.id);
@@ -26727,7 +26832,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 				}
 				if (cursor != null) content.append(h("button", {
 					type: "button",
-					class: "secondary",
+					class: "ui-button secondary ui-sm",
 					onclick: async (event) => {
 						event.currentTarget.disabled = true;
 						try {
@@ -26854,8 +26959,8 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 			}
 			loaded = true;
 			status.replaceChildren();
-			if (sourceUnavailable) view.replaceChildren(note(selected ? "pm_fu_selected_unavailable" : "pm_fu_latest_unavailable"), note("pm_fu_readable_history"));
-			else render(detail.intake);
+			if (sourceUnavailable) view.replaceChildren(inlineError({ error: t(selected ? "pm_fu_selected_unavailable" : "pm_fu_latest_unavailable") }), fold("pm_fu_details", note("pm_fu_readable_history")));
+			else render(detail?.intake);
 			renderNavigation();
 			editor.update();
 			if (editorFold.open) await loadSources();
@@ -26866,7 +26971,20 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 	return {
 		element,
 		box: element,
-		refresh
+		refresh,
+		openRef: async (target) => {
+			const id = target?.intake_id || target?.follow_up_id;
+			if (!/^pmfu_[0-9a-f]{32}$/.test(id || "")) return;
+			selected = id;
+			await refresh();
+			if (!loaded) return;
+			editorFold.open = true;
+			await loadSources();
+			if (loaded) {
+				snapshotChoice.focus();
+				editor.box.scrollIntoView({ block: "nearest" });
+			}
+		}
 	};
 }
 //#endregion
@@ -29349,28 +29467,35 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	}, t("pm_meeting_stale"));
 	const rebase = h("button", {
 		type: "button",
-		class: "secondary",
+		class: "ui-button secondary ui-sm",
 		hidden: true,
 		onclick: () => {
 			if (loaded) renderEditors(true);
 		}
 	}, t("pm_meeting_rebase"));
-	const element = h("section", {
-		class: "panel pm-evidence",
-		"data-pm-meetings": ""
-	}, h("header", { class: "pm-heading" }, h("div", {}, h("h2", {}, t("pm_meeting_title")), h("p", { class: "muted" }, t("pm_meeting_intro"))), iconButton({
+	const launch = button({
+		variant: "primary",
+		label: t("pm_meeting_new"),
+		onClick: () => reveal("pm.meeting.create")
+	});
+	const element = sectionCard({ body: h("div", {}, h("div", { class: "pm-heading" }, launch, iconButton({
 		icon: "refresh-cw",
 		label: t("pm_meeting_refresh"),
-		type: "button",
-		class: "secondary",
-		onclick: () => void refresh()
-	})), labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors);
+		onClick: () => void refresh()
+	})), labelled("pm_meeting_choose", choose), status, warning, rebase, view, editors) });
+	element.classList.add("pm-evidence", "pm-meetings");
+	element.dataset.pmMeetings = "";
 	const note = (key) => h("p", { class: "muted pm-note-text" }, t(key));
-	const fold = (key, contents, open = false) => h("details", {
-		open,
-		"data-pm-fold": key
-	}, h("summary", {}, t(key)), contents);
-	const source = (id) => h("code", { class: "pm-source" }, id || t("pm_meeting_unknown"));
+	const fold = (key, body, open = false) => {
+		const node = disclosure({
+			label: t(key),
+			body,
+			open
+		});
+		node.dataset.pmFold = key;
+		return node;
+	};
+	const source = (id) => h("code", { class: "mono pm-source" }, id || t("pm_meeting_unknown"));
 	const check = (data) => {
 		if (data?.workspace_id !== workspaceId) throw Error(t("pm_scope_mismatch"));
 		return data;
@@ -29393,7 +29518,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 	};
 	const options = (key, entries, value = "") => {
 		const node = h("select", { "aria-label": t(key) }, ...entries.map(([id, text]) => h("option", { value: id }, text)));
-		if (value && !entries.some(([id]) => id === value)) node.append(h("option", { value }, value));
+		if (value && !entries.some(([id]) => id === value)) node.append(h("option", { value }, t("pm_meeting_source_unavailable")));
 		node.value = value;
 		node.dataset.pmDefault = value;
 		return node;
@@ -29408,6 +29533,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		warning.hidden = rebase.hidden = !stale;
 		rebase.disabled = !loaded;
 		choose.disabled = !loaded;
+		launch.disabled = !can();
 	}
 	function unavailable(error) {
 		loaded = false;
@@ -29493,7 +29619,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		];
 	}
 	function refsView(refs = []) {
-		return h("ul", { class: "pm-source" }, ...refs.map((ref) => h("li", {}, t("pm_meeting_" + ref.kind), " · ", source(ref.id))));
+		return refs.length ? fold("pm_meeting_details", h("ul", {}, ...refs.map((ref) => h("li", {}, t("pm_meeting_" + ref.kind), " · ", source(ref.id))))) : "";
 	}
 	function refsControl(field, getEditor) {
 		const holder = h("div"), choices = sourceChoices();
@@ -29516,7 +29642,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				getEditor().changed();
 				dirty = true;
 			});
-			holder.append(h("label", { class: "pm-fact-heading" }, checkbox, h("span", { class: "pm-source" }, choice.label, " · ", source(choice.id))));
+			holder.append(h("label", { class: "pm-fact-heading" }, checkbox, h("span", { class: "pm-source" }, choice.label)));
 			return [checkbox, key(choice)];
 		});
 		const sync = () => {
@@ -29532,10 +29658,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		};
 	}
 	function workView(items) {
-		return h("div", { class: "pm-evidence-rows" }, ...items.map((item) => h("article", { class: "pm-fact" }, h("a", {
-			href: `#/work/${encodeURIComponent(item.work_item_id)}`,
-			class: "pm-source"
-		}, item.title || item.work_item_id), h("p", {}, item.assignee), h("p", { class: "pm-note-text" }, item.how || t("pm_meeting_how_missing")), source(item.binding_id))));
+		return h("div", { class: "pm-meeting-work" }, ...items.map((item) => h("a", { href: `#/work/${encodeURIComponent(item.work_item_id)}` }, contextChip({ text: item.title || t("pm_meeting_source_unavailable") }))));
 	}
 	function outputView(document) {
 		const output = document.output, holder = h("div", { "data-pm-meeting-output": document.kind });
@@ -29552,22 +29675,22 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			list("dependency_notes", output.dependency_notes);
 		} else if (document.kind === "review") {
 			prose("goal_review", output.goal_review);
-			for (const item of output.outcomes || []) holder.append(h("p", { class: "pm-note-text" }, item.observation), source(item.binding_id));
+			for (const item of output.outcomes || []) holder.append(h("p", { class: "pm-note-text" }, item.observation), fold("pm_meeting_details", source(item.binding_id)));
 			for (const key of [
 				"feedback",
 				"environment_changes",
 				"next_steps"
 			]) list(key, output[key]);
-			if (output.unreviewed_binding_ids?.length) holder.append(note("pm_meeting_unreviewed"), ...output.unreviewed_binding_ids.map(source));
+			if (output.unreviewed_binding_ids?.length) holder.append(note("pm_meeting_unreviewed"), fold("pm_meeting_details", h("div", {}, ...output.unreviewed_binding_ids.map(source))));
 		} else {
 			list("observations", output.observations);
 			prose("previous_improvement_review", output.previous_improvement_review);
 			if (output.no_improvement_rationale) prose("no_improvement_rationale", output.no_improvement_rationale);
 		}
-		for (const item of document.decisions || []) holder.append(h("article", { class: "pm-fact" }, h("h4", {}, item.text), note("pm_meeting_proposal"), h("p", { class: "pm-note-text" }, item.rationale), refsView(item.source_refs)));
-		for (const item of document.follow_ups || []) holder.append(h("article", { class: "pm-fact" }, h("h4", {}, item.text), h("p", {}, t("pm_meeting_assigned", { actor: item.owner_actor })), h("p", { class: "pm-note-text" }, item.expected_effect), h("p", { class: "pm-note-text" }, t("pm_meeting_verification"), ": ", item.verification), refsView(item.source_refs)));
+		for (const item of document.decisions || []) holder.append(h("article", { class: "pm-fact" }, h("h4", {}, item.text || item.title || t("pm_meeting_unknown")), note("pm_meeting_proposal"), h("p", { class: "pm-note-text" }, item.rationale), refsView(item.source_refs)));
+		for (const item of document.follow_ups || []) holder.append(h("article", { class: "pm-fact" }, h("h4", {}, item.text || item.title || t("pm_meeting_unknown")), h("p", {}, t("pm_meeting_assigned", { actor: item.owner_actor })), h("p", { class: "pm-note-text" }, item.expected_effect), h("p", { class: "pm-note-text" }, t("pm_meeting_verification"), ": ", item.verification), refsView(item.source_refs)));
 		list("unresolved_questions", document.unresolved_questions);
-		holder.append(refsView(document.source_refs), note("pm_meeting_quality"));
+		holder.append(refsView(document.source_refs));
 		return holder;
 	}
 	function historyView(detail) {
@@ -29578,19 +29701,19 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			"contexts",
 			"drafts"
 		]) {
-			const section = h("section", {}, h("h4", {}, t("pm_meeting_history_" + kind)));
-			holder.append(section);
+			const section = h("div");
+			holder.append(fold("pm_meeting_history_" + kind, section));
 			const append = (records, cursor) => {
 				for (const record of records) {
 					if (record.meeting_id !== detail.meeting.meeting_id) throw Error(t("pm_scope_mismatch"));
 					const document = record.document;
-					section.append(h("details", {}, h("summary", {}, `#${record.sequence} · ${record.actor}`), kind === "notes" ? h("div", {}, h("p", { class: "pm-note-text" }, record.content), refsView(record.source_refs)) : kind === "drafts" ? outputView(document) : kind === "contexts" ? h("div", {}, h("p", { class: "pm-note-text" }, document.sprint_goal.text), source(document.snapshot_ref.snapshot_id), source(record.context_revision_id)) : h("div", {}, h("p", {}, t("pm_meeting_" + document.status)), h("p", { class: "pm-note-text" }, document.result), note("pm_meeting_quality"), source(document.follow_up_id), source(document.snapshot_ref.snapshot_id), refsView(document.source_refs)), source(record.context_revision_id || record.event_id || record.revision_id)));
+					section.append(h("details", {}, h("summary", {}, `#${record.sequence} · ${record.actor}`), kind === "notes" ? h("div", {}, h("p", { class: "pm-note-text" }, record.content), refsView(record.source_refs)) : kind === "drafts" ? outputView(document) : kind === "contexts" ? h("div", {}, h("p", { class: "pm-note-text" }, document.sprint_goal.text), source(document.snapshot_ref.snapshot_id), source(record.context_revision_id)) : h("div", {}, h("p", {}, t("pm_meeting_" + document.status)), h("p", { class: "pm-note-text" }, document.result), statusPill("not_assessed"), source(document.follow_up_id), source(document.snapshot_ref.snapshot_id), refsView(document.source_refs)), source(record.context_revision_id || record.event_id || record.revision_id)));
 				}
 				if (cursor != null) {
 					if (!Number.isInteger(cursor) || cursor < 0) throw Error(t("pm_scope_mismatch"));
 					const more = h("button", {
 						type: "button",
-						class: "secondary",
+						class: "ui-button secondary ui-sm",
 						onclick: async () => {
 							more.disabled = true;
 							try {
@@ -29618,25 +29741,30 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		view.replaceChildren();
 		const detail = model.detail;
 		if (!detail) {
-			view.append(note("pm_meeting_empty"));
+			view.append(emptyState({ title: t("pm_meeting_empty") }));
 			return;
 		}
 		const context = detail.context.document;
-		view.append(h("section", { class: "pm-plans" }, h("h3", {}, detail.meeting.title, " · ", t("pm_meeting_" + detail.meeting.status)), h("p", {}, t("pm_meeting_" + detail.meeting.kind)), h("h4", {}, t("pm_meeting_goal")), h("p", { class: "pm-note-text" }, context.sprint_goal.text), fold("pm_meeting_fixed_context", h("div", {}, h("p", {}, context.sprint_definition.title), h("p", {}, t("pm_meeting_snapshot"), " · ", timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id), h("p", {}, source(detail.context.context_revision_id)), h("p", {}, source(context.sprint_goal.revision_id)), workView(context.selected_items), h("h4", {}, t("pm_meeting_dod")), h("ul", {}, ...context.artifacts.dod.document.criteria.map((item) => h("li", {}, item.text))), note("pm_meeting_quality"))), note("pm_meeting_source_frozen")));
-		if (detail.draft) view.append(h("section", { class: "pm-plans" }, h("h3", {}, t("pm_meeting_saved_draft")), note("pm_meeting_draft_help"), outputView(detail.draft.document), source(detail.draft.revision_id)));
+		const facts = h("div", {}, h("p", {}, context.sprint_definition.title), h("p", {}, t("pm_meeting_snapshot"), " · ", timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id), source(detail.context.context_revision_id), source(context.sprint_goal.revision_id), ...context.selected_items.map((item) => source(item.binding_id)), h("h4", {}, t("pm_meeting_dod")), h("ul", {}, ...context.artifacts.dod.document.criteria.map((item) => h("li", {}, item.text))), h("p", { class: "muted" }, t("pm_meeting_quality"), detail.completion ? " " + t("pm_meeting_completion_help") : ""), historyView(detail));
+		view.append(h("div", {
+			class: "pm-meeting-summary",
+			"data-pm-meeting-selected": detail.meeting.meeting_id
+		}, h("div", { class: "pm-fact-heading" }, h("span", { class: "ui-pill tone-neutral" }, t("pm_meeting_" + detail.meeting.kind)), statusPill(detail.meeting.status === "completed" ? "done" : "draft"), statusPill("not_assessed")), h("p", { class: "pm-note-text" }, context.sprint_goal.text), workView(context.selected_items)));
+		if (detail.draft) {
+			view.append(fold("pm_meeting_saved_draft", outputView(detail.draft.document)));
+			facts.append(source(detail.draft.revision_id));
+		}
 		if (detail.completion) {
 			const record = detail.completion;
-			view.append(h("section", {
-				class: "pm-plans",
-				"data-pm-meeting-completion": ""
-			}, h("h3", {}, t("pm_meeting_completed")), h("p", { class: "pm-note-text" }, record.document.discussion_summary), h("p", {}, t("pm_meeting_recorded_by", { actor: record.actor })), ...(record.document.decisions || []).map((item) => h("p", { class: "pm-note-text" }, item.text, " · ", t(item.disposition === "recorded_discussion_decision" ? "pm_meeting_recorded_decision" : "pm_meeting_proposal"))), note("pm_meeting_completion_help"), source(record.completion_id)));
+			view.append(fold("pm_meeting_completed", h("div", { "data-pm-meeting-completion": "" }, h("p", { class: "pm-note-text" }, record.document.discussion_summary), h("p", {}, t("pm_meeting_recorded_by", { actor: record.actor })), ...(record.document.decisions || []).map((item) => h("p", { class: "pm-note-text" }, item.text || item.title, " · ", t(item.disposition === "recorded_discussion_decision" ? "pm_meeting_recorded_decision" : "pm_meeting_proposal"))))));
+			facts.append(source(record.completion_id));
 		}
-		view.append(historyView(detail));
+		view.append(fold("pm_meeting_details", facts));
 	}
 	function collection(field, getEditor, definitions, limit, key) {
 		const rows = h("div"), add = h("button", {
 			type: "button",
-			class: "secondary"
+			class: "ui-button secondary ui-sm"
 		}, t("pm_meeting_add_" + key));
 		const holder = h("div", {}, rows, add);
 		let controls = [];
@@ -29670,7 +29798,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				});
 				const remove = h("button", {
 					type: "button",
-					class: "secondary",
+					class: "ui-button secondary ui-sm",
 					onclick: () => {
 						change(JSON.parse(field.value || "[]").filter((row) => row.id !== item.id));
 						render();
@@ -29751,9 +29879,9 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			textField("no_improvement_rationale", output.no_improvement_rationale || "", false);
 			body.append(note("pm_meeting_retro_help"));
 		}
-		fields.decisions = hidden((saved?.decisions || []).map(({ id, text, rationale, alternatives, source_refs }) => ({
+		fields.decisions = hidden((saved?.decisions || []).map(({ id, text, title, rationale, alternatives, source_refs }) => ({
 			id,
-			text,
+			text: text || title,
 			rationale,
 			alternatives,
 			source_refs
@@ -29875,7 +30003,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 					if (item.unavailable) {
 						const remove = h("button", {
 							type: "button",
-							class: "secondary",
+							class: "ui-button secondary ui-sm",
 							onclick: () => {
 								change(JSON.parse(fields.outcomes.value).filter((row) => row.binding_id !== item.binding_id));
 								render();
@@ -29954,7 +30082,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 					dirty = true;
 				}
 			});
-			choices.append(h("label", { class: "pm-fact-heading" }, node, item.text));
+			choices.append(h("label", { class: "pm-fact-heading" }, node, item.text || item.title));
 			decisionControls.push([node, item.id]);
 		};
 		(detail.draft?.document.decisions || []).forEach(addDecision);
@@ -29997,7 +30125,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		const completeBox = fold("pm_meeting_complete", completion.box, completion.locked());
 		completeBox.hidden = detail.meeting.status === "completed" && !completion.locked();
 		holder.append(completeBox);
-		const snapshots = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${row.as_of}`]), context.snapshot_ref.snapshot_id), contextReason = reason();
+		const snapshots = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`]), context.snapshot_ref.snapshot_id), contextReason = reason();
 		const sprint = model.sprints.find((row) => row.sprint_id === detail.meeting.sprint_id);
 		const revise = localForm({
 			action: "pm.meeting.context.revise",
@@ -30019,7 +30147,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		const reviseBox = fold("pm_meeting_context_change", revise.box, revise.locked());
 		reviseBox.hidden = detail.meeting.status === "completed" && !revise.locked();
 		holder.append(reviseBox);
-		const items = detail.completion?.document.follow_ups || [], allowedItems = items.filter((item) => owner() || item.owner_actor === caps()?.actor), followId = options("pm_meeting_follow_choice", allowedItems.map((item) => [item.id, `${item.text} · ${item.owner_actor}`]), allowedItems[0]?.id || "");
+		const items = detail.completion?.document.follow_ups || [], allowedItems = items.filter((item) => owner() || item.owner_actor === caps()?.actor), followId = options("pm_meeting_follow_choice", allowedItems.map((item) => [item.id, `${item.text || item.title} · ${item.owner_actor}`]), allowedItems[0]?.id || "");
 		const state = options("pm_meeting_follow_status", [
 			"open",
 			"blocked",
@@ -30028,7 +30156,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			multiline: true,
 			max: 8e3
 		}), followReason = reason();
-		const snapshot = options("pm_meeting_result_snapshot", [["", t("pm_meeting_keep_snapshot")], ...model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${row.as_of}`])]);
+		const snapshot = options("pm_meeting_result_snapshot", [["", t("pm_meeting_keep_snapshot")], ...model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`])]);
 		const follow = localForm({
 			action: "pm.meeting.follow_up.record",
 			target: target(),
@@ -30074,7 +30202,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 				"planning",
 				"review",
 				"retro"
-			].map((key) => [key, t("pm_meeting_" + key)]), "planning"), snapshot = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${row.as_of}`]), model.snapshots.at(-1)?.snapshot_id || ""), rationale = reason();
+			].map((key) => [key, t("pm_meeting_" + key)]), "planning"), snapshot = options("pm_meeting_snapshot", model.snapshots.map((row) => [row.snapshot_id, `${row.title} · ${timeText(row.as_of)}`]), model.snapshots.at(-1)?.snapshot_id || ""), rationale = reason();
 			current = localForm({
 				action: "pm.meeting.create",
 				target: {
@@ -30102,7 +30230,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			render();
 		});
 		render();
-		return fold("pm_meeting_new", holder, !model.detail || Boolean(current?.locked()));
+		return fold("pm_meeting_new", holder, Boolean(current?.locked()));
 	}
 	function renderEditors(reviewBaselines = false) {
 		const meetingId = model.detail?.meeting.meeting_id || null;
@@ -30116,7 +30244,10 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		forms = [];
 		reviewing = reviewBaselines;
 		editors.replaceChildren();
-		if (model.detail) editors.append(meetingEditors());
+		if (model.detail) {
+			const actions = meetingEditors();
+			editors.append(fold("pm_meeting_actions", actions, Boolean(actions.querySelector("details[open]"))));
+		}
 		editors.append(creationEditor());
 		reviewing = false;
 		update();
@@ -30196,9 +30327,35 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 			if (ticket === serial) unavailable(error);
 		}
 	}
+	function reveal(action, followUpId) {
+		const editor = forms.find((row) => row.box.dataset.pmAction === action);
+		if (!loaded || !editor) return;
+		if (followUpId && action === "pm.meeting.follow_up.record") {
+			const field = editor.fields.follow_up_id;
+			if (![...field.options].some((option) => option.value === followUpId)) return;
+			if (editor.locked() && field.value !== followUpId) return;
+			if (!editor.locked()) editor.set("follow_up_id", followUpId);
+			editor.update();
+		}
+		for (let node = editor.box.parentElement; node && node !== element; node = node.parentElement) if (node instanceof HTMLDetailsElement) {
+			node.hidden = false;
+			node.open = true;
+		}
+		editor.box.querySelector("input:not([type=\"hidden\"]), select, textarea")?.focus();
+		editor.box.scrollIntoView({ block: "nearest" });
+	}
+	async function openRef(target, { form: requested = "follow_up.record" } = {}) {
+		if (!target?.meeting_id) return;
+		selectedId = target.meeting_id;
+		remember("meeting_id", selectedId);
+		await refresh(true);
+		if (model?.detail?.meeting.meeting_id !== target.meeting_id) return;
+		reveal("pm.meeting." + requested, target.follow_up_id);
+	}
 	return {
 		element,
-		refresh
+		refresh,
+		openRef
 	};
 }
 //#endregion
@@ -36214,7 +36371,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	const terminal = () => ["failed", "cancelled"].includes(operation?.status);
 	const reset = h("button", {
 		type: "button",
-		class: "secondary",
+		class: "ui-button secondary",
 		hidden: true,
 		onclick: () => {
 			try {
@@ -36236,7 +36393,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	}, t("pm_edit_request"));
 	const button = h("button", {
 		type: "submit",
-		class: "primary"
+		class: "ui-button primary"
 	}, t(label));
 	const form = h("form", {
 		"data-pm-action": action,
@@ -37092,7 +37249,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		input,
 		labelled,
 		errorBox,
-		caps
+		caps,
+		withRegister: caps()?.features?.pm_register?.version === 1,
+		nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ""
 	}) : null;
 	if (governance) body.insertBefore(governance.element, content);
 	let openRegisterForm = () => {};
@@ -37102,10 +37261,23 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		else if (name.startsWith("pm.maintenance.repair")) {
 			maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref);
 			openRegisterForm("issues", "ui_repairs");
-		} else if (name.startsWith("pm.governance.")) openRegisterForm("issues", "ui_governance");
-		else if (name.startsWith("pm.issue.")) openRegisterForm("requirements", "ui_publication");
-		else if (name.startsWith("pm.meeting.")) openRegisterForm("discussions", "ui_meetings");
-		else if (name.includes("follow_up.record")) openRegisterForm("issues", "ui_follow_up");
+		} else if (name.startsWith("pm.governance.")) {
+			openRegisterForm("issues", "ui_governance");
+			governance?.openRef({
+				kind: "governance",
+				id: action.target?.record_id
+			}, { form: name.slice(14) });
+		} else if (name.startsWith("pm.issue.")) openRegisterForm("requirements", "ui_publication");
+		else if (name.startsWith("pm.meeting.")) {
+			openRegisterForm("discussions", "ui_meetings");
+			meetings?.openRef({
+				...action.target,
+				follow_up_id: action.target?.follow_up_id || action.required?.follow_up_id
+			}, { form: name.slice(11) });
+		} else if (name.includes("follow_up.record")) {
+			openRegisterForm("issues", "ui_follow_up");
+			followUp?.openRef(action.target, { form: "record" });
+		}
 	};
 	const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1 ? workspaceRegister({
 		h,

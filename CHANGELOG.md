@@ -8,6 +8,10 @@
   Redrawing the board while it is scrolled does not drop those labels. Open ends
   stay Open in English and zh-TW.
 
+- Governance, Meetings and Follow-ups use shared cards, compact context, localized
+  details and date-time editing. Register handoffs select and focus the requested
+  durable form without submitting it; original drafts and recovery keys remain intact.
+
 - Reviewed handoff facts no longer print empty placeholders. The issues register
   names `format_valid` as "Format checked" / "格式已核對" (structure and cited
   sources only; conclusions stay unaccepted). zh-TW operation, agent and provider

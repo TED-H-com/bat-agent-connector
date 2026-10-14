@@ -123,13 +123,13 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     subscribers = null;
   };
   const terminal = () => ['failed', 'cancelled'].includes(operation?.status);
-  const reset = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {
+  const reset = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => {
     try {
       guard(); if (!terminal() && !saved.intent?.initialAdmissionRefused) return;
       saved = {version: 1, values: capture()}; persist(); operation = null; status.replaceChildren(); receipt.replaceChildren(); update();
     } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error));}
   }}, t('pm_edit_request'));
-  const button = h('button', {type: 'submit', class: 'primary'}, t(label));
+  const button = h('button', {type: 'submit', class: 'ui-button primary'}, t(label));
   const form = h('form', {'data-pm-action': action, onsubmit: event => {event.preventDefault(); void run();}},
     extra, h('div', {class: 'actions'}, button, reset), status, receipt);
   function pollReceipt() {
@@ -533,17 +533,17 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     ? workspaceMeetings({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
   if(meetings)body.insertBefore(meetings.element,content);
   const governance = workspaceId && !threadId && caps()?.features?.pm_workspaces?.governance
-    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps}) : null;
+    ? workspaceGovernance({h,t,api,alive,namespace,workspaceId,workspace:()=>workspace,permitted,form,input,labelled,errorBox,caps, withRegister: caps()?.features?.pm_register?.version === 1, nameFor: (kind, id) => traceability?.labelFor?.(kind, id) || brief?.labelFor?.(kind, id) || ''}) : null;
   if(governance)body.insertBefore(governance.element,content);
   let openRegisterForm = () => {};
   const routeRegisterAction = action => {
     const name = action?.action || '';
     if (name.startsWith('pm.maintenance_review.')) openRegisterForm('issues', 'ui_maintenance_review');
     else if (name.startsWith('pm.maintenance.repair')) {maintenanceRepairs?.focusFinding?.(action?.required?.finding_ref); openRegisterForm('issues', 'ui_repairs');}
-    else if (name.startsWith('pm.governance.')) openRegisterForm('issues', 'ui_governance');
+    else if (name.startsWith('pm.governance.')) {openRegisterForm('issues', 'ui_governance'); void governance?.openRef({kind: 'governance', id: action.target?.record_id}, {form: name.slice('pm.governance.'.length)});}
     else if (name.startsWith('pm.issue.')) openRegisterForm('requirements', 'ui_publication');
-    else if (name.startsWith('pm.meeting.')) openRegisterForm('discussions', 'ui_meetings');
-    else if (name.includes('follow_up.record')) openRegisterForm('issues', 'ui_follow_up');
+    else if (name.startsWith('pm.meeting.')) {openRegisterForm('discussions', 'ui_meetings'); void meetings?.openRef({...action.target, follow_up_id: action.target?.follow_up_id || action.required?.follow_up_id}, {form: name.slice('pm.meeting.'.length)});}
+    else if (name.includes('follow_up.record')) {openRegisterForm('issues', 'ui_follow_up'); void followUp?.openRef(action.target, {form: 'record'});}
   };
   const register = workspaceId && !threadId && caps()?.features?.pm_register?.version === 1
     ? workspaceRegister({h, t, api, alive, namespace, workspaceId, errorBox, onMeta: setHeaderMeta,
