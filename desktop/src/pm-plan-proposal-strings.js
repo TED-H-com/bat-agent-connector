@@ -47,7 +47,7 @@ export const pmPlanProposalStrings = {
     pcp_invalid:'回覆內容需要檢視，目前還不能作為計畫提案。', pcp_raw:'原始分析回覆',
     pcp_stale:'討論或計畫已有變更。草稿已保留，請以目前版本重新整理提案。',
     pcp_readonly:'具有計畫採用權限的工作空間擁有者可採用這組更新。', pcp_unavailable:'此連線尚未提供計畫提案。',
-    pcp_runtime:'所選執行環境就緒後才能整理提案', pcp_mismatch:'提案與原討論或來源不符。',
+    pcp_runtime:'所選執行環境就緒後才能整理提案。', pcp_mismatch:'提案與原討論或來源不符。',
     pcp_partial:'目前只載入部分提案，可繼續讀取。', pcp_missing:'每項需求與接受條件都必須選用已納入的資訊。',
     pcp_empty_selection:'至少選入一項計畫資訊。', pcp_acceptance_missing:'每項需求至少要選一個接受條件。', pcp_cycle:'請移除需求之間的循環相依。',
     pcp_key:'候選資訊', pcp_why:'現在需要釐清的原因', pcp_pending:'請先查回原請求，再選擇其他提案。',

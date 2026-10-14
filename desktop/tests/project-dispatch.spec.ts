@@ -77,7 +77,7 @@ for (const native of [false, true]) {
     await page.goto('/dashboard/#/dispatch/prj_'+'4'.repeat(20)); await expect(prompt(page)).toHaveValue('');
     await open(page); await expect(prompt(page)).toHaveValue('Private draft');
     state.principal = 'other-person'; await page.reload(); await expect(prompt(page)).toHaveValue('');
-    state.oldCentral = true; await page.reload(); await expect(form(page)).toContainText('Update Connector to use project dispatch');
+    state.oldCentral = true; await page.reload(); await expect(form(page)).toContainText('Update Connector to use project dispatch.');
     await expect(apply(page)).toBeDisabled(); expect(state.posts).toEqual([]);
   });
   test(`${mode}: a receipt for a different project cannot replace the fixed request`, async ({page}) => {
