@@ -47,9 +47,15 @@ try {
   await receipt.click();
   await expect(page.getByRole("heading", {name: "cleanup.apply", exact: true})).toBeVisible();
   await expect(page.getByRole("heading", {name: "View item receipts", exact: true})).toBeVisible({timeout: 30000});
-  const response = await page.request.get(origin + "/api/v1/operations/" + href.split("/").at(-1),
-    {headers: {Authorization: "Bearer " + fixture.token}});
-  const op = await response.json();
+  // Item receipts land before the parent operation is terminal. Keep reading that same GET.
+  const operationUrl = origin + "/api/v1/operations/" + href.split("/").at(-1);
+  let op;
+  await expect.poll(async () => {
+    const response = await page.request.get(operationUrl, {headers: {Authorization: "Bearer " + fixture.token}});
+    if (!response.ok()) return "unavailable";
+    op = await response.json();
+    return op.operation?.status ?? "missing";
+  }, {timeout: 30000, intervals: [250]}).toMatch(/^(succeeded|failed|cancelled)$/);
   assert.equal(op.operation.status, "succeeded", JSON.stringify(op.operation));
   assert.ok(op.cleanup_receipts.some(r => ["succeeded", "already_absent"].includes(r.status)));
   assert.equal(writes.length, 1);
