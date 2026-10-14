@@ -162,12 +162,22 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await expect(region).not.toContainText('lodash');
     await expect(region).not.toContainText(copy.ghsa);
     await expect(region).not.toContainText('#14');
-    await region.locator('.pm-thread-link').filter({hasText: copy.unavailable}).click();
-    const openChip = region.locator('[data-discussion-context=finding]').first();
+    const thread = region.locator('.pm-thread-link').filter({hasText: copy.unavailable});
+    const title = await thread.locator('strong').innerText();
+    await thread.click();
+    await expect(page).toHaveURL(new RegExp(`#/pm/${fixture.ids.workspaceId}/discussions/${fixture.ids.threadFollow}$`));
+    await expect(region).toHaveCount(0);
+    const header = page.locator('main .pd-thread-header');
+    await expect(header.locator('h2')).toHaveText(title);
+    const openChip = header.locator('[data-discussion-context=finding]');
     await expect(openChip).toHaveAttribute('title', copy.unavailable);
+    await expect(openChip).toContainText(locale === 'en' ? 'Unavailable' : '無法取得');
     await expect(openChip).not.toContainText('lodash');
-    await expect(region).not.toContainText('lodash');
-    await expect(region).not.toContainText(copy.ghsa);
+    await expect(openChip).not.toContainText(copy.ghsa);
+    await expect(openChip).not.toContainText('#14');
+    await expect(page.locator('main')).not.toContainText('lodash');
+    await expect(page.locator('main')).not.toContainText(copy.ghsa);
+    await expect(page.locator('main')).not.toContainText('#14');
     await context.close();
   });
 
