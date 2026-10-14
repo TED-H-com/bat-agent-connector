@@ -42,25 +42,29 @@ text. Changing current files does not remove information from Git history or old
 
 ## Continuous integration
 
-Pull requests run what the change can affect; pushes to `main` run everything.
+Pull requests run what the change can affect; every workflow triggered by a push
+to `main` runs at full coverage. `desktop.yml` retains its existing PR/push path
+filters, so a change to only `README.md` and `docs/` triggers `ci.yml`, not desktop CI.
 Both workflows use the same standard-library `scripts/ci_scope.py` policy in a
-small `scope` job. Checkout fetches the PR base/head commits and compares them with
-`git diff --no-renames --name-only` (both old and new paths for renames); a non-PR
-event, unavailable diff, empty or ambiguous path list selects full coverage.
-Each scope job explains its selection in its summary.
-The workflows have no event path filters, so an unknown path cannot bypass the
-native allowlist and every push to `main` retains full coverage.
+small `scope` job. Checkout uses `fetch-depth: 2`; the default PR checkout is its
+merge commit, and `git diff --no-renames --name-only HEAD^1 HEAD` compares the merged
+result with the target branch tip. This measures the PR's net change without
+including changes made only on `main` since the branch point. Disabling rename
+detection includes both old and new paths. A non-PR event, unavailable diff, empty
+or ambiguous path list selects full coverage. The `ci.yml` summary explains only
+pytest versions; the `desktop.yml` summary explains only native builds.
 
 | Workflow | Job | Checks |
 | --- | --- | --- |
-| Both | `scope` | Select Python versions/native builds and explain why |
+| `ci.yml` | `scope` | Select Python versions and explain why |
+| `desktop.yml` | `scope` | Select native build level/entries and explain why |
 | `ci.yml` | `lint`, `secrets-scan` | Static checks once on Python 3.13; secret scan |
 | `ci.yml` | `pytest <version> (i/5)` | Five runners per selected version: 3.10 for PRs without Python source/tooling changes; 3.10–3.13 otherwise and on `main` |
 | `ci.yml` | `pytest-complete` | Successful shards and exact collection coverage for exactly the selected versions |
 | `desktop.yml` | `frontend` | Regenerate/check browser assets and run Node tests |
 | `desktop.yml` | `browser-ui (i/3)` | Three Playwright shards on committed browser assets |
 | `desktop.yml` | `central-ui` | Nineteen named central-service UI script steps |
-| `desktop.yml` | `build` | Four native OS builds, packaged runtime/upgrades, native checks, packaging and installed smoke tests; skipped only for PR paths on the native allowlist |
+| `desktop.yml` | `build` | PRs select no builds, Linux only, or all four builds; triggered `main` runs always select all four. Selected entries retain every native/packaged fixture |
 | `desktop.yml` | `windows-endpoint-oracle` | Windows endpoint fixtures on every run |
 
 Read `pytest-complete` for the combined pytest check: every shard must succeed and
@@ -77,7 +81,7 @@ under `tests/`, `scripts/`, `desktop/scripts/` or `.github/workflows/`. This inc
 conftests, the shard plugin, measured weights, fixture data and Python invocation
 scripts. Other PR changes use the oldest supported Python, 3.10.
 
-Native builds skip only when **every** changed path matches this allowlist:
+Native level `none` skips builds when **every** changed path matches this allowlist:
 
 | Allowed path | Why it can skip native builds |
 | --- | --- |
@@ -86,17 +90,31 @@ Native builds skip only when **every** changed path matches this allowlist:
 | `docs/**` | Documentation is not read by native build or packaging steps |
 | `AGENTS.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `README.zh-TW.md`, `desktop/DESIGN.md` | Named documentation files are not native package resources or build inputs |
 
-Everything else runs all four builds, including unknown paths, native code,
-lockfiles, build configuration and fixture helpers. `desktop/tests/**` is not
-blanket-allowed: its Python, JavaScript and PowerShell scripts/data exercise native
-and installed packages. Generated `src/bat_agent_connector/dashboard/` assets also
-require native builds: PyInstaller collects the entire Python package into the
-managed runtime, Tauri bundles that runtime, and the Linux packaged managed-setup
-fixture checks its served dashboard. They can affect package validation even
-though the Tauri WebView uses a separate Vite build. `README.md` is Python package metadata;
+Native level `linux` runs only `ubuntu-24.04`/deb when every path is on that
+allowlist or under `src/bat_agent_connector/dashboard/`, with at least one generated
+asset change. PyInstaller collects these assets into the managed runtime. The Linux
+packaged managed-setup fixture exercises the served dashboard, and the deb fixture
+exercises the installed WebView. Windows/macOS only copy these browser assets;
+the Tauri WebView uses a separate Vite build. Linux keeps all its existing steps.
+
+Native level `all` runs all four builds for anything else, including unknown paths,
+native code, lockfiles, build configuration and fixture helpers. `desktop/tests/**`
+is not blanket-allowed: its Python, JavaScript and PowerShell scripts/data exercise
+native and installed packages. `README.md` is Python package metadata;
 `THIRD_PARTY_NOTICES.md` is both package metadata and an explicit Tauri resource.
-Neither is on the allowlist. Changes to build inputs or resource declarations must
-also update this policy and its tests.
+Neither is on the allowlist, though a README/docs-only change does not trigger
+desktop CI. Non-PR events and all fallback cases also select `all`.
+
+The four build entries have one production definition, `NATIVE_BUILDS` in
+`scripts/ci_scope.py`. Its `builds` JSON output feeds an `include`-only matrix via
+`fromJSON(needs.scope.outputs.builds)`, with no axes that could create extra
+combinations. GitHub documents [one job per entry when only `include` is
+specified](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstrategymatrixinclude)
+and [job conditions before matrix expansion](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idif).
+The build job skips `none` before evaluating its empty list. Explicit names retain
+`build (ubuntu-24.04, deb, desktop-Linux-unsigned)` and the corresponding OS entries.
+Changes to build inputs or resource declarations must also update this policy and
+its tests.
 
 After `uv sync --locked --extra dev`, run one shard from the repository root.
 Use a disk-backed `TMPDIR`:
