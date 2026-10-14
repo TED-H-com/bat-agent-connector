@@ -1,6 +1,6 @@
 // One reviewed central intent; proposal text never becomes authority by itself.
 import {discussionFeedback, discussionSettingsHref} from './pm-discussions.js';
-import {iconButton, statusPill, button, disclosure} from './ui/components.js';
+import {iconButton, statusPill, button, disclosure, sectionCard} from './ui/components.js';
 import {reasonLabel, reasonLabels} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {structuredAnalysis} from './pm-structured-analysis.js';
@@ -67,8 +67,9 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   const more=actionButton({type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
   const reload=iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()});
   const prepareBox=h('details',{open:true,'data-proposal-prepare':''},h('summary',{},t('pcp_prepare')),prepare.box);
-  const box=h('section',{class:'pm-plans','data-pm-plan-proposals':''},h('h3',{},t(conversation?'pd_proposed':'pcp_title')),conversation?'':note('pcp_help'),prepareBox,
-    h('div',{class:'pm-fields'},labelled('pcp_saved',picker),h('div',{class:'actions'},reload,more)),notice,detail);
+  const box=sectionCard({body:[h('h3',{},t(conversation?'pd_proposed':'pcp_title')),conversation?'':note('pcp_help'),prepareBox,
+    h('div',{class:'pm-fields'},labelled('pcp_saved',picker),h('div',{class:'actions'},reload,more)),notice,detail]});
+  box.classList.add('pm-plans');box.dataset.pmPlanProposals='';
   const pendingPill=statusPill('in_progress');pendingPill.hidden=true;box.append(pendingPill);
   const tools=h('div', {'data-discussion-proposal-tools':''});
   if(conversation){

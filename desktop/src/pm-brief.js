@@ -83,10 +83,9 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
         const record = source.kind === 'evidence' ? (snapshot.evidence || []).find(entry => entry.evidence_id === source.evidence_id)
           : source.kind === 'plan_input' ? snapshot.baseline?.document?.selected_inputs?.find(entry => entry.input_id === source.input_id)
           : source.kind === 'plan_adoption' ? snapshot.baseline?.adoption : null;
-        details.append(proof({h, t, value: {...source, ...record}, kind: source.kind,
+        details.append(proof({h, t, value: {...source, ...record, ...(item.details && item.kind !== 'quality_assessment' ? {assessment: item.details} : {})}, kind: source.kind,
           name: source.kind === 'plan_adoption' ? snapshot.baseline?.document?.title : record?.value || source.source_ref?.ref || item.text}));
         if (source.kind === 'work_binding') details.append(h('a', {href: `#/item/${source.work_item_id}`}, t('pm_evidence_open_work')));
-        if (item.details && item.kind !== 'quality_assessment') details.append(disclosure({label: t('pd_details'), body: proof({h, t, value: item.details, name: item.text})}));
         values.append(row);
       }
       if (!section.items?.length) values.append(h('p', {}, t('pm_brief_empty_' + name)));

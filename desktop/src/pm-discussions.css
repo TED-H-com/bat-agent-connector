@@ -130,3 +130,5 @@
 
 :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(280px, 100%); }
 @media (max-width: 799px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
+
+.pd-panel .ui-tabs button { padding-inline: var(--space-2); }

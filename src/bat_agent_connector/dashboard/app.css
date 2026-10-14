@@ -2095,6 +2095,8 @@ body.pm-mode #main { padding: 0; }
 
 :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(280px, 100%); }
 @media (max-width: 799px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
+
+.pd-panel .ui-tabs button { padding-inline: var(--space-2); }
 /* Global screens. Tokens only; the shell and PM views keep their own files. */
 .global-inbox { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .global-inbox-tabs { margin: 0 0 var(--space-4); }

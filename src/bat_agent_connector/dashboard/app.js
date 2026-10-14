@@ -15297,21 +15297,13 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 					t,
 					value: {
 						...source,
-						...record
+						...record,
+						...item.details && item.kind !== "quality_assessment" ? { assessment: item.details } : {}
 					},
 					kind: source.kind,
 					name: source.kind === "plan_adoption" ? snapshot.baseline?.document?.title : record?.value || source.source_ref?.ref || item.text
 				}));
 				if (source.kind === "work_binding") details.append(h("a", { href: `#/item/${source.work_item_id}` }, t("pm_evidence_open_work")));
-				if (item.details && item.kind !== "quality_assessment") details.append(disclosure({
-					label: t("pd_details"),
-					body: proof({
-						h,
-						t,
-						value: item.details,
-						name: item.text
-					})
-				}));
 				values.append(row);
 			}
 			if (!section.items?.length) values.append(h("p", {}, t("pm_brief_empty_" + name)));
@@ -20946,10 +20938,16 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		open: true,
 		"data-proposal-prepare": ""
 	}, h("summary", {}, t("pcp_prepare")), prepare.box);
-	const box = h("section", {
-		class: "pm-plans",
-		"data-pm-plan-proposals": ""
-	}, h("h3", {}, t(conversation ? "pd_proposed" : "pcp_title")), conversation ? "" : note("pcp_help"), prepareBox, h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)), notice, detail);
+	const box = sectionCard({ body: [
+		h("h3", {}, t(conversation ? "pd_proposed" : "pcp_title")),
+		conversation ? "" : note("pcp_help"),
+		prepareBox,
+		h("div", { class: "pm-fields" }, labelled("pcp_saved", picker), h("div", { class: "actions" }, reload, more)),
+		notice,
+		detail
+	] });
+	box.classList.add("pm-plans");
+	box.dataset.pmPlanProposals = "";
 	const pendingPill = statusPill("in_progress");
 	pendingPill.hidden = true;
 	box.append(pendingPill);
