@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Expose a structured `finding` identity on maintenance findings in `pm_register_list`,
+  `pm_register_get`, overview attention and discussion context chips. `title` stays null.
+  Missing or unproven facts are omitted and listed in `unknowns`. A withdrawn source
+  removes the row and the identity together.
+  See the [register contract](docs/design/pm-register.md).
+
 - Add pinned-commit dependency inventories with lockfile evidence, sourced declarations and
   reverse impact reads via `pm_dependencies_get`, `pm_dependencies_revisions_list` and
   `pm_dependencies_impact_get`. Unknown stays unknown; counts cover only captured data,

@@ -4,7 +4,7 @@ description: Use this when you need to check on, read, wait for, or (only when e
 version: 0.2.5
 license: MIT
 metadata:
-  workflow_version: "2026-10-13.1"
+  workflow_version: "2026-10-13.2"
   api_version: "1"
   contract_version: "2026-10-08"
 ---
@@ -1646,6 +1646,14 @@ when coverage is complete. A meeting still listed but no longer readable makes i
 partial. One hidden record does not fail the page. `coverage.blocked_without_reason` counts
 blocked rows without a stored reason only when coverage is complete; otherwise it is null.
 Do not invent links the timeline does not return.
+Finding rows keep `title` null (`unknowns.title` is `not_recorded`) and add a
+structured `finding` object: `source`, `number`, and only the stored validated
+kind facts (`labels`, `manifests`, or `package`/`ecosystem`/`ghsa_id`/`severity`).
+A missing fact is omitted and named in `unknowns` as `not_recorded` or `unproven`.
+Do not invent an English name. Other row types have no `finding` key. The same
+object is on current finding attention items and on available discussion chips;
+the chip label stays the provider number. A withdrawn source removes the row,
+attention item or chip contents together with `finding`.
 See `docs/design/pm-register.md` for the record mapping.
 
 ### Live overview and discussion origins
