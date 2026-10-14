@@ -192,7 +192,7 @@ for (const locale of locales) {
     await page.locator('[data-reg-more]').click();
     await expect.poll(() => calls.some(path => path.includes(`/register?`) && path.includes(`after=${REGISTER_PAGE_CURSOR}`))).toBe(true);
     await expect(table).toHaveCount(9);
-    await expect(page.locator(`[data-row-key="${copy.rows.mapping}"]`)).toContainText(copy.zh ? 'GitHub 議題' : 'GitHub issue');
+    await expect(page.locator(`[data-row-key="${copy.rows.mapping}"]`)).toContainText(copy.zh ? '未命名議題' : 'Untitled issue');
     await expect(page.locator(`[data-row-key="${copy.rows.mapping}"]`)).not.toContainText(copy.zh ? '尚無紀錄' : 'Not recorded');
     await expect(page.locator('[data-pm-register]')).toContainText(copy.labels.risk);
     await expect(page.locator('[data-reg-more]')).toHaveCount(0);

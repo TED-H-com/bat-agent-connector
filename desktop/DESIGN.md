@@ -1130,7 +1130,8 @@ the title when the inspector is narrow instead of being squeezed between them.
 Workspace refresh and earlier-note failures, Lifecycle and accepted-plan preview
 use one localized error summary with original diagnostics in Details. Export
 source failures belong to the report's parent; withdrawal removes or hides the
-export control without adding a second error. Failed reads retain the event gate.
+export control without adding a second error. Failed reads never acknowledge an
+event checkpoint.
 
 An issue mapping without a source title or number says Untitled issue / 未命名議題;
 its original mapping identity stays in Details. The Resources Work items form

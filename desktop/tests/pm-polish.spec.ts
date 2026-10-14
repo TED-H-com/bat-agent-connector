@@ -75,6 +75,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`Unt
     await row.click(); const inspector = page.locator('[data-reg-inspector]');
     await expect(inspector.getByRole('heading', {level: 2})).toHaveText(locale === 'en' ? 'Untitled issue' : '未命名議題');
     await inspector.locator('details').last().locator('summary').click(); await expect(inspector).toContainText(f.ids.issueMapping);
+    await fits(page); await shot(page, `mapping-inspector-${locale}-${width}`);
     expect(f.writes).toEqual([]);
   } finally {await context.close();}
 });
