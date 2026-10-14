@@ -42,7 +42,7 @@ Screenshot names start with `en-1440-` or `zh-TW-390-`.
 | Draft | Discuss opens a focused unsent draft, meaningful issue title and central record context chip | `03-discussion-draft.png` |
 | Reload | Title, chip and typed message survive; no operation has been created | `04-draft-reload.png` |
 | Send | Thread route and central message appear; composer clears | `05-message-sent.png` |
-| Propose | Native analysis returns six review rows, the 15-minute criterion and unchecked referral exclusion | `06-proposal.png` |
+| Propose | Native analysis names the referral exclusion before review; Review & adopt reveals six rows, the 15-minute criterion and its unchecked exclusion control | `06-proposal.png` |
 | Review | Rationale is entered and Adopt is enabled | `07-review.png` |
 | Adopt | Lose one acknowledgement after admission; Check original request repeats the exact key and envelope. UI receipt checks reach Adopted and link to the new accepted revision | `08-adopted.png` |
 | Resolve review | Secondary action opens a rationale naming the adopted revision; the person edits it before sending | `09-resolution-review.png` |

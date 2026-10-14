@@ -16,13 +16,14 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   const status = h('div', {role: 'status'}), view = h('div'), editors = h('div');
   const remember = (key,value) => {navigation[key]=value;try {localStorage.setItem(navigationKey,JSON.stringify(navigation));} catch { /* Request durability remains the shared form's responsibility. */ }};
   const choose = h('select', {'aria-label': t('pm_meeting_choose'), onchange: () => {selectedId = choose.value; remember('meeting_id',selectedId); void refresh(true);}});
+  const selection = labelled('pm_meeting_choose', choose); selection.hidden = true;
   const warning = h('p', {class: 'muted', hidden: true}, t('pm_meeting_stale'));
   const rebase = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {if (loaded) renderEditors(true);}}, t('pm_meeting_rebase'));
   const readOnly = h('p', {class: 'ui-meta', hidden: true, 'data-pm-panel-readonly': ''}, t('pm_panel_read_only'));
   const launch = button({variant: 'primary', label: t('pm_meeting_new'), 'data-pm-meeting-create': '', 'aria-controls': createId, 'aria-expanded': 'false', onClick: () => reveal('pm.meeting.create')});
   const element = sectionCard({body: h('div', {}, h('div', {class: 'pm-heading'}, launch, readOnly,
     iconButton({icon:'refresh-cw', label:t('pm_meeting_refresh'), onClick: () => void refresh()})),
-    labelled('pm_meeting_choose', choose), status, warning, rebase, view, editors)});
+    selection, status, warning, rebase, view, editors)});
   element.classList.add('pm-evidence', 'pm-meetings'); element.dataset.pmMeetings = '';
   const note = key => h('p', {class: 'muted pm-note-text'}, t(key));
   const fold = (key, body, open = false) => {const node = disclosure({label: t(key), body, open}); node.dataset.pmFold = key; return node;};
@@ -45,7 +46,8 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   function update() {
     entries.forEach(sync => sync());
     forms.forEach(editor => editor.update()); warning.hidden = !stale; rebase.hidden = !stale || !can();
-    rebase.disabled = !loaded; choose.disabled = !loaded; launch.hidden = !can(); readOnly.hidden = !loaded || can();
+    rebase.disabled = !loaded; choose.disabled = !loaded; selection.hidden = !loaded || !model?.meetings.length;
+    launch.hidden = !can() || !model?.sprints.length; readOnly.hidden = !loaded || can();
     launch.setAttribute('aria-expanded', String(loaded && createOpen));
     if (createBox) createBox.hidden = !createOpen;
   }
@@ -183,7 +185,10 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   }
   function renderView() {
     view.replaceChildren(); const detail = model.detail;
-    if (!detail) {view.append(emptyState({title: t('pm_meeting_empty')})); return;}
+    if (!detail) {
+      const empty = emptyState({title: t('pm_meeting_empty_title'), text: t('pm_meeting_empty_help')});
+      empty.querySelector('p').classList.add('muted'); view.append(empty); return;
+    }
     const context = detail.context.document;
     const facts = h('div', {}, h('p', {}, context.sprint_definition.title),
       h('p', {}, t('pm_meeting_snapshot'), ' · ', timeStamp(context.snapshot_ref.as_of)), source(context.snapshot_ref.snapshot_id),
@@ -348,6 +353,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
     return holder;
   }
   function creationEditor() {
+    if (!model.sprints.length) {createBox = null; return entryPoint(note('pm_meeting_sprint_required'), can);}
     const initial=model.sprints.some(row=>row.sprint_id===navigation.sprint_id)?navigation.sprint_id:model.sprints.find(row=>row.status==='active')?.sprint_id||model.sprints[0]?.sprint_id||'';
     const holder=h('div',{class:'pm-fields'}),sprint=options('pm_meeting_sprint',model.sprints.map(row=>[row.sprint_id,row.definition.title]),initial),slot=h('div');
     holder.append(labelled('pm_meeting_sprint',sprint),slot);let current;
@@ -407,7 +413,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
         ||detail.completion&&(detail.completion.meeting_id!==selectedId||detail.completion.completion_id!==detail.meeting.completion_id)))throw Error(t('pm_scope_mismatch'));
       const next=JSON.stringify([selectedId,detail?.meeting.version,sprints.map(row=>[row.sprint_id,row.version]),snapshots.map(row=>row.snapshot_id),workspace()?.version]);
       const changed=signature&&signature!==next;model={meetings,sprints,snapshots,detail};loaded=true;editors.hidden=false;
-      choose.replaceChildren(...(meetings.length?meetings.map(row=>h('option',{value:row.meeting_id},row.title)):[h('option',{value:''},t('pm_meeting_empty'))]));choose.value=selectedId;
+      choose.replaceChildren(...meetings.map(row=>h('option',{value:row.meeting_id},row.title)));choose.value=selectedId;
       renderView();
       if(force||!signature||changed&&!dirty&&!forms.some(editor=>editor.locked()))renderEditors();else if(changed)stale=true;
       signature=next;update();

@@ -9,18 +9,22 @@ export function discussionLabel(t, prefix, value) {
   const key = prefix + value, label = t(key);
   return label === key ? t('ui_status_unknown') : label;
 }
-export function discussionContext(t, refs = [], {limit = refs.length, onMore} = {}) {
+export function discussionContext(t, refs = [], {limit = refs.length, onMore, title, onOpen} = {}) {
   const chips = refs.slice(0, limit).map(ref => {
     const kind = ['risk','issue','action','change','decision'].includes(ref.record_type) ? t('reg_type_' + ref.record_type) : discussionLabel(t, 'pd_kind_', ref.kind);
     const named = ref.available !== false && ref.kind === 'finding' ? findingName(ref.finding, locale, '') : '';
     const text = named || `${kind} · ${ref.available === false ? t('pd_unavailable') : ref.label || t('pd_unavailable')}`;
-    const chip = contextChip({text});
+    const chip = onOpen ? button({variant: 'ghost', label: h('span', {class: 'ui-chip-label'}, text), class: 'ui-context-chip pd-context-trigger', onClick: event => onOpen(event.currentTarget)}) : contextChip({text});
     chip.dataset.discussionContext = ref.kind;
     chip.title = text; chip.setAttribute('aria-label', text);
     // A withdrawn reference contains only its kind and position. Never consult a cache.
     if (ref.available !== false && ref.bound_label && ref.bound_label !== ref.label) chip.title += '\n' + t('pd_bound_label', {label: ref.bound_label});
     return chip;
   });
+  if (!refs.length && title) {
+    const chip = onOpen ? button({variant: 'ghost', label: h('span', {class: 'ui-chip-label'}, title), class: 'ui-context-chip pd-context-trigger', onClick: event => onOpen(event.currentTarget)}) : contextChip({text: title});
+    chip.dataset.discussionContextTitle = ''; chip.setAttribute('aria-label', title); chip.title = title; chips.push(chip);
+  }
   if (refs.length > limit && onMore) chips.push(button({size: 'sm', variant: 'ghost', label: '+' + (refs.length - limit),
     'aria-label': t('pd_more_context', {count: refs.length - limit}), 'data-discussion-more-context': '', onClick: onMore}));
   return chips;
@@ -28,7 +32,8 @@ export function discussionContext(t, refs = [], {limit = refs.length, onMore} = 
 
 // Reuse shared disclosures for the retained, lazily constructed PM tools too.
 export const discussionDom = (create, keyPrefix) => (tag, attrs, ...children) => {
-  const node = create(tag, attrs, ...children);
+  const node = tag === 'button' && ['primary', 'secondary'].includes(attrs?.class)
+    ? button({...Object.fromEntries(Object.entries(attrs).filter(([key]) => key !== 'class')), variant: attrs.class, label: children}) : create(tag, attrs, ...children);
   const identity = Object.entries(attrs || {}).find(([name]) => ['data-pm-information', 'data-pm-add-input',
     'data-pm-planning-revision', 'data-pm-note-only', 'data-pm-prepare-context', 'data-pm-revision-editor'].includes(name));
   const key = keyPrefix && identity ? JSON.stringify([keyPrefix, ...identity]) : undefined;
@@ -52,7 +57,7 @@ export function discussionTitle({t, field, form, value, local = false}) {
     current = field.value.trim(); title.textContent = current; title.title = current; finish(); pencil.focus();
   }}, field, h('div', {class: 'actions'}, button({type: 'submit', variant: 'primary', label: t('pd_save')}))) : form.box;
   edit.classList.add('pd-title-edit'); edit.querySelector('.actions').append(cancel);
-  edit.addEventListener('keydown', event => {if (event.key === 'Escape') {event.preventDefault(); event.stopPropagation(); cancel.click();}});
+  edit.addEventListener('keydown', event => {if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {event.preventDefault(); event.stopPropagation(); cancel.click();}});
   function finish({focus = false} = {}) {restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body); edit.hidden = true; display.hidden = false;}
   function updateState() {
     pencil.disabled = field.disabled; cancel.disabled = form.locked();
@@ -70,17 +75,20 @@ export function discussionTitle({t, field, form, value, local = false}) {
   }};
 }
 
+export const discussionSettingsHref = () => '#/settings?section=agents&from=' + encodeURIComponent(location.hash);
 export function discussionComposer({t, form, analysis, details, draft = false}) {
   const actions = form.box.querySelector(':scope > .actions');
   const status = h('div', {class: 'pd-composer-status'}, form.box.querySelector(':scope > [role=status]'));
   const receipt = form.box.querySelector(':scope > .pm-receipt');
+  receipt.dataset.discussionReceipt = draft ? 'create' : 'message';
   if (details) details.append(receipt); else status.append(disclosure({label: t('pd_details'), body: receipt}));
   const recovery = actions.querySelector('button[type=button]'); if (recovery) status.append(recovery);
   if (analysis) {
     actions.append(analysis.querySelector('[data-discussion-ask]'));
     status.append(analysis);
-  } else if (!draft) status.append(h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' · ', h('a', {href: '#/settings'}, t('pd_setup'))));
+  } else status.append(h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
   form.box.append(h('div', {class: 'pd-composer-row'}, status, actions));
+  if (details) form.box.append(details);
   return h('div', {class: 'pd-composer'}, form.box);
 }
 
@@ -109,26 +117,67 @@ export function discussionFeedback({t, request, node, eligible}) {
     }}));
   }
 }
-export function discussionPanel({t, namespace, workspaceId, panes, onSelect = () => {}}) {
-  const state = viewState(namespace, workspaceId, 'discussion-panel');
-  if (!Object.hasOwn(panes, state.tab)) state.tab = Object.keys(panes)[0];
-  const home = h('aside', {class: 'pd-panel-home'}), body = h('div', {class: 'pd-panel', 'data-discussion-panel': ''});
-  const select = key => {state.tab = key; for (const [id, node] of Object.entries(panes)) node.hidden = id !== key; onSelect(key);};
-  const controls = tabs({label: t('pd_panel'), value: state.tab || 'context',
-    options: Object.keys(panes).map(value => ({value, label: t('pd_tab_' + value), panel: panes[value]})), onChange: select});
-  body.append(controls, ...Object.values(panes)); home.append(body); select(state.tab || 'context');
-  let overlay = null;
-  const trigger = iconButton({icon: 'panel-right', label: t('pd_panel'), 'data-discussion-panel-toggle': '', onClick: () => {
-    if (overlay) {overlay.close(); return;}
-    overlay = inspector({title: t('pd_panel'), onClose: () => {home.append(body); overlay = null;}});
-    overlay.classList.add('pd-panel-overlay'); overlay.body.append(body); document.getElementById('main').append(overlay);
-  }});
+export function discussionPanel({t, namespace, workspaceId, threadId = 'new', panes, onSelect = () => {}}) {
+  // Only cosmetic choices live in this page-session map, never source records.
+  const state = viewState(namespace, workspaceId, 'discussion-panel.' + threadId);
+  if (!Object.hasOwn(panes, state.tab)) state.tab = 'context';
+  const home = h('aside', {class: 'pd-panel-home', hidden: true}), body = h('div', {class: 'pd-panel', 'data-discussion-panel': ''});
+  let overlay = null, opener = null, panelFocus = null, disposed = false;
+  const media = matchMedia('(min-width: 1200px)');
+  const select = key => {
+    if (!Object.hasOwn(panes, key)) return;
+    state.tab = key;
+    for (const [id, node] of Object.entries(panes)) node.hidden = id !== key;
+    onSelect(overlay ? key : null);
+  };
+  const controls = tabs({label: t('pd_panel'), value: state.tab,
+    options: Object.keys(panes).map(value => ({value, label: t('pd_tab_' + value), panel: panes[value]})), onChange: key => {state.explicit = true; select(key);}});
+  body.append(controls, ...Object.values(panes)); home.append(body); select(state.tab);
+  const trigger = iconButton({icon: 'panel-right', label: t('pd_tab_context'), 'data-discussion-panel-toggle': '',
+    'aria-expanded': 'false', onClick: () => overlay ? close(true) : open('context', {explicit: true, returnFocus: trigger})});
   trigger.classList.add('pd-panel-toggle');
-  return {home, trigger, select(key) {select(key); controls.setValue(key);}, open(key) {
+  function locate() {
+    if (!overlay) return;
+    // Responsive CSS can hide the old dock before the media event runs.
+    // Remember focus while it is inside the panel, before that layout change.
+    const focused = overlay.contains(document.activeElement) ? document.activeElement : panelFocus;
+    const panel = overlay;
+    (media.matches ? home : document.getElementById('main')).append(overlay);
+    requestAnimationFrame(() => {if (overlay === panel && panel.contains(focused)) focused.focus({preventScroll: true});});
+  }
+  function close(explicit = false) {
+    if (explicit) {state.explicit = true; state.open = false;}
+    overlay?.close();
+  }
+  function open(key = 'context', {explicit = true, returnFocus, focus = explicit} = {}) {
+    if (disposed) return;
+    state.open = true;
+    if (explicit) state.explicit = true;
+    if (returnFocus) opener = returnFocus;
     select(key); controls.setValue(key);
-    if (matchMedia('(max-width: 1199px)').matches && !overlay) trigger.click();
-    else controls.querySelector('[aria-selected=true]')?.focus();
-  }, close() {overlay?.close();}, dispose() {overlay?.close();}};
+    if (!overlay) {
+      home.hidden = false;
+      overlay = inspector({title: t('pd_panel'), returnFocus: () => (typeof opener === 'function' ? opener() : opener) || trigger, onClose: () => {
+        home.append(body); home.hidden = true; overlay = null; trigger.setAttribute('aria-expanded', 'false');
+        if (!disposed) {state.open = false; state.explicit = true;}
+        onSelect(null);
+      }});
+      overlay.addEventListener('focusin', event => {panelFocus = event.target;});
+      overlay.classList.add('pd-panel-overlay'); overlay.body.append(body); locate();
+      if (!focus && media.matches) {const previous = document.activeElement; queueMicrotask(() => {if (previous?.isConnected && !previous.closest('[hidden], [inert]')) previous.focus({preventScroll: true});});}
+      trigger.setAttribute('aria-expanded', 'true');
+    }
+    onSelect(key);
+    if (focus) queueMicrotask(() => controls.querySelector('[aria-selected=true]')?.focus());
+  }
+  media.addEventListener('change', locate);
+  return {home, trigger, select(key) {select(key); controls.setValue(key);}, open(key, options) {open(key, options);},
+    sync({proposalId = null, pending = false, inputs = false} = {}) {
+      const arrived = proposalId && state.proposalId !== proposalId;
+      if (arrived) {state.proposalId = proposalId; state.explicit = false;}
+      if (arrived || !state.explicit && (pending || inputs || proposalId)) open(inputs && !pending && !proposalId ? 'inputs' : 'plan', {explicit: false});
+      else if (!overlay && state.open) open(state.tab, {explicit: false});
+    }, close() {close();}, dispose() {disposed = true; media.removeEventListener('change', locate); overlay?.close();}};
 }
 
 export function discussionOperation(t, operation) {

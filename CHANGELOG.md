@@ -26,6 +26,15 @@
 - Reserve the returning Issues inspector before its reads finish, so related
   chips do not disappear under the pointer when the side panel arrives.
 
+- Give Discussions room with an on-demand thread panel, readable source rows,
+  composer-side receipts and title/context search. Proposal scope opens for review
+  with one primary action; IME renames preserve drafts. English and zh-TW explain
+  saved messages without a connected PM, and meetings appear only in meeting threads.
+  Keep proposal answer actions compact, hide unavailable report saves while retaining
+  original-request recovery, and give empty states a short title and supporting line.
+  Keep the phone thread list separate from unsent drafts, name exclusions before review,
+  and show meeting prerequisites without empty selectors or repeated messages.
+
 - Schedule at phone width fits every bar to the shared date range, with a range
   caption and the Today line, and does not offer Day zoom there. Week ticks label
   week starts only, so a partial opening week is not crowded under the sticky column.

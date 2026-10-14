@@ -2170,7 +2170,7 @@ body.pm-mode #main { padding: 0; }
 [data-discussions] .pm-thread-link strong { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-discussions] .pm-thread-link time { font-size: var(--fs-caption); color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-discussions] .pm-thread-link .ui-context-chip { align-self: start; max-width: 100%; }
-[data-discussions] .pm-thread-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; min-height: 0; min-width: 0; }
+[data-discussions] .pm-thread-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; min-height: 0; min-width: 0; }
 [data-discussions] .pd-new-layout { grid-template-columns: minmax(0, 1fr); }
 [data-discussions] .pm-discussion { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .pd-thread-header { padding: var(--space-4); border-bottom: 1px solid var(--line); }
@@ -2201,7 +2201,7 @@ body.pm-mode #main { padding: 0; }
 [data-discussions] .pm-note[data-pm-role=assistant], [data-discussions] [data-pm-plan-proposals] { background: var(--accent-soft); border-radius: var(--r-md); padding: var(--space-4); }
 [data-discussions] .pm-note-stamp { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
 [data-discussions] .pm-note-stamp time { margin-left: auto; font-size: var(--fs-caption); }
-[data-discussions] .pm-note-text { font-size: var(--fs-read); }
+[data-discussions] .pm-note-text { font-size: var(--fs-read); max-width: 72ch; overflow-wrap: anywhere; }
 .pd-composer { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--line); background: var(--surface); }
 .pd-composer form { border: 0; padding: 0; }
 .pd-composer textarea { min-height: 68px; max-height: 160px; width: 100%; resize: vertical; }
@@ -2226,7 +2226,7 @@ body.pm-mode #main { padding: 0; }
 .pd-panel h2, .pd-panel h3 { font-size: var(--fs-section); }
 .pd-panel .pm-fields { display: flex; flex-direction: column; }
 .pd-panel .pm-brief-row { display: block; }
-.pd-panel-toggle { display: none; }
+.pd-panel-toggle { display: inline-flex; }
 .pd-context-details { display: flex; flex-direction: column; gap: var(--space-2); }
 .pd-start { padding: var(--space-6) 0; }
 [data-discussions] [data-pm-plan-proposals] h3 { margin: 0 0 var(--space-3); font-size: var(--fs-section); }
@@ -2235,14 +2235,13 @@ body.pm-mode #main { padding: 0; }
 [data-discussions] [data-proposal-history] { margin-block: var(--space-2); }
 .pd-candidate-group h4 { font-size: var(--fs-small); color: var(--text-2); margin-block: var(--space-3) var(--space-1); }
 .pd-candidate { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: var(--space-2); align-items: start; padding-block: var(--space-1); }
-.pd-candidate input[type=checkbox] { margin-top: var(--space-2); }
+.pd-candidate input[type=checkbox] { width: 16px; height: 16px; min-height: 0; margin: 8px 0 0; }
 .pd-candidate summary { padding-block: var(--space-1); cursor: pointer; }
 .pd-questions { display: grid; gap: var(--space-2); }
+.pd-questions .actions { justify-content: flex-start; margin: 0; }
+.pd-questions .actions > button { flex: 0 0 auto; }
 .pd-questions label { display: flex; flex-direction: column; gap: var(--space-1); }
 .pd-panel-overlay .pd-panel { padding: 0; }
-@media (max-width: 1399px) and (min-width: 1200px) {
-  [data-discussions] .pm-thread-layout { grid-template-columns: minmax(0, 1fr) 260px; }
-}
 @media (max-width: 1199px) {
   [data-discussions] .pm-thread-layout { grid-template-columns: minmax(0, 1fr); }
   .pd-panel-home { display: none; }
@@ -2251,8 +2250,12 @@ body.pm-mode #main { padding: 0; }
 @media (max-width: 799px) {
   [data-discussions] { grid-template-columns: minmax(0, 1fr); height: calc(100dvh - 144px); }
   [data-discussions] .pm-workspace-list { max-height: 176px; border-right: 0; border-bottom: 1px solid var(--line); }
+  [data-discussions] .pm-workspace-list:has([data-discussion-search-empty]) { max-height: none; }
   [data-discussions]:has([data-discussion-title]) .pm-workspace-list, [data-discussions]:has(.pd-new-layout) .pm-workspace-list { display: none; }
   [data-pm-region=discussions] [data-discussions] .pm-workspace-list { display: flex; }
+  [data-discussions][data-discussion-route=list] .pm-thread-layout { display: none; }
+  [data-discussions][data-discussion-route=list] .pm-workspace-list { max-height: none; border-bottom: 0; }
+  [data-discussions][data-discussion-route=detail] .pm-workspace-list { display: none; }
   [data-discussions] .pd-thread-header, .pd-transcript, .pd-composer { padding: var(--space-3); }
   [data-discussions] .pm-thread-link { min-height: 44px; }
   [data-discussions] .pd-thread-header input { font-size: 16px; }
@@ -2268,8 +2271,42 @@ body.pm-mode #main { padding: 0; }
 .pd-panel [data-pm-plan] form > div > .muted { font-size: var(--fs-small); }
 
 [data-discussion-details] { margin-block: var(--space-3); }
-.pd-new-layout:has(.pd-panel-home) { grid-template-columns: minmax(0, 1fr) 300px; }
+.pd-new-layout:has(.pd-panel-home) { grid-template-columns: minmax(0, 1fr); }
 @media (max-width: 1199px) { .pd-new-layout:has(.pd-panel-home) { grid-template-columns: minmax(0, 1fr); } }
+
+/* The conversation gets the room until a reader or a new proposal needs the panel. */
+@media (min-width: 1200px) {
+  [data-discussions] .pm-thread-layout:has(.pd-panel-home:not([hidden])) { grid-template-columns: minmax(0, 1fr) 300px; }
+  .pd-panel-home > .pd-panel-overlay { position: static; width: 100%; height: 100%; max-height: none; border: 0; box-shadow: none; }
+  .pd-panel-home > .pd-panel-overlay > header { padding: var(--space-2) var(--space-3); }
+  .pd-panel-home > .pd-panel-overlay > .ui-inspector-body { padding: var(--space-3); }
+}
+@media (min-width: 800px) { [data-discussion-back] { display: none; } }
+.pd-context-trigger { cursor: pointer; font: inherit; padding-inline: var(--space-2); border: 0; color: var(--text-2); }
+.pd-impact { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
+.pd-exclusion { display: flex; align-items: start; gap: var(--space-2); margin-block: var(--space-2); font-size: var(--fs-small); }
+.pd-exclusion .ui-pill { flex-shrink: 0; }
+.pd-review-actions { margin-bottom: var(--space-3); }
+[data-proposal-adopt-panel] > label { display: block; margin-top: var(--space-3); }
+[data-proposal-adopt-panel] [data-proposal-candidate] { min-width: 0; }
+[data-discussion-details]:has(.pm-receipt:empty):not(:has(.pm-receipt:not(:empty))) { display: none; }
+[data-discussion-details] { margin: var(--space-2) 0 0; font-size: var(--fs-small); }
+.pd-source-row { padding-block: var(--space-2); border-bottom: 1px solid var(--line); }
+.pd-source-row p { margin-block: var(--space-1); overflow-wrap: anywhere; }
+.pd-source-facts { display: grid; gap: var(--space-1); }
+.pd-source-facts dd { margin: 0 0 var(--space-2); }
+.pd-source-facts dt { color: var(--text-3); }
+.pd-panel .pm-fact-heading { flex-wrap: wrap; }
+.pd-panel .pm-fact-heading input[type=checkbox] { flex: 0 0 auto; width: 16px; min-height: 0; }
+@media (max-width: 799px) { .pd-candidate input[type=checkbox] { margin-top: 14px; } }
+
+:root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(280px, 100%); }
+@media (max-width: 799px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
+
+:root body .pd-panel .ui-tabs > button { padding-inline: var(--space-1); }
+:root body .pd-transcript .ui-empty > p, :root body .pd-panel .ui-empty > p, :root body .pd-thread-rows .ui-empty > p,
+:root body [data-pm-plan-proposals] .ui-empty > p, :root body [data-pm-brief] .ui-empty > p { color: var(--text-3); }
+.pd-thread-rows .ui-empty { padding: var(--space-4); gap: var(--space-2); }
 /* Global screens. Tokens only; the shell and PM views keep their own files. */
 .global-inbox { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
 .global-inbox-tabs { margin: 0 0 var(--space-4); }
