@@ -43,7 +43,11 @@ for(const locale of ['en','zh-TW'])test(`fixed configured findings remain in the
 test('fixed report and weekly status do not mark discussion complete or create work',async({page})=>{
   const f=reviewFixture();await mount(page,f);
   await expect(page.getByRole('heading',{name:'Membership service maintenance',exact:true})).toBeVisible();
-  await expect(page.locator('[data-review-discussion]')).toContainText('No completed discussion');
+  await expect(page.locator('[data-pm-maintenance-review]')).toContainText('No completed discussion');
+  await expect(page.locator('[data-review-count="github"]')).toContainText('1');
+  for(const kind of ['workload','checks']){await expect(page.locator(`[data-review-count="${kind}"] [data-status="unknown"]`)).toHaveCount(1);await expect(page.locator(`[data-review-count="${kind}"]`)).not.toContainText('0');}
+  for(const name of ['finished','pending']){await expect(page.locator(`[data-review-effort="${name}"] [data-status="unknown"]`)).toHaveCount(1);await expect(page.locator(`[data-review-effort="${name}"]`)).not.toContainText('0');}
+  await expect(page.locator('[data-review-blockers] [data-status="unknown"]')).toHaveCount(1);await expect(page.locator('[data-review-blockers]')).not.toContainText('None in this saved selection');
   await page.getByText('Weekly report schedule',{exact:true}).click();await expect(page.locator('[data-pm-maintenance-review]')).toContainText('waiting for discussion');
   expect(f.state.writes).toHaveLength(0);
   await saveNote(page);expect(f.state.writes[0].body).toEqual({action:'pm.maintenance_review.note',target:{workspace_id:wid,review_id:f.state.reviews[0].review.review_id},
@@ -184,7 +188,7 @@ test('original sample provenance and bounded previous discussion remain separate
   detail.snapshot.maintenance.report.previous_review={review_id:previousId,status:'prepared',snapshot_ref:{snapshot_id:'pmsnap_'+'d'.repeat(32)},history_truncated:true,completion:null,notes:[priorNote],candidates:[],follow_up_results:[]};
   await mount(page,f);await page.getByText('Original saved samples',{exact:true}).click();await expect(page.locator('[data-review-report]')).toContainText('Observed open PRs: 0');
   await page.getByText('Previous discussion context',{exact:true}).click();await expect(page.locator('[data-review-report]')).toContainText('full history remains in that report');
-  await expect(page.locator('[data-review-report]')).toContainText('We discussed the incomplete workload evidence.');await expect(page.locator('[data-review-discussion]')).toContainText('No completed discussion');
+  await expect(page.locator('[data-review-report]')).toContainText('We discussed the incomplete workload evidence.');await expect(page.locator('[data-pm-maintenance-review]')).toContainText('No completed discussion');
 });
 
 for(const locale of ['en','zh-TW'])for(const width of [1440,768,390])test(`maintenance Review layout ${locale} ${width}`,async({page},info)=>{

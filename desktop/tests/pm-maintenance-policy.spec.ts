@@ -38,7 +38,7 @@ for(const native of [false,true])test.describe(native?'Native policy':'Web polic
     await expect(form(page).getByLabel('GitHub workload coverage',{exact:true})).toHaveValue('');
     await form(page).getByLabel('Reason for this policy',{exact:true}).fill('Review the narrower source scope');
     await save(page).click();await expect(form(page)).toContainText('Choose the available GitHub workload coverage');expect(f.state.writes).toHaveLength(0);
-    await section(page).getByText('Full policy and original versions',{exact:true}).click();
+    await section(page).locator('[data-maintenance-current]').getByText('Details',{exact:true}).click();
     await expect(section(page)).toContainText('Repository-wide coverage (not established)');await expect(section(page)).toContainText('A narrower observation cannot establish it');
     await form(page).getByLabel('GitHub workload coverage',{exact:true}).selectOption(policyProfile);await save(page).click();
     await expect.poll(()=>f.state.writes.length).toBe(1);expect(f.state.writes[0].body.params.policy.observation.github_profile).toBe(policyProfile);
@@ -102,8 +102,8 @@ for(const native of [false,true])test.describe(native?'Native policy':'Web polic
     await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');await section(page).getByText('Policy history',{exact:true}).click();
     await page.getByRole('button',{name:'Load more policies',exact:true}).click();await expect(section(page).locator('[data-maintenance-policy]')).toHaveCount(2);
     await expect(section(page)).toContainText('partial history');f.state.hidden=true;await page.getByRole('button',{name:'Refresh maintenance policy',exact:true}).click();
-    await expect(section(page).locator('[data-maintenance-current]')).toContainText('original sources are outside your current access');await openEditor(page);await expect(save(page)).toBeDisabled();
-    await expect(section(page).locator('[data-maintenance-current]')).not.toContainText('No maintenance policy');
+    await expect(section(page)).toContainText('original sources are outside your current access');await openEditor(page);await expect(save(page)).toBeDisabled();
+    await expect(section(page)).not.toContainText('No maintenance policy');
   });
   test('non-owner admin sees records without adoption permission',async({page})=>{
     const f=policyFixture();f.addPolicy();f.base.state.role='contributor';
@@ -175,5 +175,5 @@ for(const native of [false,true])test(`${native?'Native':'Web'} Chinese adoption
   await form(page).getByLabel('採用此政策的理由',{exact:true}).fill('先維持觀察；保留 <script>來源文字</script>');await form(page).getByRole('button',{name:'採用維護政策',exact:true}).click();
   await expect(section(page).locator('[data-maintenance-current]')).toContainText('政策版本 1');expect(f.state.writes).toHaveLength(1);
   expect(f.state.writes[0].body.params.policy.enabled).toBe(false);expect(f.state.writes[0].body.params.policy.observation.github_profile).toBe(policyProfile);
-  await section(page).getByText('完整政策與原始版本',{exact:true}).click();await expect(section(page)).toContainText('保留 <script>來源文字</script>');await expect(section(page).locator('script')).toHaveCount(0);await context.close();
+  await section(page).locator('[data-maintenance-current]').getByText('詳細資訊',{exact:true}).click();await expect(section(page)).toContainText('保留 <script>來源文字</script>');await expect(section(page).locator('script')).toHaveCount(0);await context.close();
 });
