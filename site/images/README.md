@@ -4,7 +4,7 @@ These sixteen unedited PNGs show the real shared browser frontend at candidate
 `944a854fc381f61c6281edb7fcbcf887321a0c68`, using the single membership demo project
 in [`desktop/tests/demo/index.ts`](../../desktop/tests/demo/index.ts).
 This is a development preview, not merged-main, native installation or live acceptance evidence.
-The integrator must re-pin the capture to merged main and regenerate before publication.
+Re-pin the capture to merged main and regenerate it after frontend #133 merges.
 The [progress report](../../docs/product/progress-2026-10-14.md) separates those states.
 
 | Images (English / zh-TW) | Scene and state |

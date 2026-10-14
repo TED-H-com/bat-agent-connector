@@ -14,10 +14,9 @@ Review the proposed update and explicitly adopt it; requirements, work and deliv
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** These screenshots come from candidate commit `944a854f`, not merged main.
-> Backend #132 merged into main as `0c354861` on October 13, 2026; it is not installed or live-tested.
-> Decision-loop backend #134 and frontend #133 are not merged yet. The walkthrough belongs to #133.
-> The integrator will re-pin the gallery to merged main before publication.
+> **Development preview.** The screenshots show the redesigned frontend from candidate commit `944a854f`
+> (PR #133, in review). Backends #132 (`0c354861`) and #134 (`f25e1556`) merged into main on
+> October 13, 2026; neither is installed or live-tested. The gallery will be recaptured from main after #133 merges.
 > The [progress report](docs/product/progress-2026-10-14.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.
 
@@ -107,8 +106,8 @@ flowchart TB
 
 | Status | Scope |
 | --- | --- |
-| Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. |
-| Redesign candidate | Live Overview, source-bound Discussions and adoption, Requirements inspector, register, Schedule, Dependencies, Agents, Board and Session. Decision-loop backend #134 and frontend #133, including the walkthrough, are not merged yet. |
+| Merged baseline | Desktop/central foundation; PM discussions and plan adoption; engineering packages and bounded dispatch; verification, requirement acceptance and dependency evidence; policy-bounded maintenance repairs; BAT proposals/Follow-up; AHP read-only observation. #132 adds central Overview, discussion context and renames, register, Schedule, Dependencies and daily resource buckets. #134 adds adopted goals, recent decisions and the guided close of a resolved issue. |
+| Redesign candidate | Live Overview, source-bound Discussions and adoption, Requirements inspector, register, Schedule, Dependencies, Agents, Board and Session. Frontend #133, including the walkthrough, is in review and not merged yet. |
 | M4 candidate | Joined Idea → delivery → maintenance → Review → new Idea flow; original runtime completion, manual single-input activity observation, Roadmap quality and Brief deviations. Candidate checks and failures are recorded separately. |
 | M5 local candidate | Persistent workspace analysis-adapter choice and read-only observation of serial manual inputs. Focused checks passed; full candidate/platform validation remains. |
 | Remaining PM v1.2 | General native coding adapter, AHP create-own/write support, remaining document views and presentations, wider CLI support, remote usage collection and delivery-efficiency attribution. |

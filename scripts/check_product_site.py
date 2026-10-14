@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -144,10 +145,30 @@ for entry in manifest["images"]:
         for check in checks
     ):
         errors.append(f"Screenshot is missing passing responsive checks: {entry['file']}")
-for entry in manifest["source_files"]:
-    path = ROOT / entry["file"]
-    if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != entry["sha256"]:
-        errors.append(f"Capture source does not match its manifest: {entry['file']}")
+
+
+def pinned(spec, text=False):
+    result = subprocess.run(["git", "-C", str(ROOT), *spec], capture_output=True, text=text)
+    return result.stdout if result.returncode == 0 else None
+
+
+# capture_site.mjs requires these paths to equal the pinned commit and reads its tooling from the checkout.
+# Hash frontend sources at that commit, so a gallery pinned to a candidate branch still checks on main.
+PINNED_PATHS = ("desktop/src/", "desktop/tests/demo/", "src/bat_agent_connector/dashboard/")
+commit = manifest.get("frontend_source_commit", "")
+if pinned(["cat-file", "-e", f"{commit}^{{commit}}"]) is None:
+    errors.append(f"Pinned frontend commit is unavailable; fetch {commit} before checking capture sources.")
+else:
+    if (pinned(["rev-parse", f"{commit}:desktop/src"], text=True) or "").strip() != manifest.get("frontend_source_tree"):
+        errors.append("Screenshot manifest tree does not match its pinned commit.")
+    for entry in manifest["source_files"]:
+        if entry["file"].startswith(PINNED_PATHS):
+            data = pinned(["cat-file", "blob", f"{commit}:{entry['file']}"])
+        else:
+            path = ROOT / entry["file"]
+            data = path.read_bytes() if path.is_file() else None
+        if data is None or hashlib.sha256(data).hexdigest() != entry["sha256"]:
+            errors.append(f"Capture source does not match its manifest: {entry['file']}")
 if errors:
     raise SystemExit("\n".join(errors))
 print(f"Checked {links} links and static assets; no missing local targets, fragments or duplicate IDs.")

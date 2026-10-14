@@ -13,8 +13,9 @@ It retains Windows Fleet, central authority, platform differences and installati
 The redesigned views and sixteen screenshots are a **candidate preview** pinned to
 `944a854fc381f61c6281edb7fcbcf887321a0c68`.
 Backend #132 merged into main as `0c354861` on October 13, 2026; it is not installed or live-tested.
-Decision-loop backend #134 and frontend #133 are not merged yet; the walkthrough belongs to #133.
-The integrator must re-pin to merged main and regenerate the gallery before publication.
+Decision-loop backend #134 merged into main as `f25e1556` on October 13, 2026; it is not installed or live-tested.
+Frontend #133, which includes the walkthrough, is in review. Re-pin to merged main and regenerate
+the gallery after #133 merges.
 Keep validation outcomes in the dated [progress report](../docs/product/progress-2026-10-14.md);
 link it from the site. The [October 12 report](../docs/product/progress-2026-10-12.md) retains historical evidence.
 The [handoff](../docs/handoff/2026-10-12-pm-v1.2.md) has development continuation

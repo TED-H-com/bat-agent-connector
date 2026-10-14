@@ -2,10 +2,10 @@
 
 這輪改版把「看懂狀況 → 找到問題 → 與 PM 討論 → 審閱並採用」接在同一個專案脈絡。
 本頁以分支候選 `944a854f` 的內容及任務提供的 PR 狀態為準。
-後端 [#132](https://github.com/teddashh/bat-agent-connector/pull/132) 已於 2026-10-13 以 `0c354861` 合併至 main。
-決策流程後端 [#134](https://github.com/teddashh/bat-agent-connector/pull/134) 與
-前端 [#133](https://github.com/teddashh/bat-agent-connector/pull/133) **尚未合併**。
-#132 尚未安裝或實機驗收；合併不等於已交付使用者環境。
+後端 [#132](https://github.com/teddashh/bat-agent-connector/pull/132) 與決策流程後端
+[#134](https://github.com/teddashh/bat-agent-connector/pull/134) 已於 2026-10-13 合併至 main（`0c354861`、`f25e1556`）。
+前端 [#133](https://github.com/teddashh/bat-agent-connector/pull/133) 仍在審查，**尚未合併**。
+兩項後端皆尚未安裝或實機驗收；合併不等於已交付使用者環境。
 [10 月 14 日進度草稿](progress-2026-10-14.md)列出交付範圍、證據及剩餘工作。
 
 既有 Charter／RTM 與本機資源頁基準為 **2bf152d／#122**。
@@ -18,9 +18,9 @@ M4 **755f126／#116** 與 M5 **f6c8f6b** 沿用下方歷史候選紀錄，沒有
 | 層級 | 本輪狀態 |
 | --- | --- |
 | 分支整合（branch） | `944a854f` 有改版共用前端、中央讀取合約及決策 walkthrough；公開截圖使用同一合成專案。 |
-| 主線（merged） | #132 後端已於 2026-10-13 以 `0c354861` 合併；#134 決策流程後端與 #133 前端尚未合併，須核對最終整合來源與 checks。 |
-| 安裝／原生驗收（installed/native） | #132 尚未安裝；尚無本輪前端候選的安裝／原生驗收回執，browser 截圖不代替原生套件。 |
-| 實機驗收（live-tested） | #132 尚未實機驗收；尚無本輪前端候選的實際 BAT／provider／模型／部署驗收回執，CI 與合成資料不代替實機證據。 |
+| 主線（merged） | #132 後端（`0c354861`）與 #134 決策流程後端（`f25e1556`）已於 2026-10-13 合併；#133 前端尚未合併，須核對最終整合來源與 checks。 |
+| 安裝／原生驗收（installed/native） | #132／#134 尚未安裝；尚無本輪前端候選的安裝／原生驗收回執，browser 截圖不代替原生套件。 |
+| 實機驗收（live-tested） | #132／#134 尚未實機驗收；尚無本輪前端候選的實際 BAT／provider／模型／部署驗收回執，CI 與合成資料不代替實機證據。 |
 
 - **#132 後端主線，2026-10-13 以 `0c354861` 合併：**固定 commit 技術相依清冊、宣告／撤回及有界 impact；
   唯讀時程的 baseline／forecast／actual；問題、行動與變更登記；每日資源桶；
@@ -32,16 +32,15 @@ M4 **755f126／#116** 與 M5 **f6c8f6b** 沿用下方歷史候選紀錄，沒有
   即時總覽與已存報告分開；從原紀錄帶入來源標籤與標題，提案審閱與明確採用保持中央證據。
   RTM 與共用詳情、甘特圖、相依矩陣／圖、登記時間線及每日資源趨勢已在分支。
   人工 Session 保持唯讀；未知、部分涵蓋、來源撤回及原請求恢復保持原規則。
-  [walkthrough 腳本](../../desktop/tests/pm-walkthrough.mjs)與截圖也屬於 #133，使用 registered operations、
+  [walkthrough 腳本](https://github.com/teddashh/bat-agent-connector/blob/944a854fc381f61c6281edb7fcbcf887321a0c68/desktop/tests/pm-walkthrough.mjs)與截圖也屬於 #133，使用 registered operations、
   暫存 Git、scripted runtime 及原採用 key 查回。候選 `944a854f` 未含 #134，仍停在 Return。
-  #134 提供缺少的目標與決策資料；#133 整合 #132 與 #134 後再記錄端到端結果。
-  詳見[目前 walkthrough 邊界](../design/pm-decision-walkthrough.md)。
-- **#134 決策流程後端候選，尚未合併：**`feat/pm-overview-decision-loop` 改動 Overview 讀取及治理引導。
+  #134 已合併並提供缺少的目標與決策資料；#133 整合分支已併入 #132 與 #134，合併前記錄端到端結果。
+  詳見[目前 walkthrough 邊界](https://github.com/teddashh/bat-agent-connector/blob/944a854fc381f61c6281edb7fcbcf887321a0c68/docs/design/pm-decision-walkthrough.md)。
+- **#134 決策流程後端，2026-10-13 以 `f25e1556` 合併：**改動 Overview 讀取及治理引導。
   目標依固定欄位順序讀取已確認輸入，採用後仍保留；`recent_decisions` 列出最近的計畫採用與已記錄決策。
   阻礙跨版本保留原需求 ID，並比對 current／blocked／absent ID 集合。
   新版本採用後，可透過既有 `pm.governance.revise` 回報問題已解決；結案不代表需求驗收。
-  整合者回報 GitHub CI 通過；Python 3.14 完整套件為 6322 passed、48 skipped、0 failed。
-  交接時 Python 3.10 仍在執行；本文件工作線未重跑或重查這些結果。
+  合併前 GitHub CI 全部通過，包含 Python 3.10–3.13；本機 Python 3.14 完整套件為 6322 passed、48 skipped、0 failed。
 - **既有主線：#121／#122。** Charter／RTM 與本機 Codex／Claude collector、cursor／去重、
   來源配額窗已合併；每日桶已由 #132 合併，改版前端 #133 尚未合併。
   遠端 collector、交付效能歸因、容量與預測仍待完成，見[資源合約](../design/agent-resource-observation.md)。
@@ -49,7 +48,7 @@ M4 **755f126／#116** 與 M5 **f6c8f6b** 沿用下方歷史候選紀錄，沒有
 - **既有主線：#98–#115。** 計畫、Sprint／Kanban、治理、工程包／交接、有界批次、發布／維護、
   成果評估／依賴、自然對話採用、政策內修復、AHP 唯讀及 BAT 結構化分析。
 - **M4／M5 歷史候選。** M4 `755f126` 及 M5 `f6c8f6b` 的範圍、結果與阻擋保留原紀錄；本輪未查 GitHub 最新狀態。
-- **尚缺：**#133 整合 #132 與 #134 後的整組驗證及 walkthrough 結果、#134／#133 合併與公開圖庫重釘；安裝／原生及實機驗收另列。
+- **尚缺：**#133 最終整合來源的整組驗證及 walkthrough 結果、#133 合併與公開圖庫重釘；安裝／原生及實機驗收另列。
   其餘完整 PM v1.2 工作仍依下表追蹤，不把視覺改版當作整個生命週期完成。
 
 完整 [已採用計畫](pm-v1.2-plan.md)的 20 章、W01–W52、A01–A64、M0–M6 保持不變。
@@ -59,7 +58,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 
 下表依固定來源歸類；「主線」表示程式已合併，不代表所有驗收條件或實際部署完成。
 各行保留原計畫優先級及編號，驗證數字見進度報告。
-視圖已在 #133 分支接入；#132 已合併，#134／#133 尚需完成最終整合驗證與合併。
+視圖已在 #133 分支接入；#132 與 #134 已合併，#133 尚需完成最終整合驗證與合併。
 安裝版／原生及實機驗收仍需各自留證。
 
 | 工作 | 優先級 | 原計畫項目 | 目前狀態／尚缺 |
@@ -73,14 +72,14 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W07 | P0 | PM worktree bootstrap | 主線：PM 自有 carrier、固定 commit、不可覆寫草稿與文件採用，不夾帶程式碼修改。 |
 | W08 | P0 | Plan revision 與採用流程 | 主線：版本、來源、accepted CAS、理由、scope revision 與 Git 證據；採用不直接授權執行。 |
 | W09 | P1 | PM runner 與 adapter selection | 主線 #115：按操作選 native／BAT 有界分析、計畫提案與 Follow-up；持久 workspace 選擇見 W24。 |
-| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄。#132 已合併有序 context、來源撤回、durable rename 與中央提案可採用性；#133 已接前端及 walkthrough，#134 補決策流程後端。#133／#134 尚未合併；更完整專業會議主持仍待做。 |
+| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄。#132 已合併有序 context、來源撤回、durable rename 與中央提案可採用性；#134 已合併決策流程後端；#133 已接前端及 walkthrough，尚未合併；更完整專業會議主持仍待做。 |
 | W11 | P1 | Plan diff 與影響分析 | 主線：固定版本／來源／條件差異及影響候選；#113 提供候選更新及整組採用，完整語意判讀待強化。 |
-| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。即時 overview、可見需求進度／待決／偏差與涵蓋標記已由 #132 合併；#133 已接即時／報告介面，#134 補採用後目標與近期決策，#133／#134 尚未合併。固定報告不混入即時數字，見 [API 合約](../design/pm-overview-discussion-context.md)。 |
+| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。即時 overview、可見需求進度／待決／偏差與涵蓋標記已由 #132 合併；#134 已合併採用後目標與近期決策；#133 已接即時／報告介面，尚未合併。固定報告不混入即時數字，見 [API 合約](../design/pm-overview-discussion-context.md)。 |
 | W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據。#132 已合併唯讀時程投影（[合約](../design/pm-schedule.md)）；不推算預測或 critical path；#133 已接甘特圖，尚未合併。M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。 |
 | W14 | P1 | Kanban | 主線：工作／執行狀態、WIP、固定品質投影及依賴證據；M4 補原 runtime 完成；完整 WIP 政策待做。 |
 | W15 | P1 | Sprint artifacts 與時間 | 主線：Sprint 承諾、固定 DoD／接受條件及原成果品質；完整 Scrum 事件與引導待做。 |
 | W16 | P1 | Planning Review Retro | 主線：Planning／Review／Retro 的固定討論、結果與改善追蹤；Daily Scrum／LLM 會議主持待做。 |
-| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任。#132 已合併登記讀取投影（`pm_register_list`／`pm_register_get`）的列、完整可見掃描合計與明確連結時間線。#133 已接篩選表與時間線，#134 補採用後問題結案引導，#133／#134 尚未合併；結案不代表需求驗收，自動跨快照追蹤／提醒仍待做。 |
+| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任。#132 已合併登記讀取投影（`pm_register_list`／`pm_register_get`）的列、完整可見掃描合計與明確連結時間線。#134 已合併採用後問題結案引導；#133 已接篩選表與時間線，尚未合併；結案不代表需求驗收，自動跨快照追蹤／提醒仍待做。 |
 | W18 | P1 | GitHub issue mapping | 主線：明確選取公開內容、穩定 Issue 關聯、追加版本及原操作查回；完整外部同步、多對多、明確重開待做。 |
 | W19 | P1 | Orchestrator readiness 與派工 | 主線：固定 package 經既有交接派工；原接受證據可滿足明確依賴；保留最後來源與權限檢查。 |
 | W20 | P1 | 現有 integration 與 merge 接入 | 主線：integration preview／apply／conflict handoff／PR merge 接原 package 與 lineage；merge receipt 不代替需求驗收。 |
