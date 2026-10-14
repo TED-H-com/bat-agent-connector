@@ -319,6 +319,8 @@ class OperationService:
         self._active: dict[str, asyncio.Task] = {}
         self._wake: asyncio.Event | None = None
         self.context: dict[str, Any] = {}  # handlers' shared dependencies (fleet, inventory, ...)
+        from .host_git import install as install_git_bindings
+        install_git_bindings(journal)
         for a in actions or []:
             self.register(a)
 
@@ -450,11 +452,10 @@ class OperationService:
             seq = self.db.execute("SELECT COALESCE(MAX(seq),0)+1 FROM operation_steps WHERE operation_id=?",
                                   (operation_id,)).fetchone()[0]
             from .host_git import bind_step
-            locations = bind_step(self, operation_id, name)
+            bind_step(self, operation_id, name)
             self.db.execute("""INSERT INTO operation_steps(operation_id,seq,name,status,request,started_at)
                 VALUES(?,?,?,?,?,?)""", (operation_id, seq, name, "started", _canonical(request), time.time()))
-            self._observation_event(operation_id, "operation.step.started", {"step": name, "step_seq": seq, "request": request,
-                **({"git_execution": locations} if locations is not None else {})})
+            self._observation_event(operation_id, "operation.step.started", {"step": name, "step_seq": seq, "request": request})
 
     def _step_restart(self, operation_id: str, name: str, request: dict, *, bookkeeping=False) -> None:
         with self.journal.tx():
@@ -470,12 +471,11 @@ class OperationService:
             from .pm_lifecycle_gates import admit_step
             admit_step(self.db, operation_id, name, bookkeeping=bookkeeping, restart=True)
             from .host_git import bind_step
-            locations = bind_step(self, operation_id, name)
+            bind_step(self, operation_id, name)
             self.db.execute("""UPDATE operation_steps SET status='started',request=?,response=NULL,error=NULL,
                 started_at=?,finished_at=NULL WHERE operation_id=? AND name=?""",
                             (_canonical(request), time.time(), operation_id, name))
-            self._observation_event(operation_id, "operation.step.restarted", {"step": name, "request": request,
-                **({"git_execution": locations} if locations is not None else {})})
+            self._observation_event(operation_id, "operation.step.restarted", {"step": name, "request": request})
 
     def _step_done(self, operation_id: str, name: str, response: dict, *, reconciled: bool = False) -> None:
         with self.journal.tx():

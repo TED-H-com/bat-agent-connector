@@ -31,10 +31,12 @@ workspace/repository operations that do not yet name
 a host conservatively freeze the configured host inventory at admission; changing
 one of those locations blocks new effects until the original binding is restored.
 No operation key, existing payload or journal schema version is rewritten.
-Per-step locations live in `external_refs.git_execution_steps`, keyed by step
-name and recorded atomically with step admission. Literal effect requests stay
-unchanged: permission ACK and maintenance-repair checks still compare them
-exactly. Git metadata is also excluded from the separate task-incarnation
+Per-step locations live in an additive `git_execution_steps` table, keyed by
+operation ID and step name and recorded atomically with step admission. Its DDL
+is idempotent and allocates no data step or `user_version`. Literal effect
+requests and external references stay unchanged: permission ACK, repair,
+receipt rollback and legacy-reference recovery checks retain their exact
+evidence. Git metadata is also excluded from the separate task-incarnation
 projection; all task fields and controller checks remain required.
 Standalone config historically accepts broader URLs than guided setup. Exact
 endpoint bytes are bound by digest so a secret-bearing query/userinfo is never

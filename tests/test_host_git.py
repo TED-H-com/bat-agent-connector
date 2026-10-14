@@ -23,6 +23,19 @@ def config(mode="ssh"):
     return parse_config({"hosts": {"fixture": {**BASE, "git": mode}}})
 
 
+def test_binding_ddl_is_idempotent_without_a_data_step(tmp_path):
+    journal = Journal(tmp_path / "bindings.sqlite3")
+    try:
+        version = journal.db.execute("PRAGMA user_version").fetchone()[0]
+        host_git.install(journal)
+        snapshot = list(journal.db.iterdump())
+        host_git.install(journal)
+        assert list(journal.db.iterdump()) == snapshot
+        assert journal.db.execute("PRAGMA user_version").fetchone()[0] == version
+    finally:
+        journal.close()
+
+
 @pytest.mark.parametrize("mode,alias,expected", [("ssh", "fixture-bat", True), ("ssh", "", False),
                                                 ("local", "fixture-bat", False), ("local", "", False)])
 def test_logical_host_dispatch(mode, alias, expected):
@@ -258,7 +271,10 @@ async def test_new_admission_and_step_bind_location_and_replay_completed_receipt
     await ops._execute(op["operation_id"])
     step = ops.db.execute("SELECT request FROM operation_steps WHERE operation_id=?", (op["operation_id"],)).fetchone()
     assert json.loads(step["request"]) == {"fixture_request": "preserve-exact"}
-    assert ops._row(op["operation_id"])["external_refs"]["git_execution_steps"]["git-effect"]["fixture"] == location
+    saved = ops.db.execute("SELECT binding FROM git_execution_steps WHERE operation_id=? AND name='git-effect'",
+                           (op["operation_id"],)).fetchone()
+    assert json.loads(saved[0])["fixture"] == location
+    assert ops._row(op["operation_id"])["external_refs"] == op["external_refs"]
     assert len(calls) == 1
     # A persisted completed step remains readable without invoking a new runner.
     from bat_agent_connector.operations import OpContext
@@ -282,12 +298,17 @@ async def test_step_location_fences_new_effects_while_completed_receipts_remain_
     op = create(ops, handler)
     await ops._execute(op["operation_id"])
     refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
-    if change == "admission_lost":
-        del refs["admission_binding"]["git_execution"]
-        ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {})
-    else:
-        refs["git_execution_steps"]["git-effect"]["fixture"]["transport"] = "local"
     with ops.journal.tx():
+        if change == "admission_lost":
+            del refs["admission_binding"]["git_execution"]
+            ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {})
+        else:
+            saved = ops.db.execute("SELECT binding FROM git_execution_steps WHERE operation_id=?",
+                                   (op["operation_id"],)).fetchone()
+            locations = json.loads(saved[0])
+            locations["fixture"]["transport"] = "local"
+            ops.db.execute("UPDATE git_execution_steps SET binding=? WHERE operation_id=?",
+                           (json.dumps(locations), op["operation_id"]))
         ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
     with host_git.execution(ops, op["operation_id"]):
         assert await handler(OpContext(ops, ops._row(op["operation_id"]))) == {"fixed": "receipt"}
@@ -318,9 +339,9 @@ async def test_unresolved_ssh_never_redirects_to_local_after_reload(operations, 
     if legacy:
         refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
         del refs["admission_binding"]["git_execution"]
-        del refs["git_execution_steps"]
         with ops.journal.tx():
             ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
+            ops.db.execute("DELETE FROM git_execution_steps WHERE operation_id=?", (op["operation_id"],))
     ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {"fixture": "fixture-bat"})
     await ops._execute(op["operation_id"])
     result = ops.get(op["operation_id"])
@@ -405,9 +426,9 @@ async def test_unresolved_location_drift_precedes_domain_availability_refusal(op
     if legacy:
         refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
         del refs["admission_binding"]["git_execution"]
-        del refs["git_execution_steps"]
         with ops.journal.tx():
             ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
+            ops.db.execute("DELETE FROM git_execution_steps WHERE operation_id=?", (op["operation_id"],))
     ops.context["git_runner"] = host_git.HostGitRunner(config("local"), {"fixture": "fixture-bat"})
     await ops._execute(op["operation_id"])
     result = ops.get(op["operation_id"])
@@ -435,9 +456,9 @@ async def test_legacy_ssh_recovery_ignores_unrelated_local_declaration(operation
     await ops._execute(op["operation_id"])
     refs = copy.deepcopy(ops._row(op["operation_id"])["external_refs"])
     del refs["admission_binding"]["git_execution"]
-    del refs["git_execution_steps"]
     with ops.journal.tx():
         ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?", (json.dumps(refs), op["operation_id"]))
+        ops.db.execute("DELETE FROM git_execution_steps WHERE operation_id=?", (op["operation_id"],))
     cfg = config()
     from dataclasses import replace
     cfg.hosts["unrelated"] = replace(cfg.host("fixture"), name="unrelated", git="local")

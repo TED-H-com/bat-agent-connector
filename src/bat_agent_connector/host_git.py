@@ -171,21 +171,30 @@ def admission_bindings(ops, action, target, params, binding):
     return {**(binding or {}), "git_execution": locations}
 
 
+def install(journal):
+    # Additive DDL only: no user_version or historical data step is allocated.
+    with journal.tx():
+        journal.db.execute("""CREATE TABLE IF NOT EXISTS git_execution_steps (
+            operation_id TEXT NOT NULL REFERENCES operations(operation_id) ON DELETE CASCADE,
+            name TEXT NOT NULL, binding TEXT NOT NULL, PRIMARY KEY(operation_id,name))""")
+
+
 def bind_step(ops, operation_id, name):
     # Effect requests are domain evidence: permission ACKs and repair recovery
-    # compare their exact bytes. Freeze location separately, in the same step
-    # transaction, without altering those requests or allocating a schema step.
+    # compare their exact bytes. External refs also have atomic receipt/recovery
+    # semantics. Freeze location separately in the same step transaction.
     refs = ops._row(operation_id).get("external_refs") or {}
     locations = (refs.get("admission_binding") or {}).get("git_execution")
     if locations is None:
         return None
-    steps = refs.get("git_execution_steps") or {}
-    if name in steps:
-        if steps[name] != locations:
+    saved = ops.db.execute("SELECT binding FROM git_execution_steps WHERE operation_id=? AND name=?",
+                           (operation_id, name)).fetchone()
+    if saved is not None:
+        if json.loads(saved[0]) != locations:
             raise NeedsAttention("GIT_EXECUTION_LOCATION_CHANGED", "Original Git step location changed")
     else:
-        ops.db.execute("UPDATE operations SET external_refs=? WHERE operation_id=?",
-            (_canonical({**refs, "git_execution_steps": {**steps, name: locations}}), operation_id))
+        ops.db.execute("INSERT INTO git_execution_steps(operation_id,name,binding) VALUES(?,?,?)",
+                       (operation_id, name, _canonical(locations)))
     return locations
 
 
@@ -219,7 +228,8 @@ def require_execution(host=None):
         return  # Setup separately binds before/after configuration revisions.
     refs = op.get("external_refs") or {}
     locations = (refs.get("admission_binding") or {}).get("git_execution")
-    steps = list((refs.get("git_execution_steps") or {}).values())
+    steps = [json.loads(row[0]) for row in ops.db.execute(
+        "SELECT binding FROM git_execution_steps WHERE operation_id=?", (operation_id,))]
     if steps:
         locations = locations if locations is not None else steps[0]
         if any(saved != locations for saved in steps):
