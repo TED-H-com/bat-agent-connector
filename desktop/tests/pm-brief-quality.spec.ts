@@ -1,4 +1,4 @@
-import {openPmSection, openPmPanel} from './pm-navigation.ts';
+import {openPmSection, openReportTask} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
@@ -74,7 +74,8 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`origin
   await page.locator('[data-pm-work]>summary').click();
   await capture.getByRole('button',{name:zh?'查回原請求':'Check original request',exact:true}).click();
   expect(f.state.writes[1]).toEqual(original);expect(original.body.params.quality_ref).toEqual(f.ref);
-  await openPmSection(page, 'overview');await openPmPanel(page, 'ui_report');
+  await openPmSection(page, 'overview');await openReportTask(page, 'save');
+  await expect(page.getByRole('heading',{name:zh?'儲存報告':'Save report',exact:true})).toBeVisible();
   await page.locator('[data-pm-action="pm.snapshot.create"] button[type=submit]').click();await page.keyboard.press('Escape');
   const deviations=page.locator('[data-pm-brief-section="deviations"]');
   await expect(deviations).toContainText(zh?'審查者否決驗收條件':'Reviewer rejected acceptance criterion');
