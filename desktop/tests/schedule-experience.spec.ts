@@ -57,7 +57,13 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(region.locator('[data-schedule-delta]')).toHaveText(locale === 'en' ? '+3d' : '+3 天');
   await expect(region.locator('.schedule-chart [data-schedule-row^="attempt:session:"]')).toHaveCount(0);
   const open = region.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] [data-open=true]`);
-  await expect(open).toContainText(locale === 'en' ? 'Open' : '未結束');
+  const openWord = locale === 'en' ? 'Open' : '未結束';
+  if (width >= 800) await expect(open).toContainText(openWord);
+  else {
+    await expect(open).toHaveCount(1);
+    await expect(open.locator('.schedule-bar-label')).toHaveCount(0);
+    await expect(region.locator(`[data-schedule-row="work:${f.ids.work.resetEmail}"] .schedule-date-range`)).toContainText(openWord);
+  }
   await expect(region.locator('.schedule-bar.blocked')).toHaveCount(0);
   await noOverflow(page); await shot(page, `schedule-${locale}-${width}`);
   const milestone = item(page, 'milestone:design_review'); await milestone.focus(); await page.keyboard.press('ArrowLeft');
@@ -85,11 +91,16 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(inspector.locator('a[href*="/requirements?select="]')).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/requirements?select=${f.ids.work.resetEmail}`);
   await noOverflow(page); await shot(page, `schedule-inspector-${locale}-${width}`);
   await page.keyboard.press('Escape'); await expect(inspector).toHaveCount(0); await expect(work).toBeFocused();
-  await region.getByRole('radio', {name: locale === 'en' ? 'Day' : '日', exact: true}).click();
-  await expect(region.locator('.schedule-weekend').first()).toBeAttached();
-  await region.getByRole('button', {name: locale === 'en' ? 'Today' : '今天', exact: true}).click();
-  if (width >= 800) expect(await region.locator('.schedule-viewport').evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
-  else expect(await region.locator('.schedule-lane').nth(1).evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
+  if (width >= 800) {
+    await region.getByRole('radio', {name: locale === 'en' ? 'Day' : '日', exact: true}).click();
+    await expect(region.locator('.schedule-weekend').first()).toBeAttached();
+    await region.getByRole('button', {name: locale === 'en' ? 'Today' : '今天', exact: true}).click();
+    expect(await region.locator('.schedule-viewport').evaluate(node => node.scrollLeft)).toBeGreaterThan(0);
+  } else {
+    await expect(region.getByRole('radio', {name: locale === 'en' ? 'Day' : '日', exact: true})).toHaveCount(0);
+    await expect(region.getByRole('radio', {name: locale === 'en' ? 'Week' : '週', exact: true})).toHaveAttribute('aria-checked', 'true');
+    await expect(region.locator('[data-schedule-axis-caption]')).toBeVisible();
+  }
   await region.locator('.schedule-unscheduled summary').click();
   await expect(region.locator('.schedule-unscheduled')).toContainText(f.copy.manualTitle);
   expect(await region.innerText()).not.toMatch(/\b(?:undefined|null|NaN)\b/);
@@ -584,10 +595,12 @@ for (const colorScheme of ['light', 'dark'] as const) test(`Month grid fills eve
     expect(Math.abs(lane.track - lane.lane)).toBeLessThan(1);
   }
   await page.setViewportSize({width: 390, height: 844});
+  await expect(page.locator('[data-pm-schedule]')).toHaveAttribute('data-schedule-layout', 'phone');
   const mobile = await geometry();
-  for (const lane of mobile.lanes.slice(1)) expect(lane.track).toBeGreaterThanOrEqual(lane.lane);
-  expect(mobile.positions).toEqual(desktop.positions);
-  expect(mobile.scaleWidth).toBe(desktop.scaleWidth);
+  const dated = mobile.lanes.filter(lane => lane.lane > 0 && lane.track > 0);
+  expect(dated.length).toBeGreaterThan(5);
+  for (const lane of dated) expect(Math.abs(lane.track - lane.lane)).toBeLessThan(2);
+  await expect(page.locator('[data-schedule-axis-caption]')).toBeVisible();
   await noOverflow(page);
   expect(f.writes).toEqual([]);
   await context.close();
@@ -685,4 +698,157 @@ test('UTC calendar days render identical ticks, bars, and meta in Pacific/Honolu
   expect(snapshots['Pacific/Honolulu'].meta).toBe(snapshots['Asia/Taipei'].meta);
   expect(snapshots['Pacific/Honolulu'].ticks).toEqual(snapshots['Asia/Taipei'].ticks);
   expect(snapshots['Pacific/Honolulu'].bars).toEqual(snapshots['Asia/Taipei'].bars);
+});
+
+function rowOverflows(page: Page) {
+  return page.evaluate(() => {
+    const bad: {id: string; cls: string; left: number; right: number; rowLeft: number; rowRight: number}[] = [];
+    for (const row of document.querySelectorAll('.schedule-row[data-schedule-row]')) {
+      const host = row.getBoundingClientRect();
+      if (host.width < 2) continue;
+      for (const el of row.querySelectorAll('.schedule-bar, .schedule-bar-label, .schedule-delta, .schedule-tick')) {
+        const box = el.getBoundingClientRect();
+        if (box.width < 0.5 || box.height < 0.5) continue;
+        if (box.left < host.left - 0.5 || box.right > host.right + 0.5 || box.top < host.top - 0.5 || box.bottom > host.bottom + 0.5) {
+          bad.push({id: (row as HTMLElement).dataset.scheduleRow || '', cls: (el as HTMLElement).className, left: box.left, right: box.right, rowLeft: host.left, rowRight: host.right});
+        }
+      }
+    }
+    return bad;
+  });
+}
+
+for (const locale of ['en', 'zh-TW'] as const) test(`phone schedule fits bars inside each row and shows the shared range ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL, viewport: {width: 390, height: 844}}), page = await context.newPage();
+  await start(page, locale);
+  const region = page.locator('[data-pm-schedule]');
+  await expect(region).toHaveAttribute('data-schedule-layout', 'phone');
+  await expect(region.getByRole('radio', {name: locale === 'en' ? 'Day' : '日', exact: true})).toHaveCount(0);
+  const caption = region.locator('[data-schedule-axis-caption]');
+  await expect(caption).toBeVisible();
+  await expect(caption).toHaveText(locale === 'en' ? /\S+ – \S+/ : /\S+至\S+/);
+  await expect(region.locator('.schedule-row[data-has-dates="true"] .schedule-today').first()).toBeVisible();
+  await expect(region.locator('.schedule-bar-label')).toHaveCount(0);
+  expect(await rowOverflows(page)).toEqual([]);
+  const bounds = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('.schedule-row[data-has-dates="true"]')] as HTMLElement[];
+    const lanes = rows.map(row => row.querySelector('.schedule-lane')!.getBoundingClientRect().width);
+    const tracks = rows.map(row => row.querySelector('.schedule-track')!.getBoundingClientRect().width);
+    const today = rows.map(row => Math.round(row.querySelector('.schedule-today')!.getBoundingClientRect().left));
+    return {lanes, tracks, todaySpread: Math.max(...today) - Math.min(...today)};
+  });
+  expect(bounds.lanes.length).toBeGreaterThan(5);
+  for (let i = 0; i < bounds.lanes.length; i++) expect(Math.abs(bounds.tracks[i] - bounds.lanes[i])).toBeLessThan(2);
+  expect(bounds.todaySpread).toBeLessThan(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await context.close();
+});
+
+for (const width of [1000, 1440]) for (const locale of ['en', 'zh-TW'] as const) test(`axis labels stay clear of each other and the sticky column ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage();
+  await start(page, locale);
+  const region = page.locator('[data-pm-schedule]');
+  const zooms = locale === 'en' ? [['Week', 'week'], ['Day', 'day'], ['Month', 'month']] : [['週', 'week'], ['日', 'day'], ['月', 'month']];
+  for (const [label, zoom] of zooms) {
+    await region.getByRole('radio', {name: label, exact: true}).click();
+    const axis = await page.evaluate(() => {
+      const row = document.querySelector('.schedule-head')!;
+      const sticky = row.querySelector('.schedule-tree-cell')!.getBoundingClientRect();
+      const ticks = [...row.querySelectorAll('.schedule-tick')].map(el => {
+        const box = el.getBoundingClientRect();
+        return {iso: (el as HTMLElement).dataset.scheduleTick || '', left: box.left, right: box.right, width: box.width};
+      });
+      return {stickyRight: sticky.right, ticks};
+    });
+    expect(axis.ticks.length).toBeGreaterThan(1);
+    expect(axis.ticks[0].left).toBeGreaterThanOrEqual(axis.stickyRight - 0.5);
+    expect(axis.ticks[1].left - axis.ticks[0].left).toBeGreaterThanOrEqual(axis.ticks[0].width - 0.5);
+    for (let i = 1; i < axis.ticks.length; i++) expect(axis.ticks[i].left).toBeGreaterThanOrEqual(axis.ticks[i - 1].right - 0.5);
+    if (zoom === 'week') {
+      expect(new Date(`${axis.ticks[0].iso}T00:00:00Z`).getUTCDay()).toBe(1);
+      expect(axis.ticks[0].iso).not.toBe('2026-09-25');
+      expect(axis.ticks[0].iso).toBe('2026-09-28');
+    }
+  }
+  await context.close();
+});
+
+for (const width of [1000, 1440]) for (const locale of ['en', 'zh-TW'] as const) test(`a scrolled redraw keeps the first axis labels ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL, viewport: {width, height: 900}}), page = await context.newPage();
+  const project = demoProject(locale);
+  let stamp = 0;
+  const f = await start(page, locale, {mutate(data) {
+    if (!stamp) return;
+    const row = data.rows.find(row => row.id === `work:${project.ids.work.email}`);
+    if (row) row.title = `Redraw ${stamp}`;
+  }});
+  const region = page.locator('[data-pm-schedule]'), viewport = region.locator('.schedule-viewport');
+  const names = locale === 'en' ? {week: 'Week', day: 'Day', month: 'Month'} : {week: '週', day: '日', month: '月'};
+  const readAxis = () => page.evaluate(() => {
+    const row = document.querySelector('.schedule-head')!;
+    const sticky = row.querySelector('.schedule-tree-cell')!.getBoundingClientRect();
+    const ticks = [...row.querySelectorAll('.schedule-tick')].map(el => {
+      const box = el.getBoundingClientRect();
+      return {iso: (el as HTMLElement).dataset.scheduleTick || '', left: box.left, right: box.right, width: box.width};
+    });
+    return {stickyRight: sticky.right, ticks};
+  });
+  const scrollToEnd = () => viewport.evaluate(node => {
+    node.scrollLeft = node.scrollWidth;
+    node.dispatchEvent(new Event('scroll'));
+    return node.scrollLeft;
+  });
+  const scrollToStart = () => viewport.evaluate(node => {node.scrollLeft = 0; node.dispatchEvent(new Event('scroll'));});
+  async function expectLabels(expected: string[]) {
+    await scrollToStart();
+    const axis = await readAxis();
+    expect(axis.ticks.map(tick => tick.iso)).toEqual(expected);
+    expect(axis.ticks[0].left).toBeGreaterThanOrEqual(axis.stickyRight - 0.5);
+    for (let i = 1; i < axis.ticks.length; i++) expect(axis.ticks[i].left).toBeGreaterThanOrEqual(axis.ticks[i - 1].right - 0.5);
+  }
+  for (const zoom of ['week', 'day'] as const) {
+    await region.getByRole('radio', {name: names[zoom], exact: true}).click();
+    await scrollToStart();
+    const initial = await readAxis();
+    expect(initial.ticks.length).toBeGreaterThan(1);
+    if (zoom === 'week') expect(initial.ticks[0].iso).toBe('2026-09-28');
+    else expect(initial.ticks[0].iso).toBe('2026-09-25');
+    const expected = initial.ticks.map(tick => tick.iso);
+    expect(await scrollToEnd()).toBeGreaterThan(40);
+    stamp += 1;
+    const reads = f.calls.length;
+    f.state.cursor++;
+    await expect.poll(() => f.calls.length).toBeGreaterThan(reads);
+    await expect(region.locator('.schedule-title', {hasText: `Redraw ${stamp}`})).toBeAttached();
+    await expectLabels(expected);
+    const other = zoom === 'week' ? 'day' : 'week';
+    expect(await scrollToEnd()).toBeGreaterThan(40);
+    await region.getByRole('radio', {name: names[other], exact: true}).click();
+    expect(await scrollToEnd()).toBeGreaterThan(40);
+    await region.getByRole('radio', {name: names[zoom], exact: true}).click();
+    await expectLabels(expected);
+  }
+  expect(f.writes).toEqual([]);
+  await context.close();
+});
+
+test('a Day choice is kept while the phone layout shows Week', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 900});
+  await start(page);
+  const region = page.locator('[data-pm-schedule]'), viewport = region.locator('.schedule-viewport');
+  await region.getByRole('radio', {name: 'Day', exact: true}).click();
+  await viewport.evaluate(node => {node.scrollLeft = 240; node.dispatchEvent(new Event('scroll'));});
+  await expect(region.locator('.schedule-weekend').first()).toBeAttached();
+  await page.setViewportSize({width: 390, height: 844});
+  await expect(region).toHaveAttribute('data-schedule-layout', 'phone');
+  await expect(region.getByRole('radio', {name: 'Day', exact: true})).toHaveCount(0);
+  await expect(region.getByRole('radio', {name: 'Week', exact: true})).toHaveAttribute('aria-checked', 'true');
+  await expect(region.locator('[data-schedule-axis-caption]')).toBeVisible();
+  await expect(region.locator('.schedule-weekend')).toHaveCount(0);
+  expect(await rowOverflows(page)).toEqual([]);
+  await page.setViewportSize({width: 1440, height: 900});
+  await expect(region).toHaveAttribute('data-schedule-layout', 'board');
+  await expect(region.getByRole('radio', {name: 'Day', exact: true})).toHaveAttribute('aria-checked', 'true');
+  await expect(region.locator('.schedule-weekend').first()).toBeAttached();
+  expect(await viewport.evaluate(node => node.scrollLeft)).toBeCloseTo(240, 0);
 });

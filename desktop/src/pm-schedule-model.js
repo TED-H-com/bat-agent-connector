@@ -1,6 +1,32 @@
 // Schedule dates are UTC days. Never substitute observation times for execution evidence.
 export const DAY = 86400000;
 export const ZOOM = {day: 48, week: 24, month: 8};
+// Week labels are UTC Mondays. A range that opens mid-week leaves that partial
+// interval unlabelled. Month labels are the 1st. Day labels keep the pixel step.
+export function axisTickDays({zoom, start, end, scale = 1}) {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return [];
+  const length = end - start + 1;
+  const dates = [];
+  if (zoom === 'week') {
+    let date = start;
+    const dow = new Date(date * DAY).getUTCDay();
+    if (dow !== 1) date += (8 - dow) % 7;
+    const step = Math.max(1, Math.ceil(length / 2100)) * 7;
+    for (let count = 0; date <= end && count < 300; count++, date += step) dates.push(date);
+  } else if (zoom === 'month') {
+    const instant = new Date(start * DAY);
+    if (instant.getUTCDate() !== 1) instant.setUTCMonth(instant.getUTCMonth() + 1, 1);
+    const step = Math.max(1, Math.ceil(length / 9000));
+    for (let count = 0; instant.getTime() / DAY <= end && count < 300; count++) {
+      dates.push(instant.getTime() / DAY);
+      instant.setUTCMonth(instant.getUTCMonth() + step, 1);
+    }
+  } else {
+    const step = Math.max(2, Math.ceil(72 / Math.max(scale, 1)), Math.ceil(length / 300));
+    for (let date = start, count = 0; date <= end && count < 300; count++, date += step) dates.push(date);
+  }
+  return dates;
+}
 export function dayNumber(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}(?:T|$)/.test(value)) return null;
   const n = Date.parse(value.slice(0, 10) + 'T00:00:00Z');

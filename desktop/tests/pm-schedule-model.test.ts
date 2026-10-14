@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {chartRange, dayNumber, notObserved, readSchedule, scheduleRef, scheduleTree, spans} from '../src/pm-schedule-model.js';
+import {DAY, axisTickDays, chartRange, dayNumber, notObserved, readSchedule, scheduleRef, scheduleTree, spans} from '../src/pm-schedule-model.js';
 import {reasonLabel, uiStrings} from '../src/ui/ui-strings.js';
 const frame = (rows: any[], extra = {}) => ({workspace_id: 'w', rows, unscheduled: [], baseline: null, forecast: null,
   range: null, unknown: [], partial: false, truncated: false, next_cursor: null, ...extra});
@@ -58,6 +58,20 @@ test('reason vocabulary has both locales and unknown codes stay out of body copy
   assert.equal(reasonLabel(key => uiStrings['zh-TW'][key], 'inconsistent_dates'), '結束早於開始，已省略結束日期');
 });
 
+
+test('axis ticks label week and month starts and leave a partial opening interval unlabelled', () => {
+  const start = dayNumber('2026-09-25'), end = dayNumber('2026-11-07');
+  const weeks = axisTickDays({zoom: 'week', start, end, scale: 24});
+  assert.equal(new Date(weeks[0] * DAY).toISOString().slice(0, 10), '2026-09-28');
+  for (const day of weeks) assert.equal(new Date(day * DAY).getUTCDay(), 1);
+  for (let i = 1; i < weeks.length; i++) assert.equal(weeks[i] - weeks[i - 1], 7);
+  assert.equal(weeks.includes(start), false);
+  assert.equal(axisTickDays({zoom: 'week', start: dayNumber('2026-09-28'), end, scale: 24})[0], dayNumber('2026-09-28'));
+  assert.deepEqual(axisTickDays({zoom: 'month', start, end, scale: 8}).map(day => new Date(day * DAY).toISOString().slice(0, 10)), ['2026-10-01', '2026-11-01']);
+  const days = axisTickDays({zoom: 'day', start, end, scale: 48});
+  assert.equal(days[0], start);
+  assert.ok(days[1] - days[0] >= 2);
+});
 
 test('page-wide unobserved note never labels an observed or ambiguous session', () => {
   const missing = {id: 'attempt:session:w:h/new', kind: 'attempt', title: 'new', status: 'unknown', refs: {session: {session_id: 'new', read_only: true}}};

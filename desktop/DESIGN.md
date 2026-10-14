@@ -492,8 +492,12 @@ the projection marks open has a short fading marker labelled Open, never a finis
 today. A terminal attempt with no recorded end says End time not recorded and is not
 drawn as open. Waiting and blocked stay visible on an open bar. Only a `blocked`
 status produces hatching. Milestone delta compares recorded dates. Recorded baseline,
-forecast and actual dates stay visible in the inspector. Day labels are spaced so they
-do not collide, and the Today mark sits under the axis text. Month ticks show only
+forecast and actual dates stay visible in the inspector. Week ticks label UTC
+Mondays only; a range that starts mid-week leaves that partial interval unlabelled.
+Month ticks label the 1st only. Day, Week and Month then drop a label whose
+left edge falls before the start of the track, or that would sit closer than its
+own width to the next one. Both decisions use the track's own coordinates, so
+scrolling the board does not remove labels. The Today mark sits under the axis text. Month ticks show only
 the localized short month; Day and Week retain month and day. Scale labels use the
 shared time module without becoming event timestamps. Bar tooltips use the same
 calendar-date formatter as visible dates. Operation attempts use the shared action
@@ -522,8 +526,13 @@ inspector beside that drawer. Zoom, selection, expansion and scroll preferences 
 bounded and connection/workspace keyed. A hidden Schedule does not fetch until the
 view is active; live updates keep focus in Unscheduled and Details. A response that
 exceeds the size limit says so. The schedule region does not nest a second vertical
-scroller. Below 800px, rows become a list with date ranges and one shared horizontal
-origin, so bars and the Today line line up; the document never scrolls horizontally.
+scroller. Below 800px, rows become a list: title, recorded dates and status stay in
+the row, and each bar track uses one shared date range fitted to the row width. A
+caption names that plotted range (for example Sep 25 – Nov 7) and each track keeps the Today
+line. Bar labels and milestone-delta text are not drawn on the tracks; Open and the
+recorded delta stay in the row. Day zoom is not offered at that width; a saved Day
+choice returns above 800px. Week and Month remain. Nothing in a row is clipped, and
+the document does not scroll horizontally.
 
 ## Dependencies
 
