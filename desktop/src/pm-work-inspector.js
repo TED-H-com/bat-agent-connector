@@ -1,6 +1,6 @@
 import {timeStamp} from './ui/stamps.js';
 import {h} from './ui/dom.js';
-import {discussLink, inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button} from './ui/components.js';
+import {discussLink, inspector, statusPill, disclosure, agentMark, contextChip, menu, iconButton, button, inlineError} from './ui/components.js';
 import {reasonLabel} from './ui/ui-strings.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {discussHref} from './pm-discuss-link.js';
@@ -8,6 +8,13 @@ import {sessionHref} from './session-navigation.js';
 import {qualityFact} from './pm-quality-projections.js';
 
 export const workStatus = card => ({backlog: 'not_started', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
+// Content approval is a management fact, not proof of delivery or passing DoD.
+export const workStatusLabel = (t, card) => card?.column === 'accepted' ? t('wv_content_approved') : t('ui_status_' + workStatus(card));
+export function workStatusPill(t, card) {
+  const pill = statusPill(workStatus(card));
+  pill.textContent = workStatusLabel(t, card);
+  return pill;
+}
 export const blockedWork = card => card?.flow?.blocked === true || card?.execution?.tasks?.some(task => task.state === 'blocked') === true;
 export const blockerText = (t, card) => card?.flow?.blocked === true ? reasonLabel(t, card.flow.blocked_reason)
   : blockedWork(card) ? t('wv_task_blocked') : t('wv_blocker_unknown');
@@ -147,8 +154,8 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     }
     panel.querySelector('[data-work-discuss]').href = href;
     if (data.error) {
-      panel.body.replaceChildren(h('section', {'data-work-section': 'error'}, paragraph(t('wv_detail_unavailable')),
-        button({label: t('wv_retry'), onClick: data.onRetry})), disclosure({label: t('wv_details'), body: paragraph(labelSegment(data.error.code))}));
+      panel.body.replaceChildren(h('section', {'data-work-section': 'error'}, inlineError({error: {message: t('wv_detail_unavailable')}, retry: data.onRetry})),
+        disclosure({label: t('wv_details'), body: paragraph(labelSegment(data.error.code))}));
       return;
     }
     const sections = [
@@ -162,7 +169,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     if (from === 'requirements' && card) state.append(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/board?select=${encodeURIComponent(card.work_item_id)}`}, t('wv_show_board')));
     if (data.milestones) served.append(paragraph(t('wv_milestone'), ' · ', joinLabel(data.milestones.map(row => row.title)) || t('wv_no_milestone')));
     if (card) {
-      state.append(h('div', {class: 'pm-work-inline'}, statusPill(workStatus(card)),
+      state.append(h('div', {class: 'pm-work-inline'}, workStatusPill(t, card),
         ...workAgents(source).map(agentMark)), paragraph(t('wv_owner'), ' · ', labelSegment(card.assignment?.actor) ||
           (card.assignment?.reason === 'creator_is_not_assignee' ? t('wv_not_recorded') : reasonLabel(t, card.assignment?.reason))));
       for (const session of source.sessions || []) state.append(paragraph(h('a', {
@@ -208,17 +215,25 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
         if (result?.status === 'rejected') {pill.textContent = t('pq_rejected'); pill.dataset.qualityResult = 'rejected';}
         return pill;
       };
-      served.replaceChildren(h('h3', {}, t('wv_criteria')), statusPill(data.acceptance || 'unknown'),
+      served.replaceChildren(h('h3', {}, t('wv_criteria')),
+        ...(data.acceptance === 'accepted' && requirement.acceptance?.length ? [] : [statusPill(data.acceptance || 'unknown')]),
         h('ul', {}, ...(requirement.acceptance || []).map(item => h('li', {}, labelSegment(item.text), ' ',
           criterionPill(item)))));
       state.dataset.workSection = 'work'; state.querySelector('h3').textContent = t('wv_bound_work');
-      for (const work of data.work || []) state.append(paragraph(button({variant: 'ghost', label: work.work.title, onClick: () => data.onWork?.(work.work_item_id)}), ' ', statusPill(workStatus(work))));
+      for (const work of data.work || []) state.append(paragraph(button({variant: 'ghost', label: work.work.title, onClick: () => data.onWork?.(work.work_item_id)}), ' ', workStatusPill(t, work)));
       if (!data.work?.length) state.append(paragraph(t(data.workIncomplete ? 'wv_work_unknown' : 'wb_no_work')));
       if (data.workIncomplete) state.append(statusPill('partial'));
       for (const row of data.milestones || []) state.append(paragraph(h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/schedule?select=milestone:${encodeURIComponent(row.milestone_id)}`}, row.title)));
       const review = data.reviews?.at(-1);
-      if (review) result.append(statusPill('accepted'), paragraph(t('wv_quality_review')), h('ul', {}, ...(review.assessment?.document?.criteria || []).filter(row => row.criterion?.requirement_id === requirement.id)
-        .map(row => h('li', {}, labelSegment(requirement.acceptance?.find(item => item.source_input_id === row.criterion.input_id)?.text), ' ', statusPill(row.status === 'accepted' ? 'accepted' : 'unknown')))));
+      if (review) {
+        const criteria = (review.assessment?.document?.criteria || []).filter(row => row.criterion?.kind === 'acceptance' && row.criterion.requirement_id === requirement.id);
+        const breakdown = disclosure({label: t('wv_review_criteria'), key: `${workspaceId}:${requirement.id}:review-criteria`, body: h('ul', {}, ...criteria.map(row => h('li', {},
+          labelSegment(requirement.acceptance?.find(item => item.source_input_id === row.criterion.input_id)?.text), ' ',
+          statusPill(row.status === 'accepted' ? 'accepted' : 'unknown'))))});
+        breakdown.dataset.requirementReviewCriteria = '';
+        result.append(paragraph(t('wv_review_number', {n: review.sequence}), ' · ', stamp(review.assessment?.created_at ?? review.created_at)),
+          paragraph(t('wv_review_basis')), breakdown);
+      }
       else {
         const work = (data.work || []).filter(work => work.latest_capture).sort((a, b) => (b.latest_capture.captured_at || 0) - (a.latest_capture.captured_at || 0))[0];
         if (work) result.append(h('div', {'data-requirement-capture': ''}, paragraph(work.work.title),

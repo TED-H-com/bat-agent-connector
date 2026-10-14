@@ -317,10 +317,17 @@ jobs:
         if: runner.os == 'Linux'
         timeout-minutes: 10
         run: npm run test:native-files
+      # Linux and Windows keep this command. macOS is the next step.
       - name: Package app (unsigned validation artifact)
+        if: runner.os != 'macOS'
         env:
           APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
         run: npm run tauri -- build --bundles ${{ matrix.bundle }} -- --locked
+      - name: Package app (unsigned validation artifact)
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
+        run: bash scripts/package-unsigned-macos.sh "${{ matrix.bundle }}"
       - name: Installed macOS DMG, WebView, Dock reopen and normal Quit fixture
         if: runner.os == 'macOS'
         timeout-minutes: 5

@@ -42,7 +42,19 @@ async function boot(page:Page,locale='en') {
   },locale);
   await expect(page.locator('[data-pm-sprints]')).toBeVisible();
 }
-async function openAction(page:Page,name:string){await action(page,name).evaluate(el=>{let parent=el.parentElement;while(parent){if(parent.tagName==='DETAILS')(parent as HTMLDetailsElement).open=true;parent=parent.parentElement;}});}
+async function openAction(page:Page,name:string){
+  const node=action(page,name);
+  const openFolds=()=>node.evaluate(el=>{let parent=el.parentElement;while(parent){if(parent.tagName==='DETAILS')(parent as HTMLDetailsElement).open=true;parent=parent.parentElement;}});
+  if(await node.isVisible()){await openFolds();return;}
+  const primary=page.locator(`[data-pm-sprint-primary="${name}"]`);
+  if(await primary.count()&&await primary.isVisible())await primary.click();
+  else{
+    await page.getByRole('button',{name:/^(More actions|其他操作)$/}).click();
+    const item=page.locator(`[data-menu-key="${name}"]`);
+    if(await item.count())await item.click();else await page.locator('[data-menu-key="pm.sprint.commitments"]').click();
+  }
+  await openFolds();
+}
 const reason=async(page:Page,name:string,text='A deliberate management decision')=>{await openAction(page,name);await action(page,name).getByLabel('Reason for this decision',{exact:true}).fill(text);};
 
 test('fixed Goal, period, work and DoD share one view without fabricated completion',async({page})=>{
@@ -108,7 +120,7 @@ test('close only after elapsed period preserves unknown quality and does not cla
 });
 test('failed or mismatched read freezes mutations while preserving form text',async({page})=>{
   const f=fixture();await mount(page,f);await reason(page,'pm.sprint.cancel','Keep my text');f.state.failRead=true;
-  await page.evaluate(()=> (window as any).refreshSprint());await expect(action(page,'pm.sprint.cancel').locator('button[type=submit]')).toBeDisabled();
+  await page.evaluate(()=> (window as any).refreshSprint());await expect(page.getByLabel('Sprint',{exact:true})).toBeHidden();await expect(action(page,'pm.sprint.cancel').locator('button[type=submit]')).toBeDisabled();
   await expect(action(page,'pm.sprint.cancel').getByLabel('Reason for this decision',{exact:true})).toHaveValue('Keep my text');
   f.state.failRead=false;f.state.wrongScope=true;await page.evaluate(()=> (window as any).refreshSprint());
   await expect(action(page,'pm.sprint.cancel').locator('button[type=submit]')).toBeDisabled();expect(f.state.writes).toHaveLength(0);
@@ -128,7 +140,7 @@ test('history pagination keeps immutable original text without a write',async({p
 });
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`Sprint layout ${locale} ${width}`,async({page},info)=>{
   const f=fixture();f.state.sprints[0].status='active';await page.setViewportSize({width,height:900});await mount(page,f,locale);
-  await expect(page.locator('[data-pm-sprints] h2')).toHaveText(locale==='en'?'Sprint and iteration':'Sprint 與迭代');
+  await expect(page.locator('[data-pm-sprints] [data-pm-sprint-status]')).toHaveText(locale==='en'?'Active':'進行中');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_PM_SPRINT_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/sprint-${locale}-${width}.png`,fullPage:true});
 });
@@ -158,7 +170,8 @@ test('changed adopted plan cannot silently rebind an unsent Product Goal draft a
   expect(f.state.writes[0].body.params.plan_revision_id).toBe(f.state.planId);
 });
 test('product commitment history loads exact revisions without authorizing work',async({page})=>{
-  const f=fixture();await mount(page,f);await page.getByText('Product commitments',{exact:true}).click();
+  const f=fixture();await mount(page,f);await page.getByRole('button',{name:'More actions',exact:true}).click();
+  await page.locator('[data-menu-key="pm.sprint.commitments"]').click();
   await page.getByText('Product commitment revisions',{exact:true}).click();
   await expect(page.getByText('#1 · owner',{exact:true})).toHaveCount(3);expect(f.state.writes).toHaveLength(0);
 });
@@ -227,7 +240,7 @@ test('terminal event after first fifty decisions updates the main closure and fu
   await expect(closure).toContainText('has not been loaded yet');expect(requests).toHaveLength(0);
   await closure.getByRole('button',{name:'Load next decision history page',exact:true}).click();
   await expect(closure).toContainText('Recovery behavior still needs acceptance evidence');
-  await expect(closure).toContainText('Unassessed');await expect(closure).toContainText('Requires Product Backlog consideration');
+  await expect(closure).toContainText('Not assessed');await expect(closure).toContainText('Requires Product Backlog consideration');
   await expect(closure.getByRole('button')).toHaveCount(0);expect(requests).toHaveLength(1);expect(requests[0]).toContain('after=50&limit=50');
   await page.getByText('Goal, selection and decision history',{exact:true}).click();
   const history=page.locator('[data-pm-sprint-history="events"]');await history.getByText('#51 · Close elapsed Sprint',{exact:true}).click();
@@ -243,7 +256,7 @@ test('byte capped initial history cursor zero is pending and is read explicitly'
   await expect(closure).toContainText('Keep the unverified recovery work visible');expect(requests[0]).toContain('after=0&limit=50');
   await page.getByText('Goal, selection and decision history',{exact:true}).click();
   await page.getByText('#1 · Cancel Sprint',{exact:true}).click();
-  await expect(page.locator('[data-pm-sprint-history="events"] [data-pm-sprint-ended-work]')).toContainText('Unassessed');
+  await expect(page.locator('[data-pm-sprint-history="events"] [data-pm-sprint-ended-work]')).toContainText('Not assessed');
   expect(f.state.writes).toHaveLength(0);
 });
 
@@ -289,7 +302,7 @@ test('refresh supersedes an in-flight history read and ignores its stale termina
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`closure history layout ${locale} ${width}`,async({page},info)=>{
   const {f}=closureFixture();await page.setViewportSize({width,height:900});await mount(page,f,locale);
   const closure=page.locator('[data-pm-sprint-closure]');await closure.getByRole('button').click();
-  await expect(closure).toContainText(locale==='en'?'Unassessed':'尚未評估');
+  await expect(closure).toContainText(locale==='en'?'Not assessed':'未評估');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_PM_SPRINT_SCREENSHOTS||info.outputPath('screenshots');await mkdir(out,{recursive:true});
   await closure.scrollIntoViewIfNeeded();await page.screenshot({path:`${out}/sprint-closure-${locale}-${width}.png`,fullPage:true});

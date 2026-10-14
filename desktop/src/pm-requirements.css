@@ -60,8 +60,8 @@
 .pm-requirements [data-rtm-select][aria-pressed=true] { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
 
 @container ui-table (max-width: 719px) {
-  .pm-requirements table, .pm-requirements tbody { display: block; }
-  .pm-requirements thead, .pm-requirements [data-row-key] > td { display: none; }
+  .pm-requirements .ui-data-table :is(table, tbody) { display: block; }
+  .pm-requirements .ui-data-table thead, .pm-requirements [data-row-key] > td { display: none; }
   .pm-requirements .ui-data-table tr:not([hidden]) { display: block; }
   .pm-requirements .ui-data-table [data-row-key] > .ui-data-table-compact { display: flex; align-items: start; gap: var(--space-2); min-height: 44px; height: auto; padding: var(--space-3); cursor: pointer; }
   .pm-requirements .ui-data-table-detail > td { display: block; height: auto; padding: 0; }

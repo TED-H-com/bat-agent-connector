@@ -1,12 +1,12 @@
 # PM v1.2 開發狀態
 
 這輪改版把「看懂狀況 → 找到問題 → 與 PM 討論 → 審閱並採用」接在同一個專案脈絡。
-本頁以分支候選 `944a854f` 的內容及任務提供的 PR 狀態為準。
-後端 [#132](https://github.com/teddashh/bat-agent-connector/pull/132) 與決策流程後端
-[#134](https://github.com/teddashh/bat-agent-connector/pull/134) 已於 2026-10-13 合併至 main（`0c354861`、`f25e1556`）。
-前端 [#133](https://github.com/teddashh/bat-agent-connector/pull/133) 仍在審查，**尚未合併**。
-兩項後端皆尚未安裝或實機驗收；合併不等於已交付使用者環境。
-[10 月 14 日進度草稿](progress-2026-10-14.md)列出交付範圍、證據及剩餘工作。
+本頁以已合併主線 `aba02180` 為準。
+後端 [#132](https://github.com/teddashh/bat-agent-connector/pull/132) 於 2026-10-13 以 `0c354861` 合併，
+[#134](https://github.com/teddashh/bat-agent-connector/pull/134) 於 2026-10-14 以 `f25e1556` 合併；
+前端 [#133](https://github.com/teddashh/bat-agent-connector/pull/133) 隨後於 2026-10-14 以 `cb7e9f42` 合併。
+本輪尚未安裝或實機驗收；合併不等於已交付使用者環境。
+[10 月 14 日進度報告](progress-2026-10-14.md)列出交付範圍、證據及剩餘工作。
 
 既有 Charter／RTM 與本機資源頁基準為 **2bf152d／#122**。
 [Charter RTM 與資源交接](../handoff/2026-10-12-pm-v1.2-resources.md)保留 #121／#122 當時的證據。
@@ -17,39 +17,43 @@ M4 **755f126／#116** 與 M5 **f6c8f6b** 沿用下方歷史候選紀錄，沒有
 
 | 層級 | 本輪狀態 |
 | --- | --- |
-| 分支整合（branch） | `944a854f` 有改版共用前端、中央讀取合約及決策 walkthrough；公開截圖使用同一合成專案。 |
-| 主線（merged） | #132 後端（`0c354861`）與 #134 決策流程後端（`f25e1556`）已於 2026-10-13 合併；#133 前端尚未合併，須核對最終整合來源與 checks。 |
-| 安裝／原生驗收（installed/native） | #132／#134 尚未安裝；尚無本輪前端候選的安裝／原生驗收回執，browser 截圖不代替原生套件。 |
-| 實機驗收（live-tested） | #132／#134 尚未實機驗收；尚無本輪前端候選的實際 BAT／provider／模型／部署驗收回執，CI 與合成資料不代替實機證據。 |
+| 分支整合（branch） | #133 的整合分支已合入主線；文件工作線 `ux/docs-r6` 更新公開介紹。 |
+| 主線（merged） | #132（`0c354861`）、#134（`f25e1556`）先合併，#133 於 2026-10-14 以 `cb7e9f42` 合併；圖庫固定於 `aba02180`。 |
+| 安裝／原生驗收（installed/native） | 本輪尚未安裝或原生驗收；browser 截圖不代替原生套件。 |
+| 實機驗收（live-tested） | 本輪尚未實機驗收；CI 與合成資料不代替實際 BAT／provider／模型／部署證據。 |
 
-- **#132 後端主線，2026-10-13 以 `0c354861` 合併：**固定 commit 技術相依清冊、宣告／撤回及有界 impact；
-  唯讀時程的 baseline／forecast／actual；問題、行動與變更登記；每日資源桶；
-  即時總覽、有序討論來源、durable rename 及中央 proposal 可採用性。
+- **#132 後端主線，2026-10-13 以 `0c354861` 合併：**固定 commit 相依清冊及有界 impact、
+  唯讀 baseline／forecast／actual 時程、登記表、每日資源桶、即時總覽、有序討論來源、改名與提案可採用性。
   見[相依](../design/pm-dependencies.md)、[時程](../design/pm-schedule.md)、
   [登記](../design/pm-register.md)與[總覽／討論](../design/pm-overview-discussion-context.md)合約。
-- **#133 前端候選，尚未合併：**Web／Tauri 共用 `desktop/src`，同一側欄串起專案總覽、
-  討論、需求、時程、技術相依、問題與變更、Agent 資源及工作看板；關聯工作開啟 Session。
-  即時總覽與已存報告分開；從原紀錄帶入來源標籤與標題，提案審閱與明確採用保持中央證據。
-  RTM 與共用詳情、甘特圖、相依矩陣／圖、登記時間線及每日資源趨勢已在分支。
-  人工 Session 保持唯讀；未知、部分涵蓋、來源撤回及原請求恢復保持原規則。
-  [walkthrough 腳本](https://github.com/teddashh/bat-agent-connector/blob/944a854fc381f61c6281edb7fcbcf887321a0c68/desktop/tests/pm-walkthrough.mjs)與截圖也屬於 #133，使用 registered operations、
-  暫存 Git、scripted runtime 及原採用 key 查回。候選 `944a854f` 未含 #134，仍停在 Return。
-  #134 已合併並提供缺少的目標與決策資料；#133 整合分支已併入 #132 與 #134，合併前記錄端到端結果。
-  詳見[目前 walkthrough 邊界](https://github.com/teddashh/bat-agent-connector/blob/944a854fc381f61c6281edb7fcbcf887321a0c68/docs/design/pm-decision-walkthrough.md)。
-- **#134 決策流程後端，2026-10-13 以 `f25e1556` 合併：**改動 Overview 讀取及治理引導。
-  目標依固定欄位順序讀取已確認輸入，採用後仍保留；`recent_decisions` 列出最近的計畫採用與已記錄決策。
-  阻礙跨版本保留原需求 ID，並比對 current／blocked／absent ID 集合。
-  新版本採用後，可透過既有 `pm.governance.revise` 回報問題已解決；結案不代表需求驗收。
-  合併前 GitHub CI 全部通過，包含 Python 3.10–3.13；本機 Python 3.14 完整套件為 6322 passed、48 skipped、0 failed。
-- **既有主線：#121／#122。** Charter／RTM 與本機 Codex／Claude collector、cursor／去重、
-  來源配額窗已合併；每日桶已由 #132 合併，改版前端 #133 尚未合併。
-  遠端 collector、交付效能歸因、容量與預測仍待完成，見[資源合約](../design/agent-resource-observation.md)。
-- **既有主線：#117–#119。** 先前公開文件、圖庫、分欄看板及共用樣式；其 checks 保留在歷史報告，不能移作本輪驗證。
-- **既有主線：#98–#115。** 計畫、Sprint／Kanban、治理、工程包／交接、有界批次、發布／維護、
-  成果評估／依賴、自然對話採用、政策內修復、AHP 唯讀及 BAT 結構化分析。
-- **M4／M5 歷史候選。** M4 `755f126` 及 M5 `f6c8f6b` 的範圍、結果與阻擋保留原紀錄；本輪未查 GitHub 最新狀態。
-- **尚缺：**#133 最終整合來源的整組驗證及 walkthrough 結果、#133 合併與公開圖庫重釘；安裝／原生及實機驗收另列。
-  其餘完整 PM v1.2 工作仍依下表追蹤，不把視覺改版當作整個生命週期完成。
+- **#134 決策流程後端，2026-10-14 以 `f25e1556` 合併：**保留採用後目標、近期決策及跨版本原需求 ID 的阻礙比對；
+  採用後使用既有 `pm.governance.revise` 回報問題已解決，結案不代表需求驗收。
+- **#139 結構化發現身分，2026-10-14 以 `2b8c4add` 合併：**中央登記表、總覽與討論來源提供 `finding`；
+  `title` 仍為 null，未證實欄位不補值，撤回時一併移除身分。`aba02180` 已包含此實作。
+- **#133 前端主線，2026-10-14 以 `cb7e9f42` 合併：**Web／Tauri 共用 `desktop/src`，同一側欄串起八個管理檢視及 Session。
+  第 5b／6 輪包含近期決策、明確 Resolve 步驟、具名發現、時程軸、Unknown／尚無紀錄，以及一致的 Agent 讀取。
+  即時總覽與固定報告分開；人工 Session 唯讀，撤回、草稿與原請求 key 保留。
+  [walkthrough 腳本](../../desktop/tests/pm-walkthrough.mjs)已包含明確解決與原 key 恢復，
+  使用真中央、暫存 Git 和 mock 外部傳輸；[證據界線](../design/pm-decision-walkthrough.md)不包含安裝或 live 驗收。
+- **既有主線：#121／#122。** Charter／RTM、本機 Codex／Claude collector、cursor／去重及來源配額窗已合併；
+  #132 的每日桶與 #133 的資源頁也已合併。遠端 collector、交付效率歸因、容量及預測仍待完成。
+- **既有主線：#117–#119、#98–#115。** 既有公開介紹、共用 UI 與 PM 底座保留原歷史證據，不算作本輪重新驗證。
+- **M4／M5 歷史候選。** M4 `755f126` 及 M5 `f6c8f6b` 保留原紀錄；本輪沒有重新驗證其狀態。
+- **尚缺：**第 7 輪、下列新工作線與完整 PM v1.2 backlog；安裝／原生及實機驗收另列。
+
+剩餘視覺修整是 **第 7 輪**，由 [Issue #140](https://github.com/teddashh/bat-agent-connector/issues/140) 追蹤；尚未實作。
+
+- Discussions：討論列、來源脈絡與提案閱讀的收尾。
+- 登記表與 Board：列、卡片、篩選與詳情的層級修整。
+- 次要面板：按需展開工具的版面與文案。
+- Shell：導覽、工作樹與窄螢幕層級。
+- 載入：首次開啟、返回與更新時的安靜狀態及穩定版面。
+
+下一條工作線以 `aba02180` 的狀態為準：
+
+- [#141 本機首次使用](https://github.com/teddashh/bat-agent-connector/issues/141)：單次貼上 BAT 連線網址、易讀錯誤、安靜狀態、含建置識別的診斷，以及「這裡能做什麼」；仍待實作。
+- [#142 本機 BAT／本機 Git 設計](https://github.com/teddashh/bat-agent-connector/pull/142)：設計文件已合併，對應 #141；[本機主機合約](../design/local-host.md)尚未實作。
+- [#143 Overview 的 PM 重點判讀](https://github.com/teddashh/bat-agent-connector/issues/143)：[#144 設計文件](https://github.com/teddashh/bat-agent-connector/pull/144)已合併；[判讀合約](../design/pm-overview-assessment.md)尚未實作。
 
 完整 [已採用計畫](pm-v1.2-plan.md)的 20 章、W01–W52、A01–A64、M0–M6 保持不變。
 M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
@@ -58,7 +62,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 
 下表依固定來源歸類；「主線」表示程式已合併，不代表所有驗收條件或實際部署完成。
 各行保留原計畫優先級及編號，驗證數字見進度報告。
-視圖已在 #133 分支接入；#132 與 #134 已合併，#133 尚需完成最終整合驗證與合併。
+視圖已由 #133 合併，`aba02180` 包含 #132／#134／#139 的中央合約。
 安裝版／原生及實機驗收仍需各自留證。
 
 | 工作 | 優先級 | 原計畫項目 | 目前狀態／尚缺 |
@@ -72,14 +76,14 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W07 | P0 | PM worktree bootstrap | 主線：PM 自有 carrier、固定 commit、不可覆寫草稿與文件採用，不夾帶程式碼修改。 |
 | W08 | P0 | Plan revision 與採用流程 | 主線：版本、來源、accepted CAS、理由、scope revision 與 Git 證據；採用不直接授權執行。 |
 | W09 | P1 | PM runner 與 adapter selection | 主線 #115：按操作選 native／BAT 有界分析、計畫提案與 Follow-up；持久 workspace 選擇見 W24。 |
-| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄。#132 已合併有序 context、來源撤回、durable rename 與中央提案可採用性；#134 已合併決策流程後端；#133 已接前端及 walkthrough，尚未合併；更完整專業會議主持仍待做。 |
+| W10 | P1 | 一位 PM 討論與 evidence snapshot | 主線：固定脈絡、來源快照、Idea／Planning／Follow-up 分析與品質紀錄。#132 已合併有序 context、來源撤回、durable rename 與中央提案可採用性；#134 已合併決策流程後端；#133 已合併前端及 walkthrough；更完整專業會議主持仍待做。 |
 | W11 | P1 | Plan diff 與影響分析 | 主線：固定版本／來源／條件差異及影響候選；#113 提供候選更新及整組採用，完整語意判讀待強化。 |
-| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。即時 overview、可見需求進度／待決／偏差與涵蓋標記已由 #132 合併；#134 已合併採用後目標與近期決策；#133 已接即時／報告介面，尚未合併。固定報告不混入即時數字，見 [API 合約](../design/pm-overview-discussion-context.md)。 |
-| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據。#132 已合併唯讀時程投影（[合約](../design/pm-schedule.md)）；不推算預測或 critical path；#133 已接甘特圖，尚未合併。M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。 |
+| W12 | P1 | Project Brief | 主線：固定 Project Brief 與選定品質評估；M4 候選補條件偏差及同快照說明。即時 overview、可見需求進度／待決／偏差與涵蓋標記已由 #132 合併；#134 已合併採用後目標與近期決策；#133 已合併即時／報告介面。固定報告不混入即時數字，見 [API 合約](../design/pm-overview-discussion-context.md)。 |
+| W13 | P1 | Roadmap 與 scope | 主線：固定里程碑、需求與時程證據。#132 已合併唯讀時程投影（[合約](../design/pm-schedule.md)）；不推算預測或 critical path；#133 已合併甘特圖。M4 候選補採用需求品質與涵蓋缺口投影；完整 Git materialization 仍待做。 |
 | W14 | P1 | Kanban | 主線：工作／執行狀態、WIP、固定品質投影及依賴證據；M4 補原 runtime 完成；完整 WIP 政策待做。 |
 | W15 | P1 | Sprint artifacts 與時間 | 主線：Sprint 承諾、固定 DoD／接受條件及原成果品質；完整 Scrum 事件與引導待做。 |
 | W16 | P1 | Planning Review Retro | 主線：Planning／Review／Retro 的固定討論、結果與改善追蹤；Daily Scrum／LLM 會議主持待做。 |
-| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任。#132 已合併登記讀取投影（`pm_register_list`／`pm_register_get`）的列、完整可見掃描合計與明確連結時間線。#134 已合併採用後問題結案引導；#133 已接篩選表與時間線，尚未合併；結案不代表需求驗收，自動跨快照追蹤／提醒仍待做。 |
+| W17 | P1 | 風險、變更與決策 | 主線：風險、變更、決策、固定來源、明確根因去重與責任。#132 已合併登記讀取投影（`pm_register_list`／`pm_register_get`）的列、完整可見掃描合計與明確連結時間線。#134 已合併採用後問題結案引導；#133 已合併篩選表與時間線及 #139 的具名發現；結案不代表需求驗收，自動跨快照追蹤／提醒仍待做。 |
 | W18 | P1 | GitHub issue mapping | 主線：明確選取公開內容、穩定 Issue 關聯、追加版本及原操作查回；完整外部同步、多對多、明確重開待做。 |
 | W19 | P1 | Orchestrator readiness 與派工 | 主線：固定 package 經既有交接派工；原接受證據可滿足明確依賴；保留最後來源與權限檢查。 |
 | W20 | P1 | 現有 integration 與 merge 接入 | 主線：integration preview／apply／conflict handoff／PR merge 接原 package 與 lineage；merge receipt 不代替需求驗收。 |
@@ -92,7 +96,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W27 | P1 | 端到端實機驗收 | 受控自動 fixtures 已有；owner 真人硬體驗收另行執行，未宣稱通過。 |
 | W28 | P2 | 其餘具名 CLI 能力 | 其他具名 CLI 的能力與版本逐一接入，尚未宣稱全面支援。 |
 | W29 | P2 | 額外 reviewer 與討論模板 | 額外 reviewer、專業討論模板與品質驗證仍待完成。 |
-| W30 | P2（原計畫） | 成本與較完整預測 | 六視圖修訂將資源觀測列為 Agent 頁及 PM 資源安排的必要依賴；本機 Codex／Claude collector 與來源配額窗已於 #122 合併，每日資源桶已由 #132 合併；#133 已接每日圖表，尚未合併。跨主機 collector、完整 quota adapters、合格交付／返工歸因、區間預測與自動模型政策仍待完成。 |
+| W30 | P2（原計畫） | 成本與較完整預測 | 六視圖修訂將資源觀測列為 Agent 頁及 PM 資源安排的必要依賴；本機 Codex／Claude collector 與來源配額窗已於 #122 合併，每日資源桶已由 #132 合併；#133 已合併每日圖表及一致讀取。跨主機 collector、完整 quota adapters、合格交付／返工歸因、區間預測與自動模型政策仍待完成。 |
 | W31 | P0 | Idea thread 與明確轉 Planning | 主線：持久 Idea thread、明確來源選擇及轉 Planning 草稿；可長期停留 Idea。 |
 | W32 | P0 | PhaseProfile 與 command policy | 主線：九種 phase profiles 與 policy 契約；不能把 profile 定義視為所有階段 runner 已完成。 |
 | W33 | P0 | InputRecord 與循序資訊取得 | 主線：有來源資訊、Follow-up、最多三個問題、自然對話候選與整組採用；完整研究 runner／其他階段引導待做。 |
@@ -109,7 +113,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 | W44 | P0 | ReleaseBaseline 與發布 receipt | 主線：明確 release／已驗證部署基準與原通道／commit／receipt；完整 registry adapter 待做。 |
 | W45 | P0 | 閒置與 workload coverage | 主線：中央工作量、來源涵蓋與穩定期間；M4 原完成／人工單次觀察、M5 人工序列觀察尚未合併。 |
 | W46 | P1 | Maintainer profile 與政策執行 | 主線 #113：採用政策內的自有 repair、驗證／PR／交付上限、原完成與基準更新；M4 完整串接仍待最終 CI。 |
-| W47 | P1 | 依賴 Issue PR 維護來源 | 主線：有界 GitHub PR／checks／Actions、明確 Issue／Dependabot／alert 來源與固定 findings，#132 已合併 [固定 commit 相依清冊](../design/pm-dependencies.md)、宣告／撤回、CI hints 和有界 impact。#133 已接矩陣／相依圖，尚未合併；安裝版／原生及實機驗收仍待執行。 |
+| W47 | P1 | 依賴 Issue PR 維護來源 | 主線：有界 GitHub PR／checks／Actions、明確 Issue／Dependabot／alert 來源與固定 findings，#132 已合併 [固定 commit 相依清冊](../design/pm-dependencies.md)、宣告／撤回、CI hints 和有界 impact。#133 已合併矩陣／相依圖；安裝版／原生及實機驗收仍待執行。 |
 | W48 | P0 | 維護排程與恢復 | 主線：有界到期檢查、週 Review、窗去重／漏跑合併、原 owner 憑證、容量／期限及原 children 查回。 |
 | W49 | P1 | 每週 Maintenance Review 與改進研究 | 主線：固定週報、原 findings／repairs、前次決策、owner outcome、责任與雙語輸出；改進研究待做。 |
 | W50 | P0 | 暫停 關閉與 reopen | 主線：pause／close／reopen、原 execution epoch、在途查回與保留；不復活舊佇列、不接管外部 session；M4 joined 有接續回歸。 |
@@ -118,7 +122,7 @@ M4 是 BAT 日常可用里程碑，不能代表全部跨工具 v1.2 已完成。
 
 ## 文件及歷史
 
-- [10 月 14 日進度草稿](progress-2026-10-14.md)：改版交付、候選 PR、證據與下一步。
+- [10 月 14 日進度報告](progress-2026-10-14.md)：改版合併、證據與下一步。
 - [10 月 12 日進度](progress-2026-10-12.md)：前次固定來源、Sprint 建議與歷史證據。
 - [開發交接](../handoff/2026-10-12-pm-v1.2.md)：精確來源、測試／失敗、M5 與停放草稿、接續 gate。
 - [歷史實作紀錄](pm-v1.2-history-through-2026-10-12.md)：保留原批次敘述與當時證據，不覆蓋本頁。

@@ -75,16 +75,46 @@ for (const locale of ['en', 'zh-TW']) test.describe(`${locale} setup review`, ()
     await expect(sessions).toBeVisible(); await expect(change).toBeVisible();
     const a = (await sessions.boundingBox())!, b = (await change.boundingBox())!;
     expect(Math.abs(a.y - b.y)).toBeLessThan(1); expect(b.x - a.x - a.width).toBe(8);
-    const laterGap = await panel.evaluate(node => {
+    const laterGaps = await panel.evaluate(node => {
       const step = node.querySelector('[data-setup-connect]')!;
-      return step.nextElementSibling!.getBoundingClientRect().top - step.getBoundingClientRect().bottom;
+      const steps = [step, step.nextElementSibling!, step.nextElementSibling!.nextElementSibling!];
+      const centers = steps.map(detail => {
+        const rect = detail.querySelector('summary')!.getBoundingClientRect();
+        return (rect.top + rect.bottom) / 2;
+      });
+      return {betweenSteps: step.nextElementSibling!.getBoundingClientRect().top - step.getBoundingClientRect().bottom,
+        afterActions: step.getBoundingClientRect().top - node.querySelector('[data-setup-actions]')!.getBoundingClientRect().bottom,
+        centerGaps: [centers[1] - centers[0], centers[2] - centers[1]]};
     });
-    expect(laterGap).toBe(16);
+    expect(laterGaps.betweenSteps).toBe(0); expect(laterGaps.afterActions).toBe(16);
+    expect(laterGaps.centerGaps[0]).toBe(laterGaps.centerGaps[1]);
     const receipt = panel.locator('[data-setup-operation]');
     await expect(receipt).toBeHidden(); expect(await panel.innerText()).not.toMatch(/\bdone\b|Setup operation|設定操作/);
     await panel.locator('[data-setup-details] > summary').click();
     await expect(receipt).toHaveText(locale === 'en' ? 'Setup operation · Done' : '設定操作 · 完成');
     await expect(receipt).toBeVisible(); await expect(receipt).toHaveAttribute('href', '#/op/' + 'op_' + 'c'.repeat(32));
+    expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
+  });
+
+  for (const width of [1440, 1000, 390]) test(`pasted and refused setup keeps space only after the action at ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: 900});
+    const state = await managedSetupFixture(page, false, locale); await page.goto('/dashboard/');
+    const panel = page.locator('[data-managed-setup]'); await paste(page, connectionUrl);
+    const gaps = () => panel.evaluate(node => {
+      const step = node.querySelector('[data-setup-connect]')!;
+      const second = step.nextElementSibling!, third = second.nextElementSibling!;
+      return {afterAction: second.getBoundingClientRect().top - step.querySelector('button[type=submit]')!.getBoundingClientRect().bottom,
+        betweenSteps: third.getBoundingClientRect().top - second.getBoundingClientRect().bottom};
+    });
+    await expect(panel.locator('[data-setup-paste-read]')).toContainText(locale === 'en' ? 'Read from BAT' : '已從 BAT 讀取');
+    await expect(panel.locator('[data-setup-actions]')).toBeHidden();
+    expect(await gaps()).toEqual({afterAction: 16, betweenSteps: 0});
+    state.refused = true; state.refusalCode = 'HOST_IDENTITY_CHANGED'; state.refusalStatus = 409;
+    await panel.locator('[data-setup-host] button[type=submit]').click();
+    await expect(panel.locator('[data-setup-error=host]')).toHaveText(locale === 'en'
+      ? 'Use a new host ID for changed connection or trust settings.' : '此主機的連線設定已變更，請使用新的主機代號。');
+    await expect(field(page, 'host')).toBeEditable(); await expect(panel.locator('[data-setup-actions]')).toBeHidden();
+    expect(await gaps()).toEqual({afterAction: 16, betweenSteps: 0});
     expect(state.posts).toHaveLength(1); expect(state.staged).toHaveLength(1);
   });
 

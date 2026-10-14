@@ -673,6 +673,7 @@ async def session_read(
     archive_total = None
     arch_off = 0
     archive_complete = False
+    archive_reason = None
     raw_budget = 3000
     def need_archive() -> bool:
         if index_reading:
@@ -688,11 +689,13 @@ async def session_read(
         chunk = min(200, raw_budget)
         r = await c.invoke("claude:load-archived", {"sessionId": sid, "offset": arch_off, "limit": chunk})
         if not isinstance(r, dict):
+            archive_reason = "archive_unconfirmed"
             break
         archive_total = r.get("total", archive_total)
         msgs = [m for m in r.get("messages") or [] if isinstance(m, dict)]
         if not msgs:
             archive_complete = r.get("hasMore") is False
+            archive_reason = None if archive_complete else "archive_unconfirmed"
             break
         for m in reversed(msgs):
             if m.get("id") not in live_ids:
@@ -701,7 +704,10 @@ async def session_read(
         raw_budget -= len(msgs)
         if not r.get("hasMore"):
             archive_complete = r.get("hasMore") is False
+            archive_reason = None if archive_complete else "archive_unconfirmed"
             break
+    if not archive_complete and archive_reason is None and raw_budget <= 0:
+        archive_reason = "archive_budget"
 
     chronological = list(reversed(newest_first))
     cursor = _cursor(after, chronological, exact_id=turn is not None)
@@ -758,7 +764,9 @@ async def session_read(
     reading_index = {}
     if index_reading:
         from .session_reading import index_messages
-        reading_index["_reading_index"] = index_messages(chronological, complete=archive_complete, include_tools=include_tools)
+        reading_index["_reading_index"] = index_messages(
+            chronological, complete=archive_complete, include_tools=include_tools, archive_reason=archive_reason
+        )
     return {
         **reading_index,
         **since,

@@ -22,6 +22,12 @@ projection read can still be superseded by a newer withdrawal read. PM record ev
 follow the same visibility rule; workspace authority and lifecycle admission have
 their own scoped reads even while the Lifecycle drawer is closed. A newer event
 read must restore lifecycle gates withdrawn by a superseded manual Refresh.
+An unrelated background refresh retains the last centrally observed lifecycle
+policy until the new read settles, so it cannot disable a pressed Save button and
+lose the click. Manual Refresh and selected-workspace authority/lifecycle events
+withdraw admission before reading; a policy event in a coalesced page still closes
+the gates. Failed or withdrawn lifecycle reads clear the prior policy, and older
+responses cannot restore it.
 
 ## Tokens and type
 
@@ -276,6 +282,14 @@ reasons share the localized reason map; omitted lifecycle operations appear only
 in Details. Delivery evidence keeps accepted, merged, deployed and rolled-back
 states separate.
 
+When a complete progress read has unaccepted requirements and at least one loaded
+delivery, a quiet line explains that this round's acceptance evidence is still
+missing. See unaccepted opens Requirements (there is currently no acceptance
+filter); Ask PM generates a progress title and carries the current plan context.
+Unknown, partial, fully accepted and delivery-empty reads omit the line. Delivery
+is not described as failed. Context chips retain the central plan label; the
+current context contract has no separate Progress identity.
+
 Empty milestone and delivery lists say None recorded / 尚無紀錄 only with complete
 roadmap or recent-delivery coverage, including any delivery output-reference limit.
 Otherwise they show Unknown and the recorded localized reason. Empty charter cards
@@ -345,8 +359,16 @@ Print includes the status strip and full charter; the saved-charter fallback pri
 inside its Overview region as well. Interactive controls and live attention are omitted.
 
 Report tools retain the existing durable snapshot operation, original-key recovery,
-authorized comparison, history pagination, print and export. Report history loads on
-demand and rereads every loaded page after a refresh. Selecting a report
+authorized comparison, history pagination, print and export. Compare and Print keep
+single-line labels; every report control has a 44px
+touch target through 800px, including controls mounted outside the project shell.
+Empty and error states stay with those controls when the tools move into the
+inspector; an unavailable report withdraws its content and disables comparison/print.
+Comparison matches statements by original input/source identity, foregrounds changed
+Before/After pairs, labels additions/removals in text, and collapses unchanged
+statements within changed sections. Both report identities remain visible and their
+source records remain in Details. Report history loads on demand and rereads every
+loaded page after a refresh. Selecting a report
 replaces the status and charter with that report's fixed content; live attention,
 milestones, delivery rows and phase are absent. Historical snapshots do not contain
 central acceptance counts, so those metrics stay unknown with the requirement
@@ -362,14 +384,30 @@ view when `pm_overview` is absent.
 
 ## Discussions
 
-Discussions uses a 280px searchable thread list, a conversation with its composer
-pinned below the scrolling transcript, and a Context / Inputs / Plan panel. Below
+Discussions uses a 280px searchable thread list and a conversation with its composer
+pinned below the scrolling transcript. Below 800px, the list route shows only the
+list; a thread or `/discussions/new` replaces it, and Back returns to the list.
+At 800px and wider the list and detail remain side by side. The Discussion info panel (Context / Inputs / Plan) starts closed
+for a plain thread at every width. One bound context chip or the Context icon opens it
+and returns focus on close. A new reviewable proposal or original proposal recovery
+opens Plan; an original input request opens Inputs. Explicit open/close and tab choices
+last for that thread in the page session, until a new proposal arrives. A closed panel
+leaves at least 760px for the transcript at 1440px; message bodies wrap at 72ch. Below
 1200px the panel opens in the shared drawer; below 800px it becomes a sheet with
 Escape and focus return. A quiet origin link sits above the text title; its pencil
 opens inline Save / Cancel controls (Enter saves, Escape cancels) using the central
 rename action. Cancel discards unsubmitted title edits; a successful Save restores
 focus to the pencil after recovery controls unlock. Recovery remains attached to the
 original rename intent. Tabs associate their panels for assistive technology.
+Rename Escape ignores IME composition. Header Back appears only below 800px.
+Mode pills disappear when they repeat the title. Search matches titles and context
+chip text, with a clear-search empty state. Empty thread, search and tool states
+have a short title and one muted line. Answer actions use intrinsic-width buttons
+beside the adoption flow. Report
+save entry points stay hidden without write authorization or a current plan head;
+retained original-request recovery remains visible with a reason when disabled.
+Rename and message receipts stay beside the composer independently of panel tabs
+and visibility.
 Context chips use current labels and put differing admission labels in tooltips;
 withdrawn refs show only their kind and Unavailable, including in the thread list.
 A finding chip uses the shared finding name when `finding` is present, including
@@ -403,6 +441,15 @@ Opening or reloading an unsent draft performs no write. Thread origins retain th
 to a report restores both its ID and Overview's saved mode. Source views retain their own
 preference state.
 
+Without an analysis composer, notes show Saved and one sentence explains that the
+PM will not reply. Set up PM opens Settings with the current discussion return route.
+A proposal-free thread shows no Proposed update card. Collapsed proposals show the
+title, summary, impact pills and the named exclusions, followed by Review & adopt
+and Ask follow-up; editable scope and questions
+open in the adoption panel. Review & adopt is primary until it opens, then Adopt is
+primary and Send remains secondary. Source rows use human labels and shared times;
+full source identities are copyable in Details, without JSON blocks.
+
 Structured analysis stays on the existing capability-checked native/BAT proposal
 path. A Proposed update card groups candidates with include toggles, at most three
 inline answers, and one owner adoption review. Notes and answers remain central
@@ -424,7 +471,9 @@ announcements. Original-key recovery is retained.
 Receipt checks include the central `waiting_external` and `waiting_checks` states;
 these keep the bounded backoff and read only the acknowledged operation ID.
 Saved proposals, runtime options, planning inputs, immutable revisions,
-context packages, meetings, follow-ups and Brief remain in the thread panel.
+context packages and Brief remain in the thread panel. Meetings gets its own Meeting
+tab only for sprint planning, sprint review, retrospective and maintenance review
+threads. Follow-ups stays in Issues & changes, with a link from follow-up threads.
 Each proposal refresh reads one list and its selected document; picker titles and
 status come directly from list rows. Proposal titles replace raw IDs in the picker;
 plan name, revision and status replace
@@ -435,9 +484,7 @@ reader’s choices across live reads and Refresh. A pending original request ope
 Inputs once when the thread is first shown, including its drawer/sheet after reload, and later
 reads never re-expand a reader-closed disclosure.
 The Plan tab lists revision rows with centrally read Accepted / Draft / Historical
-pills and a Compare action; revision detail reads wait until Plan opens. Meetings
-and Follow-up read only while their Context disclosure is open or on their own
-events. The Brief uses the same borderless presentation as these sibling sections;
+pills and a Compare action; revision detail reads wait until Plan opens. Meetings reads only while its Meeting disclosure is open or on its own events. The Brief uses the same borderless presentation as these sibling sections;
 explanatory planning copy is inside Details.
 
 ## Requirements
@@ -463,6 +510,8 @@ stacked work rows and an Open requirement action. Desktop selection stays unchan
 With the inspector docked, Milestone and Next blocker move out of the table; both
 remain in the inspector. Explicit column tracks reclaim that width, milestones
 ellipsis with full titles, PR pills wrap, and Work remains numeric and right-aligned.
+The same compact presentation applies below a 720px table-container width, even
+on larger viewports. Its entire header is hidden; the wide table retains its header.
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
 six ordered work sections: Requirements served; Status & ownership; Latest result;
@@ -474,11 +523,16 @@ execution duration. Technical records and source times appear in Details. A requ
 Criteria, Bound work, Latest result, Decisions and changes, Delivery, then Details.
 Criterion results use the exact current plan, digest, scope and input identity; a recorded
 rejection stays visible even when no review qualifies the overall requirement as Accepted.
+Accepted criterion states appear once in Criteria. Latest result names the qualifying
+review, its assessment time and its exact plan/scope/input basis; per-criterion review
+details start collapsed. Unknown and Not assessed summaries retain their evidence limits.
 Auxiliary source failures clear only their own facts and offer Retry; plan and work
 catalogue withdrawal clears the view. Inspector actions retain their nodes across live
 age updates, and closing returns to the current selection.
 Milestone destinations apply once for the current route. Live refresh retains the
 reader's search and restores group-heading focus by central milestone identity.
+Unchanged delivery reads retain row nodes, position and focus regardless of response
+completion order; change fingerprints order sources by stable work-item ID.
 An authorized unassigned-work read can resolve a work destination without an adopted plan.
 
 Existing quality, evidence, specs, package, handoff and publication controls move
@@ -578,6 +632,10 @@ It is primary only when this member can run it. Otherwise it is a secondary butt
 where it wraps without displacing Refresh. Maintenance policy, release baselines, maintenance checks, and
 workload observations stay in the secondary cards.
 
+Release source previews update the existing repository editor in place. A preview
+arriving while the owner enters a rationale preserves textarea focus and keyboard
+input; registration still requires reviewed source evidence and the original CAS.
+
 The header names the capture commit and its UTC date. A Stale pill is shown only when
 the projection says `stale` is true. Unknown freshness stays out of the header and is
 stated once under Details. A Partial pill and the omitted total describe the returned
@@ -662,7 +720,9 @@ still drops the row when it is gone, without opening the sheet. Leaving the view
 still in flight and closes the inspector.
 Search and owner accept at most 200 characters.
 
-The table shows the type word; Source stays in the inspector facts. A maintenance
+The table keeps type, title, status and next step. Related, impact, due, owner and
+priority drop in that order as the table gets narrower, so the type word stays whole.
+Source stays in the inspector facts. A maintenance
 finding with no title is named from its structured `finding` when the server sends
 one: a GitHub issue or Dependabot pull request uses its kind and number, and a
 security alert uses its package, or its number when the package is absent. The
@@ -676,15 +736,42 @@ Details also leaves out the missing-title line; a fallback name still lists it.
 A neutral type basis says the record has no type of its own, so the register
 lists it as an issue. Long owner text
 ellipsizes. Related requirement and work chips use a loaded name when one is known.
-Filters are one toolbar: type, status, exact owner and title search, with accessible
-names and no visible field labels. Pages follow `next_cursor`; row ids and cursors
-are passed through unchanged.
+Filters are one toolbar: type, status group, exact owner, age and title search, with
+accessible names and no visible field labels. Status choices are Open, In progress,
+Blocked, Waiting, In review, Done, Closed, Draft and Other. Every recorded status
+maps to one of those groups. A status outside the map is Other and stays in the
+list. A group with one recorded status is sent to the register. A group with
+several, and Other, filter the loaded rows. An open-by-age bar, a week point or
+the age menu filters the loaded rows and shows a removable chip. Age uses the
+server’s open-status list and `as_of`. A week point filters rows opened that week;
+the public rows do not expose the summary’s resolution timestamps.
+Those counts say how many loaded rows are shown. They use a matching total only
+when coverage is complete and the catalogue has no further page. The age bars
+themselves stay the server summary. Blocking reasons stay informational: the
+public row does not include the reason, so they do not filter. "N shown" is the
+header meta, including beside complete type totals when more rows can be loaded.
+The pagination group keeps its accessible loaded-count label without repeating
+that text visibly in the footer. The selected row uses a
+`--surface-3` selection token, separate from an info pill. Pages follow `next_cursor`;
+row ids and cursors are passed through unchanged.
 
-The inspector shows the processing timeline in the order the server sent. Status
-wording covers the operation, decision and direction states the register emits. An
-operation that is accepted for processing does not use the inspected-result word
-“Accepted”. An unrecognised status uses the generic wording, and the raw code is
-only in Details. Discuss and Propose change use the shared discussion link. A
+A filtered empty register offers a small secondary Clear filters action that resets
+type, status, owner, age, opening week and search. A complete filtered result with
+no matches hides trends until filters are cleared. Incomplete reads keep their own
+state and any available summary. Header type counts omit zeros; a successful read
+with no visible rows says None shown. A complete, unfiltered empty register says
+there are no issues or changes yet and has no reset action. An
+incomplete read says Records incomplete instead of implying there are no matches.
+Read errors use one shared inline error with an adjacent small secondary Retry.
+
+The inspector shows the processing timeline in the order the server sent. Rows,
+inspector facts and timeline entries use the exact recorded status label in the
+shared group's tone; grouping changes filtering only. An operation says “Accepted
+for processing”, distinct from the inspected-result word “Accepted”. An
+unrecognised status uses Other in the table, and the raw code
+is only in Details. A row with no title is named from its source: a finding keeps
+its finding name, and any other record uses a known name, then its kind and number,
+then its kind. It does not use “Not recorded” as the title. Discuss and Propose change use the shared discussion link. A
 finding binds the finding ref on its action when that object is a context ref.
 Requirement and work links open the Requirements selection. Below 1200px, a row
 action closes the sheet, keeps the selection, and moves focus to the form. Those
@@ -758,8 +845,13 @@ rows, counts, the chart and the inspector together.
 
 Board uses neutral lanes and compact cards with explicit requirement/session
 associations. Search, requirement/agent filters, grouping and collapsed lanes are
-view preferences. Below 800px lanes stack; wider boards scroll horizontally inside
-the board. Arrow keys navigate cards and lanes; Enter opens the inspector. Live
+view preferences. The toolbar wraps whole controls. Below 600px lanes stack; wider
+boards show a whole number of lanes that fill the width, at least about 168px, and
+scroll horizontally inside the board. A lane name uses an ellipsis and keeps its
+count. A lane that does not fit starts at the edge, so the edge fade still marks
+more lanes. Lanes in a horizontal row share the tallest lane's content height,
+with no fixed minimum; stacked lanes keep their own content height.
+Arrow keys navigate cards and lanes; Enter opens the inspector. Live
 updates defer lane movement while that lane is hovered or focused, but withdrawal
 removes inaccessible facts immediately. Local transitions are 140ms and respect
 reduced motion.
@@ -776,12 +868,23 @@ Each lane is a list with an H2 heading. Cards are list items with an H3 title
 button, described by their requirement, status and recorded delivery/blocker/age
 facts. Visually hidden status text stays inside the card’s bounds; blocker flags are not tab stops. Paged lanes show loaded counts and one
 visible partial marker; an empty Board hides the lanes and shows one empty state.
+A complete read with no filtered matches says No work matches these filters and
+offers a small secondary Clear filters action. It resets search, requirement and
+agent, retaining grouping. A complete Board with no associated work and no filters
+keeps its own empty state without that action. A partial read with no loaded
+matches says Work list incomplete. While filters are active the header appends
+N shown or None shown once; grouping alone does not add it. Board read errors use
+one shared inline error with an adjacent small secondary Retry. Details follows
+Retry inside the full-width banner only when an error code adds information beyond
+the sentence. Its open body occupies a separate full-width line inside the banner.
 Opening the inspector reveals the selected card after docking. Closing restores
 focus to the latest selection, falling back to the view heading after withdrawal.
 An unchanged read failure keeps its status, Details and Retry nodes, including
 keyboard focus, while another read is pending and when the same error returns.
 Initial activation and the workspace load share that first projection read;
 later events still start their own reads and invalidate older responses.
+Agent filter options use stable work-item order rather than source response order,
+so identical background reads retain the options and current keyboard focus.
 Selections use `?select=` in both views and reopen after returning from another
 view. Current requirement chips link to Requirements; earlier-plan text is read
 from its bound revision and never replaced by a raw ID in a chip or filter.
@@ -789,15 +892,20 @@ from its bound revision and never replaced by a raw ID in a chip or filter.
 ## Session workspace
 
 Opened from Work or a project tree. The page header shows the session title and agent
-mark, one status pill, and one quiet meta line: project, host, and a compact observed
+mark, an optional status pill, and one quiet meta line: project, host, and a compact observed
 time (relative within a day, otherwise a short local time with no seconds). Send stays
 the only primary action, on the composer's queue row. Interrupt is a danger button.
 Discuss, copy title, copy ID, Open in BAT, and the send shortcut sit in the overflow
 menu. Below 600px the session caption and metadata keep the full header width, with
 actions on the following row. An absent title says Untitled session, and an
 unreported agent uses Unknown.
-A manual or unconfirmed session shows Read-only and has no send, answer, or
-interrupt control.
+List rows, the rail and the header show status only for pending requests, running,
+out-of-sync observations, and managed failure or attention states. Unloaded tabs
+stay quiet and say Not open in BAT / BAT 中未開啟 in Details; loaded tabs with no
+reported activity say BAT did not report activity / BAT 未回報活動狀態 there.
+A manual or unconfirmed session has one Read-only line and no send, answer, or
+interrupt control. Details label Session ID / 工作階段 ID and Workspace / 工作區
+and show each observed time once, formatted with the shared time stamp.
 On mobile, the Session title and metadata use the full header width, with actions
 on the next row. Wider fonts must not turn the title into a tall narrow column
 that squeezes the pending question scroller below a whole answer input.
@@ -813,6 +921,10 @@ while the reader is scrolled up show New messages and do not move the visible ro
 Scrolling up without new content shows Back to latest. Activating either restores
 transcript focus. A pinned reader follows layout changes and a successful own send.
 Tool disclosures preserve the reader's toggle until the tool changes state.
+An incomplete reading count stays a lower bound (N+ unread / N+ 則未讀), including
+beside the archive budget or unconfirmed-history note. Missing-ID and unconfirmed
+archive explanations stay in Details, including when both reasons apply. Complete
+counts keep Last observed; unknown counts remain unknown. These notes use muted text.
 Approval prompts sit above the composer and keep their original operation keys.
 Their preview is a wrapping block, separate from transcript rows. The composer
 occupies at most half the viewport; questions scroll inside it while Answer and
@@ -951,7 +1063,8 @@ A fresh editable draft after reload explains that another credential paste is ne
 Successful configuration offers View sessions as the primary next action and
 collapses 1. Connect BAT. Change settings or expanding the disclosure opens it
 again; later visits with a configured host start collapsed. The two actions share
-a wrapping row with an 8px gap. Setup steps have 16px between groups, and the
+a wrapping row with an 8px gap. Collapsed setup steps have even spacing; 16px
+separates an action row from the next step, and the
 localized operation link/status lives in Details. English configured counts use
 singular/plural host and repository labels.
 

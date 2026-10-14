@@ -1,8 +1,10 @@
 export const pmKanbanStrings = {
   en: {
     pm_kanban_title: 'Work board', pm_kanban_board_details: 'Board details', pm_kanban_partial_sources: 'Sources incomplete',
-    pm_kanban_refresh: 'Refresh work flow', pm_kanban_retry: 'Retry work flow', pm_kanban_loading: 'Reading work flow…',
+    pm_kanban_refresh: 'Refresh work flow', pm_kanban_loading: 'Reading work flow…',
     pm_kanban_empty: 'No work has been explicitly associated with this workspace.', pm_kanban_more: 'Load more work',
+    pm_kanban_no_matches: 'No work matches these filters', pm_kanban_clear_filters: 'Clear filters', pm_kanban_none_shown: 'None shown',
+    pm_kanban_incomplete: 'Work list incomplete', pm_kanban_no_loaded_matches: 'No loaded work matches',
     pm_kanban_partial: 'More work remains outside this page.', pm_kanban_bounded: 'This read was shortened to fit the response limit.',
     pm_kanban_loaded: '{count} distinct work items shown',
     pm_kanban_wip: 'Latest page: {count} WIP · {unknown} unknown · {cards} unarchived work items',
@@ -54,8 +56,10 @@ export const pmKanbanStrings = {
   },
   'zh-TW': {
     pm_kanban_title: '工作看板', pm_kanban_board_details: '看板資料', pm_kanban_partial_sources: '來源不完整',
-    pm_kanban_refresh: '重新整理工作流', pm_kanban_retry: '重試工作流', pm_kanban_loading: '正在讀取工作流…',
+    pm_kanban_refresh: '重新整理工作流', pm_kanban_loading: '正在讀取工作流…',
     pm_kanban_empty: '這個工作區尚未明確關聯任何工作。', pm_kanban_more: '載入更多工作',
+    pm_kanban_no_matches: '沒有符合篩選條件的工作', pm_kanban_clear_filters: '清除篩選', pm_kanban_none_shown: '沒有顯示項目',
+    pm_kanban_incomplete: '工作清單不完整', pm_kanban_no_loaded_matches: '已載入工作沒有符合項目',
     pm_kanban_partial: '這一頁以外還有其他工作。', pm_kanban_bounded: '本次讀取因回應大小限制而縮短。',
     pm_kanban_loaded: '已顯示 {count} 項不同工作',
     pm_kanban_wip: '最近一頁：{count} 項 WIP・{unknown} 項未知・{cards} 項未封存工作',

@@ -10,12 +10,11 @@ The product introduction follows one project journey: understand its state, find
 problem, discuss it with the PM and review a decision in the same context.
 It retains Windows Fleet, central authority, platform differences and installation guidance.
 
-The redesigned views and sixteen screenshots are a **candidate preview** pinned to
-`944a854fc381f61c6281edb7fcbcf887321a0c68`.
-Backend #132 merged into main as `0c354861` on October 13, 2026; it is not installed or live-tested.
-Decision-loop backend #134 merged into main as `f25e1556` on October 13, 2026; it is not installed or live-tested.
-Frontend #133, which includes the walkthrough, is in review. Re-pin to merged main and regenerate
-the gallery after #133 merges.
+The redesigned views and sixteen screenshots are a **development preview from merged main**
+pinned to `aba02180e872f798ea54aa003b267b14eb7f5018`.
+Backend #132 merged as `0c354861` on October 13, 2026; #134 merged as `f25e1556`
+on October 14. Frontend #133 merged afterward on October 14 as `cb7e9f42`.
+Nothing is installed or live-tested. CI and browser screenshots do not establish native or live acceptance.
 Keep validation outcomes in the dated [progress report](../docs/product/progress-2026-10-14.md);
 link it from the site. The [October 12 report](../docs/product/progress-2026-10-12.md) retains historical evidence.
 The [handoff](../docs/handoff/2026-10-12-pm-v1.2.md) has development continuation
@@ -48,6 +47,9 @@ The gallery has eight scenes in two languages: Overview, Discussions, Requiremen
 Issues & changes, Schedule, Dependencies, Board and a read-only manual Session. See [screenshot provenance and reproduction](images/README.md).
 All are unedited captures of the real shared frontend using one synthetic demo project.
 The discussion proposal is unadopted; unassessed quality and incomplete coverage remain visible.
+Recently decided uses the existing synthetic plan adoption receipts. Named findings and
+the Schedule axis come from the merged UI. Agents and Overview empty-state variants
+remain review captures, keeping the public tour at eight scenes.
 
 When frontend source changes, update the deliberate source pin, check fixture
 compatibility, regenerate all sixteen images and inspect the 390/768/1440 previews.

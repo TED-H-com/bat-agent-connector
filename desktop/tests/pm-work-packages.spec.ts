@@ -48,7 +48,7 @@ function fixture(){
   return{state,base,dispatch};
 }
 const section=(page:any)=>page.locator('[data-pm-work-packages]'),detail=(page:any)=>page.locator('[data-pm-wp-detail]');
-async function review(page:any){await section(page).getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();await expect(detail(page)).toContainText('Ready for engineering review');}
+async function review(page:any){await section(page).getByLabel('Package',{exact:true}).selectOption({label:'Restore member access · Preparation 1'});await expect(detail(page)).toContainText('Ready for engineering review');}
 for(const native of [false,true])test.describe(native?'native engineering packages':'web engineering packages',()=>{
   test('fixed requirements and distinct code/spec sources are readable without execution',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await review(page);
@@ -77,12 +77,12 @@ for(const native of [false,true])test.describe(native?'native engineering packag
   });
   test('mismatched readiness cannot attach to the displayed fixed package',async({page})=>{
     const f=fixture();f.state.mismatch=true;await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');
-    await section(page).getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
-    await expect(section(page)).toContainText('The response does not match');await expect(detail(page)).not.toContainText('Members can recover');
+    await section(page).getByLabel('Package',{exact:true}).selectOption({label:'Restore member access · Preparation 1'});
+    await expect(section(page)).toContainText('The response does not match');await expect(detail(page)).not.toContainText('Members can recover');await expect(section(page)).not.toContainText('No readable work packages on this page.');
   });
   test('late selected response cannot repopulate a page after leaving it',async({page})=>{
     const f=fixture();let release!:()=>void;f.state.gate=new Promise<void>(resolve=>release=resolve);
-    await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await section(page).getByRole('button',{name:'Restore member access · Preparation 1',exact:true}).click();
+    await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await section(page).getByLabel('Package',{exact:true}).selectOption({label:'Restore member access · Preparation 1'});
     await page.goto('/dashboard/#/settings');release();await expect(section(page)).toHaveCount(0);
     await expect(page.locator('main')).not.toContainText('Members can recover');expect(f.base.state.writes).toHaveLength(0);
   });
@@ -96,13 +96,13 @@ for(const native of [false,true])test.describe(native?'native engineering packag
     const f=fixture(),second=structuredClone(f.state.rows[0]);second.sequence=2;second.package_id='pmwp_'+'f'.repeat(32);
     second.document.package_id=second.package_id;second.document.design.text='A separate design for the next preparation.';f.state.rows.push(second);
     await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');
-    await section(page).getByRole('button',{name:'Restore member access · Preparation 2',exact:true}).click();
+    await section(page).getByLabel('Package',{exact:true}).selectOption({label:'Restore member access · Preparation 2'});
     await expect(detail(page)).toContainText('A separate design for the next preparation.');
   });
 });
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`engineering layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=fixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await section(page).getByRole('button',{name:/Restore member access/}).click();
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=section(page).getByLabel(/^(Package|工作包)$/);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});
   await expect(detail(page).locator('[data-pm-wp-readiness]')).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.PM_WORK_PACKAGE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/${locale}-${width}.png`,fullPage:true});}
@@ -131,7 +131,7 @@ for(const native of [false,true])test.describe(native?'native saved engineering 
     };
     await mountConversation(page,native,dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');await review(page);
     await openPmSection(page,'requirements','ui_packages');
-    const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator('summary').click();
+    const box=page.locator('[data-pm-work-deliveries]');await expect(box).toBeVisible();await box.locator(':scope > summary').click();
     await expect(box).toContainText('This page is incomplete.');
     expect((await box.innerText()).toLowerCase()).not.toContain('null');expect((await box.innerText()).toLowerCase()).not.toContain('undefined');
     await box.getByRole('button',{name:'More delivery records',exact:true}).click();
@@ -140,7 +140,7 @@ for(const native of [false,true])test.describe(native?'native saved engineering 
     await expect(box).toContainText('Requirements and Definition of Done still need their own assessment.');
     expect(deliveryCalls.some(path=>path.includes('after=12'))).toBe(true);
     withdrawn=true;await box.getByRole('button',{name:'Refresh delivery records',exact:true}).click();
-    await expect(box).toContainText('Delivery evidence is unavailable');await expect(box).not.toContainText('staging');
+    await expect(box).toContainText('Delivery evidence is unavailable');await expect(box).not.toContainText('No readable delivery records in this page.');await expect(box).not.toContainText('staging');
     await expect(box.locator('a')).toHaveCount(0);
   });
 });

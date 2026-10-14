@@ -7,7 +7,7 @@ if (!output) throw Error('Set BATC_SETUP_SHOTS to a disk evidence directory');
 await mkdir(output, {recursive:true});
 const browser = await chromium.launch();
 try {
-  for (const locale of ['en','zh-TW']) for (const width of (stage === 'before' ? [1440,390] : stage === 'fix2' ? [1440,1000,390] : [1440,768,390])) {
+  for (const locale of ['en','zh-TW']) for (const width of (stage === 'before' ? [1440,390] : ['fix2','fix3'].includes(stage) ? [1440,1000,390] : [1440,768,390])) {
     const context = await browser.newContext({locale, viewport:{width,height:width===390?844:900}}), page = await context.newPage();
     const state = await managedSetupFixture(page,false,locale), errors=[];
     page.on('pageerror', error=>errors.push(error.message));
@@ -34,16 +34,16 @@ try {
     await shot('url-filled');
     state.refused=true;state.refusalCode='INVALID_TARGET';state.refusalMessage='Choose a stable logical host name';
     if(stage==='before') await form.locator('input').first().fill('本機');
-    if(stage!=='before') {state.admissionRefused=true;state.refusalStatus=stage==='fix2'?409:422;}
-    if(stage==='fix2') {state.refusalCode='HOST_IDENTITY_CHANGED';state.refusalMessage='Existing host connection identity is different.';}
+    if(stage!=='before') {state.admissionRefused=true;state.refusalStatus=['fix2','fix3'].includes(stage)?409:422;}
+    if(['fix2','fix3'].includes(stage)) {state.refusalCode='HOST_IDENTITY_CHANGED';state.refusalMessage='Existing host connection identity is different.';}
     await form.locator('button[type=submit]').click(); await expect.poll(()=>state.posts.length).toBe(1); await shot('refusal');
     state.refused=false;
     if(stage==='before') {await panel.locator('.actions').first().locator('button').last().click();await form.locator('input').first().fill('local');}
-    if(stage!=='before') await form.locator('[data-setup-field=host]').fill(stage==='fix2'?'local-new':'local');
+    if(stage!=='before') await form.locator('[data-setup-field=host]').fill(['fix2','fix3'].includes(stage)?'local-new':'local');
     await form.locator('button[type=submit]').click(); await expect(panel.locator('a[href^="#/op/"]')).toHaveAttribute('href', '#/op/op_'+'c'.repeat(32));
     await expect(panel.locator('[data-setup-sessions]')).toBeVisible();
     await shot('connected');
-    if(stage==='fix2') {
+    if(['fix2','fix3'].includes(stage)) {
       await panel.locator('[data-setup-details]>summary').click();await expect(panel.locator('[data-setup-operation]')).toBeVisible();
       await shot('connected-details');await panel.locator('[data-setup-details]>summary').click();
     }

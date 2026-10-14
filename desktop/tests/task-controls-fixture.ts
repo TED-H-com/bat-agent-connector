@@ -5,7 +5,7 @@ export async function taskFixture(page: Page, native = false, options: any = {})
   const state = {actor: 'task-person', server: 'task-server', principal: 'task-principal', scopes: ['observe', 'operate'],
     allowed: true, paused: false, version: 7, taskState: 'running', status: 'succeeded', failRead: false, failTask: false,
     operation: null as any, posts: [] as any[], reads: [] as string[], errors: [] as string[], events: [] as any[],
-    after: 0, lost: false, holdPost: null as any, delayPost: false, list: [] as any[], listLimit: 2,
+    after: 0, lost: false, holdPost: null as any, delayPost: false, taskEvents: [] as any[], list: [] as any[], listLimit: 2,
     holdList: null as any, delayList: false, failList: false, ...options};
   const dispatch = async (input: any) => {
     const url = new URL(input.path, 'http://fixture'), path = url.pathname;
@@ -32,7 +32,8 @@ export async function taskFixture(page: Page, native = false, options: any = {})
     if (path === '/tasks/'+taskId) {
       if (state.failTask) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Task read failed'}}};
       return {status: 200, data: {task: {task_id: taskId, host: 'demo', session_id: 'managed-fixture-session',
-        project: 'Review the shared dashboard', state: state.taskState, paused: state.paused, control_version: state.version}}};
+        project: 'Review the shared dashboard', state: state.taskState, paused: state.paused, control_version: state.version,
+        events: state.taskEvents}}};
     }
     if (path === '/operations/'+opId) {
       if (state.failRead) return {status: 503, data: {error: {code: 'READ_FAILED', message: 'Operation read failed'}}};
