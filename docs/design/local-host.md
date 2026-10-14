@@ -195,9 +195,9 @@ checking; a localized display name does not become its identifier.
    **Connect / 連線**, with no repeat trust decision.
 3. Native enrollment obtains the appropriate token only through a supported
    BAT contract. If unavailable, use one secure **native** paste field:
-   **BAT connection token / BAT 連線金鑰**. It is the credential-entry surface
+   **BAT connection token / BAT 連線權杖**. It is the credential-entry surface
    in the same enrollment sheet, not an additional dialog or an HTML password
-   field. The page sees only **Token added / 已加入金鑰** or unavailable.
+   field. The page sees only **Token added / 已加入權杖** or unavailable.
    The dialog's submit is data entry, not another permission/trust prompt.
 4. Central runs the existing read-only host probe, verifies the exact server
    profile/workspaces, atomically publishes setup and returns its durable result.
@@ -205,7 +205,7 @@ checking; a localized display name does not become its identifier.
    enable writes/orchestration, create a workspace or prove managed Git ready.
 
 The fallback instruction is **Copy the remote connection token from BAT's
-remote-server settings / 從 BAT 的遠端伺服器設定複製連線金鑰**. The exact navigation
+remote-server settings / 從 BAT 的遠端伺服器設定複製連線權杖**. The exact navigation
 must be supplied and tested against the supported BAT release before shipping;
 this investigation cannot establish it. For headless BAT, the operator must
 use BAT's documented token output/configuration procedure. Never suggest
