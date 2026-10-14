@@ -114,12 +114,12 @@ for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`runti
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:width===390?844:900}}),page=await context.newPage();try{
     const f=runtimeFixture();await mountRuntime(page,false,f);
     const folder=process.env.PM_SCREENSHOTS||info.outputPath('screenshots');await mkdir(folder,{recursive:true});
-    await page.screenshot({path:`${folder}/board-${locale}-${width}.png`});
+    await page.screenshot({path:`${folder}/board-${locale}-${width}.png`,animations:'disabled'});
     await openDetail(page);await editor(page).locator('select').selectOption({label:'fixture-host / manual-session-1'});
     await expect(page.locator('.pm-main > .ui-page-header h1')).toHaveText(labels(locale).heading);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
     await expect(panel(page)).not.toContainText(/\bundefined\b|\bnull\b|pm_kanban_/);
-    await editor(page).scrollIntoViewIfNeeded();await page.screenshot({path:`${folder}/runtime-${locale}-${width}.png`});
-    if(locale==='en'&&width===1440){await page.emulateMedia({colorScheme:'dark'});await page.screenshot({path:`${folder}/runtime-dark-${width}.png`});}
+    await editor(page).scrollIntoViewIfNeeded();await page.screenshot({path:`${folder}/runtime-${locale}-${width}.png`,animations:'disabled'});
+    if(locale==='en'&&width===1440){await page.emulateMedia({colorScheme:'dark'});await page.screenshot({path:`${folder}/runtime-dark-${width}.png`,animations:'disabled'});}
   }finally{await context.close();}
 });
