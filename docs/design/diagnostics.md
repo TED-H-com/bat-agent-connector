@@ -40,7 +40,8 @@ locales. Browser assets use the serving Connector build and remain reproducible.
 
 ## Save boundary
 
-Browsers use a Blob download. Native saving does not rely on Blob support across
+Browsers use a Blob download and report only that the download started. Native
+saving confirms completion after its write receipt and does not rely on Blob support across
 WebViews: upstream documents platform-dependent downloads and reports macOS Blob
 failures ([Tauri issue 8452](https://github.com/tauri-apps/tauri/issues/8452),
 [download events](https://docs.rs/tauri/2.12.1/tauri/webview/enum.DownloadEvent.html)).

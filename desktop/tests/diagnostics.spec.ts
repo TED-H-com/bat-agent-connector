@@ -23,6 +23,7 @@ for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
   const downloadPromise=page.waitForEvent('download');await dialog.getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();
   const download=await downloadPromise;expect(download.suggestedFilename()).toMatch(/^batc-diagnostics-\d{8}-\d{4}\.json$/);
   expect(JSON.parse(await readFile((await download.path())!,'utf8'))).toEqual(bundle);
+  await expect(dialog.getByRole('status')).toHaveText(locale==='en'?'Download started':'已開始下載');
   await dialog.getByRole('button',{name:locale==='en'?'Copy':'複製',exact:true}).click();
   await expect(dialog.getByRole('status')).toHaveText(locale==='en'?'Copied':'已複製');expect(await page.evaluate(()=>(window as any).diagnosticsClipboard)).toBe(text);
   await dialog.getByRole('button',{name:locale==='en'?'Close':'關閉',exact:true}).focus();await page.keyboard.press('Tab');await expect(page.locator('[data-diagnostics-json]')).toBeFocused();
@@ -33,6 +34,7 @@ for(const locale of ['en','zh-TW'])test.describe(locale,()=>{
  test('native saving passes only text, generated filename and locale',async({page})=>{
   const state=await diagnosticsFixture(page,true);await open(page,locale);
   await page.getByRole('dialog').getByRole('button',{name:locale==='en'?'Save':'儲存',exact:true}).click();await expect.poll(()=>state.saved.length).toBe(1);
+  await expect(page.getByRole('dialog').getByRole('status')).toHaveText(locale==='en'?'Saved':'已儲存');
   expect(Object.keys(state.saved[0]).sort()).toEqual(['content','filename','locale']);expect(JSON.parse(state.saved[0].content).client.app_commit).toBe('b'.repeat(40));
  });
  test('failed read exports its template through error Details',async({page})=>{

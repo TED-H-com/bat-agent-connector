@@ -446,6 +446,7 @@ var diagnosticsStrings = {
 		diag_json: "Full JSON",
 		diag_copied: "Copied",
 		diag_copy_failed: "Copy failed. Select the JSON to copy it.",
+		diag_download_started: "Download started",
 		diag_saved: "Saved",
 		diag_save_failed: "Save could not be confirmed. Check the destination before saving again.",
 		diag_withdrawn: "Source access changed. Close and reopen diagnostics for a fresh preview.",
@@ -482,6 +483,7 @@ var diagnosticsStrings = {
 		diag_json: "完整 JSON",
 		diag_copied: "已複製",
 		diag_copy_failed: "複製失敗，請選取 JSON 後手動複製。",
+		diag_download_started: "已開始下載",
 		diag_saved: "已儲存",
 		diag_save_failed: "無法確認是否已儲存，請先檢查目的地再重新儲存。",
 		diag_withdrawn: "來源存取權已變更，請關閉後重新開啟診斷資料。",
@@ -11683,7 +11685,7 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 			saved.disabled = true;
 			try {
 				const result = await save(content, filename);
-				if (current === serial && result) status.textContent = t("diag_saved");
+				if (current === serial && result) status.textContent = t(result === true ? "diag_download_started" : "diag_saved");
 			} catch {
 				if (current === serial) status.textContent = t("diag_save_failed");
 			} finally {

@@ -9,7 +9,7 @@ export function diagnosticsDialog({h, t, load, save, onClose}) {
   const close = () => {serial++; dialog.close(); dialog.remove(); onClose(); if (origin?.isConnected) origin.focus();};
   const saved = button({variant:'primary',label:t('diag_save'),disabled:true,onClick:async () => {
     const current=serial; saved.disabled=true;
-    try {const result=await save(content,filename); if (current===serial && result) status.textContent=t('diag_saved');}
+    try {const result=await save(content,filename); if (current===serial && result) status.textContent=t(result === true ? 'diag_download_started' : 'diag_saved');}
     catch {if(current===serial)status.textContent=t('diag_save_failed');}
     finally {if(current===serial)saved.disabled=false;}
   }});
