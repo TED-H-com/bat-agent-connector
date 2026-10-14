@@ -44,7 +44,7 @@ for(const native of [false,true])test(`${native?'Native':'Web'} workspace mounts
     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
     await page.screenshot({path:testInfo.outputPath(`${native?'native':'web'}-${width}.png`),fullPage:true});
   }
-  await apply.getByRole('button',{name:'Adopt this update',exact:true}).click();
+  await apply.getByRole('button',{name:'Adopt',exact:true}).click();
   await expect.poll(()=>proposal.state.writes.length).toBe(1);
   expect(base.state.writes).toEqual([]);
   expect(proposal.state.writes[0].body.params.review.rows.find((row:any)=>row.key==='referral').include).toBe(false);
@@ -73,7 +73,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`struct
   await mountConversation(page,native,dispatch);
   if(native)await page.addInitScript(caps=>{const ipc=(window as any).__TAURI_INTERNALS__,invoke=ipc.invoke;ipc.invoke=(command:string,args:any)=>command==='connector_connect'?Promise.resolve(caps):invoke(command,args);},(await dispatch({method:'GET',path:'/capabilities'})).data);
   await page.goto(pmRoute);const form=page.locator(`[data-pm-action="${PROPOSE}"]`),choice=form.locator('[data-pm-structured-analysis] select');
-  await openThreadTab(page,'plan');await page.locator('[data-proposal-prepare] > summary').click();const heading=page.locator('[data-pm-plan-proposals] > h3'),title=locale==='zh-TW'?'建議更新':'Proposed update';
+  await openThreadTab(page,'plan');await page.locator('[data-proposal-prepare] > summary').click();const heading=page.locator('[data-discussion-proposal-tools] > header > h3'),title=locale==='zh-TW'?'計畫更新':'Plan updates';
   await expect(heading).toHaveText(title);
   await expect(choice).toBeEnabled();await choice.selectOption(BAT);await form.locator('textarea').fill('Prepare the original member-access conversation.');
   await page.reload();await openThreadTab(page,'plan');await page.locator('[data-proposal-prepare] > summary').click();await expect(heading).toHaveText(title);await expect(choice).toHaveValue(BAT);await expect(form.locator('textarea')).toHaveValue('Prepare the original member-access conversation.');

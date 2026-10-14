@@ -112,7 +112,10 @@ test('BAT selector and source provenance fit both languages and all shared width
     const context=await browser.newContext({locale,baseURL});const page=await context.newPage();const f=nativeFixture();f.bat.available=true;
     await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openThreadAnalysis(page);await selector(page).selectOption('bat_analysis');
     for(const [width,height] of [[1440,900],[768,900],[390,844]]){
-      await page.setViewportSize({width,height});await openThreadAnalysis(page);
+      await page.setViewportSize({width,height});
+      // Wait for the open dock to move before the helper considers its toggle.
+      if(await page.locator('[data-discussion-panel-toggle]').getAttribute('aria-expanded')==='true')await expect(page.locator('[data-discussion-panel]')).toBeVisible();
+      await openThreadAnalysis(page);
       await expect(form(page)).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
       await page.screenshot({path:`${folder}/bat-analysis-${locale}-${width}.png`,fullPage:true});
     }

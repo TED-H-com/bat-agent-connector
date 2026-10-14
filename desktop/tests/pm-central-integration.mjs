@@ -104,7 +104,7 @@ try {
   }
   const original = (await read()).inputs.find(item => item.slot === 'problem');
   await page.locator(`[data-input-id="${original.input_id}"] input[type=checkbox]`).check();
-  await openDisclosure(page.locator(`[data-input-id="${original.input_id}"] summary`));
+  await openDisclosure(page.locator(`[data-input-id="${original.input_id}"] details:has([data-pm-action="pm.input.confirm"]) > summary`));
   const confirm = page.locator(`[data-input-id="${original.input_id}"] [data-pm-action="pm.input.confirm"]`);
   await confirm.getByLabel('Why this statement is confirmed', {exact:true}).fill('The owner selected this outcome');
   await confirm.getByRole('button', {name:'Confirm statement', exact:true}).click();
@@ -114,6 +114,7 @@ try {
   await page.getByRole('checkbox', {name:'Selected input outside this view', exact:true}).click();
   await page.locator(`[data-input-id="${confirmed.input_id}"] input[type=checkbox]`).check();
   await openThreadTab(page,'plan');
+  await openDisclosure(page.locator('[data-pm-plan] > summary'));
   const plan = page.locator('[data-pm-action="pm.thread.plan"]');
   await plan.getByLabel('Why this direction', {exact:true}).fill('Prepare one change and retain the alternative');
   await plan.getByRole('button', {name:'Save Planning draft', exact:true}).click();

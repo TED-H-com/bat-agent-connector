@@ -88,29 +88,30 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`emp
   const milestones = root(page).getByRole('heading', {name: locale === 'en' ? 'Milestones' : '里程碑', exact: true}).locator('..').locator('..');
   const deliveries = root(page).locator('.pm-overview-side > section').last();
   const empty = locale === 'en' ? 'None recorded' : '尚無紀錄';
+  // Assert the card's coverage status separately from optional source record times.
   for (const [card, reason] of [[milestones, locale === 'en' ? 'Source unavailable' : '無法取得來源'],
     [deliveries, locale === 'en' ? 'Source is incomplete' : '來源不完整']] as const) {
-    await expect(card.locator('[data-status=unknown]')).toBeVisible();
+    await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible();
     await expect(card).toContainText(reason); await expect(card).not.toContainText(empty);
   }
   // Coverage alone can change while the arrays remain empty.
   f.state.data.coverage.sources.roadmap.complete = true; f.state.data.recent_deliveries_complete = true;
   f.state.data.unknown = [{field: 'next_milestone', reason: 'no_roadmap_baseline'}];
   await refresh(page);
-  for (const card of [milestones, deliveries]) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]')).toHaveCount(0);}
+  for (const card of [milestones, deliveries]) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toHaveCount(0);}
   // A complete scan can still omit delivery rows at the output-reference limit.
   f.state.data.coverage.sources.attention_references = {complete: false, next_cursor: null, status: 'source_limit'};
   f.state.data.unknown = [{field: 'attention_references', reason: 'source_limit'}];
-  await refresh(page); await expect(deliveries.locator('[data-status=unknown]')).toBeVisible(); await expect(deliveries).not.toContainText(empty);
+  await refresh(page); await expect(deliveries.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(deliveries).not.toContainText(empty);
   await expect(deliveries.getByRole('heading')).toHaveText(locale === 'en' ? 'Recent deliveries (loaded)' : '近期交付（已載入）');
   delete f.state.data.coverage.sources.roadmap;
-  await refresh(page); await expect(milestones.locator('[data-status=unknown]')).toBeVisible(); await expect(milestones).not.toContainText(empty);
+  await refresh(page); await expect(milestones.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(milestones).not.toContainText(empty);
   f.state.data.plan = null; f.state.data.coverage.sources.plan.complete = false;
   f.state.data.unknown = [{field: 'plan', reason: 'source_unavailable'}];
   await refresh(page);
   for (const key of ['definition', 'scope', 'schedule', 'resources', 'risks']) {
     const card = root(page).locator(`[data-charter-section="${key}"]`);
-    await expect(card.locator('[data-status=unknown]')).toBeVisible();
+    await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible();
     await expect(card).toContainText(locale === 'en' ? 'Source unavailable' : '無法取得來源'); await expect(card).not.toContainText(empty);
   }
   expect(f.state.writes).toEqual([]); await context.close();
@@ -279,18 +280,19 @@ for (const locale of ['en', 'zh-TW']) test(`charter empty states require readabl
   f.state.planPatch = clearStatements;
   f.state.data.attention = f.state.data.attention.filter((row: any) => row.kind !== 'decision'); f.state.data.attention_counts.decision = 0;
   await boot(page, f); const cards = root(page).locator('[data-charter-section]'), empty = locale === 'en' ? 'None recorded' : '尚無紀錄';
-  for (const card of await cards.all()) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]')).toHaveCount(0);}
+  // A missing record time inside Sources does not change complete card coverage.
+  for (const card of await cards.all()) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toHaveCount(0);}
   f.state.data.attention_counts.decision = null;
   f.state.data.unknown = [{field: 'attention_counts.decision', reason: 'source_unavailable'}];
   await refresh(page); const decisions = root(page).locator('[data-charter-section=decisions]');
-  await expect(decisions.locator('[data-status=unknown]')).toBeVisible(); await expect(decisions).not.toContainText(empty);
+  await expect(decisions.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(decisions).not.toContainText(empty);
   const decision = overview(demoProject(locale)).attention.find(row => row.kind === 'decision')!;
   f.state.data.attention.push(decision); await refresh(page);
-  await expect(decisions).toContainText(decision.title); await expect(decisions.locator('[data-status=unknown]')).toBeVisible();
+  await expect(decisions).toContainText(decision.title); await expect(decisions.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible();
   await expect(decisions).not.toContainText(empty);
   delete f.state.data.coverage.sources.plan;
   await refresh(page);
-  for (const card of (await cards.all()).slice(0, 5)) {await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText(empty);}
+  for (const card of (await cards.all()).slice(0, 5)) {await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(card).not.toContainText(empty);}
   let restricted = true, filtered = false;
   f.state.reportPatch = snapshot => {
     clearStatements(snapshot.baseline); for (const section of Object.values(snapshot.brief) as any[]) section.items = [];
@@ -298,16 +300,16 @@ for (const locale of ['en', 'zh-TW']) test(`charter empty states require readabl
   };
   await report(page, f.ids.snap1);
   for (const card of await cards.all()) {
-    await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText(empty);
+    await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(card).not.toContainText(empty);
     await expect(card).toContainText(locale === 'en' ? 'Restricted sources' : '來源受限');
   }
   restricted = false; filtered = true; await refresh(page);
   for (const card of await cards.all()) {
-    await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText(empty);
+    await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(card).not.toContainText(empty);
     await expect(card).toContainText(locale === 'en' ? 'Some sources hidden' : '部分來源已隱藏');
   }
   filtered = false; await refresh(page);
-  for (const card of await cards.all()) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]')).toHaveCount(0);}
+  for (const card of await cards.all()) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toHaveCount(0);}
   expect(f.state.writes).toEqual([]); await context.close();
 });
 

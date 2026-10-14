@@ -1,3 +1,4 @@
+import {openThreadTab} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 import {governanceFixture, mount, action, openAction, workspaceId} from './pm-governance-fixture';
@@ -232,7 +233,7 @@ test('an unknown admission waits for sending to resume and retries only the orig
       onEvents: () => () => {}, errorBox: (error: any) => h('p', {}, error.message)});
     win.disposeWorkspace.navigate(workspaceId, threadId, 'discussions');
   }, {workspaceId, threadId});
-  await page.getByRole('tab', {name: 'Inputs', exact: true}).click();
+  await openThreadTab(page, 'inputs');
   await page.locator('[data-pm-add-input] > summary').click();
   const form = page.locator('[data-pm-action="pm.input.record"]');
   await form.getByLabel('Topic', {exact: true}).selectOption('problem');
