@@ -162,7 +162,9 @@ body.pm-mode #main { padding: 0; }
 
 /* A nested dock also reserves space beside the view's header actions. */
 @media (min-width: 1200px) {
-  main:has(.ui-inspector[role=complementary]):not(:has(> .ui-inspector)) .ui-page-header {
+  main:has(.ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .ui-page-header,
+  main:has(.ui-inspector[role=complementary]):not(:has(> .ui-inspector)) .pm-main > .ui-page-header,
+  main:has(.ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .workspace-session-heading {
     max-width: calc(100% - 400px - var(--space-4));
   }
 }

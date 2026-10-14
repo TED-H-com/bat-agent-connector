@@ -4,6 +4,7 @@ import {shellReviewFixture} from './shell-review-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmRoute, workspaceId} from './pm-fixture.ts';
 import {openPmPanel} from './pm-navigation.ts';
+import {openSession, fromRequirements} from './session-fixture.ts';
 async function shot(page: Page, state: string, locale: string, width: number) {
   if (!process.env.BATC_FIX2_SHOTS) return;
   await mkdir(process.env.BATC_FIX2_SHOTS, {recursive: true});
@@ -128,4 +129,24 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1280, 1000, 390
   }
   const bounds = await panel.boundingBox(); expect(bounds!.y + bounds!.height).toBe(900); if (width >= 1200) expect(bounds!.y).toBe(48);
   await shot(page, 'requirements-docked', locale, width); expect(f.base.base.state.writes).toHaveLength(0); await context.close();
+});
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1280, 1000, 390]) test(`Session header actions stay clear of Results ${locale} ${width}`, async ({browser}) => {
+  const s = await openSession(browser, {locale, width, height: 900});
+  try {
+    await fromRequirements(s.page, s.ids, 'manual');
+    const panel = s.page.locator('.ui-inspector'), header = s.page.locator('.workspace-session-heading .ui-page-header');
+    if (width >= 1200) {
+      await expect(panel).toBeVisible();
+      const title = await header.boundingBox(), dock = await panel.boundingBox();
+      expect(title!.x + title!.width).toBeLessThanOrEqual(dock!.x);
+      expect(dock!.y).toBe(48); expect(dock!.y + dock!.height).toBe(900);
+    } else await expect(panel).toBeHidden();
+    const more = header.getByRole('button', {name: locale === 'en' ? 'More actions' : '更多操作', exact: true});
+    await more.click();
+    await expect(s.page.getByRole('menuitem', {name: locale === 'en' ? 'Discuss' : '討論', exact: true})).toBeVisible();
+    await s.page.keyboard.press('Escape'); await expect(more).toBeFocused();
+    await shot(s.page, 'session-header', locale, width);
+    expect(s.writes).toHaveLength(0);
+  } finally {await s.context.close();}
 });

@@ -53,8 +53,10 @@
   unavailable state when their projection is unsupported, with secondary tools
   collapsed below it. Empty and unavailable shell tasks use short titles with muted
   explanations; Settings distinguishes missing evidence from unreadable projects
-  and clears withdrawn project details. Native save receipts use localized punctuation. Discussion tools overlay without
+  and clears withdrawn project details. Native save receipts use localized punctuation.
+  Discussion tools overlay without
   narrowing the thread; docked inspectors fill the viewport with independent scrolling.
+  View headers and Issues lists reserve space beside docked inspectors.
   Lifecycle copy consistently says phase, Settings shows one access reason, report
   controls fit their selected text, and breadcrumbs separate only existing crumbs.
 
