@@ -40,7 +40,7 @@ body.has-workspace .workspace-nav { display: flex; position: sticky; top: 48px; 
 .shell-all-projects { display: block; padding: var(--space-2); font-size: var(--fs-small); text-decoration: none; color: var(--text-2); }
 body.has-workspace main { min-width: 0; max-width: 1600px; width: 100%; margin: 0 auto; padding: var(--space-6); }
 body.pm-mode #main { padding: 0; }
-.pm-shell { display: block; min-height: calc(100dvh - 48px); }
+.pm-shell { display: block; min-height: calc(100dvh - 48px); --ci-scope-probe: 1; }
 .pm-main { padding: var(--space-6); min-width: 0; }
 .pm-shell > aside { display: none; }
 .pm-main > .ui-page-header { border: 0; }
