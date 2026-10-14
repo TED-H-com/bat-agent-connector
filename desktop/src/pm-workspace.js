@@ -785,7 +785,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   async function refreshSection(section, activation = false) {
     const read = activation ? activationReads.get(section) : null;
     activationReads.delete(section);
-    await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({user:true}) : section.refresh()));
+    await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({event:true}) : section.refresh()));
     alive();
     if (sectionVisible(section)) revealSource(section);
   }

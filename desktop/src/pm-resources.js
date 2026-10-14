@@ -573,9 +573,9 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     const scroller = main.querySelector('.ui-data-table');
     Object.assign(preference, {selected, paused, filter, period, scroll: scroller ? scroller.scrollLeft : preference.scroll || 0});
   }
-  async function refresh({user = false, trend = false} = {}) {
+  async function refresh({user = false, trend = false, event = false} = {}) {
     if (!active || (paused && !user)) return;
-    if (!user && busy) return;
+    if (!user && !event && busy) return;
     const ticket = ++serial;
     busy = true;
     clearTimeout(timer);

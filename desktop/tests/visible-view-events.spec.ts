@@ -75,3 +75,25 @@ test('the untouched sidebar is 232px at 1000 and 1199',async({page})=>{
     expect(await page.locator('#workspace-sidebar').evaluate(node=>node.getBoundingClientRect().width)).toBe(232);
   }
 });
+
+
+test('Agents pause survives event reads and resumes with a fresh source read',async({page})=>{
+  const f=demoFixture(),wid=f.ids.workspaceId;let cursor=0;const reads:string[]=[],writes:string[]=[];
+  await mountConversation(page,false,async input=>{
+    const url=new URL(input.path,'http://fixture');
+    if(url.pathname==='/events')return {status:200,data:{events:Number(url.searchParams.get('after'))<cursor?[{seq:cursor,resource_type:'pm_workspace',resource_id:wid,kind:'pm_workspace.updated'}]:[],next_cursor:cursor,head_cursor:cursor,has_more:false,sync:{checkpoint:{cursor,token:`paused-${cursor}`}}}};
+    if(input.method==='GET')reads.push(url.pathname);else writes.push(url.pathname);
+    return f.dispatch(input);
+  });
+  await page.goto(`/dashboard/#/pm/${wid}/agents`);await expect(page.locator('[data-resource-row]')).toHaveCount(3);
+  await page.getByRole('button',{name:'Pause updates',exact:true}).click();
+  const stamp=page.locator('[data-resource-meta] time'),frozen=await stamp.getAttribute('datetime');
+  await page.waitForTimeout(1200);reads.length=0;cursor++;
+  await expect.poll(()=>page.evaluate(()=>Object.values(localStorage).some(value=>value.includes('paused-1')))).toBe(true);
+  expect(reads).not.toContain(`/pm/workspaces/${wid}/resources`);
+  await expect(stamp).toHaveAttribute('datetime',frozen!);
+  await expect(page.getByRole('button',{name:'Resume updates',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Resume updates',exact:true}).click();
+  await expect.poll(()=>reads.filter(path=>path===`/pm/workspaces/${wid}/resources`).length).toBe(1);
+  expect(writes).toEqual([]);
+});

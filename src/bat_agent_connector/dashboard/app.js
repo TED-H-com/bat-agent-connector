@@ -14310,9 +14310,9 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 			scroll: scroller ? scroller.scrollLeft : preference.scroll || 0
 		});
 	}
-	async function refresh({ user = false, trend = false } = {}) {
+	async function refresh({ user = false, trend = false, event = false } = {}) {
 		if (!active || paused && !user) return;
-		if (!user && busy) return;
+		if (!user && !event && busy) return;
 		const ticket = ++serial;
 		busy = true;
 		clearTimeout(timer);
@@ -36943,7 +36943,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	async function refreshSection(section, activation = false) {
 		const read = activation ? activationReads.get(section) : null;
 		activationReads.delete(section);
-		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ user: true }) : section.refresh()));
+		await (read || (section === dependencies ? section.setActive(true) : section === resources ? section.refresh({ event: true }) : section.refresh()));
 		alive();
 		if (sectionVisible(section)) revealSource(section);
 	}

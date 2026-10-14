@@ -751,3 +751,7 @@ masks hidden stale views before navigation can expose them. Recovery rereads the
 visible view and restores an open tool with its unsent draft. An Overview related
 inspector keeps its owning Overview projection subscribed while it is mounted in
 Issues. Closed discussion tools wait for their next visible disclosure.
+
+Agents event reads respect Pause updates. A later event can supersede an older
+in-flight source read while updates are running; only explicit Refresh bypasses
+the pause. Parent authorization remains checked while the projection is paused.
