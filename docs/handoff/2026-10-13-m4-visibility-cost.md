@@ -14,6 +14,10 @@ and the failure as
 `tests/test_pm_repair_observer_source_reads.py::test_original_observer_frame_bounds_repeated_sources_and_rechecks_authority`.
 Their tracebacks and head/base comparisons remain pending at this checkpoint.
 
+The exact [129-file test inventory](2026-10-13-m4-visibility-cost-tests.txt)
+is preserved with this note. The affected runs select its 127 files other than
+the joined lifecycle and operation helpers, which are measured separately.
+
 ## Backend merge
 
 Merge `358226810f22d6ad4f4c0edcdc15e8c4876affd9` joins the previous M4 integration
