@@ -23,25 +23,41 @@ const scenes = ['overview', 'discussions', 'requirements', 'issues', 'schedule',
 const reviewScenes = ['agents', 'overview-unknown', 'overview-empty'];
 const git = (...args) => execFileSync('git', args, {cwd: root, encoding: 'utf8'}).trim();
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
-const sourceCommit = git('rev-parse', source);
-// Documentation commits may rerun the capture, but product and demo bytes must stay pinned.
-git('diff', '--exit-code', sourceCommit, '--', 'desktop/src', 'desktop/tests/demo', 'src/bat_agent_connector/dashboard');
-await mkdir(output, {recursive: true});
-if (review) await mkdir(review, {recursive: true});
-const server = createServer(async (request, response) => {
-  const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
-  const file = pathname === '/dashboard/' ? 'index.html' : pathname.slice('/dashboard/'.length);
-  if (!pathname.startsWith('/dashboard/') || !assets.includes(file)) {response.writeHead(404).end(); return;}
+const lockfile = 'desktop/package-lock.json';
+const lockfileDigestName = 'without_root_version';
+export function lockfileDigest(bytes) {
+  let value;
   try {
-    const body = await readFile(path.join(root, 'src/bat_agent_connector/dashboard', file));
-    response.writeHead(200, {'Content-Type': file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'text/javascript',
-      'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'"});
-    response.end(body);
-  } catch {response.writeHead(404).end();}
-});
-await new Promise((resolve, reject) => {server.once('error', reject); server.listen(0, '127.0.0.1', resolve);});
-const origin = 'http://127.0.0.1:' + server.address().port;
-
+    value = JSON.parse(Buffer.isBuffer(bytes) ? bytes.toString('utf8') : String(bytes));
+  } catch (error) {
+    throw new Error(`Malformed lockfile JSON: ${error.message}`);
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Malformed lockfile JSON: root must be an object');
+  }
+  if (value.packages !== undefined && (!value.packages || typeof value.packages !== 'object' || Array.isArray(value.packages))) {
+    throw new Error('Malformed lockfile JSON: packages must be an object');
+  }
+  const rootPackage = value.packages?.[''];
+  if (rootPackage !== undefined && (!rootPackage || typeof rootPackage !== 'object' || Array.isArray(rootPackage))) {
+    throw new Error('Malformed lockfile JSON: root package must be an object');
+  }
+  for (const [holder, label] of [[value, 'root'], [rootPackage, 'root package']]) {
+    if (holder && 'version' in holder) {
+      if (typeof holder.version !== 'string') {
+        throw new Error(`Malformed lockfile JSON: ${label} version must be a string`);
+      }
+      delete holder.version;
+    }
+  }
+  return sha256(Buffer.from(JSON.stringify(value), 'utf8'));
+}
+export function sourceEntry(file, bytes) {
+  return file === lockfile
+    ? {file, digest: lockfileDigestName, sha256: lockfileDigest(bytes)}
+    : {file, sha256: sha256(bytes)};
+}
+let origin;
 async function prepare(page, scenario, locale) {
   const zh = locale === 'zh-TW';
   // The real managed-browser-session fixture avoids an optional bearer-only 404 probe.
@@ -168,72 +184,92 @@ async function prepare(page, scenario, locale) {
   return {route: new URL(page.url()).pathname + new URL(page.url()).hash, composition};
 }
 
-let browser;
-try {
-  browser = await chromium.launch({args: ['--disable-dev-shm-usage']});
-  const images = [], sources = new Set(['scripts/capture_site.mjs', 'desktop/package-lock.json', ...assets.map(file => 'src/bat_agent_connector/dashboard/' + file)]);
-  async function include(file) {
-    if (sources.has(file)) return;
-    sources.add(file);
-    const content = await readFile(path.join(root, file), 'utf8');
-    for (const match of content.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
-      if (match[1].startsWith('.')) await include(path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1])));
+if (path.resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) {
+  const sourceCommit = git('rev-parse', source);
+  // Documentation commits may rerun the capture, but product and demo bytes must stay pinned.
+  git('diff', '--exit-code', sourceCommit, '--', 'desktop/src', 'desktop/tests/demo', 'src/bat_agent_connector/dashboard');
+  await mkdir(output, {recursive: true});
+  if (review) await mkdir(review, {recursive: true});
+  const server = createServer(async (request, response) => {
+    const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+    const file = pathname === '/dashboard/' ? 'index.html' : pathname.slice('/dashboard/'.length);
+    if (!pathname.startsWith('/dashboard/') || !assets.includes(file)) {response.writeHead(404).end(); return;}
+    try {
+      const body = await readFile(path.join(root, 'src/bat_agent_connector/dashboard', file));
+      response.writeHead(200, {'Content-Type': file.endsWith('.html') ? 'text/html' : file.endsWith('.css') ? 'text/css' : 'text/javascript',
+        'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'"});
+      response.end(body);
+    } catch {response.writeHead(404).end();}
+  });
+  await new Promise((resolve, reject) => {server.once('error', reject); server.listen(0, '127.0.0.1', resolve);});
+  origin = 'http://127.0.0.1:' + server.address().port;
+  let browser;
+  try {
+    browser = await chromium.launch({args: ['--disable-dev-shm-usage']});
+    const images = [], sources = new Set(['scripts/capture_site.mjs', 'desktop/package-lock.json', ...assets.map(file => 'src/bat_agent_connector/dashboard/' + file)]);
+    async function include(file) {
+      if (sources.has(file)) return;
+      sources.add(file);
+      const content = await readFile(path.join(root, file), 'utf8');
+      for (const match of content.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
+        if (match[1].startsWith('.')) await include(path.posix.normalize(path.posix.join(path.posix.dirname(file), match[1])));
+      }
     }
+    const fixtures = ['desktop/tests/demo/index.ts', 'desktop/tests/conversation-fixture.ts'];
+    for (const fixture of fixtures) await include(fixture);
+    for (const [language, locale] of [['en', 'en-US'], ['zh', 'zh-TW']]) for (const scenario of [...scenes, ...(review ? reviewScenes : [])]) {
+      const responsive = [];
+      // The work inspector scrolls independently; give its delivery/attempts room.
+      const sceneViewport = {...viewport, height: scenario === 'requirements' ? 1600 : viewport.height};
+      let scene;
+      for (const width of [390, 768, 1440]) {
+        const context = await browser.newContext({locale, viewport: {...sceneViewport, width}, timezoneId: 'UTC', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block'});
+        try {
+          const blocked = [], errors = [];
+          await context.route('**/*', route => {
+            if (new URL(route.request().url()).origin !== origin) {blocked.push(route.request().url()); return route.abort();}
+            return route.continue();
+          });
+          const page = await context.newPage();
+          page.setDefaultTimeout(15000);
+          page.on('pageerror', error => errors.push(error.message));
+          page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
+          await page.clock.setFixedTime(new Date(fixtureClock));
+          scene = await prepare(page, scenario, locale === 'zh-TW' ? locale : 'en');
+          await page.evaluate(async () => {
+            await document.fonts.ready;
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          });
+          const dimensions = await page.evaluate(() => ({viewport: innerWidth, content: document.documentElement.scrollWidth}));
+          assert.ok(dimensions.content <= dimensions.viewport, `${scenario}-${language} overflows at ${width}: ${JSON.stringify(dimensions)}`);
+          assert.doesNotMatch(await page.locator('#main').innerText(), /\b(?:undefined|null|NaN)\b/);
+          assert.deepEqual(errors, [], 'Browser errors'); assert.deepEqual(blocked, [], 'Unexpected external requests');
+          responsive.push({...dimensions, horizontal_overflow: false});
+          // Include the whole page so the charter and delivery details are not cut mid-line.
+          // This uses browser capture, without changing the app's DOM or styles.
+          if (review) await page.screenshot({path: path.join(review, `${scenario}-${language}-${width}.png`), fullPage: true, animations: 'disabled', caret: 'hide'});
+          if (scenes.includes(scenario) && width === viewport.width) await page.screenshot({path: path.join(output, `${scenario}-${language}.png`), fullPage: true, animations: 'disabled', caret: 'hide'});
+        } finally {await context.close();}
+      }
+      if (!scenes.includes(scenario)) {
+        process.stdout.write(`Reviewed ${scenario}-${language}; 390/768/1440: no horizontal overflow\n`);
+        continue;
+      }
+      const file = `${scenario}-${language}.png`;
+      const png = await readFile(path.join(output, file));
+      images.push({file, sha256: sha256(png), scenario, locale, viewport: sceneViewport, image_size: {width: png.readUInt32BE(16), height: png.readUInt32BE(20)}, full_page: true, theme: 'light',
+        route: scene.route, fixture_sources: fixtures, composition: scene.composition, responsive_checks: responsive});
+      process.stdout.write(`Captured ${file}; 390/768/1440: no horizontal overflow\n`);
+    }
+    assert.equal(images.length, 16);
+    const sourceFiles = await Promise.all([...sources].sort().map(async file => sourceEntry(file, await readFile(path.join(root, file)))));
+    const manifest = {schema: 'public_ui_screenshots_v1', frontend_source_commit: sourceCommit, source_pin_kind: 'merged', frontend_source_tree: git('rev-parse', sourceCommit + ':desktop/src'),
+      captured_at: new Date().toISOString(), fixture_clock: fixtureClock, timezone: 'UTC', browser: browser.version(), node: process.version,
+      synthetic_data: true, native_or_live_acceptance: false, dom_content_modified: false, source_files: sourceFiles, images};
+    await writeFile(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  } finally {
+    if (browser) await browser.close();
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   }
-  const fixtures = ['desktop/tests/demo/index.ts', 'desktop/tests/conversation-fixture.ts'];
-  for (const fixture of fixtures) await include(fixture);
-  for (const [language, locale] of [['en', 'en-US'], ['zh', 'zh-TW']]) for (const scenario of [...scenes, ...(review ? reviewScenes : [])]) {
-    const responsive = [];
-    // The work inspector scrolls independently; give its delivery/attempts room.
-    const sceneViewport = {...viewport, height: scenario === 'requirements' ? 1600 : viewport.height};
-    let scene;
-    for (const width of [390, 768, 1440]) {
-      const context = await browser.newContext({locale, viewport: {...sceneViewport, width}, timezoneId: 'UTC', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block'});
-      try {
-        const blocked = [], errors = [];
-        await context.route('**/*', route => {
-          if (new URL(route.request().url()).origin !== origin) {blocked.push(route.request().url()); return route.abort();}
-          return route.continue();
-        });
-        const page = await context.newPage();
-        page.setDefaultTimeout(15000);
-        page.on('pageerror', error => errors.push(error.message));
-        page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
-        await page.clock.setFixedTime(new Date(fixtureClock));
-        scene = await prepare(page, scenario, locale === 'zh-TW' ? locale : 'en');
-        await page.evaluate(async () => {
-          await document.fonts.ready;
-          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-        });
-        const dimensions = await page.evaluate(() => ({viewport: innerWidth, content: document.documentElement.scrollWidth}));
-        assert.ok(dimensions.content <= dimensions.viewport, `${scenario}-${language} overflows at ${width}: ${JSON.stringify(dimensions)}`);
-        assert.doesNotMatch(await page.locator('#main').innerText(), /\b(?:undefined|null|NaN)\b/);
-        assert.deepEqual(errors, [], 'Browser errors'); assert.deepEqual(blocked, [], 'Unexpected external requests');
-        responsive.push({...dimensions, horizontal_overflow: false});
-        // Include the whole page so the charter and delivery details are not cut mid-line.
-        // This uses browser capture, without changing the app's DOM or styles.
-        if (review) await page.screenshot({path: path.join(review, `${scenario}-${language}-${width}.png`), fullPage: true, animations: 'disabled', caret: 'hide'});
-        if (scenes.includes(scenario) && width === viewport.width) await page.screenshot({path: path.join(output, `${scenario}-${language}.png`), fullPage: true, animations: 'disabled', caret: 'hide'});
-      } finally {await context.close();}
-    }
-    if (!scenes.includes(scenario)) {
-      process.stdout.write(`Reviewed ${scenario}-${language}; 390/768/1440: no horizontal overflow\n`);
-      continue;
-    }
-    const file = `${scenario}-${language}.png`;
-    const png = await readFile(path.join(output, file));
-    images.push({file, sha256: sha256(png), scenario, locale, viewport: sceneViewport, image_size: {width: png.readUInt32BE(16), height: png.readUInt32BE(20)}, full_page: true, theme: 'light',
-      route: scene.route, fixture_sources: fixtures, composition: scene.composition, responsive_checks: responsive});
-    process.stdout.write(`Captured ${file}; 390/768/1440: no horizontal overflow\n`);
-  }
-  assert.equal(images.length, 16);
-  const sourceFiles = await Promise.all([...sources].sort().map(async file => ({file, sha256: sha256(await readFile(path.join(root, file)))})));
-  const manifest = {schema: 'public_ui_screenshots_v1', frontend_source_commit: sourceCommit, source_pin_kind: 'merged', frontend_source_tree: git('rev-parse', sourceCommit + ':desktop/src'),
-    captured_at: new Date().toISOString(), fixture_clock: fixtureClock, timezone: 'UTC', browser: browser.version(), node: process.version,
-    synthetic_data: true, native_or_live_acceptance: false, dom_content_modified: false, source_files: sourceFiles, images};
-  await writeFile(path.join(output, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
-} finally {
-  if (browser) await browser.close();
-  await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
 }

@@ -14,7 +14,8 @@
   "source_files": [
     {
       "file": "desktop/package-lock.json",
-      "sha256": "8cda4fab28d4477d7c2e1504f737ed37a493a72378ee49e68c0b3c61735083b5"
+      "digest": "without_root_version",
+      "sha256": "8a2ad8c5c884e97c20ac23c79bc87eace2e97298306ea984a2db5e780ba53639"
     },
     {
       "file": "desktop/src/pm-agents-trend.js",
@@ -106,7 +107,7 @@
     },
     {
       "file": "scripts/capture_site.mjs",
-      "sha256": "4ea580470967d0c51517e78d19a8c85b5b432c2f0fb0ec8acbdc59a0c610f8bb"
+      "sha256": "34d5c8e4e678986e63a383d4d7329109d926d6c62ba83b26af290e83d57997ef"
     },
     {
       "file": "src/bat_agent_connector/dashboard/app.css",

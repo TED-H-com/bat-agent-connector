@@ -50,7 +50,7 @@ export function discussionTitle({t, field, form, value, local = false}) {
   const display = h('div', {class: 'pd-title-display'}, title, pencil);
   const cancel = button({label: t('pd_cancel'), onClick: () => {
     if (form.locked()) return;
-    if (local) form.set('title', current); else {form.discard(); field.value = current;} finish(); pencil.focus();
+    if (local) form.set('title', current); else {form.discard(); field.value = current;} finish({focus: true}); pencil.focus();
   }});
   const edit = local ? h('form', {onsubmit: event => {
     event.preventDefault(); if (field.disabled) return;
@@ -60,7 +60,7 @@ export function discussionTitle({t, field, form, value, local = false}) {
   edit.addEventListener('keydown', event => {if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {event.preventDefault(); event.stopPropagation(); cancel.click();}});
   function finish({focus = false} = {}) {restoreFocus = focus && (edit.contains(document.activeElement) || document.activeElement === document.body); edit.hidden = true; display.hidden = false;}
   function updateState() {
-    pencil.disabled = field.disabled; cancel.disabled = form.locked();
+    pencil.disabled = field.disabled || field.readOnly; cancel.disabled = form.locked();
     if (local) edit.querySelector('button[type=submit]').disabled = field.disabled;
   }
   finish();

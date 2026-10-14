@@ -14043,7 +14043,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 				form.discard();
 				field.value = current;
 			}
-			finish();
+			finish({ focus: true });
 			pencil.focus();
 		}
 	});
@@ -14075,7 +14075,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		display.hidden = false;
 	}
 	function updateState() {
-		pencil.disabled = field.disabled;
+		pencil.disabled = field.disabled || field.readOnly;
 		cancel.disabled = form.locked();
 		if (local) edit.querySelector("button[type=submit]").disabled = field.disabled;
 	}
@@ -38855,7 +38855,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -38984,8 +38984,11 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	}
 	function update() {
 		if (disposed || !form.isConnected) return;
-		const locked = busy || damaged || Boolean(saved.intent) || !allowed();
-		for (const input of Object.values(fields)) input.disabled = locked;
+		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
+		for (const input of Object.values(fields)) {
+			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
+			if (readOnlyWhenUnavailable) input.readOnly = locked;
+		}
 		button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
 		button.textContent = t(saved.intent ? "pm_check_original" : label);
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
@@ -40755,6 +40758,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				target,
 				fields: { title: threadTitle },
 				params: (values) => ({ title: values.title.trim() }),
+				readOnlyWhenUnavailable: true,
 				preconditions,
 				permitted: write,
 				label: "pd_save",
