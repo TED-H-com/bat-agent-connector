@@ -10,7 +10,8 @@ const app = readFileSync(new URL("app.js", root), "utf8")
   .replace(/^import .*;\n/gm, "").replace(/^startTimeTicker\(\);\n/gm, "")
   .replace(/\nstart\(\);\s*$/, "\n");
 const dom = readFileSync(new URL("ui/dom.js", root), "utf8")
-  .replace("export function h", "function dom");
+  // Evaluate all shared helpers in the VM; app.js imports h as dom.
+  .replace(/^export /gm, "").replace("function h(", "function dom(");
 const i18nSource = readFileSync(new URL("i18n.js", root), "utf8");
 // Load the actual named translation imports, including newly added PM panels.
 // The fixture still executes the canonical translator and start-note behavior.
