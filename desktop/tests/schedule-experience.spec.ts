@@ -72,9 +72,9 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   const attempts = (await inspector.locator('[data-schedule-attempt]').allInnerTexts()).join('\n');
   expect(attempts).toContain(locale === 'en' ? 'Start session' : '開始工作階段');
   expect(attempts).toContain('Codex');
-  const agents = await inspector.locator('.schedule-agent').allTextContents();
-  expect(agents).toContain('Codex');
-  expect(agents).not.toContain('codex');
+  const agent = inspector.locator('.schedule-agent').filter({has: page.getByRole('img', {name: 'Codex', exact: true})});
+  await expect(agent).toContainText('Codex');
+  await expect(agent).not.toContainText('codex');
   expect(attempts).not.toContain('session.start');
   await expect(region.locator(`[data-schedule-row^="attempt:operation:"] .schedule-title`)).toHaveText(locale === 'en' ? 'Start session' : '開始工作階段');
   await expect(inspector.locator('a[href*="/session/"]')).toHaveCount(1);
