@@ -35535,8 +35535,21 @@ var retired = (error) => [
 	"PM_DISPOSED"
 ].includes(error.code);
 var receiptSubscribers = new Map();
+var formConnectionTag = "batc-pm-form-connection";
+if (!customElements.get(formConnectionTag)) customElements.define(formConnectionTag, class extends HTMLElement {
+	#changed = () => {};
+	observe(callback) {
+		this.#changed = callback;
+	}
+	connectedCallback() {
+		this.#changed(true);
+	}
+	disconnectedCallback() {
+		this.#changed(false);
+	}
+});
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value), pruneEmpty = false }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = (value) => String(value), pruneEmpty = false }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -35591,7 +35604,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	}
 	const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope) && caps()?.actions?.some((row) => row.action === action && row.allowed === true);
 	const receiveReceipt = () => {
-		if (disposed || damaged || !saved.intent) return;
+		if (disposed || !form.isConnected || damaged || !saved.intent) return;
 		try {
 			guard();
 			const stored = JSON.parse(localStorage.getItem(storage));
@@ -35601,9 +35614,12 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			update();
 		} catch {}
 	};
-	const subscribers = receiptSubscribers.get(storage) || new Set();
-	subscribers.add(receiveReceipt);
-	receiptSubscribers.set(storage, subscribers);
+	let subscribers = null;
+	const unsubscribe = () => {
+		subscribers?.delete(receiveReceipt);
+		if (subscribers && !subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
+		subscribers = null;
+	};
 	const terminal = () => ["failed", "cancelled"].includes(operation?.status);
 	const reset = h("button", {
 		type: "button",
@@ -35660,7 +35676,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		}, receiptDelays[receiptAttempt++]);
 	}
 	function update() {
-		if (disposed) return;
+		if (disposed || !form.isConnected) return;
 		const locked = busy || damaged || Boolean(saved.intent) || !allowed();
 		for (const input of Object.values(fields)) input.disabled = locked;
 		button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
@@ -35782,7 +35798,22 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		}
 	}
 	if (damaged) status.append(h("p", { class: "error" }, t("pm_damaged")));
-	update();
+	const connection = h(formConnectionTag, { hidden: true });
+	connection.observe((connected) => {
+		onConnectionChange(connected);
+		if (disposed) return;
+		if (connected) {
+			subscribers = receiptSubscribers.get(storage) || new Set();
+			subscribers.add(receiveReceipt);
+			receiptSubscribers.set(storage, subscribers);
+			receiveReceipt();
+			update();
+		} else {
+			stopTimer();
+			unsubscribe();
+		}
+	});
+	form.append(connection);
 	return {
 		box: form,
 		fields,
@@ -35829,10 +35860,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			disposed = true;
 			receiptPolling = false;
 			stopTimer();
-			subscribers.delete(receiveReceipt);
+			unsubscribe();
+			onConnectionChange(false);
 			for (const input of Object.values(fields)) input.disabled = true;
 			button.disabled = reset.disabled = true;
-			if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
 		},
 		set: (name, value) => {
 			if (!busy && !saved.intent && !damaged) {
@@ -35953,14 +35984,18 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			statusText: threadId ? (value) => discussionLabel(t, "pd_op_", value) : void 0,
 			...options,
 			permitted: () => initialReadComplete && options.permitted() && (lifecycle?.newActionAllowed(options.action, () => options.params(Object.fromEntries(Object.entries(options.fields).map(([key, input]) => [key, input.value])))) ?? true),
-			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)()
+			recoverPermitted: () => initialReadComplete && (options.recoverPermitted || options.permitted)(),
+			onConnectionChange: (connected) => {
+				if (connected && !disposed) forms.add(value);
+				else forms.delete(value);
+				if (connected && disposed) value.dispose();
+			}
 		});
 		const dispose = value.dispose;
 		value.dispose = () => {
 			forms.delete(value);
 			dispose();
 		};
-		forms.add(value);
 		return value;
 	};
 	const status = h("div", {

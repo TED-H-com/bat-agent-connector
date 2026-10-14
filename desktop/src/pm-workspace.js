@@ -48,11 +48,20 @@ const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].i
 // A remounted form can recover an acknowledged ID without resending an unknown
 // POST. Notifications contain no result; the active form reads with current access.
 const receiptSubscribers = new Map();
+// An autonomous, hidden child tracks the ordinary form's connection without
+// changing editor.box, form selectors, layout or the form's hidden behavior.
+const formConnectionTag = 'batc-pm-form-connection';
+if (!customElements.get(formConnectionTag)) customElements.define(formConnectionTag, class extends HTMLElement {
+  #changed = () => {};
+  observe(callback) {this.#changed = callback;}
+  connectedCallback() {this.#changed(true);}
+  disconnectedCallback() {this.#changed(false);}
+});
 export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes('observe');
 
 // Save the exact request before admission. A later authorization/validation error can never
 // release an earlier ambiguous request; only its matching terminal receipt permits replacement.
-function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
+function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = value => String(value), pruneEmpty = false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
@@ -88,7 +97,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   const allowed = () => (saved.intent ? recoverPermitted() : permitted()) && caps()?.scopes?.includes(requiredScope)
     && caps()?.actions?.some(row => row.action === action && row.allowed === true);
   const receiveReceipt = () => {
-    if (disposed || damaged || !saved.intent) return;
+    if (disposed || !form.isConnected || damaged || !saved.intent) return;
     try {
       guard();
       const stored = JSON.parse(localStorage.getItem(storage));
@@ -100,8 +109,12 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       update();
     } catch { /* a retired or unreadable form cannot apply the receipt */ }
   };
-  const subscribers = receiptSubscribers.get(storage) || new Set();
-  subscribers.add(receiveReceipt); receiptSubscribers.set(storage, subscribers);
+  let subscribers = null;
+  const unsubscribe = () => {
+    subscribers?.delete(receiveReceipt);
+    if (subscribers && !subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
+    subscribers = null;
+  };
   const terminal = () => ['failed', 'cancelled'].includes(operation?.status);
   const reset = h('button', {type: 'button', class: 'secondary', hidden: true, onclick: () => {
     try {
@@ -125,7 +138,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     }, receiptDelays[receiptAttempt++]);
   }
   function update() {
-    if (disposed) return;
+    if (disposed || !form.isConnected) return;
     const locked = busy || damaged || Boolean(saved.intent) || !allowed();
     for (const input of Object.values(fields)) input.disabled = locked;
     button.disabled = busy || damaged || !allowed() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
@@ -207,7 +220,17 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     } finally {busy = false; update();}
   }
   if (damaged) status.append(h('p', {class: 'error'}, t('pm_damaged')));
-  update();
+  const connection = h(formConnectionTag, {hidden: true});
+  connection.observe(connected => {
+    onConnectionChange(connected);
+    if (disposed) return;
+    if (connected) {
+      subscribers = receiptSubscribers.get(storage) || new Set();
+      subscribers.add(receiveReceipt); receiptSubscribers.set(storage, subscribers);
+      receiveReceipt(); update();
+    } else {stopTimer(); unsubscribe();}
+  });
+  form.append(connection);
   return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !damaged && allowed() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
     stage: () => {
       if (disposed || busy || saved.intent || damaged) return false;
@@ -222,10 +245,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       receiptAttempt = 0; receiptPolling = true; void run(true);
     },
     dispose: () => {
-      disposed = true; receiptPolling = false; stopTimer(); subscribers.delete(receiveReceipt);
+      disposed = true; receiptPolling = false; stopTimer(); unsubscribe(); onConnectionChange(false);
       for (const input of Object.values(fields)) input.disabled = true;
       button.disabled = reset.disabled = true;
-      if (!subscribers.size && receiptSubscribers.get(storage) === subscribers) receiptSubscribers.delete(storage);
     },
     set: (name, value) => {if (!busy && !saved.intent && !damaged) {fields[name].value = value; changed();}},
     values: () => capture()};
@@ -297,10 +319,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const form = options => {
     const value = durableForm({h, t, api, caps, guard: alive, namespace, errorBox, statusText: threadId ? value => discussionLabel(t, 'pd_op_', value) : undefined, ...options,
       permitted:()=>initialReadComplete&&options.permitted()&&(lifecycle?.newActionAllowed(options.action,()=>options.params(Object.fromEntries(Object.entries(options.fields).map(([key,input])=>[key,input.value]))))??true),
-      recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)()});
+      recoverPermitted:()=>initialReadComplete&&(options.recoverPermitted||options.permitted)(),
+      onConnectionChange: connected => {
+        if (connected && !disposed) forms.add(value);
+        else forms.delete(value);
+        if (connected && disposed) value.dispose();
+      }});
     const dispose = value.dispose;
     value.dispose = () => {forms.delete(value); dispose();};
-    forms.add(value); return value;
+    return value;
   };
   const status = h('div', {role: 'status', class: 'pm-status'}), workspaceList = h('div', {class: 'pm-workspace-list'});
   const name = input('pm_workspace_name', {max: 120}), repositories = input('pm_repositories', {required: false});
@@ -685,8 +712,8 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     for (const checkbox of facts?.querySelectorAll('input[type=checkbox]') || [])
       checkbox.disabled = Boolean(selectedSourcesForm()?.locked()) || !canSelectSources();
   };
-  // Refreshes and inspectors temporarily detach forms. Keep their gates current
-  // until explicit disposal, including while they await reattachment.
+  // Discarded forms leave the registry immediately; temporarily detached forms
+  // rejoin and derive the current gates synchronously on reconnection.
   const updateForms = () => {for (const value of forms) value.update();};
   const timestamp = value => typeof value === 'number' ? value * 1000 : value;
   const time = value => {const date = new Date(timestamp(value)); return Number.isNaN(date.valueOf()) ? String(value || '') : date.toLocaleString();};

@@ -67,8 +67,8 @@
 - Organize existing PM tools into Overview, Discussions, Requirements, Schedule,
   Dependencies, Issues & changes, Agents and Board. Keep secondary tools in disclosures;
   expose reports and lifecycle through header menus without changing durable actions.
-- Keep durable PM forms registered across temporary refresh and inspector detachment
-  until disposal, so recovery buttons follow the current gates. Explain a gate that
+- Track durable PM forms by connection, releasing discarded forms and receipt subscribers
+  and restoring current gates immediately after refresh or inspector reattachment. Explain a gate that
   closes during submission or receipt checking while preserving drafts and original keys.
 - Show live project status and what needs attention first in Overview, with compact charter cards
   and saved reports on demand. Unknown values stay explicit, saved reports never mix in live data,
