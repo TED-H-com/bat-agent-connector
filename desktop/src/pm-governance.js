@@ -1,5 +1,5 @@
-import {timeStamp, timeText} from './ui/stamps.js';
-import {iconButton, button, sectionCard, statusPill, disclosure, emptyState, inlineError} from './ui/components.js';
+import {timeStamp} from './ui/stamps.js';
+import {iconButton, button, sectionCard, statusPill, disclosure, emptyState} from './ui/components.js';
 // Sourced management findings and explicit direction decisions share one journal.
 export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, workspace, permitted, form, input, labelled, errorBox, caps, withRegister = false, nameFor = () => ''}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, kinds = ['risk', 'assumption', 'issue', 'dependency', 'drift', 'change'];
@@ -175,7 +175,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     if (withRegister || !model.detail) return;
     const {record, revision} = model.detail;
     detail.append(h('section', {'data-pm-governance-detail': record.record_id}, h('h3', {class: 'pm-source'}, revision.document.title),
-      statusPill('not_assessed'), fold('pm_gov_details', h('div', {}, documentView(revision), note('pm_gov_unassessed'), fold('pm_gov_baseline', h('div', {}, id(record.context.plan_revision_id), id(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id),
+      statusPill('not_assessed'), fold('pm_gov_details', h('div', {}, documentView(revision), h('p', {class:'muted'}, t('pm_gov_unassessed'), record.kind === 'change' ? ' ' + t('pm_gov_direction_only') : ''), fold('pm_gov_baseline', h('div', {}, id(record.context.plan_revision_id), id(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id),
         timeStamp(record.context.snapshot_ref.as_of), text(t('pm_gov_root') + ': ' + record.root_cause_key))), historyView(record)))));
   }
   function namedChoices(field, entries, label) {
@@ -336,7 +336,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
   }
   async function renderEditors(rebase = false) {
     clearEditors(); dirty = false; stale = false;
-    if (model.detail) editors.append(h('strong', {'data-pm-governance-selected': selectedId}, model.detail.revision.document.title), findingEditor(model.detail, rebase).element, decisionEditors(rebase));
+    if (model.detail) editors.append(withRegister ? h('strong', {'data-pm-governance-selected': selectedId}, model.detail.revision.document.title) : '', findingEditor(model.detail, rebase).element, decisionEditors(rebase), button({variant:'secondary',label:t('pm_gov_resolve'),onClick:()=>void openRef({kind:'governance',id:selectedId},{form:'resolve'})}));
     const create = findingEditor(null, rebase); editors.append(create.element); update(); await create.mount();
   }
   async function refresh(force = false) {
@@ -412,7 +412,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
     if (!loaded || !editor) return;
     if (requested === 'resolve' && !editor.locked()) editor.set('status', 'reported_resolved');
     for (let parent = editor.box.parentElement; parent && parent !== element; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
-    const field = editor.box.querySelector('input:not([type="hidden"]), select, textarea');
+    const field = requested === 'resolve' ? editor.fields.rationale : editor.box.querySelector('input:not([type="hidden"]), select, textarea');
     field?.focus(); editor.box.scrollIntoView({block: 'nearest'});
   }
   return {element, refresh, openRef};

@@ -4274,6 +4274,7 @@ var pmContextBundleStrings = {
 //#region src/pm-governance-strings.js
 var pmGovernanceStrings = {
 	en: {
+		pm_gov_resolve: "Resolve",
 		pm_gov_details: "Details",
 		pm_gov_title: "Risks, changes and decisions",
 		pm_gov_intro: "What needs attention, why it matters, and which direction was chosen.",
@@ -4381,6 +4382,7 @@ var pmGovernanceStrings = {
 		pm_gov_drift_help: "Reported drift needs an affected dimension, an observed evidence fact, and a fixed plan input or requirement. The interpretation remains unassessed."
 	},
 	"zh-TW": {
+		pm_gov_resolve: "回報解決",
 		pm_gov_details: "詳細資訊",
 		pm_gov_title: "風險、變更與決策",
 		pm_gov_intro: "哪些事項需要關注、為何重要，以及已選擇的方向。",
@@ -6128,7 +6130,7 @@ var pmMeetingStrings = {
 		pm_meeting_summary: "What was discussed and concluded",
 		pm_meeting_complete: "Complete discussion",
 		pm_meeting_complete_help: "Complete the exact saved draft after recording the actual discussion. This is a meeting record, not a quality or delivery approval.",
-		pm_meeting_owner_only: "Only the Sprint’s designated owner, with current 工作空間 owner access, can complete this discussion.",
+		pm_meeting_owner_only: "Only the Sprint’s designated owner, with current workspace owner access, can complete this discussion.",
 		pm_meeting_decision_help: "Select the proposals actually decided in this discussion. Recording them does not adopt scope changes.",
 		pm_meeting_recorded_decision: "Recorded discussion decision; scope is unchanged",
 		pm_meeting_recorded_by: "Recorded by {actor}",
@@ -20074,7 +20076,6 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 				await refreshParent?.();
 			}
 		});
-		entry.editor.box.querySelector("button[type=submit]").className = "ui-button secondary";
 		const defaultRationale = t("pcp_resolve_default", {
 			title: plan.document.title,
 			number: plan.sequence
@@ -22581,7 +22582,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		detail.replaceChildren();
 		if (withRegister || !model.detail) return;
 		const { record, revision } = model.detail;
-		detail.append(h("section", { "data-pm-governance-detail": record.record_id }, h("h3", { class: "pm-source" }, revision.document.title), statusPill("not_assessed"), fold("pm_gov_details", h("div", {}, documentView(revision), note("pm_gov_unassessed"), fold("pm_gov_baseline", h("div", {}, id(record.context.plan_revision_id), id(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id), timeStamp(record.context.snapshot_ref.as_of), text(t("pm_gov_root") + ": " + record.root_cause_key))), historyView(record)))));
+		detail.append(h("section", { "data-pm-governance-detail": record.record_id }, h("h3", { class: "pm-source" }, revision.document.title), statusPill("not_assessed"), fold("pm_gov_details", h("div", {}, documentView(revision), h("p", { class: "muted" }, t("pm_gov_unassessed"), record.kind === "change" ? " " + t("pm_gov_direction_only") : ""), fold("pm_gov_baseline", h("div", {}, id(record.context.plan_revision_id), id(record.context.plan_document_digest), id(record.context.snapshot_ref.snapshot_id), timeStamp(record.context.snapshot_ref.as_of), text(t("pm_gov_root") + ": " + record.root_cause_key))), historyView(record)))));
 	}
 	function namedChoices(field, entries, label) {
 		field.type = "hidden";
@@ -22920,7 +22921,14 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		clearEditors();
 		dirty = false;
 		stale = false;
-		if (model.detail) editors.append(h("strong", { "data-pm-governance-selected": selectedId }, model.detail.revision.document.title), findingEditor(model.detail, rebase).element, decisionEditors(rebase));
+		if (model.detail) editors.append(withRegister ? h("strong", { "data-pm-governance-selected": selectedId }, model.detail.revision.document.title) : "", findingEditor(model.detail, rebase).element, decisionEditors(rebase), button({
+			variant: "secondary",
+			label: t("pm_gov_resolve"),
+			onClick: () => void openRef({
+				kind: "governance",
+				id: selectedId
+			}, { form: "resolve" })
+		}));
 		const create = findingEditor(null, rebase);
 		editors.append(create.element);
 		update();
@@ -23047,7 +23055,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		if (!loaded || !editor) return;
 		if (requested === "resolve" && !editor.locked()) editor.set("status", "reported_resolved");
 		for (let parent = editor.box.parentElement; parent && parent !== element; parent = parent.parentElement) if (parent instanceof HTMLDetailsElement) parent.open = true;
-		editor.box.querySelector("input:not([type=\"hidden\"]), select, textarea")?.focus();
+		(requested === "resolve" ? editor.fields.rationale : editor.box.querySelector("input:not([type=\"hidden\"]), select, textarea"))?.focus();
 		editor.box.scrollIntoView({ block: "nearest" });
 	}
 	return {

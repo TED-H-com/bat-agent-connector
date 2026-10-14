@@ -31,7 +31,7 @@ export const pmMeetingStrings = {
     pm_meeting_edit_draft:'Prepare discussion draft', pm_meeting_save_draft:'Save discussion draft', pm_meeting_note_text:'Discussion note',
     pm_meeting_save_note:'Save discussion note', pm_meeting_discuss:'Record the discussion', pm_meeting_summary:'What was discussed and concluded',
     pm_meeting_complete:'Complete discussion', pm_meeting_complete_help:'Complete the exact saved draft after recording the actual discussion. This is a meeting record, not a quality or delivery approval.',
-    pm_meeting_owner_only:'Only the Sprint’s designated owner, with current 工作空間 owner access, can complete this discussion.',
+    pm_meeting_owner_only:'Only the Sprint’s designated owner, with current workspace owner access, can complete this discussion.',
     pm_meeting_decision_help:'Select the proposals actually decided in this discussion. Recording them does not adopt scope changes.',
     pm_meeting_recorded_decision:'Recorded discussion decision; scope is unchanged', pm_meeting_recorded_by:'Recorded by {actor}',
     pm_meeting_completion_help:'The designated owner recorded the discussion. Attendance and quality are not independently verified.',

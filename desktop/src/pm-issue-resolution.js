@@ -1,4 +1,4 @@
-import {statusPill, button} from './ui/components.js';
+import {statusPill} from './ui/components.js';
 
 const ACTION = 'pm.governance.revise';
 const findingFields = ['title', 'description', 'owner_actor', 'affected_requirement_ids', 'trigger', 'response',
@@ -53,7 +53,6 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
         await api('GET', base + '/overview'); alive();
         await refreshParent?.();
       }});
-    entry.editor.box.querySelector('button[type=submit]').className = 'ui-button secondary';
     const defaultRationale = t('pcp_resolve_default', {title: plan.document.title, number: plan.sequence});
     if (!entry.editor.locked() && !rationale.value) entry.editor.set('rationale', defaultRationale);
     // The prefilled draft is not an instruction to send a resolution.

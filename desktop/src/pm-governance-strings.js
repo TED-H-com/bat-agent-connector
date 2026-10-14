@@ -1,6 +1,6 @@
 export const pmGovernanceStrings = {
   en: {
-    pm_gov_details: 'Details',
+    pm_gov_resolve:'Resolve',pm_gov_details: 'Details',
     pm_gov_title: 'Risks, changes and decisions', pm_gov_intro: 'What needs attention, why it matters, and which direction was chosen.',
     pm_gov_refresh: 'Refresh findings', pm_gov_unknown: 'Unknown', pm_gov_empty: 'No findings', pm_gov_inspect: 'View finding', pm_gov_selected: 'Selected finding',
     pm_gov_risk: 'Risk', pm_gov_assumption: 'Assumption', pm_gov_issue: 'Issue', pm_gov_dependency: 'Dependency', pm_gov_drift: 'Reported drift', pm_gov_change: 'Change proposal',
@@ -39,7 +39,7 @@ export const pmGovernanceStrings = {
     pm_gov_drift_help: 'Reported drift needs an affected dimension, an observed evidence fact, and a fixed plan input or requirement. The interpretation remains unassessed.',
   },
   'zh-TW': {
-    pm_gov_details: '詳細資訊',
+    pm_gov_resolve:'回報解決',pm_gov_details: '詳細資訊',
     pm_gov_title: '風險、變更與決策', pm_gov_intro: '哪些事項需要關注、為何重要，以及已選擇的方向。',
     pm_gov_refresh: '重新讀取事項', pm_gov_unknown: '未知', pm_gov_empty: '尚無事項', pm_gov_inspect: '查看事項', pm_gov_selected: '目前選取',
     pm_gov_risk: '風險', pm_gov_assumption: '假設', pm_gov_issue: '問題', pm_gov_dependency: '依賴', pm_gov_drift: '回報偏差', pm_gov_change: '變更提案',
