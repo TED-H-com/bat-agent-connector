@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Keep Board recovery controls and keyboard focus stable across repeated read
+  failures, and reuse the initial activation read during workspace loading.
+
+- Reserve the returning Issues inspector before its reads finish, so related
+  chips do not disappear under the pointer when the side panel arrives.
+
 - Schedule at phone width fits every bar to the shared date range, with a range
   caption and the Today line, and does not offer Day zoom there. Week ticks label
   week starts only, so a partial opening week is not crowded under the sticky column.

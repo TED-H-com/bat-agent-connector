@@ -13,6 +13,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
   let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
   let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+  let failureSignature = '';
   const meta = h('span'), status = h('div', {role: 'status'}), list = h('div', {class: 'pm-kanban-list'}), boardInfo = h('div');
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('wv_refresh'), onClick: () => void refresh()});
   const more = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => void loadMore()}, t('pm_kanban_more'));
@@ -58,19 +59,24 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     history.replaceState(null, '', path + (params.size ? '?' + params : ''));
   }
   function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
-  function withdraw({forgetRoute = true} = {}) {
+  function withdraw({forgetRoute = true, keepStatus = false} = {}) {
     ++serial; ++detailSerial; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; earlierPlans.clear(); milestones = [];
+    if (!keepStatus) {failureSignature = ''; status.replaceChildren();}
     if (forgetRoute) writeSelection(null);
-    closeRetaining(); list.replaceChildren(); meta.replaceChildren(); boardInfo.replaceChildren(); more.hidden = true; more.disabled = false; element.removeAttribute('aria-busy');
+    closeRetaining(); list.replaceChildren(); meta.replaceChildren(); boardInfo.replaceChildren(); more.hidden = true; more.disabled = false; refreshButton.disabled = false; element.removeAttribute('aria-busy');
     list.hidden = true; content.querySelector('.ui-empty')?.remove(); element.querySelector('[data-board-partial]')?.remove();
     requirementFilter.replaceChildren(h('option', {value: ''}, t('wv_all_requirements'))); delete requirementFilter.dataset.options;
     agentFilter.replaceChildren(h('option', {value: ''}, t('wv_all_agents'))); delete agentFilter.dataset.options;
   }
   function unavailable(error) {
-    errorBox?.(error); withdraw();
-    status.replaceChildren(h('p', {class: 'error'}, error.message === t('pm_kanban_scope_error') ? error.message : t(error.code === 'SNAPSHOT_CHANGED' ? 'wb_plan_changed' : error.status === 403 ? 'forbidden_scope' : 'wv_board_unavailable')),
+    errorBox?.(error); withdraw({keepStatus: true});
+    const message = error.message === t('pm_kanban_scope_error') ? error.message : t(error.code === 'SNAPSHOT_CHANGED' ? 'wb_plan_changed' : error.status === 403 ? 'forbidden_scope' : 'wv_board_unavailable');
+    const signature = JSON.stringify([message, labelSegment(error.code)]);
+    if (signature === failureSignature) return;
+    failureSignature = signature;
+    status.replaceChildren(h('p', {class: 'error'}, message),
     ...(error.code ? [disclosure({label: t('wv_details'), body: h('p', {}, labelSegment(error.code))})] : []),
-    h('button', {type: 'button', class: 'ui-button secondary', onclick: () => {pages = 1; void refresh();}}, t('pm_kanban_retry')));}
+    h('button', {type: 'button', class: 'ui-button secondary', onclick: () => {if (reading) return; pages = 1; void refresh();}}, t('pm_kanban_retry')));}
   function requirements(card) {const bound = card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id);
     return (bound?.document?.requirements || []).filter(row => card.binding.requirement_ids?.includes(row.id));}
   function fillFilters() {
@@ -200,7 +206,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (routeId && rows.has(routeId)) {selected = routeId; preference.selected = routeId;}
     next = data.next_cursor ?? null; fillFilters(); renderColumns(); renderMetrics();
     list.hidden = !rows.size;
-    status.replaceChildren(...(!rows.size ? [emptyState({title: t('pm_kanban_empty')})] : []));
+    failureSignature = ''; status.replaceChildren(...(!rows.size ? [emptyState({title: t('pm_kanban_empty')})] : []));
     if (selected && !rows.has(selected)) {selected = null; preference.selected = null; writeSelection(null); closeRetaining(); viewHeading()?.focus();}
     else if (selected && active) void select(selected, true);
   }
@@ -242,7 +248,9 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (!active) {stale = true; return;}
     stale = false;
     const ticket = ++serial; detailSerial++; reading = true; refreshButton.disabled = true; more.disabled = true;
-    if (!rows.size) status.replaceChildren(note('pm_kanban_loading')); element.setAttribute('aria-busy', 'true');
+    // Keep the same recovery controls while checking an existing failure. A
+    // repeated error must not remove the button under the pointer or keyboard.
+    if (!rows.size && !failureSignature) status.replaceChildren(note('pm_kanban_loading')); element.setAttribute('aria-busy', 'true');
     try {
       const combined = new Map(); let after = 0, data;
       for (let index = 0; index < pages; index++) {

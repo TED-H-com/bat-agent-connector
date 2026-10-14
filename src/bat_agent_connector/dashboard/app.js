@@ -23733,9 +23733,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const fallback = tableHost.querySelector(".ui-data-table") || tableHost.querySelector(".reg-list") || tableHost;
 		(row || fallback)?.focus();
 	}
-	function paintInspector(record) {
-		if (!active) return;
-		const row = record.row;
+	function prepareInspector(row) {
 		const title = displayTitle(row) || t("reg_type_" + row.type);
 		if (!sheet || sheet.getAttribute("data-reg-row") !== row.row_id) {
 			closeSheet(true);
@@ -23753,8 +23751,15 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			opening = false;
 			sheet.setAttribute("data-reg-inspector", "");
 			sheet.setAttribute("data-reg-row", row.row_id);
+			sheet.setAttribute("data-reg-loading", "");
+			sheet.body.append(skeleton(3));
 			layout.append(sheet);
 		} else sheet.querySelector("h2").textContent = title;
+	}
+	function paintInspector(record) {
+		if (!active) return;
+		prepareInspector(record.row);
+		sheet.removeAttribute("data-reg-loading");
 		sheet.body.replaceChildren(...detailNodes(record).filter(Boolean));
 	}
 	function openRow(row) {
@@ -23849,7 +23854,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			statusLine.replaceChildren();
 			render();
 			const showSheet = Boolean(sheet) || matchMedia("(min-width: 1200px)").matches;
-			if (preference.inspector && selected && (changed || stale || showSheet && !sheet)) loadDetail(selected, showSheet);
+			if (preference.inspector && selected && (changed || stale || showSheet && (!sheet || sheet.hasAttribute("data-reg-loading")))) loadDetail(selected, showSheet);
 		} catch (error) {
 			try {
 				alive();
@@ -23997,6 +24002,8 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			closeSheet(true);
 			return;
 		}
+		const selectedRow = rows.find((row) => row.row_id === selected);
+		if (preference.inspector && selectedRow && matchMedia("(min-width: 1200px)").matches) prepareInspector(selectedRow);
 		return refresh().then(() => {
 			if (!active || sheet || matchMedia("(min-width: 1200px)").matches) return;
 			const current = document.activeElement;
@@ -28666,6 +28673,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
 	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
 	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
+	let failureSignature = "";
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -28787,7 +28795,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		detail.close();
 		preserveSelection = false;
 	}
-	function withdraw({ forgetRoute = true } = {}) {
+	function withdraw({ forgetRoute = true, keepStatus = false } = {}) {
 		++serial;
 		++detailSerial;
 		reading = false;
@@ -28798,6 +28806,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		plan = null;
 		earlierPlans.clear();
 		milestones = [];
+		if (!keepStatus) {
+			failureSignature = "";
+			status.replaceChildren();
+		}
 		if (forgetRoute) writeSelection(null);
 		closeRetaining();
 		list.replaceChildren();
@@ -28805,6 +28817,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		boardInfo.replaceChildren();
 		more.hidden = true;
 		more.disabled = false;
+		refreshButton.disabled = false;
 		element.removeAttribute("aria-busy");
 		list.hidden = true;
 		content.querySelector(".ui-empty")?.remove();
@@ -28816,14 +28829,19 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	}
 	function unavailable(error) {
 		errorBox?.(error);
-		withdraw();
-		status.replaceChildren(h$1("p", { class: "error" }, error.message === t("pm_kanban_scope_error") ? error.message : t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_board_unavailable")), ...error.code ? [disclosure({
+		withdraw({ keepStatus: true });
+		const message = error.message === t("pm_kanban_scope_error") ? error.message : t(error.code === "SNAPSHOT_CHANGED" ? "wb_plan_changed" : error.status === 403 ? "forbidden_scope" : "wv_board_unavailable");
+		const signature = JSON.stringify([message, labelSegment(error.code)]);
+		if (signature === failureSignature) return;
+		failureSignature = signature;
+		status.replaceChildren(h$1("p", { class: "error" }, message), ...error.code ? [disclosure({
 			label: t("wv_details"),
 			body: h$1("p", {}, labelSegment(error.code))
 		})] : [], h$1("button", {
 			type: "button",
 			class: "ui-button secondary",
 			onclick: () => {
+				if (reading) return;
 				pages = 1;
 				refresh();
 			}
@@ -29054,6 +29072,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		renderColumns();
 		renderMetrics();
 		list.hidden = !rows.size;
+		failureSignature = "";
 		status.replaceChildren(...!rows.size ? [emptyState({ title: t("pm_kanban_empty") })] : []);
 		if (selected && !rows.has(selected)) {
 			selected = null;
@@ -29178,7 +29197,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		reading = true;
 		refreshButton.disabled = true;
 		more.disabled = true;
-		if (!rows.size) status.replaceChildren(note("pm_kanban_loading"));
+		if (!rows.size && !failureSignature) status.replaceChildren(note("pm_kanban_loading"));
 		element.setAttribute("aria-busy", "true");
 		try {
 			const combined = new Map();
@@ -38745,7 +38764,9 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			]) {
 				const lazy = lazyThreadSections.get(section);
 				if (section && (!event || sectionRequired(section)) && (!threadId || !lazy || lazy.open && !lazy.closest("[data-discussion-tab]")?.hidden)) {
-					await section.refresh();
+					const activation = !initialReadComplete && activationReads.get(section);
+					activationReads.delete(section);
+					await (activation || section.refresh());
 					if (sectionRequired(section)) revealSource(section);
 				}
 				alive();

@@ -634,7 +634,9 @@ until that row's own detail read says it is gone. Overlapping refreshes of the
 same filters share one trailing list read. A changed filter starts its own read
 and drops the one still in flight. The open row is read again when its list row
 changed or it was kept beyond the loaded pages. At 1200px and above, returning
-to the view restores the side panel and reads that row. Below 1200px a refresh
+to the view reserves the side panel immediately, then reads that row into its
+loading body. The table must not first expose related chips and hide them when
+the delayed inspector arrives. Below 1200px a refresh
 or a return keeps the selection and leaves the sheet closed until the row is
 opened again, and a return moves focus to that row. A detail read in that case
 still drops the row when it is gone, without opening the sheet. Leaving the view cancels register reads that are
@@ -740,6 +742,10 @@ facts. Visually hidden status text stays inside the card’s bounds; blocker fla
 visible partial marker; an empty Board hides the lanes and shows one empty state.
 Opening the inspector reveals the selected card after docking. Closing restores
 focus to the latest selection, falling back to the view heading after withdrawal.
+An unchanged read failure keeps its status, Details and Retry nodes, including
+keyboard focus, while another read is pending and when the same error returns.
+Initial activation and the workspace load share that first projection read;
+later events still start their own reads and invalidate older responses.
 Selections use `?select=` in both views and reopen after returning from another
 view. Current requirement chips link to Requirements; earlier-plan text is read
 from its bound revision and never replaced by a raw ID in a chip or filter.
