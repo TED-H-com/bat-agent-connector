@@ -135,6 +135,26 @@
   and withdrawn sources lose rows and counts together.
   See the [dependency contract](docs/design/pm-dependencies.md).
 
+- Report tasks open separately and focus their own controls. Change phase starts at
+  Choose phase / 選擇階段 and requires an explicit choice. Workspace settings resolve
+  plan and requirement labels from the bound revision, revalidate them on refresh,
+  and keep their exact IDs in Details. Schedule, Agents and Dependencies show an
+  unavailable state when their projection is unsupported, with secondary tools
+  collapsed below it. Empty and unavailable shell tasks use short titles with muted
+  explanations; Settings distinguishes missing evidence from unreadable projects
+  and clears withdrawn project details. Native save receipts use localized punctuation.
+  Discussion tools overlay without
+  narrowing the thread; docked inspectors fill the viewport with independent scrolling.
+  View headers, lists and secondary sections share one edge beside docked inspectors.
+  Fixed dock reservations leave Discussions' own panel column intact, with one scroller.
+  Overview grids follow their available column width beside a reader; milestone
+  date ranges wrap only at the arrow.
+  Unreadable Evidence plans keep one message and their diagnostics in the row's Details.
+  Shell and lifecycle views share bilingual project phase names; Export report opens
+  directly to its choices and download action. Phase empty states fit fallback fonts.
+  Lifecycle copy consistently says phase, Settings shows one access reason, report
+  controls fit their selected text, and breadcrumbs separate only existing crumbs.
+
 - Add live project status via `pm_overview_get`: adopted-requirement progress, blockers,
   decisions, deviations and recent deliveries, retaining confirmed goals and recent
   decided history and unresolved requirement blockers across plan revisions,
@@ -164,6 +184,11 @@
 
 - Keep release registration focus and keyboard input when source previews arrive
   during rationale entry, so Web and Tauri submit the reviewed request once.
+
+- Reuse source validation within one fixed maintenance-repair read traversal so
+  delivery does not exhaust its budget repeatedly checking the same graph.
+  Each new frame still checks current sources; uncertain dispatches retain their
+  original keys and receipts and are never sent again.
 
 - Add source-bound discussions (`pm.thread.create`) and durable titles (`pm.thread.rename`).
   `pm_conversation_proposal_get` exposes adoptability that survives title-only renames;

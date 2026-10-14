@@ -11,8 +11,8 @@ from inspect import signature
 from .api_auth import Principal
 
 _CURRENT = ContextVar('pm_read_cache', default=None)
-# Depth of active traversal guards. A context copied into another thread or
-# task keeps the depth, which can only prevent storing, never add an entry.
+# Depth of active traversal guards. Inherited contexts still cannot use the
+# owner's memo; guarded answers stay private to their exact traversal depth.
 _GUARDS = ContextVar('pm_read_cache_guards', default=0)
 
 
@@ -31,10 +31,11 @@ class _Scope:
     values: dict = field(default_factory=dict)
     active: bool = True
     disabled: bool = False
+    guard_depth: int = 0
 
     def __post_init__(self):
-        self.changes = self.db.total_changes
-        self.disabled = not self.db.in_transaction
+        self.changes = 0 if self.disabled else self.db.total_changes
+        self.disabled = self.disabled or not self.db.in_transaction
 
     def usable(self):
         # ContextVars are inherited by asyncio tasks and copy_context(). Neither
@@ -98,14 +99,41 @@ def guarded():
 
     Answers computed inside a guard can assume that an in-progress back edge is
     visible, or refuse because a traversal budget ran out. Neither is the
-    request-wide answer, so nothing loaded while any guard is active is stored.
-    Entries stored outside every guard may still be served.
+    request-wide answer, so guarded loads cannot populate the request memo.
+    Entries stored outside every guard may still be served. An isolated
+    guarded_scope may store answers relative to its own unchanged guard only.
     """
     token = _GUARDS.set(_GUARDS.get() + 1)
     try:
         yield
     finally:
         _GUARDS.reset(token)
+
+
+@contextmanager
+def guarded_scope(db, principal):
+    """Fresh snapshot memo private to one active traversal guard.
+
+    Back-edge assumptions stay fixed for this guard's lifetime. Never join an
+    outer memo or export these conditional answers to it. Nested guards cannot
+    reuse or store answers in this scope; copied tasks/threads and writes retain
+    the usual owner and snapshot barriers.
+    """
+    depth = _GUARDS.get()
+    if depth == 0:
+        raise RuntimeError('A guarded memo requires an active traversal guard')
+    parent = frame = _CURRENT.get()
+    while frame is not None and frame.scope.db is not db:
+        frame = frame.parent
+    disabled = frame is not None and not frame.scope.usable()
+    current = _Scope(db, guard_depth=depth, disabled=disabled)
+    token = _CURRENT.set(_Frame(current, _key(principal), parent))
+    try:
+        yield
+    finally:
+        current.active = False
+        current.values.clear()
+        _CURRENT.reset(token)
 
 
 def remember(kind, key, load):
@@ -118,12 +146,14 @@ def remember(kind, key, load):
     if frame is None or not frame.scope.usable():
         return load()
     current = frame.scope
+    if current.guard_depth and _GUARDS.get() != current.guard_depth:
+        return load()  # Conditional answers require this exact traversal guard.
     try:
         identity = (kind, frame.principal, _key(key))
     except TypeError:
         return load()
     if identity not in current.values:
-        if _GUARDS.get() > 0:
+        if _GUARDS.get() > current.guard_depth:
             return load()
         from .operations import OperationError
         try:

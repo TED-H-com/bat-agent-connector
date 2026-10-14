@@ -26,7 +26,7 @@ export function workspaceOverview(options) {
   let mode = preference.mode === 'saved' ? 'saved' : 'live', signature = '', loading = false, reportLoading = false;
   const primary = discussLink({workspaceId}, {'data-overview-discuss':''});
   const meta = h('span', {'data-overview-meta': ''});
-  const content = h('div'), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
+  const content = h('div', {class: 'pm-overview-content', 'data-overview-content': ''}), status = h('div', {role: 'status'}), savedBar = h('div', {class: 'pm-overview-saved', hidden: true});
   const box = h('section', {class: 'pm-overview', 'data-pm-overview': ''}, savedBar, status, content);
   const reportTools = h('div', {class: 'pm-report-tools', 'data-pm-report-tools': ''});
   const historyHint = h('span', {class: 'ui-meta', hidden: true, 'data-overview-history-partial': ''}, t('ov_partial_history'));
@@ -86,8 +86,13 @@ export function workspaceOverview(options) {
   }
   function open(row) {onOpen(row.ref, row);}
   function itemLink(row, part) {return row ? h('button', {type: 'button', class: 'pm-overview-link', 'data-overview-link': `${part}:${row.key || row.milestone_id || row.work_item_id}`, onclick: () => open(row)}, row.title) : null;}
-  function milestoneDate(row) {return h('span', {class: 'ui-meta'}, date(row.baseline_date), row.forecast_date && row.forecast_date !== row.baseline_date ? h('span', {}, ' → ', date(row.forecast_date)) : '',
-    row.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null);}
+  function milestoneDate(row) {
+    const changed = row.forecast_date && row.forecast_date !== row.baseline_date;
+    const late = row.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: row.delta_days})) : null;
+    return h('span', {class: 'ui-meta pm-overview-date-range', 'data-overview-date-range': ''},
+      h('span', {}, date(row.baseline_date), !changed ? late : null),
+      changed ? h('span', {}, ' → ', date(row.forecast_date), late) : null);
+  }
   function statusStrip(data, fixed = false) {
     const p = data?.progress, complete = p && classes.every(key => Number.isSafeInteger(p[key]));
     const acceptanceGap = !fixed && complete && p.complete === true && Number.isSafeInteger(p.requirements)

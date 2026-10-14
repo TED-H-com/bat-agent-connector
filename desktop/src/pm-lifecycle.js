@@ -1,6 +1,7 @@
 import {nativeRunState} from './pm-native-analysis.js';
 import {actionLabel, operationStatusLabel} from './global-labels.js';
 import {emptyState, skeleton} from './ui/components.js';
+import {phaseVocabulary} from './ui/ui-strings.js';
 // Management intent and execution admissions stay on the central journal.
 export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,form,input,labelled,errorBox,onChange}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}/lifecycle`,actor=caps()?.actor;
@@ -37,8 +38,9 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   const chosen=()=>{try{const ids=JSON.parse(retained.value||'[]');return Array.isArray(ids)&&ids.every(id=>typeof id==='string')?ids:[];}catch{return [];}};
   function makeEditor(kind,{stage=false,extra=null,fields={},params=()=>({}),eligible=()=>true}={}){
     const reason=input('pm_lifecycle_reason',{max:4000,multiline:true}),version=hidden();
-    const choice=stage?h('select',{'aria-label':t('pm_lifecycle_stage'),required:true},...['idea','planning','development','maintain'].map(value=>h('option',{value},stageName(value)))):null;
-    if(choice)choice.dataset.pmDefault='idea';
+    const stages=['idea','planning','development','maintain'];
+    const choice=stage?h('select',{'aria-label':t('pm_lifecycle_stage'),required:true},h('option',{value:''},t('pm_lifecycle_choose')),...stages.map(value=>h('option',{value},stageName(value)))):null;
+    if(choice)choice.dataset.pmDefault='';
     const maintenance=stage?hidden():null;
     const values={reason,version,...(choice?{stage:choice,maintenance}:{}),...fields};
     const selectedMaintenance=()=>{try{return JSON.parse(maintenance?.value||'null');}catch{return null;}};
@@ -49,9 +51,9 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
     editor=form({action:`pm.lifecycle.${kind}`,target:{workspace_id:workspaceId},fields:values,
       params:data=>({reason:data.reason,...(choice?{stage:data.stage}:{}),...(choice&&data.stage==='maintain'?{maintenance_ref:JSON.parse(data.maintenance)}:{}),...params(data)}),
       preconditions:()=>({expected_lifecycle_revision:Number(version.value)}),
-      permitted:()=>Boolean(gate()&&eligible()&&maintenanceReady()&&version.value!==''&&Number(version.value)===current.lifecycle.revision),
+      permitted:()=>Boolean(gate()&&eligible()&&maintenanceReady()&&version.value!==''&&Number(version.value)===current.lifecycle.revision&&(!choice||stages.includes(choice.value))),
       recoverPermitted:()=>permitted(true),label:kind==='retain_inflight'?'pm_lifecycle_retain':'pm_lifecycle_'+kind,
-      onStateChange:()=>{if(kind==='retain_inflight')for(const check of retentionChoices.querySelectorAll('input'))check.disabled=retentionLocked();},
+      onStateChange:()=>{editablePhase();if(kind==='retain_inflight')for(const check of retentionChoices.querySelectorAll('input'))check.disabled=retentionLocked();},
       onSaved:()=>refresh(),extra:h('div',{},choice?labelled('pm_lifecycle_stage',choice):'',extra,
         labelled('pm_lifecycle_reason',reason),version,maintenance,...Object.values(fields))});
     const rebase=h('button',{type:'button',class:'secondary',onclick:()=>{
@@ -62,6 +64,14 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
     if(choice)choice.addEventListener('change',()=>{if(!editor.locked()){captureMaintenance();editor.update();}});
     const warning=h('p',{class:'muted',hidden:true},t('pm_lifecycle_stale'));
     editor.box.append(warning,rebase);
+    function editablePhase(){
+      // An unanswered phase blocks submission. It must not prevent choosing one.
+      // Keep the durable form's authority and recovery locks on every state update.
+      if(!choice||!editor||editor.locked()||stages.includes(choice.value)||!gate()||!eligible()
+        ||version.value===''||Number(version.value)!==current.lifecycle.revision
+        ||!caps()?.scopes?.includes('manage')||!caps()?.actions?.some(row=>row.action===`pm.lifecycle.${kind}`&&row.allowed===true))return;
+      choice.disabled=false;reason.disabled=false;
+    }
     const originalUpdate=editor.update;
     editor.update=()=>{
       const empty=!reason.value&&(!choice||choice.value===choice.dataset.pmDefault)&&(!fields.operations||!chosen().length);
@@ -70,7 +80,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
       originalUpdate();
       const stale=Boolean(current&&version.value!==''&&(Number(version.value)!==current.lifecycle.revision||!maintenanceReady()));
       warning.hidden=!stale;rebase.hidden=!stale;rebase.disabled=!gate()||editor.locked();
-      if(choice)for(const option of choice.options)option.disabled=Boolean(current&&!current.available_stages.includes(option.value));
+      if(choice)for(const option of choice.options)option.disabled=Boolean(option.value&&current&&!current.available_stages.includes(option.value));
     };
     editors.push(editor);return editor;
   }
@@ -106,7 +116,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function renderWork(){
     work.replaceChildren(h('h3',{},t('pm_lifecycle_inflight')));
-    if(!rows.length)work.append(emptyState({title:t('pm_lifecycle_inflight_empty')}));
+    if(!rows.length)work.append(emptyState({title:t('pm_lifecycle_inflight_empty'),text:h('span',{class:'muted'},t('pm_lifecycle_inflight_empty_help'))}));
     if(workFiltered)work.append(h('p',{class:'muted'},t('pm_lifecycle_filtered')));
     for(const row of rows){
       const details=h('details',{'data-pm-lifecycle-operation':row.operation_id},h('summary',{},actionLabel(row.action),' · ',t('pm_lifecycle_'+row.disposition)),
@@ -136,8 +146,11 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function render(){
     const state=current.lifecycle,stopped=['paused','closed'].includes(state.stage);
-    summary.replaceChildren(h('p',{class:'pm-lifecycle-stage'},h('strong',{},stageName(['pausing','closing'].includes(state.status)?state.status:state.stage))),
-      h('p',{class:'muted'},t(state.stage===null?'pm_lifecycle_legacy_help':stopped?'pm_lifecycle_stopped_help':'pm_lifecycle_active_help')));
+    if(state.stage===null){
+      const empty=emptyState({title:stageName(null),text:h('span',{class:'muted'},t('pm_lifecycle_legacy_help'))});
+      empty.querySelector('h2').classList.add('pm-lifecycle-stage');summary.replaceChildren(empty);
+    }else summary.replaceChildren(h('p',{class:'pm-lifecycle-stage'},h('strong',{},stageName(['pausing','closing'].includes(state.status)?state.status:state.stage))),
+      h('p',{class:'muted'},t(stopped?'pm_lifecycle_stopped_help':'pm_lifecycle_active_help')));
     maintenanceNote.textContent=t(state.stage==='maintain'?'pm_lifecycle_maintenance_active':current.maintenance?.available?'pm_lifecycle_maintenance_ready':'pm_lifecycle_maintenance_unavailable');
     if(current.transition?.reason)summary.append(h('p',{},current.transition.reason));
     if(!permitted(true))summary.append(h('p',{class:'muted'},t('pm_lifecycle_reader')));
@@ -146,7 +159,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function withdraw(){++serial;ready=false;current=null;rows=[];cursor=null;historyCursor=null;historyLoaded=false;historyRequest=null;workFiltered=false;
     maintenanceNote.textContent='';summary.replaceChildren();work.replaceChildren();retentionChoices.replaceChildren();historyBody.replaceChildren();status.replaceChildren();notify();}
-  function unavailable(error){withdraw();status.replaceChildren(errorBox(error, {within:status}),h('p',{class:'muted'},t('pm_lifecycle_unknown')));}
+  function unavailable(error){withdraw();status.replaceChildren(emptyState({title:t('pm_lifecycle_unavailable'),text:h('span',{class:'muted'},t('pm_lifecycle_unknown'))}),errorBox(error, {within:status}));}
   async function refresh({event=false}={}){
     // An unrelated background read does not withdraw the last observed policy.
     // Disabling a pressed submit button here makes the browser drop its click.
@@ -178,6 +191,8 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
       for(const row of page.transitions){
         if(!/^pmlt_[0-9a-f]{32}$/.test(row.transition_id))throw Error(t('pm_scope_mismatch'));
         const detail=h('details',{},h('summary',{},row.reason||t('pm_lifecycle_trace')),h('p',{class:'muted'},row.actor||''));
+        if(Object.hasOwn(phaseVocabulary,row.to_stage))detail.append(h('p',{'data-pm-lifecycle-history-phase':''},
+          Object.hasOwn(phaseVocabulary,row.from_stage)?stageName(row.from_stage)+' → ':'',stageName(row.to_stage)));
         let done=false;detail.addEventListener('toggle',async()=>{
           if(!detail.open||done)return;done=true;
           try{const original=checkScope(await api('GET',`${endpoint}/transitions/${row.transition_id}`));alive();if(ticket!==serial||!detail.isConnected)return;

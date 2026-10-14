@@ -1,14 +1,15 @@
 import {expectErrorDetails,expectNoNestedErrorDetails} from './api-error-assertions.ts';
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, openPmPanel} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {mountConversation} from './conversation-fixture.ts';
 import {pmFixture, pmRoute, workspaceId} from './pm-fixture.ts';
+import {expectShellEmpty, shellShot} from './shell-empty-state.ts';
 const pid='prj_'+'1'.repeat(20), wid='wi_'+'2'.repeat(20), rid='pmrev_'+'3'.repeat(32), eid='pme_'+'4'.repeat(32);
 function fixture() {
-  const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, catalogReads:0, catalogWait:null as Promise<void>|null, associated:false, tracked:false, lost:false, sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any,evidenceReadFails:false};
+  const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, catalogReads:0, catalogWait:null as Promise<void>|null, associated:false, tracked:false, lost:false, planDenied:false, acceptedPlan:rid, planReads:[] as string[], boundPlan:null as string|null, boundRequirements:[] as string[], sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any,evidenceReadFails:false};
   const project={project_id:pid,name:'Reader experience',version:2};
-  const binding=()=>({workspace_id:workspaceId,work_item_id:wid,binding_id:'pmwb_'+'5'.repeat(32),project_id:pid,plan_revision_id:null,requirement_ids:[]});
+  const binding=()=>({workspace_id:workspaceId,work_item_id:wid,binding_id:'pmwb_'+'5'.repeat(32),project_id:pid,plan_revision_id:state.boundPlan||null,requirement_ids:state.boundRequirements||[]});
   let workBinding:any=null;
   const summary={evidence_id:eid,workspace_id:workspaceId,source_kind:'work_claim',source_observed_at:1791720000,captured_at:1791720001,assessment:{state:'done'}};
   const dispatch=async(input:any)=>{
@@ -29,7 +30,12 @@ function fixture() {
     const endpoint='/pm/workspaces/'+workspaceId;
     if(path===endpoint+'/projects')return {status:200,data:{workspace_id:workspaceId,bindings:state.associated?[{project_id:pid,sequence:1}]:[],next_cursor:null}};
     if(path===endpoint+'/work')return {status:200,data:{workspace_id:workspaceId,bindings:state.tracked?[workBinding||binding()]:[],next_cursor:null}};
-    if(path===endpoint+'/plans/accepted')return {status:200,data:{head:{workspace_id:workspaceId},plan:{revision_id:rid,document:{title:'First useful action',requirements:[{id:'first-action',text:'Visitors find the first useful action'}]}}}};
+    if(path.startsWith(endpoint+'/plans/')){
+      state.planReads.push(path);
+      const id=path.endsWith('/accepted')?state.acceptedPlan:path.split('/').at(-1)!;
+      return state.planDenied?{status:403,data:{error:{code:'FORBIDDEN',message:'Plan withdrawn'}}}:{status:200,data:{head:{workspace_id:workspaceId},plan:{workspace_id:workspaceId,revision_id:id,
+        document:{title:id===rid?'First useful action':'Previous supported release',requirements:[{id:'first-action',text:id===rid?'Visitors find the first useful action':'Members can use the supported release'}]}}}};
+    }
     if(path===endpoint+'/work/'+wid+'/capture')return {status:200,data:{workspace_id:workspaceId,capture:state.capture}};
     if(path===endpoint+'/evidence/'+eid&&state.evidenceReadFails)return {status:503,data:{error:{code:'BAT_ERROR',message:'Fixture evidence read failed'}}};
     if(path===endpoint+'/evidence/'+eid)return {status:200,data:{evidence:{...summary,document:{facts:{state:'done',authority:'recorded_work_claim_and_approval',description:'<script>literal evidence</script>'}}}}};
@@ -54,6 +60,91 @@ function fixture() {
 const action=(page:any,name:string)=>page.locator(`[data-pm-action="${name}"]`);
 const selectProject=async(page:any)=>{await page.getByLabel('Connector project',{exact:true}).selectOption(pid);};
 const openWork=async(page:any)=>{await page.locator('[data-pm-work] > summary').click();};
+for(const native of [false,true])for(const locale of ['en','zh-TW'])for(const width of [1440,390])
+test(`an unreadable bound plan has one message and one Details ${native?'native':'web'} ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage();
+  const f=fixture();f.state.associated=true;f.state.tracked=true;f.state.boundPlan=rid;
+  f.state.boundRequirements=['membership.email_sign_in'];f.state.planDenied=true;
+  await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);
+  await openPmSection(page,'requirements','ui_evidence');
+  await page.getByLabel(locale==='en'?'Connector project':'Connector 專案',{exact:true}).selectOption(pid);await openWork(page);
+  const work=page.locator('[data-pm-work]'),facts=work.locator('.ui-disclosure');
+  const summary=locale==='en'?'Could not read this plan.':'無法讀取這份計畫。';
+  await expect(work).toContainText('Clear first action');
+  await expect(work.locator('[data-pm-bound-plan] .ui-pill')).toHaveText(locale==='en'?'Unknown':'未知');
+  await expect(facts).toHaveCount(1);
+  await expect(facts).toHaveJSProperty('open',false);
+  await expect(work.locator('[data-error-summary]')).toHaveCount(1);
+  await expect(work.locator('[data-error-summary]')).toHaveText(summary);
+  await expect(facts.locator('details')).toHaveCount(0);
+  await expect.poll(()=>work.innerText()).not.toContain(rid);
+  await expect.poll(()=>work.innerText()).not.toContain('membership.email_sign_in');
+  const capture=async(state:string)=>{
+    if(!process.env.BATC_FIX4_SHOTS)return;
+    await mkdir(process.env.BATC_FIX4_SHOTS,{recursive:true});
+    await page.screenshot({path:`${process.env.BATC_FIX4_SHOTS}/fix4-evidence-${state}-${native?'native':'web'}-${locale}-${width}.png`,animations:'disabled'});
+  };
+  await capture('collapsed');await facts.locator(':scope > summary').click();
+  await expect(facts.locator('[data-error-summary]')).toBeVisible();
+  await expect(facts.locator('[data-error-details] code')).toHaveText('FORBIDDEN');
+  await expect(facts.locator('[data-error-details] p')).toHaveText('Plan withdrawn');
+  await expect(facts).toContainText(rid);await expect(facts).toContainText('membership.email_sign_in');
+  await capture('expanded');
+  expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);
+  await context.close();
+});
+for(const locale of ['en','zh-TW'])for(const width of [1440,390])for(const state of ['no-projects','no-work','no-evidence','unavailable'])
+test(`Settings ${state} has a short title and muted explanation ${locale} ${width}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale,baseURL,viewport:{width,height:900}}),page=await context.newPage();
+  const f=fixture();f.state.associated=true;f.state.tracked=true;let withdrawn=false;
+  const dispatch=async(input:any)=>{
+    const path=new URL(input.path,'http://fixture').pathname;
+    if(path==='/projects'&&withdrawn)return {status:403,data:{error:{code:'FORBIDDEN',message:'Project catalog withdrawn'}}};
+    const result=await f.dispatch(input);
+    if(path==='/projects'&&state==='no-projects')result.data.projects=[];
+    if(path==='/projects/'+pid&&state==='no-work')result.data.work_items=[];
+    return result;
+  };
+  const copy=locale==='en'?{project:'Connector project',
+    'no-projects':['No projects yet','No Connector projects are available.'],
+    'no-work':['No work yet','This project has no active work items.'],
+    'no-evidence':['No evidence yet','No evidence snapshot collected yet.'],
+    unavailable:['Projects unavailable','Your token lacks this permission.']}
+    :{project:'Connector 專案','no-projects':['尚無專案','目前沒有可用的 Connector 專案。'],
+      'no-work':['尚無工作','此專案目前沒有工作項目。'],'no-evidence':['尚無證據','尚未整理證據快照。'],
+      unavailable:['無法取得專案','你的權杖沒有這個權限。']};
+  await mountConversation(page,false,dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_workspace_settings');
+  if(state!=='no-projects')await page.getByLabel(copy.project,{exact:true}).selectOption(pid);
+  if(state==='no-evidence'||state==='unavailable')await openWork(page);
+  if(state==='unavailable'){
+    await expect(page.locator('[data-pm-work]')).toContainText('Clear first action');
+    withdrawn=true;f.base.state.cursor++;
+    await expect(page.locator('[data-pm-work]')).toHaveCount(0);
+    await expect(page.getByLabel(copy.project,{exact:true})).toHaveValue('');
+    await expect(page.getByLabel(copy.project,{exact:true}).locator('option')).toHaveCount(1);
+  }
+  const [title,reason]=copy[state as keyof typeof copy] as string[];
+  const empty=page.locator('[data-pm-evidence] .ui-empty').filter({has:page.getByRole('heading',{name:title,exact:true})});
+  await expectShellEmpty(empty,title,reason);await empty.scrollIntoViewIfNeeded();
+  await shellShot(page,'settings-'+state,locale,width);
+  expect(f.state.writes).toHaveLength(0);expect(f.base.state.writes).toHaveLength(0);await context.close();
+});
+for(const locale of ['en','zh-TW'])for(const source of ['catalog','work'])test(`Settings missing ${source} data stays unavailable rather than empty ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale,baseURL}),page=await context.newPage(),f=fixture();f.state.associated=true;
+  const dispatch=async(input:any)=>{
+    const path=new URL(input.path,'http://fixture').pathname,result=await f.dispatch(input);
+    if(source==='catalog'&&path==='/projects')delete result.data.projects;
+    if(source==='work'&&path==='/projects/'+pid)delete result.data.work_items;
+    return result;
+  };
+  await mountConversation(page,false,dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_workspace_settings');
+  if(source==='work')await page.getByLabel(locale==='en'?'Connector project':'Connector 專案',{exact:true}).selectOption(pid);
+  const panel=page.locator('[data-pm-evidence]'),title=locale==='en'?'Projects unavailable':'無法取得專案';
+  await expectShellEmpty(panel.locator('.ui-empty'),title,locale==='en'?'Could not read Connector data.':'無法讀取 Connector 專案紀錄。');
+  await expect(panel.getByRole('heading',{name:locale==='en'?'No projects yet':'尚無專案',exact:true})).toHaveCount(0);
+  await expect(panel.getByRole('heading',{name:locale==='en'?'No work yet':'尚無工作',exact:true})).toHaveCount(0);
+  expect(f.state.writes).toHaveLength(0);await context.close();
+});
 for(const native of [false,true])test.describe(native?'native evidence':'web evidence',()=>{
   test('refresh visibly disables association until its fixed source reads finish, without losing the draft',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);
@@ -92,7 +183,72 @@ for(const native of [false,true])test.describe(native?'native evidence':'web evi
     expect(f.state.writes.map(row=>row.body.action)).toEqual(['pm.project.bind','pm.work.bind']);
     expect(f.state.writes[1].body.params).toEqual({rationale:'Track first visit results',plan_revision_id:rid,requirement_ids:['first-action']});
     expect(f.state.writes[1].body.preconditions).toEqual({expected_work_version:3,expected_binding_id:null});
-    await expect(page.locator('[data-pm-work]')).toContainText('This work references a fixed adopted plan revision.');
+    const work=page.locator('[data-pm-work]');
+    await expect(work).toContainText('This work references a fixed adopted plan revision.');
+    await expect(work).toContainText('First useful action');
+    await expect(work).toContainText('Visitors find the first useful action');
+    await expect.poll(async()=>work.innerText()).not.toContain(rid);
+    const facts=work.locator('.ui-disclosure');
+    await expect(facts).toHaveJSProperty('open',false);
+    await expect(facts).toContainText(rid);await expect(facts).toContainText('first-action');
+  });
+  test('an unreadable plan keeps the work row and leaves the revision id in Details',async({page})=>{
+    const f=fixture();f.state.associated=true;f.state.tracked=true;f.state.boundPlan=rid;
+    f.state.boundRequirements=['membership.email_sign_in'];f.state.planDenied=true;
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page,'requirements','ui_evidence');await selectProject(page);await openWork(page);
+    const work=page.locator('[data-pm-work]');
+    await expect(work).toContainText('Clear first action');
+    await expect(work.getByText('Unknown',{exact:true}).first()).toBeVisible();
+    await expect.poll(async()=>work.innerText()).not.toContain(rid);
+    await expect.poll(async()=>work.innerText()).not.toContain('membership.email_sign_in');
+    const facts=work.locator('.ui-disclosure');
+    await expect(facts).toHaveCount(1);
+    await expect(facts).toContainText('Could not read this plan.');
+    await expect(facts).toContainText(rid);await expect(facts).toContainText('membership.email_sign_in');
+    await expect(facts.locator('[data-error-summary]')).toHaveText('Could not read this plan.');
+    await expect(facts.locator('[data-error-details]')).toContainText('FORBIDDEN');
+    await expect(facts.locator('[data-error-details]')).toContainText('Plan withdrawn');
+    expect(f.state.writes).toHaveLength(0);
+  });
+  test('an older bound plan supplies its own readable labels without borrowing the current plan',async({page})=>{
+    const f=fixture();f.state.associated=true;f.state.tracked=true;f.state.boundPlan='pmrev_'+'6'.repeat(32);
+    f.state.boundRequirements=['first-action'];f.base.state.role='reader';f.base.state.manage=false;
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page,'requirements','ui_evidence');await selectProject(page);await openWork(page);
+    const labels=page.locator('[data-pm-bound-plan]');
+    await expect(labels).toContainText('Previous supported release');await expect(labels).toContainText('Members can use the supported release');
+    await expect(labels).not.toContainText('First useful action');
+    expect(f.state.planReads).toContain('/pm/workspaces/'+workspaceId+'/plans/'+f.state.boundPlan);
+    await expect(action(page,'pm.work.bind')).toHaveCount(0);expect(f.state.writes).toHaveLength(0);
+  });
+  test('refresh withdraws the bound plan labels when that source becomes unreadable',async({page})=>{
+    const f=fixture();f.state.associated=true;f.state.tracked=true;f.state.boundPlan=rid;f.state.boundRequirements=['first-action'];
+    await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page,'requirements','ui_evidence');await selectProject(page);await openWork(page);
+    const labels=page.locator('[data-pm-bound-plan]');await expect(labels).toContainText('First useful action');
+    f.state.planDenied=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await expect(labels.getByText('Unknown',{exact:true})).toBeVisible();await expect(labels).not.toContainText('First useful action');
+    await expect(labels).not.toContainText('Visitors find the first useful action');expect(f.state.writes).toHaveLength(0);
+  });
+  test('a late bound plan response cannot restore labels after withdrawal',async({page})=>{
+    const f=fixture();f.state.associated=true;f.state.tracked=true;f.state.boundPlan='pmrev_'+'6'.repeat(32);f.state.boundRequirements=['first-action'];
+    let release!:()=>void,waiting=false,replied=false;
+    const held=new Promise<void>(resolve=>{release=resolve;});
+    const dispatch=async(input:any)=>{
+      const result=await f.dispatch(input),path=new URL(input.path,'http://fixture').pathname;
+      if(path.endsWith('/plans/'+f.state.boundPlan)&&!waiting){waiting=true;await held;replied=true;}
+      return result;
+    };
+    await mountConversation(page,native,dispatch);await page.goto(pmRoute);await openPmSection(page,'requirements','ui_evidence');await selectProject(page);await openWork(page);
+    const labels=page.locator('[data-pm-bound-plan]');await expect.poll(()=>waiting).toBe(true);
+    f.state.planDenied=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    const facts=page.locator('[data-pm-work] .ui-disclosure');
+    await expect(facts).toHaveCount(1);
+    await expect(facts).toContainText('Could not read this plan.');
+    await expect(facts.locator('[data-error-details]')).toContainText('FORBIDDEN');
+    await expect(facts.locator('[data-error-details]')).toContainText('Plan withdrawn');
+    release();await expect.poll(()=>replied).toBe(true);
+    await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+    await expect(labels.getByText('Unknown',{exact:true})).toBeVisible();
+    await expect(labels).not.toContainText('Previous supported release');expect(f.state.writes).toHaveLength(0);
   });
   test('lost project association response can recover even after association becomes visible',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmSection(page, 'requirements' , 'ui_evidence');await selectProject(page);

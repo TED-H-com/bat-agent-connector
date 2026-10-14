@@ -116,6 +116,15 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
 
 for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
   test.use({locale: locale === 'en' ? 'en-US' : 'zh-TW', colorScheme: 'light', reducedMotion: 'reduce'});
+  test('Evidence unavailable preserves the refresh-cycle read gate with its shell empty state', async ({page}) => {
+    const f = await mountFailure(page, 'evidence', 'workspaceEvidence', 503, {code, message: serverMessage, detached: false});
+    const root = page.locator('#fixture');
+    await expect(root.locator('.ui-empty h2')).toHaveText(locale === 'en' ? 'Projects unavailable' : '無法取得專案');
+    expect(await page.evaluate(() => (window as any).c4State.refreshCycle.error?.code)).toBe(code);
+    await expect(root.locator('[data-error-summary]')).toHaveCount(0);
+    await expect(root).not.toContainText(serverMessage);
+    expect(f.reads()).toBeGreaterThan(0); expect(f.writes()).toBe(0);
+  });
   for (const width of [1440, 390]) for (const failure of failures) {
     const {name, factory, key, cause, code, message} = failure;
     test(`${name} ${cause} one failure message ${width}`, async ({page}) => {

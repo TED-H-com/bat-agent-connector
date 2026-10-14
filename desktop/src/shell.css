@@ -81,12 +81,13 @@ body.pm-mode #main { padding: 0; }
 .ui-page-header .ui-menu-panel { z-index: 45; }
 .ui-inspector .pm-lifecycle { margin: 0; border: 0; padding: 0; }
 .ui-inspector .pm-lifecycle > h2 { display: none; }
+.ui-inspector .pm-lifecycle .ui-empty { padding-inline: var(--space-4); }
 .pm-primary-content .pm-heading:empty { display: none; }
 .pm-charter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 1199px) { .pm-charter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .pm-charter-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (min-width: 1200px) {
-  main:has(> .ui-inspector) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; }
+  main:has(> .ui-inspector:not(.ui-inspector-overlay)) { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; }
   main > .ui-inspector { grid-column: 2; grid-row: 1; }
 }
 
@@ -159,3 +160,18 @@ body.pm-mode #main { padding: 0; }
 @media (min-width: 1000px) and (max-width: 1199px) { body.has-workspace #workspace::before { width: var(--workspace-sidebar-width, 232px); } }
 .workspace-nav-footer :is(a, button)[aria-current=page] { background: var(--accent-soft); color: var(--accent); border-radius: var(--r-sm); }
 .workspace-nav-footer [data-shell-tools] > .ui-icon:last-child { margin-left: auto; width: 16px; height: 16px; }
+
+/* Fixed nested docks reserve space; panels in their own grid column do not. */
+@media (min-width: 1200px) {
+  main:not(:has(> .ui-inspector)) .pm-main:has(:is(.reg-layout, .pm-overview, .pm-agents-layout, .schedule-layout, .pm-work-layout) > .ui-inspector[role=complementary]) {
+    padding-right: calc(var(--space-6) + 400px + var(--space-4));
+  }
+  .pm-main .reg-layout:has(> .ui-inspector),
+  .pm-main .pm-agents-layout:has(> .ui-inspector),
+  .pm-main .schedule-layout:has(> .ui-inspector),
+  .pm-main .pm-work-layout:has(> .pm-work-inspector) { grid-template-columns: minmax(0, 1fr); }
+  main:has(:is(.reg-layout, .pm-overview, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .ui-page-header,
+  main:has(:is(.reg-layout, .pm-overview, .pm-agents-layout, .schedule-layout, .pm-work-layout, .session-workspace) > .ui-inspector[role=complementary]):not(:has(> .ui-inspector)) > .workspace-session-heading {
+    max-width: calc(100% - 400px - var(--space-4));
+  }
+}
