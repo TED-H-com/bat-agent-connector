@@ -75,11 +75,16 @@ test('mismatched execution completion fails closed instead of claiming another a
 });
 
 for(const native of [false,true])test(`a late original receipt cannot restore withdrawn sources ${native?'Tauri':'Web'}`,async({page})=>{
+  await page.clock.install();
   const f=runtimeFixture();await mountRuntime(page,native,f);await openDetail(page);await editor(page).locator('select').selectOption({label:'fixture-host / manual-session-1'});
+  await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
   await editor(page).getByRole('button',{name:'Check current activity',exact:true}).click();await expect(editor(page)).toContainText(/Waiting externally|等待外部條件/);
   f.complete();let release=()=>{};f.state.deferReceipt=new Promise(resolve=>{release=resolve;});
   try{
-    await editor(page).getByRole('button',{name:'Check original request',exact:true}).click();await expect.poll(()=>f.state.receiptReads).toBe(1);
+    // The acknowledged original ID is checked automatically while its primary
+    // action stays disabled. Hold that read across withdrawal, without waiting
+    // for a manual recovery button that belongs to a different state.
+    await page.clock.runFor(1000);await expect.poll(()=>f.state.receiptReads).toBe(1);
     f.board.state.failRead=403;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(row(page)).toHaveCount(0);release();
     await expect(page.locator('[data-pm-kanban]')).not.toContainText('single input was quiescent');await expect(page.locator('[data-pm-kanban]')).not.toContainText(observerId);
     expect(f.state.writes).toHaveLength(1);

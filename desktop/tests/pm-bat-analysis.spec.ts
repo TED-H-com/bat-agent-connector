@@ -102,7 +102,9 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
     f.state.failRead=false;await page.reload();await openThreadAnalysis(page);
     await expect(purpose(page)).toHaveValue('Private original analysis');
     await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.ops.size).toBe(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
+    expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
 });
 
