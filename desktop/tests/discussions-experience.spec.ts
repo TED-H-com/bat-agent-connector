@@ -352,12 +352,17 @@ test('inline rename cancels without writing and recovers an unknown save with th
   await expect(rename).toBeFocused(); await expect(title).toHaveText(original!); expect(f.discussion.writes).toHaveLength(0);
   await rename.press('Enter'); await input.fill('Retained rename draft'); restoring = true; await page.reload();
   await expect(input).toHaveValue('Retained rename draft'); expect(f.discussion.writes).toHaveLength(0);
-  await expect(input).toBeDisabled();
+  await expect(input).not.toBeEditable(); await expect(input).toHaveAttribute('readonly', '');
+  await expect(page.locator('[data-pm-action="pm.thread.rename"]').getByRole('button', {name: 'Save', exact: true})).toBeDisabled();
+  await input.press('Enter'); expect(f.discussion.writes).toHaveLength(0);
   restoring = false; releaseRestore();
   // Restoring a draft precedes the complete snapshot's send admission.
-  await expect(input).toBeEnabled(); await input.press('Enter');
+  await expect(input).toBeEditable(); await input.press('Enter');
   const form = page.locator('[data-pm-action="pm.thread.rename"]');
   await expect(form).toContainText('Original reply unavailable');
+  await expect(input).toBeDisabled();
+  await input.evaluate(node => node.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true})));
+  await expect(input).toBeVisible(); await expect(input).toHaveValue('Retained rename draft');
   await page.reload(); await form.getByRole('button', {name: 'Check original request', exact: true}).click();
   await expect(title).toHaveText('Retained rename draft'); await expect(input).toBeHidden();
   expect(f.discussion.writes).toHaveLength(2); expect(f.discussion.writes[1]).toEqual(f.discussion.writes[0]);

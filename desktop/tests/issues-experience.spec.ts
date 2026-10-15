@@ -63,9 +63,11 @@ function textFor(locale: Locale) {
 async function boot(browser: import('@playwright/test').Browser, baseURL: string | undefined, locale: Locale, width: number, options: {dark?: boolean, gate?: boolean, holdDetail?: boolean} = {}) {
   const fixture = demoFixture({locale});
   const calls: string[] = [];
+  const writes: unknown[] = [];
   const gate = {denyList: false, held: 0, release: null as null | (() => void), lateUsed: false, detailHeld: false, releaseDetail: null as null | (() => void)};
   const dispatch = async (input: {method?: string, path: string}) => {
     calls.push(input.path);
+    if (input.method && input.method !== 'GET') writes.push(input);
     const url = new URL(input.path, 'http://fixture');
     const list = url.pathname.endsWith('/register');
     if (options.gate && list && url.searchParams.get('owner') === 'late-reader' && !gate.lateUsed) {
@@ -94,10 +96,38 @@ async function boot(browser: import('@playwright/test').Browser, baseURL: string
   page.on('console', message => {if (message.type() === 'error') errors.push(message.text());});
   await mountConversation(page, false, dispatch);
   await page.goto(demoRoute());
-  return {page, context, errors, calls, gate, fixture, copy: textFor(locale)};
+  return {page, context, errors, calls, writes, gate, fixture, copy: textFor(locale)};
 }
 
 for (const locale of locales) {
+  for (const width of [1440, 1280, 1000, 390]) test(`Issues keeps its list clear of the full-height inspector (${locale}, ${width})`, async ({browser, baseURL}) => {
+    const {page, context, copy, errors, writes} = await boot(browser, baseURL, locale, width);
+    try {
+      await openView(page, 'issues');
+      await page.locator(`[data-row-key="${copy.rows.finding}"]`).click();
+      const inspector = page.locator('[data-reg-inspector]');
+      await expect(inspector).toContainText(copy.findingName);
+      await expect(inspector).toHaveAttribute('role', width >= 1200 ? 'complementary' : 'dialog');
+      const bounds = await inspector.boundingBox();
+      expect(bounds!.y + bounds!.height).toBe(page.viewportSize()!.height);
+      if (width >= 1200) {
+        expect(bounds!.y).toBe(48);
+        const list = await page.locator('.reg-main').boundingBox();
+        expect(list!.x + list!.width).toBeLessThanOrEqual(bounds!.x);
+        await expect(page.locator(`[data-reg-table] [data-reg-requirement="${copy.project.ids.requirements.email}"]`)).toBeHidden();
+        await page.locator('[data-pm-refresh]').click();
+        await expect(inspector).toContainText(copy.findingName);
+      }
+      await expectNoOverflow(page);
+      if (process.env.BATC_FIX2_SHOTS) {
+        mkdirSync(process.env.BATC_FIX2_SHOTS, {recursive: true});
+        await page.screenshot({path: `${process.env.BATC_FIX2_SHOTS}/fix2-issues-docked-${locale}-${width}.png`, animations: 'disabled'});
+      }
+      expect(writes).toHaveLength(0);
+      expect(errors.filter(line => !line.startsWith('Failed to load resource:'))).toEqual([]);
+    } finally {await context.close();}
+  });
+
   test(`returning Issues reserves its inspector before delayed reads (${locale})`, async ({browser, baseURL}) => {
     const {page, context, copy, errors} = await boot(browser, baseURL, locale, 1440);
     let releaseList!: () => void, releaseDetail!: () => void, detailStarted = false;

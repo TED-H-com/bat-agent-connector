@@ -46,8 +46,9 @@ The app also supports the user's system dark theme.
 
 [`manifest.json`](manifest.json) records the merged source commit and frontend
 tree, capture time, fixture clock, browser/Node versions, actual locale and viewport.
-SHA-256 hashes cover the script, demo dependencies, lockfile, served browser assets
-and every PNG. Each scene has fresh-context overflow checks at 390, 768 and 1440px.
+SHA-256 hashes cover the script, demo dependencies, lockfile (excluding only the
+root package version), served browser assets and every PNG. Each scene has
+fresh-context overflow checks at 390, 768 and 1440px.
 Browser/console errors and external requests fail the capture.
 These checks concern shared-browser layout, not native or live acceptance.
 

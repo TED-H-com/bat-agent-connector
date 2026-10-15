@@ -208,56 +208,56 @@ class BatClient:
             raise ConnectionLost(
                 f"{self.host.name}: connect failed: {redact(type(e).__name__)}: {redact(e)}"
             ) from None
-        self.connect_ms = (time.monotonic() - t0) * 1000
-        sslobj = ws.transport.get_extra_info("ssl_object")
-        der = sslobj.getpeercert(binary_form=True) if sslobj else None
-        if not der or cert_fingerprint(der) != self.host.fingerprint:
-            await ws.close()
-            raise FingerprintMismatch(
-                f"{self.host.name}: TLS certificate fingerprint does not match the pinned value; refusing to authenticate"
-            )
-        t1 = time.monotonic()
-        auth = {
-            "type": "auth",
-            "id": "auth-1",
-            "token": token,
-            "protocols": [PROTOCOL],
-            "compression": ["none"],
-            "clientInfo": {
-                "appName": "bat-agent-connector",
-                "appVersion": __version__,
-                "label": self._label,
-                "deviceId": self._device_id,
-                "platform": "linux",
-            },
-        }
-        try:
-            await ws.send(json.dumps(auth))
-            deadline = time.monotonic() + self._connect_timeout
-            reply = None
-            while time.monotonic() < deadline:
-                raw = await _wait_with_timeout(ws.recv(), max(0.1, deadline - time.monotonic()))
-                obj = self._decode(raw)
-                if obj and obj.get("type") == "auth-result":
-                    reply = obj
-                    break
-        except (ConnectionClosed, asyncio.TimeoutError) as e:
-            await ws.close()
-            raise AuthError(f"{self.host.name}: no auth-result ({type(e).__name__})") from None
-        if not reply or reply.get("result") is not True:
-            await ws.close()
-            err = (reply or {}).get("error") or "no auth-result"
-            raise AuthError(f"{self.host.name}: auth failed: {redact(err)}")
-        if reply.get("protocol") != PROTOCOL:
-            await ws.close()
-            raise AuthError(f"{self.host.name}: server negotiated {reply.get('protocol')!r}, need {PROTOCOL}")
-        self.auth_ms = (time.monotonic() - t1) * 1000
-        self.auth_info = {
-            k: reply.get(k) for k in ("protocol", "serverVersion", "capabilities", "compression")
-        }
         self._ws = ws
-        self.closed_reason = None
-        self._reader = asyncio.create_task(self._read_loop(ws), name=f"bat-reader-{self.host.name}")
+        try:
+            self.connect_ms = (time.monotonic() - t0) * 1000
+            sslobj = ws.transport.get_extra_info("ssl_object")
+            der = sslobj.getpeercert(binary_form=True) if sslobj else None
+            if not der or cert_fingerprint(der) != self.host.fingerprint:
+                raise FingerprintMismatch(
+                    f"{self.host.name}: TLS certificate fingerprint does not match the pinned value; refusing to authenticate"
+                )
+            t1 = time.monotonic()
+            auth = {
+                "type": "auth",
+                "id": "auth-1",
+                "token": token,
+                "protocols": [PROTOCOL],
+                "compression": ["none"],
+                "clientInfo": {
+                    "appName": "bat-agent-connector",
+                    "appVersion": __version__,
+                    "label": self._label,
+                    "deviceId": self._device_id,
+                    "platform": "linux",
+                },
+            }
+            try:
+                await ws.send(json.dumps(auth))
+                deadline = time.monotonic() + self._connect_timeout
+                reply = None
+                while time.monotonic() < deadline:
+                    raw = await _wait_with_timeout(ws.recv(), max(0.1, deadline - time.monotonic()))
+                    obj = self._decode(raw)
+                    if obj and obj.get("type") == "auth-result":
+                        reply = obj
+                        break
+            except (ConnectionClosed, asyncio.TimeoutError) as e:
+                raise AuthError(f"{self.host.name}: no auth-result ({type(e).__name__})") from None
+            if not reply or reply.get("result") is not True:
+                err = (reply or {}).get("error") or "no auth-result"
+                raise AuthError(f"{self.host.name}: auth failed: {redact(err)}")
+            if reply.get("protocol") != PROTOCOL:
+                raise AuthError(f"{self.host.name}: server negotiated {reply.get('protocol')!r}, need {PROTOCOL}")
+            self.auth_ms = (time.monotonic() - t1) * 1000
+            self.auth_info = {
+                k: reply.get(k) for k in ("protocol", "serverVersion", "capabilities", "compression")
+            }
+            self.closed_reason = None
+            self._reader = asyncio.create_task(self._read_loop(ws), name=f"bat-reader-{self.host.name}")
+        except BaseException:
+            await self.close()
+            raise
 
     def _decode(self, raw: str | bytes) -> dict | None:
         try:
@@ -323,8 +323,13 @@ class BatClient:
     async def close(self) -> None:
         ws, self._ws = self._ws, None
         if ws is not None:
-            with contextlib.suppress(Exception):
+            try:
                 await ws.close()
+            except Exception:
+                ws.transport.abort()
+            except BaseException:
+                ws.transport.abort()
+                raise
         if self._reader is not None:
             with contextlib.suppress(Exception, asyncio.CancelledError):
                 await _wait_with_timeout(self._reader, 3)

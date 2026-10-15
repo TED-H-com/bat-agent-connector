@@ -199,14 +199,18 @@ try {
       {content:'A second client retained this note while the first client was editing the project association.'},
       {expected_version:(await read()).thread.version});
     await bounded(catalogRead,30000,'Project catalog refresh was not requested');
+    await expect(projectForm.getByRole('button',{name:'Associate project',exact:true})).toBeDisabled();
+    // The thread's tool overlays its detail column. Close it before using the
+    // background header; the pending catalog read and association draft survive.
+    await page.keyboard.press('Escape');
     const refreshButton=page.getByRole('button',{name:'Refresh',exact:true});
     await expect(refreshButton).toBeDisabled();
     refreshClick=refreshButton.click().then(()=>null,error=>error);
-    await expect(projectForm.getByRole('button',{name:'Associate project',exact:true})).toBeDisabled();
   }finally{releaseCatalog();await page.unroute(catalogUrl,blockCatalog);}
   const refreshFailure=await refreshClick;
   if(refreshFailure)throw refreshFailure;
   console.log('PM fixture recovered the Refresh click after a deliberately earlier background catalog read.');
+  await openPmPanel(page,'ui_workspace_settings');
   await expect(projectForm.getByLabel('Why associate this work?',{exact:true})).toHaveValue('Track this existing project in the PM workspace');
   await projectForm.getByRole('button',{name:'Associate project',exact:true}).click();
   await page.locator('[data-pm-work] > summary').click();
@@ -268,7 +272,7 @@ try {
   assert.equal(brief.snapshot.work[0].capture.capture_id,captured.capture.capture_id);
   assert.equal(brief.snapshot.brief.deviations.status,'unassessed');
   const exports = page.locator('[data-pm-brief-export]');
-  await exports.locator('summary').click();
+  await expect(exports.getByRole('combobox').first()).toBeVisible();
   await exports.getByLabel('Report language',{exact:true}).selectOption('en');
   for (const format of ['markdown','html','svg']) {
     await exports.getByLabel('File format',{exact:true}).selectOption(format);
@@ -307,7 +311,7 @@ try {
   ]){
     await activity.locator(`[data-pm-lifecycle-intent="${kind}"]>summary`).click();
     const editor=activity.locator(`[data-pm-action="pm.lifecycle.${kind}"]`);
-    if(kind==='reopen')await editor.getByLabel('Management stage',{exact:true}).selectOption('development');
+    if(kind==='reopen')await editor.getByLabel('Management phase',{exact:true}).selectOption('development');
     await editor.getByLabel('Reason and retained context',{exact:true}).fill(reason);
     await editor.getByRole('button',{name:label,exact:true}).click();
     await expect(activity.locator('.pm-lifecycle-stage')).toHaveText(stage);

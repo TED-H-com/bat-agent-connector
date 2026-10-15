@@ -104,12 +104,20 @@ Icons come from `ui/icons.js`: locally vendored Lucide SVG geometry, 24×24 view
 | `contextChip` | `{icon,text,onRemove}`; optional named removal control |
 | `agentMark` | CLI name; local initials for Codex, Claude, Grok, Gemini, BAT, PM |
 | `menu` | `{button,items:[{label,icon,href,onSelect,disabled,key}]}`; arrows, Escape, outside click, focus return; dispose on unmount |
-| `inspector` | `{title,onClose,returnFocus,dock}`; append returned node, then append content to `.body`; `.close()` restores focus; ordinary panels dispose by closing; docked panels retain mounting on narrow close and destroy on dispose |
+| `inspector` | `{title,onClose,returnFocus,dock,overlay}`; append returned node, then append content to `.body`; `.close()` restores focus; ordinary panels dispose by closing; docked panels retain mounting on narrow close and destroy on dispose |
 | `dataTable` | `{columns:[{key,label,numeric,render}],rows,rowKey,selected,onSelect,expandable}`; sticky headers, 44px rows, keyboard row navigation and optional expansion |
 
 The inspector occupies 400px at ≥1200px, overlays from the right at 800–1199px,
-and becomes a full-screen sheet with Back below 800px. Overlay mode traps focus
-and makes background content inert. `returnFocus` accepts an element or a callback
+and becomes a full-screen sheet with Back below 800px. Tool drawers over Discussions
+always overlay, so its thread and detail columns keep their width. List views keep
+docking at ≥1200px. Every section in the main column shares one right edge beside
+a docked inspector, including the header and collapsed secondary tools. A docked
+surface extends from the 48px topbar to the viewport bottom; its body scrolls
+independently of the fixed header. Only fixed docks in the register, Overview, Agents,
+Schedule and Work layouts reserve main-column space. Discussions' static 300px panel
+owns its grid column and scrolls through that column, without a second inspector-body
+scroller.
+Overlay mode traps focus and makes background content inert. `returnFocus` accepts an element or a callback
 resolved at close. It focuses a connected, rendered target outside hidden/inert
 ancestors, falling back to the creation-time opener under the same checks.
 
@@ -145,7 +153,9 @@ of transport health, with the pause explained in the tooltip.
 One persistent sidebar is 248px (232px at 1000–1199px), with its own scroll and an
 optional saved resize preference. Below 1000px it is a drawer with scrim, focus trap
 and Escape/focus return. The sidebar contains workspace name/central phase, Project
-views, explicitly bound Work, and Pending/Tools/Settings. Capability-absent views
+views, explicitly bound Work, and Pending/Tools/Settings. Project phase names share
+`phaseVocabulary` in `ui/ui-strings.js`: Idea / 構想, Planning / 規劃, Development / 開發,
+Maintain / 維護, Paused / 已暫停, Closed / 已結案. Delivery / 交付 names the Tools page. Capability-absent views
 are omitted. With no selected PM workspace, the existing global tree remains.
 
 Work uses central workspace/project bindings, never matching names, paths or repos.
@@ -180,6 +190,21 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 
 Secondary tools use collapsed disclosures or the view's tool drawer. They keep their
 original forms and refresh/withdrawal behavior. Do not rebuild contents to move sections.
+When Schedule, Agents or Dependencies has no primary projection, that view shows its own
+unavailable state first. Missing capability does not prove that no records exist.
+Sprints, observations, policy and baselines stay collapsed under their
+labels and do not replace the view. Each Report menu task opens on its own: Versions, Save
+report and Export report focus that task's first control. Export report presents its
+description, format, language and primary download/save action directly, without an
+inner disclosure. A phase change starts on Choose
+phase and does not submit a stage until one is chosen. Workspace settings show the
+bound plan's title and requirement text, including older revisions. Display labels are
+revalidated on refresh; revision and requirement ids stay in Details, with Unknown when
+those labels cannot be read.
+Empty and unavailable shell tasks use the shared empty state: a short title without
+terminal punctuation and one muted explanatory line. A readable empty snapshot list
+does not block saving the first report. Settings withdraws project rows and inspector
+details when their source cannot be read; retained selection IDs alone are not facts.
 
 Durable PM forms register only while connected. A hidden autonomous child tracks
 connection without changing the ordinary form's layout, selectors or hidden state.
@@ -352,8 +377,11 @@ with three bullets before expansion and a labeled Sources disclosure on each car
 Report controls use the same report terminology and shared disclosure chevrons;
 the saved history arrows remain together. Attention rows keep Discuss beside the title at every width. Details lists localized source coverage, with raw JSON
 behind a separate Raw coverage disclosure.
-Full plan uses the shared inspector and restores focus on Escape. At 768px the
-charter has two columns; at 390px all regions stack in reading order.
+Full plan uses the shared inspector and restores focus on Escape. Overview grids
+respond to the content column through a named container, including beside a docked
+reader. Below 1100px of content, the main regions stack and the charter has two
+columns; below 540px all grids stack in reading order. Milestone calendar dates
+stay intact, with a date range wrapping only before its arrow when needed.
 
 Print includes the status strip and full charter; the saved-charter fallback prints
 inside its Overview region as well. Interactive controls and live attention are omitted.
@@ -399,7 +427,11 @@ opens inline Save / Cancel controls (Enter saves, Escape cancels) using the cent
 rename action. Cancel discards unsubmitted title edits; a successful Save restores
 focus to the pencil after recovery controls unlock. Recovery remains attached to the
 original rename intent. Tabs associate their panels for assistive technology.
-Rename Escape ignores IME composition. Header Back appears only below 800px.
+Rename Escape ignores IME composition. A restored, unsubmitted title draft stays
+focusable and read-only while initial reads gate Save, so plain Escape can discard
+it immediately. Focus returns to Rename when its permission gate opens; late reads
+do not reopen the discarded draft. Admitted intents remain locked for original-key
+recovery. Header Back appears only below 800px.
 Mode pills disappear when they repeat the title. Search matches titles and context
 chip text, with a clear-search empty state. Empty thread, search and tool states
 have a short title and one muted line. Answer actions use intrinsic-width buttons
@@ -1077,7 +1109,9 @@ NETWORK_ERROR or TIMEOUT code. Details appears only for additional technical fac
 without an empty code or repeated summary. Refresh-cycle read-error gates remain
 unchanged.
 `errorBox(error, {summary})` lets a caller supply its own sentence without duplicating
-it. Rendering an error still records the same refresh-cycle failure, so failed reads
+it. An Evidence work row reuses the rendered diagnostics inside its existing Details,
+alongside the unreadable-plan sentence and fixed revision/requirement IDs; it adds no
+nested error disclosure. Rendering an error still records the same refresh-cycle failure, so failed reads
 cannot acknowledge event checkpoints or enable mutations. IME Escape leaves menus,
 inspectors and the mobile drawer open; ordinary Escape retains focus restoration.
 
