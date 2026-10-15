@@ -9,7 +9,7 @@ import {performance} from 'node:perf_hooks';
 import {chromium, expect as baseExpect} from '@playwright/test';
 import {openPmSection, recoverOriginalAdoption} from './pm-navigation.ts';
 
-const expect = baseExpect.configure({timeout: 60000});
+const expect = baseExpect.configure({timeout: 30000});
 const backend = resolve(process.env.BATC_PM_BACKEND || '..');
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv/bin/python');
 const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
@@ -64,7 +64,7 @@ async function walkthrough(locale, width) {
     const lines = output[Symbol.asyncIterator]();
     const next = async () => {
       const row = await bounded(Promise.race([lines.next(), stopped.then(() => {throw spawnError || Error('Walkthrough central stopped');})]),
-        120000, 'Timed out waiting for walkthrough central');
+        60000, 'Timed out waiting for walkthrough central');
       if (row.done) throw spawnError || Error('Walkthrough central stopped');
       return JSON.parse(row.value);
     };

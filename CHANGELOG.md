@@ -60,11 +60,15 @@
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
   and never cache loads affected by cycle or budget refusals, including raw metadata.
-- Overview measures acceptance consistently, groups empty Charter domains, and keeps
-  attention context readable on mobile. Issues & changes opens the exact record,
-  identifies records outside loaded rows, hides stale next steps after resolution,
-  and keeps secondary tools and change proposals in menus. Demo records now share
-  consistent identities across Overview, register and discussion context.
+
+- The Overview's progress bar measures accepted requirements only, matching its
+  headline, and the Charter lists empty domains on one line instead of empty
+  cards. Each Needs attention item opens its own record in Issues & changes, which
+  says when that record is outside the loaded rows. A resolved record no longer
+  shows its old next step. Discuss is a record's primary action, with Propose
+  change under More, and the register's tools open from the More menu. The phase
+  pill stays across views, and on phones attention ages sit with their context.
+
 - Pull requests select the Python matrix and no/Linux/all native builds from their
   merge diff. Existing desktop path filters remain; workflows triggered on `main`
   keep full coverage. Every selected Python version retains all five pytest shards
