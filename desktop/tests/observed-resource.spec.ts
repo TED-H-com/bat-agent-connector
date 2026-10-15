@@ -137,7 +137,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     const sessions = page.locator('[data-observed-session]');
     await expect(sessions.nth(0).locator('.ui-pill')).toHaveCount(0);
     await expect(sessions.nth(1).locator('.ui-pill')).toHaveCount(0);
-    await expect(sessions.nth(2).locator('.ui-pill')).toHaveText(zh ? '等待中' : 'Waiting');
+    await expect(sessions.nth(2).locator('.ui-pill')).toHaveCount(0);
     const details = page.locator('[data-observed-details]');
     await details.locator(':scope > summary').click();
     await expect(details.getByRole('link', {name: 'PR #11', exact: true})).toBeVisible();

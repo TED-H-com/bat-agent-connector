@@ -8386,7 +8386,8 @@ var STRINGS = {
 		sessions_workspace_unknown: "工作區未記錄",
 		sessions_workspace_unverified: "未記錄工作區 ID",
 		sessions_scope_missing: "所選工作區目前沒有資料",
-		sessions_no_matches: "目前範圍沒有符合的工作階段。",
+		sessions_empty: "尚無工作階段",
+		sessions_no_matches: "目前範圍沒有符合的工作階段",
 		sessions_more_hint: "還有頁面尚未載入。可載入更多，或調整搜尋與篩選。",
 		sessions_empty_hint: "可調整搜尋、主機或存取方式；未出現在這裡不代表工作已結束。",
 		sessions_showing_exact: "共 {loaded} 個，顯示 {shown} 個",
@@ -9063,8 +9064,12 @@ var STRINGS = {
 		attention_empty: "這一類目前沒有項目。",
 		attention_not_updated: "本次未能更新；若下方有資料，仍是上次讀取的內容。",
 		attention_invalid: "清單回應不完整，請重新讀取。",
-		conversation_mark: "標記畫面中的訊息已讀",
-		conversation_remember: "記住閱讀位置",
+		conversation_mark: "標為已讀",
+		conversation_remember: "儲存位置",
+		conversation_saving: "正在儲存閱讀狀態",
+		conversation_no_unread: "畫面中沒有可標為已讀的訊息",
+		conversation_no_position: "畫面中沒有可儲存位置的訊息",
+		conversation_save_failed: "無法儲存閱讀狀態",
 		conversation_older: "更早的訊息",
 		conversation_unread: "上次觀察：{count} 則未讀",
 		conversation_unread_lower_bound: "{count}+ 則未讀",
@@ -10065,7 +10070,8 @@ var STRINGS = {
 		sessions_workspace_unknown: "Workspace not recorded",
 		sessions_workspace_unverified: "No recorded workspace ID",
 		sessions_scope_missing: "Selected workspace is not in this view",
-		sessions_no_matches: "No matching sessions in this view.",
+		sessions_empty: "No sessions yet",
+		sessions_no_matches: "No matching sessions in this view",
 		sessions_more_hint: "More pages are available. Load more, or adjust your search and filters.",
 		sessions_empty_hint: "Adjust your search, host or access filter. Absence from this view does not mean work has ended.",
 		sessions_showing_exact: "Showing {shown} of {loaded} sessions",
@@ -10700,8 +10706,12 @@ var STRINGS = {
 		attention_empty: "No items in this category.",
 		attention_not_updated: "Could not refresh. Any items below are from the previous read.",
 		attention_invalid: "Incomplete list response; reload to try again.",
-		conversation_mark: "Mark visible messages read",
-		conversation_remember: "Remember reading position",
+		conversation_mark: "Mark read",
+		conversation_remember: "Save position",
+		conversation_saving: "Saving reading state",
+		conversation_no_unread: "No unread messages in view",
+		conversation_no_position: "No message position in view",
+		conversation_save_failed: "Reading state unavailable",
 		conversation_older: "Earlier messages",
 		conversation_unread: "Last observed: {count} unread",
 		conversation_unread_lower_bound: "{count}+ unread",
@@ -45430,7 +45440,7 @@ function readingSummary(t, reading) {
 		detail: ""
 	};
 }
-function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
+function conversationPanel({ h, t, when, guard, errorBox, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
 		tabindex: "0",
@@ -45524,9 +45534,14 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		latest.hidden = !olderWindow && (pinned || !rows.size);
 		if (memory && initialized) memory.scrollTop = viewport.scrollTop;
 		if (!readingActions) return;
-		mark.disabled = busy || !visible().some((row) => row.reading?.can_mark && row.reading?.unread);
-		remember.disabled = busy || !visible().some((row) => row.reading);
-		older.disabled = busy;
+		const availability = (control, reason) => {
+			control.disabled = Boolean(reason);
+			control.setAttribute("aria-description", reason);
+			control.title = reason;
+		};
+		availability(mark, busy ? t("conversation_saving") : !visible().some((row) => row.reading?.can_mark && row.reading?.unread) ? t("conversation_no_unread") : "");
+		availability(remember, busy ? t("conversation_saving") : !visible().some((row) => row.reading) ? t("conversation_no_position") : "");
+		availability(older, busy ? t("conversation_saving") : "");
 	};
 	const follow = () => {
 		pinned = true;
@@ -45537,12 +45552,16 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 	const run = async (action) => {
 		if (!alive() || busy) return;
 		busy = true;
+		status.replaceChildren();
 		indicator();
 		try {
 			await action();
 			if (alive()) status.textContent = t("conversation_saved");
 		} catch (error) {
-			if (alive()) status.textContent = error.message || String(error);
+			if (alive()) status.replaceChildren(errorBox(error, {
+				summary: t("conversation_save_failed"),
+				within: status
+			}));
 		} finally {
 			busy = false;
 			if (alive()) indicator();
@@ -45806,24 +45825,18 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		initialized = true;
 		indicator();
 	};
-	const fail = ({ title, retry }) => {
+	const fail = ({ error }) => {
 		if (!alive()) return;
-		const action = retry ? h("button", {
-			class: "ui-button secondary ui-sm",
-			type: "button",
-			onclick: retry
-		}, t("ui_retry")) : null;
 		if (!rows.size) {
 			viewport.replaceChildren(h("div", {
 				class: "conversation-state",
 				"data-conversation-state": "error"
-			}, emptyState({
-				icon: "circle-alert",
-				title,
-				action
-			})));
-			caption.textContent = t("message_window_failed");
-		} else caption.replaceChildren(t("message_window_stale"), action ? "\xA0· " : "", action || "");
+			}, error));
+			caption.textContent = "";
+		} else {
+			viewport.prepend(error);
+			caption.textContent = t("message_window_stale");
+		}
 		indicator();
 	};
 	const clear = () => {
@@ -53215,8 +53228,11 @@ function sessionHref(session) {
 function sessionRow$1(h, session) {
 	const observation = session?.observation || {};
 	const title = text(observation.title) || text(session?.title) || t("session_untitled");
-	const fresh = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale && !observation.gone_at && !["gone", "missing"].includes(observation.state?.enumeration) && observation.state?.lifecycle !== "ended";
-	const activity = fresh && observation.pending ? statusPill("asking_you") : fresh && observation.streaming === true ? statusPill("running") : fresh && observation.streaming === false ? statusPill("waiting") : null;
+	const pill = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale && !observation.gone_at && !["gone", "missing"].includes(observation.state?.enumeration) && observation.state?.lifecycle !== "ended" ? sessionPill(observation) : null;
+	const activity = pill ? h("span", {
+		class: `ui-pill tone-${pill.tone === "stale" ? "warn" : pill.tone}`,
+		"data-status": pill.status
+	}, t(pill.key)) : null;
 	return h("div", {
 		class: "or-session",
 		"data-observed-session": ""
@@ -54817,6 +54833,7 @@ async function viewSessions(main) {
 		class: "session-workspaces"
 	});
 	const scopeNote = h("p", { class: "muted" }, t("sessions_scope_note"));
+	const pageNote = h("span", { class: "muted" }, t("sessions_page_note"));
 	const scope = h("details", {
 		class: "panel session-scope",
 		open: matchMedia("(min-width: 901px)").matches
@@ -54841,7 +54858,7 @@ async function viewSessions(main) {
 	}), h("div", { class: "filters session-filters" }, searchField(search), hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
 		"aria-label": t("sessions_title"),
 		class: "session-results"
-	}, count, list, h("div", { class: "session-pagination" }, more, h("span", { class: "muted" }, t("sessions_page_note"))))));
+	}, count, list, h("div", { class: "session-pagination" }, more, pageNote))));
 	try {
 		const hosts = (await api("GET", "/hosts")).hosts;
 		assertView(connection);
@@ -54951,10 +54968,15 @@ async function viewSessions(main) {
 			visible += sessions.length;
 			return [h("section", { class: "panel session-group" }, h("header", { class: "session-group-heading" }, h("h2", { title: workspaceName(group) }, workspaceName(group)), h("span", { class: "muted" }, group.host), group.name && group.id && labels.get(labelKey(group)) > 1 ? h("code", { class: "muted" }, group.id) : null, group.name && !group.id ? h("span", { class: "muted" }, t("sessions_workspace_unverified")) : null), ...sessions.map(row))];
 		});
+		const filtered = Boolean(search.value.trim() || hostSel.value || accessSel.value || selected);
+		const empty = rows.size === 0 && !cursor;
 		list.replaceChildren(...sections.length ? sections : [emptyState({
-			title: t("sessions_no_matches"),
-			text: t(cursor ? "sessions_more_hint" : "sessions_empty_hint")
+			title: t(empty && !filtered ? "sessions_empty" : "sessions_no_matches"),
+			text: empty && !filtered ? null : t(cursor ? "sessions_more_hint" : "sessions_empty_hint")
 		})]);
+		count.hidden = empty;
+		pageNote.hidden = empty;
+		pathsIntro.hidden = !empty || filtered;
 		scopeNote.textContent = t(cursor ? "sessions_scope_note" : "sessions_scope_exact");
 		count.textContent = t(cursor ? "sessions_showing" : "sessions_showing_exact", {
 			shown: visible,
@@ -55476,7 +55498,7 @@ function sessionErrorBox(e, action = null, options = {}) {
 		class: "session-error",
 		role: "alert",
 		"data-session-error": typeof e?.code === "string" ? e.code : ""
-	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, sessionErrorLine(e)), action ? h("button", {
+	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, options.summary || sessionErrorLine(e)), action ? h("button", {
 		type: "button",
 		class: "session-error-action",
 		onclick: action.run
@@ -55545,7 +55567,7 @@ async function viewSession(main, host, sid, context = null) {
 		class: "workspace-result",
 		"data-workspace-result": ""
 	});
-	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30;
+	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30, messageFailure = null;
 	const readingSupported = state.caps?.features?.session_reading?.version === 1;
 	const saveReading = async (action, params, preconditions = {}) => {
 		const op = await submit(action, {
@@ -55559,6 +55581,7 @@ async function viewSession(main, host, sid, context = null) {
 	const conversation = conversationPanel({
 		h,
 		t,
+		errorBox,
 		when: sessionWhen,
 		guard: () => assertView(connection),
 		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
@@ -56428,6 +56451,7 @@ async function viewSession(main, host, sid, context = null) {
 			nextMessageOffset = read.next_offset;
 			firstMessages = false;
 			paintReadingDetail(readingSupported ? read.reading : null);
+			messageFailure = null;
 			conversation.update(read.messages, readingSupported ? {
 				...read,
 				restore,
@@ -56436,10 +56460,7 @@ async function viewSession(main, host, sid, context = null) {
 			} : { next_offset: read.next_offset });
 		} catch (error) {
 			if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
-			conversation.fail({
-				title: error?.status === 413 ? t("session_err_too_large") : t("message_window_failed"),
-				retry: () => refresh().catch(() => {})
-			});
+			messageFailure = error;
 			throw error;
 		}
 	};
@@ -56545,12 +56566,22 @@ async function viewSession(main, host, sid, context = null) {
 				}
 				readReady = false;
 				updateControls();
+				readError?.remove();
+				const messagesFailed = messageFailure === error;
 				readError = sessionErrorBox(error, {
 					label: t("ui_retry"),
 					run: () => refresh().catch(() => {})
-				}, { within: status });
+				}, {
+					within: messagesFailed ? conversation.box : status,
+					summary: messagesFailed ? t(error?.status === 413 ? "session_err_too_large" : "message_window_failed") : null
+				});
 				readError.error = error;
-				if (!withdrawn) status.replaceChildren(readError);
+				if (!withdrawn) {
+					if (messagesFailed) {
+						status.replaceChildren();
+						conversation.fail({ error: readError });
+					} else status.replaceChildren(readError);
+				}
 				scheduleRetry();
 				throw error;
 			}

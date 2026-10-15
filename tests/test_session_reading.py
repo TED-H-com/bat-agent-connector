@@ -345,4 +345,3 @@ async def test_incomplete_reasons_and_unindexed_count_follow_current_read_with_m
     assert status == 200 and doc["reading"]["complete"] is False
     assert doc["reading"]["incomplete_reasons"] == ["message_ids"]
     assert doc["reading"]["unindexed_count"] == 3
-

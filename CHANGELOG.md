@@ -12,6 +12,9 @@
 - Keep narrow icon headers on the title row, align checkbox labels, and give mobile
   project rows a title-first layout with right-aligned actions. Remove the extra
   Dispatched work heading gap and wait for discussion Send readiness after reload.
+  Sessions distinguish first-run emptiness from filters and share activity labels
+  with resource rows. Reading actions explain unavailable states; failed message
+  reads show one Retry with diagnostics and export in Details.
 
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,

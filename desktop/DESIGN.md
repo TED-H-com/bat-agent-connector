@@ -1197,3 +1197,14 @@ its existing order. Row controls retain 44px touch targets. Dispatched work star
 at the card padding without the generic heading's extra top margin.
 Checkboxes retain their intrinsic height instead of the text-input minimum; their
 labels keep the existing touch area and orchestration aligns to the first text line.
+
+A complete empty Sessions read without filters says No sessions yet / 尚無工作階段.
+It omits zero counts and loaded-page guidance. Search, host, access and workspace
+filters keep the matching-empty state and the absence-is-not-completion caveat.
+Observed-resource session rows use sessionPill's labels and tones, while stale,
+gone and ended observations keep their activity pill hidden.
+Reading receipt controls retain their toolbar space and expose a short disabled
+reason through their accessible description and tooltip. Failures use the shared
+error presentation with a localized summary. Message-read failures have one alert
+and Retry inside the transcript; original diagnostics and export remain in Details.
+The existing formatted session detail timestamp already avoids duplicate ISO text.
