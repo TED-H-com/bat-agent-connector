@@ -14,7 +14,7 @@ from . import pm_maintenance_policy as policies
 from . import pm_maintenance_repair_rules as rules
 from . import pm_release_baselines as baselines
 from . import pm_workload as workload
-from .operations import ActionDef, OperationError, OperationService, Wait
+from .operations import ActionDef, OperationError, Wait
 
 ACTION = 'pm.maintenance.repair'
 RECORD = 'pm.maintenance.repair.evidence.record'
@@ -23,6 +23,7 @@ REQUIRED = frozenset({'observe', 'manage', 'start'})
 MAX_READ_BYTES = 384_000
 TERMINAL = frozenset({'succeeded', 'failed', 'cancelled'})
 _READING = ContextVar('pm_maintenance_repair_reading', default=frozenset())
+_RESERVING_WORKLOAD = ContextVar('pm_maintenance_repair_reserving_workload', default=None)
 
 
 def _bad(code, message, status=409):
@@ -96,10 +97,10 @@ def _bounded(value):
 
 
 def _operation(ops, oid):
-    row = ops.db.execute('SELECT * FROM operations WHERE operation_id=?', (oid,)).fetchone()
-    if not row:
+    operation = pm_read_cache.operation(ops.db, oid)
+    if operation is None:
         raise _bad('NOT_FOUND', 'Original repair operation unavailable', 404)
-    return OperationService._decode(row)
+    return operation
 
 
 def _intent(op):
@@ -144,25 +145,76 @@ def _access(ops, principal, op):
         raise _bad('NOT_FOUND', 'Original workload source changed', 404)
 
 
+def _source_read_key(db, principal, operation_id):
+    return (id(db), principal.actor, principal.scopes, principal.admin,
+        principal.credential_id, operation_id)
+
+
+def source_backedge(db, principal, operation_id):
+    """Only an existing full-source traversal may suppress its own backedge."""
+    return _source_read_key(db, principal, operation_id) in _READING.get()
+
+
+def source_read_active(db, principal):
+    """A partial same-caller repair traversal is never a request-wide grant."""
+    return bool(source_read_context(db, principal))
+
+
+def source_read_context(db, principal):
+    """The exact active repair set, only for traversal-local boolean reuse."""
+    prefix = _source_read_key(db, principal, None)[:-1]
+    return frozenset(key for key in _READING.get() if key[:-1] == prefix)
+
+
 def _full_access(ops, principal, op):
+    from .pm_source_reads import check, complete_repair_sources, scope
+    with scope(ops.db, principal) as state:
+        pm_workspace.require_member(ops.db, principal, op['target']['workspace_id'])
+        original = _operation(ops, op['operation_id'])
+        if (original['action'] != ACTION or original['action'] != op['action']
+                or original['target'] != op['target'] or _intent(original) != _intent(op)):
+            raise _bad('NOT_FOUND', 'Original repair context changed', 404)
+        def visible():
+            _full_access_sources(ops, principal, original)
+            return True
+        # A nested repair can depend on the outer repair's partial backedge.
+        # Only an outer, fully completed source decision may enter the memo.
+        if source_read_active(ops.db, principal):
+            visible()
+        elif not check(ops.db, principal, 'repair_sources', original['operation_id'], visible):
+            raise _bad('NOT_FOUND', 'Original repair sources unavailable', 404)
+        else:
+            complete_repair_sources(ops.db, principal, state)
+
+
+def _full_access_sources(ops, principal, op):
     # A receipt may refer to this repair through its owned child. Check every
     # source on the outer traversal, while suppressing only that same back edge.
-    key = (id(ops.db), principal.actor, principal.scopes, principal.admin, op['operation_id'])
+    key = _source_read_key(ops.db, principal, op['operation_id'])
     checking = _READING.get()
     if key in checking:
         return
     if len(checking) >= 64:
+        pm_read_cache.refuse()
         raise _bad('NOT_FOUND', 'Repair source traversal is unavailable', 404)
     token = _READING.set(checking | {key})
     try:
-        # Memoize only within this exact back-edge assumption and read snapshot.
-        # The private memo is discarded before the guard or snapshot can change.
-        with baselines._snapshot(ops.db), pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, principal):
+        # This body reads only immutable original sources. Live credentials,
+        # current policy/lifecycle and new-effect checks remain in the caller
+        # and receive a fresh source scope on each synchronous invocation.
+        from .pm_source_reads import scope
+        # Keep conditional reads private to this exact repair guard; retain
+        # the source scope's bounded DAG proofs for completed outer validation.
+        with scope(ops.db, principal) as state, pm_read_cache.guarded(), pm_read_cache.guarded_scope(ops.db, principal):
+            if state['repair_generation'] is None:
+                state['repair_generation'] = pm_read_cache.refusal_generation()
+            state['repair_walks'].add(key)
             _access(ops, principal, op)
             from . import pm_maintenance_repair_evidence as evidence
             evidence.require_evidence_sources(ops, principal, op)
             from . import pm_maintenance_repair_delivery as delivery
             delivery.require_sources(ops, principal, op)
+            state['repair_completed'].add(key)
     finally:
         _READING.reset(token)
 
@@ -295,15 +347,20 @@ def _guard(ops, parent, *, scopes=REQUIRED):
     intent, wid = _intent(parent), parent['target']['workspace_id']
     record = policies._record(ops.db, wid, intent['check']['workload']['policy_id'])
     live = _principal(ops, record, scopes=scopes)
-    current = checks._check(ops, live, parent['target'], {'policy_id': record['policy_id']}, parent['preconditions'])
-    if current != intent['check']:
-        raise _bad('PM_REPAIR_CONTEXT_CHANGED', 'The original policy, baseline or lifecycle epoch changed')
-    _full_access(ops, live, parent)
-    baseline = baselines._record(ops.db, wid, intent['check']['workload']['baseline_id'])
-    rules.sources(ops, live, wid, intent['rule'], baseline)
-    row = _record_for(ops, parent)
-    if row['finished_at'] is not None or not row['created_at'] <= time.time() < row['deadline_at']:
-        raise _bad('PM_REPAIR_DEADLINE', 'This repair cannot admit another effect after its original deadline')
+    from .pm_source_reads import scope
+    # Every frame still obtains current credentials and executes every current
+    # check. Only shared historical source booleans survive between the reads
+    # within this one synchronous guard; no guard result or eligibility is cached.
+    with scope(ops.db, live):
+        current = checks._check(ops, live, parent['target'], {'policy_id': record['policy_id']}, parent['preconditions'])
+        if current != intent['check']:
+            raise _bad('PM_REPAIR_CONTEXT_CHANGED', 'The original policy, baseline or lifecycle epoch changed')
+        _full_access(ops, live, parent)
+        baseline = baselines._record(ops.db, wid, intent['check']['workload']['baseline_id'])
+        rules.sources(ops, live, wid, intent['rule'], baseline)
+        row = _record_for(ops, parent)
+        if row['finished_at'] is not None or not row['created_at'] <= time.time() < row['deadline_at']:
+            raise _bad('PM_REPAIR_DEADLINE', 'This repair cannot admit another effect after its original deadline')
     return live
 
 
@@ -387,10 +444,38 @@ def capacity_counts(ops, wid, policy_id, period):
     return concurrent, count
 
 
+def _only_current_local_reservation(ops, operation):
+    """The exact reserve callback is not an unresolved effect on its baseline.
+
+    This private synchronous scope never applies to an ordinary workload read,
+    another operation, a committed reservation or any unknown/external step.
+    The enclosing _check still proves current authority, sources and workload.
+    """
+    ctx = _RESERVING_WORKLOAD.get()
+    if (ctx is None or ctx.service is not ops or not ops.db.in_transaction
+            or ctx.operation_id != operation['operation_id']):
+        return False
+    current = ops._row(ctx.operation_id)
+    if (current['action'] != ACTION or current['status'] != 'running' or current['cancel_requested']
+            or _intent(current) != _intent(ctx.op)
+            or ops.db.execute('SELECT 1 FROM pm_maintenance_repairs WHERE operation_id=?', (ctx.operation_id,)).fetchone()
+            or ops.db.execute('SELECT 1 FROM pm_maintenance_repair_children WHERE parent_id=?', (ctx.operation_id,)).fetchone()):
+        return False
+    steps = ops.db.execute('''SELECT s.*,l.kind FROM operation_steps s LEFT JOIN pm_lifecycle_steps l
+        ON l.operation_id=s.operation_id AND l.name=s.name WHERE s.operation_id=? LIMIT 2''', (ctx.operation_id,)).fetchall()
+    return (len(steps) == 1 and steps[0]['name'] == 'pm.repair.reserve' and steps[0]['status'] == 'started'
+        and steps[0]['kind'] == 'local' and steps[0]['request'] == '{}'
+        and steps[0]['response'] is None and steps[0]['external_ref'] is None and steps[0]['error'] is None)
+
+
 def _reserve(ctx):
     def reserve():
         principal = pm_workspace.admitted_principal(ctx)
-        intent = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions, reserving=True)
+        token = _RESERVING_WORKLOAD.set(ctx)
+        try:
+            intent = _check(ctx.service, principal, ctx.target, ctx.params, ctx.preconditions, reserving=True)
+        finally:
+            _RESERVING_WORKLOAD.reset(token)
         if intent != _intent(ctx.op):
             raise _bad('PM_REPAIR_CONTEXT_CHANGED', 'The original repair selection changed before reservation')
         now = time.time()

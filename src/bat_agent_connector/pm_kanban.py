@@ -206,6 +206,14 @@ class _Execution:
                              "accepted_at": pm_evidence._time(step["finished_at"]) if accepted else None,
                              "source": {"kind": "operation_send", "operation_id": oid, "step_seq": step["seq"] if step else None},
                              "completion": "unassessed", "observed_at": pm_evidence._time(op["updated_at"])}
+        from . import pm_execution_runtime
+        try:
+            self.attempts[oid]['runtime_completion'] = pm_execution_runtime.summary(self.ops, self.principal, op)
+        except OperationError:
+            # An inaccessible original receipt cannot leak even its presence.
+            self.attempts[oid]['runtime_completion'] = None
+            self.coverage['unavailable_sources'] = True
+
 
     def session(self, ref):
         if not pm_evidence._session_visible(self.ops, self.principal, self.wid, ref):
@@ -239,6 +247,7 @@ class _Execution:
 
 def _card(ops, principal, wid, binding, now):
     from .pm_quality_projections import card_quality
+    from .pm_session_quiescence import sources as manual_sources
     item = work_items._get_item(ops.db, binding["work_item_id"])
     completion = work_items.completion(item)
     project = work_items._get_project(ops.db, item["project_id"])
@@ -249,7 +258,8 @@ def _card(ops, principal, wid, binding, now):
     return {"work_item_id": item["work_item_id"], "binding": {k: binding[k] for k in _BINDING_FIELDS},
             "work": {k: item[k] for k in _WORK_FIELDS}, "column": column, "completion": completion,
             "project_archived": bool(project["archived"]), "flow": _flow(ops, principal, wid, item, completion, now),
-            "execution": _Execution(ops, principal, wid).collect(item["work_item_id"]),
+            "execution": {**_Execution(ops, principal, wid).collect(item["work_item_id"]),
+                "manual_observation_sources": manual_sources(ops, principal, wid, item["work_item_id"])},
             "quality": card_quality(ops, principal, wid, binding, capture),
             "latest_capture": capture,
             "capture_matches_binding": capture["binding_id"] == binding["binding_id"] if capture else None,

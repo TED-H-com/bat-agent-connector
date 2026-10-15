@@ -215,6 +215,7 @@ class ApiV1:
             ("GET", r"/api/v1/capabilities", self.capabilities, "observe"),
             ("GET", r"/api/v1/workspaces", self.workspaces, "observe"),
             ("GET", r"/api/v1/pm/workspaces", self.pm_workspaces, "observe"),
+            ("GET", r"/api/v1/pm/installation-capabilities", self.pm_installation_capabilities, "observe"),
             ("GET", r"/api/v1/pm/profiles", self.pm_profiles, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})", self.pm_workspace, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/lifecycle", self.pm_lifecycle, "observe"),
@@ -757,6 +758,12 @@ class ApiV1:
     async def pm_run(self, principal, query, workspace_id, run_id, **_):
         return self._pm_read(principal, "pm_run_get", query, workspace_id=workspace_id, run_id=run_id)
 
+    async def pm_installation_capabilities(self, principal, query, **_):
+        from . import pm_native_capabilities
+        self._exact_query(query, set())
+        return 200, {"native_analysis": pm_native_capabilities.installation(self.daemon.ops),
+                     "workspace_required": True}
+
     async def pm_capabilities(self, principal, query, workspace_id, **_):
         return self._pm_read(principal, "pm_capabilities_get", query, workspace_id=workspace_id)
 
@@ -1086,9 +1093,11 @@ class ApiV1:
         fleet = self.daemon.fleet
         from . import (
             pm_conversation_proposals,
+            pm_execution_runtime,
             pm_execution_verification,
             pm_maintenance_checks,
             pm_maintenance_policy,
+            pm_maintenance_repair_runtime,
             pm_maintenance_repairs,
             pm_maintenance_review,
             pm_quality_reviews,
@@ -1101,6 +1110,7 @@ class ApiV1:
         gh_cfg = self.daemon.ops.context["github_config"]
         from . import pr_publication
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
+                               and a.name not in {pm_execution_runtime.ACTION, pm_maintenance_repair_runtime.ACTION}
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
                                and (a.name != "session.failover" or principal.allows("operate"))
                                and (a.name != pm_execution_verification.ACTION or all(principal.allows(s) for s in pm_execution_verification.REQUIRED))
@@ -1153,6 +1163,7 @@ class ApiV1:
                                                     "runner": False, "context_packages": True,
                                                     "accepted_context_bundle": {"schema": "pm_context_bundle_v1", "context_version": 2,
                                                         "max_utf8_bytes": 262144, "explicit_selection": True, "complete_files_only": True},
+                                                    "installation_eligibility": True,
                                                     "native_analysis": "pm.run.analyze" in self.daemon.ops.actions,
                                                     "bat_analysis": "pm.run.bat.analyze" in self.daemon.ops.actions,
                                                     "runtime_reason": "external_tool_policy_unverified",
@@ -1185,7 +1196,7 @@ class ApiV1:
                                                         "requirement_acceptance_profiles": ["accepted_requirements_v1"]},
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
                                                     "conversation_proposals": pm_conversation_proposals.capabilities(),
-                                                    "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 2},
+                                                    "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 4},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
                                                     "kanban": True, "spec_sources": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},

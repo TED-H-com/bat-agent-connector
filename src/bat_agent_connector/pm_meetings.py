@@ -359,14 +359,24 @@ class _SourceReader:
     """Read-only evidence policy adapter; no service/schema/worker construction."""
     def __init__(self, db):
         self.db = db
+        self.journal = self
+
+    def tx(self):
+        from .pm_release_baselines import _snapshot
+        return _snapshot(self.db)
 
     def get(self, operation_id, *, steps=False, principal=None):
         row = self.db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
-        # PM operations are never delivery evidence sources. Reject before a
-        # nested PM visibility check, including malformed cyclic source graphs.
-        if row is None or row['action'].startswith('pm.'):
+        # Engineering verifiers and GitHub observations can be quality proofs.
+        # Other PM operations remain excluded before recursive source checks;
+        # the evidence collector separately rejects all PM delivery claims.
+        if row is None or (row['action'].startswith('pm.') and row['action'] not in {'pm.execution.verify', 'pm.github.observe'}):
             raise _bad('NOT_FOUND', 'Source operation not found', 404)
-        return OperationService._decode(row)
+        operation = OperationService._decode(row)
+        if principal is not None:
+            from .pm_access import require_visible
+            require_visible(self.db, principal, operation)
+        return operation
 
 
 def operation_visible(db, principal, operation):

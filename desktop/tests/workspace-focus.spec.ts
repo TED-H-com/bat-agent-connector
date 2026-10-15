@@ -252,6 +252,8 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`rep
   await expect(page.locator('[data-pm-action="pm.snapshot.create"] button[type=submit]')).toBeFocused();
   await expect(page.getByRole('combobox', {name: copy.version, exact: true})).toBeHidden();
   await expect(exported).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await shellShot(page, 'report-save-focused', locale, width);
   expect(base.state.writes).toHaveLength(0);
   await context.close();
 });

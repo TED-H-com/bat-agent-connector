@@ -7,7 +7,8 @@ const binary = Buffer.from([0, 255, 128, 13, 10, 60, 38, 34, 195, 169]);
 const digest = createHash("sha256").update(binary).digest("hex");
 const ref = {artifact_id: aid, revision: 1, digest};
 const caps = {actor: "artifact-person", scopes: ["observe", "manage", "start", "operate"], api_version: 1,
-  contract_version: "2026-10-08", features: {checkpoints: ["demo"]}, hosts: [], actions: [],
+  contract_version: "2026-10-08", features: {checkpoints: ["demo"]}, hosts: [],
+  actions: [{action: "checkpoint.create", allowed: true}, {action: "checkpoint.continue", allowed: true}],
   artifacts: {limits: {max_file_bytes: 16 * 1024 * 1024}}};
 const item = {work_item_id: wid, title: "Artifact fixture", version: 1, state: "todo", goal: "", request: "", acceptance: "", steps: [],
   attachments: [], completion: {display_state: "todo", fingerprint: "fixture-fingerprint"}};

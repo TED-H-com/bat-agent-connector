@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "bat-agent-connector"
-version = "0.2.5"
+version = "0.2.6"
 description = "Unofficial connector that lets AI agents (MCP clients, CLIs) read and, when explicitly enabled, nudge Better Agent Terminal (BAT) sessions over BAT's remote protocol."
 readme = "README.md"
 license = "MIT"

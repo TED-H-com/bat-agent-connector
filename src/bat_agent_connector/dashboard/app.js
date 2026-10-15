@@ -19,282 +19,6 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
-//#region src/diagnostics.js
-var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
-var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
-var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
-var commit = (value) => typeof value === "string" && [40, 64].includes(value.length) && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
-var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
-var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
-var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
-var bool = (value) => typeof value === "boolean" ? value : null;
-var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
-var time = (value) => {
-	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
-	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
-};
-var select = (value, values) => values.includes(value) ? value : null;
-var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
-var resourceNames = {
-	hosts: "host",
-	projects: "project",
-	"work-items": "work_item",
-	tasks: "task",
-	operations: "operation",
-	workspaces: "workspace",
-	threads: "thread",
-	snapshots: "snapshot",
-	artifacts: "artifact",
-	uploads: "operation",
-	checkpoints: "checkpoint"
-};
-function pathTemplate(path) {
-	const parts = String(path).replace(/^\/api(?=\/v1)/, "").split(/[?#]/)[0].split("/").filter(Boolean);
-	if (parts[0] !== "v1") parts.unshift("v1");
-	return "/" + parts.map((part, i) => {
-		const si = parts.indexOf("sessions");
-		if (si >= 0 && i === si + 1) return parts[si - 2] === "hosts" ? ":session" : ":host";
-		if (si >= 0 && i === si + 2 && parts[si - 2] !== "hosts") return ":session";
-		if (resourceNames[parts[i - 1]]) return ":" + resourceNames[parts[i - 1]];
-		return routeWords.has(part) ? part : ":id";
-	}).join("/");
-}
-function failedCall({ at, method, path, status, code: errorCode, admissionRefused, operation }) {
-	return {
-		at: time(at),
-		method: select(method, [
-			"GET",
-			"POST",
-			"PUT",
-			"PATCH",
-			"DELETE",
-			"HEAD"
-		]) || "GET",
-		path_template: pathTemplate(path),
-		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
-		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
-		admission_refused: admissionRefused === true,
-		operation_id: operationId$3(operation?.operation_id)
-	};
-}
-function errorRing(limit = 50) {
-	const entries = [];
-	return {
-		record(input) {
-			entries.push(failedCall(input));
-			entries.splice(0, Math.max(0, entries.length - Math.min(50, limit)));
-		},
-		entries: () => entries.map((entry) => ({ ...entry })),
-		clear() {
-			entries.length = 0;
-		}
-	};
-}
-function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
-	return {
-		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
-		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
-		connector_version: version$2(caps?.build?.version ?? caps?.connector),
-		connector_commit: commit(caps?.build?.commit),
-		connector_source: select(caps?.build?.source, [
-			"vcs",
-			"package",
-			"bundled"
-		]),
-		api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
-		contract_version: contractVersion(caps?.contract_version),
-		platform: desktop ? "desktop" : "browser",
-		os_family: select(os, [
-			"windows",
-			"macos",
-			"linux"
-		]) || "unknown",
-		locale: locale === "zh-TW" ? "zh-TW" : "en",
-		viewport_class: width > 0 ? width < 800 ? "small" : width < 1200 ? "medium" : "large" : "unknown"
-	};
-}
-function buildLine(client, t) {
-	const unknown = t("diag_unknown");
-	const connector = t("diag_connector_build", {
-		version: client.connector_version || unknown,
-		commit: client.connector_commit?.slice(0, 7) || unknown
-	});
-	return client.platform === "desktop" ? t("diag_desktop_build", {
-		version: client.app_version || unknown,
-		commit: client.app_commit?.slice(0, 7) || unknown
-	}) + " · " + connector : connector;
-}
-var APP = "io.betteragent.dashboard";
-function logLocations(os, managed) {
-	const root = managed ? {
-		linux: `~/.local/share/${APP}/central`,
-		macos: `~/Library/Application Support/${APP}/central`,
-		windows: `%LOCALAPPDATA%\\${APP}\\central`
-	}[os] : {
-		linux: "~/.local/state/bat-agent-connector",
-		macos: "~/.local/state/bat-agent-connector",
-		windows: "~\\.local\\state\\bat-agent-connector"
-	}[os];
-	return {
-		state_database: root ? root + (os === "windows" ? "\\" : "/") + (managed ? os === "windows" ? "state\\" : "state/" : "") + "tasks.sqlite3" : null,
-		runtime_stderr: managed ? "not_persisted_by_desktop" : "external_service_configuration",
-		location: "default_template_only"
-	};
-}
-var databaseTemplates = (managed) => Object.fromEntries([
-	"linux",
-	"macos",
-	"windows"
-].map((os) => [os, logLocations(os, managed).state_database]));
-function scrubDiagnostics(text) {
-	const safeLogs = new Set([
-		"linux",
-		"macos",
-		"windows"
-	].flatMap((os) => [false, true].map((managed) => logLocations(os, managed).state_database)));
-	return JSON.stringify(JSON.parse(text, (_key, input) => {
-		if (typeof input !== "string") return input;
-		let value = input;
-		try {
-			value = decodeURIComponent(value);
-		} catch {}
-		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
-		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
-		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$3(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
-	}));
-}
-function sessionFacts(session) {
-	return {
-		loaded: bool(session.loaded),
-		streaming: bool(session.streaming),
-		unknown_activity: ![true, false].includes(session.streaming),
-		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
-		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
-		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
-	};
-}
-function buildDiagnostics(input) {
-	const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a, b) => String(a.host).localeCompare(String(b.host), "en")) : [];
-	const flags = (source, keys) => Object.fromEntries(keys.map((key) => [key, bool(source?.[key])]));
-	const sessions = Array.isArray(input.sessions) ? input.sessions.map(sessionFacts) : null;
-	const count = (key) => sessions?.length === 0 ? 0 : sessions?.some((s) => typeof s[key] === "boolean") ? sessions.filter((s) => s[key] === true).length : null;
-	const history = sessions?.some((s) => s.history_reasons !== null) ? Object.create(null) : null;
-	if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
-	const sources = Object.fromEntries([
-		"capabilities",
-		"hosts",
-		"operations",
-		"managed_setup",
-		"observation"
-	].map((key) => [key, select(input.sources?.[key], ["available", "not_available"]) || "not_available"]));
-	const bundle = {
-		schema: "batc.diagnostics.v1",
-		exported_at: time(input.exportedAt),
-		client: clientIdentity(input),
-		sources,
-		hosts: hosts.map((host, i) => {
-			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
-			const policyFlags = flags(host.policy || policy, [
-				"enabled",
-				"writes",
-				"orchestrate",
-				"shared_clone_worktrees",
-				"managed_roots_configured",
-				"ssh_configured",
-				"checkpoint_available"
-			]);
-			if (policyFlags.managed_roots_configured === null && Array.isArray(policy.managed_roots)) policyFlags.managed_roots_configured = policy.managed_roots.length > 0;
-			const setupHost = Array.isArray(input.setup?.hosts) ? input.setup.hosts.find((item) => item.name === host.host) : null;
-			if (policyFlags.ssh_configured === null && setupHost && (typeof setupHost.ssh_alias === "string" || setupHost.ssh_alias === null)) policyFlags.ssh_configured = Boolean(setupHost.ssh_alias);
-			const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find((scan) => scan.profile_id === policy.profile_id) : null;
-			return {
-				alias: `host-${i + 1}`,
-				connection_state: select(host.connection_state, [
-					"connected",
-					"disconnected",
-					"reconnecting",
-					"never_connected",
-					"stale"
-				]) || (host.reachable === true ? "reachable" : host.reachable === false ? "unreachable" : "unknown"),
-				stale: bool(host.stale),
-				stale_reason: reason(host.stale_reason),
-				last_error_code: code(host.last_error?.code ?? discovery?.error_code),
-				bat: {
-					status: select(host.bat?.status, [
-						"ready",
-						"unavailable",
-						"unknown"
-					]),
-					version: version$2(host.bat?.version ?? host.server_version),
-					protocol: select(host.bat?.protocol, protocols),
-					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
-						"claude",
-						"codex",
-						"terminal",
-						"git"
-					])
-				},
-				coverage: {
-					basis: "configured_profile_enumeration",
-					complete: bool(discovery?.complete_enumeration),
-					reasons: Array.isArray(discovery?.outside_scan) ? [...new Set(discovery.outside_scan.map((item) => reason(item.reason)).filter(Boolean))] : null
-				},
-				policy: policyFlags
-			};
-		}),
-		sessions: {
-			basis: "client_loaded_reads",
-			sampled: sessions?.length ?? null,
-			loaded: count("loaded"),
-			streaming: count("streaming"),
-			unknown_activity: count("unknown_activity"),
-			stale: count("stale"),
-			pending: count("pending"),
-			history_reasons: history,
-			unreported: Object.fromEntries([
-				"loaded",
-				"streaming",
-				"stale",
-				"pending"
-			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
-		},
-		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
-			id: operationId$3(op.operation_id),
-			action: action(op.action),
-			status: op.status,
-			error_code: code(op.error_code ?? op.error?.code),
-			created_at: time(op.created_at),
-			updated_at: time(op.updated_at)
-		})) : null,
-		coverage: {
-			complete: bool(input.observation?.coverage?.complete),
-			reasons: Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null
-		},
-		operations_basis: "loaded_page",
-		recent_errors: (input.recentErrors || []).slice(-50).map((e) => failedCall({
-			at: e.at,
-			method: e.method,
-			path: e.path_template,
-			status: e.status,
-			code: e.code,
-			admissionRefused: e.admission_refused,
-			operation: { operation_id: e.operation_id }
-		})),
-		log_locations: {
-			basis: "default_templates_only",
-			state_database: {
-				managed_desktop: databaseTemplates(true),
-				standalone: databaseTemplates(false)
-			},
-			runtime_stderr: {
-				managed_desktop: "not_persisted_by_desktop",
-				standalone: "external_service_configuration"
-			}
-		}
-	};
-	return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
-}
-//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -440,6 +164,122 @@ function parseDiscussRefs(query) {
 		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
 	};
 }
+//#endregion
+//#region src/work-paths-strings.js
+var workPathsStrings = {
+	en: {
+		paths_view_only: "View only",
+		paths_manual: "Reply in BAT. To hand this work to an agent, continue from a checkpoint in a new managed session",
+		paths_continue: "Continue from checkpoint",
+		paths_start: "Start new session",
+		paths_mcp: "Dispatch from an agent (MCP)",
+		paths_setup: "Set up",
+		paths_host_unavailable: "This host is not set up for managed work",
+		paths_start_required: "You need the start permission",
+		paths_checkpoint_required: "You need checkpoint permission",
+		paths_first: "Reply in BAT, continue from a checkpoint, or dispatch from an MCP agent",
+		paths_how: "How dispatch works",
+		paths_isolation: "Connector creates a new isolated worktree inside the allowed managed folders",
+		paths_bat: "Connector starts a BAT session there",
+		paths_tracking: "It sends the brief and tracks replies, results and evidence here",
+		agents_heading: "Agents",
+		agents_pm: "PM agent",
+		agents_mcp: "MCP agents",
+		agents_back: "Back to discussion",
+		agents_pm_help: "Reads the discussion’s frozen context and proposes updates; manual sessions stay read-only",
+		agents_ready: "Ready",
+		agents_unavailable: "Unavailable",
+		agents_unchecked: "Not checked",
+		agents_check: "Check again",
+		agents_preflight: "Installation checks passed; each run still checks permissions and runtime readiness",
+		agents_not_checked: "Eligibility is unknown; check again or follow PM setup",
+		agents_pm_docs: "PM setup",
+		agents_platform: "Local PM supports Linux; use a Linux Connector or configure BAT analysis",
+		agents_executable: "Codex or bwrap is missing; install both on the Connector host",
+		agents_auth: "Codex is not signed in; sign in on the Connector host",
+		agents_home: "Codex’s home is unavailable; configure its directory on the Connector host",
+		agents_policy: "Managed Codex configuration is unsupported; follow PM setup for a supported host",
+		agents_installation: "The installation could not be checked; review PM setup and check again",
+		agents_action: "PM analysis is unavailable in this Connector; install a compatible version",
+		agents_scope: "PM analysis needs observe, manage and start permissions; ask the operator",
+		agents_worktree: "BAT PM needs a configured PM worktree; prepare it in workspace settings",
+		agents_binding: "The repository binding changed; review the workspace’s PM worktree",
+		agents_tier: "This BAT host does not allow managed starts; ask the operator to enable them",
+		agents_start_worktree: "This host requires isolated worktrees; review its managed-work settings",
+		agents_bat_unknown: "BAT analysis is unavailable; review its workspace binding and host setup",
+		agents_mcp_can: "An MCP agent can start and drive managed sessions with its own scoped token",
+		agents_mcp_limits: "Manual sessions stay read-only; host gates and token scopes apply",
+		agents_operator: "For an operator install, add this config to your MCP client on the Connector host",
+		agents_bundle: "The desktop bundle has no MCP command; follow the operator-install instructions",
+		agents_token: "Ask the Connector operator for a separate token with observe, operate and start scopes",
+		agents_issue: "On the operator installation, issue a token once and store it privately in place of the placeholder",
+		agents_scopes: "Add manage only for project and work-item changes",
+		agents_copy: "Copy",
+		agents_copied: "Copied",
+		agents_copy_failed: "Copy failed; select and copy the config",
+		agents_mcp_docs: "MCP setup",
+		agents_skill_docs: "Agent guide",
+		agents_token_issue: "Issue token",
+		agents_bat: "BAT analysis",
+		agents_native: "Local analysis"
+	},
+	"zh-TW": {
+		paths_view_only: "僅供檢視",
+		paths_manual: "在 BAT 回覆這個工作階段；要讓代理接手，請從檢查點建立新的受管工作",
+		paths_continue: "從檢查點繼續",
+		paths_start: "開始新工作階段",
+		paths_mcp: "由代理派工（MCP）",
+		paths_setup: "設定",
+		paths_host_unavailable: "此主機尚未設定受管工作",
+		paths_start_required: "您需要啟動權限",
+		paths_checkpoint_required: "您需要建立檢查點的權限",
+		paths_first: "在 BAT 回覆、從檢查點繼續，或由 MCP 代理派工",
+		paths_how: "派工如何運作",
+		paths_isolation: "Connector 在允許的受管資料夾內建立新的獨立工作樹",
+		paths_bat: "Connector 在其中啟動 BAT 工作階段",
+		paths_tracking: "送出工作說明，並在這裡追蹤回覆、成果與證據",
+		agents_heading: "代理",
+		agents_pm: "PM 代理",
+		agents_mcp: "MCP 代理",
+		agents_back: "返回討論",
+		agents_pm_help: "讀取討論的固定脈絡並提出更新建議；人工工作階段維持唯讀",
+		agents_ready: "可用",
+		agents_unavailable: "無法使用",
+		agents_unchecked: "未檢查",
+		agents_check: "重新檢查",
+		agents_preflight: "安裝檢查已通過；每次執行仍會檢查權限與執行環境",
+		agents_not_checked: "尚無法確認資格；請重新檢查或參閱 PM 設定",
+		agents_pm_docs: "PM 設定",
+		agents_platform: "本機 PM 目前只支援 Linux；請使用 Linux Connector 或設定 BAT 分析",
+		agents_executable: "找不到 Codex 或 bwrap；請在 Connector 主機安裝兩者",
+		agents_auth: "Codex 尚未登入；請在 Connector 主機登入",
+		agents_home: "無法使用 Codex 目錄；請在 Connector 主機設定該目錄",
+		agents_policy: "尚不支援受管 Codex 設定；請依 PM 設定使用支援的主機",
+		agents_installation: "無法檢查安裝狀態；請確認 PM 設定後重新檢查",
+		agents_action: "此 Connector 未提供 PM 分析；請安裝相容版本",
+		agents_scope: "PM 分析需要檢視、管理與啟動權限；請洽管理員",
+		agents_worktree: "BAT PM 需要已設定的 PM 工作樹；請至工作空間設定準備",
+		agents_binding: "儲存庫綁定已變更；請重新檢視工作空間的 PM 工作樹",
+		agents_tier: "此 BAT 主機未允許受管啟動；請洽管理員啟用",
+		agents_start_worktree: "此主機要求獨立工作樹；請檢查受管工作設定",
+		agents_bat_unknown: "BAT 分析無法使用；請確認工作空間綁定與主機設定",
+		agents_mcp_can: "MCP 代理可使用自己的專屬權杖啟動並操作受管工作階段",
+		agents_mcp_limits: "人工工作階段維持唯讀；主機限制與權杖權限仍適用",
+		agents_operator: "使用管理員安裝版時，請在 Connector 主機的 MCP 用戶端加入此設定",
+		agents_bundle: "桌面套件未提供 MCP 指令；請依管理員安裝說明設定",
+		agents_token: "請向 Connector 管理員索取獨立權杖，授予檢視、操作與啟動權限",
+		agents_issue: "在管理員安裝環境簽發一次權杖，私下儲存並替換預留值",
+		agents_scopes: "只有需要變更專案與工作項目時，才加上管理權限",
+		agents_copy: "複製",
+		agents_copied: "已複製",
+		agents_copy_failed: "複製失敗；請選取設定後複製",
+		agents_mcp_docs: "MCP 設定",
+		agents_skill_docs: "代理指南",
+		agents_token_issue: "簽發權杖",
+		agents_bat: "BAT 分析",
+		agents_native: "本機分析"
+	}
+};
 //#endregion
 //#region src/diagnostics-strings.js
 var diagnosticsStrings = {
@@ -1507,6 +1347,8 @@ var globalStrings = {
 		action_pm_dependencies_retract: "Retract dependency",
 		action_pm_dod_revise: "Revise definition of done",
 		action_pm_evidence_capture: "Capture evidence",
+		action_pm_execution_runtime_observe: "Check original turn",
+		action_pm_session_quiescence_observe: "Check manual activity",
 		action_pm_execution_verify: "Verify execution",
 		action_pm_follow_up_analyze: "Analyze follow-up",
 		action_pm_follow_up_prepare: "Prepare follow-up",
@@ -1703,6 +1545,8 @@ var globalStrings = {
 		action_pm_dependencies_retract: "撤回相依",
 		action_pm_dod_revise: "修訂完成定義",
 		action_pm_evidence_capture: "記錄證據",
+		action_pm_execution_runtime_observe: "查核原始回合",
+		action_pm_session_quiescence_observe: "查核人工活動",
 		action_pm_execution_verify: "驗證執行",
 		action_pm_follow_up_analyze: "分析後續",
 		action_pm_follow_up_prepare: "準備後續",
@@ -2209,7 +2053,7 @@ var pmQualityReviewsStrings = {
 		pmq_assessment: "Assessment",
 		pmq_revocation: "Revocation",
 		pmq_selected: "This exact assessment is selected for the work.",
-		pmq_selection_help: "Select a currently qualified assessment explicitly. Later conclusions do not replace this selection.",
+		pmq_selection_help: "Explicitly select an original assessment for evidence. Rejected or unassessed conclusions do not qualify work; later conclusions do not replace this selection.",
 		pmq_assess_heading: "Record criterion conclusions",
 		pmq_assessment_reason: "Reason for this assessment",
 		pmq_verdict: "Reviewer conclusion",
@@ -2302,7 +2146,7 @@ var pmQualityReviewsStrings = {
 		pmq_assessment: "評估",
 		pmq_revocation: "撤銷",
 		pmq_selected: "已為這項工作選定這份確切評估。",
-		pmq_selection_help: "請明確選擇目前適用且合格的評估。後續結論不會取代原本選擇。",
+		pmq_selection_help: "請明確選取要納入證據的原始評估；不符合或未評估的結論不代表工作合格，後續結論也不會取代原本選擇。",
 		pmq_assess_heading: "記錄條件結論",
 		pmq_assessment_reason: "這次評估的理由",
 		pmq_verdict: "審查者結論",
@@ -2348,6 +2192,19 @@ var qualityProjectionStrings = {
 		pq_coverage: "Each original requirement is counted once. Unreviewed work remains unassessed.",
 		pq_increment: "Qualified Increment",
 		pq_recorded_by: "Assessed by {actor}",
+		pq_rejected_acceptance: "Reviewer rejected acceptance criterion",
+		pq_rejected_dod: "Reviewer rejected Definition of Done criterion",
+		pq_deviations_boundary: "Selected reviewer judgments about original criteria. They do not independently prove semantic failure; current applicability and other deviation dimensions are unassessed.",
+		pq_deviations_coverage: "Selected assessments and coverage",
+		pq_deviations_selected: "The saved selection is complete; unlinked activity remains unassessed.",
+		pq_deviations_partial: "Saved source coverage is incomplete. Missing assessments do not establish acceptance or resolution.",
+		pq_deviations_empty: "No rejection is projected from the applicable selected criteria. This does not establish that the project has no deviations.",
+		pq_deviation_reason_single_original_assessment_missing: "No single original assessment selected",
+		pq_deviation_reason_criterion_provenance_unavailable: "This older capture has no fixed criterion provenance",
+		pq_deviation_reason_binding_mismatch: "Assessment belongs to a different work binding",
+		pq_deviation_reason_scope_mismatch: "Assessment belongs to a different scope",
+		pq_deviation_reason_not_applicable_at_selection: "Assessment was not applicable when selected",
+		pm_brief_status_fixed_quality_deviations: "Selected original quality judgments",
 		pm_brief_status_fixed_quality_assessments: "Explicit original quality assessments",
 		pm_evidence_kind_quality_assessment: "Original quality assessment"
 	},
@@ -2371,6 +2228,19 @@ var qualityProjectionStrings = {
 		pq_coverage: "每個原始需求只計入一次；尚未審查的工作仍標示未評估。",
 		pq_increment: "符合品質條件的 Increment",
 		pq_recorded_by: "評估者：{actor}",
+		pq_rejected_acceptance: "審查者否決驗收條件",
+		pq_rejected_dod: "審查者否決完成定義條件",
+		pq_deviations_boundary: "這是對原始條件的選定審查判斷，不代表獨立驗證已證明語意缺陷；目前適用性與其他偏差面向尚未評估。",
+		pq_deviations_coverage: "選定評估與涵蓋範圍",
+		pq_deviations_selected: "已保存的選取範圍完整；未關聯的活動仍未評估。",
+		pq_deviations_partial: "已保存來源涵蓋不完整；缺少評估不代表符合條件或已解決。",
+		pq_deviations_empty: "所選適用條件未產生否決項目；這不代表專案沒有偏差。",
+		pq_deviation_reason_single_original_assessment_missing: "尚未選取單一原始評估",
+		pq_deviation_reason_criterion_provenance_unavailable: "這份舊擷取沒有固定的條件來源",
+		pq_deviation_reason_binding_mismatch: "評估屬於不同工作關聯",
+		pq_deviation_reason_scope_mismatch: "評估屬於不同範疇",
+		pq_deviation_reason_not_applicable_at_selection: "評估在選取當時不適用",
+		pm_brief_status_fixed_quality_deviations: "選定的原始品質判斷",
 		pm_brief_status_fixed_quality_assessments: "明確選取的原始品質評估",
 		pm_evidence_kind_quality_assessment: "原始品質評估"
 	}
@@ -3360,6 +3230,8 @@ var maintenanceObservationStrings = {
 		pmo_exclusion_pm_owned_session: "A session bound to the PM role is excluded from development work.",
 		pmo_exclusion_verified_ended_session_retained: "A verified ended session is retained as history.",
 		pmo_exclusion_original_maintenance_attempt_completed: "The original maintenance attempt has recorded completion evidence.",
+		pmo_exclusion_original_batch_attempt_completed: "The original batch attempt has recorded completion evidence; its retained session alone is not active work.",
+		pmo_exclusion_manual_session_currently_quiescent: "The linked manual session was quiescent for its single original input. Ownership and work acceptance are unchanged.",
 		pmo_exclusion_unknown: "This source was excluded in the saved observation. Review its original evidence.",
 		pmo_blocker_details: "Review blockers and coverage gaps",
 		pmo_reason_source_limit: "The source exceeds the bounded observation size.",
@@ -3434,6 +3306,8 @@ var maintenanceObservationStrings = {
 		pmo_exclusion_pm_owned_session: "已綁定 PM 角色的工作階段不計入開發工作。",
 		pmo_exclusion_verified_ended_session_retained: "已驗證結束的工作階段保留為歷史。",
 		pmo_exclusion_original_maintenance_attempt_completed: "原始維護嘗試已有保存的完成證據。",
+		pmo_exclusion_original_batch_attempt_completed: "原始批次嘗試已有保存的完成證據；保留該工作階段本身不算進行中的工作。",
+		pmo_exclusion_manual_session_currently_quiescent: "觀察時，已關聯人工工作階段的原始單次輸入已無活動；控制權與工作驗收不變。",
 		pmo_exclusion_unknown: "本次保存觀察未將此來源計入工作量，請核對其原始證據。",
 		pmo_blocker_details: "檢視阻止原因與涵蓋缺口",
 		pmo_reason_source_limit: "來源超過這次有界觀察的大小上限。",
@@ -6658,6 +6532,24 @@ var pmKanbanStrings = {
 		pm_kanban_truncated: "Source coverage is limited.",
 		pm_kanban_unsupported: "Some linked source types are not projected in this view.",
 		pm_kanban_saved_only: "Saved Connector records; hosts and providers were not checked by this read.",
+		pm_kanban_runtime_recorded: "Original turn completed",
+		pm_kanban_runtime_completed: "The original execution turn completed.",
+		pm_kanban_runtime_limits: "Historical activity evidence only. Quality acceptance, current workload eligibility and process termination are not established by this receipt.",
+		pm_kanban_runtime_recorded_at: "Completion recorded at",
+		pm_kanban_runtime_receipt: "Original activity receipt",
+		pm_kanban_manual_title: "Linked manual session",
+		pm_kanban_manual_source: "Session to observe",
+		pm_kanban_manual_choose: "Select a linked manual session",
+		pm_kanban_manual_observe: "Check current activity",
+		pm_kanban_manual_help: "Read one linked session’s original single input. This does not send, stop, take control of the session or accept the work.",
+		pm_kanban_manual_ready: "The selected source can be checked. Native identity and current authority are rechecked when the request runs.",
+		pm_kanban_manual_unavailable: "Select an available source from the current work details. An original pending request keeps its fixed source.",
+		pm_kanban_manual_authority: "New observations require observe access and a current workspace writer role. Original receipts remain readable with source access.",
+		pm_kanban_manual_original_missing: "Previously selected source is unavailable",
+		pm_kanban_manual_identity: "Authenticated native identity is unavailable or stale.",
+		pm_kanban_manual_multiple: "Only a single original input is supported; multiple inputs remain unproven.",
+		pm_kanban_manual_active: "The native turn is active or has pending input.",
+		pm_kanban_manual_recorded: "The selected single input was quiescent at observation time. The manual session remains under its existing control.",
 		pm_kanban_history_unknown: "Recorded flow history cannot establish reliable timing.",
 		pm_kanban_versions: "Fixed work association",
 		pm_kanban_binding: "Binding",
@@ -6691,6 +6583,7 @@ var pmKanbanStrings = {
 		pm_kanban_state_queued: "Queued",
 		pm_kanban_state_dispatching: "Dispatching",
 		pm_kanban_state_running: "Running",
+		pm_kanban_state_idle: "Idle",
 		pm_kanban_state_waiting_permission: "Waiting for permission",
 		pm_kanban_state_quota_limited: "Quota limited",
 		pm_kanban_state_human_owned: "Human controlled",
@@ -6777,6 +6670,24 @@ var pmKanbanStrings = {
 		pm_kanban_truncated: "來源涵蓋範圍有限。",
 		pm_kanban_unsupported: "這個畫面尚未呈現部分關聯來源類型。",
 		pm_kanban_saved_only: "內容來自 Connector 已保存的紀錄；本次讀取未查詢主機或服務供應者。",
+		pm_kanban_runtime_recorded: "已記錄原回合完成",
+		pm_kanban_runtime_completed: "原始執行回合已完成。",
+		pm_kanban_runtime_limits: "這是當時的活動證據；這份收據不代表品質已驗收、目前符合工作量排除條件，或程序已終止。",
+		pm_kanban_runtime_recorded_at: "完成記錄時間",
+		pm_kanban_runtime_receipt: "原始活動收據",
+		pm_kanban_manual_title: "已關聯的人工工作階段",
+		pm_kanban_manual_source: "要觀察的工作階段",
+		pm_kanban_manual_choose: "選擇已關聯的人工工作階段",
+		pm_kanban_manual_observe: "查核目前活動",
+		pm_kanban_manual_help: "唯讀查核已關聯工作階段的原始單次輸入。不會發送、停止、接管工作階段或核可工作。",
+		pm_kanban_manual_ready: "可以查核此來源；執行請求時會重新核對原生身分與目前權限。",
+		pm_kanban_manual_unavailable: "請從目前工作詳情選擇可用來源。尚待查回的原請求仍保留固定來源。",
+		pm_kanban_manual_authority: "新觀察需要觀察權限及目前工作區的寫入角色；仍有來源存取權時，可查回原收據。",
+		pm_kanban_manual_original_missing: "先前選定的來源目前不可用",
+		pm_kanban_manual_identity: "已驗證的原生身分不可用或已過期。",
+		pm_kanban_manual_multiple: "只支援原始單次輸入；多次輸入仍無法證明。",
+		pm_kanban_manual_active: "原生回合仍有活動或待處理輸入。",
+		pm_kanban_manual_recorded: "觀察當時，選定的單次輸入已無活動。人工工作階段仍維持原控制權。",
 		pm_kanban_history_unknown: "現有工作流歷史不足以確認可靠時間。",
 		pm_kanban_versions: "固定工作關聯",
 		pm_kanban_binding: "關聯",
@@ -6810,6 +6721,7 @@ var pmKanbanStrings = {
 		pm_kanban_state_queued: "排隊中",
 		pm_kanban_state_dispatching: "派送中",
 		pm_kanban_state_running: "執行中",
+		pm_kanban_state_idle: "閒置中",
 		pm_kanban_state_waiting_permission: "等待權限",
 		pm_kanban_state_quota_limited: "額度受限",
 		pm_kanban_state_human_owned: "由人控制",
@@ -7132,6 +7044,22 @@ var pmStrings = {
 		pm_roadmap_update_observation: "Review saved results",
 		pm_roadmap_observation_help: "Use a fixed snapshot. Matching work and evidence do not by themselves satisfy the Definition of Done.",
 		pm_roadmap_quality_unknown: "Completion has not been assessed",
+		pm_roadmap_quality_qualified: "Qualified by the selected assessments",
+		pm_roadmap_quality_not_qualified: "Not qualified by the selected assessments",
+		pm_roadmap_quality_unassessed: "Unassessed",
+		pm_roadmap_quality_accepted: "Accepted",
+		pm_roadmap_quality_rejected: "Rejected",
+		pm_roadmap_quality_count: "{qualified} of {total} requirements qualified",
+		pm_roadmap_quality_acceptance: "Acceptance criteria",
+		pm_roadmap_quality_coverage_complete: "All selected work contributions are covered.",
+		pm_roadmap_quality_coverage_incomplete: "Work contribution coverage is incomplete; this does not establish completion.",
+		pm_roadmap_quality_fixed: "Original selected assessments; current applicability has not been evaluated. This does not establish a finish date, stopped runtime, deployment or scope change.",
+		pm_roadmap_quality_details: "Requirements and original assessments",
+		pm_roadmap_quality_original: "Original assessment",
+		pm_roadmap_quality_version: "Version",
+		pm_roadmap_quality_candidate: "Candidate commit",
+		pm_roadmap_quality_digest: "Assessment digest",
+		pm_roadmap_quality_dod: "Definition of done",
 		pm_roadmap_no_observation: "No result snapshot selected",
 		pm_roadmap_sources: "View linked sources",
 		pm_roadmap_after: "After: {items}",
@@ -7494,6 +7422,22 @@ var pmStrings = {
 		pm_roadmap_update_observation: "查核已保存成果",
 		pm_roadmap_observation_help: "引用固定快照。工作與證據關聯吻合，本身不代表已符合完成定義。",
 		pm_roadmap_quality_unknown: "尚未評估是否完成",
+		pm_roadmap_quality_qualified: "所選評估判定合格",
+		pm_roadmap_quality_not_qualified: "所選評估判定未合格",
+		pm_roadmap_quality_unassessed: "尚未評估",
+		pm_roadmap_quality_accepted: "已接受",
+		pm_roadmap_quality_rejected: "未接受",
+		pm_roadmap_quality_count: "{total} 項需求中有 {qualified} 項合格",
+		pm_roadmap_quality_acceptance: "驗收條件",
+		pm_roadmap_quality_coverage_complete: "已涵蓋所有選定工作的貢獻。",
+		pm_roadmap_quality_coverage_incomplete: "工作貢獻涵蓋不完整，尚不足以證明完成。",
+		pm_roadmap_quality_fixed: "這是原先選定的評估，目前適用性尚未核對；不代表完成日期、執行程序已停止、已部署或範圍已變更。",
+		pm_roadmap_quality_details: "需求與原始評估",
+		pm_roadmap_quality_original: "原始評估",
+		pm_roadmap_quality_version: "版本",
+		pm_roadmap_quality_candidate: "候選提交",
+		pm_roadmap_quality_digest: "評估摘要雜湊",
+		pm_roadmap_quality_dod: "完成定義",
 		pm_roadmap_no_observation: "尚未選定成果快照",
 		pm_roadmap_sources: "查看關聯來源",
 		pm_roadmap_after: "依賴：{items}",
@@ -7861,6 +7805,7 @@ var STRINGS = {
 		...overviewStrings["zh-TW"],
 		...scheduleStrings["zh-TW"],
 		...globalStrings["zh-TW"],
+		...workPathsStrings["zh-TW"],
 		...workViewStrings["zh-TW"],
 		...ahpObserverStrings["zh-TW"],
 		...qualityProjectionStrings["zh-TW"],
@@ -8409,9 +8354,9 @@ var STRINGS = {
 		start_choose_host: "選擇主機",
 		start_workspace: "工作區",
 		start_choose_workspace: "選擇工作區",
-		start_agent: "Agent",
+		start_agent: "代理",
 		start_model: "模型（選填）",
-		start_model_default: "使用主機或 agent 的預設模型",
+		start_model_default: "使用主機或代理的預設模型",
 		start_title: "標題（選填）",
 		start_prompt: "原始指示（選填）",
 		start_reload_workspaces: "重新讀取工作區",
@@ -8420,7 +8365,7 @@ var STRINGS = {
 		start_no_workspaces: "此主機目前未傳回工作區。",
 		start_truncated: "只顯示前 200 個工作區；此清單不代表所有工作區。",
 		start_workspace_help: "使用 Connector 傳回的固定工作區 ID；主機仍會檢查儲存庫與權限。",
-		start_isolation: "使用新 worktree。此操作不會接管既有人工或任務工作階段。",
+		start_isolation: "使用新的工作樹；人工與任務工作階段維持原狀",
 		start_prompt_help: "原文會完整保留。留白只啟動工作階段，不會自動產生指示。",
 		start_apply: "開始工作階段",
 		start_new: "準備另一個工作階段",
@@ -9334,7 +9279,7 @@ var STRINGS = {
 		read_only_note: "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
 		continue_from_checkpoint: "從這裡接續",
 		checkpoints: "檢查點",
-		checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的儲存庫複本裡，以新的分支與工作階段進行。",
+		checkpoint_help: "記錄選定的提交與最近對話，原工作階段與目錄維持唯讀",
 		create_checkpoint: "記下這個版本",
 		no_checkpoints: "還沒有記下的檢查點。",
 		excerpt_count: "{n} 則對話",
@@ -9348,7 +9293,7 @@ var STRINGS = {
 		continue_placeholder: "要代理接著做什麼…",
 		start_agent_work: "開始代理工作",
 		open_new_session: "開啟新工作階段",
-		checkpoint_unavailable: "此主機缺少受管理目錄、SSH 連線別名或寫入與協調權限，無法從檢查點開工。",
+		checkpoint_unavailable: "此主機尚未設定受管工作",
 		needs_start_scope: "這個登入沒有開工權限，請使用具開工權限的憑證。",
 		confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
 		confinement_none: "無已證實的執行限制",
@@ -9495,6 +9440,7 @@ var STRINGS = {
 		...overviewStrings.en,
 		...scheduleStrings.en,
 		...globalStrings.en,
+		...workPathsStrings.en,
 		...workViewStrings.en,
 		...ahpObserverStrings.en,
 		...qualityProjectionStrings.en,
@@ -10969,7 +10915,7 @@ var STRINGS = {
 		read_only_note: "A person created this session in BAT, so the API never writes to it. To have an agent continue, start a new managed session from its commit.",
 		continue_from_checkpoint: "Start from here",
 		checkpoints: "Checkpoints",
-		checkpoint_help: "Records this session's current commit and recent conversation (read-only; the session and its folder are not changed). Agent work started from it runs in the connector's own clone on a new branch and session.",
+		checkpoint_help: "Records the selected commit and recent conversation; the source stays read-only",
 		create_checkpoint: "Record this version",
 		no_checkpoints: "No checkpoints yet.",
 		excerpt_count: "{n} messages",
@@ -10983,7 +10929,7 @@ var STRINGS = {
 		continue_placeholder: "What should the agent do next…",
 		start_agent_work: "Start agent work",
 		open_new_session: "Open the new session",
-		checkpoint_unavailable: "This host lacks managed_roots, an SSH alias or the write/orchestrate tiers, so work cannot start from a checkpoint here.",
+		checkpoint_unavailable: "This host is not set up for managed work",
 		needs_start_scope: "Your token lacks the start scope, so it cannot start agent work; issue one with --scope start.",
 		confined_note: "The working directory alone offers no protection. Limits come from start options and account evidence; individual approvals may permit outside writes.",
 		confinement_none: "No proven execution limit",
@@ -12090,6 +12036,630 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 	return root;
 }
 //#endregion
+//#region src/global-screens.js
+function setupGuide() {
+	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
+}
+function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
+	const article = h("article", {
+		class: "global-inbox-row",
+		"data-inbox-key": key
+	});
+	if (onOpen) article.addEventListener("click", (event) => {
+		if (event.target.closest("a, button, input, select, textarea")) return;
+		onOpen();
+	});
+	const text = h("div", { class: "global-inbox-text" }, h("a", {
+		class: "title",
+		href
+	}, title), meta || pill ? h("p", { class: "global-inbox-meta" }, meta ? h("span", { class: "global-inbox-meta-text" }, meta) : null, pill || null) : null);
+	const details = onOpen ? iconButton({
+		icon: "chevron-right",
+		label: detailsLabel,
+		onClick: () => onOpen()
+	}) : null;
+	article.append(text, h("div", { class: "global-inbox-actions" }, action || null, details));
+	return article;
+}
+function firstRunCard({ h, t, body, footer }) {
+	return h("div", { class: "global-first-run" }, h("section", {
+		class: "global-first-card",
+		"aria-labelledby": "global-first-title"
+	}, h("span", {
+		class: "brand-mark",
+		"aria-hidden": "true"
+	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
+}
+function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSelect = () => {} }) {
+	const nav = h("nav", {
+		class: "global-settings-nav",
+		role: exclusive ? "tablist" : null,
+		"aria-orientation": exclusive ? "vertical" : null,
+		"aria-label": t("global_settings_nav")
+	});
+	const panels = h("div", { class: "global-settings-panels" });
+	const buttons = [];
+	const roots = [];
+	let preferred = selected || "";
+	for (const section of sections) {
+		const panel = h("section", {
+			class: "global-settings-section",
+			id: `settings-panel-${section.id}`,
+			"data-settings-panel": section.id,
+			role: exclusive ? "tabpanel" : null,
+			"aria-labelledby": exclusive ? `settings-tab-${section.id}` : null
+		});
+		if (section.id === "models") panel.setAttribute("data-settings-models", "");
+		const button = exclusive ? h("button", {
+			type: "button",
+			role: "tab",
+			id: `settings-tab-${section.id}`,
+			"data-settings-nav": section.id,
+			"aria-controls": panel.id
+		}, section.label) : h("a", {
+			href: `#settings-panel-${section.id}`,
+			id: `settings-tab-${section.id}`,
+			"data-settings-nav": section.id
+		}, section.label);
+		if (section.hidden) {
+			button.hidden = true;
+			panel.hidden = true;
+		}
+		button.addEventListener("click", (event) => {
+			if (!exclusive) event.preventDefault();
+			select(section.id, true);
+		});
+		buttons.push(button);
+		roots.push(panel);
+		nav.append(button);
+		panels.append(panel);
+	}
+	const visible = () => buttons.filter((button) => !button.hidden);
+	const marked = (button) => exclusive ? button.getAttribute("aria-selected") === "true" : button.getAttribute("aria-current") === "true";
+	function apply(id) {
+		for (const button of buttons) {
+			const on = !button.hidden && button.dataset.settingsNav === id;
+			if (exclusive) {
+				button.setAttribute("aria-selected", on ? "true" : "false");
+				button.tabIndex = on ? 0 : -1;
+			} else if (on) button.setAttribute("aria-current", "true");
+			else button.removeAttribute("aria-current");
+		}
+		if (!exclusive) return;
+		for (const node of roots) {
+			const button = buttons.find((item) => item.dataset.settingsNav === node.dataset.settingsPanel);
+			node.hidden = !(button && !button.hidden && node.dataset.settingsPanel === id);
+		}
+	}
+	function select(id, scroll) {
+		const button = buttons.find((item) => item.dataset.settingsNav === id);
+		if (!button || button.hidden) return;
+		preferred = id;
+		apply(id);
+		onSelect(id);
+		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
+	}
+	nav.addEventListener("keydown", (event) => {
+		if (![
+			"ArrowUp",
+			"ArrowDown",
+			"ArrowLeft",
+			"ArrowRight",
+			"Home",
+			"End"
+		].includes(event.key)) return;
+		const enabled = visible();
+		const current = enabled.indexOf(document.activeElement);
+		if (current < 0) return;
+		event.preventDefault();
+		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1) + enabled.length) % enabled.length];
+		if (!next) return;
+		next.focus();
+		select(next.dataset.settingsNav, true);
+	});
+	const initial = buttons.find((button) => !button.hidden && button.dataset.settingsNav === preferred) || visible()[0];
+	if (initial) apply(initial.dataset.settingsNav);
+	function panel(id) {
+		return roots.find((node) => node.dataset.settingsPanel === id);
+	}
+	function show(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		button.hidden = false;
+		if (!exclusive) node.hidden = false;
+		if (preferred === id) apply(id);
+		else if (!visible().some(marked)) apply(id);
+	}
+	function hide(id) {
+		const button = buttons.find((node) => node.dataset.settingsNav === id);
+		const node = panel(id);
+		if (!button || !node) return;
+		const was = marked(button);
+		button.hidden = true;
+		node.hidden = true;
+		if (was) {
+			const next = visible()[0];
+			if (next) apply(next.dataset.settingsNav);
+		}
+	}
+	function reapply() {
+		if (buttons.find((node) => !node.hidden && node.dataset.settingsNav === preferred)) apply(preferred);
+	}
+	const root = h("div", {
+		class: "global-settings",
+		"data-settings-exclusive": exclusive ? "true" : "false"
+	}, nav, panels);
+	root.reapply = reapply;
+	return {
+		root,
+		panel,
+		show,
+		hide,
+		reapply
+	};
+}
+//#endregion
+//#region src/work-paths.js
+var actionAllowed = (caps, name) => caps?.actions?.some((a) => a.action === name && a.allowed === true) === true;
+var mayStartSession = (caps) => caps?.scopes?.includes("start") && actionAllowed(caps, "session.start");
+function checkpointReason(caps, host) {
+	if (!caps?.features?.checkpoints?.includes(host)) return "paths_host_unavailable";
+	if (!caps?.scopes?.includes("start") || !actionAllowed(caps, "checkpoint.continue")) return "paths_start_required";
+	if (!actionAllowed(caps, "checkpoint.create")) return "paths_checkpoint_required";
+	return null;
+}
+function dispatchExplanation({ h, t }) {
+	return disclosure({
+		label: t("paths_how"),
+		body: h("ol", { class: "work-paths-steps" }, ...[
+			"paths_isolation",
+			"paths_bat",
+			"paths_tracking"
+		].map((key) => h("li", {}, t(key))))
+	});
+}
+function internalFrom(value) {
+	if (typeof value !== "string" || value.length > 2048 || !value.startsWith("#/")) return null;
+	let decoded;
+	try {
+		decoded = decodeURIComponent(value);
+	} catch {
+		return null;
+	}
+	if (/[\\\s\u0000-\u001f\u007f]/u.test(decoded) || decoded.includes("://") || decoded.includes("//") || decoded.slice(1).includes("#")) return null;
+	const path = decoded.split("?")[0];
+	if (path.split("/").some((part) => part === "." || part === "..")) return null;
+	if (!/^#\/(?:pm\/ws_[a-f0-9]{32}\/discussions(?:\/(?:new|[a-zA-Z0-9_-]+))?|sessions|session\/[^/?]+\/[^/?]+)$/.test(path)) return null;
+	return value;
+}
+//#endregion
+//#region src/settings-agents.js
+var eligibilityReasons = {
+	PM_NATIVE_PLATFORM_UNSUPPORTED: "agents_platform",
+	PM_NATIVE_EXECUTABLE_UNAVAILABLE: "agents_executable",
+	PM_NATIVE_AUTH_UNAVAILABLE: "agents_auth",
+	PM_NATIVE_HOME_UNAVAILABLE: "agents_home",
+	PM_NATIVE_MANAGED_CONFIG_UNSUPPORTED: "agents_policy",
+	PM_NATIVE_INSTALLATION_UNAVAILABLE: "agents_installation",
+	action_unavailable: "agents_action",
+	PM_WORKTREE_REQUIRED: "agents_worktree",
+	REPOSITORY_BINDING_CHANGED: "agents_binding",
+	PM_BAT_BINDING_CHANGED: "agents_binding",
+	REPOSITORY_NOT_CONFIGURED: "agents_bat_unknown",
+	REPOSITORY_NOT_BOUND: "agents_binding",
+	REPOSITORY_HOST_UNAVAILABLE: "agents_tier",
+	TIER_DISABLED: "agents_tier",
+	HOST_READ_ONLY: "agents_tier",
+	START_WORKTREE_REQUIRED: "agents_start_worktree"
+};
+function settingsAgents({ h, t, api, caps, guard, from }) {
+	const heading = h("h2", {
+		id: "settings-agents-heading",
+		tabindex: -1,
+		"data-agents-heading": ""
+	}, t("agents_heading"));
+	const status = h("span", {
+		class: "ui-pill tone-neutral",
+		"data-pm-eligibility": ""
+	});
+	const reason = h("span", { "data-pm-eligibility-reason": "" });
+	const codes = h("div");
+	const technical = disclosure({
+		label: t("global_details"),
+		body: codes
+	});
+	const safeFrom = internalFrom(from);
+	const workspaceId = safeFrom?.match(/^#\/pm\/(ws_[a-f0-9]{32})\//)?.[1];
+	let ticket = 0;
+	const current = (mine) => {
+		try {
+			guard();
+			return mine === ticket && root.isConnected;
+		} catch {
+			return false;
+		}
+	};
+	const notChecked = () => {
+		status.textContent = t("agents_unchecked");
+		status.className = "ui-pill tone-neutral";
+		reason.textContent = t("agents_not_checked");
+		codes.replaceChildren();
+		technical.hidden = true;
+	};
+	const paint = (doc) => {
+		const native = doc?.native_analysis, bat = workspaceId ? doc?.bat_analysis : null;
+		const descriptors = [native, bat].filter((value) => value && typeof value.eligible_for_preflight === "boolean");
+		if (!descriptors.length) {
+			notChecked();
+			return;
+		}
+		const permitted = [
+			"observe",
+			"manage",
+			"start"
+		].every((scope) => caps()?.scopes?.includes(scope));
+		const ready = descriptors.some((value) => value.eligible_for_preflight === true && value.action_registered === true && value.authorized !== false) && permitted;
+		status.textContent = t(ready ? "agents_ready" : "agents_unavailable");
+		status.className = `ui-pill tone-${ready ? "info" : "neutral"}`;
+		const failures = descriptors.map((value) => value.action_registered === false ? "agents_action" : value.reason ? eligibilityReasons[value.reason] || (value === bat ? "agents_bat_unknown" : "agents_installation") : !permitted || value.authorized === false ? "agents_scope" : "agents_installation");
+		reason.textContent = t(ready ? "agents_preflight" : failures[0]);
+		codes.replaceChildren(...descriptors.flatMap((value) => value.reason ? [h("p", {}, t(value === bat ? "agents_bat" : "agents_native"), ": ", h("code", {}, value.reason))] : []));
+		if (!ready && descriptors.length > 1) codes.prepend(h("p", {}, t(failures[1])));
+		technical.hidden = !codes.childElementCount;
+	};
+	const load = async () => {
+		const mine = ++ticket;
+		notChecked();
+		check.disabled = true;
+		const features = caps()?.features?.pm_workspaces;
+		const endpoint = workspaceId && (features?.native_analysis || features?.bat_analysis || features?.installation_eligibility) ? `/pm/workspaces/${workspaceId}/capabilities` : features?.installation_eligibility ? "/pm/installation-capabilities" : null;
+		try {
+			if (!endpoint) return;
+			const doc = await api("GET", endpoint);
+			if (current(mine)) paint(doc);
+		} catch {
+			if (current(mine)) notChecked();
+		} finally {
+			if (current(mine)) check.disabled = false;
+		}
+	};
+	const check = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("agents_check"),
+		onClick: load,
+		"data-pm-eligibility-check": ""
+	});
+	const pm = h("section", {
+		class: "settings-agent-group",
+		"data-settings-pm-agent": ""
+	}, h("div", { class: "settings-agent-heading" }, h("h3", {}, t("agents_pm")), status, check), h("p", {}, t("agents_pm_help")), h("p", {}, reason, " ", h("a", { href: setupGuide() + "#pm-agent-setup" }, t("agents_pm_docs"))), technical);
+	const config = JSON.stringify({ mcpServers: { bat: {
+		command: "bat-agent-connector-mcp",
+		args: ["--principal-only"],
+		env: { BATC_API_TOKEN: "<SCOPED_TOKEN>" }
+	} } }, null, 2);
+	const copyStatus = h("span", { role: "status" });
+	const copy = button({
+		variant: "secondary",
+		size: "sm",
+		label: t("agents_copy"),
+		onClick: async () => {
+			try {
+				guard();
+				await navigator.clipboard.writeText(config);
+				guard();
+				if (root.isConnected) copyStatus.textContent = t("agents_copied");
+			} catch {
+				if (root.isConnected) copyStatus.textContent = t("agents_copy_failed");
+			}
+		}
+	});
+	const bundled = Boolean(caps()?.managed_installation);
+	const mcp = h("section", {
+		class: "settings-agent-group",
+		"data-settings-mcp": ""
+	}, h("h3", {}, t("agents_mcp")), h("p", {}, t("agents_mcp_can")), h("p", {}, t("agents_mcp_limits")), h("p", { class: "muted" }, t(bundled ? "agents_bundle" : "agents_operator")), ...!bundled ? [
+		h("pre", { "data-mcp-config": "" }, h("code", {}, config)),
+		h("div", { class: "actions" }, copy, copyStatus),
+		h("p", {}, t("agents_token")),
+		disclosure({
+			label: t("agents_token_issue"),
+			body: h("div", {}, h("p", {}, t("agents_issue")), h("pre", {}, h("code", {}, "batc api-token issue --actor mcp-agent --scope observe --scope operate --scope start")), h("p", {}, t("agents_scopes")))
+		})
+	] : [], h("div", { class: "actions" }, h("a", { href: setupGuide() + "#cli-and-agent-access" }, t("agents_mcp_docs")), h("a", { href: "https://github.com/teddashh/bat-agent-connector/blob/main/docs/agent-skills.md" }, t("agents_skill_docs"))));
+	const root = h("section", {
+		class: "panel settings-agents",
+		"aria-labelledby": heading.id
+	}, heading, safeFrom ? h("a", {
+		href: safeFrom,
+		"data-agents-back": ""
+	}, t("agents_back")) : null, pm, mcp);
+	notChecked();
+	return {
+		root,
+		heading,
+		load
+	};
+}
+//#endregion
+//#region src/diagnostics.js
+var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
+var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
+var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+var commit = (value) => typeof value === "string" && [40, 64].includes(value.length) && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
+var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
+var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
+var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+var bool = (value) => typeof value === "boolean" ? value : null;
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var time = (value) => {
+	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+};
+var select = (value, values) => values.includes(value) ? value : null;
+var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
+var resourceNames = {
+	hosts: "host",
+	projects: "project",
+	"work-items": "work_item",
+	tasks: "task",
+	operations: "operation",
+	workspaces: "workspace",
+	threads: "thread",
+	snapshots: "snapshot",
+	artifacts: "artifact",
+	uploads: "operation",
+	checkpoints: "checkpoint"
+};
+function pathTemplate(path) {
+	const parts = String(path).replace(/^\/api(?=\/v1)/, "").split(/[?#]/)[0].split("/").filter(Boolean);
+	if (parts[0] !== "v1") parts.unshift("v1");
+	return "/" + parts.map((part, i) => {
+		const si = parts.indexOf("sessions");
+		if (si >= 0 && i === si + 1) return parts[si - 2] === "hosts" ? ":session" : ":host";
+		if (si >= 0 && i === si + 2 && parts[si - 2] !== "hosts") return ":session";
+		if (resourceNames[parts[i - 1]]) return ":" + resourceNames[parts[i - 1]];
+		return routeWords.has(part) ? part : ":id";
+	}).join("/");
+}
+function failedCall({ at, method, path, status, code: errorCode, admissionRefused, operation }) {
+	return {
+		at: time(at),
+		method: select(method, [
+			"GET",
+			"POST",
+			"PUT",
+			"PATCH",
+			"DELETE",
+			"HEAD"
+		]) || "GET",
+		path_template: pathTemplate(path),
+		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
+		admission_refused: admissionRefused === true,
+		operation_id: operationId$3(operation?.operation_id)
+	};
+}
+function errorRing(limit = 50) {
+	const entries = [];
+	return {
+		record(input) {
+			entries.push(failedCall(input));
+			entries.splice(0, Math.max(0, entries.length - Math.min(50, limit)));
+		},
+		entries: () => entries.map((entry) => ({ ...entry })),
+		clear() {
+			entries.length = 0;
+		}
+	};
+}
+function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+	return {
+		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
+		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
+		connector_version: version$2(caps?.build?.version ?? caps?.connector),
+		connector_commit: commit(caps?.build?.commit),
+		connector_source: select(caps?.build?.source, [
+			"vcs",
+			"package",
+			"bundled"
+		]),
+		api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
+		contract_version: contractVersion(caps?.contract_version),
+		platform: desktop ? "desktop" : "browser",
+		os_family: select(os, [
+			"windows",
+			"macos",
+			"linux"
+		]) || "unknown",
+		locale: locale === "zh-TW" ? "zh-TW" : "en",
+		viewport_class: width > 0 ? width < 800 ? "small" : width < 1200 ? "medium" : "large" : "unknown"
+	};
+}
+function buildLine(client, t) {
+	const unknown = t("diag_unknown");
+	const connector = t("diag_connector_build", {
+		version: client.connector_version || unknown,
+		commit: client.connector_commit?.slice(0, 7) || unknown
+	});
+	return client.platform === "desktop" ? t("diag_desktop_build", {
+		version: client.app_version || unknown,
+		commit: client.app_commit?.slice(0, 7) || unknown
+	}) + " · " + connector : connector;
+}
+var APP = "io.betteragent.dashboard";
+function logLocations(os, managed) {
+	const root = managed ? {
+		linux: `~/.local/share/${APP}/central`,
+		macos: `~/Library/Application Support/${APP}/central`,
+		windows: `%LOCALAPPDATA%\\${APP}\\central`
+	}[os] : {
+		linux: "~/.local/state/bat-agent-connector",
+		macos: "~/.local/state/bat-agent-connector",
+		windows: "~\\.local\\state\\bat-agent-connector"
+	}[os];
+	return {
+		state_database: root ? root + (os === "windows" ? "\\" : "/") + (managed ? os === "windows" ? "state\\" : "state/" : "") + "tasks.sqlite3" : null,
+		runtime_stderr: managed ? "not_persisted_by_desktop" : "external_service_configuration",
+		location: "default_template_only"
+	};
+}
+var databaseTemplates = (managed) => Object.fromEntries([
+	"linux",
+	"macos",
+	"windows"
+].map((os) => [os, logLocations(os, managed).state_database]));
+function scrubDiagnostics(text) {
+	const safeLogs = new Set([
+		"linux",
+		"macos",
+		"windows"
+	].flatMap((os) => [false, true].map((managed) => logLocations(os, managed).state_database)));
+	return JSON.stringify(JSON.parse(text, (_key, input) => {
+		if (typeof input !== "string") return input;
+		let value = input;
+		try {
+			value = decodeURIComponent(value);
+		} catch {}
+		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
+		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$3(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+	}));
+}
+function sessionFacts(session) {
+	return {
+		loaded: bool(session.loaded),
+		streaming: bool(session.streaming),
+		unknown_activity: ![true, false].includes(session.streaming),
+		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
+		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
+	};
+}
+function buildDiagnostics(input) {
+	const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a, b) => String(a.host).localeCompare(String(b.host), "en")) : [];
+	const flags = (source, keys) => Object.fromEntries(keys.map((key) => [key, bool(source?.[key])]));
+	const sessions = Array.isArray(input.sessions) ? input.sessions.map(sessionFacts) : null;
+	const count = (key) => sessions?.length === 0 ? 0 : sessions?.some((s) => typeof s[key] === "boolean") ? sessions.filter((s) => s[key] === true).length : null;
+	const history = sessions?.some((s) => s.history_reasons !== null) ? Object.create(null) : null;
+	if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
+	const sources = Object.fromEntries([
+		"capabilities",
+		"hosts",
+		"operations",
+		"managed_setup",
+		"observation"
+	].map((key) => [key, select(input.sources?.[key], ["available", "not_available"]) || "not_available"]));
+	const bundle = {
+		schema: "batc.diagnostics.v1",
+		exported_at: time(input.exportedAt),
+		client: clientIdentity(input),
+		sources,
+		hosts: hosts.map((host, i) => {
+			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
+			const policyFlags = flags(host.policy || policy, [
+				"enabled",
+				"writes",
+				"orchestrate",
+				"shared_clone_worktrees",
+				"managed_roots_configured",
+				"ssh_configured",
+				"checkpoint_available"
+			]);
+			if (policyFlags.managed_roots_configured === null && Array.isArray(policy.managed_roots)) policyFlags.managed_roots_configured = policy.managed_roots.length > 0;
+			const setupHost = Array.isArray(input.setup?.hosts) ? input.setup.hosts.find((item) => item.name === host.host) : null;
+			if (policyFlags.ssh_configured === null && setupHost && (typeof setupHost.ssh_alias === "string" || setupHost.ssh_alias === null)) policyFlags.ssh_configured = Boolean(setupHost.ssh_alias);
+			const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find((scan) => scan.profile_id === policy.profile_id) : null;
+			return {
+				alias: `host-${i + 1}`,
+				connection_state: select(host.connection_state, [
+					"connected",
+					"disconnected",
+					"reconnecting",
+					"never_connected",
+					"stale"
+				]) || (host.reachable === true ? "reachable" : host.reachable === false ? "unreachable" : "unknown"),
+				stale: bool(host.stale),
+				stale_reason: reason(host.stale_reason),
+				last_error_code: code(host.last_error?.code ?? discovery?.error_code),
+				bat: {
+					status: select(host.bat?.status, [
+						"ready",
+						"unavailable",
+						"unknown"
+					]),
+					version: version$2(host.bat?.version ?? host.server_version),
+					protocol: select(host.bat?.protocol, protocols),
+					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
+						"claude",
+						"codex",
+						"terminal",
+						"git"
+					])
+				},
+				coverage: {
+					basis: "configured_profile_enumeration",
+					complete: bool(discovery?.complete_enumeration),
+					reasons: Array.isArray(discovery?.outside_scan) ? [...new Set(discovery.outside_scan.map((item) => reason(item.reason)).filter(Boolean))] : null
+				},
+				policy: policyFlags
+			};
+		}),
+		sessions: {
+			basis: "client_loaded_reads",
+			sampled: sessions?.length ?? null,
+			loaded: count("loaded"),
+			streaming: count("streaming"),
+			unknown_activity: count("unknown_activity"),
+			stale: count("stale"),
+			pending: count("pending"),
+			history_reasons: history,
+			unreported: Object.fromEntries([
+				"loaded",
+				"streaming",
+				"stale",
+				"pending"
+			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
+		},
+		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
+			id: operationId$3(op.operation_id),
+			action: action(op.action),
+			status: op.status,
+			error_code: code(op.error_code ?? op.error?.code),
+			created_at: time(op.created_at),
+			updated_at: time(op.updated_at)
+		})) : null,
+		coverage: {
+			complete: bool(input.observation?.coverage?.complete),
+			reasons: Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null
+		},
+		operations_basis: "loaded_page",
+		recent_errors: (input.recentErrors || []).slice(-50).map((e) => failedCall({
+			at: e.at,
+			method: e.method,
+			path: e.path_template,
+			status: e.status,
+			code: e.code,
+			admissionRefused: e.admission_refused,
+			operation: { operation_id: e.operation_id }
+		})),
+		log_locations: {
+			basis: "default_templates_only",
+			state_database: {
+				managed_desktop: databaseTemplates(true),
+				standalone: databaseTemplates(false)
+			},
+			runtime_stderr: {
+				managed_desktop: "not_persisted_by_desktop",
+				standalone: "external_service_configuration"
+			}
+		}
+	};
+	return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
+}
+//#endregion
 //#region src/diagnostics-dialog.js
 function diagnosticsDialog({ h, t, load, save, onClose }) {
 	const origin = document.activeElement;
@@ -13121,6 +13691,8 @@ var ACTIONS = {
 	"pm.dependencies.retract": "action_pm_dependencies_retract",
 	"pm.dod.revise": "action_pm_dod_revise",
 	"pm.evidence.capture": "action_pm_evidence_capture",
+	"pm.execution.runtime.observe": "action_pm_execution_runtime_observe",
+	"pm.session.quiescence.observe": "action_pm_session_quiescence_observe",
 	"pm.execution.verify": "action_pm_execution_verify",
 	"pm.follow_up.analyze": "action_pm_follow_up_analyze",
 	"pm.follow_up.prepare": "action_pm_follow_up_prepare",
@@ -13343,170 +13915,6 @@ function reasonText$1(code) {
 	return reasonLabel(t, token);
 }
 //#endregion
-//#region src/global-screens.js
-function setupGuide() {
-	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
-}
-function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
-	const article = h("article", {
-		class: "global-inbox-row",
-		"data-inbox-key": key
-	});
-	if (onOpen) article.addEventListener("click", (event) => {
-		if (event.target.closest("a, button, input, select, textarea")) return;
-		onOpen();
-	});
-	const text = h("div", { class: "global-inbox-text" }, h("a", {
-		class: "title",
-		href
-	}, title), meta || pill ? h("p", { class: "global-inbox-meta" }, meta ? h("span", { class: "global-inbox-meta-text" }, meta) : null, pill || null) : null);
-	const details = onOpen ? iconButton({
-		icon: "chevron-right",
-		label: detailsLabel,
-		onClick: () => onOpen()
-	}) : null;
-	article.append(text, h("div", { class: "global-inbox-actions" }, action || null, details));
-	return article;
-}
-function firstRunCard({ h, t, body, footer }) {
-	return h("div", { class: "global-first-run" }, h("section", {
-		class: "global-first-card",
-		"aria-labelledby": "global-first-title"
-	}, h("span", {
-		class: "brand-mark",
-		"aria-hidden": "true"
-	}), h("h1", { id: "global-first-title" }, t("global_product")), h("p", {}, t("global_first_sentence")), body, footer || null));
-}
-function settingsFrame({ h, t, sections, exclusive = false, selected = "", onSelect = () => {} }) {
-	const nav = h("nav", {
-		class: "global-settings-nav",
-		role: exclusive ? "tablist" : null,
-		"aria-orientation": exclusive ? "vertical" : null,
-		"aria-label": t("global_settings_nav")
-	});
-	const panels = h("div", { class: "global-settings-panels" });
-	const buttons = [];
-	const roots = [];
-	let preferred = selected || "";
-	for (const section of sections) {
-		const panel = h("section", {
-			class: "global-settings-section",
-			id: `settings-panel-${section.id}`,
-			"data-settings-panel": section.id,
-			role: exclusive ? "tabpanel" : null,
-			"aria-labelledby": exclusive ? `settings-tab-${section.id}` : null
-		});
-		if (section.id === "models") panel.setAttribute("data-settings-models", "");
-		const button = exclusive ? h("button", {
-			type: "button",
-			role: "tab",
-			id: `settings-tab-${section.id}`,
-			"data-settings-nav": section.id,
-			"aria-controls": panel.id
-		}, section.label) : h("a", {
-			href: `#settings-panel-${section.id}`,
-			id: `settings-tab-${section.id}`,
-			"data-settings-nav": section.id
-		}, section.label);
-		if (section.hidden) {
-			button.hidden = true;
-			panel.hidden = true;
-		}
-		button.addEventListener("click", (event) => {
-			if (!exclusive) event.preventDefault();
-			select(section.id, true);
-		});
-		buttons.push(button);
-		roots.push(panel);
-		nav.append(button);
-		panels.append(panel);
-	}
-	const visible = () => buttons.filter((button) => !button.hidden);
-	const marked = (button) => exclusive ? button.getAttribute("aria-selected") === "true" : button.getAttribute("aria-current") === "true";
-	function apply(id) {
-		for (const button of buttons) {
-			const on = !button.hidden && button.dataset.settingsNav === id;
-			if (exclusive) {
-				button.setAttribute("aria-selected", on ? "true" : "false");
-				button.tabIndex = on ? 0 : -1;
-			} else if (on) button.setAttribute("aria-current", "true");
-			else button.removeAttribute("aria-current");
-		}
-		if (!exclusive) return;
-		for (const node of roots) {
-			const button = buttons.find((item) => item.dataset.settingsNav === node.dataset.settingsPanel);
-			node.hidden = !(button && !button.hidden && node.dataset.settingsPanel === id);
-		}
-	}
-	function select(id, scroll) {
-		const button = buttons.find((item) => item.dataset.settingsNav === id);
-		if (!button || button.hidden) return;
-		preferred = id;
-		apply(id);
-		onSelect(id);
-		if (scroll) document.getElementById("settings-panel-" + id)?.scrollIntoView({ block: "nearest" });
-	}
-	nav.addEventListener("keydown", (event) => {
-		if (![
-			"ArrowUp",
-			"ArrowDown",
-			"ArrowLeft",
-			"ArrowRight",
-			"Home",
-			"End"
-		].includes(event.key)) return;
-		const enabled = visible();
-		const current = enabled.indexOf(document.activeElement);
-		if (current < 0) return;
-		event.preventDefault();
-		const next = enabled[event.key === "Home" ? 0 : event.key === "End" ? enabled.length - 1 : (current + (event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1) + enabled.length) % enabled.length];
-		if (!next) return;
-		next.focus();
-		select(next.dataset.settingsNav, true);
-	});
-	const initial = buttons.find((button) => !button.hidden && button.dataset.settingsNav === preferred) || visible()[0];
-	if (initial) apply(initial.dataset.settingsNav);
-	function panel(id) {
-		return roots.find((node) => node.dataset.settingsPanel === id);
-	}
-	function show(id) {
-		const button = buttons.find((node) => node.dataset.settingsNav === id);
-		const node = panel(id);
-		if (!button || !node) return;
-		button.hidden = false;
-		if (!exclusive) node.hidden = false;
-		if (preferred === id) apply(id);
-		else if (!visible().some(marked)) apply(id);
-	}
-	function hide(id) {
-		const button = buttons.find((node) => node.dataset.settingsNav === id);
-		const node = panel(id);
-		if (!button || !node) return;
-		const was = marked(button);
-		button.hidden = true;
-		node.hidden = true;
-		if (was) {
-			const next = visible()[0];
-			if (next) apply(next.dataset.settingsNav);
-		}
-	}
-	function reapply() {
-		if (buttons.find((node) => !node.hidden && node.dataset.settingsNav === preferred)) apply(preferred);
-	}
-	const root = h("div", {
-		class: "global-settings",
-		"data-settings-exclusive": exclusive ? "true" : "false"
-	}, nav, panels);
-	root.reapply = reapply;
-	return {
-		root,
-		panel,
-		show,
-		hide,
-		reapply
-	};
-}
-//#endregion
 //#region src/pm-quality-projections.js
 function qualityFact({ h, t, fact, current = false }) {
 	if (!fact) return "";
@@ -13522,7 +13930,7 @@ function qualityFact({ h, t, fact, current = false }) {
 		class: "pm-note-text"
 	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
 }
-function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
+function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, requireQualified = true, errorBox }) {
 	let editor = null, pending = false;
 	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
 	const read = () => {
@@ -13558,7 +13966,7 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 				alive();
 				if (!element.isConnected || editor.locked()) return;
 				const row = data.review, context = row?.context, assessment = row?.assessment;
-				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
+				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || (requireQualified ? row.qualified !== true : row.applicable !== true) || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
 					"operation_id",
 					"version",
 					"document_digest"
@@ -13593,6 +14001,19 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 			update();
 		}
 	};
+}
+//#endregion
+//#region src/pm-runtime-completion.js
+function runtimeCompletion(t, attempt) {
+	const value = attempt.runtime_completion;
+	if (value == null) return null;
+	const operationId = (id) => /^op_[0-9a-f]{32}$/.test(id || "");
+	if (value.runtime_status !== "original_turn_completed" || value.process_death_proven !== false || !operationId(value.observation_operation_id) || !operationId(value.execution_operation_id) || value.execution_operation_id !== attempt.operation_id || !/^[0-9a-f]{64}$/.test(value.document_digest || "") || !Number.isFinite(value.recorded_at)) throw Error(t("pm_kanban_scope_error"));
+	return value;
+}
+function runtimeReceipt(t, attempt) {
+	const value = runtimeCompletion(t, attempt);
+	return value ? h$1("div", { "data-runtime-completion": value.execution_operation_id }, h$1("p", {}, t("pm_kanban_runtime_completed")), h$1("p", { class: "ui-meta" }, t("pm_kanban_runtime_limits")), h$1("p", {}, t("pm_kanban_runtime_recorded_at"), " · ", timeStamp(value.recorded_at)), h$1("a", { href: `#/op/${encodeURIComponent(value.observation_operation_id)}` }, t("pm_kanban_runtime_receipt")), h$1("p", { class: "mono" }, value.observation_operation_id), h$1("p", { class: "mono" }, value.document_digest)) : null;
 }
 //#endregion
 //#region src/pm-work-inspector.js
@@ -13855,6 +14276,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				current: true
 			}));
 			else result.append(paragraph(t("pm_kanban_quality_unknown")));
+			if (card.execution?.attempts?.some((attempt) => runtimeCompletion(t, attempt))) result.append(paragraph(t("pm_kanban_runtime_recorded")));
 			const capture = card.latest_capture;
 			if (capture) {
 				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
@@ -13944,7 +14366,10 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				"operations",
 				"sessions",
 				"attempts"
-			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), paragraph(t("wv_ci_times_missing")), h$1("pre", { class: "mono" }, JSON.stringify({
+			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), paragraph(t("wv_ci_times_missing")), ...(card?.execution?.sessions || []).map((row) => {
+				const key = "pm_kanban_state_" + labelSegment(row.runtime_status), label = t(key);
+				return paragraph(t("pm_kanban_session"), " · ", label === key ? t("ui_status_unknown") : label, h$1("span", { class: "mono" }, " · ", labelSegment(row.resource_id)));
+			}), ...(card?.execution?.attempts || []).map((attempt) => runtimeReceipt(t, attempt)), h$1("pre", { class: "mono" }, JSON.stringify({
 				reviews: data.reviews,
 				criteria_results: data.criteriaResults,
 				register: data.register,
@@ -16105,7 +16530,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		try {
 			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
 			live(expected);
-			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
+			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.deviations?.version === 1 ? 4 : source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
 			const bytes = new TextEncoder().encode(report.content);
 			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
 			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
@@ -16335,14 +16760,21 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				qualified: section.quality.qualified_requirements,
 				total: section.quality.total_requirements
 			}))), h("p", { class: "muted" }, t("pq_coverage")));
+			if (name === "deviations" && section.version === 1) values.append(h("p", { class: "muted" }, t("pq_deviations_boundary")), h("details", { "data-pm-deviation-coverage": "" }, h("summary", {}, t("pq_deviations_coverage")), h("p", {}, t(section.coverage?.selected_source_coverage_complete ? "pq_deviations_selected" : "pq_deviations_partial")), ...(section.coverage?.selections || []).map((selection) => h("div", {}, h("a", { href: `#/item/${selection.work_item_id}` }, t("pm_evidence_open_work")), h("p", {}, selection.reason ? t("pq_deviation_reason_" + selection.reason) : `${t("pq_acceptance")}: ${t("pq_" + selection.acceptance)} · ${t("pq_dod")}: ${t("pq_" + selection.dod)}`))), proof({
+				h,
+				t,
+				value: section.coverage,
+				name: t("pq_deviations_coverage")
+			})));
 			for (const item of section.items || []) {
-				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.text), details);
+				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.kind === "quality_rejection" ? `${t("pq_rejected_" + item.details.criterion.criterion.kind)}: ${item.text}` : item.text), details);
 				if (item.kind === "quality_assessment") details.append(qualityFact({
 					h,
 					t,
 					fact: item.details
 				}));
-				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
+				if (item.kind === "quality_rejection") details.append(h("p", {}, t("pq_recorded_by", { actor: item.details.assessed_by })), h("p", {}, item.details.assessment.rationale), h("p", { class: "muted" }, t("pq_fixed")));
+				if (item.status) details.append(h("p", { class: "muted" }, item.kind === "quality_rejection" ? t("pq_rejected") : readable("pm_status_", item.status)));
 				const record = source.kind === "evidence" ? (snapshot.evidence || []).find((entry) => entry.evidence_id === source.evidence_id) : source.kind === "plan_input" ? snapshot.baseline?.document?.selected_inputs?.find((entry) => entry.input_id === source.input_id) : source.kind === "plan_adoption" ? snapshot.baseline?.adoption : null;
 				details.append(proof({
 					h,
@@ -16358,7 +16790,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				if (source.kind === "work_binding") details.append(h("a", { href: `#/item/${source.work_item_id}` }, t("pm_evidence_open_work")));
 				values.append(row);
 			}
-			if (!section.items?.length) values.append(h("p", {}, t("pm_brief_empty_" + name)));
+			if (!section.items?.length) values.append(h("p", {}, t(name === "deviations" && section.version === 1 ? "pq_deviations_empty" : "pm_brief_empty_" + name)));
 			sections.append(h("section", {
 				class: "pm-brief-row",
 				"data-pm-brief-section": name
@@ -26383,7 +26815,10 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 	}, h("details", { "data-pm-package-handoff-controls": "" }, h("summary", {}, t("ph_title")), sectionCard({ body: h("div", {}, head, availabilityNotice, review, status, facts, useReview, editorView, outcome, disclosure({
 		label: t("ph_details"),
 		body: h("div", {}, h("p", { class: "muted" }, t("ph_intro")), h("p", { class: "muted" }, t("ph_boundary")), h("p", { class: "muted" }, t("ph_agent_help")))
-	})) })));
+	})) })), dispatchExplanation({
+		h,
+		t
+	}));
 	const available = () => {
 		const cap = caps()?.features?.pm_workspaces?.package_handoff;
 		return cap?.available === true && cap.action === "repository.continue" && cap.contract === contract && cap.code_basis_required === true && ["bounded_full_prompt", "bounded_full_prompt_or_fixed_spec_artifact"].includes(cap.source_materialization);
@@ -30931,9 +31366,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		const use = h("button", {
 			type: "button",
 			class: "secondary",
-			disabled: !row.qualified,
+			disabled: !selectable(row),
 			onclick: () => {
-				if (!ready || !current()?.qualified) return;
+				if (!ready || !selectable(current())) return;
 				emit(reference(current()));
 				renderReview();
 			}
@@ -30967,6 +31402,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			document_digest: a.document_digest,
 			candidate_commit: row.context.native_result.candidate_commit
 		} : null;
+	}
+	function selectable(row) {
+		return Boolean(row?.assessment && row.applicable === true && !row.revocation);
 	}
 	function proofChoices(row, item) {
 		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$5(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
@@ -31215,7 +31653,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			await verifier.setSources(operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
-			if (previous && current()?.qualified && same$5(previous, reference(current()))) emit(previous);
+			if (previous && selectable(current()) && same$5(previous, reference(current()))) emit(previous);
 			update();
 		} catch (err) {
 			if (valid(ticket)) failure(err);
@@ -31265,14 +31703,139 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 	};
 }
 //#endregion
+//#region src/pm-kanban-observation.js
+function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permitted, form, errorBox, onSourceFailure }) {
+	const action = "pm.session.quiescence.observe", sources = new Map();
+	let ready = false, generation = 0, editor = null;
+	const select = h("select", {
+		"aria-label": t("pm_kanban_manual_source"),
+		required: true
+	}), context = h("p", { class: "pm-kanban-note" }), result = h("div");
+	const key = (row) => JSON.stringify([
+		row.link_id,
+		row.expected_link_operation_id,
+		row.expected_project_binding_id,
+		row.expected_session_identity_digest
+	]);
+	const selected = () => sources.get(select.value);
+	const reader = () => ready && caps()?.scopes?.includes("observe");
+	const writer = () => reader() && permitted(false);
+	const source = () => {
+		const row = selected();
+		if (!row?.available) throw Error(t("pm_kanban_manual_unavailable"));
+		return row;
+	};
+	const reason = (row) => t("pm_kanban_" + ({
+		manual_native_identity_unavailable: "manual_identity",
+		manual_multiple_inputs_unsupported: "manual_multiple",
+		manual_native_turn_active: "manual_active"
+	}[row?.reason] || "manual_unavailable"));
+	function describe() {
+		select.disabled = Boolean(editor?.locked()) || !writer() || !caps()?.actions?.some((row) => row.action === action && row.allowed);
+		if (editor) editor.box.querySelector("button[type=submit]").hidden = !writer() && !editor.locked();
+		context.replaceChildren(t(!permitted(false) || !caps()?.scopes?.includes("observe") || !caps()?.actions?.some((row) => row.action === action && row.allowed) ? "pm_kanban_manual_authority" : !ready || !selected() ? "pm_kanban_manual_unavailable" : selected().available ? "pm_kanban_manual_ready" : "pm_kanban_manual_unavailable"));
+		if (selected()?.reason) context.append(" ", reason(selected()));
+	}
+	editor = form({
+		action,
+		target: {
+			workspace_id: workspaceId,
+			work_item_id: workId
+		},
+		fields: { source: select },
+		requiredScope: "observe",
+		statusText: (status) => {
+			const key = "reg_status_" + status, label = t(key);
+			return label === key ? t("ui_status_unknown") : label;
+		},
+		params: () => ({ link_id: source().link_id }),
+		preconditions: () => {
+			const row = source();
+			return {
+				expected_link_operation_id: row.expected_link_operation_id,
+				expected_project_binding_id: row.expected_project_binding_id,
+				expected_session_identity_digest: row.expected_session_identity_digest
+			};
+		},
+		permitted: () => writer() && selected()?.available === true,
+		recoverPermitted: reader,
+		label: "pm_kanban_manual_observe",
+		extra: h("div", {}, h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_help")), h("label", {}, t("pm_kanban_manual_source"), select), context),
+		onStateChange: describe,
+		onSaved: (receipt) => {
+			if (receipt?.schema !== "pm_manual_single_input_quiescence_v1" || receipt.workspace_id !== workspaceId || receipt.work_item_id !== workId || receipt.runtime_status !== "current_single_input_quiescent" || receipt.process_death_proven !== false || receipt.ownership !== "manual_read_only" || receipt.work_acceptance !== "not_evaluated" || !/^op_[0-9a-f]{32}$/.test(receipt.observation_operation_id || "") || !/^[0-9a-f]{64}$/.test(receipt.document_digest || "") || !Number.isFinite(receipt.recorded_at)) throw Error(t("pm_kanban_scope_error"));
+			result.replaceChildren(h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_recorded")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_runtime_limits")), h("p", {}, t("pm_kanban_source_time"), ": ", timeStamp(receipt.recorded_at)), h("code", { class: "pm-source" }, receipt.document_digest));
+		},
+		api: async (...args) => {
+			const ticket = generation;
+			try {
+				const data = await api(...args);
+				alive();
+				if (ticket !== generation) throw Object.assign(Error(), { code: "PM_DISPOSED" });
+				return data;
+			} catch (error) {
+				alive();
+				if (ticket === generation && [
+					401,
+					403,
+					404
+				].includes(error.status)) onSourceFailure(error);
+				throw error;
+			}
+		},
+		errorBox
+	});
+	editor.box.querySelector("button[type=submit]").className = "ui-button secondary ui-sm";
+	select.addEventListener("change", () => {
+		result.replaceChildren();
+		editor.update();
+	});
+	const box = h("div", { "data-pm-manual-observation": workId }, h("h4", {}, t("pm_kanban_manual_title")), editor.box, result);
+	function update(rows) {
+		++generation;
+		if (!Array.isArray(rows) || rows.length > 64) throw Error(t("pm_kanban_scope_error"));
+		const value = select.value;
+		sources.clear();
+		select.replaceChildren(h("option", { value: "" }, t("pm_kanban_manual_choose")));
+		for (const row of rows) {
+			if (!Number.isSafeInteger(row.link_id) || row.link_id <= 0 || !/^op_[0-9a-f]{32}$/.test(row.expected_link_operation_id || "") || !/^pmpb_[0-9a-f]{32}$/.test(row.expected_project_binding_id || "") || !/^[0-9a-f]{64}$/.test(row.expected_session_identity_digest || "") || !["host", "session_id"].every((field) => typeof row[field] === "string" && row[field].length > 0 && row[field].length <= 4096) || typeof row.available !== "boolean" || row.reason != null && typeof row.reason !== "string" || row.available && row.reason != null || sources.has(key(row))) throw Error(t("pm_kanban_scope_error"));
+			sources.set(key(row), row);
+			select.append(h("option", { value: key(row) }, `${row.host} / ${row.session_id}${row.available ? "" : ` · ${reason(row)}`}`));
+		}
+		if (value && !sources.has(value)) select.append(h("option", { value }, t("pm_kanban_manual_original_missing")));
+		select.value = value;
+		ready = true;
+		editor.update();
+	}
+	function withdraw() {
+		++generation;
+		ready = false;
+		sources.clear();
+		const value = select.value;
+		select.replaceChildren(h("option", { value }, t("pm_kanban_manual_original_missing")));
+		result.replaceChildren();
+		editor.box.querySelector(".pm-receipt")?.replaceChildren();
+		editor.update();
+	}
+	return {
+		box,
+		update,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
+function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
 	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
 	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
 	let failureSignature = "";
+	const observers = new Map();
+	const withdrawObservers = () => {
+		for (const observer of observers.values()) observer.withdraw();
+	};
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -31348,6 +31911,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		tools: () => toolItems(),
 		returnFocus: () => rows.get(selected)?.node.querySelector("[data-board-open]") || viewHeading(),
 		onClose: () => {
+			withdrawObservers();
 			detailSerial++;
 			if (!preserveSelection) {
 				selected = null;
@@ -31368,6 +31932,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || "") || expectedId && card.work_item_id !== expectedId || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t("pm_kanban_scope_error"));
 		if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
 		for (const item of card.latest_capture?.evidence || []) if (item.workspace_id && item.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+		for (const attempt of card.execution?.attempts || []) runtimeCompletion(t, attempt);
 		return card;
 	}
 	function checkPage(data, after) {
@@ -31399,6 +31964,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preserveSelection = false;
 	}
 	function withdraw({ forgetRoute = true, keepStatus = false } = {}) {
+		withdrawObservers();
 		++serial;
 		++detailSerial;
 		reading = false;
@@ -31572,7 +32138,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}, workStatusPill(t, card)) : null, age ? h$1("span", {
 			class: "pm-board-age",
 			title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
-		}, age) : null), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];
+		}, age) : null), card.execution?.attempts?.some((attempt) => runtimeCompletion(t, attempt)) ? h$1("span", {
+			class: "ui-meta",
+			"data-runtime-summary": ""
+		}, t("pm_kanban_runtime_recorded")) : null, coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];
 	}
 	function makeCard(card) {
 		const node = h$1("article", {
@@ -31704,6 +32273,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					card.column,
 					card.flow?.age_seconds,
 					card.flow?.cycle_seconds,
+					card.execution?.attempts,
 					blockedWork(card),
 					sources.get(card.work_item_id)
 				]);
@@ -31750,6 +32320,28 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				select(card.work_item_id, true);
 			}
 		});
+		if (form && caps()?.actions?.some((row) => row.action === "pm.session.quiescence.observe")) {
+			let observer = observers.get(card.work_item_id);
+			if (!observer) {
+				observer = kanbanObservation({
+					h: h$1,
+					t,
+					api,
+					alive,
+					workspaceId,
+					workId: card.work_item_id,
+					caps,
+					permitted,
+					form,
+					errorBox,
+					onSourceFailure: unavailable
+				});
+				observers.set(card.work_item_id, observer);
+			}
+			const body = detail.element.body.querySelector("[data-work-section=\"details\"] > div");
+			if (observer.box.parentNode !== body) body.insertBefore(observer.box, body.querySelector(":scope > pre"));
+			observer.update(card.execution?.manual_observation_sources ?? []);
+		}
 		if (opening) requestAnimationFrame(() => {
 			const node = rows.get(card.work_item_id)?.node;
 			if (selected === card.work_item_id && node?.isConnected && detail.element) revealCard(node);
@@ -31758,6 +32350,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	async function select(id, retain = false) {
 		const current = rows.get(id);
 		if (!current) return;
+		if (selected !== id || !retain) withdrawObservers();
 		if (selected !== id) deliveryPages = 1;
 		selected = id;
 		preference.selected = id;
@@ -31799,6 +32392,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			showDetail(data.card);
 		} catch (error) {
 			if (generation === serial && ticket === detailSerial) {
+				observers.get(id)?.withdraw();
 				if (error.message === t("pm_kanban_scope_error")) {
 					unavailable(error);
 					return;
@@ -31845,6 +32439,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			return;
 		}
 		stale = false;
+		withdrawObservers();
 		const ticket = ++serial;
 		detailSerial++;
 		reading = true;
@@ -34283,7 +34878,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						if (!detail.isConnected) return;
 						if (value.workspace_id !== workspaceId || value.revision.revision_id !== entry.revision_id) throw Error(t("pm_scope_mismatch"));
 						const doc = value.revision.document;
-						content.replaceChildren(h("p", {}, doc.rationale || t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
+						content.replaceChildren(h("p", {}, doc.rationale || t(doc.milestones?.some((row) => row.actual?.quality) ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
 						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
@@ -34320,6 +34915,34 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		}
 		return false;
 	}
+	function qualityResult(observed) {
+		const actual = observed?.actual, quality = actual?.quality, context = observed?.quality_context;
+		if (!quality) return t(observed ? "pm_roadmap_quality_unknown" : "pm_roadmap_no_observation");
+		const states = [
+			"accepted",
+			"rejected",
+			"unassessed"
+		], status = (value) => t("pm_roadmap_quality_" + value);
+		if (quality.profile !== "fixed_milestone_assessments_v1" || context?.profile !== quality.profile || [
+			"plan_revision_id",
+			"plan_document_digest",
+			"scope_revision"
+		].some((key) => quality[key] !== context[key]) || quality.current_applicability !== "not_evaluated" || typeof quality.contribution_coverage_complete !== "boolean" || ![
+			"qualified",
+			"not_qualified",
+			"unassessed"
+		].includes(actual.completion) || !states.includes(actual.dod) || !Number.isSafeInteger(quality.total_requirements) || quality.total_requirements < 0 || !Number.isSafeInteger(quality.qualified_requirements) || quality.qualified_requirements < 0 || quality.qualified_requirements > quality.total_requirements || !Array.isArray(quality.requirements) || quality.requirements.length !== quality.total_requirements || !Array.isArray(context.requirement_ids) || !Array.isArray(quality.assessments) || quality.requirements.some((row) => !context.requirement_ids.includes(row.requirement_id) || !states.includes(row.acceptance) || !states.includes(row.dod))) throw Error(t("pm_scope_mismatch"));
+		const sources = h("details", {}, h("summary", {}, t("pm_roadmap_quality_details")), h("ul", {}, ...quality.requirements.map((row) => h("li", {}, h("code", { class: "pm-source" }, row.requirement_id), h("p", {}, t("pm_roadmap_quality_acceptance"), ": ", status(row.acceptance), " · ", t("pm_roadmap_quality_dod"), ": ", status(row.dod))))));
+		for (const assessment of quality.assessments) {
+			const ref = assessment.reference;
+			if (!/^pmqr_[0-9a-f]{32}$/.test(ref?.review_id) || !/^op_[0-9a-f]{32}$/.test(ref?.operation_id) || !Number.isSafeInteger(ref.version) || ref.version < 1 || !/^([0-9a-f]{64})$/.test(ref.document_digest) || !/^([0-9a-f]{40})$/.test(ref.candidate_commit) || assessment.candidate_commit !== ref.candidate_commit) throw Error(t("pm_scope_mismatch"));
+			sources.append(h("p", { class: "pm-source" }, t("pm_roadmap_quality_original"), ": ", h("code", {}, ref.review_id), " · ", t("pm_roadmap_quality_version"), ": ", String(ref.version), h("span", { class: "pm-source" }, t("pm_roadmap_quality_candidate"), ": ", h("code", {}, ref.candidate_commit)), h("span", { class: "pm-source" }, t("pm_roadmap_quality_digest"), ": ", h("code", {}, ref.document_digest)), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, ref.operation_id)));
+		}
+		return h("div", { "data-pm-roadmap-quality": "" }, h("strong", {}, status(actual.completion)), h("p", {}, t("pm_roadmap_quality_dod"), ": ", status(actual.dod)), h("p", {}, t("pm_roadmap_quality_count", {
+			qualified: quality.qualified_requirements,
+			total: quality.total_requirements
+		})), h("p", { class: "muted" }, t(quality.contribution_coverage_complete ? "pm_roadmap_quality_coverage_complete" : "pm_roadmap_quality_coverage_incomplete")), h("p", { class: "muted" }, t("pm_roadmap_quality_fixed")), sources);
+	}
 	function render() {
 		const base = current.baseline?.document;
 		if (!base) {
@@ -34338,7 +34961,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 			const predicted = current.forecast?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
 			const observed = current.observation?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
 			const dependencies = milestone.depends_on.map((id) => base.milestones.find((item) => item.milestone_id === id)?.title || id);
-			const source = h("details", {}, h("summary", {}, t("pm_roadmap_sources")), h("p", { class: "muted" }, t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			const source = h("details", {}, h("summary", {}, t("pm_roadmap_sources")), h("p", { class: "muted" }, t(observed?.actual?.quality ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
 				plan_revision_id: milestone.plan_revision_id,
 				requirement_ids: milestone.requirement_ids,
 				work_binding_ids: milestone.work_binding_ids,
@@ -34356,7 +34979,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				].map((key) => [key, current.observation.document[key]])) : null,
 				observation: observed || null
 			}, null, 2)));
-			body.append(h("tr", { "data-pm-milestone": milestone.milestone_id }, h("th", { scope: "row" }, milestone.title, dependencies.length ? h("small", { class: "muted pm-source" }, t("pm_roadmap_after", { items: dependencies.join(", ") })) : ""), h("td", {}, textDate(milestone.baseline_date)), h("td", {}, textDate(predicted?.forecast_date)), h("td", {}, t(observed ? "pm_roadmap_quality_unknown" : "pm_roadmap_no_observation"), source)));
+			body.append(h("tr", { "data-pm-milestone": milestone.milestone_id }, h("th", { scope: "row" }, milestone.title, dependencies.length ? h("small", { class: "muted pm-source" }, t("pm_roadmap_after", { items: dependencies.join(", ") })) : ""), h("td", {}, textDate(milestone.baseline_date)), h("td", {}, textDate(predicted?.forecast_date)), h("td", {}, qualityResult(observed), source)));
 		}
 		view.replaceChildren(h("p", {}, h("strong", {}, base.title), h("small", { class: "muted pm-source" }, base.rationale)), h("div", { class: "pm-roadmap-scroll" }, table));
 	}
@@ -34420,6 +35043,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		} catch (error) {
 			if (ticket === serial) {
 				current = null;
+				signature = "";
 				view.replaceChildren();
 				historyBody.replaceChildren();
 				historyLoaded = false;
@@ -37186,7 +37810,9 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 			"unselected_backlog",
 			"pm_owned_session",
 			"verified_ended_session_retained",
-			"original_maintenance_attempt_completed"
+			"original_maintenance_attempt_completed",
+			"original_batch_attempt_completed",
+			"manual_session_currently_quiescent"
 		];
 		const item = h("li", {}, t("pmo_exclusion_" + (reasons.includes(row.reason) ? row.reason : "unknown")), sourceReference(row));
 		if (!reasons.includes(row.reason)) item.append(h("code", { class: "pm-source" }, row.reason));
@@ -38813,6 +39439,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				readSelection: qualitySelection,
 				field: selectedQuality,
 				constraints: { binding_id: binding.binding_id },
+				requireQualified: false,
 				errorBox
 			}) : null;
 			const capture = track(form({
@@ -40012,6 +40639,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		workspaceId,
 		errorBox,
 		caps,
+		permitted,
+		form,
 		embedded: true
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);
@@ -49929,7 +50558,7 @@ function validRequest$2(r) {
 		"prompt"
 	].every((k) => !(k in r.params) || text$3(r.params[k], k === "prompt" ? 2e4 : 256)) && object$2(r.preconditions) && Object.keys(r.preconditions).length === 0;
 }
-function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference }) {
+function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, storageKey, submitPreference, initialHost }) {
 	let raw;
 	try {
 		raw = JSON.parse(localStorage.getItem(storageKey));
@@ -49949,6 +50578,10 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 			title: "",
 			prompt: ""
 		}, raw.intent.request.params);
+	}
+	if (!saved.intent && initialHost && caps()?.hosts?.some((x) => x.host === initialHost) && saved.host !== initialHost) {
+		saved.host = initialHost;
+		saved.workspace = "";
 	}
 	let operation = null, busy = false, submission = null, refreshing = null, readFailed = false;
 	let workspaces = [], discovery = 0, discovering = false, discoveredHost = "";
@@ -54277,7 +54910,18 @@ async function viewSessions(main) {
 		class: "session-project-link",
 		href: "#/projects"
 	}, t("sessions_projects")));
-	main.append(h("div", { class: "session-heading" }, pageHeader({ title: t("sessions_title") }), state.caps?.actions?.some((a) => a.action === "session.start") ? h("a", { href: "#/start" }, t("start_title_page")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), disclosure({
+	const pathsIntro = h("p", {
+		class: "ui-meta",
+		"data-session-paths": "",
+		hidden: true
+	}, t("paths_first"));
+	main.append(h("div", { class: "session-heading" }, pageHeader({
+		title: t("sessions_title"),
+		meta: pathsIntro
+	}), mayStartSession(state.caps) ? h("a", {
+		href: "#/start",
+		class: "ui-button primary"
+	}, t("paths_start")) : null, state.caps?.features?.repository_sync?.length ? h("a", { href: "#/published" }, t("pub_title")) : null, state.caps?.actions?.some((a) => Object.values(orchestrationActions).includes(a.action)) ? h("a", { href: "#/orchestrate/relay" }, t("orch_title")) : null), disclosure({
 		label: t("global_details"),
 		body: h("p", {}, t("sessions_intro"))
 	}), h("div", { class: "filters session-filters" }, searchField(search), hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
@@ -54405,6 +55049,7 @@ async function viewSessions(main) {
 	};
 	const read = async (mode, expectedRevision) => {
 		if (expectedRevision !== revision) return;
+		if (mode === "reset") pathsIntro.hidden = true;
 		const p = new URLSearchParams({
 			limit: "50",
 			order: "id",
@@ -54441,6 +55086,7 @@ async function viewSessions(main) {
 			}
 			cursor = next;
 			more.hidden = !cursor;
+			pathsIntro.hidden = rows.size !== 0 || Boolean(cursor);
 			pages = mode === "more" ? pages + readPages : readPages;
 			const focused = document.activeElement;
 			const focusedID = list.contains(focused) ? focused.closest("[data-resource-id]")?.dataset.resourceId : null;
@@ -54451,6 +55097,7 @@ async function viewSessions(main) {
 			const current = [...list.querySelectorAll("[data-resource-id]")].find((node) => node.dataset.resourceId === anchorID);
 			if (mode === "refresh" && current && Math.abs(scrollY - before) < 1) scrollBy(0, current.getBoundingClientRect().top - offset);
 		} catch (e) {
+			pathsIntro.hidden = true;
 			status.replaceChildren(errorBox(e, { within: status }));
 		} finally {
 			more.disabled = false;
@@ -55177,8 +55824,8 @@ async function viewSession(main, host, sid, context = null) {
 		hidden: true,
 		id: "workspace-message-input"
 	}, box, composerRow);
-	const readonly = h("p", {
-		class: "muted session-readonly",
+	const readonly = h("section", {
+		class: "session-readonly work-paths-card",
 		"data-session-readonly": "",
 		hidden: true
 	});
@@ -55766,7 +56413,26 @@ async function viewSession(main, host, sid, context = null) {
 		composer.hidden = !managed;
 		controls.hidden = !managed;
 		readonly.hidden = managed;
-		readonly.textContent = t(row.provenance === "manual" ? "session_readonly_manual" : "session_readonly_unknown");
+		if (row.provenance === "manual") {
+			const reason = checkpointReason(state.caps, host);
+			readonly.replaceChildren(h("h2", {}, t("paths_view_only")), h("p", {}, t("paths_manual")), h("div", { class: "actions" }, ...[reason ? null : button({
+				variant: "secondary",
+				label: t("paths_continue"),
+				onClick: () => {
+					results.open();
+					cps.open();
+				}
+			}), mayStartSession(state.caps) ? h("a", {
+				class: "ui-button secondary",
+				href: `#/start?host=${encodeURIComponent(host)}`
+			}, t("paths_start")) : null].filter(Boolean)), ...[reason ? h("p", {
+				class: "muted",
+				"data-checkpoint-reason": ""
+			}, t(reason), " ", h("a", { href: "#/settings?section=connection" }, t("paths_setup"))) : null].filter(Boolean), h("a", {
+				class: "global-quiet-link",
+				href: "#/settings?section=agents"
+			}, t("paths_mcp")));
+		} else readonly.textContent = t("session_readonly_unknown");
 		renderPending();
 		updateControls();
 	};
@@ -56026,8 +56692,8 @@ async function viewSession(main, host, sid, context = null) {
 	};
 }
 function checkpointPanel(host, sid, { namespace = state.namespace, manual = () => false } = {}) {
-	const can = (state.caps?.features?.checkpoints || []).includes(host);
-	const mayStart = (state.caps?.scopes || []).includes("start");
+	const can = (state.caps?.features?.checkpoints || []).includes(host) && actionAllowed(state.caps, "checkpoint.create");
+	const mayStart = (state.caps?.scopes || []).includes("start") && actionAllowed(state.caps, "checkpoint.continue");
 	const list = h("div", {});
 	const status = h("div", { class: "muted" });
 	const rows = new Map();
@@ -56184,7 +56850,8 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	}, t("checkpoint_record"));
 	const recordForm = h("div", {
 		class: "session-checkpoint-record",
-		hidden: true
+		hidden: true,
+		tabindex: -1
 	}, h("div", { class: "actions" }, pick), note, h("div", { class: "actions" }, create));
 	const action = can ? button({
 		variant: "ghost",
@@ -56201,7 +56868,6 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	const paintNotes = () => notes.replaceChildren(...[
 		h("p", { class: "muted" }, t("checkpoint_help")),
 		manual() ? h("p", { class: "muted" }, t("checkpoint_manual_hint")) : null,
-		can ? null : h("p", { class: "muted" }, t("checkpoint_unavailable")),
 		can ? null : h("p", { class: "muted" }, h("code", {}, t("checkpoint_unavailable_keys"))),
 		mayStart ? null : h("p", { class: "muted" }, t("needs_start_scope")),
 		mayStart ? null : h("p", { class: "muted" }, h("code", {}, t("needs_start_scope_key")))
@@ -56215,7 +56881,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 	checkpointWhy.addEventListener("toggle", () => {
 		if (checkpointWhy.open) paintNotes();
 	});
-	const box = h("div", { class: "session-checkpoints" }, can ? null : h("p", { class: "muted session-checkpoint-state" }, t("session_checkpoint_unavailable")), recordForm, status, list, checkpointWhy);
+	const box = h("div", { class: "session-checkpoints" }, can && mayStart ? null : h("p", { class: "muted session-checkpoint-state" }, t(checkpointReason(state.caps, host) || "paths_host_unavailable")), recordForm, status, list, checkpointWhy);
 	const clear = () => {
 		ticket += 1;
 		rows.clear();
@@ -56227,6 +56893,14 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 		box,
 		action,
 		clear,
+		open: async () => {
+			const mine = ticket;
+			recordForm.hidden = false;
+			action?.setAttribute("aria-expanded", "true");
+			recordForm.scrollIntoView({ block: "nearest" });
+			if (pick.hidden) await loadPreview(mine);
+			if (mine === ticket) (pick.hidden ? recordForm : pick).focus();
+		},
 		load: async () => {
 			const mine = ticket;
 			await loadPreview(mine);
@@ -57367,11 +58041,12 @@ async function fleetTailscale(root, guard) {
 }
 function openSettings(main, { exclusive = false, refreshButton } = {}) {
 	const memory = viewState(state.namespace || "", "", "settings");
+	const params = new URLSearchParams(location.hash.split("?")[1] || "");
 	const frame = settingsFrame({
 		h,
 		t,
 		exclusive,
-		selected: memory.section || "",
+		selected: params.get("section") || memory.section || "",
 		onSelect: (id) => {
 			memory.section = id;
 		},
@@ -57401,6 +58076,10 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 				hidden: true
 			},
 			{
+				id: "agents",
+				label: t("agents_heading")
+			},
+			{
 				id: "about",
 				label: t("global_nav_about")
 			}
@@ -57424,6 +58103,25 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
 	}).catch(() => {});
 	main.append(frame.root);
+	const connection = {
+		epoch: state.epoch,
+		namespace: state.namespace,
+		generation
+	};
+	const agents = settingsAgents({
+		h,
+		t,
+		api,
+		caps: () => state.caps,
+		guard: () => assertView(connection),
+		from: params.get("from")
+	});
+	frame.panel("agents").append(agents.root);
+	agents.load();
+	if (params.get("section") === "agents") {
+		agents.heading.scrollIntoView({ block: "nearest" });
+		agents.heading.focus();
+	}
 	return frame;
 }
 function viewBrowserSettings(main) {
@@ -59542,12 +60240,16 @@ async function viewStart(main) {
 		caps: () => state.caps,
 		guard: () => assertView(connection),
 		submitPreference: submit,
+		initialHost: new URLSearchParams(location.hash.split("?")[1] || "").get("host"),
 		ready: () => state.online && !state.nativeBusy,
 		errorBox,
 		opStatus,
 		storageKey: `batc.start.${connection.namespace}`
 	});
-	main.append(h("a", { href: "#/sessions" }, t("nav_sessions")), pageHeader({ title: t("start_title_page") }), h("p", { class: "muted" }, t("start_intro")), ...state.caps?.features?.repository_sync?.length ? [h("p", {}, h("a", { href: "#/published" }, t("pub_title")))] : [], panel.box);
+	main.append(h("a", { href: "#/sessions" }, t("nav_sessions")), pageHeader({ title: t("start_title_page") }), h("p", { class: "muted" }, t("start_intro")), ...state.caps?.features?.repository_sync?.length ? [h("p", {}, h("a", { href: "#/published" }, t("pub_title")))] : [], panel.box, dispatchExplanation({
+		h,
+		t
+	}));
 	try {
 		await panel.init();
 	} catch {}
@@ -59681,7 +60383,10 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		storageKey: `batc.dispatch.${connection.namespace}.${pid}${repairWid ? "." + repairWid : ""}`,
 		attachmentFactory: repairSeed ? null : (prompt, changed) => attachmentDraft(`dispatch.${pid}`, prompt, [], false, changed)
 	});
-	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), pageHeader({ title: t("dispatch_title") }), repairSeed ? h("p", { class: "muted" }, t("repair_dispatch_help")) : "", panel.box);
+	main.append(h("a", { href: `#/project/${pid}` }, t("dispatch_back")), pageHeader({ title: t("dispatch_title") }), repairSeed ? h("p", { class: "muted" }, t("repair_dispatch_help")) : "", panel.box, dispatchExplanation({
+		h,
+		t
+	}));
 	try {
 		await panel.init();
 	} catch {}

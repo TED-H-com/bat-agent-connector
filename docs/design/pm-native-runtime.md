@@ -205,3 +205,15 @@ was retained; the successful smoke was a new explicit operation, not a replay
 that changed the failed history. Synthetic scratch data was removed after an
 exact process-identity death recheck. This evidence covers one Linux analysis
 path, not all models, platforms, BAT execution or PM worktree document writing.
+
+
+### Settings installation read
+
+`GET /api/v1/pm/installation-capabilities` requires `observe` and no workspace. It
+projects `pm_native_capabilities.installation()` from the same cheap
+`installation_eligibility()` used by workspace capabilities, plus action registration.
+It returns `workspace_required: true` and no workspace authorization. This read never
+spawns a process, reads authentication bytes or verifies a model; existing workspace
+membership, scopes and per-run gates remain authoritative. The capability feature
+`pm_workspaces.installation_eligibility` advertises the read. Settings entered from a
+discussion instead uses the existing workspace capabilities read, including `bat_analysis`.

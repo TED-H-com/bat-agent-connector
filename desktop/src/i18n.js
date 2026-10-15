@@ -1,3 +1,4 @@
+import {workPathsStrings} from './work-paths-strings.js';
 import {diagnosticsStrings} from './diagnostics-strings.js';
 import {overviewStrings} from './pm-overview-strings.js';
 import {scheduleStrings} from './pm-schedule-strings.js';
@@ -33,6 +34,7 @@ export const STRINGS = {
     ...overviewStrings["zh-TW"],
     ...scheduleStrings["zh-TW"],
     ...globalStrings["zh-TW"],
+    ...workPathsStrings["zh-TW"],
     ...workViewStrings["zh-TW"],
     ...ahpObserverStrings["zh-TW"],
     ...qualityProjectionStrings["zh-TW"],
@@ -390,12 +392,12 @@ export const STRINGS = {
     dispatch_project_unavailable: "無法確認目前專案。草稿保留，確認前不會派工。",
     dispatch_unsupported: "請更新 Connector 以使用專案快速派工。",
     dispatch_fixed_inputs: "這筆操作固定使用下列附件版本；查回不會重傳或另開工作。",
-    start_choose_host: "選擇主機", start_workspace: "工作區", start_choose_workspace: "選擇工作區", start_agent: "Agent",
-    start_model: "模型（選填）", start_model_default: "使用主機或 agent 的預設模型", start_title: "標題（選填）", start_prompt: "原始指示（選填）",
+    start_choose_host: "選擇主機", start_workspace: "工作區", start_choose_workspace: "選擇工作區", start_agent: "代理",
+    start_model: "模型（選填）", start_model_default: "使用主機或代理的預設模型", start_title: "標題（選填）", start_prompt: "原始指示（選填）",
     start_reload_workspaces: "重新讀取工作區", start_loading_workspaces: "正在讀取工作區…",
     start_discovery_failed: "工作區清單尚未確認。請重新讀取後再選擇。", start_no_workspaces: "此主機目前未傳回工作區。",
     start_truncated: "只顯示前 200 個工作區；此清單不代表所有工作區。", start_workspace_help: "使用 Connector 傳回的固定工作區 ID；主機仍會檢查儲存庫與權限。",
-    start_isolation: "使用新 worktree。此操作不會接管既有人工或任務工作階段。", start_prompt_help: "原文會完整保留。留白只啟動工作階段，不會自動產生指示。",
+    start_isolation: "使用新的工作樹；人工與任務工作階段維持原狀", start_prompt_help: "原文會完整保留。留白只啟動工作階段，不會自動產生指示。",
     start_apply: "開始工作階段", start_new: "準備另一個工作階段", start_unavailable: "需要 observe 與 start 權限，以及 Connector 允許啟動工作階段的主機。",
     start_invalid_result: "操作回應與原啟動請求不符。", start_unknown: "提交結果尚未確認；原請求與 key 已保留。",
     start_fixed: "主機、工作區、選項與原文已固定。查回不會重新啟動；結果不明時只能重試同一筆請求。",
@@ -964,7 +966,7 @@ export const STRINGS = {
     answer: "回答", allow: "允許", deny: "拒絕", read_only_note:
       "這個工作階段由人在 BAT 建立，API 唯讀，永不寫入：不送字、不回答、不中斷。要讓代理接續，請從它的提交另開受管理工作。",
     continue_from_checkpoint: "從這裡接續", checkpoints: "檢查點",
-    checkpoint_help: "記下這個工作階段目前的提交與最近對話（只讀，不改動原工作階段或資料夾）。從檢查點開始的代理工作會在 Connector 自己的儲存庫複本裡，以新的分支與工作階段進行。",
+    checkpoint_help: "記錄選定的提交與最近對話，原工作階段與目錄維持唯讀",
     create_checkpoint: "記下這個版本", no_checkpoints: "還沒有記下的檢查點。", excerpt_count: "{n} 則對話",
     commit: "提交", checkpoint_note_placeholder: "接下來要做什麼（原文，會一併記下，選填）…",
     dirty_unknown: "未提交修改尚未觀測，不會帶入新工作。",
@@ -972,7 +974,7 @@ export const STRINGS = {
     started_from: "這個工作階段從提交 {commit} 開出：", source_session: "來源工作階段",
     dirty_warning: "記錄時有 {n} 個未提交的修改，不會帶入新工作。", continue_placeholder: "要代理接著做什麼…",
     start_agent_work: "開始代理工作", open_new_session: "開啟新工作階段",
-    checkpoint_unavailable: "此主機缺少受管理目錄、SSH 連線別名或寫入與協調權限，無法從檢查點開工。",
+    checkpoint_unavailable: "此主機尚未設定受管工作",
     needs_start_scope: "這個登入沒有開工權限，請使用具開工權限的憑證。",
     confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
     confinement_none: "無已證實的執行限制", confinement_prompt_gated: "權限詢問控管", confinement_host_account: "帳號限制",
@@ -1051,6 +1053,7 @@ export const STRINGS = {
     ...overviewStrings.en,
     ...scheduleStrings.en,
     ...globalStrings.en,
+    ...workPathsStrings.en,
     ...workViewStrings.en,
     ...ahpObserverStrings.en,
     ...qualityProjectionStrings.en,
@@ -1977,9 +1980,7 @@ export const STRINGS = {
     read_only_note: "A person created this session in BAT, so the API never writes to it. To have an agent " +
       "continue, start a new managed session from its commit.",
     continue_from_checkpoint: "Start from here", checkpoints: "Checkpoints",
-    checkpoint_help: "Records this session's current commit and recent conversation (read-only; the session and " +
-      "its folder are not changed). Agent work started from it runs in the connector's own clone on a new branch " +
-      "and session.",
+    checkpoint_help: "Records the selected commit and recent conversation; the source stays read-only",
     create_checkpoint: "Record this version", no_checkpoints: "No checkpoints yet.", excerpt_count: "{n} messages",
     commit: "Commit", checkpoint_note_placeholder: "What should happen next (kept verbatim; optional)…",
     dirty_unknown: "Uncommitted changes: not observed (no SSH alias for this host); none are carried over.",
@@ -1988,8 +1989,7 @@ export const STRINGS = {
     dirty_warning: "{n} uncommitted change(s) at capture time are not carried over.",
     continue_placeholder: "What should the agent do next…", start_agent_work: "Start agent work",
     open_new_session: "Open the new session",
-    checkpoint_unavailable: "This host lacks managed_roots, an SSH alias or the write/orchestrate tiers, so work " +
-      "cannot start from a checkpoint here.",
+    checkpoint_unavailable: "This host is not set up for managed work",
     needs_start_scope: "Your token lacks the start scope, so it cannot start agent work; issue one with --scope start.",
     confined_note: "The working directory alone offers no protection. Limits come from start options and account evidence; individual approvals may permit outside writes.",
     confinement_none: "No proven execution limit", confinement_prompt_gated: "Prompt gated", confinement_host_account: "Host account",

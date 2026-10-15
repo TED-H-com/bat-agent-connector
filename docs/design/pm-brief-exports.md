@@ -201,3 +201,18 @@ Shared-browser tests cover all formats, exact bytes, late replies, source loss,
 selected history, native receipts and compact layouts at 390/768/1440 pixels in
 both languages. The real-central browser fixture also downloads and verifies all
 three formats, without adding an operation or changing the captured snapshot.
+
+## Criterion projection renderer 4
+
+A snapshot whose Brief has `deviations.version: 1` uses renderer 4 in every
+format, including when its selected criteria have no rejection. The shared
+Web/Tauri client checks that exact renderer against the displayed authorized
+view; native saving accepts renderer 4 with the same fixed digest, complete
+content and ordinary/maintenance projection checks. Versions 1, 2 and 3 remain
+valid for their unchanged legacy snapshot shapes.
+
+English and zh-TW Markdown, HTML and SVG display the same original reviewer
+rejections and rationale, with full source appendices and explicit partial,
+unassessed and historical-applicability limits. Source-authored wording remains
+literal. This is bounded original quality evidence, not semantic drift analysis
+or a claim that Issue #89's remaining dimensions are complete.

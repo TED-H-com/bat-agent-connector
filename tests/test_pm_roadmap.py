@@ -237,7 +237,7 @@ async def test_observation_freezes_exact_capture_and_keeps_verification_distinct
     assert document["baseline_revision_id"] == baseline["revision_id"] and document["snapshot_digest"] == snap["snapshot_digest"]
     selected = document["milestones"][0]
     assert selected["work"] == [{"work_binding_id": binding["binding_id"], "work_item_id": work["work_item_id"],
-                                 "capture_id": captured["capture_id"], "match_status": "exact"}]
+                                 "capture_id": captured["capture_id"], "match_status": "exact", "requirement_ids": ["login"]}]
     assert selected["actual"]["completion"] == selected["actual"]["dod"] == "unassessed"
     assert selected["actual"]["actual_finish_date"] is None and selected["coverage"]["scope_assessment"] == "unassessed"
     fact = next(e for e in selected["actual"]["facts"] if e["source_kind"] == "observed_verification")

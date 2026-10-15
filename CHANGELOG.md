@@ -14,8 +14,16 @@
   export action reuse the context panel's disclosure.
   Dependencies keeps its capture action hidden on other views after refresh.
 
+- Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
+  Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
+  provides installation-aware MCP guidance and a read-only PM eligibility check, with
+  localized reasons and a return link to the originating discussion.
+
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
+- Reconcile M4 completed PM reads with main's private maintenance-repair memo:
+  preserve one validation per repair frame, isolate nested guards and recalls,
+  and never cache loads affected by cycle or budget refusals, including raw metadata.
 - Pull requests select the Python matrix and no/Linux/all native builds from their
   merge diff. Existing desktop path filters remain; workflows triggered on `main`
   keep full coverage. Every selected Python version retains all five pytest shards
@@ -182,6 +190,31 @@
   separate from fixed saved reports.
   Unknown or incomplete source counts stay null; hidden evidence never supplies totals.
   See the [overview contract](docs/design/pm-overview-discussion-context.md).
+
+- Reuse completed PM source and operation visibility reads during synchronous
+  page, step and final-frame validation. Discard memos on writes and before awaits;
+  preserve current authority, withdrawal and original-receipt recovery checks.
+  Reuse completed visibility without reopening source savepoints; still reject
+  invalid borrowed source scopes before serving a cached decision. Reload canonical
+  spec admission evidence for compact shared-operation read projections.
+  Retain bounded proofs within their exact live guard context and copy decoded
+  canonical operation/plan metadata without repeating its parsing.
+
+- Bound repeated original-source traversal in GitHub workload observation checks.
+  Share only completed historical decisions within each synchronous policy read,
+  consume the immediately verified parent budget before each GET, and refuse a page
+  whose deadline expired during validation. Keep the original 60-second bound,
+  receipt recovery and independent post-read/source-withdrawal checks.
+
+- Integrate the M4 lifecycle evidence and original recovery candidate with the
+  Charter, requirements traceability, compact board and local CLI resource workbench.
+  Preserve original runtime receipts and manual observation controls in board details,
+  including source withdrawal, original-key recovery and localized idle-session
+  evidence. Candidate versions remain
+  core 0.2.6 and desktop 0.1.2, upgrading from the fixed core 0.2.5 fixture.
+
+- Apply the same worker diagnostics and failure cleanup to joined maintenance's
+  captured attempt waves, without changing the 60-second bound or durable receipts.
 
 - Overview distinguishes unread milestone, delivery and charter sources from known
   empty records in English and Traditional Chinese. Live updates keep the attention

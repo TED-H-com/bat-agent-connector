@@ -108,3 +108,12 @@ bounded read worker at most may remain outstanding per configured client after
 that deadline; its slot remains occupied until it exits. Later reads fail
 incomplete while it finishes, and its late response is discarded. This bounds
 worker accumulation when a provider or resolver stalls before returning headers.
+
+Each synchronous current-policy check shares completed historical source booleans
+within the existing principal/credential-bound read scope. It ends before a write
+or await, and never caches current eligibility. The final pre-GET check returns
+the original maintenance/repair deadlines after validating their private relations.
+The page immediately clamps its timeout to those budgets and rechecks its own
+deadline after the source traversal. Timeout arithmetic does not traverse the same
+repair DAG again. Post-GET, receipt and final-record checks remain independent;
+no deadline or authority survives into a later page.

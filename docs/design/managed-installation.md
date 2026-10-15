@@ -46,6 +46,13 @@ version is insufficient: `ensure` deliberately reuses a verified running core of
 the same runtime version. Development commits do not each need a version bump;
 release preparation fixes the next package identity before final validation.
 
+The next PM candidate pairs core `0.2.6` with desktop `0.1.2`. Its packaged
+upgrade fixture builds the original core `0.2.5` from fixed source
+`50dbb7ef98240a3067d048a58e95c746d15f0f00` and compares the two actual payloads.
+Earlier `0.2.4` → `0.2.5` receipts remain historical evidence for their original
+candidates. The new version declarations are preparation, not proof of a passing
+package build, published release or upgrade of an operator's installation.
+
 Expired/revoked credentials, invalid manifests, changed identity or missing ready-state data are recovery failures. They do not cause automatic credential reissue, deletion of history or replacement ownership. Reinstallation reuses preserved application data; deliberately deleting that data is outside ordinary reopen/upgrade behavior.
 
 Explicit desktop Quit follows the existing Fleet shutdown guards and leaves the independent central service running. Stopping the managed service is separate and requires its own verified owner and safe-stop checks.

@@ -206,7 +206,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
       const holder = h('div');
       const selectedQuality = h('input', {type: 'hidden', value: 'null'});
       const picker = qualitySelection ? fixedQualityPicker({h,t,api,alive,workspaceId,workItemId:item.work_item_id,
-        readSelection:qualitySelection,field:selectedQuality,constraints:{binding_id:binding.binding_id},errorBox}) : null;
+        readSelection:qualitySelection,field:selectedQuality,constraints:{binding_id:binding.binding_id},requireQualified:false,errorBox}) : null;
       const capture = track(form({action: 'pm.evidence.capture', target: {workspace_id: workspaceId, work_item_id: item.work_item_id},
         fields: picker ? {quality_ref:selectedQuality} : {}, params: values => values.quality_ref && JSON.parse(values.quality_ref)
           ? {quality_ref:JSON.parse(values.quality_ref)} : {}, preconditions: () => ({expected_binding_id: binding.binding_id}),
