@@ -106,7 +106,9 @@ submission/link-withdrawal cases. The latter verify the existing original-key
 changes, and block the old work route after its session link is removed. The first
 focus test assertion expected a non-normalized timestamp; it was corrected to
 the existing ISO timestamp contract. Background updates keep inspector and Live
-keyboard focus. Full Python and exact-commit CI results belong in the PR status.
+keyboard focus. A final 23-case workbench run also covers tab-arrow focus and
+returning from Live to Work: closing an already hidden Results panel must not
+redirect keyboard focus. Full Python and exact-commit CI results belong in the PR status.
 
 Still required: real adopted-plan → work-package → start composition; reliable
 next-turn progression; Work/Attempt/Result identity across adapters; full typed

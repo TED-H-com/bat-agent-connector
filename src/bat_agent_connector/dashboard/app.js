@@ -12639,11 +12639,12 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 		memory.scroll ||= {};
 		memory.scroll[current] = regions[current].scrollTop;
 		panel?.close();
-		results.close();
+		if (!results.hidden) results.close();
 		current = memory.view = value;
 		for (const [key, region] of Object.entries(regions)) region.hidden = key !== value;
 		regions[value].scrollTop = memory.scroll[value] || 0;
 	}
+	results.hidden = true;
 	select(current);
 	const edgeControl = (key) => [...lineage.querySelectorAll("[data-edge]")].find((node) => node.dataset.edge === key);
 	const activeTab = () => controls.querySelector("[aria-selected=\"true\"]");
@@ -12687,6 +12688,7 @@ function workbenchViews({ main, head, work, results, namespace, workspace, host,
 			onClick: () => {
 				select("work");
 				controls.setValue("work");
+				activeTab()?.focus({ preventScroll: true });
 			}
 		}));
 	}

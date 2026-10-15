@@ -27,6 +27,7 @@ for (const lang of ['en', 'zh-TW']) for (const width of [1920, 1440, 1280, 1024,
     const tabs = page.locator('[data-workbench-views]');
     for (const name of lang === 'en' ? ['Lineage', 'Live', 'Work'] : ['關聯', '現場', '工作']) {
       await tabs.getByRole('tab', {name, exact: true}).click();
+      await expect(tabs.getByRole('tab', {name, exact: true})).toBeFocused();
       await expect(heading).toHaveText(f.data.session.title);
       await expect(heading).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -57,6 +58,10 @@ for (const native of [false, true]) test(`source withdrawal clears every perspec
   await expect(page.locator('.conversation .msg')).toHaveCount(2);
   const tabs = page.locator('[data-workbench-views]');
   await tabs.getByRole('tab', {name: 'Lineage'}).click();
+  await page.keyboard.press('ArrowRight');
+  await expect(tabs.getByRole('tab', {name: 'Live'})).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(tabs.getByRole('tab', {name: 'Lineage'})).toBeFocused();
   const edge = page.locator('[data-edge]');
   await edge.click();
   await expect(page.locator('[data-workbench-inspect]')).toContainText('Another work');
@@ -76,6 +81,10 @@ for (const native of [false, true]) test(`source withdrawal clears every perspec
   f.data.events.push({seq: 2, resource_type: 'session', resource_id: 'demo/search-results', kind: 'session.updated'});
   await expect(page.locator('[data-workbench-live] time')).toHaveAttribute('datetime', new Date(f.data.session.observed_at).toISOString());
   await expect(returnWork).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(tabs.getByRole('tab', {name: 'Work', exact: true})).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(tabs.getByRole('tab', {name: 'Live'})).toBeFocused();
   denied = true;
   f.data.events.push({seq: 3, resource_type: 'session', resource_id: 'demo/search-results', kind: 'session.updated'});
   await expect(page.locator('[data-session-withdrawn]')).toBeVisible();

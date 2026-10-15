@@ -27,11 +27,12 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
     if (!Object.hasOwn(regions, value)) return;
     memory.scroll ||= {};
     memory.scroll[current] = regions[current].scrollTop;
-    panel?.close(); results.close();
+    panel?.close(); if (!results.hidden) results.close();
     current = memory.view = value;
     for (const [key, region] of Object.entries(regions)) region.hidden = key !== value;
     regions[value].scrollTop = memory.scroll[value] || 0;
   }
+  results.hidden = true;
   select(current);
   const edgeControl = key => [...lineage.querySelectorAll('[data-edge]')].find(node => node.dataset.edge === key);
   const activeTab = () => controls.querySelector('[aria-selected="true"]');
@@ -57,7 +58,9 @@ export function workbenchViews({main, head, work, results, namespace, workspace,
       h('p', {class: 'ui-meta'}, [projection.host, projection.runtime, projection.model].filter(Boolean).join(' · ')),
       h('p', {}, t('wc_' + projection.state)),
       h('p', {class: 'ui-meta'}, t('wc_latest'), ' · ', timeStamp(projection.observedAt, {empty: t('obs_unknown')})),
-      button({label: t('wc_work'), size: 'sm', 'data-live-work': '', onClick: () => {select('work'); controls.setValue('work');}}));
+      button({label: t('wc_work'), size: 'sm', 'data-live-work': '', onClick: () => {
+        select('work'); controls.setValue('work'); activeTab()?.focus({preventScroll: true});
+      }}));
   }
   function paint() {
     if (!projection) return;
