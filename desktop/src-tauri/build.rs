@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo:rerun-if-env-changed=BATC_BUILD_COMMIT");
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
         tauri_build::AppManifest::new().commands(&[
             "managed_control",
@@ -9,6 +10,7 @@ fn main() {
             "native_files_upload",
             "native_files_save",
             "native_brief_save",
+            "native_diagnostics_save",
             "native_files_control",
             "native_files_preview",
             "native_status",

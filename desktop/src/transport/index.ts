@@ -4,7 +4,7 @@ export const nativeDesktop = isTauri();
 export interface ConnectorResponse { status: number; data: any }
 export interface NativeStatus {
   configuration_source?: "managed" | "external";
-  updates?: boolean;
+  updates?: boolean; diagnostics_save?: boolean; app_build?: {version: string; commit: string | null};
   endpoint: string | null; error: string | null; credential_available: boolean;
   expected_actor?: string; credential_source?: "launch_environment" | "windows_credential_manager" | null;
   credential_saved?: boolean; enrollment_supported?: boolean; configuration_reload?: boolean; configuration_setup?: boolean;
@@ -42,6 +42,8 @@ export async function nativeStatus() {
   nativeBriefExportSupport = status.brief_exports === true;
   return status;
 }
+export const nativeDiagnosticsSave = (input: {content: string; filename: string; locale: string}) =>
+  invoke<{display_name: string} | null>("native_diagnostics_save", {input});
 export const nativeFilesStatus = () => invoke<any>("native_files_status");
 export const nativeFilesPick = (draftId: string) => invoke<any[]>("native_files_pick", {draftId});
 export const nativeFilesUpload = (handleId: string) => invoke<any>("native_files_upload", {handleId});

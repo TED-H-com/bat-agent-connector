@@ -3,6 +3,7 @@ import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {pmFixture,workspaceId} from './pm-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
+import {expectErrorDetails} from './api-error-assertions.ts';
 const route=`/dashboard/#/pm/${workspaceId}`,base=`/pm/workspaces/${workspaceId}`;
 const contract={contract:'ahp_observer_v1',protocol_version:'1.0.0',implemented_subset:['initialize','listSessions','subscribe','reconnect'],observation:'supported',create_own:'unsupported',send:'unsupported',cancel:'unsupported',close:'unsupported',pm_writer:'unsupported',adapter_switch:'unsupported',manual_foreign_access:'read_only',tested_host_versions:[],live_host_verified:false,changesets:'static_advertised_snapshots_only',transcript:'unsupported',limits:{seconds:30,selected_sessions:8,changesets:16}};
 function fixture(){
@@ -81,7 +82,11 @@ for(const native of [false,true])test.describe(native?'AHP Tauri bridge':'AHP We
   });
   test('source withdrawal on event removes original titles and details without a write',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await expect(page.getByLabel('Select editor session 1',{exact:true})).toBeVisible();f.state.denied=true;f.pm.state.cursor++;
-    await expect(page.locator('[data-pm-ahp]')).toContainText('Previous source content has been hidden');await expect(page.locator('[data-pm-ahp]')).not.toContainText('NOT_FOUND', {useInnerText: true});await expect(page.locator('[data-ahp-detail]')).toHaveCount(0);await expect(page.locator('[data-pm-ahp]')).not.toContainText('editor session 1');expect(f.state.writes).toHaveLength(0);
+    const panel=page.locator('[data-pm-ahp]'),summary=panel.locator('[data-error-summary]');
+    await expect(panel).toContainText('Previous source content has been hidden');
+    await expect(summary).toHaveCount(1);await expect(summary).not.toContainText('NOT_FOUND');
+    await expectErrorDetails(panel,'Source unavailable','NOT_FOUND');
+    await expect(page.locator('[data-ahp-detail]')).toHaveCount(0);await expect(panel).not.toContainText('editor session 1');expect(f.state.writes).toHaveLength(0);
   });
   test('catalog source 404 preserves ability to capture a replacement without preserving its titles',async({page})=>{
     const f=fixture();f.make();await open(page,native,f);await page.getByLabel('Select editor session 1',{exact:true}).check();f.state.rows=[];await page.getByRole('button',{name:'Reload saved observations'}).click();

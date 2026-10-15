@@ -51,6 +51,11 @@
   completed steps collapse with even spacing, and one Settings Refresh preserves
   page-only credentials and drafts. IME Escape keeps inspectors and menus open.
 
+- Show installed build versions/commits in Settings → About. Preview, save or copy
+  a local redacted diagnostics file from About or error Details, with anonymous
+  hosts, client-read session counts and at most 50 failed API calls. Desktop uses
+  a constrained native JSON save dialog; no upload or telemetry is introduced.
+
 - Reserve the returning Issues inspector before its reads finish, so related
   chips do not disappear under the pointer when the side panel arrives.
 

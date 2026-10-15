@@ -1119,8 +1119,8 @@ Details disclosure. Tailscale guidance belongs with an actual Fleet connection.
 Errors prefer a caller summary, then a known code's translation, then an explicitly
 localized API message or plain client Error message. Unknown server codes and
 programming errors use the generic summary; transport messages use their explicit
-NETWORK_ERROR or TIMEOUT code. Details appears only for additional technical facts,
-without an empty code or repeated summary. Refresh-cycle read-error gates remain
+NETWORK_ERROR or TIMEOUT code. Details contains the diagnostics export action and
+any additional technical facts, without an empty code or repeated summary. Refresh-cycle read-error gates remain
 unchanged.
 `errorBox(error, {summary})` lets a caller supply its own sentence without duplicating
 it. An Evidence work row reuses the rendered diagnostics inside its existing Details,
@@ -1140,3 +1140,20 @@ Meetings uses one plain empty sentence inside its own card: writers without a
 Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
 Its title and Refresh stay on the first row; the read-only reason wraps beneath
 the title when the inspector is narrow instead of being squeezed between them.
+
+## Diagnostics preview
+
+About retains its existing Settings frame and adds one build line and Export
+diagnostics. Error Details reuse the same entry point. The modal uses shared
+surface/type/spacing/overlay tokens, a compact source summary including stale host data, a wrapping,
+scrollable JSON preview and Save / Copy / Close. Native `<dialog>` makes the
+background inert; Tab wraps, Escape closes, and focus returns to the trigger.
+English and zh-TW share behavior. Only loaded session reads and an operation page
+are counted; unavailable sources remain unknown. Withdrawal clears preview facts
+and disables export actions together. See [the diagnostics contract](../docs/design/diagnostics.md).
+
+Diagnostics export stays inside error Details as a ghost action. Error renderers
+pass their destination via `within` (or `insideDetails: true` when constructing a
+detached disclosure) so code, server diagnostics and export reuse existing Details.
+An expanded session error can use up to 32% of viewport height so its sentence,
+diagnostics and export action fit together on phones; longer content still scrolls.

@@ -34,7 +34,7 @@ export function sessionLabelsPanel({h,t,api,caps,guard,target,storageKey,errorBo
   const input=h('textarea',{'aria-label':t('labels_input'),rows:3,maxlength:1000});
   input.value=saved.text||'';
   const tags=h('div',{class:'actions session-label-tags'}), message=h('div',{role:'status'}), result=h('div'), restriction=h('p',{class:'muted'});
-  const error=e=>{if(live()){message.replaceChildren(errorBox(e));update();}};
+  const error=e=>{if(live()){message.replaceChildren(errorBox(e, {within:message}));update();}};
   const parsed=()=>input.value.trim()===''?[]:input.value.split('\n').map(v=>v.trim());
   const accept=candidate=>{
     guard();const intent=saved.intent;

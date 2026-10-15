@@ -88,7 +88,7 @@ export function workspaceWorkDeliveries({h,t,api,alive,workspaceId,errorBox}) {
       render();status.replaceChildren(...(data.source_visibility_filtered?[statusPill('partial'),h('p',{class:'muted'},t('wd_filtered'))]:[]));
     }catch(error){try{if(!valid(ticket))return;}catch{return;}
       rows=[];packages=[];cursor=null;facts.replaceChildren();status.replaceChildren();
-      head.replaceChildren(h('div',{class:'pm-tool-note'},errorBox(error,{summary:t('wd_unavailable')})),refreshButton);
+      head.replaceChildren(h('div',{class:'pm-tool-note'},errorBox(error,{summary:t('wd_unavailable'), within:head})),refreshButton);
     }finally{if(ticket===sequence){busy=false;controls();}}
   }
   function withdraw(){sequence++;busy=false;rows=[];packages=[];cursor=null;facts.replaceChildren();status.replaceChildren();controls();}
