@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 dist/
+desktop/dist-prototype/v1.3/
 build/
 *.egg-info/
 # never commit real configs or tokens
