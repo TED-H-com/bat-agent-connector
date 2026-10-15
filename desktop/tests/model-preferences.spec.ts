@@ -45,7 +45,7 @@ for (const native of [false, true]) {
     await expect(initial).toHaveValue('preserved-draft');
     await panel.getByRole('button', {name: 'Move model model-a up', exact: true}).click();
     f.state.lost = true; await panel.getByRole('button', {name: 'Save', exact: true}).click();
-    await expect(panel).toContainText('Lost preference reply'); await expect(initial).toBeDisabled();
+    await expect(panel).toContainText('This request could not be completed. Check Details.'); await expect(initial).toBeDisabled();
     const original = f.data.writes[0]; expect(original.body.preconditions).toEqual({expected_revision: 2});
     expect(original.body.params).toMatchObject({initial_model: 'preserved-draft', last_model: 'actual:last', order: ['claude:model-a', 'claude:model-b']});
     await page.reload(); await page.getByRole(native ? 'link' : 'tab', {name: /^(Models|模型)$/}).click(); await panel.locator('summary').click(); await expect(initial).toHaveValue('preserved-draft'); await expect(initial).toBeDisabled();

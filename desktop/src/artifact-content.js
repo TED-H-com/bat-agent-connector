@@ -1,5 +1,6 @@
 import {nativeDesktop, nativeFileSupport, nativeFilesPreview, nativeFilesSave,
   nativeFilesStatus, nativeFilesControl} from "./transport/index.ts";
+import {errorPresentation} from "./error-presentation.js";
 
 const reference = row => ({artifact_id: row.artifact_id, revision: row.revision, digest: row.digest});
 const same = (a, b) => a && b && a.artifact_id === b.artifact_id && a.revision === b.revision && a.digest === b.digest;
@@ -69,7 +70,7 @@ export function artifactContent({h, t, api, guard, getArtifact, canRead, validAr
     guard();
     if (disposed || !canRead() || expected && !same(expected, getArtifact())) throw new Error(t('ar_content_changed'));
   };
-  const fail = error => {try {guard(); if (!disposed) status.textContent = error.message === 'PREVIEW_UNSUPPORTED' ? t('ar_content_preview_limit') : error.message;} catch { /* old view */ }};
+  const fail = error => {try {guard(); if (!disposed) status.textContent = error.message === 'PREVIEW_UNSUPPORTED' ? t('ar_content_preview_limit') : errorPresentation(error, t, {fallback: 'error_generic_short'}).summary;} catch { /* old view */ }};
   const close = () => {preview.replaceChildren(); preview.hidden = true; };
   const receiptValid = value => /^file_[0-9a-f]{32}$/.test(value?.transfer_id) && value.direction === 'download' &&
     same(value.artifact, current) && value.digest === current.digest && value.size_bytes === current.size_bytes &&

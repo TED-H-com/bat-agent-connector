@@ -44,7 +44,7 @@ for (const native of [false, true]) test(`skills pin exact source, preserve unre
   f.state.stale = false; await panel.getByRole('button', {name: 'Reload saved selection', exact: true}).click();
   await expect(panel.getByRole('checkbox')).not.toBeChecked(); await panel.getByRole('checkbox').check();
   f.state.lost = true; await panel.getByRole('button', {name: 'Save skill selection', exact: true}).click();
-  await expect(panel).toContainText('Lost selection reply'); const original = f.data.writes[0];
+  await expect(panel).toContainText('This request could not be completed. Check Details.'); const original = f.data.writes[0];
   expect(original.body).toEqual({action: 'project.skills.update', target: {project_id: pid}, params: {host: 'demo', workspace_id: 'actual-ws',
     selected: [{skill_id: missing, digest: 'd'.repeat(64)}, {skill_id: skill, digest: 'c'.repeat(64)}]}, preconditions: {expected_revision: 3, expected_catalog_digest: 'b'.repeat(64)}});
   await page.reload(); await panel.locator(':scope > summary').click(); await expect(panel.getByRole('checkbox')).toBeDisabled();
