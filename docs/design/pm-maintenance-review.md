@@ -107,6 +107,13 @@ A source loss withholds the complete report instead of leaving quoted report
 text next to a filtered source. Operations and history need the same original
 source checks through `operation_visible`. Current reads do not fall back to an
 older visible report. Lists omit inaccessible rows with `visibility_filtered`.
+The operation/candidate source reader supplies the same read transaction interface
+as ordinary quality-evidence reads, without creating a service or changing data.
+The complete Review source list, Review operation visibility and PM run source
+visibility each share completed source decisions only within one synchronous
+read scope. This also covers a new PM run that cites an original Review candidate.
+No scope spans an await or write; current membership, execution authority,
+deadlines and transport fences remain checked at each original effect boundary.
 
 These five actions are local records and may be admitted while Paused/Closed
 through the shared lifecycle record-action allowlist. Weekly schedule execution

@@ -88,6 +88,8 @@ HTTP reads use `/pm/workspaces/{workspace_id}/spec-materializations` and
 `pm_spec_materialization_get`. The list accepts an optional exact `package_id`,
 `after` up to the signed 64-bit bound, and `limit` from 1 to 50. Reads retain one
 SQLite snapshot across membership and original source checks and refuse whole
-records exceeding the 2 MB wire budget. Filtering retains scan progress and
+records exceeding the 2 MB wire budget. Source checks reload canonical admission
+evidence even for compact operation projections; caller bindings never supply
+authority. Filtering retains scan progress and
 never exposes a hidden ID. The native bridge permits only those exact GETs.
 All writes use the registered durable operation; no extra confirmation is added.

@@ -116,6 +116,13 @@ an unrelated repository contains the same Git commit. No latest branch/head is s
 All source operations, original verifier task and saved GitHub observation remain
 subject to current source visibility.
 
+Historical quality source reads authorize the exact original DoD plan revision
+and its immutable files and sources. They do not project the current plan head:
+a later plan may derive from this quality evidence through Review and a new
+conversation. Current-head metadata remains a separate public plan projection;
+it cannot introduce that later draft back into the original evidence's authority
+graph. Withdrawal of an original source still hides the complete quality record.
+
 A reviewer conclusion is a reasoned, attributed decision about what the original
 criterion means and what the cited result demonstrates. The registered adapter
 independently establishes whether that result is a genuine successful fixed

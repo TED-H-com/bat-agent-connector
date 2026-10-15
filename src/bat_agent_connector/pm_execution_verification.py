@@ -184,12 +184,28 @@ def _access(ops, principal, op):
 def operation_visible(db, principal, original):
     try:
         from .pm_quality_reviews import _Reader
-        ops = _Reader(db)
-        op = _op(ops, original['operation_id'])
-        if op['action'] != ACTION:
-            return False
-        _access(ops, principal, op)
-        return True
+        from .pm_source_reads import check, scope
+        with scope(db, principal):
+            ops = _Reader(db)
+            # Only the canonical saved operation identifies a memo entry. The
+            # caller's possibly partial operation projection is not authority.
+            op = _op(ops, original['operation_id'])
+            if op['action'] != ACTION:
+                return False
+            def sources_visible():
+                _access(ops, principal, op)
+                return True
+            from .pm_maintenance_repairs import source_backedge
+            for root in pm_source_lineage.roots(db, 'operation', op['operation_id']):
+                if source_backedge(db, principal, root):
+                    row = db.execute('SELECT action FROM operations WHERE operation_id=?', (root,)).fetchone()
+                    if row and row[0] == 'pm.maintenance.repair':
+                        # A direct verifier read can enter its original repair,
+                        # whose saved quality receipt refers to this verifier.
+                        # Let only that exact domain guard terminate the edge;
+                        # this partial authorization must never enter the memo.
+                        return sources_visible()
+            return check(db, principal, 'execution_verifier', op['operation_id'], sources_visible)
     except (OperationError, KeyError, TypeError, ValueError):
         return False
 

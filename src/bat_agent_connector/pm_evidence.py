@@ -657,7 +657,7 @@ def list_evidence(ops, principal, workspace_id, *, work_item_id=None, after=0, l
             "next_cursor": rows[limit - 1]["sequence"] if len(rows) > limit else None}
 
 
-@pm_read_cache.memoized
+@pm_read_cache.memoized(freeze=pm_read_cache.json_snapshot, thaw=json.loads)
 def get_evidence(ops, principal, workspace_id, evidence_id):
     _member(ops, principal, workspace_id)
     if not isinstance(evidence_id, str) or not _EVIDENCE.fullmatch(evidence_id):

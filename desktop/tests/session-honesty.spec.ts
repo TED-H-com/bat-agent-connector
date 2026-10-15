@@ -213,14 +213,15 @@ test('unknown fields stay unknown', async ({browser}) => {
   }
 });
 
-test('a manual session reads as one plain read-only line, and its turns belong to a person', async ({browser}) => {
+test('a manual session shows read-only paths, and its turns belong to a person', async ({browser}) => {
   for (const locale of ['en', 'zh-TW'] as const) {
     const zh = locale === 'zh-TW';
     const s = await openSession(browser, {locale});
     await fromRequirements(s.page, s.ids, 'manual');
     const {page} = s;
     const line = page.locator('[data-session-readonly]');
-    await expect(line).toHaveText(zh ? '這是有人在 BAT 開啟的工作階段，這裡只能檢視。' : "Started in BAT by a person, so it's read-only here.");
+    await expect(line.getByRole('heading')).toHaveText(zh ? '僅供檢視' : 'View only');
+    await expect(line).toContainText(zh ? '在 BAT 回覆這個工作階段' : 'Reply in BAT');
     expect(await line.evaluate(el => Boolean(el.closest('.panel')))).toBe(false);
     await expect(page.locator('.workspace-composer')).toBeHidden();
     for (const name of [zh ? '送出' : 'Send', zh ? '允許' : 'Allow', zh ? '中斷這一輪' : 'Interrupt turn'])

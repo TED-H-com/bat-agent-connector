@@ -148,7 +148,9 @@ and ID, digest, times, cursor, normalized `assessment`, and fixed SHA or deploym
 identity `version_refs`. Full evidence remains available through its existing ID.
 An observed test result retains `assessment.verification`; a work claim retains
 `assessment.state`; operation success retains `assessment.status`. None becomes
-DoD, milestone acceptance, deployment verification or an actual finish date.
+DoD, milestone acceptance, deployment verification or an actual finish date by
+itself. New observations can additionally project explicitly selected quality
+assessments as described below.
 `coverage.scope_assessment` also stays `unassessed`.
 
 Every observation read rechecks the original snapshot's evidence visibility for
@@ -212,8 +214,8 @@ Action results contain IDs, sequence, updated head, digest and
 `execution_authorized: false`; they do not copy private evidence into the durable
 operation response.
 
-This increment does not evaluate semantic scope drift, date variance causes,
-critical paths, DoD, delivery acceptance or forecast confidence. It does not
+This module does not originate semantic scope drift, date variance causes,
+critical paths, DoD assessments, delivery acceptance or forecast confidence. It does not
 render SVG or generate narrative reports. Those later consumers must use these
 same fixed baseline, forecast and evidence references rather than inventing a
 second source of PM truth.
@@ -232,4 +234,39 @@ and history expand in place. Unsaved drafts retain their original versions and
 exact association IDs across reloads. Old associations remain explicitly removable.
 A changed current baseline never replaces an uncertain request's saved body/key.
 Choosing the current baseline is explicit; saved historical results are reread
-under current source permissions. The UI does not mark milestones Done.
+under current source permissions. The UI does not treat a date or successful
+operation as a completed milestone.
+
+## Original snapshot quality projection
+
+New observations additionally freeze `quality_context` on each milestone: profile
+`fixed_milestone_assessments_v1`, original plan revision/digest, scope revision,
+and selected requirement IDs. Each saved work match also retains its original
+binding's requirement IDs. This is additive observation metadata; old immutable
+observations without the profile keep their original unassessed behavior.
+
+No additional review or selection is needed in Roadmap. `pm.roadmap.observe`
+consumes the quality assessments already explicitly selected in its exact
+DocumentSnapshot. It reuses the Brief's requirement aggregation for the
+milestone's original scope and explicit work bindings. Each selected requirement
+counts once; all selected work contributions need accepted original criteria and
+DoD. An assessment for another plan, scope, binding or capture cannot substitute.
+
+When matching original quality evidence is available, `actual.quality` includes
+the common requirement/contribution summary, fixed plan references and exact
+assessment/evidence references. `actual.completion` is `qualified` only when all
+selected requirements qualify with complete coverage; a recorded rejection is
+`not_qualified`, and missing or incomplete evidence stays `unassessed`.
+`actual.dod` is reported separately. These conclusions describe the original
+selected assessments, with `current_applicability: not_evaluated`; they do not
+assert that coding processes stopped, prove a current deployment or infer an
+actual finish date. Scheduling dates and semantic scope-drift assessment remain
+independent.
+
+Later review revocation or a different current plan cannot rewrite an original
+observation. A newly selected snapshot can record the changed result. Source
+withdrawal still filters the exact original facts, changes the visible digest
+and removes their quality contribution and references; no latest accessible
+review is substituted. Missing work, mismatched bindings/captures, hidden sources
+and truncated work/evidence/bytes prevent a qualified milestone. Existing whole
+UTF-8 observation limits include this projection and its original references.

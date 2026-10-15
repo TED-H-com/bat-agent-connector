@@ -10,9 +10,10 @@ import json
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
+from functools import wraps
 
 from . import pm_read_cache
-from .operations import OperationError, OperationService
+from .operations import OperationError
 
 MAX_ROOTS = 64
 _EXECUTION = ContextVar("pm_source_execution", default=None)
@@ -46,11 +47,12 @@ def schema(journal):
         delivery_schema(journal)
 
 
-@pm_read_cache.memoized
+@pm_read_cache.memoized(guard_independent=True)
 def installed(db):
     return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_source_lineage'").fetchone() is not None
 
 
+@pm_read_cache.memoized(guard_independent=True)
 def _table(db, name):
     return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
@@ -61,7 +63,7 @@ def roots(db, kind, identity, *, _seen=None):
     return _root_read(db, kind, identity)
 
 
-@pm_read_cache.memoized
+@pm_read_cache.memoized(guard_independent=True, freeze=frozenset, thaw=set)
 def _root_read(db, kind, identity):
     return _roots_collect(db, kind, identity)
 
@@ -189,13 +191,43 @@ def document_roots(db, value):
     return result
 
 
+@pm_read_cache.memoized(guard_independent=True)
+def _original_action(db, operation_id):
+    row = db.execute('SELECT action FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
+    return row[0] if row else None
+
+
 def visible_roots(db, principal, original_ids):
+    # Public metadata has no original sources and needs no authority scope.
+    # A missing principal must still never authorize a referenced resource.
+    if not original_ids:
+        return True
+    if principal is None:
+        return False
+    from .pm_maintenance_repairs import source_backedge
+    from .pm_source_reads import check, scope
+    with scope(db, principal):
+        for identity in original_ids:
+            # Only the exact repair traversal already proving the entire graph
+            # may visit its saved receipt -> owned child -> same repair edge.
+            # Never memoize that partial grant. Completed outer authorizations
+            # retain the shared memo and bounds like every other original root.
+            if _original_action(db, identity) == 'pm.maintenance.repair' and source_backedge(db, principal, identity):
+                visible = _visible_roots(db, principal, (identity,))
+            else:
+                visible = check(db, principal, 'original_root', identity,
+                    lambda identity=identity: _visible_roots(db, principal, (identity,)))
+            if not visible:
+                return False
+        return True
+
+
+def _visible_roots(db, principal, original_ids):
     from .pm_package_handoff import source_visible
     for original_id in original_ids:
-        row = db.execute("SELECT * FROM operations WHERE operation_id=?", (original_id,)).fetchone()
-        if row is None:
+        operation = pm_read_cache.operation(db, original_id)
+        if operation is None:
             return False
-        operation = OperationService._decode(row)
         if operation['action'] == 'pm.input.record' and (operation.get('external_refs') or {}).get('admission_binding', {}).get('pm_review_candidate'):
             from .pm_review_candidate_sources import operation_visible as candidate_visible
             if not candidate_visible(db, principal, operation):
@@ -320,6 +352,18 @@ def bind_operation(db, operation_id, target, params, binding):
         bind(db, operation_id, binding["pm_delivery"])
 
 
+def _source_guard(fn):
+    @wraps(fn)
+    def guard(ops, *args):
+        # A synchronous validation only: end the snapshot and memo before the
+        # caller writes or awaits. Every live/effect guard still runs each time.
+        from .pm_release_baselines import _snapshot
+        with _snapshot(ops.db), pm_read_cache.scope(ops.db):
+            return fn(ops, *args)
+    return guard
+
+
+@_source_guard
 def require_new_effect(ops, operation_id):
     from .pm_conversation_adoption import require_child as require_conversation_child
     require_conversation_child(ops.db, operation_id)
@@ -356,7 +400,11 @@ def require_frame():
     current = _EXECUTION.get()
     if current is None:
         return
-    ops, operation_id = current
+    _require_frame(*current)
+
+
+@_source_guard
+def _require_frame(ops, operation_id):
     from .pm_conversation_adoption import require_child as require_conversation_child
     require_conversation_child(ops.db, operation_id)
     from .pm_work_batches import require_child

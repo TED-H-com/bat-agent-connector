@@ -104,7 +104,7 @@ async def test_exact_quality_reaches_all_views_and_closed_sprint_stays_fixed_aft
     for locale in ('en', 'zh-TW'):
         for format in ('markdown', 'html', 'svg'):
             exported = pm_brief_exports.render_brief(ops, OWNER, w['workspace_id'], first['snapshot_id'], format=format, locale=locale)
-            assert exported['renderer_version'] == 3 and exported['view_digest'] == first['view_digest']
+            assert exported['renderer_version'] == 4 and exported['view_digest'] == first['view_digest']
             content = ''.join(ET.fromstring(exported['content']).itertext()) if format == 'svg' else exported['content']
             assert '1 / 1' in content and ref['document_digest'] in ''.join(content.split())
     binding = pm_evidence._binding(ops.db, w['workspace_id'], w['target']['work_item_id'])

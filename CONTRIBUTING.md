@@ -22,6 +22,12 @@ workers before the fixture can close their journal. This leaves original durable
 operation IDs, keys and uncertain step receipts available for normal reconciliation;
 it does not call the product's operation-cancel action or rerun a test.
 
+Captured-wave helpers such as joined maintenance's `advance` keep their existing
+per-wave deadlines. Use `tests.operation_helpers.worker_details` before stopping
+workers to preserve the suspended await chain, and `stop_workers` on failure or
+caller cancellation to join all pending workers belonging to that service while
+its journal is still open. Workers admitted during a wave also need this cleanup.
+
 Keep test journals on disk with normal durability settings. Slow synchronous
 storage can exhaust the settling deadline and block the event loop itself; an
 async timeout cannot preempt an SQLite commit. Diagnose storage latency and worker

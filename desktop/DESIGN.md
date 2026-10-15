@@ -939,6 +939,16 @@ Selections use `?select=` in both views and reopen after returning from another
 view. Current requirement chips link to Requirements; earlier-plan text is read
 from its bound revision and never replaced by a raw ID in a chip or filter.
 
+Original-turn completion stays a concise card fact, separate from management status,
+quality and delivery. The shared inspector keeps exact activity receipts and localized
+retained-session runtime labels in Details. Board Details also holds the existing
+linked-manual observation form above the full source dump: it reads one original input,
+never controls the session.
+Read-only members have no new-observation entry point; an authorized original receipt
+remains recoverable. Closing, refreshing or withdrawing the Board invalidates pending
+observation reads and clears receipts with rows and counts. Drafts and original keys
+survive remounting; a changed native identity requires an explicit new selection.
+
 ## Session workspace
 
 Opened from Work or a project tree. The page header shows the session title and agent
@@ -1157,6 +1167,35 @@ Meetings uses one plain empty sentence inside its own card: writers without a
 Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
 Its title and Refresh stay on the first row; the read-only reason wraps beneath
 the title when the inspector is narrow instead of being squeezed between them.
+
+
+## Read-only paths and agent setup
+
+Manual sessions retain `data-session-readonly` and show View only, a short BAT reply
+hint, up to two navigation controls, and the quiet MCP setup link. Capability actions,
+checkpoint host availability and start scope gate those controls. Continue opens and
+focuses the existing checkpoint capture form in Results; it never captures or dispatches
+on behalf of the user. Unavailability is a localized sentence, with configuration keys
+only in the checkpoint disclosure. The Start host hint changes only an editable draft,
+never a saved original operation. Sessions name the three paths in their header only
+after a successful empty inventory read; populated, partial and unavailable lists omit it.
+
+Start, project dispatch and PM package handoff share the collapsed How dispatch works
+disclosure. Settings → Agents holds PM eligibility above MCP instructions. Operator
+installs show a placeholder-token config and private CLI issuance instructions; bundled
+installs show documentation because the managed launcher has no MCP or token-issuance
+entry point. Neither view reads or renders a real credential.
+MCP snippets use a padded, wrapping monospace block on the secondary surface.
+
+`section=agents` selects, scrolls to and focuses the Agents heading. Validated internal
+`from` routes show one return link. Discussion origins read existing workspace capabilities
+(native and BAT analysis); other entries use the observe-only installation projection when
+advertised. Every check makes one read, clears previous facts before refreshing and never
+creates an operation. Ready denotes installation eligibility for preflight, not model
+execution evidence. Unknown, withdrawn and unsupported reads show Not checked; raw reason
+codes stay in Details. Late responses cannot paint after leaving the view.
+Headings with `tabindex="-1"` keep programmatic focus without an outline; interactive
+controls retain the shared accent focus-visible ring. This also applies to requirement groups.
 
 ## Diagnostics preview
 

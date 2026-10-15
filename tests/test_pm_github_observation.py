@@ -423,3 +423,63 @@ async def test_final_null_cursor_boundary_returns_fitting_whole_prefix(ops, monk
     assert module._size(prefix) <= maximum
     final = listing(ops, OWNER, data['workspace_id'], after=prefix['next_cursor'])
     assert len(final[field]) == 1 and final['next_cursor'] is None
+
+
+async def test_time_spent_in_final_source_check_cannot_send_an_expired_page(ops, monkeypatch):
+    data = await prepared(ops, monkeypatch)
+    clock = [NOW]
+    measured_time = SimpleNamespace(time=lambda: clock[0], monotonic=lambda: clock[0])
+    monkeypatch.setattr(observation, 'time', measured_time)
+    monkeypatch.setattr(provider, 'time', measured_time)
+    original = observation._check
+
+    def slow_final_check(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if clock[0] == NOW and ops.db.execute("SELECT 1 FROM operation_steps WHERE name LIKE 'pm.github.page.%' AND status='started'").fetchone():
+            clock[0] += provider.MAX_SECONDS
+        return result
+
+    monkeypatch.setattr(observation, '_check', slow_final_check)
+    op, document = await observe(ops, data)
+    assert op['status'] == 'succeeded'
+    assert document['evidence']['status'] == 'incomplete'
+    assert document['evidence']['reason'] == 'observation_time_limit'
+    assert ops.context['github'].reads == []
+
+
+@pytest.mark.parametrize('maintenance_budget,repair_budget', [(7, None), (None, 5), (7, 5)])
+async def test_each_get_uses_its_immediately_checked_original_parent_budget(ops, monkeypatch,
+        maintenance_budget, repair_budget):
+    from bat_agent_connector import pm_maintenance_checks, pm_maintenance_repairs
+
+    data = await prepared(ops, monkeypatch)
+    checked = []
+    def maintenance(*args):
+        checked.append('maintenance')
+        return NOW + maintenance_budget if maintenance_budget is not None else None
+    def repair(*args):
+        checked.append('repair')
+        return NOW + repair_budget if repair_budget is not None else None
+    monkeypatch.setattr(pm_maintenance_checks, 'require_child', maintenance)
+    monkeypatch.setattr(pm_maintenance_repairs, 'require_delivery_child', repair)
+    gh, seen, after_check = ops.context['github'], [], []
+    bounded_get = gh.bounded_get
+    async def read(path, **kwargs):
+        # The original two guards execute once in the final synchronous frame;
+        # timeout arithmetic must not trigger a second traversal of either DAG.
+        assert checked[-2:] == ['maintenance', 'repair']
+        assert checked == after_check
+        assert kwargs['timeout_s'] == min(value for value in (maintenance_budget, repair_budget) if value is not None)
+        seen.append(kwargs['timeout_s'])
+        return await bounded_get(path, **kwargs)
+    # Scope the count to the pre-GET callback, after the durable step has started.
+    original_check = observation._check
+    def current(*args, **kwargs):
+        result = original_check(*args, **kwargs)
+        after_check[:] = checked
+        return result
+    monkeypatch.setattr(observation, '_check', current)
+    monkeypatch.setattr(gh, 'bounded_get', read)
+    op, document = await observe(ops, data)
+    assert op['status'] == 'succeeded' and document['evidence']['status'] == 'complete'
+    assert len(seen) == len(gh.reads) == document['evidence']['pages']

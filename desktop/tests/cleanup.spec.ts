@@ -5,7 +5,8 @@ const rid = "wt_" + "a".repeat(32), oid = "op_" + "b".repeat(32);
 const cp = "cp_" + "c".repeat(32);
 const caps = {actor: "cleanup-person", scopes: ["observe", "operate", "start", "cleanup", "cleanup_discard"], api_version: 1,
   contract_version: "2026-10-08", hosts: [{host: "demo", confinement: {host_account: {start_effect: "recheck"}}}],
-  features: {cleanup: true, cleanup_task: true, checkpoints: ["demo"]}, actions: []};
+  features: {cleanup: true, cleanup_task: true, checkpoints: ["demo"]},
+  actions: [{action: "checkpoint.create", allowed: true}, {action: "checkpoint.continue", allowed: true}]};
 const item = {resource_id: rid, host: "demo", kind: "worktree", path: "/managed/fixture", proven: true,
   task_owned: false, decision: "reclaim", reasons: [], observation: {head: "a".repeat(40)}, steps: ["preserve", "remove.worktree"]};
 const preview = {preview_id: "clpv_" + "d".repeat(32), preview_token: "fixture-signed-preview", fingerprint: "fixture-fingerprint",

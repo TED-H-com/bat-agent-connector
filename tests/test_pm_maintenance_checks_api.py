@@ -1,6 +1,7 @@
 """The shared scheduler reads and real child hooks preserve original authority."""
 import asyncio
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -134,7 +135,13 @@ async def test_real_provider_call_is_clamped_to_original_parent_deadline(check_o
     parent = ops.create(OWNER, **request(ops, data))[0]
     checks._reserve(OpContext(ops, parent))
     row = checks._row(ops, parent['operation_id'])
-    ops.context['check_test_clock'][0] = row['deadline_at'] - .04
+    clock = ops.context['check_test_clock']
+    clock[0] = row['deadline_at'] - .04
+    # The parent and the page reader consume one original wall-clock deadline.
+    # Keep both clocks aligned when advancing to the final unsent request.
+    measured_time = SimpleNamespace(time=lambda: clock[0], monotonic=lambda: clock[0])
+    for module in (checktests.githubtests.observation, checktests.githubtests.provider):
+        monkeypatch.setattr(module, 'time', measured_time)
     provider = ops.context['github']
     waits = []
 

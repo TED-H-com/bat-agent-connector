@@ -109,6 +109,12 @@ def _child_digest(child):
 
 
 def _quality_access(db, principal, intent):
+    from .pm_source_reads import scope
+    with scope(db, principal):
+        _quality_sources(db, principal, intent)
+
+
+def _quality_sources(db, principal, intent):
     selected = intent.get("quality_ref")
     if selected is None:
         return
@@ -231,6 +237,12 @@ def _intent(op):
 
 
 def operation_visible(db, principal, operation):
+    from .pm_source_reads import scope
+    with scope(db, principal):
+        return _operation_visible(db, principal, operation)
+
+
+def _operation_visible(db, principal, operation):
     try:
         op = _operation(db, operation["operation_id"])
         intent = _intent(op)

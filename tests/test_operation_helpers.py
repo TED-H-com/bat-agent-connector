@@ -1,13 +1,15 @@
 """A failed test must finish its workers before the fixture closes their journal."""
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.operations import ActionDef, OperationService
 from bat_agent_connector.task_journal import Journal
-from tests.operation_helpers import settle_operations
+from tests import pm_joined_maintenance_helpers as maintenance
+from tests.operation_helpers import _worker_details, settle_operations, stop_workers, worker_details
 
 CALLER = Principal("fixture-operator", frozenset({"observe", "operate"}))
 
@@ -20,21 +22,21 @@ async def ops(tmp_path):
         yield service
     finally:
         # Also clean up when exercising the old, leaking helper in the red run.
-        tasks = list(service._active.values())
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        await stop_workers(service)
         journal.close()
 
 
 @pytest.mark.parametrize("count", [1, 2])
-async def test_settle_timeout_joins_workers_and_preserves_original_recovery(ops, count):
-    release = asyncio.Event()
+@pytest.mark.parametrize("waiter", ["settle", "advance"])
+async def test_wait_timeout_joins_workers_and_preserves_original_recovery(ops, monkeypatch, count, waiter):
+    release, entered = asyncio.Event(), asyncio.Event()
     sent, finalized, reconciled = [], [], []
 
     async def run(ctx):
         async def awaiting_receipt():
             sent.append(ctx.operation_id)
+            if len(sent) == count:
+                entered.set()
             try:
                 await release.wait()
             finally:
@@ -51,8 +53,25 @@ async def test_settle_timeout_joins_workers_and_preserves_original_recovery(ops,
     envelopes = [{"action": "fixture.send", "target": {}, "params": {},
                   "idempotency_key": f"original-{index}"} for index in range(count)]
     ids = [ops.create(CALLER, **envelope)[0]["operation_id"] for envelope in envelopes]
-    with pytest.raises(AssertionError, match="did not settle within") as caught:
-        await settle_operations(ops, timeout=0.01)
+    with monkeypatch.context() as patch:
+        if waiter == "advance":
+            # Expire the existing 60-second wave after all synthetic workers
+            # enter their receipt await; never replace a global stdlib clock.
+            elapsed = [0]
+            run_due = ops.run_due
+
+            async def schedule_stuck_workers():
+                await run_due()
+                await asyncio.wait_for(entered.wait(), 5)
+                elapsed[0] = 60
+
+            patch.setattr(ops, "run_due", schedule_stuck_workers)
+            patch.setattr(maintenance, "time", SimpleNamespace(monotonic=lambda: elapsed[0]))
+        with pytest.raises(AssertionError, match="did not settle within") as caught:
+            if waiter == "advance":
+                await maintenance.advance({"d": SimpleNamespace(ops=ops)}, ops.get(ids[0]))
+            else:
+                await settle_operations(ops, timeout=0.01)
 
     assert finalized == ["running"] * count
     assert not ops._active
@@ -64,6 +83,11 @@ async def test_settle_timeout_joins_workers_and_preserves_original_recovery(ops,
         assert saved["steps"][0]["status"] == "started"
     assert "fixture.send" in message and "provider.receipt" in message
     assert "awaiting_receipt" in message
+    assert "status=running" in message and "attempts=1" in message
+    assert "worker_done=False" in message
+    if waiter == "advance":
+        assert "Repair attempt wave did not settle within 60s" in message
+    assert _worker_details is worker_details
 
     for envelope, oid in zip(envelopes, ids):
         replay, fresh = ops.create(CALLER, **envelope)
@@ -73,7 +97,8 @@ async def test_settle_timeout_joins_workers_and_preserves_original_recovery(ops,
     assert all(ops.get(oid)["status"] == "succeeded" for oid in ids)
 
 
-async def test_cancelled_settle_joins_workers_before_returning(ops):
+@pytest.mark.parametrize("waiter", ["settle", "advance"])
+async def test_cancelled_wait_joins_workers_before_returning(ops, waiter):
     entered, release = asyncio.Event(), asyncio.Event()
     finalized = []
 
@@ -85,8 +110,9 @@ async def test_cancelled_settle_joins_workers_before_returning(ops):
             finalized.append(ops.get(ctx.operation_id)["status"])
 
     ops.register(ActionDef("fixture.wait", "operate", "Synthetic blocked read", run))
-    ops.create(CALLER, action="fixture.wait", target={}, params={}, idempotency_key="original")
-    settling = asyncio.create_task(settle_operations(ops))
+    op, _ = ops.create(CALLER, action="fixture.wait", target={}, params={}, idempotency_key="original")
+    settling = asyncio.create_task(maintenance.advance({"d": SimpleNamespace(ops=ops)}, op)
+                                   if waiter == "advance" else settle_operations(ops))
     try:
         await asyncio.wait_for(entered.wait(), 5)
     finally:

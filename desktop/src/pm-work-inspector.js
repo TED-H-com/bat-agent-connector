@@ -6,6 +6,7 @@ import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {discussHref} from './pm-discuss-link.js';
 import {sessionHref} from './session-navigation.js';
 import {qualityFact} from './pm-quality-projections.js';
+import {runtimeCompletion, runtimeReceipt} from './pm-runtime-completion.js';
 
 export const workStatus = card => ({backlog: 'not_started', in_progress: 'in_progress', waiting: 'waiting', review: 'in_review', accepted: 'done', archived: 'historical'})[typeof card?.column === 'string' ? card.column : ''] || 'unknown';
 // Content approval is a management fact, not proof of delivery or passing DoD.
@@ -180,6 +181,7 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       if (source.errors?.some(row => row.kind === 'session')) state.append(paragraph(t('wv_session_unavailable')));
       if (card.quality?.selected_assessment) result.append(qualityFact({h, t, fact: card.quality, current: true}));
       else result.append(paragraph(t('pm_kanban_quality_unknown')));
+      if (card.execution?.attempts?.some(attempt => runtimeCompletion(t, attempt))) result.append(paragraph(t('pm_kanban_runtime_recorded')));
       const capture = card.latest_capture;
       if (capture) {
         result.append(paragraph(t('pm_kanban_capture'), ' · ', stamp(capture.captured_at)));
@@ -265,6 +267,12 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
       ...['tasks', 'operations', 'sessions', 'attempts'].flatMap(kind => (card?.execution?.[kind] || []).map(row => paragraph(t('pm_kanban_source_time'), ' · ', stamp(row.observed_at)))),
       paragraph(t('pm_kanban_attempt_basis')), paragraph(t('wb_acceptance_separate')),
       paragraph(t('wv_ci_times_missing')),
+      ...(card?.execution?.sessions || []).map(row => {
+        const key = 'pm_kanban_state_' + labelSegment(row.runtime_status), label = t(key);
+        return paragraph(t('pm_kanban_session'), ' · ', label === key ? t('ui_status_unknown') : label,
+          h('span', {class: 'mono'}, ' · ', labelSegment(row.resource_id)));
+      }),
+      ...(card?.execution?.attempts || []).map(attempt => runtimeReceipt(t, attempt)),
       h('pre', {class: 'mono'}, JSON.stringify({reviews: data.reviews, criteria_results: data.criteriaResults, register: data.register, work_captures: data.work?.map(work => ({work_item_id: work.work_item_id, capture: work.latest_capture})), errors: source.errors, plan_revision: plan?.revision_id || card?.binding?.plan_revision_id, binding: card?.binding, work: card?.work,
         execution: card?.execution, flow: card?.flow, capture: card?.latest_capture, issues, deliveries: source.deliveries, quality: card?.quality}, (key, value) => value === null ? '—' : value, 2))),
       open: panel.body.querySelector('[data-work-section="details"]')?.open || false});

@@ -139,6 +139,16 @@ under `features.pm_workspaces.workload`.
 
 ## Stability and final admission
 
+Historical workload source access reloads the exact canonical saved snapshot and
+may reuse only a completed authorization boolean inside one synchronous source
+read. Connection, actor, scopes, admin and credential identity remain distinct;
+membership is checked before canonical history is read. Caller-modified rows are
+refused. Active same-caller repair source traversals execute the original checks
+without reusing or saving a partial grant. The workload source depth bound is
+independent of existing source types, sharing the same total node budget.
+No document, classification, freshness or final eligibility is cached; a new read
+after a yield or source withdrawal rechecks the whole original source graph.
+
 A stability window requires complete idle observations of the same policy,
 baseline, lifecycle epoch, adopted scope and activity evidence. Their freshness
 windows must overlap; a clock reversal, missing interval, changed source scope or

@@ -144,7 +144,7 @@ fn verify(value: Value, reference: &Reference) -> Result<Verified, String> {
         || doc.template_version != 1
         || !matches!(
             (doc.renderer_version, doc.coverage.projection.as_str()),
-            (1 | 3, "project_brief_only") | (2 | 3, "project_brief_with_maintenance_review")
+            (1 | 3 | 4, "project_brief_only") | (2..=4, "project_brief_with_maintenance_review")
         )
         || doc.workspace_id != reference.workspace_id
         || doc.snapshot_id != reference.snapshot_id
@@ -372,7 +372,7 @@ mod tests {
             verify(doc.clone(), &reference).unwrap().content,
             doc["content"]
         );
-        doc["renderer_version"] = json!(4);
+        doc["renderer_version"] = json!(5);
         assert!(verify(doc, &reference).is_err());
     }
 
@@ -385,17 +385,20 @@ mod tests {
                     "project_brief_with_maintenance_review",
                 ] {
                     let (reference, mut doc) = fixture(format, locale);
-                    doc["renderer_version"] = json!(3);
-                    doc["coverage"]["projection"] = json!(projection);
-                    assert_eq!(
-                        verify(doc.clone(), &reference).unwrap().content,
-                        doc["content"]
-                    );
-                    let mut changed = doc.clone();
-                    changed["output_digest"] = json!("0".repeat(64));
-                    assert!(verify(changed, &reference).is_err());
-                    doc["coverage"]["projection"] = json!("unknown_quality_view");
-                    assert!(verify(doc, &reference).is_err());
+                    for renderer in [3, 4] {
+                        doc["renderer_version"] = json!(renderer);
+                        doc["coverage"]["projection"] = json!(projection);
+                        assert_eq!(
+                            verify(doc.clone(), &reference).unwrap().content,
+                            doc["content"]
+                        );
+                        let mut changed = doc.clone();
+                        changed["output_digest"] = json!("0".repeat(64));
+                        assert!(verify(changed, &reference).is_err());
+                        let mut changed = doc.clone();
+                        changed["coverage"]["projection"] = json!("unknown_quality_view");
+                        assert!(verify(changed, &reference).is_err());
+                    }
                 }
             }
         }
