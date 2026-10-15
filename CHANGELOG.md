@@ -2,6 +2,18 @@
 
 ## Next release (unreleased)
 
+- PM refresh, Lifecycle, accepted-plan preview and report export failures show one
+  localized message with diagnostics in Details. Issue mappings without a title
+  read "Untitled issue". Projects and Resources open their creation forms on
+  request and keep drafts and original-request recovery; a new project opens its
+  page once its receipt is verified. Refused and terminal PM requests hide their
+  disabled primary action, and Discussions keeps New request with the composer
+  actions. Context previews keep their specific stale or invalid reason, version
+  conflicts keep the full draft-preservation guidance, and project header chips
+  stay compact on narrow screens. Accepted-plan preview diagnostics and their
+  export action reuse the context panel's disclosure.
+  Dependencies keeps its capture action hidden on other views after refresh.
+
 - Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
   Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
   provides installation-aware MCP guidance and a read-only PM eligibility check, with

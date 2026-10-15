@@ -5263,6 +5263,8 @@ var pmIssueStrings = {
 //#region src/pm-register-strings.js
 var pmRegisterStrings = {
 	en: {
+		reg_untitled_issue: "Untitled issue",
+		reg_source_id: "Source ID",
 		reg_all: "All",
 		reg_type_risk: "Risk",
 		reg_type_issue: "Issue",
@@ -5387,6 +5389,8 @@ var pmRegisterStrings = {
 		reg_requirement: "Requirement"
 	},
 	"zh-TW": {
+		reg_untitled_issue: "未命名議題",
+		reg_source_id: "來源識別碼",
 		reg_all: "全部",
 		reg_type_risk: "風險",
 		reg_type_issue: "問題",
@@ -7785,11 +7789,18 @@ var instructionReceiptStrings = {
 	}
 };
 //#endregion
+//#region src/create-record-strings.js
+var createRecordStrings = {
+	en: { create_project: "New project" },
+	"zh-TW": { create_project: "新增專案" }
+};
+//#endregion
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
 		...diagnosticsStrings["zh-TW"],
 		...pmStrings["zh-TW"],
+		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
 		...overviewStrings["zh-TW"],
 		...scheduleStrings["zh-TW"],
@@ -9424,6 +9435,7 @@ var STRINGS = {
 	en: {
 		...diagnosticsStrings.en,
 		...pmStrings.en,
+		...createRecordStrings.en,
 		...uiStrings.en,
 		...overviewStrings.en,
 		...scheduleStrings.en,
@@ -14710,8 +14722,6 @@ function discussionComposer({ t, form, analysis, details, draft = false }) {
 		label: t("pd_details"),
 		body: receipt
 	}));
-	const recovery = actions.querySelector("button[type=button]");
-	if (recovery) status.append(recovery);
 	if (analysis) {
 		actions.append(analysis.querySelector("[data-discussion-ask]"));
 		status.append(analysis);
@@ -16585,8 +16595,8 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 				return;
 			}
 			if (identity() !== expected) return;
+			status.replaceChildren();
 			onUnavailable(rendered);
-			status.replaceChildren(errorBox(rendered, { within: status }));
 		} finally {
 			busy = false;
 			update();
@@ -19706,6 +19716,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function syncCapture() {
 		if (!captureButton) return;
+		captureButton.hidden = !active || captureForm.replaceable();
 		const reason = captureHintText();
 		captureButton.className = captureButton.disabled ? "ui-button secondary ui-md" : "ui-button primary ui-md";
 		captureHint.textContent = reason;
@@ -19980,7 +19991,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			header.pills.hidden = true;
 			header.pills.replaceChildren();
 		}
-		captureButton.hidden = !active;
 		syncCapture();
 		if (!active || !data) return;
 		const commit = shortSha(data.capture?.commit_sha);
@@ -25985,6 +25995,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			kind,
 			n: number
 		});
+		if (row?.source?.kind === "issue_mapping") return t("reg_untitled_issue");
 		if (kind && kind !== t("ui_reason_generic")) return kind;
 		if (TYPES.includes(row?.type)) return t("reg_type_" + row.type);
 		return t("ui_status_unknown");
@@ -26391,7 +26402,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			updated_at: "reg_updated",
 			pull_requests: "reg_pull_requests"
 		};
-		const detailBits = [];
+		const detailBits = row.source?.kind === "issue_mapping" && labelSegment(row.source.id) ? [h("p", {}, t("reg_source_id"), locale === "zh-TW" ? "：" : ": ", h("code", {}, row.source.id))] : [];
 		const precise = preciseStatus(row.status);
 		if (precise) detailBits.push(h("p", { "data-reg-status-detail": "" }, precise));
 		const seenStatuses = new Set([row.status]);
@@ -27237,12 +27248,9 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 }
 //#endregion
 //#region src/pm-context-bundle.js
-function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
+function pmContextBundle({ h, t, api, guard, caps, target, thread, errorBox }) {
 	const value = h("input", { type: "hidden" }), summary = h("div", { "data-pm-context-selection": "" });
-	const status = h("p", {
-		class: "muted",
-		role: "status"
-	}), details = h("div", { "data-pm-context-preview": "" });
+	const status = h("div", { role: "status" }), details = h("div", { "data-pm-context-preview": "" });
 	let request = null, preview = null, verified = null, loading = false, generation = 0;
 	const supported = () => caps()?.features?.pm_workspaces?.accepted_context_bundle?.schema === "pm_context_bundle_v1";
 	const currentVersion = () => thread()?.thread?.version;
@@ -27253,9 +27261,15 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 			return null;
 		}
 	};
+	const clientErrors = new WeakSet();
+	const clientError = (key) => {
+		const error = Error(t(key));
+		clientErrors.add(error);
+		return error;
+	};
 	function validate(row) {
 		const ref = row?.context_bundle_ref, sha = /^[0-9a-f]{64}$/;
-		if (row?.schema !== "pm_context_bundle_preview_v1" || row.workspace_id !== target.workspace_id || row.thread_id !== target.thread_id || !Number.isSafeInteger(row.thread_version) || row.thread_version < 1 || ref?.schema !== "pm_context_bundle_v1" || Object.keys(ref).sort().join(",") !== "adoption_operation_id,document_digest,git_receipt_digest,revision_id,schema" || !/^pmrev_[0-9a-f]{32}$/.test(ref.revision_id) || !/^op_[0-9a-f]{32}$/.test(ref.adoption_operation_id) || !sha.test(ref.document_digest) || !sha.test(ref.git_receipt_digest) || !Array.isArray(row.manifest) || !row.manifest.length || row.manifest.some((file) => typeof file.path !== "string" || !sha.test(file.digest) || !Number.isSafeInteger(file.utf8_bytes) || file.utf8_bytes < 0 || typeof file.included !== "boolean") || typeof row.coverage?.accepted_document_complete !== "boolean" || row.coverage.accepted_document_complete !== row.manifest.every((file) => file.included) || row.coverage.acceptance_coverage !== (row.coverage.accepted_document_complete ? "complete_original_document" : "incomplete_original_document") || row.execution_authorized !== false || row.coverage.execution_authorized !== false || row.coverage.adoption_authorized !== false || row.authority !== "context_only") throw Error(t("pm_cb_invalid"));
+		if (row?.schema !== "pm_context_bundle_preview_v1" || row.workspace_id !== target.workspace_id || row.thread_id !== target.thread_id || !Number.isSafeInteger(row.thread_version) || row.thread_version < 1 || ref?.schema !== "pm_context_bundle_v1" || Object.keys(ref).sort().join(",") !== "adoption_operation_id,document_digest,git_receipt_digest,revision_id,schema" || !/^pmrev_[0-9a-f]{32}$/.test(ref.revision_id) || !/^op_[0-9a-f]{32}$/.test(ref.adoption_operation_id) || !sha.test(ref.document_digest) || !sha.test(ref.git_receipt_digest) || !Array.isArray(row.manifest) || !row.manifest.length || row.manifest.some((file) => typeof file.path !== "string" || !sha.test(file.digest) || !Number.isSafeInteger(file.utf8_bytes) || file.utf8_bytes < 0 || typeof file.included !== "boolean") || typeof row.coverage?.accepted_document_complete !== "boolean" || row.coverage.accepted_document_complete !== row.manifest.every((file) => file.included) || row.coverage.acceptance_coverage !== (row.coverage.accepted_document_complete ? "complete_original_document" : "incomplete_original_document") || row.execution_authorized !== false || row.coverage.execution_authorized !== false || row.coverage.adoption_authorized !== false || row.authority !== "context_only") throw clientError("pm_cb_invalid");
 		return row;
 	}
 	const signature = (row) => JSON.stringify(row?.context_bundle_ref);
@@ -27264,11 +27278,13 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 		type: "button",
 		class: "secondary",
 		onclick: async () => {
+			let ticket, actor;
 			try {
 				guard?.();
 				if (loading || request?.locked() || !supported()) return;
 				loading = true;
-				const ticket = ++generation, actor = caps()?.actor;
+				ticket = ++generation;
+				actor = caps()?.actor;
 				preview = null;
 				verified = null;
 				status.replaceChildren(skeleton(2));
@@ -27279,16 +27295,25 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 				guard?.();
 				if (ticket !== generation || caps()?.actor !== actor || request?.locked()) return;
 				preview = validate(result);
-				if (preview.thread_version !== currentVersion()) throw Error(t("pm_cb_stale"));
+				if (preview.thread_version !== currentVersion()) throw clientError("pm_cb_stale");
 				const old = selected();
 				if (old && signature(old) === signature(preview) && old.thread_version === preview.thread_version && JSON.stringify(old.manifest) === JSON.stringify(preview.manifest)) verified = value.value;
 				status.textContent = "";
 				renderDetails(preview);
 			} catch (error) {
+				try {
+					guard?.();
+				} catch {
+					return;
+				}
+				if (ticket !== generation || caps()?.actor !== actor || request?.locked()) return;
 				preview = null;
 				verified = null;
 				details.replaceChildren();
-				status.textContent = error.message || t("pm_cb_unavailable");
+				status.replaceChildren(errorBox(error, {
+					summary: clientErrors.has(error) ? error.message : t("pm_cb_unavailable"),
+					within: status
+				}));
 			} finally {
 				loading = false;
 				update();
@@ -27359,7 +27384,7 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread }) {
 }
 //#endregion
 //#region src/pm-native-analysis.js
-function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard }) {
+function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard, errorBox }) {
 	const specs = [{
 		key: "native_analysis",
 		adapter: "codex-native-linux",
@@ -27421,7 +27446,8 @@ function pmNativeAnalysis({ h, t, api, form, input, labelled, caps, capability, 
 			guard,
 			caps,
 			target,
-			thread
+			thread,
+			errorBox
 		});
 		const request = form({
 			action: spec.action,
@@ -27897,10 +27923,10 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(emptyState({
-			title: t("pm_lifecycle_unavailable"),
-			text: h("span", { class: "muted" }, t("pm_lifecycle_unknown"))
-		}), errorBox(error, { within: status }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pm_lifecycle_unknown"),
+			within: status
+		}));
 	}
 	async function refresh({ event = false } = {}) {
 		if (!event || !ready || !current) {
@@ -39837,6 +39863,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			if (readOnlyWhenUnavailable) input.readOnly = locked;
 		}
 		button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
 		button.textContent = t(saved.intent ? "pm_check_original" : label);
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
@@ -39945,9 +39972,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 						persist();
 					} catch {}
 				}
-				const handled = onError(error);
-				if (!handled) status.replaceChildren(errorBox(error, { within: status }));
-				if (error.code === "VERSION_CONFLICT" && !handled) status.append(h("p", { class: "muted" }, t("pm_stale")));
+				if (!onError(error)) status.replaceChildren(errorBox(error, error.code === "VERSION_CONFLICT" ? {
+					summary: t("pm_stale"),
+					within: status
+				} : { within: status }));
 			}
 		} finally {
 			busy = false;
@@ -41682,6 +41710,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				labelled,
 				caps,
 				namespace,
+				errorBox,
 				guard: alive,
 				capability: () => pmCapabilities,
 				thread: () => threadData,
@@ -42263,7 +42292,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				proposalReview?.withdraw();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, {
+					summary: t("pm_stale"),
+					within: status
+				}));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -42624,7 +42656,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, {
+					summary: t("pm_stale"),
+					within: status
+				}));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -47355,7 +47390,7 @@ var admissionRefusals$3 = {
 	WORK_ITEM_ARCHIVED: 409,
 	WRONG_PROJECT: 409
 };
-function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, errorBox, opStatus }) {
+function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, onStateChange = () => {}, errorBox, opStatus }) {
 	const project = kind === "project", action = project ? "project.create" : "work_item.create";
 	const target = project ? {} : { project_id: projectId }, key = `batc.create.${namespace}.${kind}.${projectId || "root"}`;
 	const primary = project ? "name" : "title", fields = new Map(), choices = new Map();
@@ -47572,11 +47607,13 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		create.textContent = t(saved.intent ? "create_check_original" : project ? "add_project" : "add_item");
 		review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal$7(operation) && operation.status !== "succeeded");
 		review.disabled = busy || !allowed || !permitted();
+		onStateChange();
 	}
 	if (damaged) status.replaceChildren(h("p", { class: "error" }, t("create_invalid_draft")));
 	update();
 	return {
 		box: form,
+		pending: () => Boolean(saved.intent),
 		setContext({ rows, name = "", active = true }) {
 			guard();
 			allowed = active;
@@ -47599,6 +47636,62 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				if (current && !options.some(([value]) => value === current)) input.append(h("option", { value: current }, `${current} · ${t("create_source_missing")}`));
 				input.value = current;
 			}
+			update();
+		}
+	};
+}
+function createRecordDisclosure({ label, hook, ...options }) {
+	const { h, t } = options;
+	let record, open = false, available = false;
+	const update = () => {
+		if (!record) return;
+		open ||= record.pending();
+		record.box.hidden = !available || !open;
+		toggle.hidden = actions.hidden = !available || open;
+		close.hidden = record.pending();
+	};
+	const toggle = button({
+		variant: "primary",
+		label,
+		[hook]: "",
+		onClick: () => {
+			open = true;
+			update();
+			record.box.querySelector("input")?.focus();
+		}
+	});
+	const close = button({
+		variant: "secondary",
+		label: t("cancel"),
+		onClick: () => {
+			if (record.pending()) return;
+			open = false;
+			update();
+			toggle.focus();
+		}
+	});
+	const actions = h("div", { class: "actions" }, toggle);
+	record = createRecordForm({
+		...options,
+		onStateChange: () => {
+			options.onStateChange?.();
+			update();
+		},
+		onCreated: async (value) => {
+			open = false;
+			await options.onCreated(value);
+			update();
+			if (!toggle.hidden) toggle.focus();
+		}
+	});
+	record.box.querySelector(".actions > button:last-of-type").after(close);
+	update();
+	return {
+		...record,
+		toggle,
+		actions,
+		setAvailable: (value) => {
+			available = value;
 			update();
 		}
 	};
@@ -58753,7 +58846,7 @@ async function viewProjects(main) {
 	const out = h("div", {});
 	const tree = h("div", { "data-project-list": "" });
 	const archived = h("div", {});
-	const create = createRecordForm({
+	const create = createRecordDisclosure({
 		h,
 		t,
 		api,
@@ -58763,6 +58856,8 @@ async function viewProjects(main) {
 		kind: "project",
 		errorBox,
 		opStatus,
+		label: t("create_project"),
+		hook: "data-project-new",
 		onCreated: async (op) => {
 			location.hash = `#/project/${op.result.project_id}`;
 		}
@@ -58786,7 +58881,7 @@ async function viewProjects(main) {
 	main.append(pageHeader({
 		title: t("nav_projects"),
 		actions: [refresh]
-	}), note || "", create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived, help) }));
+	}), note || "", create.actions, create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived, help) }));
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens, mine = ++request;
 		let received = false;
@@ -58802,7 +58897,7 @@ async function viewProjects(main) {
 				return;
 			}
 			freshPage();
-			create.box.hidden = !may("manage") || state.caps?.actions?.find((row) => row.action === "project.create")?.allowed === false;
+			create.setAvailable(may("manage") && state.caps?.actions?.find((row) => row.action === "project.create")?.allowed !== false);
 			filter.hidden = false;
 			refresh.hidden = false;
 			help.hidden = false;
@@ -58889,7 +58984,7 @@ async function viewProjects(main) {
 				rows: [],
 				active: false
 			});
-			create.box.hidden = true;
+			create.setAvailable(false);
 			fill(out);
 			fill(archived);
 			filter.hidden = true;
@@ -58939,7 +59034,7 @@ async function viewProject(main, pid) {
 	const out = h("div", {});
 	const archived = h("div", {});
 	const showArchived = h("input", { type: "checkbox" });
-	const create = createRecordForm({
+	const create = createRecordDisclosure({
 		h,
 		t,
 		api,
@@ -58951,13 +59046,17 @@ async function viewProject(main, pid) {
 		showScope: false,
 		errorBox,
 		opStatus,
-		onCreated: async () => render()
+		label: t("new_item_title"),
+		hook: "data-project-work-create",
+		onCreated: async () => {
+			await render();
+		}
 	});
 	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
 	const itemCard = sectionCard({
 		title: t("work_items"),
 		actions: [filter],
-		body: h("div", { class: "or-item-list" }, create.box, items, archived)
+		body: h("div", { class: "or-item-list" }, create.actions, create.box, items, archived)
 	});
 	itemCard.dataset.projectItemCard = "";
 	itemCard.hidden = true;
@@ -58982,7 +59081,7 @@ async function viewProject(main, pid) {
 			rows: [],
 			active: false
 		});
-		create.box.hidden = true;
+		create.setAvailable(false);
 		fill(work);
 		work.hidden = true;
 		fill(items);
@@ -59038,7 +59137,8 @@ async function viewProject(main, pid) {
 		const p = data.project;
 		if (note) note.hidden = false;
 		itemCard.hidden = false;
-		create.box.hidden = !may("manage") || p.archived || state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed === false;
+		const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed !== false;
+		create.setAvailable(mayCreate);
 		create.setContext({
 			rows: data.work_items,
 			name: p.name,
@@ -59089,7 +59189,7 @@ async function viewProject(main, pid) {
 		fill(head, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])), pageHeader({
 			title: p.name,
 			pill: p.archived ? chip(t("archived"), "warn") : null
-		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
+		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions project-summary-actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
 			class: "session-project-link",
 			href: `#/dispatch/${pid}`
 		}, t("dispatch_title")) : null, p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null), may("manage") && !p.archived ? d.box : null, data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ", ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);
