@@ -53,6 +53,9 @@
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.
 
+- The Windows installed-fixture self-test gives its UIA probe compile and run a 60-second
+  budget, prints which phase is running, and reports the timeout or exit code when it fails.
+
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
 
