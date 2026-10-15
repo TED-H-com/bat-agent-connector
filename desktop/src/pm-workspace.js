@@ -227,7 +227,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
         }
         const handled = onError(error);
         if (!handled) status.replaceChildren(errorBox(error));
-        if (error.code === 'VERSION_CONFLICT' && !handled) status.append(h('p', {class: 'muted'}, t('pm_stale')));
+        if (error.code === 'VERSION_CONFLICT' && !handled) status.replaceChildren(errorBox(error, {summary: t('pm_stale')}));
       }
     } finally {busy = false; update();}
   }

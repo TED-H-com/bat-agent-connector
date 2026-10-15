@@ -4464,7 +4464,7 @@ var pmContextBundleStrings = {
 		pm_cb_recheck: "Preview again to check this saved selection before starting a new analysis.",
 		pm_cb_stale: "The discussion changed. Preview the accepted plan again.",
 		pm_cb_invalid: "The accepted context preview is invalid or does not match this discussion.",
-		pm_cb_unavailable: "Accepted plan unavailable"
+		pm_cb_unavailable: "The accepted plan or its original sources are unavailable."
 	},
 	"zh-TW": {
 		pm_cb_title: "分析使用的已採用計畫（選填）",
@@ -4487,7 +4487,7 @@ var pmContextBundleStrings = {
 		pm_cb_recheck: "開始新分析前，請重新預覽並核對保存的選擇。",
 		pm_cb_stale: "討論已變更，請重新預覽已採用計畫。",
 		pm_cb_invalid: "採用文件預覽無效，或不屬於目前討論。",
-		pm_cb_unavailable: "無法取得已採用計畫"
+		pm_cb_unavailable: "無法讀取已採用計畫或其原始來源。"
 	}
 };
 //#endregion
@@ -4756,7 +4756,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stopped_help: "New managed work is stopped. Existing results remain readable; other controllers’ sessions are preserved.",
 		pm_lifecycle_legacy_help: "Existing work keeps its classification.",
 		pm_lifecycle_unavailable: "Activity unavailable",
-		pm_lifecycle_unknown: "Workspace state unavailable",
+		pm_lifecycle_unknown: "Workspace state is unreadable.",
 		pm_lifecycle_manage: "Manage project activity",
 		pm_lifecycle_action: "Change",
 		pm_lifecycle_stage: "Management phase",
@@ -4803,7 +4803,7 @@ var pmLifecycleStrings = {
 		pm_lifecycle_stopped_help: "已停止受理新的受管理工作。既有結果仍可查回，其他控制者的工作階段保持原狀。",
 		pm_lifecycle_legacy_help: "既有工作保留原分類。",
 		pm_lifecycle_unavailable: "無法取得狀態",
-		pm_lifecycle_unknown: "無法取得工作區狀態",
+		pm_lifecycle_unknown: "無法讀取工作區狀態。",
 		pm_lifecycle_manage: "調整專案投入",
 		pm_lifecycle_action: "調整方式",
 		pm_lifecycle_stage: "管理階段",
@@ -6944,7 +6944,7 @@ var pmStrings = {
 		pm_receipt_mismatch: "The receipt does not match the original request. Its key and draft have been preserved.",
 		pm_damaged: "The saved request cannot be validated. It has been preserved; no replacement will be sent.",
 		pm_action_unavailable: "This action is currently unavailable. Your draft and original request are preserved.",
-		pm_stale: "Could not confirm the current version",
+		pm_stale: "Could not confirm the current version. Your draft is preserved. Refresh and review before another change.",
 		pm_scope_mismatch: "The response does not belong to the selected workspace and discussion.",
 		pm_partial: "This is a bounded view; older records or additional candidates may not be included.",
 		pm_open_planning: "Still to clarify",
@@ -7306,7 +7306,7 @@ var pmStrings = {
 		pm_receipt_mismatch: "回執與原請求不一致。已保留原 key 與草稿。",
 		pm_damaged: "無法驗證已存請求。原資料仍保留，不會另送一筆。",
 		pm_action_unavailable: "目前無法執行這項操作。草稿與原請求仍保留。",
-		pm_stale: "無法確認最新版本",
+		pm_stale: "目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。",
 		pm_scope_mismatch: "回應不屬於選定的工作區與討論。",
 		pm_partial: "目前只顯示部分紀錄；較早的內容或其他候選想法可能未列入。",
 		pm_open_planning: "規劃中仍待釐清",
@@ -7370,10 +7370,17 @@ var instructionReceiptStrings = {
 	}
 };
 //#endregion
+//#region src/create-record-strings.js
+var createRecordStrings = {
+	en: { create_project: "New project" },
+	"zh-TW": { create_project: "新增專案" }
+};
+//#endregion
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
 		...pmStrings["zh-TW"],
+		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
 		...overviewStrings["zh-TW"],
 		...scheduleStrings["zh-TW"],
@@ -9006,6 +9013,7 @@ var STRINGS = {
 	},
 	en: {
 		...pmStrings.en,
+		...createRecordStrings.en,
 		...uiStrings.en,
 		...overviewStrings.en,
 		...scheduleStrings.en,
@@ -26323,9 +26331,15 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread, errorBox }) {
 			return null;
 		}
 	};
+	const clientErrors = new WeakSet();
+	const clientError = (key) => {
+		const error = Error(t(key));
+		clientErrors.add(error);
+		return error;
+	};
 	function validate(row) {
 		const ref = row?.context_bundle_ref, sha = /^[0-9a-f]{64}$/;
-		if (row?.schema !== "pm_context_bundle_preview_v1" || row.workspace_id !== target.workspace_id || row.thread_id !== target.thread_id || !Number.isSafeInteger(row.thread_version) || row.thread_version < 1 || ref?.schema !== "pm_context_bundle_v1" || Object.keys(ref).sort().join(",") !== "adoption_operation_id,document_digest,git_receipt_digest,revision_id,schema" || !/^pmrev_[0-9a-f]{32}$/.test(ref.revision_id) || !/^op_[0-9a-f]{32}$/.test(ref.adoption_operation_id) || !sha.test(ref.document_digest) || !sha.test(ref.git_receipt_digest) || !Array.isArray(row.manifest) || !row.manifest.length || row.manifest.some((file) => typeof file.path !== "string" || !sha.test(file.digest) || !Number.isSafeInteger(file.utf8_bytes) || file.utf8_bytes < 0 || typeof file.included !== "boolean") || typeof row.coverage?.accepted_document_complete !== "boolean" || row.coverage.accepted_document_complete !== row.manifest.every((file) => file.included) || row.coverage.acceptance_coverage !== (row.coverage.accepted_document_complete ? "complete_original_document" : "incomplete_original_document") || row.execution_authorized !== false || row.coverage.execution_authorized !== false || row.coverage.adoption_authorized !== false || row.authority !== "context_only") throw Error(t("pm_cb_invalid"));
+		if (row?.schema !== "pm_context_bundle_preview_v1" || row.workspace_id !== target.workspace_id || row.thread_id !== target.thread_id || !Number.isSafeInteger(row.thread_version) || row.thread_version < 1 || ref?.schema !== "pm_context_bundle_v1" || Object.keys(ref).sort().join(",") !== "adoption_operation_id,document_digest,git_receipt_digest,revision_id,schema" || !/^pmrev_[0-9a-f]{32}$/.test(ref.revision_id) || !/^op_[0-9a-f]{32}$/.test(ref.adoption_operation_id) || !sha.test(ref.document_digest) || !sha.test(ref.git_receipt_digest) || !Array.isArray(row.manifest) || !row.manifest.length || row.manifest.some((file) => typeof file.path !== "string" || !sha.test(file.digest) || !Number.isSafeInteger(file.utf8_bytes) || file.utf8_bytes < 0 || typeof file.included !== "boolean") || typeof row.coverage?.accepted_document_complete !== "boolean" || row.coverage.accepted_document_complete !== row.manifest.every((file) => file.included) || row.coverage.acceptance_coverage !== (row.coverage.accepted_document_complete ? "complete_original_document" : "incomplete_original_document") || row.execution_authorized !== false || row.coverage.execution_authorized !== false || row.coverage.adoption_authorized !== false || row.authority !== "context_only") throw clientError("pm_cb_invalid");
 		return row;
 	}
 	const signature = (row) => JSON.stringify(row?.context_bundle_ref);
@@ -26351,7 +26365,7 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread, errorBox }) {
 				guard?.();
 				if (ticket !== generation || caps()?.actor !== actor || request?.locked()) return;
 				preview = validate(result);
-				if (preview.thread_version !== currentVersion()) throw Error(t("pm_cb_stale"));
+				if (preview.thread_version !== currentVersion()) throw clientError("pm_cb_stale");
 				const old = selected();
 				if (old && signature(old) === signature(preview) && old.thread_version === preview.thread_version && JSON.stringify(old.manifest) === JSON.stringify(preview.manifest)) verified = value.value;
 				status.textContent = "";
@@ -26366,7 +26380,7 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread, errorBox }) {
 				preview = null;
 				verified = null;
 				details.replaceChildren();
-				status.replaceChildren(errorBox(error, { summary: t("pm_cb_unavailable") }));
+				status.replaceChildren(errorBox(error, { summary: clientErrors.has(error) ? error.message : t("pm_cb_unavailable") }));
 			} finally {
 				loading = false;
 				update();
@@ -38803,7 +38817,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				}
 				const handled = onError(error);
 				if (!handled) status.replaceChildren(errorBox(error));
-				if (error.code === "VERSION_CONFLICT" && !handled) status.append(h("p", { class: "muted" }, t("pm_stale")));
+				if (error.code === "VERSION_CONFLICT" && !handled) status.replaceChildren(errorBox(error, { summary: t("pm_stale") }));
 			}
 		} finally {
 			busy = false;
@@ -46418,6 +46432,62 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				if (current && !options.some(([value]) => value === current)) input.append(h("option", { value: current }, `${current} · ${t("create_source_missing")}`));
 				input.value = current;
 			}
+			update();
+		}
+	};
+}
+function createRecordDisclosure({ label, hook, ...options }) {
+	const { h, t } = options;
+	let record, open = false, available = false;
+	const update = () => {
+		if (!record) return;
+		open ||= record.pending();
+		record.box.hidden = !available || !open;
+		toggle.hidden = actions.hidden = !available || open;
+		close.hidden = record.pending();
+	};
+	const toggle = button({
+		variant: "primary",
+		label,
+		[hook]: "",
+		onClick: () => {
+			open = true;
+			update();
+			record.box.querySelector("input")?.focus();
+		}
+	});
+	const close = button({
+		variant: "secondary",
+		label: t("cancel"),
+		onClick: () => {
+			if (record.pending()) return;
+			open = false;
+			update();
+			toggle.focus();
+		}
+	});
+	const actions = h("div", { class: "actions" }, toggle);
+	record = createRecordForm({
+		...options,
+		onStateChange: () => {
+			options.onStateChange?.();
+			update();
+		},
+		onCreated: async (value) => {
+			open = false;
+			await options.onCreated(value);
+			update();
+			if (!toggle.hidden) toggle.focus();
+		}
+	});
+	record.box.querySelector(".actions").append(close);
+	update();
+	return {
+		...record,
+		toggle,
+		actions,
+		setAvailable: (value) => {
+			available = value;
 			update();
 		}
 	};
@@ -57328,7 +57398,7 @@ async function viewProjects(main) {
 	const out = h("div", {});
 	const tree = h("div", { "data-project-list": "" });
 	const archived = h("div", {});
-	const create = createRecordForm({
+	const create = createRecordDisclosure({
 		h,
 		t,
 		api,
@@ -57338,8 +57408,10 @@ async function viewProjects(main) {
 		kind: "project",
 		errorBox,
 		opStatus,
-		onCreated: async (op) => {
-			location.hash = `#/project/${op.result.project_id}`;
+		label: t("create_project"),
+		hook: "data-project-new",
+		onCreated: async () => {
+			await render();
 		}
 	});
 	const showArchived = h("input", { type: "checkbox" });
@@ -57361,7 +57433,7 @@ async function viewProjects(main) {
 	main.append(pageHeader({
 		title: t("nav_projects"),
 		actions: [refresh]
-	}), note || "", create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived, help) }));
+	}), note || "", create.actions, create.box, out, sectionCard({ body: h("div", { class: "or-item-list" }, filter, tree, archived, help) }));
 	const render = async (fromEvent = false) => {
 		const opens = drawerOpens, mine = ++request;
 		let received = false;
@@ -57377,7 +57449,7 @@ async function viewProjects(main) {
 				return;
 			}
 			freshPage();
-			create.box.hidden = !may("manage") || state.caps?.actions?.find((row) => row.action === "project.create")?.allowed === false;
+			create.setAvailable(may("manage") && state.caps?.actions?.find((row) => row.action === "project.create")?.allowed !== false);
 			filter.hidden = false;
 			refresh.hidden = false;
 			help.hidden = false;
@@ -57464,7 +57536,7 @@ async function viewProjects(main) {
 				rows: [],
 				active: false
 			});
-			create.box.hidden = true;
+			create.setAvailable(false);
 			fill(out);
 			fill(archived);
 			filter.hidden = true;
@@ -57514,8 +57586,7 @@ async function viewProject(main, pid) {
 	const out = h("div", {});
 	const archived = h("div", {});
 	const showArchived = h("input", { type: "checkbox" });
-	let createClose;
-	const create = createRecordForm({
+	const create = createRecordDisclosure({
 		h,
 		t,
 		api,
@@ -57527,45 +57598,17 @@ async function viewProject(main, pid) {
 		showScope: false,
 		errorBox,
 		opStatus,
-		onStateChange: () => {
-			if (createClose) createClose.hidden = create.pending();
-		},
-		onCreated: async () => {
-			createOpen = false;
-			await render();
-			if (!createToggle.hidden) createToggle.focus();
-		}
-	});
-	let createOpen = create.pending();
-	const createToggle = button({
-		variant: "primary",
 		label: t("new_item_title"),
-		"data-project-work-create": "",
-		onClick: () => {
-			createOpen = true;
-			create.box.hidden = false;
-			createToggle.hidden = createActions.hidden = true;
-			create.box.querySelector("input")?.focus();
+		hook: "data-project-work-create",
+		onCreated: async () => {
+			await render();
 		}
 	});
-	createClose = button({
-		variant: "secondary",
-		label: t("cancel"),
-		onClick: () => {
-			if (create.pending()) return;
-			createOpen = false;
-			create.box.hidden = true;
-			createToggle.hidden = createActions.hidden = false;
-			createToggle.focus();
-		}
-	});
-	const createActions = h("div", { class: "actions" }, createToggle);
-	create.box.querySelector(".actions").append(createClose);
 	const filter = h("label", { class: "capture-choice or-archive-filter" }, showArchived, h("span", {}, t("show_archived")));
 	const itemCard = sectionCard({
 		title: t("work_items"),
 		actions: [filter],
-		body: h("div", { class: "or-item-list" }, createActions, create.box, items, archived)
+		body: h("div", { class: "or-item-list" }, create.actions, create.box, items, archived)
 	});
 	itemCard.dataset.projectItemCard = "";
 	itemCard.hidden = true;
@@ -57590,7 +57633,7 @@ async function viewProject(main, pid) {
 			rows: [],
 			active: false
 		});
-		create.box.hidden = true;
+		create.setAvailable(false);
 		fill(work);
 		work.hidden = true;
 		fill(items);
@@ -57647,10 +57690,7 @@ async function viewProject(main, pid) {
 		if (note) note.hidden = false;
 		itemCard.hidden = false;
 		const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find((row) => row.action === "work_item.create")?.allowed !== false;
-		createOpen ||= create.pending();
-		create.box.hidden = !mayCreate || !createOpen;
-		createToggle.hidden = createActions.hidden = !mayCreate || createOpen;
-		createClose.hidden = create.pending();
+		create.setAvailable(mayCreate);
 		create.setContext({
 			rows: data.work_items,
 			name: p.name,
@@ -57701,7 +57741,7 @@ async function viewProject(main, pid) {
 		fill(head, h("div", { class: "muted" }, h("a", { href: "#/projects" }, t("nav_projects")), ...data.path.flatMap((x) => [" / ", h("a", { href: `#/project/${x.project_id}` }, x.name)])), pageHeader({
 			title: p.name,
 			pill: p.archived ? chip(t("archived"), "warn") : null
-		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
+		}), p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""), h("p", { class: "pre" }, p.description)) : null, h("div", { class: "actions project-summary-actions" }, ...counts(p.counts), ...p.repositories.map((r) => chip(r)), may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {
 			class: "session-project-link",
 			href: `#/dispatch/${pid}`
 		}, t("dispatch_title")) : null, p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null), may("manage") && !p.archived ? d.box : null, data.sub_projects.length ? h("p", {}, t("sub_projects"), ": ", ...data.sub_projects.flatMap((x, i) => [i ? " · " : "", h("a", { href: `#/project/${x.project_id}` }, x.name)])) : null);

@@ -32,7 +32,7 @@ import {resultSourcesPanel} from "./result-sources.js";
 import {repairPanel, repairWorkItemPanel} from "./repair-panel.js";
 import {repairDispatchSeed, validateRepairRecord} from "./repair-intent.js";
 import {instructionReceiptPanel} from "./instruction-receipts.js";
-import {createRecordForm} from "./create-record.js";
+import {createRecordDisclosure} from "./create-record.js";
 // BAT Dashboard: a client of /api/v1 only. Every change is an operation with an Idempotency-Key; text from
 // sessions is always set with textContent (never parsed as HTML).
 import { t } from "./i18n.js";
@@ -3279,9 +3279,9 @@ async function viewProjects(main) {
   const out = h("div", {});
   const tree = h("div", {"data-project-list": ""});
   const archived = h("div", {});
-  const create = createRecordForm({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
+  const create = createRecordDisclosure({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     namespace: connection.namespace, kind: "project", errorBox, opStatus,
-    onCreated: async op => {location.hash = `#/project/${op.result.project_id}`;}});
+    label: t("create_project"), hook: "data-project-new", onCreated: async () => {await render();}});
   const showArchived = h("input", { type: "checkbox" });
   const refresh = iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => render().catch(() => {})});
   const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
@@ -3290,7 +3290,7 @@ async function viewProjects(main) {
   create.box.hidden = true; filter.hidden = true; help.hidden = true;
   if (note) note.hidden = true;
   main.append(pageHeader({title: t("nav_projects"), actions: [refresh]}),
-    note || "", create.box, out, sectionCard({body: h("div", {class: "or-item-list"}, filter, tree, archived, help)}));
+    note || "", create.actions, create.box, out, sectionCard({body: h("div", {class: "or-item-list"}, filter, tree, archived, help)}));
   const render = async (fromEvent = false) => {
     const opens = drawerOpens, mine = ++request;
     let received = false;
@@ -3303,7 +3303,7 @@ async function viewProjects(main) {
       create.setContext({rows: data.projects});
       if (holdRender(fromEvent, opens)) { idleReload = () => render(true); return; }
       freshPage();
-      create.box.hidden = !may("manage") || state.caps?.actions?.find(row => row.action === "project.create")?.allowed === false;
+      create.setAvailable(may("manage") && state.caps?.actions?.find(row => row.action === "project.create")?.allowed !== false);
       filter.hidden = false; refresh.hidden = false;
       help.hidden = false; if (note) note.hidden = false;
       const rows = [];
@@ -3355,7 +3355,7 @@ async function viewProjects(main) {
         } }, t("restore")) : null)));
     } catch (error) {
       if (connection.generation !== generation || connection.epoch !== state.epoch || mine !== request || !tree.isConnected) return;
-      request++; create.setContext({rows: [], active: false}); create.box.hidden = true;
+      request++; create.setContext({rows: [], active: false}); create.setAvailable(false);
       fill(out); fill(archived); filter.hidden = true; refresh.hidden = true; freshPage();
       help.hidden = true; if (note) note.hidden = true;
       errorBox(error);
@@ -3382,25 +3382,11 @@ async function viewProject(main, pid) {
   const out = h("div", {});
   const archived = h("div", {});
   const showArchived = h("input", { type: "checkbox" });
-  let createClose;
-  const create = createRecordForm({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
+  const create = createRecordDisclosure({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     namespace: connection.namespace, kind: "work_item", projectId: pid, showScope: false, errorBox, opStatus,
-    onStateChange: () => {if (createClose) createClose.hidden = create.pending();},
-    onCreated: async () => {createOpen = false; await render(); if (!createToggle.hidden) createToggle.focus();}});
-  let createOpen = create.pending();
-  const createToggle = button({variant: 'primary', label: t('new_item_title'), 'data-project-work-create': '',
-    onClick: () => {
-      createOpen = true; create.box.hidden = false; createToggle.hidden = createActions.hidden = true;
-      create.box.querySelector('input')?.focus();
-    }});
-  createClose = button({variant: 'secondary', label: t('cancel'), onClick: () => {
-    if (create.pending()) return;
-    createOpen = false; create.box.hidden = true; createToggle.hidden = createActions.hidden = false; createToggle.focus();
-  }});
-  const createActions = h('div', {class: 'actions'}, createToggle);
-  create.box.querySelector('.actions').append(createClose);
+    label: t("new_item_title"), hook: "data-project-work-create", onCreated: async () => {await render();}});
   const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));
-  const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, createActions, create.box, items, archived)});
+  const itemCard = sectionCard({title: t("work_items"), actions: [filter], body: h("div", {class: "or-item-list"}, create.actions, create.box, items, archived)});
   itemCard.dataset.projectItemCard = ""; itemCard.hidden = true; create.box.hidden = true;
   const note = manageNote(); if (note) note.hidden = true;
   main.append(note || "", out, head, work, itemCard);
@@ -3412,7 +3398,7 @@ async function viewProject(main, pid) {
   const withdraw = (error, transportFailed) => {
     rememberEditors(); workEditors.clear();
     currentEditor = null; prepared = null; request++;
-    create.setContext({rows: [], active: false}); create.box.hidden = true;
+    create.setContext({rows: [], active: false}); create.setAvailable(false);
     fill(work); work.hidden = true; fill(items); fill(archived); fill(out); itemCard.hidden = true;
     if (note) note.hidden = true;
     errorBox(error);
@@ -3450,10 +3436,7 @@ async function viewProject(main, pid) {
     if (note) note.hidden = false;
     itemCard.hidden = false;
     const mayCreate = may("manage") && !p.archived && state.caps?.actions?.find(row => row.action === "work_item.create")?.allowed !== false;
-    createOpen ||= create.pending();
-    create.box.hidden = !mayCreate || !createOpen;
-    createToggle.hidden = createActions.hidden = !mayCreate || createOpen;
-    createClose.hidden = create.pending();
+    create.setAvailable(mayCreate);
     create.setContext({rows: data.work_items, name: p.name, active: !p.archived});
     work.hidden = !Array.isArray(data.work);
     fill(work, h("h2", {}, t("delivery_project_work")),
@@ -3483,7 +3466,7 @@ async function viewProject(main, pid) {
       pageHeader({title: p.name, pill: p.archived ? chip(t("archived"), "warn") : null}),
       p.description ? h("details", {}, h("summary", {}, t("description"), " · ", p.description.replace(/\s+/g, " ").slice(0, 140), p.description.length > 140 ? "…" : ""),
         h("p", {class: "pre"}, p.description)) : null,
-      h("div", { class: "actions" }, ...counts(p.counts), ...p.repositories.map(r => chip(r)),
+      h("div", { class: "actions project-summary-actions" }, ...counts(p.counts), ...p.repositories.map(r => chip(r)),
         may("manage") && !p.archived && state.caps?.features?.project_dispatch?.version === 1 ? h("a", {class: "session-project-link", href: `#/dispatch/${pid}`}, t("dispatch_title")) : null,
         p.task_project ? chip(`Task Service: ${p.task_project}`) : null, may("manage") && !p.archived ? d.toggle : null),
       may("manage") && !p.archived ? d.box : null,

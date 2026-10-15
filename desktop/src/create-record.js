@@ -147,3 +147,32 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
     update();
   }};
 }
+
+// Both creation entry points retain the same form and its original request while hidden.
+export function createRecordDisclosure({label, hook, ...options}) {
+  const {h, t} = options;
+  let record, open = false, available = false;
+  const update = () => {
+    if (!record) return;
+    open ||= record.pending();
+    record.box.hidden = !available || !open;
+    toggle.hidden = actions.hidden = !available || open;
+    close.hidden = record.pending();
+  };
+  const toggle = button({variant: 'primary', label, [hook]: '', onClick: () => {
+    open = true; update(); record.box.querySelector('input')?.focus();
+  }});
+  const close = button({variant: 'secondary', label: t('cancel'), onClick: () => {
+    if (record.pending()) return;
+    open = false; update(); toggle.focus();
+  }});
+  const actions = h('div', {class: 'actions'}, toggle);
+  record = createRecordForm({...options, onStateChange: () => {options.onStateChange?.(); update();},
+    onCreated: async value => {
+      open = false; await options.onCreated(value); update();
+      if (!toggle.hidden) toggle.focus();
+    }});
+  record.box.querySelector('.actions').append(close);
+  update();
+  return {...record, toggle, actions, setAvailable: value => {available = value; update();}};
+}

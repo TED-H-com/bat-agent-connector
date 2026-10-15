@@ -1128,13 +1128,20 @@ Its title and Refresh stay on the first row; the read-only reason wraps beneath
 the title when the inspector is narrow instead of being squeezed between them.
 
 Workspace refresh and earlier-note failures, Lifecycle and accepted-plan preview
-use one localized error summary with original diagnostics in Details. Export
+use one complete localized error sentence with original diagnostics in Details.
+The version-conflict sentence keeps its draft-preservation and refresh guidance.
+Accepted-plan validation keeps its own stale or invalid reason; API and transport
+failures use the unavailable sentence. Export
 source failures belong to the report's parent; withdrawal removes or hides the
 export control without adding a second error. Failed reads never acknowledge an
 event checkpoint.
 
 An issue mapping without a source title or number says Untitled issue / 未命名議題;
-its original mapping identity stays in Details. The Resources Work items form
-starts closed behind New work item. Cancel closes it and returns focus without
-discarding the draft. A pending original request stays open for receipt recovery;
-a verified successful creation closes the form.
+its original mapping identity stays in Details. Projects and Resources Work items
+share a creation disclosure, starting closed behind New project or New work item.
+Cancel closes it and returns focus without discarding the draft. A pending original
+request stays open for receipt recovery; a verified successful creation refreshes
+the same list, closes the form and returns focus to its action. Source withdrawal
+hides the form and action together. Project header chips center beside touch-sized
+actions without stretching. Captures disable animations so disclosure chevrons
+show their settled open rotation.

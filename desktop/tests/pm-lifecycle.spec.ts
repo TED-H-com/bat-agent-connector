@@ -74,9 +74,9 @@ for(const locale of ['en','zh-TW'])for(const width of [1440,390])for(const font 
   const f=fixture();f.state.stage=null;f.state.status='unclassified';
   const copy=locale==='en'?{phase:'Phase not yet selected',legacy:'Existing work keeps its classification.',
     pending:'No admitted work',scope:'Only readable records are shown.',
-    reason:'Workspace state unavailable'}
+    reason:'Workspace state is unreadable.'}
     :{phase:'尚未指定管理階段',legacy:'既有工作保留原分類。',pending:'尚無已受理工作',scope:'僅顯示可讀取的管理紀錄。',
-      reason:'無法取得工作區狀態'};
+      reason:'無法讀取工作區狀態。'};
   await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmPanel(page,'ui_change_phase');
   const empty=(title:string)=>activity(page).locator('.ui-empty').filter({has:page.getByRole('heading',{name:title,exact:true})});
   const checkMargin=async(title:string)=>expect(await empty(title).evaluate(node=>{
@@ -205,7 +205,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
   test('source read failure clears prior facts and blocks new investment',async({page})=>{
     const f=fixture();f.stop();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openPmPanel(page, 'ui_change_phase');
     await expect(activity(page)).toContainText('Keep the released version');f.state.failed=true;f.base.state.cursor++;
-    await expect(activity(page).locator('[data-error-summary]')).toHaveText('Workspace state unavailable', {timeout:10000});
+    await expect(activity(page).locator('[data-error-summary]')).toHaveText('Workspace state is unreadable.', {timeout:10000});
     await expect(activity(page).locator('[data-api-error]')).toHaveCount(1);
     await expect(activity(page)).not.toContainText('Keep the released version');await expect(activity(page).locator('[data-pm-lifecycle-operation]')).toHaveCount(0);
     const editor=await edit(page,'reopen');await expect(editor.getByRole('button',{name:'Reopen workspace',exact:true})).toBeDisabled();

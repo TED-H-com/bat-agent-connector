@@ -32,6 +32,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await page.getByRole('button', {name: zh ? '重試' : 'Retry', exact: true}).click();
       await expect(page.locator('#main').getByRole('link', {name: 'Login', exact: true})).toBeVisible();
       await expect(page.locator('[data-project-unavailable]')).toHaveCount(0);
+      await page.locator('[data-project-new]').click();
       await expect(page.getByRole('textbox', {name: zh ? '新專案名稱' : 'New project name', exact: true})).toBeEnabled();
     }
     expect(state.posts).toEqual([]);
@@ -63,6 +64,9 @@ for (const locale of ['en-US', 'zh-TW']) {
   test(`fix2 1: a late successful project list cannot undo withdrawal ${locale}`, async ({page}) => {
     const state = fresh({manage: true}); await mount(page, locale, state); await page.goto('/dashboard/#/projects');
     await expect(page.locator('#main .row.tree')).toHaveCount(1);
+    await page.locator('[data-project-new]').click();
+    const draft = page.locator('[data-create-record="project"] input').first();
+    await draft.fill('Preserved project draft');
     let release: (() => void) | undefined;
     state.holdList = archived => archived ? new Promise<void>(resolve => {release = resolve;}) : Promise.resolve();
     const filter = page.locator('#main').getByRole('checkbox', {name: zh ? '顯示已封存' : 'Show archived'});
@@ -74,6 +78,8 @@ for (const locale of ['en-US', 'zh-TW']) {
     await expect(page.locator('#main .row.tree, #main .drawer, #main [data-project-count]')).toHaveCount(0);
     await expect(page.locator('[data-project-unavailable="list"]')).toContainText(reason(403));
     await expect(page.locator('[data-create-record="project"]')).toBeHidden();
+    await expect(page.locator('[data-project-new]')).toBeHidden();
+    await expect(draft).toHaveValue('Preserved project draft');
     expect(state.posts).toEqual([]);
   });
 

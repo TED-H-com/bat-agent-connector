@@ -108,8 +108,8 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (c
       await screenshot('policy-paused');
       denied = true; f.state.cursor++;
       await expect(page.locator('[data-pm-lifecycle] [data-error-summary]')).toHaveText(zh
-        ? '無法取得工作區狀態'
-        : 'Workspace state unavailable');
+        ? '無法讀取工作區狀態。'
+        : 'Workspace state is unreadable.');
       await expect(page.locator('[data-pm-lifecycle] [data-api-error]')).toHaveCount(1);
       await expect(page.locator('[data-pm-lifecycle] [data-error-details]')).toBeHidden();
       await expect(page.locator('[data-pm-lifecycle] .pm-lifecycle-stage')).toHaveCount(0);

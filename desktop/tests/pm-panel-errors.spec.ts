@@ -137,6 +137,39 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
 
 for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
   test.use({locale: locale === 'en' ? 'en-US' : 'zh-TW', colorScheme: 'light', reducedMotion: 'reduce'});
+  for (const width of [1440, 390]) test(`version conflict has one complete summary and keeps its original draft ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    const f = pmFixture(); f.state.reject = {status: 409, code: 'VERSION_CONFLICT'};
+    await mountConversation(page, false, f.dispatch); await page.goto(pmRoute);
+    const form = page.locator('[data-pm-action="pm.message.append"]'), field = form.locator('textarea');
+    await field.fill('Keep this original draft');
+    await form.getByRole('button', {name: locale === 'en' ? 'Send' : '送出', exact: true}).click();
+    const sentence = locale === 'en'
+      ? 'Could not confirm the current version. Your draft is preserved. Refresh and review before another change.'
+      : '目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。';
+    await expect(form.locator('[data-api-error]')).toHaveCount(1);
+    await expect(form.locator('[data-error-summary]')).toHaveText(sentence);
+    await expect(form.getByText(sentence, {exact: true})).toHaveCount(1);
+    await expect(form.locator('[data-error-details]')).toBeHidden();
+    expect(await form.innerText()).not.toContain('Rejected request');
+    expect(await form.innerText()).not.toContain('VERSION_CONFLICT');
+    const folder = process.env.BATC_FIX1_SHOTS;
+    if (folder) {
+      await mkdir(folder, {recursive: true}); await form.locator('[data-api-error]').scrollIntoViewIfNeeded();
+      await page.screenshot({animations: 'disabled', path: `${folder}/version-conflict-${locale}-${width}-closed.png`});
+    }
+    await form.locator('[data-api-error] summary').click();
+    await expect(form.locator('[data-error-details] code')).toHaveText('VERSION_CONFLICT');
+    await expect(form.locator('[data-error-details]')).toContainText('Rejected request');
+    if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/version-conflict-${locale}-${width}-open.png`});
+    await expect(field).toHaveValue('Keep this original draft');
+    expect(f.state.writes).toHaveLength(1); expect(f.state.ops.size).toBe(0);
+    const [stored] = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.pm.message.append.')).map(([, value]) => JSON.parse(value)));
+    expect(stored.values.content).toBe('Keep this original draft');
+    expect(stored.intent.key).toBe(f.state.writes[0].idempotency_key);
+    expect(stored.intent.request).toEqual(f.state.writes[0].body);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
   for (const width of [1440, 390]) for (const mode of ['refresh', 'earlier']) test(`workspace ${mode} one localized error ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: width === 390 ? 844 : 900});
     const f = pmFixture(); let denied = false, failedReads = 0;
@@ -157,7 +190,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     else await page.locator('.pm-main > header').getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true}).click();
     const root = page.locator('#main'), summary = root.locator('[data-error-summary]');
     await expect(summary).toHaveCount(1);
-    await expect(summary).toHaveText(locale === 'en' ? 'Could not confirm the current version' : '無法確認最新版本');
+    await expect(summary).toHaveText(locale === 'en' ? 'Could not confirm the current version. Your draft is preserved. Refresh and review before another change.' : '目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。');
     await expect(root.locator('[data-api-error]')).toHaveCount(1);
     await expect(root.locator('[data-error-details]')).toBeHidden(); await expect(root).not.toContainText(serverMessage, {useInnerText: true});
     const shots = process.env.BATC_C4_SHOTS;

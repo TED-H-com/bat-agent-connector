@@ -5,7 +5,10 @@
 - PM refresh, Lifecycle, accepted-plan preview and report export failures show one
   localized message with diagnostics in Details. Untitled issue mappings get a
   calm name, and Resources opens work-item creation on request while preserving
-  drafts and original-request recovery.
+  drafts and original-request recovery. Projects uses the same collapsed creation
+  form and returns focus after creation. Context previews keep their specific stale
+  or invalid reason; version conflicts retain the full draft-preservation guidance.
+  Project header chips stay compact on narrow screens.
 
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
