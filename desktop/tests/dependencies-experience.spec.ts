@@ -96,9 +96,9 @@ test('filtering to test relations shows what to re-check, and the graph keeps th
   await expect(page.locator('[data-dep-capture]')).toBeDisabled();
   await expect(page.locator('[data-dep-capture]')).toHaveClass(/\bsecondary\b/);
   await expect(page.locator('[data-dep-capture]')).not.toHaveClass(/\bprimary\b/);
-  await expect(page.locator('[data-dep-capture-reason]')).toHaveText('Capture needs manage access.');
+  await expect(page.locator('[data-dep-capture-reason]')).toHaveText('Capture needs Manage access');
   await expect(page.locator('[data-dep-capture]')).toHaveAttribute('aria-describedby', 'dep-capture-reason');
-  await expect(page.locator('[data-dep-capture]')).toHaveAttribute('title', 'Capture needs manage access.');
+  await expect(page.locator('[data-dep-capture]')).toHaveAttribute('title', 'Capture needs Manage access');
   await expect(page.locator('.ui-header-actions button.primary:visible')).toHaveCount(0);
   await expect(page.locator('[data-dep-relation=test]')).toContainText('2');
   await expect(page.locator('.dep-filter-label').first()).toHaveText('Relation');

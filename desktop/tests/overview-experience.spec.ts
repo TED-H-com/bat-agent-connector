@@ -444,10 +444,10 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
     const discuss = page.locator('[data-overview-discuss]');
     const bounds = await discuss.boundingBox();
     expect(bounds!.height).toBeLessThan(60);
-    // All header actions remain reachable in the row's own scroll area.
+    // Wrapped header actions remain inside the header and reachable at their hit point.
     await page.locator('[data-pm-refresh]').focus();
     expect(await page.locator('[data-pm-refresh]').evaluate(node => {
-      const box = node.getBoundingClientRect(), row = node.parentElement!.getBoundingClientRect();
+      const box = node.getBoundingClientRect(), row = node.closest('.ui-page-header')!.getBoundingClientRect();
       const target = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
       // Scroll offsets round to pixels while translated label widths can be fractional.
       return box.left >= row.left - 1 && box.right <= row.right + 1 && node.contains(target);

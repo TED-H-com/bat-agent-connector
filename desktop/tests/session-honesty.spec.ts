@@ -94,7 +94,9 @@ for (const [name, response] of [
     const {page} = s;
     const state = page.locator('.conversation [data-conversation-state=error]');
     await expect(state).toContainText(name === '413' ? 'Too many messages to load' : 'Messages unavailable');
-    await expect(page.locator('.conversation-window')).toHaveText('Messages unavailable');
+    await expect(page.locator('.conversation-window')).toHaveText('');
+    await expect(state.locator('details')).toContainText(response.data.error.message);
+    await expect(page.locator('.conversation').getByRole('button', {name: 'Retry', exact: true})).toHaveCount(1);
     expect(await visibleText(page)).not.toMatch(/INTERNAL|PAYLOAD_TOO_LARGE/);
     if (name === '413') expect(s.log.some(row => row.path.includes('/messages?') && row.path.includes('last_n=10'))).toBe(true);
     failing = false;

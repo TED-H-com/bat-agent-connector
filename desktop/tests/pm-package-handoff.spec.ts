@@ -148,7 +148,7 @@ for(const native of [false,true])test(`${native?'Native':'Web'} Chinese fixed pa
   const context=await browser.newContext({baseURL,locale:'zh-TW'}),page=await context.newPage(),f=handoffFixture();
   await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel('工作包',{exact:true});await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});await open(page);
   await section(page).getByRole('button',{name:'核對基底',exact:true}).click();
-  await expect(form(page).getByLabel('Agent',{exact:true})).toBeVisible();
+  await expect(form(page).getByLabel('代理',{exact:true})).toBeVisible();
   await expect(section(page)).not.toContainText('BAT agent');
   await expect(section(page)).not.toContainText('runtime');
   await form(page).getByLabel('為何使用這個實作基底？',{exact:true}).fill('沿用既有登入模組，實作固定規格');
