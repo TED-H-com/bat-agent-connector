@@ -12,7 +12,6 @@ import {acceptedFinding, findingName, findingSeverity} from './ui/finding-name.j
 
 const domains = ['definition', 'scope', 'schedule', 'resources', 'risks', 'decisions'];
 const classes = ['accepted', 'in_review', 'in_progress', 'blocked', 'not_started'];
-const tones = ['ok', 'review', 'info', 'bad', 'neutral'];
 const phaseNames = ['idea', 'planning', 'development', 'maintain', 'paused', 'closed'];
 
 // Live projection and immutable reports deliberately have separate render inputs.
@@ -94,12 +93,12 @@ export function workspaceOverview(options) {
       changed ? h('span', {}, ' → ', date(row.forecast_date), late) : null);
   }
   function statusStrip(data, fixed = false) {
-    const p = data?.progress, complete = p && classes.every(key => Number.isSafeInteger(p[key]));
+    const p = data?.progress, complete = p && p.complete === true && Number.isSafeInteger(p.requirements) && classes.every(key => Number.isSafeInteger(p[key]));
     const acceptanceGap = !fixed && complete && p.complete === true && Number.isSafeInteger(p.requirements)
       && p.accepted < p.requirements && data.recent_deliveries?.length > 0;
     const progressTitle = acceptanceGap ? `${t('ov_progress')} · ${t('ov_accepted', {accepted: p.accepted, total: p.requirements})}` : '';
     const askProgress = acceptanceGap ? discussLink({workspaceId, refs: refs(), title: progressTitle, from: 'overview'},
-      {'data-overview-ask-progress': '', 'data-overview-link': 'status:progress:discuss', class: 'ui-button ghost ui-sm'}) : null;
+      {'data-overview-ask-progress': '', 'data-overview-link': 'status:progress:discuss', class: 'ui-button secondary ui-sm'}) : null;
     if (askProgress) askProgress.textContent = t('ov_ask_pm');
     const goalReason = (data?.unknown || []).find(row => row.field === 'plan.goal')?.reason;
     const goal = metric({label: t('ov_goal'), value: data?.plan?.goal ?? '—', context: h('div', {},
@@ -113,10 +112,11 @@ export function workspaceOverview(options) {
       context: h('div', {}, fixed && p ? h('div', {}, t('ov_requirements', {n: p.requirements})) : p && !complete ? statusPill('partial') : null,
         !p && (data?.unknown || []).some(row => row.reason === 'no_adopted_plan') ? h('a', {href: `#/pm/${encodeURIComponent(workspaceId)}/discussions`}, reasonLabel(t, 'no_adopted_plan')) : null,
         acceptanceGap ? h('div', {'data-overview-acceptance-gap': ''}, h('p', {class: 'pm-overview-acceptance-gap'}, t('ov_acceptance_gap')),
-          h('div', {class: 'pm-overview-progress-actions'}, h('a', {class: 'ui-button ghost ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/requirements`,
+          h('div', {class: 'pm-overview-progress-actions'}, h('a', {class: 'ui-button secondary ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/requirements`,
             'data-overview-unaccepted': '', 'data-overview-link': 'status:progress:requirements'}, t('ov_see_unaccepted')), askProgress)) : null,
         next ? h('div', {class: 'pm-overview-next'}, next.title, h('div', {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h('span', {class: 'pm-overview-late'}, t('ov_delta', {n: next.delta_days})) : null)) : null),
-      bar: complete ? classes.map((key, i) => ({tone: tones[i], value: p[key]})) : null});
+      // The headline and track both measure acceptance; other states stay in Details.
+      bar: complete ? [{tone: 'ok', value: p.accepted}, {tone: 'neutral', value: p.requirements - p.accepted}] : null});
     progress.dataset.overviewMetric = 'progress';
     if (complete) {
       const counts = disclosure({label: t('ov_details'), key: `${namespace}:${workspaceId}:progress`, body: h('ul', {}, ...classes.map(key => h('li', {}, statusPill(key), ` ${p[key]}`)))});
@@ -127,7 +127,10 @@ export function workspaceOverview(options) {
       const first = data?.attention?.find(row => row.kind === kind);
       const node = metric({label: t(kind === 'blocker' ? 'ov_blockers' : 'ov_decisions'), value: data?.attention_counts?.[kind] ?? null,
         context: h('div', {}, kind === 'decision' && first ? h('div', {class: 'pm-overview-decision-row', 'data-overview-open-decision': first.key}, itemLink(first, 'status'), discuss(first, 'status')) : itemLink(first, 'status'),
-          kind === 'decision' && !fixed ? recentDecisions(data) : null)});
+          kind === 'decision' && !fixed ? recentDecisions(data) : null,
+          kind === 'decision' && data?.attention_truncated ? statusPill('partial') : null,
+          kind === 'decision' && data?.attention_counts?.decision > (data?.attention || []).filter(row => row.kind === 'decision').length
+            ? h('a', {class: 'ui-button secondary ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ov_more', {n: data.attention_counts.decision - (data?.attention || []).filter(row => row.kind === 'decision').length})) : null)});
       node.dataset.overviewMetric = kind; return node;
     });
     return h('div', {class: 'pm-overview-status', 'data-overview-status': ''}, goal, progress, ...metrics);
@@ -183,10 +186,10 @@ export function workspaceOverview(options) {
         h('span', {class: 'pm-overview-kind', title: label, 'aria-label': label}, icon(row.kind === 'decision' ? 'message-square' : 'circle-alert')),
         h('span', {}, h('strong', {}, attentionTitle(row))));
       const node = h('div', {class: 'pm-overview-attention-row', 'data-overview-row': row.key}, link,
-        h('div', {class: 'pm-overview-attention-meta'}, h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · ')),
+        h('div', {class: 'pm-overview-attention-meta'}, h('span', {class: 'pm-overview-context'}, [label, contextText(row)].filter(Boolean).join(' · '),
+          elapsed === null ? null : h('span', {}, ' · ', h('span', {'data-overview-age': ''}, elapsed))),
           h('span', {class: 'pm-overview-attention-actions'},
             severity ? h('span', {class: `ui-pill tone-${severity.tone}`, 'data-finding-severity': severity.severity}, severity.label) : null,
-            elapsed === null ? null : h('span', {class: 'ui-meta', 'data-overview-age': ''}, elapsed),
             discuss(row))));
       cached?.node.remove(); attentionNodes.set(row.key, {signature: rowSignature, node});
       rows.insertBefore(node, rows.children[position] || null); position++;
@@ -237,24 +240,19 @@ export function workspaceOverview(options) {
   }
   function charter(source) {
     const groups = charterSections(source), document = source?.baseline?.document;
-    const grid = h('div', {class: 'pm-overview-charter-grid'});
-    for (const key of domains) {
+    const grid = h('div', {class: 'pm-overview-charter-grid'}), empty = [];
+    // Live milestones and pending decisions already have their own cards.
+    const shownDomains = mode === 'live' ? domains.filter(key => !['schedule', 'decisions'].includes(key)) : domains;
+    for (const key of shownDomains) {
       const rows = groups[key], expanded = preference.expanded?.includes(key);
+      if (!rows.length) {empty.push(key); continue;}
       const list = h('ul', {class: 'pm-overview-bullets'}, ...rows.map((row, i) => h('li', {hidden: i >= 3 && !expanded}, row.text,
         ['agent_assumption', 'unresolved', 'conflicting'].includes(row.status) ? statusPill('unconfirmed') : null)));
       const sources = disclosure({label: t('ov_sources'), key: `${namespace}:${workspaceId}:overview-source:${key}`,
         body: proof({h, t, value: rows.map(row => ({...row, ...(document?.selected_inputs?.find(input => input.input_id === row.input_id) || {})}))})});
       sources.classList.add('pm-overview-sources'); sources.querySelector('summary').setAttribute('aria-label', `${t('ov_sources')} · ${t('wb_' + key)}`);
       sources.querySelector('summary').title = t('ov_sources'); sources.querySelector('summary').dataset.overviewLink = `charter:${key}:sources`;
-      const decisions = key === 'decisions' && Object.hasOwn(source, 'decision_count');
-      const count = source?.decision_count;
-      const complete = decisions ? count === 0 && !source.attention_truncated
-        : Boolean(document) && (Object.hasOwn(source, 'plan_complete') ? source.plan_complete : !savedPartial());
-      const card = sectionCard({title: t('wb_' + key), body: h('div', {}, rows.length ? list : decisions && count > 0 ? null
-        : emptyField(source, decisions ? 'attention_counts.decision' : 'plan', complete, decisions ? ['governance', 'plan_candidate', 'proposals', 'lifecycle_inflight'] : ['plan']),
-        decisions && rows.length && count === null ? statusPill('unknown') : null,
-        decisions && source.attention_truncated ? statusPill('partial') : null,
-        decisions && count > rows.length ? h('a', {class: 'ui-button ghost ui-sm', href: `#/pm/${encodeURIComponent(workspaceId)}/issues`}, t('ov_more', {n: count - rows.length})) : null, sources)});
+      const card = sectionCard({title: t('wb_' + key), body: h('div', {}, list, sources)});
       card.dataset.charterSection = key;
       if (rows.length > 3) {
         const more = button({variant: 'ghost', size: 'sm', label: t(expanded ? 'ov_less' : 'ov_more', {n: rows.length - 3}), 'aria-expanded': String(Boolean(expanded)), 'data-overview-link': `charter:${key}:expand`, onClick: () => {
@@ -266,7 +264,10 @@ export function workspaceOverview(options) {
       grid.append(card);
     }
     return h('section', {'data-pm-charter': '', class: 'pm-overview-charter'}, h('header', {class: 'pm-overview-charter-heading'}, h('h2', {}, t('ov_charter')),
-      button({variant: 'ghost', label: t('ov_plan'), disabled: !document, 'data-charter-plan': '', 'data-overview-link': 'charter:plan', onClick: () => fullPlan(document)})), grid);
+      button({variant: 'secondary', label: t('ov_plan'), disabled: !document, 'data-charter-plan': '', 'data-overview-link': 'charter:plan', onClick: () => fullPlan(document)})), grid,
+      empty.length ? h('p', {class: 'ui-meta', 'data-charter-empty': ''},
+        emptyField(source, 'plan', Boolean(document) && (Object.hasOwn(source, 'plan_complete') ? source.plan_complete : !savedPartial()), ['plan']),
+        ' · ', empty.map(key => t('wb_' + key)).join(' · ')) : null);
   }
   function details(data, fixed) {
     const knownSources = ['plan', 'plan_candidate', 'work', 'governance', 'quality', 'roadmap', 'forecast', 'proposals', 'findings', 'lifecycle_inflight', 'deliveries', 'projects', 'evidence'];
@@ -424,7 +425,7 @@ export function workspaceOverview(options) {
     const text = plan?.document?.requirements?.find(row => row.id === id)?.text;
     return typeof text === 'string' ? text : '';
   }
-  return {box, primary, meta, reportTools, refresh, refreshProjection: () => mode === 'live' ? refreshLive() : undefined, withdraw, prepareReports, openRelated, labelFor, closeRelated: () => {if (relatedSelection) closeReader();},
+  return {box, primary, meta, reportTools, refresh, refreshProjection: () => mode === 'live' ? refreshLive() : undefined, phase: () => mode === 'live' ? projection?.lifecycle?.stage : null, withdraw, prepareReports, openRelated, labelFor, closeRelated: () => {if (relatedSelection) closeReader();},
     reportActions: {compare: () => {if (mode !== 'saved') {mode = preference.mode = 'saved'; saved = reports.current(); signature = ''; render();} return reports.comparePrevious();}, print: () => window.print()},
     setActive(value) {if (active === value) {header(); return;} active = value;
       if (!value) {preference.scroll = window.scrollY; closeReader();}

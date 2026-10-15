@@ -47,6 +47,11 @@
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
   and never cache loads affected by cycle or budget refusals, including raw metadata.
+- Overview measures acceptance consistently, groups empty Charter domains, and keeps
+  attention context readable on mobile. Issues & changes opens the exact record,
+  identifies records outside loaded rows, hides stale next steps after resolution,
+  and keeps secondary tools and change proposals in menus. Demo records now share
+  consistent identities across Overview, register and discussion context.
 - Pull requests select the Python matrix and no/Linux/all native builds from their
   merge diff. Existing desktop path filters remain; workflows triggered on `main`
   keep full coverage. Every selected Python version retains all five pytest shards

@@ -63,7 +63,7 @@
 .reg-main .ui-data-table th, .reg-main .ui-data-table td { white-space: nowrap; vertical-align: middle; }
 .reg-main .ui-data-table td:nth-child(2), .reg-main .ui-data-table th:nth-child(2),
 .reg-main .ui-data-table td:nth-child(8), .reg-main .ui-data-table th:nth-child(8) { white-space: normal; }
-.reg-main .ui-data-table td:nth-child(2) { min-width: 9rem; max-width: 18rem; }
+.reg-main .ui-data-table td:nth-child(2) { min-width: 12rem; }
 .reg-main .ui-data-table td:nth-child(8) { max-width: 14rem; }
 .reg-owner-cell { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
@@ -146,18 +146,18 @@
 .pm-shell [data-pm-register] .ui-data-table th[data-column=priority],
 .pm-shell [data-pm-register] .ui-data-table th[data-column=impact] { width: 4.5rem; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=due] { width: 6rem; }
-.pm-shell [data-pm-register] .ui-data-table th[data-column=owner] { width: 8.5rem; }
-.pm-shell [data-pm-register] .ui-data-table th[data-column=next] { width: 10rem; }
-.pm-shell [data-pm-register] .ui-data-table th[data-column=related] { width: 13.5rem; }
+.pm-shell [data-pm-register] .ui-data-table th[data-column=owner] { width: 11rem; }
+.pm-shell [data-pm-register] .ui-data-table th[data-column=next] { width: 8rem; }
+.pm-shell [data-pm-register] .ui-data-table th[data-column=related] { width: 10rem; }
 .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=type] { white-space: nowrap; }
 .pm-shell [data-pm-register] .reg-type { max-width: 100%; }
-@container ui-table (max-width: 980px) {
+@container ui-table (max-width: 1200px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=related] { display: none; }
 }
-@container ui-table (max-width: 860px) {
+@container ui-table (max-width: 1120px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=impact] { display: none; }
 }
-@container ui-table (max-width: 760px) {
+@container ui-table (max-width: 1000px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=due] { display: none; }
 }
 @container ui-table (max-width: 680px) {
@@ -166,3 +166,10 @@
 @container ui-table (max-width: 560px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=priority] { display: none; }
 }
+
+/* A docked inspector leaves title and status first; all facts remain in its body. */
+@container ui-table (max-width: 800px) {
+  .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=next] { display: none; }
+}
+
+.reg-actions .ui-menu-panel { top: auto; bottom: calc(100% + var(--space-1)); right: 0; }

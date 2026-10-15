@@ -457,7 +457,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   let lastList = [], lastThreadList = null;
   function publishContext() {
-    const stage = workspace ? lifecycle?.phase?.() : null;
+    // Lifecycle owns its own invalidation. Without that module, reuse only a
+    // fresh Overview read from this workspace's mounted page session.
+    const stage = workspace ? lifecycle ? lifecycle.phase() : !staleSections.has(brief) ? brief?.phase?.() : null : null;
     phasePill.hidden = !['idea','planning','development','maintain','paused','closed'].includes(stage);
     phasePill.textContent = phasePill.hidden ? '' : t('ui_phase_' + stage);
     onContext({workspace, workspaces: lastList, view: threadId ? 'discussions' : workbench?.selected() || view || 'discussions',
@@ -753,13 +755,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   }
   const openIssueTool = section => {
     if (matchMedia('(max-width: 1199px)').matches) register?.closeSheet?.(true);
-    const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
-    if (fold instanceof HTMLDetailsElement) {
-      fold.open = true;
-      queueMicrotask(() => {fold.querySelector('summary')?.focus(); fold.scrollIntoView({block: 'nearest'});});
-      return;
+    const card = body.querySelector(`[data-pm-section="${section}"]`);
+    const fold = card?.querySelector(':scope > details');
+    if (!(fold instanceof HTMLDetailsElement)) return;
+    for (const tool of issueTools) {
+      const other = body.querySelector(`[data-pm-section="${tool.section}"] > details`);
+      if (other && other !== fold) other.open = false;
     }
-    body.querySelector(`[data-pm-section="${section}"]`)?.scrollIntoView({block: 'nearest'});
+    card.hidden = false; fold.open = true;
+    void refreshStaleVisible();
+    queueMicrotask(() => {fold.querySelector('summary')?.focus(); fold.scrollIntoView({block: 'nearest'});});
   };
   const overflow = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-pm-overflow': ''}), items: [
     ...(lifecycle ? [{key: 'phase', label: t('ui_change_phase'), onSelect: () => openPanel(t('ui_change_phase'), lifecycle.element)}] : []),
@@ -825,7 +830,16 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       lazyThreadSections.set(section, details);
       details.addEventListener('toggle', () => {if (details.open && !details.closest('[data-discussion-tab]')?.hidden && loaded) void refreshSection(section);});
     }
-    card.dataset.pmSection = label; node.classList.add('pm-secondary-content'); return card;
+    card.dataset.pmSection = label; node.classList.add('pm-secondary-content');
+    // Issue tools are mounted only from More actions, with their original forms.
+    if (register && issueTools.some(tool => tool.section === label)) {
+      card.hidden = true; details.open = false;
+      details.addEventListener('toggle', () => {
+        card.hidden = !details.open;
+        if (details.open && loaded) void refreshStaleVisible();
+      });
+    }
+    return card;
   }
   const groups = [];
   if (workspaceId && !threadId) {

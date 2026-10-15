@@ -1,6 +1,6 @@
 import {timeStamp, timeText} from './ui/stamps.js';
 import {viewState} from './ui/view-state.js';
-import {button, searchField, contextChip, discussLink, dataTable, disclosure, emptyState, inlineError, inspector, segmented, skeleton, statusPill} from './ui/components.js';
+import {button, searchField, contextChip, discussLink, dataTable, disclosure, emptyState, inlineError, inspector, iconButton, menu, segmented, skeleton, statusPill} from './ui/components.js';
 import {statusVocabulary, reasonLabel} from './ui/ui-strings.js';
 import {icon} from './ui/icons.js';
 import {discussHref, isContextRef} from './pm-discuss-link.js';
@@ -54,6 +54,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   let typeValue = TYPES.includes(preference.type) ? preference.type : '';
   let ageValue = Object.hasOwn(AGE_KEYS, preference.age) ? preference.age : '';
   let weekValue = /^\d{4}-\d{2}-\d{2}$/.test(preference.week || '') ? preference.week : '';
+  let inspectorMenu = null;
   let debounce = null, sheet = null, retainSheet = false, opening = false;
   const statusLine = h('div', {class: 'reg-status', role: 'status'});
   const summaryHost = h('div', {class: 'reg-summary', 'data-reg-summary': ''});
@@ -131,6 +132,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
   function kindLabel(kind) {return known(t, 'reg_kind_' + kind) || t('ui_reason_generic');}
   function stepLabel(step) {return known(t, 'reg_step_' + step) || t('ui_reason_generic');}
   function dash(value) {return labelSegment(value) || '—';}
+  // A recorded response remains history after resolution, not a current next step.
+  function nextStep(row) {return ['done', 'closed'].includes(groupOf(row.status)) ? '' : labelSegment(row.next_step);}
   function readFilters() {
     preference.type = typeValue;
     preference.status = statusSelect.value;
@@ -391,7 +394,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
         'aria-current': current ? 'true' : null, 'aria-selected': current ? 'true' : null,
         tabindex: current || !hasSelection && index === 0 ? 0 : -1, onclick: () => openRow(row)},
         h('span', {class: 'reg-list-title'}, dash(displayTitle(row))), listMeta(row),
-        labelSegment(row.next_step) ? h('span', {class: 'reg-list-next'}, row.next_step) : null);
+        nextStep(row) ? h('span', {class: 'reg-list-next'}, row.next_step) : null);
       button.addEventListener('keydown', event => {
         if (event.target !== button) return;
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
@@ -429,9 +432,9 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       {key: 'status', label: t('reg_col_status'), render: row => statusNode(row.status)},
       {key: 'priority', label: t('reg_col_priority'), render: row => dash(row.priority)},
       {key: 'impact', secondary:true, label: t('reg_col_impact'), render: row => dash(row.impact)},
-      {key: 'owner', secondary:true, label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell'}, dash(row.owner))},
+      {key: 'owner', secondary:true, label: t('reg_col_owner'), render: row => h('span', {class: 'reg-owner-cell', title: labelSegment(row.owner)}, dash(row.owner))},
       {key: 'due', secondary:true, label: t('reg_col_due'), render: row => day(row.due) || '—'},
-      {key: 'next', label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(row.next_step))},
+      {key: 'next', label: t('reg_col_next'), render: row => h('span', {class: 'reg-clamp'}, dash(nextStep(row)))},
       {key: 'related', secondary:true, label: t('reg_col_related'), render: row => relatedChips(row, 2)},
     ];
     tableHost.replaceChildren(dataTable({columns, rows: shown, rowKey: 'row_id', selected, onSelect: (_key, row) => openRow(row)}));
@@ -495,6 +498,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     return label ? h('span', {}, label) : null;
   }
   function detailNodes(record) {
+    inspectorMenu?.dispose();
     const row = record.row;
     const unknownCodes = [];
     const pairs = [
@@ -505,7 +509,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       [t('reg_col_owner'), dash(row.owner)],
       [t('reg_col_due'), day(row.due) || '—'],
       [t('reg_col_status'), statusNode(row.status)],
-      [t('reg_col_next'), dash(row.next_step)],
+      [t('reg_col_next'), dash(nextStep(row))],
       [t('reg_col_related'), relatedChips(row)],
     ];
     const identity = acceptedFinding(row.finding);
@@ -529,17 +533,21 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const title = displayTitle(row) || t('reg_discussion');
     const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter(action => labelSegment(action?.action));
     const labels = offered.map(action => t(ACTION_KEYS[action.action] || 'reg_action_open'));
-    const stepText = labelSegment(row.next_step);
-    const primary = stepText && labels.filter(label => label === stepText).length === 1 ? stepText : '';
+    const stepText = nextStep(row);
+    const open = !['done', 'closed'].includes(groupOf(row.status));
+    const primary = !open && stepText && labels.filter(label => label === stepText).length === 1 ? stepText : '';
+    inspectorMenu = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-reg-overflow': ''}),
+      items: [{key: 'propose', label: t('reg_propose'), href: discussHref({workspaceId, refs, title: t('reg_change_title', {title}), from: 'issues'})}]});
+    inspectorMenu.querySelector('[data-menu-key=propose]').dataset.regPropose = '';
     const links = h('div', {class: 'reg-actions'},
-      discussLink({workspaceId, refs, title, from:'issues'}, {'data-reg-discuss':''}),
+      discussLink({workspaceId, refs, title, from:'issues'}, {'data-reg-discuss':'', class: `ui-button ${open ? 'primary' : 'secondary'} ui-sm`}),
       ...offered.map((action, index) => {
         const key = ACTION_KEYS[action.action];
         if (!key) unknownCodes.push(action.action);
         return h('button', {type: 'button', class: `ui-button ${labels[index] === primary ? 'primary' : 'secondary'} ui-sm`, 'data-reg-action': action.action,
           onclick: () => onAction(action)}, labels[index]);
       }),
-      h('a', {class: 'ui-button secondary ui-sm', 'data-reg-propose': '', href: discussHref({workspaceId, refs, title: t('reg_change_title', {title}), from: 'issues'})}, t('reg_propose')));
+      inspectorMenu);
     const fieldKey = {title: 'reg_col_title', status: 'reg_col_status', owner: 'reg_col_owner', due: 'reg_col_due', impact: 'reg_col_impact', priority: 'reg_col_priority', next_step: 'reg_col_next', created_at: 'reg_created', updated_at: 'reg_updated', pull_requests: 'reg_pull_requests'};
     const detailBits = row.source?.kind === 'issue_mapping' && labelSegment(row.source.id)
       ? [h('p', {}, t('reg_source_id'), locale === 'zh-TW' ? '：' : ': ', h('code', {}, row.source.id))] : [];
@@ -575,7 +583,9 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     for (const code of unknownCodes) if (labelSegment(code) && !seenCodes.has(String(code))) {seenCodes.add(String(code)); detailBits.push(h('p', {class: 'mono'}, String(code)));}
     const extra = detailBits.length ? disclosure({label: t('reg_details'), key: `reg-details:${workspaceId}:${row.row_id}`,
       body: h('div', {class: 'reg-detail-body'}, ...detailBits)}) : null;
-    return [h('div', {class: 'reg-sheet-main'}, facts, head, timeline, extra), links];
+    return [h('div', {class: 'reg-sheet-main'},
+      !visibleRows().some(item => item.row_id === row.row_id) ? h('p', {class: 'ui-meta', 'data-reg-outside-page': ''}, t('reg_outside_page')) : null,
+      facts, head, timeline, extra), links];
   }
   function focusSelectedRow() {
     const row = selected ? tableHost.querySelector(`[data-row-key="${CSS.escape(selected)}"]`) : null;
@@ -588,7 +598,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       closeSheet(true);
       opening = true;
       sheet = inspector({title, onClose: () => {
-        sheet = null;
+        sheet = null; inspectorMenu?.dispose(); inspectorMenu = null;
         if (!retainSheet && !opening) preference.inspector = false;
         // close() focuses its captured opener after onClose. A rebuilt row is disconnected, so focus again on the next turn.
         queueMicrotask(() => {if (!opening && !sheet && active) focusSelectedRow();});
@@ -711,6 +721,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       if (!active || ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
       // A closed modal stays closed. The read still drops the row when the detail is gone.
       if (!paint) return;
+      const index = rows.findIndex(row => row.row_id === rowId);
+      if (index >= 0) {rows[index] = data.row; render();}
       paintInspector(data);
     } catch (error) {
       try {alive();} catch {return;}
@@ -808,9 +820,10 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     if (!ROW_ID.test(rowId) || !active) return;
     // Finish the destination's initial list read before selecting. Its normal
     // serial/withdrawal guards still govern the subsequent exact record read.
+    const query = String(pageQuery());
     await refresh();
     try {alive();} catch {return;}
-    if (!active || unavailable || failed) return;
+    if (!active || unavailable || failed || query !== String(pageQuery())) return;
     selected = rowId; preference.selected = rowId; preference.inspector = true;
     render();
     await loadDetail(rowId);
