@@ -31,7 +31,7 @@ export const pmKanbanStrings = {
     pm_kanban_manual_help: 'Read one linked session’s original single input. This does not send, stop, take control of the session or accept the work.',
     pm_kanban_manual_ready: 'The selected source can be checked. Native identity and current authority are rechecked when the request runs.',
     pm_kanban_manual_unavailable: 'Select an available source from the current work details. An original pending request keeps its fixed source.',
-    pm_kanban_manual_authority: 'New observations require observe access and a current workspace writer role. Original receipts remain readable with source access.',
+    pm_kanban_manual_authority: 'New observations need View access and a current workspace writer role. Original receipts remain readable with source access.',
     pm_kanban_manual_original_missing: 'Previously selected source is unavailable',
     pm_kanban_manual_identity: 'Authenticated native identity is unavailable or stale.',
     pm_kanban_manual_multiple: 'Only a single original input is supported; multiple inputs remain unproven.',

@@ -118,6 +118,21 @@
   .ui-page-header h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 }
 
+/* Flatten the action row on phones while preserving its DOM insertion contract. */
+@media (max-width: 800px) {
+  .ui-page-header:has(> .ui-header-actions) { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); }
+  .ui-page-header:has(> .ui-header-actions) > .ui-page-heading { display: contents; }
+  .ui-page-header:has(> .ui-header-actions) .ui-title-row { flex: 1 1 0; flex-wrap: nowrap; overflow: hidden; }
+  .ui-page-header > .ui-header-actions { display: contents; }
+  .ui-page-header > .ui-header-actions > * { flex: none; }
+  .ui-page-header > .ui-header-actions > :not(.ui-icon-button, .ui-menu:has(> .ui-icon-button)) { order: 2; }
+  .ui-page-header > .ui-page-heading > :not(.ui-title-row) { flex-basis: 100%; order: 1; }
+  .ui-page-header:has(> .ui-header-actions > :not(.ui-icon-button, .ui-menu:has(> .ui-icon-button), [hidden]))::after {
+    content: ''; flex-basis: 100%; order: 1;
+  }
+  .ui-page-header:has(> .ui-page-heading > .ui-meta:not([hidden]))::after { display: none; }
+}
+
 /* Legacy and new disclosures share chrome without replacing durable contents. */
 :root body :is(details, .ui-disclosure) > summary {
   display: flex; align-items: center; gap: var(--space-2); list-style: none;

@@ -24,6 +24,11 @@
   provides installation-aware MCP guidance and a read-only PM eligibility check, with
   localized reasons and a return link to the originating discussion.
 
+- In zh-TW, the Overview's adoption time reads 「剛剛採用」 without a stray space,
+  and its Ask PM button reads 「詢問 PM」 as in Discussions. Issues & changes says
+  "None recorded" when no blocking reasons exist, and the owner column keeps a
+  name on one line, ending a longer name with an ellipsis.
+
 - Lazy PM loading keeps its loading status separate from each panel's status
   slot, while revealing settled content and removing its mask together.
 
@@ -44,6 +49,14 @@
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
+- At phone width, page headers keep icon actions beside the title, and project and
+  work-item rows put the title first with their actions on the right. Sessions says
+  "No sessions yet" before the first session instead of describing filters, and
+  resource rows use the same session labels. Mark read and Save position say why
+  they are unavailable, and a failed message read shows one alert with Retry, with
+  diagnostics in Details. Permission notes use the Connection access names (View,
+  Manage, Start…), and zh-TW uses 代理 and 工作樹 throughout.
+
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
   and never cache loads affected by cycle or budget refusals, including raw metadata.
@@ -57,6 +70,9 @@
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.
+
+- The Windows installed-fixture self-test gives its UIA probe compile and run a 60-second
+  budget, prints which phase is running, and reports the timeout or exit code when it fails.
 
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.

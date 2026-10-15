@@ -142,7 +142,12 @@ for (const locale of ['en', 'zh-TW'] as const) {
     await shot(page, `session-${locale}-768`);
     await page.setViewportSize({width: 390, height: 844});
     const caption = await page.locator('.workspace-session-heading .ui-title-row').boundingBox();
-    expect(caption!.width).toBeGreaterThan(330);
+    let iconWidth = 0;
+    for (const action of await page.locator('.workspace-session-heading .ui-header-actions .ui-icon-button:visible').all()) {
+      const bounds = (await action.boundingBox())!; iconWidth += bounds.width;
+      expect(bounds.y).toBeLessThan(caption!.y + caption!.height);
+    }
+    expect(caption!.width + iconWidth).toBeGreaterThan(330);
     expect(await page.locator('h1').evaluate(node => node.getBoundingClientRect().height <= 2 * parseFloat(getComputedStyle(node).lineHeight))).toBe(true);
     await scroller.evaluate(el => {el.scrollTop = el.scrollHeight;});
     expect(await page.evaluate(noOverflow)).toBe(true);
