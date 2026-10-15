@@ -1,6 +1,8 @@
 import {test, expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {workspaceFixture, mountWorkspace, workspaceRoute} from './workspace-fixture.ts';
+import {mountConversation} from './conversation-fixture.ts';
+import {workbenchFixture, workspaceId as fixtureWorkspaceId} from './pm-workbench-fixture.ts';
 
 for (const lang of ['en', 'zh-TW']) for (const width of [1920, 1440, 1280, 1024, 768, 390, 320]) {
   test(`workbench continuous reading ${lang} ${width}`, async ({page}) => {
@@ -204,3 +206,69 @@ test('preview rollback keeps the route and existing draft', async ({page}) => {
   await expect(page.locator('#workspace-message-input textarea')).toHaveValue('Keep through rollout');
   expect(f.data.posts).toEqual([]);
 });
+
+const previewLayoutRoutes = [
+  {id: 'today', url: '/dashboard/?workbench=1#/home', mount: async (page: any, lang: string) => mountWorkspace(page, false, workspaceFixture(lang))},
+  {id: 'overview', url: `/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/overview`, mount: async (page: any) => mountConversation(page, false, workbenchFixture().dispatch)},
+  {id: 'discussions', url: `/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/discussions`, mount: async (page: any) => mountConversation(page, false, workbenchFixture().dispatch)},
+  {id: 'work', url: '/dashboard/?workbench=1' + workspaceRoute, mount: async (page: any, lang: string) => mountWorkspace(page, false, workspaceFixture(lang))}
+];
+
+for (const route of previewLayoutRoutes) {
+  for (const lang of ['en', 'zh-TW']) {
+    for (const width of [1440, 1280, 1024, 768, 390, 320]) {
+      test(`workbench preview layout ${route.id} ${lang} ${width}`, async ({page}) => {
+        await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), lang);
+        await page.setViewportSize({width, height: width < 600 ? 844 : 900});
+        await route.mount(page, lang);
+        await page.goto(route.url);
+        await expect(page.locator('#main h1, .ui-page-header h1')).toBeVisible();
+
+        // 1. No page-wide horizontal scroll: document.scrollingElement.scrollWidth <= innerWidth
+        const scrollWidth = await page.evaluate(() => document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth);
+        expect(scrollWidth).toBeLessThanOrEqual(width);
+
+        // 2. The page h1 is uncovered: document.elementFromPoint(rect.left + 2, rect.top + rect.height / 2) is the h1 or inside it.
+        // When the rail is visible, rect.left is at least the rail's right edge.
+        const h1 = page.locator('#main h1, .ui-page-header h1').first();
+        const rect = (await h1.boundingBox())!;
+        expect(rect).toBeTruthy();
+        const uncovered = await page.evaluate(({x, y}) => {
+          const topEl = document.elementFromPoint(x, y);
+          const heading = document.querySelector('#main h1, .ui-page-header h1');
+          return Boolean(heading && (topEl === heading || heading.contains(topEl)));
+        }, {x: rect.x + 2, y: rect.y + rect.height / 2});
+        expect(uncovered).toBe(true);
+
+        const railCheck = await page.evaluate(() => {
+          const ws = document.querySelector('#workspace');
+          const rail = document.querySelector('#workspace-sidebar, .workspace-nav');
+          const band = ws ? parseFloat(window.getComputedStyle(ws, '::before').width || '0') : 0;
+          const railVisible = window.innerWidth >= 1000 && rail && window.getComputedStyle(rail).display !== 'none';
+          const railRight = railVisible ? Math.max(band, rail.getBoundingClientRect().right) : 0;
+          return {railVisible, railRight};
+        });
+        if (railCheck.railVisible) {
+          expect(rect.x).toBeGreaterThanOrEqual(railCheck.railRight);
+        }
+
+        // 3. Header actions on-screen: every visible header action satisfies left >= 0 and right <= innerWidth
+        const actionsOnScreen = await page.evaluate(() => {
+          const actions = Array.from(document.querySelectorAll('.ui-header-actions > :not([hidden])'))
+            .filter(el => window.getComputedStyle(el).display !== 'none');
+          return actions.every(el => {
+            const r = el.getBoundingClientRect();
+            return r.left >= 0 && r.right <= window.innerWidth;
+          });
+        });
+        expect(actionsOnScreen).toBe(true);
+
+        // 4. One-line heading: in zh-TW at 390 and 320, the Overview h1 is one line. Its height must be less than 1.5x its computed line-height.
+        if (route.id === 'overview' && lang === 'zh-TW' && (width === 390 || width === 320)) {
+          const lineHeight = await h1.evaluate(node => parseFloat(window.getComputedStyle(node).lineHeight));
+          expect(rect.height).toBeLessThan(1.5 * lineHeight);
+        }
+      });
+    }
+  }
+}
