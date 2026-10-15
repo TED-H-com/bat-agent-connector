@@ -1,17 +1,8 @@
 import { createServer } from "node:http";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 
 const root = new URL("../../src/bat_agent_connector/dashboard/", import.meta.url);
 const protoRoot = new URL("../dist-prototype/v1.3/", import.meta.url);
-if (!existsSync(new URL("index.html", protoRoot))) {
-  execFileSync("npm", ["run", "build:prototype"], {
-    cwd: fileURLToPath(new URL("..", import.meta.url)),
-    stdio: "inherit",
-  });
-}
 
 const port = Number(process.env.BATC_UI_TEST_PORT || process.env.BATC_TEST_PORT || 1421);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid fixture port");
@@ -44,10 +35,10 @@ createServer(async (req, res) => {
     );
     res.writeHead(200, {
       "Content-Type": targetName.endsWith("html")
-        ? "text/html; charset=utf-8"
+        ? "text/html"
         : targetName.endsWith("css")
-          ? "text/css; charset=utf-8"
-          : "text/javascript; charset=utf-8",
+          ? "text/css"
+          : "text/javascript",
       "Content-Security-Policy":
         "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'",
     });
