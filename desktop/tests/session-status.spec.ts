@@ -52,6 +52,8 @@ async function capture(page: Page, enabled: boolean, name: string) {
 
 for (const native of [false, true]) for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) {
   test(`quiet sessions retain unread bounds and localized details (${native ? 'IPC' : 'Web'} ${locale} ${width})`, async ({browser, baseURL}) => {
+    // This matrix includes nine screenshots and repeated event-driven refreshes.
+    test.setTimeout(60000);
     const zh = locale === 'zh-TW', context = await browser.newContext({baseURL,
       locale: zh ? 'zh-TW' : 'en-US', timezoneId: 'UTC', viewport: {width, height: width === 390 ? 844 : 900}});
     try {
