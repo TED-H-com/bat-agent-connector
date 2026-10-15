@@ -1,5 +1,7 @@
 export const pmRegisterStrings = {
   en: {
+    reg_untitled_issue: 'Untitled issue',
+    reg_source_id: 'Source ID',
     reg_all: 'All', reg_type_risk: 'Risk', reg_type_issue: 'Issue', reg_type_action: 'Action', reg_type_change: 'Change', reg_type_decision: 'Decision',
     reg_filter_status: 'Status', reg_any_status: 'Any status', reg_filter_owner: 'Owner', reg_filter_age: 'Age', reg_any_age: 'Any age', reg_filter_search: 'Search titles',
     reg_group_open: 'Open', reg_group_closed: 'Closed', reg_group_other: 'Other',
@@ -39,6 +41,8 @@ export const pmRegisterStrings = {
     reg_pr: 'PR #{n}', reg_work: 'Work', reg_requirement: 'Requirement',
   },
   'zh-TW': {
+    reg_untitled_issue: '未命名議題',
+    reg_source_id: '來源識別碼',
     reg_all: '全部', reg_type_risk: '風險', reg_type_issue: '問題', reg_type_action: '行動', reg_type_change: '變更', reg_type_decision: '決策',
     reg_filter_status: '狀態', reg_any_status: '任何狀態', reg_filter_owner: '負責人', reg_filter_age: '未決天數', reg_any_age: '所有未決天數', reg_filter_search: '搜尋標題',
     reg_group_open: '未解決', reg_group_closed: '已結案', reg_group_other: '其他',

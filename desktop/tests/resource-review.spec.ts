@@ -72,6 +72,7 @@ for (const locale of ['en-US', 'zh-TW']) {
         : 'This account can view projects; change the credential under Connection to edit.');
       expect(await page.locator('#main').innerText()).not.toContain(projectId);
       await expect(page.locator('[data-create-record="work_item"]')).toBeHidden();
+      await expect(page.locator('[data-project-work-create]')).toBeHidden();
       await expect(page.getByRole('button', {name: zh ? '新增' : 'Add', exact: true})).toBeHidden();
       await expect(items(page).getByRole('heading', {name: zh ? '還沒有工作項目。' : 'No work items yet.', exact: true})).toBeVisible();
       const filter = items(page).getByRole('checkbox', {name: zh ? '顯示已封存' : 'Show archived'});
@@ -106,11 +107,13 @@ for (const locale of ['en-US', 'zh-TW']) {
 
   test(`5c–d: write entry points require their existing grant ${locale}`, async ({page}) => {
     const state = fresh({manage: true}); await mount(page, locale, state); await page.goto(route);
+    await page.locator('[data-project-work-create]').click();
     await expect(page.getByRole('textbox', {name: zh ? '新工作項目' : 'New work item', exact: true})).toBeVisible();
     await expect(page.locator('[data-project-create]')).toBeVisible();
     expect(await page.locator('#main').innerText()).not.toContain(projectId);
     state.denyCreation = true; await page.reload();
     await expect(page.locator('[data-create-record="work_item"]')).toBeHidden();
+    await expect(page.locator('[data-project-work-create]')).toBeHidden();
     await expect(page.locator('[data-project-create]')).toBeHidden();
     expect(state.posts).toEqual([]);
   });
@@ -120,6 +123,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     await mount(page, locale, state); await page.goto(route);
     await expect(page.locator('[data-project-work]')).toHaveCount(2);
     await expect(summary(page).locator('[data-project-count="completion"]')).toHaveText(zh ? '完成 0/1' : '0/1 done');
+    await page.locator('[data-project-work-create]').click();
     await page.getByRole('textbox', {name: zh ? '新工作項目' : 'New work item', exact: true}).fill('Unsent work');
     await items(page).locator('.row.tree').getByRole('button', {name: zh ? '更多' : 'More', exact: true}).click();
     await page.locator('[data-work-item-inspector]').getByRole('textbox').first().fill('Unsent child');

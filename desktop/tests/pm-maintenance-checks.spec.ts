@@ -78,7 +78,8 @@ for(const native of [false,true])test.describe(native?'Native maintenance checks
   test('changed server versions require explicit new intent and preserve the refused original',async({page})=>{
     const f=checkFixture();await mountConversation(page,native,f.dispatch);await page.goto(policyRoute);await openPmSection(page, 'dependencies' , 'ui_policy');await expect(submit(page)).toBeEnabled();
     f.parent.addPolicy(f.parent.state.policies[0].document.policy);await submit(page).click();await expect(section(page)).toContainText('Check versions changed');
-    await expect(section(page).getByRole('button',{name:'Check original request',exact:true})).toBeDisabled();
+    const original = section(page).getByRole('button',{name:'Check original request',exact:true,includeHidden:true});
+    await expect(original).toBeHidden(); expect(await original.isDisabled()).toBe(true);
     await section(page).getByRole('button',{name:'Refresh maintenance checks',exact:true}).click();
     await section(page).getByRole('button',{name:'New request',exact:true}).click();await submit(page).click();await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.writes[0].body.preconditions.expected_policy_version).toBe(1);expect(f.state.writes[1].body.preconditions.expected_policy_version).toBe(2);

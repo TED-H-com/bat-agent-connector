@@ -121,6 +121,7 @@ try {
   await expect(page.locator('.pm-draft')).toContainText('Offer a guided tour later');
   await page.reload(); await openThreadTab(page,'plan'); await expect(page.locator('.pm-draft')).toContainText('Make the first action visible');
   const data = await read(); assert.equal(data.thread.mode, 'planning'); assert.equal(data.draft.execution_authorized, false);
+  assert.equal(data.thread.workspace_id, workspaceId); assert.equal(Object.hasOwn(data, 'workspace_id'), false);
   assert.equal(data.draft.adopted, false); assert.deepEqual(data.draft.selected_input_ids, [confirmed.input_id]);
   assert.equal(data.draft.candidate_inputs.length, 1); assert.equal(data.messages.length, 1);
   await openDisclosure(page.locator('[data-pm-revision-editor] > summary'));
@@ -298,6 +299,7 @@ try {
   assert.equal(new URL(repeatedResponse.url()).searchParams.get('journal_cursor'),String(fixedComparison.comparison.context.journal_cursor));
   assert.deepEqual(await repeatedResponse.json(),fixedComparison);
   await page.reload();
+  await openThreadBrief(page);
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   await openPmPanel(page, 'ui_change_phase');
   const activity=page.locator('[data-pm-lifecycle]');

@@ -1,4 +1,4 @@
-import {openThreadTab} from './pm-navigation.ts';
+import {openThreadTab, openPmSection} from './pm-navigation.ts';
 import {test,expect} from '@playwright/test';
 import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture.ts';
@@ -68,11 +68,14 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
     if(original){f.state.lost=true;await form.getByRole('button',{name:'Start discussion',exact:true}).click();await expect(form).toContainText('Reply unavailable');}
     const expectedWrites=original?1:0,label=original?'Check original request':'Start discussion';
     const saved=()=>page.evaluate(()=>Object.entries(localStorage).filter(([key])=>key.includes('.pm.thread.create.')).map(([,value])=>JSON.parse(value)));
+    // The snapshot belongs to Overview. Keep the discussion draft, then hold
+    // the visible Overview read on reload instead of relying on a hidden read.
+    await openPmSection(page,'overview');
     const before=await saved();hold=true;await page.reload();
     try {
       await expect.poll(()=>held).toBe(true);
       await expect(field).toHaveValue('Retain the original discussion draft');
-      await expect(form.getByRole('button',{name:label,exact:true})).toBeDisabled();
+      await expect(form.getByRole('button',{name:label,exact:true,includeHidden:true})).toBeDisabled();
       await expect(field).toBeDisabled();
       // Even an explicit form event while the initial read is pending must not
       // freeze an unsent operation or consume a new original key.
@@ -80,8 +83,9 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
       expect(f.state.writes).toHaveLength(expectedWrites);
       expect(await saved()).toEqual(before);
     } finally {release();}
-    await expect(form.getByRole('button',{name:label,exact:true})).toBeEnabled();
+    await expect(form.getByRole('button',{name:label,exact:true,includeHidden:true})).toBeEnabled();
     await expect(field).toHaveValue('Retain the original discussion draft');
+    await openPmSection(page,'discussions');
     await form.getByRole('button',{name:label,exact:true}).click();
     await expect(page).toHaveURL(new RegExp('#/pm/'+workspaceId+'/discussions/'+threadId+'$'));
     expect(f.state.writes).toHaveLength(expectedWrites+1);
@@ -144,7 +148,8 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   test('stale admission retains text and read failure freezes mutation until refresh',async({page})=>{
     const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const note=action(page,'pm.message.append');
     await note.getByLabel('Message the PM…',{exact:true}).fill('Keep this draft');f.state.reject={status:409,code:'VERSION_CONFLICT'};
-    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(note).toContainText('Your draft is preserved');
+    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(note).toContainText('Could not confirm the current version. Your draft is preserved. Refresh and review before another change.');
+    await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Keep this draft');
     await note.getByRole('button',{name:'New request',exact:true}).click();f.state.reject=null;f.state.thread.version=9;
     f.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.pm-status')).toContainText('PM read unavailable');
     await expect(note).toBeHidden();await expect(note.locator('button[type=submit]')).toBeDisabled();await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Keep this draft');

@@ -10,7 +10,7 @@ const terminal = value => ['succeeded', 'failed', 'cancelled'].includes(value?.s
 const admissionRefusals = {INVALID_PARAMS: 422, INVALID_TARGET: 422, NAME_TAKEN: 409,
   PROJECT_NOT_FOUND: 404, WORK_ITEM_NOT_FOUND: 404, PROJECT_ARCHIVED: 409,
   WORK_ITEM_ARCHIVED: 409, WRONG_PROJECT: 409};
-export function createRecordForm({h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, errorBox, opStatus}) {
+export function createRecordForm({h, t, api, caps, guard, namespace, kind, projectId = null, showScope = true, onCreated, onStateChange = () => {}, errorBox, opStatus}) {
   const project = kind === 'project', action = project ? 'project.create' : 'work_item.create';
   const target = project ? {} : {project_id: projectId}, key = `batc.create.${namespace}.${kind}.${projectId || 'root'}`;
   const primary = project ? 'name' : 'title', fields = new Map(), choices = new Map();
@@ -127,10 +127,11 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
     create.textContent = t(saved.intent ? 'create_check_original' : project ? 'add_project' : 'add_item');
     review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal(operation) && operation.status !== 'succeeded');
     review.disabled = busy || !allowed || !permitted();
+    onStateChange();
   }
   if (damaged) status.replaceChildren(h('p', {class: 'error'}, t('create_invalid_draft')));
   update();
-  return {box: form, setContext({rows, name = '', active = true}) {
+  return {box: form, pending: () => Boolean(saved.intent), setContext({rows, name = '', active = true}) {
     guard(); allowed = active; scope.textContent = t('create_project_scope', {name, id: projectId});
     const flattened = [];
     const walk = list => {for (const row of list || []) {if (!row.archived) flattened.push(row); walk(row.children);}};
@@ -145,4 +146,33 @@ export function createRecordForm({h, t, api, caps, guard, namespace, kind, proje
     }
     update();
   }};
+}
+
+// Both creation entry points retain the same form and its original request while hidden.
+export function createRecordDisclosure({label, hook, ...options}) {
+  const {h, t} = options;
+  let record, open = false, available = false;
+  const update = () => {
+    if (!record) return;
+    open ||= record.pending();
+    record.box.hidden = !available || !open;
+    toggle.hidden = actions.hidden = !available || open;
+    close.hidden = record.pending();
+  };
+  const toggle = button({variant: 'primary', label, [hook]: '', onClick: () => {
+    open = true; update(); record.box.querySelector('input')?.focus();
+  }});
+  const close = button({variant: 'secondary', label: t('cancel'), onClick: () => {
+    if (record.pending()) return;
+    open = false; update(); toggle.focus();
+  }});
+  const actions = h('div', {class: 'actions'}, toggle);
+  record = createRecordForm({...options, onStateChange: () => {options.onStateChange?.(); update();},
+    onCreated: async value => {
+      open = false; await options.onCreated(value); update();
+      if (!toggle.hidden) toggle.focus();
+    }});
+  record.box.querySelector('.actions > button:last-of-type').after(close);
+  update();
+  return {...record, toggle, actions, setAvailable: value => {available = value; update();}};
 }

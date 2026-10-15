@@ -135,7 +135,7 @@ test('reviewed facts stay free of empty markers when the base is ready and when 
 
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`handoff ${locale} ${width}px`,async({browser,baseURL},testInfo)=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=handoffFixture();
-  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});await open(page);
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);await expect(picker.locator('option').filter({hasText:/Restore member access/})).toHaveCount(1);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});await open(page);
   await section(page).getByRole('button',{name:locale==='zh-TW'?'核對基底':'Review base',exact:true}).click();
   await expect(section(page).getByRole('heading',{name:locale==='zh-TW'?'已核對實作基底':'Reviewed implementation base',exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);const folder=process.env.PM_SCREENSHOTS||testInfo.outputPath('screenshots');mkdirSync(folder,{recursive:true});
@@ -146,7 +146,7 @@ for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`ha
 
 for(const native of [false,true])test(`${native?'Native':'Web'} Chinese fixed package start`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale:'zh-TW'}),page=await context.newPage(),f=handoffFixture();
-  await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel('工作包',{exact:true});await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});await open(page);
+  await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'requirements','ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel('工作包',{exact:true});await expect(picker.locator('option').filter({hasText:/Restore member access/})).toHaveCount(1);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});await open(page);
   await section(page).getByRole('button',{name:'核對基底',exact:true}).click();
   await expect(form(page).getByLabel('Agent',{exact:true})).toBeVisible();
   await expect(section(page)).not.toContainText('BAT agent');

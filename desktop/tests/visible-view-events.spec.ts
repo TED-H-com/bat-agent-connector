@@ -35,6 +35,7 @@ for(const [view,budget] of Object.entries(budgets)) for(const size of [10,20]) t
     expect(reads.length,JSON.stringify(reads)).toBeLessThanOrEqual(budget);
     expect(reads.filter(row=>row.path==='/projects')).toHaveLength(1);
     expect(reads.filter(row=>row.path==='/pm/workspaces')).toHaveLength(0);
+    if(view==='issues')expect(reads.filter(row=>new URL(row.path,'http://fixture').pathname===`/pm/workspaces/${f.ids.workspaceId}/plans/accepted`)).toHaveLength(1);
     if(view!=='schedule')expect(reads.filter(row=>/\/schedule(?:\?|$)/.test(row.path))).toHaveLength(0);
     if(view!=='requirements'&&view!=='board')expect(reads.filter(row=>/\/deliveries(?:\?|$)/.test(row.path))).toHaveLength(0);
   }

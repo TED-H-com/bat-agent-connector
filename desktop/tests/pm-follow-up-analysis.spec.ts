@@ -218,7 +218,7 @@ test('unbound preparation selects a PM discussion using real string cursors',asy
       if(after!==null&&after!==threadId)return {status:400,data:{error:{code:'INVALID_CURSOR',message:'Thread cursor must be a pmt identifier'}}};
       return {status:200,data:{workspace_id:workspaceId,threads:[{workspace_id:workspaceId,thread_id:after?second:threadId,title:after?'Second discussion':'First discussion',mode:'planning',version:5}],next_cursor:after?null:threadId}};
     }
-    if(url.pathname===`/pm/workspaces/${workspaceId}/threads/${second}`)return {status:200,data:{workspace_id:workspaceId,thread:{workspace_id:workspaceId,thread_id:second,version:8,mode:'planning'},capabilities:{write:true}}};
+    if(url.pathname===`/pm/workspaces/${workspaceId}/threads/${second}`)return {status:200,data:{version:1,thread:{workspace_id:workspaceId,thread_id:second,version:8,mode:'planning'},capabilities:{write:true}}};
     return original(input);
   };
   await mount(page,f);await page.locator('[data-pm-follow-up-analyze] > summary').click();
