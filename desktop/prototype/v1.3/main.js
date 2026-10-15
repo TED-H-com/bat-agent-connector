@@ -381,11 +381,11 @@ function renderDiscussions() {
   })), ...['idea', 'planVersion', 'threadTitle'].map((key, i) => h('button', {
     class: `proto-thread ${i === 2 ? 'selected' : ''}`,
     onclick: openDiscussionComposer
-  }, h('strong', {}, t(key)), h('small', {}, t(i === 1 ? 'planned' : 'idea'))))), h('div', {
+  }, h('strong', {}, t(key)), h('small', {}, t(i === 1 ? 'planned' : i === 2 && state.workStarted ? state.workState : i === 2 && state.planAdoptedLater ? 'planned' : 'idea'))))), h('div', {
     class: 'proto-thread-detail'
   }, h('header', {
     class: 'proto-thread-heading'
-  }, h('strong', {}, t('threadTitle')), pill(t(state.workStarted ? 'running' : state.planAdoptedLater ? 'planned' : 'idea')), state.workStarted ? action('openWork', 'discussion-open-work', () => go('work_main'), 'ghost') : null, state.adoptMode !== 'idle' ? action('messageLabel', 'discussion-compose', openDiscussionComposer, 'ghost') : null, state.ownerDecisionRecorded ? notice(state.ownerDecisionRecorded, 'discussion-decision-banner', 'ok') : null), h('div', {
+  }, h('strong', {}, t('threadTitle')), pill(t(state.workStarted ? state.workState : state.planAdoptedLater ? 'planned' : 'idea')), state.workStarted ? action('openWork', 'discussion-open-work', () => go('work_main'), 'ghost') : null, state.adoptMode !== 'idle' ? action('messageLabel', 'discussion-compose', openDiscussionComposer, 'ghost') : null, state.ownerDecisionRecorded ? notice(state.ownerDecisionRecorded, 'discussion-decision-banner', 'ok') : null), h('div', {
     class: 'proto-transcript session-workspace'
   }, h('div', {
     class: 'conversation-scroll'
@@ -417,7 +417,7 @@ function renderDiscussions() {
 }
 function advanced() {
   const identity = workIdentity();
-  const node = details(h('div', {}, facts([['ui_work', identity.workId], ['attempt', identity.attemptId], ['ui_session', identity.sessionId], ['preparing_worktree', identity.worktreeId], ['operationKey', identity.operationKey], ['planVersion', C.planRevision]]), h('pre', tid('advanced-raw-events'), `operation: ${identity.operationId}\noperation_key: ${identity.operationKey}\nqueue_receipt: msg_q_02\nsteered: false`)), 'advanced');
+  const node = details(h('div', {}, facts([['ui_work', identity.workId], ['attempt', identity.attemptId], ['ui_session', identity.sessionId], ['preparing_worktree', identity.worktreeId], ['operationKey', identity.operationKey], ['planVersion', C.planRevision]]), h('pre', tid('advanced-raw-events'), `operation: ${identity.operationId}\noperation_key: ${identity.operationKey}${state.secondSentenceQueued ? "\nqueue_receipt: msg_q_02\nsteered: false" : ""}`)), 'advanced');
   node.dataset.testid = 'work-area-advanced';
   node.open = state.advancedExpanded;
   node.addEventListener('toggle', () => {
@@ -677,6 +677,7 @@ function pendingButton() {
   return node;
 }
 export function renderApp() {
+  document.title = `BAT Dashboard · ${t("prototype")}`;
   previousPanelOpen = currentInspector?.getAttribute('aria-modal') === 'true';
   previousPanelView = currentInspector ? currentInspector.dataset.view : null;
   clearTimeout(streamTimer);
