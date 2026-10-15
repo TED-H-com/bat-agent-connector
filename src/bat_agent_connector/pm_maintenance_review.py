@@ -377,7 +377,8 @@ def _admitter(action):
 
 
 def operation_visible(db, principal, operation):
-    with baselines._snapshot(db):
+    from .pm_source_reads import scope
+    with scope(db, principal):
         row = db.execute('SELECT * FROM operations WHERE operation_id=?', (operation.get('operation_id'),)).fetchone()
         if row is None or row['action'] not in ACTIONS:
             return False

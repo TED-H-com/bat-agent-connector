@@ -1085,9 +1085,11 @@ class ApiV1:
         fleet = self.daemon.fleet
         from . import (
             pm_conversation_proposals,
+            pm_execution_runtime,
             pm_execution_verification,
             pm_maintenance_checks,
             pm_maintenance_policy,
+            pm_maintenance_repair_runtime,
             pm_maintenance_repairs,
             pm_maintenance_review,
             pm_quality_reviews,
@@ -1100,6 +1102,7 @@ class ApiV1:
         gh_cfg = self.daemon.ops.context["github_config"]
         from . import pr_publication
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
+                               and a.name not in {pm_execution_runtime.ACTION, pm_maintenance_repair_runtime.ACTION}
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
                                and (a.name != "session.failover" or principal.allows("operate"))
                                and (a.name != pm_execution_verification.ACTION or all(principal.allows(s) for s in pm_execution_verification.REQUIRED))
@@ -1184,7 +1187,7 @@ class ApiV1:
                                                         "requirement_acceptance_profiles": ["accepted_requirements_v1"]},
                                                     "follow_up_analysis": "pm.follow_up.analyze" in self.daemon.ops.actions,
                                                     "conversation_proposals": pm_conversation_proposals.capabilities(),
-                                                    "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 2},
+                                                    "brief_export": {"formats": ["markdown", "html", "svg"], "locales": ["en", "zh-TW"], "renderer_version": 4},
                                                     "follow_up_prepare": "pm.follow_up.prepare" in self.daemon.ops.actions,
                                                     "kanban": True, "spec_sources": True, "meetings": "pm.meeting.create" in self.daemon.ops.actions, "dispatch": False},
                                   "project_dispatch": {"version": 1, "artifacts": True, "model": True},

@@ -49,6 +49,24 @@ def visible(ops, principal, wid, ref):
             return True
         except pm_github_observation.OperationError:
             return False
+    if kind == 'manual_session_quiescence':
+        from . import pm_session_quiescence as manual
+        try:
+            operation = ops.get(ident)
+            value = manual.proof(ops, principal, operation)
+            return bool(value and value['workspace_id'] == wid and value['document_digest'] == ref.get('document_digest'))
+        except (manual.OperationError, KeyError, ValueError, TypeError):
+            return False
+    if kind == 'execution_runtime_completion':
+        from . import pm_execution_runtime as runtime
+        try:
+            reader = runtime.batches._op(ops, ident)
+            child = runtime._original(ops, reader)
+            value = runtime.proof(ops, principal, child)
+            return bool(value and value['workspace_id'] == wid and value['observation_operation_id'] == ident
+                and value['document_digest'] == ref.get('document_digest'))
+        except (runtime.OperationError, KeyError, ValueError, TypeError):
+            return False
     if kind == 'repair_runtime_completion':
         from . import pm_maintenance_repair_runtime as runtime
         try:
@@ -85,6 +103,8 @@ class Collector:
         self.expiries = [now + self.max_age]
         self.verified_sessions = set()
         self.repair_sessions, self.repair_executions, self.repair_work = {}, {}, {}
+        self.batch_sessions, self.batch_executions, self.batch_work = {}, {}, {}
+        self.manual_sessions = {}
         self.projects = self.scope['project_binding']['project_id']
 
     def reason(self, code, severity='unknown', source=None):
@@ -252,7 +272,58 @@ class Collector:
                 work = binding['contract']['package']['context']['work_ref']
                 self.repair_work[work['work_item_id']] = (work, proof)
 
-    def current_repair_session(self, row, proof, origin):
+    def completed_batches(self):
+        from . import pm_execution_runtime as runtime
+        from . import pm_package_handoff
+        rows = self.rows("SELECT * FROM operations WHERE action=? AND json_extract(target,'$.workspace_id')=? ORDER BY operation_id",
+            (runtime.ACTION, self.wid), 'execution_completions')
+        for row in rows:
+            reader = runtime.batches.OperationService._decode(row)
+            child = runtime._original(self.ops, reader)
+            # Filter the entire original contribution before projecting any ID.
+            if not runtime.operation_visible(self.db, self.principal, reader):
+                self.reason('source_not_visible')
+                continue
+            proof = runtime.proof(self.ops, self.principal, child)
+            if proof is None:
+                continue
+            if not self.ref('execution_runtime_completion', reader['operation_id'], document_digest=proof['document_digest']):
+                continue
+            self.record('execution_runtime_completion', reader['operation_id'], proof)
+            origin = runtime.origin(self.ops, child)
+            session = self.db.execute('SELECT * FROM sessions_observed WHERE host=? AND session_id=?',
+                (proof['host'], proof['session_id'])).fetchone()
+            if not self.current_repair_session(session, proof, origin) or not runtime._settled(self.ops, child, reader['operation_id']):
+                continue
+            self.batch_sessions[(proof['host'], proof['session_id'])] = proof
+            self.batch_executions[child['operation_id']] = proof
+            binding = pm_package_handoff.binding(child)
+            if binding:
+                work = binding['contract']['package']['context']['work_ref']
+                self.batch_work[work['work_item_id']] = (work, proof)
+
+    def quiescent_manual_sessions(self):
+        from . import pm_session_quiescence as manual
+        rows = self.rows("SELECT * FROM operations WHERE action=? AND json_extract(target,'$.workspace_id')=? ORDER BY operation_id",
+            (manual.ACTION, self.wid), 'manual_quiescence')
+        for row in rows:
+            operation = manual.saved.batches.OperationService._decode(row)
+            if not manual.operation_visible(self.db, self.principal, operation):
+                self.reason('source_not_visible')
+                continue
+            proof = manual.proof(self.ops, self.principal, operation)
+            if proof is None:
+                continue
+            if not self.ref('manual_session_quiescence', operation['operation_id'], document_digest=proof['document_digest']):
+                continue
+            self.record('manual_session_quiescence', operation['operation_id'], proof)
+            original = manual.saved._saved(self.ops, operation['operation_id'], manual.ORIGIN)
+            session = self.db.execute('SELECT * FROM sessions_observed WHERE host=? AND session_id=?',
+                (proof['host'], proof['session_id'])).fetchone()
+            if self.current_repair_session(session, proof, original, manual=True):
+                self.manual_sessions[(proof['host'], proof['session_id'])] = proof
+
+    def current_repair_session(self, row, proof, origin, *, manual=False):
         from . import pm_maintenance_repair_runtime as runtime
         if row is None or row['missing_count'] or row['gone_at']:
             return False
@@ -262,7 +333,18 @@ class Collector:
         at = epoch(row['last_seen_at'])
         fleet = self.ops.context.get('fleet')
         hc = fleet.config.hosts.get(row['host']) if fleet else None
-        if not pair or hc is None or digest([hc.url, hc.fingerprint, hc.profile_id]) != pair['binding_digest']:
+        if (not pair or hc is None or digest([hc.url, hc.fingerprint, hc.profile_id]) != pair['binding_digest']
+                or origin['host_binding_digest'] != pair['binding_digest']):
+            return False
+        original_workspace = origin.get('bat_workspace_id')
+        if not original_workspace and not manual:
+            # Existing repair receipts predate the additive scope fields. Their
+            # exact original execution target already pins the BAT workspace.
+            original = self.db.execute("SELECT json_extract(target,'$.workspace_id') FROM operations WHERE operation_id=?",
+                (proof['execution_operation_id'],)).fetchone()
+            original_workspace = original[0] if original else None
+        if (not original_workspace or pair['workspace_id'] != original_workspace
+                or origin.get('profile_id', hc.profile_id) != pair['profile_id']):
             return False
         # Native counters are provided only by current authenticated metadata;
         # the inventory must not substitute a tab SDK or a retained stale field.
@@ -270,10 +352,17 @@ class Collector:
                 or data.get('fields_stale') or data.get('specific_stale_reason')
                 or data.get('loaded') is not True or data.get('streaming') is not False or data.get('pending')
                 or data.get('runtime_status') not in {None, 'idle', 'completed', 'stopped', 'exited'}
-                or data.get('provenance') != 'connector_managed' or data.get('api_access') != 'managed'
                 or body(data.get('field_evidence')).get('native_input') != 'session_meta'
                 or data.get('sdk_session_id') != proof['sdk_session_id']
-                or data.get('native_input_state') != proof.get('input_state')
+                or data.get('native_input_state') != proof.get('input_state')):
+            return False
+        if manual:
+            from . import registry
+            counter = runtime.input_state({'inputState': data.get('native_input_state')})
+            if (data.get('provenance') != 'manual' or registry.get(row['host'], row['session_id'])
+                    or counter != origin['input_state'] or counter is None or counter['received'] != 1 or counter['pending'] != 0):
+                return False
+        elif (data.get('provenance') != 'connector_managed' or data.get('api_access') != 'managed'
                 or not runtime.same_original_input(origin, runtime.input_state({'inputState': data.get('native_input_state')}))
                 or data.get('registry_origin') != {'controller_incarnation': proof['registry_incarnation'],
                     'created_at': origin['registry_created_at'], 'start_operation_id': proof['execution_operation_id']}):
@@ -285,8 +374,15 @@ class Collector:
             return False
         observed, scan = epoch(host['last_success_at']), body(discovery['body'])
         finished = epoch(scan.get('finished_at'))
-        return (observed is not None and finished is not None and proof['recorded_at'] <= observed <= self.now < observed + self.max_age
-            and proof['recorded_at'] <= finished <= self.now < finished + self.max_age
+        # Inventory's displayed timestamps intentionally have whole-second
+        # precision. Bind the scan to its exact saved start, not a tolerance:
+        # both the host and session rows carry that same original float, and
+        # scan_id carries the corresponding microsecond identity.
+        exact_scan = (observed is not None and at == observed
+            and scan.get('scan_id') == f'scan_{int(observed * 1000000)}'
+            and epoch(scan.get('started_at')) == math.floor(observed))
+        return (exact_scan and finished is not None and proof['recorded_at'] <= observed <= self.now < observed + self.max_age
+            and math.floor(observed) <= finished <= self.now < finished + self.max_age
             and discovery['binding'] == scan.get('binding_version') == pair['binding_digest']
             and scan.get('status') == 'succeeded' and scan.get('complete_enumeration') is True
             and body(scan.get('authority')).get('verified') is True
@@ -298,11 +394,13 @@ class Collector:
             if not self.ref('work', row['work_item_id'], project_id=self.projects):
                 continue
             self.record('work', row['work_item_id'], dict(row))
-            completed = self.repair_work.get(row['work_item_id'])
+            completed = self.repair_work.get(row['work_item_id']) or self.batch_work.get(row['work_item_id'])
+            completion_reason = ('original_batch_attempt_completed' if row['work_item_id'] in self.batch_work
+                else 'original_maintenance_attempt_completed')
             item = work_items._item(row)
             if (completed and item['version'] == completed[0]['work_version']
                     and work_items.fingerprint(item) == completed[0]['work_fingerprint']):
-                self.exclusions.append({'kind': 'work', 'id': row['work_item_id'], 'reason': 'original_maintenance_attempt_completed',
+                self.exclusions.append({'kind': 'work', 'id': row['work_item_id'], 'reason': completion_reason,
                     'runtime_observation_id': completed[1]['observation_operation_id']})
             elif row['state'] == 'todo':
                 self.exclusions.append({'kind': 'work', 'id': row['work_item_id'], 'reason': 'unselected_backlog'})
@@ -373,10 +471,11 @@ class Collector:
             elif row['action'] in {'repository.continue', 'session.start', 'checkpoint.continue'} and row['status'] == 'succeeded':
                 result, target = body(row['result']), body(row['target'])
                 host, sid = result.get('host') or target.get('host'), result.get('session_id')
-                completed = self.repair_executions.get(oid)
+                completed = self.repair_executions.get(oid) or self.batch_executions.get(oid)
+                completion_reason = 'original_batch_attempt_completed' if oid in self.batch_executions else 'original_maintenance_attempt_completed'
                 if (completed and row['action'] == 'repository.continue'
                         and (host, sid) == (completed['host'], completed['session_id'])):
-                    self.exclusions.append({'kind': 'operation', 'id': oid, 'reason': 'original_maintenance_attempt_completed',
+                    self.exclusions.append({'kind': 'operation', 'id': oid, 'reason': completion_reason,
                         'runtime_observation_id': completed['observation_operation_id']})
                 elif not host or not sid or (host, sid) not in self.verified_sessions:
                     self.reason('started_attempt_result_unverified', 'development', {'kind': 'operation', 'id': oid})
@@ -464,6 +563,12 @@ class Collector:
             self.reason('coding_active', 'development', ref)
         elif data.get('pending'):
             self.reason('session_waiting', 'development', ref)
+        elif (host, sid) in self.manual_sessions:
+            self.exclusions.append({**ref, 'reason': 'manual_session_currently_quiescent',
+                'runtime_observation_id': self.manual_sessions[(host, sid)]['observation_operation_id']})
+        elif (host, sid) in self.batch_sessions:
+            self.exclusions.append({**ref, 'reason': 'original_batch_attempt_completed',
+                'runtime_observation_id': self.batch_sessions[(host, sid)]['observation_operation_id']})
         elif (host, sid) in self.repair_sessions:
             self.exclusions.append({**ref, 'reason': 'original_maintenance_attempt_completed',
                 'runtime_observation_id': self.repair_sessions[(host, sid)]['observation_operation_id']})
@@ -492,6 +597,8 @@ class Collector:
     def collect(self):
         self.tasks()
         self.completed_repairs()
+        self.completed_batches()
+        self.quiescent_manual_sessions()
         self.work()
         self.sprints()
         self.operations()

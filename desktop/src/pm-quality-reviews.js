@@ -102,7 +102,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
   function renderReview(){
     const row=current();facts.replaceChildren();if(!row){facts.append(text('pmq_empty'));assessment.hidden=withdrawal.hidden=true;return;}
     const document=row.assessment?.document;
-    const use=h('button',{type:'button',class:'secondary',disabled:!row.qualified,onclick:()=>{if(!ready||!current()?.qualified)return;emit(reference(current()));renderReview();}},t('pmq_use'));
+    const use=h('button',{type:'button',class:'secondary',disabled:!selectable(row),onclick:()=>{if(!ready||!selectable(current()))return;emit(reference(current()));renderReview();}},t('pmq_use'));
     facts.append(...[h('h3',{},t('pmq_result')),h('p',{},`${t('pmq_acceptance')}: ${t('pmq_'+row.acceptance)} · ${t('pmq_dod')}: ${t('pmq_'+row.dod)}`),
       line('pmq_candidate',row.context.native_result.candidate_commit),line('pmq_reviewer',row.context.reviewer_actor),
       row.context.self_review?text('pmq_self_review'):null,...row.applicability_reasons.map(reason=>text('pmq_reason_'+reason)),
@@ -119,6 +119,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
     buildAssessment(row);
   }
   function reference(row){const a=row.assessment;return a?{review_id:row.review_id,operation_id:a.operation_id,version:a.version,document_digest:a.document_digest,candidate_commit:row.context.native_result.candidate_commit}:null;}
+  function selectable(row){return Boolean(row?.assessment&&row.applicable===true&&!row.revocation);}
   function proofChoices(row,item){return model.proofs.filter(proof=>proof.reference.candidate_commit===row.context.native_result.candidate_commit&&same(proof.condition,item.condition)
     &&(!proof.source_operation_id||proof.source_operation_id===row.context.execution_operation_id));}
   function buildAssessment(row){
@@ -180,7 +181,7 @@ export function workspaceQualityReviews({h,t,api,alive,workspaceId,workspace,cap
       if(packages.some(row=>row.workspace_id!==workspaceId||row.work_item_id!==id)||dods.some(row=>row.workspace_id!==workspaceId))throw error();
       model={packages,operations,dods,reviews:reviews.map(checkReview),proofs};ready=true;options(history,reviews.map(row=>[row.review_id,`${row.context.native_result.candidate_commit.slice(0,12)} · ${row.context.reviewer_actor} · ${row.review_id}`]));
       if(selected&&!reviews.some(row=>row.review_id===selected))selected='';history.value=selected;buildCreate();renderReview();await verifier.setSources(operations.filter(op=>packages.some(pkg=>children(pkg).some(child=>child.operation_id===op.operation_id))));if(!valid(ticket))return;status.replaceChildren(...(filtered?[text('pmq_filtered')]:[]));
-      if(previous&&current()?.qualified&&same(previous,reference(current())))emit(previous);update();
+      if(previous&&selectable(current())&&same(previous,reference(current())))emit(previous);update();
     }catch(err){if(valid(ticket))failure(err);}
   }
   function setWork(id){if(id===workId)return;withdraw();

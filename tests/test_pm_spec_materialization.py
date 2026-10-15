@@ -10,9 +10,11 @@ from pathlib import Path
 import pytest
 
 from bat_agent_connector import (
+    pm_access,
     pm_plans,
     pm_runs,
     pm_source_lineage,
+    pm_source_reads,
     pm_spec_format,
 )
 from bat_agent_connector import pm_spec_materialization as specs
@@ -88,6 +90,26 @@ async def test_fixed_owned_git_artifact_and_idempotent_original_receipts(fixed, 
         ops.create(OWNER, **request(w))
     with pytest.raises(sqlite3.IntegrityError, match="immutable"):
         ops.db.execute("DELETE FROM pm_spec_materializations")
+    assert snapshot(w["human"]) == human
+    assert not bat_writes(mock)
+
+
+async def test_shared_visibility_loads_canonical_spec_sources(fixed, mock):
+    w, ops = fixed, fixed["d"].ops
+    human = snapshot(w["human"])
+    op = await materialize(w)
+    compact = {key: op[key] for key in ("operation_id", "action", "target", "actor")}
+    forged = {**compact, "external_refs": {"admission_binding": {"pm_spec_materialization": {}}}}
+    changes = ops.db.total_changes
+    with pm_source_reads.scope(ops.db, OWNER):
+        assert pm_access.visible(ops.db, OWNER, compact)
+        assert specs.source_visible(ops.db, OWNER, forged)
+        assert pm_access.visible(ops.db, OWNER, forged)
+    assert ops.db.total_changes == changes
+    ops.db.execute("DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?",
+                   (w["workspace_id"], OWNER.actor))
+    assert not pm_access.visible(ops.db, OWNER, compact)
+    assert not specs.source_visible(ops.db, OWNER, forged)
     assert snapshot(w["human"]) == human
     assert not bat_writes(mock)
 

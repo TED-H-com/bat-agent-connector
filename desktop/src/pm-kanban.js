@@ -3,17 +3,21 @@ import {button, searchField, pageHeader, iconButton, statusPill, agentMark, cont
 import {icon} from './ui/icons.js';
 import {viewState} from './ui/view-state.js';
 import {cliName} from './pm-agents-trend.js';
+import {kanbanObservation} from './pm-kanban-observation.js';
+import {runtimeCompletion} from './pm-runtime-completion.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
 
 // Central management columns stay separate from execution, quality and delivery.
-export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
+export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
   const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, 'board');
   const integer = value => Number.isSafeInteger(value) && value >= 0;
   if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error('Invalid Kanban page size');
   let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
   let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
   let failureSignature = '';
+  const observers = new Map();
+  const withdrawObservers = () => {for (const observer of observers.values()) observer.withdraw();};
   const meta = h('span'), status = h('div', {role: 'status'}), list = h('div', {class: 'pm-kanban-list'}), boardInfo = h('div');
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('wv_refresh'), onClick: () => void refresh()});
   const more = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => void loadMore()}, t('pm_kanban_more'));
@@ -31,6 +35,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     status, layout, h('footer', {class: 'pm-kanban-footer'}, more,
       disclosure({label: t('pm_kanban_board_details'), body: h('div', {}, boardInfo, h('p', {}, t('pm_kanban_wip_basis')), h('p', {}, t('pm_kanban_quality')), h('p', {}, t('pm_kanban_limits')))})));
   const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), returnFocus: () => rows.get(selected)?.node.querySelector('[data-board-open]') || viewHeading(), onClose: () => {
+    withdrawObservers();
     detailSerial++; if (!preserveSelection) {selected = null; preference.selected = null; writeSelection(null); markSelection();}
     requestAnimationFrame(updateEdges);
   }});
@@ -43,6 +48,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId
       || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t('pm_kanban_scope_error'));
     for (const item of card.latest_capture?.evidence || []) if (item.workspace_id && item.workspace_id !== workspaceId) throw Error(t('pm_kanban_scope_error'));
+    for (const attempt of card.execution?.attempts || []) runtimeCompletion(t, attempt);
     return card;
   }
   function checkPage(data, after) {
@@ -61,6 +67,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   function closeRetaining() {preserveSelection = true; detail.close(); preserveSelection = false;}
   function withdraw({forgetRoute = true, keepStatus = false} = {}) {
+    withdrawObservers();
     ++serial; ++detailSerial; reading = false; rows.clear(); sources.clear(); page = null; next = null; plan = null; earlierPlans.clear(); milestones = [];
     if (!keepStatus) {failureSignature = ''; status.replaceChildren();}
     if (forgetRoute) writeSelection(null);
@@ -145,6 +152,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
           node.setAttribute('aria-label', node.title); return node;}), coverageState !== 'complete' ? statusPill(coverageState) : null, blockedWork(card) ? h('span', {class: 'pm-board-blocker', title: blockerText(t, card), 'aria-label': blockerText(t, card)}, icon('circle-alert'), h('span', {class: 'pm-board-blocker-label'}, t('ui_status_blocked'))) : null,
         group.value !== 'status' ? h('span', {class: 'pm-board-state', title: workStatusLabel(t, card)}, workStatusPill(t, card)) : null,
         age ? h('span', {class: 'pm-board-age', title: t(card.completion?.approved ? 'pm_kanban_cycle' : 'pm_kanban_age')}, age) : null),
+      card.execution?.attempts?.some(attempt => runtimeCompletion(t, attempt)) ? h('span', {class: 'ui-meta', 'data-runtime-summary': ''}, t('pm_kanban_runtime_recorded')) : null,
       coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h('span', {class: 'ui-meta'}, t('pm_kanban_partial_sources')) : null)];
   }
   function makeCard(card) {
@@ -225,7 +233,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       const previous = rows.get(card.work_item_id);
       if (previous) {
         // Preserve the card node and focus, even when its facts change.
-        const contentSignature = JSON.stringify([card.work.title, card.column, card.flow?.age_seconds, card.flow?.cycle_seconds, blockedWork(card), sources.get(card.work_item_id)]);
+        const contentSignature = JSON.stringify([card.work.title, card.column, card.flow?.age_seconds, card.flow?.cycle_seconds, card.execution?.attempts, blockedWork(card), sources.get(card.work_item_id)]);
         if (previous.signature !== contentSignature) previous.pending = true;
         previous.signature = contentSignature; previous.card = card; previous.node.querySelector('[data-board-open]').textContent = firstLabel(card.work.title, t('ui_work_item'));
       } else rows.set(card.work_item_id, {node: makeCard(card), card});
@@ -242,11 +250,22 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     detail.show({title: card.work.title, card, plan: card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id), earlierPlan: card.binding.plan_revision_id !== plan?.revision_id, requirements: requirements(card),
     milestones: milestones.filter(row => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some(id => card.binding.requirement_ids?.includes(id))), source: sources.get(card.work_item_id),
     onMore: () => {deliveryPages++; void select(card.work_item_id, true);}});
+    if (form && caps()?.actions?.some(row => row.action === 'pm.session.quiescence.observe')) {
+      let observer = observers.get(card.work_item_id);
+      if (!observer) {
+        observer = kanbanObservation({h, t, api, alive, workspaceId, workId: card.work_item_id, caps, permitted, form, errorBox, onSourceFailure: unavailable});
+        observers.set(card.work_item_id, observer);
+      }
+      const body = detail.element.body.querySelector('[data-work-section="details"] > div');
+      if (observer.box.parentNode !== body) body.insertBefore(observer.box, body.querySelector(':scope > pre'));
+      observer.update(card.execution?.manual_observation_sources ?? []);
+    }
     if (opening) requestAnimationFrame(() => {const node = rows.get(card.work_item_id)?.node;
       if (selected === card.work_item_id && node?.isConnected && detail.element) revealCard(node);});
   }
   async function select(id, retain = false) {
     const current = rows.get(id); if (!current) return;
+    if (selected !== id || !retain) withdrawObservers();
     if (selected !== id) deliveryPages = 1;
     selected = id; preference.selected = id; writeSelection(id); markSelection();
     const generation = serial, ticket = ++detailSerial;
@@ -261,6 +280,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       patchCard(current.node, data.card);
       renderColumns(); renderMetrics(); showDetail(data.card);
     } catch (error) {if (generation === serial && ticket === detailSerial) {
+      observers.get(id)?.withdraw();
       if (error.message === t('pm_kanban_scope_error')) {unavailable(error); return;}
       if ([403, 404].includes(error.status)) {
         try {checkPage(await api('GET', path(0)), 0); alive(); if (generation !== serial || ticket !== detailSerial) return;}
@@ -274,6 +294,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   async function refresh() {
     if (!active) {stale = true; return;}
     stale = false;
+    withdrawObservers();
     const ticket = ++serial; detailSerial++; reading = true; refreshButton.disabled = true; more.disabled = true;
     // Keep the same recovery controls while checking an existing failure. A
     // repeated error must not remove the button under the pointer or keyboard.

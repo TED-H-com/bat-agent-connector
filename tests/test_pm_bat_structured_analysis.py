@@ -17,6 +17,7 @@ from bat_agent_connector import (
     pm_plans,
     pm_reads,
     pm_runs,
+    pm_source_reads,
     registry,
 )
 from bat_agent_connector import pm_bat_operations as bat
@@ -129,6 +130,50 @@ async def test_bat_structured_complete_original_proof_and_one_review(structured,
         accepted = pm_plans.accepted_plan(ops, OWNER, w['workspace_id'])['plan']['document']
         assert [row['id'] for row in accepted['requirements']] == ['member.login', 'member.recovery']
     assert snapshot(w['human']) == human
+
+
+async def test_pm_start_guard_reuses_sources_but_rechecks_each_controller(structured, mock, monkeypatch):
+    w, ops = structured, structured['d'].ops
+    guard, check, visible = bat.guard_start, bat._check, proposals._operation_visible
+    active, observed = [], []
+
+    def count_check(ctx, run, **kwargs):
+        if active:
+            active[-1]['controller_checks'] += 1
+        return check(ctx, run, **kwargs)
+
+    def count_visible(db, principal, operation):
+        if active and operation['operation_id'] == active[-1]['operation_id']:
+            active[-1]['source_reads'] += 1
+        return visible(db, principal, operation)
+
+    def checked_guard(ctx, plan):
+        if not isinstance(ctx, bat._StartContext) or 'pm_carrier' not in plan:
+            return guard(ctx, plan)
+        before, scope = ops.db.total_changes, pm_source_reads._READ.get()
+        row = {'operation_id': ctx.operation_id, 'controller_checks': 0, 'source_reads': 0}
+        active.append(row)
+        try:
+            value = guard(ctx, plan)
+        finally:
+            active.pop()
+        assert ops.db.total_changes == before
+        assert pm_source_reads._READ.get() is scope
+        # Each distinct guard must read the original source again. Sharing
+        # never skips either controller check or persists across native IO.
+        assert row['controller_checks'] == 2
+        assert row['source_reads'] == 1
+        observed.append(row)
+        return value
+
+    monkeypatch.setattr(bat, '_check', count_check)
+    monkeypatch.setattr(proposals, '_operation_visible', count_visible)
+    monkeypatch.setattr(bat, 'guard_start', checked_guard)
+    out = await execute(w, request(w, proposals.ACTION))
+    assert out['status'] == 'succeeded', out
+    assert len(observed) > 1
+    assert result(w, out)['validation']['status'] == 'format_valid'
+    assert mock.channels().count('claude:start-session') == mock.channels().count('claude:send-message') == 1
 
 
 @pytest.mark.parametrize('action', ACTIONS)

@@ -8,7 +8,7 @@ import time
 from . import pm_evidence, pm_plans, pm_sprints, pm_workspace, work_items
 from . import pm_quality_sources as sources
 from . import pm_release_baselines as snapshots
-from .operations import ActionDef, OperationError, OperationService
+from .operations import ActionDef, OperationError
 from .pm_work_batch_evidence import digest
 
 CREATE = 'pm.quality.review.create'
@@ -85,10 +85,11 @@ def _member(ops, principal, wid, *, write=False, decide=False):
 
 
 def _op(ops, oid):
-    row = ops.db.execute('SELECT * FROM operations WHERE operation_id=?', (oid,)).fetchone()
-    if not row:
+    from . import pm_read_cache
+    operation = pm_read_cache.operation(ops.db, oid)
+    if operation is None:
         raise sources.bad('Original quality operation is unavailable', 'NOT_FOUND', 404)
-    return OperationService._decode(row)
+    return operation
 
 
 def _review(ops, wid, rid):
@@ -124,19 +125,47 @@ def _records(ops, row):
 
 
 def _access(ops, principal, row):
-    _member(ops, principal, row['workspace_id'])
-    current, seen = row, set()
+    from . import pm_source_lineage
+    from .pm_maintenance_repairs import source_backedge
+    from .pm_source_reads import check, scope
+    with scope(ops.db, principal):
+        _member(ops, principal, row['workspace_id'])
+        original = _review(ops, row['workspace_id'], row['review_id'])
+        if row != original:
+            raise sources.bad('Original quality context changed', 'NOT_FOUND', 404)
+        history = _source_history(ops, original)
+        def visible():
+            for current in history:
+                sources.access(ops, principal, original['workspace_id'], current['context'])
+                for record in _records(ops, current):
+                    if record['kind'] == 'assessment':
+                        sources.proof_access(ops, principal, original['workspace_id'], record['document'])
+            return True
+        # A saved assessment can return through its owned execution to the
+        # repair whose complete sources are already being checked. That exact
+        # domain backedge is not a completed authorization and must not be cached.
+        for root in pm_source_lineage.roots(ops.db, 'operation', original['operation_id']):
+            if source_backedge(ops.db, principal, root):
+                op = ops.db.execute('SELECT action FROM operations WHERE operation_id=?', (root,)).fetchone()
+                if op and op[0] == 'pm.maintenance.repair':
+                    visible()
+                    return len(history)
+        if not check(ops.db, principal, 'quality_sources', original['review_id'], visible):
+            raise sources.bad('Original quality sources are unavailable', 'NOT_FOUND', 404)
+        return len(history)
+
+
+def _source_history(ops, row):
+    """Rebuild bounded canonical history; only its source boolean is reusable."""
+    current, seen, result = row, set(), []
     while current:
         if current['review_id'] in seen or len(seen) >= MAX_HISTORY:
             raise sources.bad('The original quality history exceeds its bound', 'PM_QUALITY_LIMIT', 409)
         seen.add(current['review_id'])
-        sources.access(ops, principal, row['workspace_id'], current['context'])
-        for record in _records(ops, current):
-            if record['kind'] == 'assessment':
-                sources.proof_access(ops, principal, row['workspace_id'], record['document'])
+        result.append(current)
         previous = current['context']['previous_review_id']
         current = _review(ops, row['workspace_id'], previous) if previous else None
-    return len(seen)
+    return result
 
 
 def _create_input(ops, principal, target, params, pre):

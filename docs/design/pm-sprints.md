@@ -54,7 +54,8 @@ Two explicit modes exist:
 - `scrum`: **Scrum artifacts (conformance not established)**. The read model reports
   `scrum_conformance: not_established`; setting this value does not claim complete
   Scrum implementation. Planning, Review and Retrospective records are provided by
-  the meeting service; Daily Scrum and quality assessment remain separate work.
+  the meeting service; Daily Scrum remains separate work. Fixed acceptance and
+  DoD assessment use the [quality review service](pm-quality-review.md).
   Historical definitions retain their originally saved label.
 
 Both modes use an immutable positive period of at most one calendar month.
@@ -97,10 +98,16 @@ Cancellation can also close an unstarted plan. Both terminal states retain the
 original Goal, its started revision, selected-work history, DoD reference, actor
 and reason. Optional `work_notes` may explain currently selected work only.
 
-There is no quality evaluation service in this slice. Every item is explicitly
-`unassessed`, `counts_as_done: false`, with disposition
-`requires_product_backlog_consideration`. This means it is not counted as a
-verified Increment; it does **not** assert that implementation or testing failed.
+Close and cancel may explicitly select `quality_refs` by selected work item ID.
+Each reference must resolve to the original assessment for that work binding,
+adopted scope and this Sprint's fixed DoD revision. The terminal event freezes
+the selected assessment and its source references. A qualified assessment yields
+`quality: qualified`, `counts_as_done: true` and `qualified_increment`; an
+assessment that does not qualify yields `not_qualified` and backlog reconsideration.
+Without an assessment, an item remains `unassessed`, `counts_as_done: false`, with
+disposition `requires_product_backlog_consideration`. This does **not** assert
+that implementation or testing failed. Later assessments cannot rewrite the
+original terminal event; current source access still governs its public reads.
 A work item's Done claim or human implementation approval cannot stand in for DoD
 and item acceptance evidence. Closing the management period cannot imply Review,
 Retrospective, deployment or product completion.
@@ -124,8 +131,8 @@ Unrecognized parameter fields are rejected.
 | `pm.sprint.goal.revise` | workspace + Sprint | `goal` | `expected_version` |
 | `pm.sprint.select` | workspace + Sprint | `items: [{binding_id,assignee,how}]` | `expected_version` |
 | `pm.sprint.start` | workspace + Sprint | none | `expected_version` |
-| `pm.sprint.close` | workspace + Sprint | optional `work_notes: {work_item_id: reason}` | `expected_version` |
-| `pm.sprint.cancel` | workspace + Sprint | optional `work_notes` | `expected_version` |
+| `pm.sprint.close` | workspace + Sprint | optional `work_notes: {work_item_id: reason}`, `quality_refs: {work_item_id: original_assessment_ref}` | `expected_version` |
+| `pm.sprint.cancel` | workspace + Sprint | optional `work_notes`, `quality_refs` | `expected_version` |
 
 Read APIs are `get_artifacts`, `get_artifact`, `list_revisions`, `get_sprint`,
 `list_sprints`, and `list_history(kind=goals|selections|events)`. Paged lists use
@@ -175,8 +182,8 @@ external sent-effect uncertainty or retry dispatch.
 Immutable revision, Sprint-definition and event tables reject UPDATE/DELETE.
 Mutable heads/current state are derived management pointers. These actions do not
 alter accepted plans, PM messages, writer slots, work claims, quality assessments,
-Git/PR facts or deployment evidence. Evidence-backed Increment assessment and
-Sprint-to-execution authorization remain explicit follow-up work. Current Sprint
+Git/PR facts or deployment evidence. They consume explicitly selected quality
+assessments; they do not create assessments or grant execution authority. Current Sprint
 reads advertise Review/Retro preparation when the meeting service is installed,
 the Sprint actually started and the caller has current write membership and
 manage scope. Preparing a meeting still requires an explicit authorized snapshot;

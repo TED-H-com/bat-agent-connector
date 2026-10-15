@@ -23,7 +23,7 @@ from . import (
     pm_worktree,
 )
 from .errors import ResourceReadOnly
-from .operations import RERUN, ActionDef, Cancelled, OperationError, OperationService, StepFailed, Uncertain
+from .operations import RERUN, ActionDef, Cancelled, OperationError, StepFailed, Uncertain
 from .pm_release_baselines import _snapshot_read
 
 ACTION = "pm.spec.materialize"
@@ -92,9 +92,10 @@ def _admit(ops, principal, target, params, pre):
 
 def _source_visible(db, principal, operation):
     try:
-        if operation.get("action") != ACTION:
-            row = db.execute("SELECT * FROM operations WHERE operation_id=?", (operation.get("operation_id"),)).fetchone()
-            operation = OperationService._decode(row) if row else {}
+        # Read surfaces can pass only the operation identity/action/target.
+        # Admission evidence always comes from the canonical record, never a
+        # caller's projection, even when its action already matches.
+        operation = pm_read_cache.operation(db, operation.get("operation_id")) or {}
         if operation.get("action") != ACTION:
             return False
         fixed = operation["external_refs"]["admission_binding"]["pm_spec_materialization"]
@@ -121,13 +122,16 @@ def source_visible(db, principal, operation):
         state = ({}, set())
         token = _SOURCE_READ.set(state)
     results, active = state
-    key = (id(db), principal.actor, tuple(sorted(principal.scopes)), principal.admin, operation.get("operation_id"))
+    key = (id(db), principal.actor, tuple(sorted(principal.scopes)), principal.admin,
+           principal.credential_id, operation.get("operation_id"))
     try:
         if key in active:
+            pm_read_cache.refuse()
             return False
         if key in results:
             return results[key]
         if len(results) + len(active) >= pm_source_lineage.MAX_ROOTS:
+            pm_read_cache.refuse()
             return False
         active.add(key)
         try:
