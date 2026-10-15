@@ -1,35 +1,56 @@
 import {test, expect} from '@playwright/test';
-import {mkdir} from 'node:fs/promises';
 
-const outDir = '/home/ted-h/agent-work/bac-ux/tmp/error-residuals';
 const serverMsg = 'Requested entity not found on remote BAT host';
 
-for (const {locale, summaryText, lang, width} of [
-  {locale: 'en-US', summaryText: 'This record is unavailable. Refresh the view.', lang: 'en', width: 1440},
-  {locale: 'zh-TW', summaryText: '找不到這筆資料，請重新整理。', lang: 'zh', width: 390},
+for (const {locale, summaryText, shortGenericText, storageFailedText, refreshRetainText} of [
+  {
+    locale: 'en-US',
+    summaryText: 'This record is unavailable. Refresh the view.',
+    shortGenericText: 'This request could not be completed.',
+    storageFailedText: 'This setting could not be saved in this browser.',
+    refreshRetainText: 'Not refreshed; retaining the last observation.',
+  },
+  {
+    locale: 'zh-TW',
+    summaryText: '找不到這筆資料，請重新整理。',
+    shortGenericText: '無法完成此要求。',
+    storageFailedText: '無法在這個瀏覽器儲存這項設定。',
+    refreshRetainText: '這次未能更新；保留上次觀察。',
+  },
 ]) {
+  const width = locale === 'zh-TW' ? 390 : 1440;
   test.describe(`error residuals ${locale}`, () => {
     test.use({locale, viewport: {width, height: 900}});
 
-    test(`site1: inlineError shows localized summary with code in closed details (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
+    test(`site1: inlineError shows summary and Retry on line 1, Details at full width on line 2 (${locale})`, async ({page}) => {
       await page.goto('/ui-components.html');
       await page.evaluate(async ({msg}) => {
         const {inlineError} = await import('/src/ui/components.js');
         const {ApiError} = await import('/src/error-presentation.js');
         const err = new ApiError(404, 'NOT_FOUND', msg);
         const root = document.getElementById('fixture')!;
-        root.replaceChildren(inlineError({error: err}));
+        root.replaceChildren(inlineError({error: err, retry: () => {}}));
       }, {msg: serverMsg});
 
       const alert = page.locator('.ui-inline-error');
       await expect(alert).toBeVisible();
-      await expect(alert.locator('[data-error-summary]')).toHaveText(summaryText);
-
-      // Closed details check
+      const summaryEl = alert.locator('[data-error-summary]');
+      const retryBtn = alert.locator('button');
       const details = alert.locator('details.ui-disclosure');
+
+      await expect(summaryEl).toHaveText(summaryText);
+      await expect(retryBtn).toBeVisible();
       await expect(details).toHaveCount(1);
       await expect(details).not.toHaveAttribute('open', '');
+
+      // Assert that Retry stays on the summary's line at 390
+      await page.setViewportSize({width: 390, height: 900});
+      const summaryBox = (await summaryEl.boundingBox())!;
+      const retryBox = (await retryBtn.boundingBox())!;
+      const detailsBox = (await details.boundingBox())!;
+      expect(summaryBox.y).toBeLessThan(retryBox.y + retryBox.height);
+      expect(retryBox.y).toBeLessThan(summaryBox.y + summaryBox.height);
+      expect(detailsBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height - 2);
 
       // Outside details, in zh-TW no English server message
       if (locale === 'zh-TW') {
@@ -42,8 +63,6 @@ for (const {locale, summaryText, lang, width} of [
         expect(outsideText).not.toContain('NOT_FOUND');
       }
 
-      await page.screenshot({path: `${outDir}/after-site1-inline-error-${lang}-${width}.png`});
-
       // Expand details and check code and message
       await details.locator('summary').click();
       await expect(alert.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
@@ -51,7 +70,6 @@ for (const {locale, summaryText, lang, width} of [
     });
 
     test(`site2: operations list read failure shows localized summary and code in details (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
       await page.goto('/ui-components.html');
       await page.evaluate(async ({msg}) => {
         const {operationList} = await import('/src/operation-list.js');
@@ -84,15 +102,12 @@ for (const {locale, summaryText, lang, width} of [
         expect(outsideText).not.toContain('NOT_FOUND');
       }
 
-      await page.screenshot({path: `${outDir}/after-site2-operations-list-${lang}-${width}.png`});
-
       await details.locator('summary').click();
       await expect(statusBox.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
       await expect(statusBox.locator('[data-error-details] p')).toHaveText(serverMsg);
     });
 
     test(`site2: operations detail failure shows localized summary with code in details (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
       await page.goto('/ui-components.html');
       const opId = 'op_' + '2'.repeat(32);
       await page.evaluate(async ({msg, id}) => {
@@ -142,15 +157,12 @@ for (const {locale, summaryText, lang, width} of [
         expect(outsideText).not.toContain('NOT_FOUND');
       }
 
-      await page.screenshot({path: `${outDir}/after-site2-operations-detail-${lang}-${width}.png`});
-
       await details.locator('summary').click();
       await expect(inlineErr.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
       await expect(inlineErr.locator('[data-error-details] p')).toHaveText(serverMsg);
     });
 
-    test(`site4: model preferences shows localized summary in status (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
+    test(`site4: model preferences shows localized summary with details (${locale})`, async ({page}) => {
       await page.goto('/ui-components.html');
       await page.evaluate(async ({msg}) => {
         const {modelPreferencesPanel} = await import('/src/model-preferences.js');
@@ -190,18 +202,23 @@ for (const {locale, summaryText, lang, width} of [
         saveBtn?.click();
       }, {msg: serverMsg});
 
-      const status = page.locator('[data-model-preferences] [role="status"]');
+      const panel = page.locator('[data-model-preferences]');
+      const status = panel.locator('[role="status"]');
       await expect(status).toHaveText(summaryText);
       if (locale === 'zh-TW') {
         expect(await status.innerText()).not.toContain(serverMsg);
         expect(await status.innerText()).not.toContain('NOT_FOUND');
       }
 
-      await page.screenshot({path: `${outDir}/after-site4-model-preferences-${lang}-${width}.png`});
+      const details = panel.locator('details.ui-disclosure');
+      await expect(details).toHaveCount(1);
+      await expect(details).not.toHaveAttribute('open', '');
+      await details.locator('summary').click();
+      await expect(details.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
+      await expect(details.locator('[data-error-details] p')).toHaveText(serverMsg);
     });
 
-    test(`site4: project skills shows localized summary in status (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
+    test(`site4: project skills shows localized summary with details (${locale})`, async ({page}) => {
       await page.goto('/ui-components.html');
       await page.evaluate(async ({msg}) => {
         const {projectSkillsPanel} = await import('/src/project-skills.js');
@@ -245,29 +262,33 @@ for (const {locale, summaryText, lang, width} of [
         saveBtn?.click();
       }, {msg: serverMsg});
 
-      const status = page.locator('[data-project-skills] [role="status"]');
+      const panel = page.locator('[data-project-skills]');
+      const status = panel.locator('[role="status"]');
       await expect(status).toHaveText(summaryText);
       if (locale === 'zh-TW') {
         expect(await status.innerText()).not.toContain(serverMsg);
         expect(await status.innerText()).not.toContain('NOT_FOUND');
       }
 
-      await page.screenshot({path: `${outDir}/after-site4-project-skills-${lang}-${width}.png`});
+      const details = panel.locator('details.ui-disclosure');
+      await expect(details).toHaveCount(1);
+      await expect(details).not.toHaveAttribute('open', '');
+      await details.locator('summary').click();
+      await expect(details.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
+      await expect(details.locator('[data-error-details] p')).toHaveText(serverMsg);
     });
 
-    test(`site5: composer shortcut shows localized summary in status (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
+    test(`site5: composer shortcut shows storage failure without Details (${locale})`, async ({page}) => {
       await page.goto('/ui-components.html');
-      await page.evaluate(async ({msg}) => {
+      await page.evaluate(async () => {
         const {composerShortcut} = await import('/src/composer-shortcut.js');
-        const {ApiError} = await import('/src/error-presentation.js');
         const {h} = await import('/src/ui/dom.js');
         const {t} = await import('/src/i18n.js');
         const input = document.createElement('textarea');
         const btn = document.createElement('button');
         const originalSet = localStorage.setItem.bind(localStorage);
         localStorage.setItem = () => {
-          throw new ApiError(404, 'NOT_FOUND', msg);
+          throw new Error('QuotaExceededError');
         };
         const comp = composerShortcut({h, t, input, button: btn, storageKey: 'test.shortcut', guard: () => {}});
         const root = document.getElementById('fixture')!;
@@ -276,20 +297,17 @@ for (const {locale, summaryText, lang, width} of [
         select.value = 'enter';
         select.dispatchEvent(new Event('change', {bubbles: true}));
         localStorage.setItem = originalSet;
-      }, {msg: serverMsg});
+      });
 
       const status = page.locator('.composer-shortcut [role="status"]');
-      await expect(status).toHaveText(summaryText);
-      if (locale === 'zh-TW') {
-        expect(await status.innerText()).not.toContain(serverMsg);
-        expect(await status.innerText()).not.toContain('NOT_FOUND');
-      }
-
-      await page.screenshot({path: `${outDir}/after-site5-composer-shortcut-${lang}-${width}.png`});
+      await expect(status).toHaveText(storageFailedText);
+      const text = await status.innerText();
+      expect(text).not.toContain('Details');
+      expect(text).not.toContain('詳細資料');
+      expect(await page.locator('.composer-shortcut details').count()).toBe(0);
     });
 
-    test(`site5: artifact content fail shows localized summary in status (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
+    test(`site5: artifact content fail shows short generic summary without Details (${locale})`, async ({page}) => {
       const artId = 'art_' + '3'.repeat(32);
       await page.addInitScript(() => sessionStorage.setItem('batc.dashboard.token', 'fixture-token'));
       await page.route('**/api/v1/**', async route => {
@@ -339,24 +357,22 @@ for (const {locale, summaryText, lang, width} of [
       const previewBtn = page.getByRole('button', {name: locale === 'zh-TW' ? '預覽' : 'Preview', exact: true});
       await previewBtn.waitFor({state: 'visible'});
 
-      // Next request to artifact fails with NOT_FOUND
+      // Next request to artifact fails with unknown code so fallback is triggered
       await page.route(`**/api/v1/artifacts/${artId}/revisions/1`, async route => {
-        return route.fulfill({status: 404, json: {error: {code: 'NOT_FOUND', message: serverMsg}}});
+        return route.fulfill({status: 500, json: {error: {code: 'INTERNAL_UNKNOWN', message: serverMsg}}});
       });
       await previewBtn.click();
 
       const status = page.locator('.artifact-content [role="status"]');
-      await expect(status).toHaveText(summaryText);
-      if (locale === 'zh-TW') {
-        expect(await status.innerText()).not.toContain(serverMsg);
-        expect(await status.innerText()).not.toContain('NOT_FOUND');
-      }
-
-      await page.screenshot({path: `${outDir}/after-site5-artifact-content-${lang}-${width}.png`});
+      await expect(status).toHaveText(shortGenericText);
+      const text = await status.innerText();
+      expect(text).not.toContain('Details');
+      expect(text).not.toContain('詳細資料');
+      expect(text).not.toContain(serverMsg);
+      expect(text).not.toContain('INTERNAL_UNKNOWN');
     });
 
-    test(`site6: maintenance repair policy shows localized summary on error (${locale})`, async ({page}) => {
-      await mkdir(outDir, {recursive: true});
+    test(`site6: maintenance repair policy shows short generic summary without Details (${locale})`, async ({page}) => {
       await page.goto('/ui-components.html');
       await page.evaluate(async ({msg}) => {
         const {maintenanceRepairPolicyControls} = await import('/src/pm-maintenance-repair-policy.js');
@@ -406,7 +422,7 @@ for (const {locale, summaryText, lang, width} of [
 
         const originalDigest = crypto.subtle.digest.bind(crypto.subtle);
         crypto.subtle.digest = () => {
-          throw new ApiError(404, 'NOT_FOUND', msg);
+          throw new ApiError(500, 'UNREGISTERED_ERROR', msg);
         };
         const addBtn = controls.element.querySelector('button.ui-button') as HTMLButtonElement;
         addBtn?.click();
@@ -415,13 +431,51 @@ for (const {locale, summaryText, lang, width} of [
       }, {msg: serverMsg});
 
       const status = page.locator('[data-policy-group="pmr_rules"] [role="status"]');
-      await expect(status).toHaveText(summaryText);
+      await expect(status).toHaveText(shortGenericText);
+      const text = await status.innerText();
+      expect(text).not.toContain('Details');
+      expect(text).not.toContain('詳細資料');
+      expect(text).not.toContain(serverMsg);
+      expect(text).not.toContain('UNREGISTERED_ERROR');
+      expect(await page.locator('[data-policy-group="pmr_rules"] details.ui-disclosure').count()).toBe(0);
+    });
+
+    test(`site5: result-sources shows localized summary with details (${locale})`, async ({page}) => {
+      await page.goto('/ui-components.html');
+      await page.evaluate(async ({msg}) => {
+        const {resultSourcesPanel} = await import('/src/result-sources.js');
+        const {ApiError} = await import('/src/error-presentation.js');
+        const {h} = await import('/src/ui/dom.js');
+        const {t} = await import('/src/i18n.js');
+        const api = async () => {
+          throw new ApiError(404, 'NOT_FOUND', msg);
+        };
+        const panel = resultSourcesPanel({
+          h, t, api, guard: () => {},
+          workItemId: 'wi_' + '1'.repeat(32),
+          linkTarget: () => h('span', {}, 'target'),
+          onEvents: () => () => {},
+          errorBox: () => {},
+        });
+        const root = document.getElementById('fixture')!;
+        root.replaceChildren(panel.box);
+        (panel.box.querySelector('details') as HTMLDetailsElement).open = true;
+      }, {msg: serverMsg});
+
+      const panel = page.locator('[data-result-sources]');
+      const status = panel.locator('[role="status"]');
+      await expect(status).toHaveText(`${refreshRetainText} ${summaryText}`);
       if (locale === 'zh-TW') {
         expect(await status.innerText()).not.toContain(serverMsg);
         expect(await status.innerText()).not.toContain('NOT_FOUND');
       }
 
-      await page.screenshot({path: `${outDir}/after-site6-maintenance-repair-policy-${lang}-${width}.png`});
+      const details = panel.locator('details.ui-disclosure');
+      await expect(details).toHaveCount(1);
+      await expect(details).not.toHaveAttribute('open', '');
+      await details.locator('summary').click();
+      await expect(details.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
+      await expect(details.locator('[data-error-details] p')).toHaveText(serverMsg);
     });
   });
 }
