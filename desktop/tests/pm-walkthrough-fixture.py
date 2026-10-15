@@ -256,6 +256,10 @@ async def serve(commands):
                     raise ValueError("Unknown walkthrough command")
                 ops = daemon.ops
                 requests = command["requests"]
+                mode = command.get("mode") or os.environ.get("BATC_WALKTHROUGH_MODE", "owner")
+                if mode not in {"owner", "lost_acknowledgement"}:
+                    raise ValueError(f"Unknown walkthrough mode: {mode}")
+                expected_attempts = 2 if mode == "lost_acknowledgement" else 1
                 request_keys = {row["key"] for row in requests}
                 created = [ops.get(row[0]) for row in ops.db.execute("SELECT operation_id FROM operations")
                     if row[0] not in seed_ids]
@@ -271,10 +275,10 @@ async def serve(commands):
                 assert adoption["status"] == "succeeded", adoption
                 assert {op["operation_id"] for op in created} - {op["operation_id"] for op in browser_ops} == set(
                     adoption["result"]["child_operation_ids"])
-                assert len([r for r in requests if r["action"] == adoption["action"]]) == 1
+                assert len([r for r in requests if r["action"] == adoption["action"]]) == expected_attempts
                 assert ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0] == 2  # Seed + one review.
                 resolution = next(op for op in browser_ops if op["action"] == "pm.governance.revise")
-                assert len([r for r in requests if r["action"] == resolution["action"]]) == 1
+                assert len([r for r in requests if r["action"] == resolution["action"]]) == expected_attempts
                 resolved = pm_governance.get_record(ops, owner, seeded["workspace_id"], seeded["issue_id"])
                 assert resolved["record"]["version"] == original_issue["record"]["version"] + 1
                 assert resolved["record"]["context"] == original_issue["record"]["context"]

@@ -7,7 +7,7 @@ import {homedir} from 'node:os';
 import assert from 'node:assert/strict';
 import {performance} from 'node:perf_hooks';
 import {chromium, expect as baseExpect} from '@playwright/test';
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, recoverOriginalAdoption} from './pm-navigation.ts';
 
 const expect = baseExpect.configure({timeout: 30000});
 const backend = resolve(process.env.BATC_PM_BACKEND || '..');
@@ -41,20 +41,26 @@ const labels = {
 const unexpectedResponse = row => row.status >= 400 && !(row.method === 'GET' && row.status === 404
   && (row.path === '/api/v1/browser-session' || row.path.endsWith('/maintenance-findings/current')));
 
-async function walkthrough(locale, width) {
+async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
+  const mode = lostAcknowledgement ? 'lost_acknowledgement' : 'owner';
+  const expectedAttempts = lostAcknowledgement ? 2 : 1;
+  const prefix = lostAcknowledgement ? `${locale}-${width}-recovery` : `${locale}-${width}`;
   const started = performance.now(), temporary = await mkdtemp(resolve(scratch, 'pm-walkthrough-run-'));
   let child, stopped, spawnError, output, browser, page, fixture, step = 'startup';
-  const errors = [], failures = [], requests = [], responses = [], operationReplies = new Map(), reads = new Map(), pending = new Set();
+  const errors = [], failures = [], requests = [], responses = [], operationReplies = new Map(), reads = new Map(), pending = new Set(), inFlight = new Map();
+  const dropped = new Set();
+  let lostAcknowledgements = 0;
   const watch = promise => {pending.add(promise); promise.finally(() => pending.delete(promise)).catch(() => {}); return promise;};
   const screenshot = async (number, name) => {
     step = name;
-    const path = resolve(shots, `${locale}-${width}-${String(number).padStart(2, '0')}-${name}.png`);
-    await page.screenshot({path, fullPage: true, animations: 'disabled'});
-    console.log(JSON.stringify({locale, width, step: name, screenshot: path}));
+    const path = resolve(shots, `${prefix}-${String(number).padStart(2, '0')}-${name}.png`);
+    await page.screenshot({path, animations: 'disabled'});
+    console.log(JSON.stringify({locale, width, mode, step: name, screenshot: path}));
   };
   try {
     child = spawn(python, [resolve('tests/pm-walkthrough-fixture.py')], {cwd: backend,
       env: {...process.env, BATC_PM_FIXTURE_TEMP: temporary, BATC_WALKTHROUGH_LOCALE: locale,
+        BATC_WALKTHROUGH_MODE: mode,
         PYTHONPATH: [resolve(backend, 'src'), backend].join(delimiter)}, stdio: ['pipe', 'pipe', 'inherit']});
     stopped = new Promise(resolve => {child.once('exit', resolve); child.once('error', error => {spawnError = error; resolve();});});
     child.stdin.on('error', () => {});
@@ -62,7 +68,7 @@ async function walkthrough(locale, width) {
     const lines = output[Symbol.asyncIterator]();
     const next = async () => {
       const row = await bounded(Promise.race([lines.next(), stopped.then(() => {throw spawnError || Error('Walkthrough central stopped');})]),
-        180000, 'Timed out waiting for walkthrough central');
+        60000, 'Timed out waiting for walkthrough central');
       if (row.done) throw spawnError || Error('Walkthrough central stopped');
       return JSON.parse(row.value);
     };
@@ -74,18 +80,22 @@ async function walkthrough(locale, width) {
     page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => {
-      if (new URL(request.url()).pathname === '/api/v1/operations' && request.method() === 'POST') {
+      const path = new URL(request.url()).pathname;
+      if (path.startsWith('/api/v1/')) inFlight.set(request, {method: request.method(), path, startedMs: Math.round(performance.now() - started)});
+      if (path === '/api/v1/operations' && request.method() === 'POST') {
         requests.push({key: request.headers()['idempotency-key'], body: request.postDataJSON()});
       }
     });
     page.on('requestfailed', request => {
+      inFlight.delete(request);
       if (new URL(request.url()).pathname.startsWith('/api/v1/')) failures.push({path: new URL(request.url()).pathname,
         action: request.postDataJSON()?.action, error: request.failure()?.errorText});
     });
     page.on('response', response => {
+      inFlight.delete(response.request());
       const path = new URL(response.url()).pathname;
       if (!path.startsWith('/api/v1/')) return;
-      responses.push({method: response.request().method(), path, status: response.status()});
+      responses.push({method: response.request().method(), path, status: response.status(), atMs: Math.round(performance.now() - started)});
       if (path !== '/api/v1/operations' && !path.endsWith('/overview')) return;
       watch((async () => {
         const data = await response.json(); reads.set(path, data);
@@ -94,6 +104,23 @@ async function walkthrough(locale, width) {
         }
       })().catch(error => errors.push(`Response ${path}: ${error.message}`)));
     });
+    if (lostAcknowledgement) {
+      // Lose each first adoption/resolution acknowledgement after central admission.
+      // Each UI recovery click must reuse its original durable key and envelope.
+      await page.route(url => url.pathname === '/api/v1/operations', async route => {
+        const request = route.request();
+        const action = request.method() === 'POST' ? request.postDataJSON().action : null;
+        if (!['pm.conversation.adopt', 'pm.governance.revise'].includes(action) || dropped.has(action)) {
+          await route.continue(); return;
+        }
+        dropped.add(action);
+        const response = await route.fetch();
+        assert.equal(response.status(), 202);
+        operationReplies.set(request.headers()['idempotency-key'], (await response.json()).operation);
+        lostAcknowledgements++;
+        await route.abort('failed');
+      });
+    }
     await page.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
     step = 'understand';
     await page.goto(`${origin}/dashboard/#/pm/${fixture.workspace_id}/overview`);
@@ -177,22 +204,38 @@ async function walkthrough(locale, width) {
     await expect(page.locator('.pm-discussion .ui-button.primary:visible')).toHaveCount(1);
     await screenshot(7, 'review');
 
-    step = 'adopt';
+    step = lostAcknowledgement ? 'adoption-retry' : 'adopt';
     await proposal.getByRole('button', {name: l.adopt, exact: true}).click();
-    // Completion is proved by the UI's own automatic receipt/readback, without clicking Check original request.
     const adopted = proposal.locator('[data-proposal-adopted]');
     const savedReceipt = proposal.locator('[data-pm-action="pm.conversation.adopt"] [data-pm-saved]');
-    await expect(adopted).toBeVisible();
-    await expect(adopted).toContainText(l.adopted);
-    if (await proposal.locator('[data-pm-action="pm.conversation.adopt"]').count()) {
-      await expect(savedReceipt).toHaveCount(1);
+    if (lostAcknowledgement) {
+      const retry = proposal.getByRole('button', {name: l.retry, exact: true});
+      await expect(retry).toBeVisible();
+      await retry.click();
+      // Completion is proved by the UI's own receipt/readback, not an API poll.
+      const originalReceipt = proposal.getByRole('button', {name: l.retry, exact: true, includeHidden: true});
+      await expect.poll(async () => {
+        if (await adopted.isVisible() && (!await originalReceipt.count() || await savedReceipt.count())) return true;
+        if (!await originalReceipt.count()) return false;
+        await recoverOriginalAdoption(proposal, l.retry);
+        return false;
+      }, {intervals: [1000, 1500, 2000]}).toBe(true);
+      if (await originalReceipt.count()) await expect(savedReceipt).toHaveCount(1);
+    } else {
+      // Completion is proved by the UI's own automatic receipt/readback, without clicking Check original request.
+      await expect(adopted).toBeVisible();
+      if (await proposal.locator('[data-pm-action="pm.conversation.adopt"]').count()) {
+        await expect(savedReceipt).toHaveCount(1);
+      }
     }
+    await expect(adopted).toContainText(l.adopted);
     await expect(proposal.locator('[data-issue-resolve-title]')).toHaveText(copy.issue);
     await expect(proposal.locator('[data-issue-resolve-open]')).toHaveClass(/primary/);
     await expect(page.locator('.pm-discussion .ui-button.primary:visible')).toHaveCount(1);
     await screenshot(8, 'adopted');
     const adoptionRequests = requests.filter(row => row.body.action === 'pm.conversation.adopt');
-    assert.equal(adoptionRequests.length, 1);
+    assert.equal(adoptionRequests.length, expectedAttempts);
+    if (lostAcknowledgement) assert.deepEqual(adoptionRequests[1], adoptionRequests[0]);
     await expect(proposal.locator('[data-proposal-adopted-revision]')).toHaveText(l.accepted);
     const revisionLink = await proposal.locator('[data-proposal-adopted-revision]').getAttribute('href');
     const revision = new URLSearchParams(revisionLink.split('?')[1]).get('revision');
@@ -217,12 +260,16 @@ async function walkthrough(locale, width) {
     await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).scrollIntoViewIfNeeded();
     await screenshot(9, 'resolution-review');
     await resolutionForm.getByRole('button', {name: l.resolve, exact: true}).click();
+    if (lostAcknowledgement) {
+      await resolutionForm.getByRole('button', {name: l.retry, exact: true}).click();
+    }
     await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.resolved);
     await expect(proposal.locator('[data-issue-resolved]')).toContainText(l.unassessed);
     await expect(proposal.locator('[data-issue-resolve-open]')).toHaveCount(0);
     await expect(page.locator('.pm-discussion .ui-button.primary:visible')).toHaveCount(1);
     const resolutionRequests = requests.filter(row => row.body.action === 'pm.governance.revise');
-    assert.equal(resolutionRequests.length, 1);
+    assert.equal(resolutionRequests.length, expectedAttempts);
+    if (lostAcknowledgement) assert.deepEqual(resolutionRequests[1], resolutionRequests[0]);
     assert.equal(resolutionRequests[0].body.params.status, 'reported_resolved');
     await screenshot(10, 'issue-resolved');
     await proposal.locator('[data-proposal-adopted-revision]').click();
@@ -231,12 +278,15 @@ async function walkthrough(locale, width) {
     await bounded(Promise.all([...pending]), 30000, 'Response diagnostics did not finish');
     assert.deepEqual(errors, []);
     assert.deepEqual(responses.filter(unexpectedResponse), []);
-    assert.deepEqual(failures, []);
+    assert.equal(lostAcknowledgements, lostAcknowledgement ? 2 : 0);
+    assert.deepEqual(failures.map(row => row.action),
+      lostAcknowledgement ? ['pm.conversation.adopt', 'pm.governance.revise'] : []);
     for (const row of requests) assert.match(row.key, /^[A-Za-z0-9._:-]{8,200}$/, 'Every UI operation needs a stable key');
-    child.stdin.write(JSON.stringify({action: 'verify', requests: requests.map(row => ({
+    child.stdin.write(JSON.stringify({action: 'verify', mode, requests: requests.map(row => ({
       key: row.key, action: row.body.action, operation_id: operationReplies.get(row.key)?.operation_id}))}) + '\n');
     assert.equal((await next()).verified, true);
-    console.log(JSON.stringify({locale, width, centralSafetyVerified: true, browserOperations: 5, adoptionAttempts: 1, resolutionAttempts: 1}));
+    console.log(JSON.stringify({locale, width, mode, centralSafetyVerified: true, browserOperations: 5,
+      adoptionAttempts: expectedAttempts, resolutionAttempts: expectedAttempts}));
     step = 'decision-overview';
     await openPmSection(page, 'overview');
     await expect(page.locator('[data-overview-meta]')).toContainText(copy.updated);
@@ -284,19 +334,25 @@ async function walkthrough(locale, width) {
     await bounded(Promise.all([...pending]), 30000, 'Response diagnostics did not finish');
     assert.deepEqual(errors, []);
     assert.deepEqual(responses.filter(unexpectedResponse), []);
-    assert.deepEqual(failures, []);
+    assert.equal(lostAcknowledgements, lostAcknowledgement ? 2 : 0);
+    assert.deepEqual(failures.map(row => row.action),
+      lostAcknowledgement ? ['pm.conversation.adopt', 'pm.governance.revise'] : []);
     for (const row of requests) assert.match(row.key, /^[A-Za-z0-9._:-]{8,200}$/, 'Every UI operation needs a stable key');
-    console.log(JSON.stringify({locale, width, passed: true, operations: 5, adoptionAttempts: 1, resolutionAttempts: 1,
+    console.log(JSON.stringify({locale, width, mode, passed: true, operations: 5,
+      adoptionAttempts: expectedAttempts, resolutionAttempts: expectedAttempts,
       seconds: Number(((performance.now() - started) / 1000).toFixed(2))}));
   } catch (error) {
     if (page) {
-      await page.screenshot({path: resolve(shots, `${locale}-${width}-failure-${step}.png`), fullPage: true, animations: 'disabled'}).catch(() => {});
-      console.error('Walkthrough failure:', JSON.stringify({locale, width, step, url: page.url(), errors, failures,
+      await page.screenshot({path: resolve(shots, `${prefix}-failure-${step}.png`), animations: 'disabled'}).catch(() => {});
+      console.error('Walkthrough failure:', JSON.stringify({locale, width, mode, step, url: page.url(), errors, failures,
         seconds: Number(((performance.now() - started) / 1000).toFixed(2)),
+        inFlight: [...inFlight.values()],
         requests: requests.map(row => ({key: row.key, action: row.body.action})), responses: responses.slice(-20),
         overview: fixture && reads.get(`/api/v1/pm/workspaces/${fixture.workspace_id}/overview`),
         forms: await page.locator('[data-pm-action]').evaluateAll(forms => forms.map(form => ({
           action: form.dataset.pmAction, status: form.querySelector('[role=status]')?.textContent,
+          receipt: form.querySelector('.pm-receipt')?.textContent,
+          buttonText: form.querySelector('button[type=submit]')?.textContent,
           disabled: form.querySelector('button[type=submit]')?.disabled})))}));
     }
     throw error;
@@ -316,7 +372,16 @@ async function walkthrough(locale, width) {
   }
 }
 
-const results = await Promise.allSettled([['en', 1440], ['en', 390], ['zh-TW', 1440], ['zh-TW', 390]].map(
-  ([locale, width]) => walkthrough(locale, width).catch(error => {console.error(`${locale} ${width} walkthrough failed:`, error); throw error;})));
-const failures = results.filter(row => row.status === 'rejected').map(row => row.reason);
+const failures = [];
+for (const [locale, width, options] of [
+  ['en', 1440, {}],
+  ['en', 390, {}],
+  ['zh-TW', 1440, {}],
+  ['zh-TW', 390, {}],
+  ['en', 1440, {lostAcknowledgement: true}],
+  ['zh-TW', 1440, {lostAcknowledgement: true}],
+]) {
+  try {await walkthrough(locale, width, options);}
+  catch (error) {failures.push(error); console.error(`${locale} ${width} walkthrough failed:`, error);}
+}
 if (failures.length) throw new AggregateError(failures, `${failures.length} PM walkthrough(s) failed`);

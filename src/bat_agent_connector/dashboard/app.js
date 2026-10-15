@@ -22576,6 +22576,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		multiline: true,
 		max: 4e3
 	});
+	rationale.addEventListener("focus", () => {
+		const transcript = box.closest(".pd-transcript");
+		if (transcript && getComputedStyle(transcript).overflowY !== "visible") {
+			const pane = transcript.getBoundingClientRect(), bottom = adopt.box.getBoundingClientRect().bottom;
+			if (bottom > pane.bottom) transcript.scrollTop += bottom - pane.bottom + 8;
+		}
+	});
 	adopt = form({
 		action: ADOPT,
 		target,
@@ -23140,8 +23147,14 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 					adopt.box.hidden = !reviewOpen;
 					updateControls();
 					if (reviewOpen) {
-						const heading = detail.querySelector("h4") || box, rect = heading.getBoundingClientRect();
-						if (rect.top < 0 || rect.bottom > innerHeight) heading.scrollIntoView({ block: "start" });
+						const heading = content.querySelector("h4") || detail.querySelector("h4") || box, transcript = box.closest(".pd-transcript");
+						if (transcript && getComputedStyle(transcript).overflowY !== "visible") {
+							const pane = transcript.getBoundingClientRect(), top = heading.getBoundingClientRect().top;
+							if (top < pane.top || adopt.box.getBoundingClientRect().bottom > pane.bottom) transcript.scrollTop += top - pane.top - 12;
+						} else {
+							const topbar = document.querySelector(".ui-topbar")?.getBoundingClientRect().bottom || 0, rect = heading.getBoundingClientRect();
+							if (rect.top < topbar || adopt.box.getBoundingClientRect().bottom > innerHeight) window.scrollBy(0, rect.top - topbar - 12);
+						}
 						content.querySelector("input[type=checkbox]")?.focus({ preventScroll: true });
 					}
 				}
@@ -39861,7 +39874,18 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		version: 1,
 		values: {}
 	}, damaged = false, busy = false, operation = null;
-	const receiptDelays = [
+	const receiptDelays = action === "pm.conversation.adopt" ? [
+		250,
+		500,
+		1e3,
+		1500,
+		2e3,
+		3e3,
+		3e3,
+		3e3,
+		3e3,
+		3e3
+	] : [
 		250,
 		500,
 		1e3,
@@ -40144,6 +40168,13 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
 		initialChecking: () => initialChecking && (busy || receiptTimer !== null),
+		stopAutoCheck: () => {
+			if (initialChecking) {
+				initialChecking = false;
+				stopTimer();
+				update();
+			}
+		},
 		stage: () => {
 			if (disposed || busy || saved.intent || damaged) return false;
 			guard();
@@ -40466,7 +40497,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		icon: "refresh-cw",
 		label: t("pm_refresh"),
 		"data-pm-refresh": "",
-		onClick: () => void load()
+		onClick: () => {
+			for (const value of forms) value.stopAutoCheck?.();
+			load();
+		}
 	});
 	const phasePill = h("span", {
 		class: "ui-pill tone-neutral",

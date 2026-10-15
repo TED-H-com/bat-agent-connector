@@ -68,7 +68,7 @@ export const pmAvailable = caps => caps?.features?.pm_workspaces?.version === 1 
 function durableForm({h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = 'manage', onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false}) {
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
-  const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
+  const receiptDelays = action === 'pm.conversation.adopt' ? [250, 500, 1000, 1500, 2000, 3000, 3000, 3000, 3000, 3000] : [250, 500, 1000, 1500, 2000, 3000];
   let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false;
   const stopTimer = () => {clearTimeout(receiptTimer); receiptTimer = null;};
   try {
@@ -248,6 +248,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   form.append(connection);
   return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !(initialChecking && receiptTimer !== null) && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
     initialChecking: () => initialChecking && (busy || receiptTimer !== null),
+    stopAutoCheck: () => {if (initialChecking) {initialChecking = false; stopTimer(); update();}},
     stage: () => {
       if (disposed || busy || saved.intent || damaged) return false;
       guard(); saved.values = capture();
@@ -439,7 +440,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     extra: h('div', {class: 'pm-fields'}, labelled('pm_workspace_name', name),
       h('details', {}, h('summary', {}, t('pm_repositories_optional')), labelled('pm_repositories', repositories), h('p', {class: 'muted'}, t('pm_repository_help'))))});
   const title = h('span', {}, t('pm_title'));
-  const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), 'data-pm-refresh': '', onClick: () => void load()});
+  const refresh = iconButton({icon: 'refresh-cw', label: t('pm_refresh'), 'data-pm-refresh': '', onClick: () => {for (const value of forms) value.stopAutoCheck?.(); void load();}});
   const phasePill = h('span', {class: 'ui-pill tone-neutral', hidden: true});
   const viewMeta = h('p', {class: 'ui-meta', 'data-pm-work-meta': '', hidden: true});
   const heading = pageHeader({title, pill: phasePill, meta: viewMeta, actions: [refresh]});

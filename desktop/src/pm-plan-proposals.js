@@ -56,6 +56,13 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     onStateChange:()=>{if(ready){adopt?.update();updateControls();}},
     extra:h('div',{class:'pm-fields'},labelled('pcp_purpose',purpose),runtime.box,h('details',{},h('summary',{},t('pcp_model')),labelled('pcp_model',model)),note('pcp_prepare_help'))});
   const review=hidden(),rationale=input('pcp_rationale',{multiline:true,max:4000});
+  rationale.addEventListener('focus',()=>{
+    const transcript=box.closest('.pd-transcript');
+    if(transcript&&getComputedStyle(transcript).overflowY!=='visible'){
+      const pane=transcript.getBoundingClientRect(),bottom=adopt.box.getBoundingClientRect().bottom;
+      if(bottom>pane.bottom)transcript.scrollTop+=bottom-pane.bottom+8;
+    }
+  });
   adopt=form({action:ADOPT,target,fields:{review,rationale},params:values=>{
       const saved=JSON.parse(values.review);if(!active||saved.proposal_id!==active.proposal_id||!validReview(saved.review))throw Error(t('pcp_missing'));
       return {proposal_id:saved.proposal_id,review:saved.review,rationale:values.rationale};},
@@ -241,8 +248,14 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
         'aria-expanded':String(reviewOpen),onClick:()=>{
           reviewOpen=!reviewOpen;adopt.box.hidden=!reviewOpen;updateControls();
           if(reviewOpen){
-            const heading=detail.querySelector('h4')||box,rect=heading.getBoundingClientRect();
-            if(rect.top<0||rect.bottom>innerHeight)heading.scrollIntoView({block:'start'});
+            const heading=content.querySelector('h4')||detail.querySelector('h4')||box,transcript=box.closest('.pd-transcript');
+            if(transcript&&getComputedStyle(transcript).overflowY!=='visible'){
+              const pane=transcript.getBoundingClientRect(),top=heading.getBoundingClientRect().top;
+              if(top<pane.top||adopt.box.getBoundingClientRect().bottom>pane.bottom)transcript.scrollTop+=top-pane.top-12;
+            }else{
+              const topbar=document.querySelector('.ui-topbar')?.getBoundingClientRect().bottom||0,rect=heading.getBoundingClientRect();
+              if(rect.top<topbar||adopt.box.getBoundingClientRect().bottom>innerHeight)window.scrollBy(0,rect.top-topbar-12);
+            }
             content.querySelector('input[type=checkbox]')?.focus({preventScroll:true});
           }
         }});

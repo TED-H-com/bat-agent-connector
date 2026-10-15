@@ -508,7 +508,9 @@ and Ask follow-up; editable scope and questions
 open in the adoption panel. Review & adopt is primary until it opens, then Adopt is
 primary and Send remains secondary. Opening Review & adopt scrolls the review panel
 into view and focuses the first candidate checkbox, with one shared Details disclosure
-at the bottom of the proposal card. Source rows use human labels and shared times;
+at the bottom of the proposal card. At 800px and wider the transcript scrolls inside its
+pane; below 800px a thread with a proposal switches to page scrolling so the proposal
+review and composer share one document scroller. Source rows use human labels and shared times;
 full source identities are copyable in Details, without JSON blocks.
 
 Structured analysis stays on the existing capability-checked native/BAT proposal

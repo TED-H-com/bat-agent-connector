@@ -19,15 +19,15 @@
   export action reuse the context panel's disclosure.
   Dependencies keeps its capture action hidden on other views after refresh.
 
-- Inline discussion proposals keep the Discussion info panel closed at every width,
-  scroll the review panel into view and focus the first candidate checkbox on Review
-  & adopt, and share one Details disclosure. New discussion drafts explain that the
-  first message enables Ask PM when a PM adapter is available, and keep Set up PM on
-  one line when disconnected. Durable forms keep their action label disabled during
-  bounded automatic receipt checks, proposals queue a trailing refresh and suppress
-  stale prompts while adoption or issue resolution is in flight, Plan revisions label
-  the current head as Adopted, and adopted discussions present Resolve issue as the
-  primary action below the issue title with a draft-preserving Cancel control.
+- Reviewing a PM proposal stays in the conversation: Discussion info no longer
+  opens over it, Review & adopt brings the review into view, and the proposal has
+  one Details. Adopt and Resolve issue keep their own label while Connector
+  confirms them and then settle by themselves. Check original request appears
+  only when confirmation stops without a result or after a reload. A settling
+  adoption no longer shows Out of date or Ask PM again. A new discussion says
+  that the first message reaches the PM when one is set up. The current plan
+  revision reads Adopted. After adoption, Resolve issue is the primary action
+  under the issue's title, and Cancel keeps its draft.
 
 - Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
   Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
