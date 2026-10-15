@@ -544,3 +544,90 @@ async def test_misclassified_journal_only_action_still_refuses_local_host_on_run
     assert "SSH location" in result["status_reason"]
     assert calls == []
 
+
+@pytest.mark.parametrize("mode", ["ssh", "local"])
+async def test_pm_execution_runtime_observe_admission_matches_verify_on_ssh_and_local_host(operations, mode):
+    from dataclasses import replace
+
+    ops = operations
+    cfg = config(mode)
+    other_mode = "local" if mode == "ssh" else "ssh"
+    cfg.hosts["unrelated"] = replace(cfg.host("fixture"), name="unrelated", git=other_mode)
+    runner = host_git.HostGitRunner(cfg, {"fixture": "fixture-bat", "unrelated": "unrelated-bat"}, server_id="fixture-server")
+    ops.context["git_runner"] = runner
+    principal = api_auth.Principal("fixture-operator", frozenset({"observe", "operate", "start"}))
+    ops.register(ActionDef("repository.continue", "start", "Fixture execution child",
+                           lambda ctx: asyncio.sleep(0, result={"host": "fixture"}),
+                           target_keys=("repository", "host", "workspace_id")))
+    ops.register(ActionDef("pm.execution.verify", "operate", "Fixture execution verifier",
+                           lambda ctx: asyncio.sleep(0, result=ctx.effect("verify-receipt", lambda: {"ok": True})),
+                           admit=lambda _ops, _p, _t, _params, _pre: {
+                               "pm_execution_verification": {"configured": {"host": "fixture"}}},
+                           target_keys=("workspace_id", "execution_operation_id")))
+    ops.register(ActionDef("pm.execution.runtime.observe", "observe", "Fixture execution runtime observer",
+                           lambda ctx: asyncio.sleep(0, result=ctx.effect("runtime-receipt", lambda: {"ok": True})),
+                           admit=lambda _ops, _p, target, _params, _pre: {
+                               "pm_execution_runtime": {"execution_operation_id": target["execution_operation_id"]}},
+                           target_keys=("workspace_id", "execution_operation_id")))
+    child, _ = ops.create(principal, action="repository.continue",
+                          target={"repository": "org/repo", "host": "fixture", "workspace_id": "ws-1"},
+                          idempotency_key=f"child-{mode}")
+    target = {"workspace_id": "ws-1", "execution_operation_id": child["operation_id"]}
+    verify_op, _ = ops.create(principal, action="pm.execution.verify", target=target, idempotency_key=f"verify-{mode}")
+    runtime_op, _ = ops.create(principal, action="pm.execution.runtime.observe", target=target, idempotency_key=f"runtime-{mode}")
+    assert host_git.action_class("pm.execution.runtime.observe") == host_git.action_class("pm.execution.verify") == "host_effect"
+    expected = {"fixture": runner.execution_binding("fixture")}
+    assert expected["fixture"]["transport"] == mode
+    assert runtime_op["external_refs"]["admission_binding"]["git_execution"] == expected
+    assert verify_op["external_refs"]["admission_binding"]["git_execution"] == expected
+    flipped = config(other_mode)
+    flipped.hosts["unrelated"] = replace(flipped.host("fixture"), name="unrelated", git=mode)
+    ops.context["git_runner"] = host_git.HostGitRunner(flipped, {"fixture": "fixture-bat", "unrelated": "unrelated-bat"},
+                                                       server_id="fixture-server")
+    await ops._execute(verify_op["operation_id"])
+    await ops._execute(runtime_op["operation_id"])
+    assert ops.get(verify_op["operation_id"])["status"] == ops.get(runtime_op["operation_id"])["status"] == "needs_attention"
+    assert ops.get(verify_op["operation_id"])["error_code"] == ops.get(runtime_op["operation_id"])["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"
+
+
+@pytest.mark.parametrize("mode", ["ssh", "local"])
+async def test_pm_session_quiescence_observe_admission_matches_comparable_action_on_ssh_and_local_host(operations, mode):
+    from dataclasses import replace
+
+    ops = operations
+    with ops.journal.tx():
+        ops.db.execute("INSERT INTO work_item_links(link_id,work_item_id,kind,ref,linked_by,linked_at,link_operation) "
+                       "VALUES(1,'wi_1','session','fixture/s1','fixture-operator',1,'op_link')")
+    cfg = config(mode)
+    other_mode = "local" if mode == "ssh" else "ssh"
+    cfg.hosts["unrelated"] = replace(cfg.host("fixture"), name="unrelated", git=other_mode)
+    runner = host_git.HostGitRunner(cfg, {"fixture": "fixture-bat", "unrelated": "unrelated-bat"}, server_id="fixture-server")
+    ops.context["git_runner"] = runner
+    principal = api_auth.Principal("fixture-operator", frozenset({"observe", "operate"}))
+    ops.register(ActionDef("pm.execution.verify", "operate", "Fixture comparable host effect",
+                           lambda ctx: asyncio.sleep(0, result=ctx.effect("verify-receipt", lambda: {"ok": True})),
+                           admit=lambda _ops, _p, _t, _params, _pre: {
+                               "pm_execution_verification": {"configured": {"host": "fixture"}}},
+                           target_keys=("workspace_id", "execution_operation_id")))
+    ops.register(ActionDef("pm.session.quiescence.observe", "observe", "Fixture session quiescence observer",
+                           lambda ctx: asyncio.sleep(0, result=ctx.effect("quiescence-receipt", lambda: {"ok": True})),
+                           target_keys=("workspace_id", "work_item_id")))
+    comparable_op, _ = ops.create(principal, action="pm.execution.verify",
+                                  target={"workspace_id": "ws-1", "execution_operation_id": "op_child"},
+                                  idempotency_key=f"comparable-{mode}")
+    quiescence_op, _ = ops.create(principal, action="pm.session.quiescence.observe",
+                                  target={"workspace_id": "ws-1", "work_item_id": "wi_1"},
+                                  params={"link_id": 1}, idempotency_key=f"quiescence-{mode}")
+    assert host_git.action_class("pm.session.quiescence.observe") == host_git.action_class("pm.execution.verify") == "host_effect"
+    expected = {"fixture": runner.execution_binding("fixture")}
+    assert expected["fixture"]["transport"] == mode
+    assert quiescence_op["external_refs"]["admission_binding"]["git_execution"] == expected
+    assert comparable_op["external_refs"]["admission_binding"]["git_execution"] == expected
+    flipped = config(other_mode)
+    flipped.hosts["unrelated"] = replace(flipped.host("fixture"), name="unrelated", git=mode)
+    ops.context["git_runner"] = host_git.HostGitRunner(flipped, {"fixture": "fixture-bat", "unrelated": "unrelated-bat"},
+                                                       server_id="fixture-server")
+    await ops._execute(comparable_op["operation_id"])
+    await ops._execute(quiescence_op["operation_id"])
+    assert ops.get(comparable_op["operation_id"])["status"] == ops.get(quiescence_op["operation_id"])["status"] == "needs_attention"
+    assert ops.get(comparable_op["operation_id"])["error_code"] == ops.get(quiescence_op["operation_id"])["error_code"] == "GIT_EXECUTION_LOCATION_CHANGED"

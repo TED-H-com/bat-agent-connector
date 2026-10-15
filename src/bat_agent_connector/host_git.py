@@ -180,11 +180,13 @@ HOST_EFFECT_ACTIONS = frozenset({
     "pm.conversation.adopt",
     "pm.conversation.propose",
     "pm.dependencies.capture",
+    "pm.execution.runtime.observe",
     "pm.execution.verify",
     "pm.follow_up.analyze",
     "pm.plan.adopt",
     "pm.run.bat.analyze",
     "pm.run.prepare",
+    "pm.session.quiescence.observe",
     "pm.spec.materialize",
     "repository.continue",
     "session.answer",
@@ -311,11 +313,42 @@ def action_class(action):
     raise ValueError(f"unclassified action {action!r}")
 
 
+def _operation_hosts(ops, target, params, binding):
+    hosts = _host_names(target, params, binding)
+    if hosts or ops is None or getattr(ops, "db", None) is None:
+        return hosts
+    if isinstance(target, dict) and isinstance(target.get("execution_operation_id"), str):
+        row = ops.db.execute(
+            "SELECT target, params, result, external_refs FROM operations WHERE operation_id=?",
+            (target["execution_operation_id"],),
+        ).fetchone()
+        if row is not None:
+            hosts.update(_host_names(*(json.loads(value) for value in row if value)))
+        if not hosts:
+            for step in ops.db.execute(
+                "SELECT response FROM operation_steps WHERE operation_id=? AND response IS NOT NULL",
+                (target["execution_operation_id"],),
+            ):
+                hosts.update(_host_names(json.loads(step[0])))
+    if (not hosts and isinstance(target, dict) and isinstance(params, dict)
+            and isinstance(target.get("work_item_id"), str) and type(params.get("link_id")) is int
+            and ops.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='work_item_links'").fetchone()):
+        row = ops.db.execute(
+            "SELECT ref FROM work_item_links WHERE link_id=? AND work_item_id=? AND kind='session' AND removed_at IS NULL",
+            (params["link_id"], target["work_item_id"]),
+        ).fetchone()
+        if row is not None and isinstance(row[0], str):
+            host, sep, _ = row[0].partition("/")
+            if sep and host:
+                hosts.add(host)
+    return hosts
+
+
 def admission_bindings(ops, action, target, params, binding):
     runner = ops.context.get("git_runner")
     if action in SETUP_ACTIONS or action in JOURNAL_ONLY_ACTIONS or not isinstance(runner, HostGitRunner):
         return binding
-    hosts = _host_names(target, params, binding)
+    hosts = _operation_hosts(ops, target, params, binding)
     # Indirect workspace/repository actions resolve carriers later. Freeze the
     # configured inventory at admission so that resolution cannot choose a new
     # execution location. Unknown hosts are never authorized by this binding.
@@ -393,7 +426,7 @@ def require_execution(host=None):
     if locations is None:
         # Legacy unresolved operations predate opt-in. They may read/reconcile
         # on SSH; an explicit local declaration never redirects their effects.
-        names = [host] if host else (_host_names(op["target"], op["params"],
+        names = [host] if host else (_operation_hosts(ops, op["target"], op["params"],
             (op.get("external_refs") or {}).get("admission_binding")) or list(runner._hosts))
         if any(runner._require_current(name) is None or runner.execution_binding(name)["transport"] != "ssh"
                for name in names):
