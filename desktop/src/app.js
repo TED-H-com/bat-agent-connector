@@ -3281,7 +3281,7 @@ async function viewProjects(main) {
   const archived = h("div", {});
   const create = createRecordDisclosure({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
     namespace: connection.namespace, kind: "project", errorBox, opStatus,
-    label: t("create_project"), hook: "data-project-new", onCreated: async () => {await render();}});
+    label: t("create_project"), hook: "data-project-new", onCreated: async op => {location.hash = `#/project/${op.result.project_id}`;}});
   const showArchived = h("input", { type: "checkbox" });
   const refresh = iconButton({icon: "refresh-cw", label: t("global_refresh"), onClick: () => render().catch(() => {})});
   const filter = h("label", {class: "capture-choice or-archive-filter"}, showArchived, h("span", {}, t("show_archived")));

@@ -25,10 +25,8 @@ for (const native of [false, true]) test(`new project can select its configured 
   await repository.selectOption(selected.repository);
   await page.getByRole('textbox', {name: 'New project name'}).fill('First project');
   await page.getByRole('textbox', {name: 'New project name'}).press('Enter');
-  await expect(page).toHaveURL(/#\/projects$/);
-  await expect(page.locator('[data-project-new]')).toBeFocused();
+  await expect(page).toHaveURL(new RegExp('#/project/' + dispatchProject + '$'));
   expect(state.posts[0].body.params).toEqual({name: 'First project', repositories: [selected.repository]});
-  await page.locator('#main').getByRole('link', {name: 'First project', exact: true}).click();
   await page.getByRole('link', {name: 'Quick project dispatch'}).click();
   const destination = page.getByRole('combobox', {name: 'Repository · host · workspace ID'});
   await expect(destination).toHaveValue(JSON.stringify(selected));

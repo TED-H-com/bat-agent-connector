@@ -50,6 +50,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`wor
     await open.click();
     const title = form.getByLabel(locale === 'en' ? 'New work item' : '新工作項目', {exact: true});
     await expect(title).toBeFocused(); await title.fill('Retained draft');
+    expect(await form.locator('.actions').evaluate(node => [...node.children].map(child => child.tagName))).toEqual(['BUTTON', 'BUTTON', 'BUTTON', 'SPAN']);
     if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/work-items-open-${locale}-${width}.png`});
     await form.getByRole('button', {name: locale === 'en' ? 'Cancel' : '取消', exact: true}).click();
     await expect(form).toBeHidden(); await expect(open).toBeFocused();
@@ -103,6 +104,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`pro
     await open.click();
     const name = form.getByLabel(locale === 'en' ? 'New project name' : '新專案名稱', {exact: true});
     await expect(name).toBeFocused(); await name.fill('Retained project draft');
+    expect(await form.locator('.actions').evaluate(node => [...node.children].map(child => child.tagName))).toEqual(['BUTTON', 'BUTTON', 'BUTTON', 'SPAN']);
     if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/projects-open-${locale}-${width}.png`});
     await form.getByRole('button', {name: locale === 'en' ? 'Cancel' : '取消', exact: true}).click();
     await expect(form).toBeHidden(); await expect(open).toBeFocused();
@@ -110,8 +112,10 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`pro
     await page.reload(); await expect(form).toBeHidden(); await open.click(); await expect(name).toHaveValue('Retained project draft');
     expect(f.state.writes).toEqual([]);
     await form.getByRole('button', {name: locale === 'en' ? 'Add' : '新增', exact: true}).click();
-    await expect(form).toBeHidden(); await expect(open).toBeFocused();
-    await expect(page).toHaveURL(/#\/projects$/); expect(f.state.writes).toHaveLength(1);
+    await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
+    await expect(page.locator('[data-project-summary]')).toBeVisible();
+    if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/project-created-${locale}-${width}.png`});
+    expect(f.state.writes).toHaveLength(1);
     expect(f.state.writes[0].body).toEqual({action: 'project.create', target: {}, params: {name: 'Retained project draft'}, preconditions: {}});
     expect(errors).toEqual([]); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally {await context.close();}
@@ -241,8 +245,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
-    await expect(page).toHaveURL(/#\/projects$/);
-    await expect(form).toBeHidden(); await expect(page.locator('[data-project-new]')).toBeFocused();
+    await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
   });
 
   for (const uncertain of ['lost reply','foreign receipt']) for (const status of [401,403,422])
@@ -271,8 +274,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
       await expect(form.getByRole('button',{name:'Edit a new creation request',exact:true})).toBeHidden();
       f.state.reject=null; f.state.wrongReceipt=false;
       await form.getByRole('button',{name:'Check original creation request',exact:true}).click();
-      await expect(page).toHaveURL(/#\/projects$/);
-      await expect(form).toBeHidden(); await expect(page.locator('[data-project-new]')).toBeFocused();
+      await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
       expect(f.state.writes).toHaveLength(3); expect(f.state.ops.size).toBe(1);
       for (const request of f.state.writes.slice(1)) {
         expect(request.idempotency_key).toBe(f.state.writes[0].idempotency_key);
@@ -292,8 +294,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await form.getByRole('button',{name:'Edit a new creation request',exact:true}).click();
     await form.getByLabel('New project name',{exact:true}).fill('Corrected work');
     f.state.reject=null; await form.getByRole('button',{name:'Add',exact:true}).click();
-    await expect(page).toHaveURL(/#\/projects$/);
-    await expect(form).toBeHidden(); await expect(page.locator('[data-project-new]')).toBeFocused();
+    await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
     expect(f.state.ops.size).toBe(1);
     expect(f.state.writes[1].idempotency_key).not.toBe(f.state.writes[0].idempotency_key);
   });

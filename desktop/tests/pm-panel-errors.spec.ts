@@ -8,6 +8,7 @@ import {workbenchFixture} from './pm-workbench-fixture.ts';
 import {reviewFixture as maintenanceFixture} from './pm-maintenance-review-fixture.ts';
 import {pmFixture, pmPath, pmRoute} from './pm-fixture.ts';
 import {mountConversation} from './conversation-fixture.ts';
+import {openThreadTab} from './pm-navigation.ts';
 
 const panels = [
   ['maintenance-review', 'workspaceMaintenanceReview', 'pmrv_unavailable'],
@@ -151,6 +152,14 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     await expect(form.locator('[data-error-summary]')).toHaveText(sentence);
     await expect(form.getByText(sentence, {exact: true})).toHaveCount(1);
     await expect(form.locator('[data-error-details]')).toBeHidden();
+    const primary = form.locator('button[type=submit]');
+    await expect(primary).toBeHidden(); expect(await primary.isDisabled()).toBe(true);
+    const actions = form.locator('.pd-composer-row > .actions');
+    const recovery = actions.getByRole('button', {name: locale === 'en' ? 'New request' : '新請求', exact: true});
+    await expect(recovery).toBeVisible(); await expect(recovery).toBeEnabled();
+    await expect(form.locator('.pd-composer-status').getByRole('button')).toHaveCount(0);
+    const actionBounds = await actions.boundingBox(), rowBounds = await form.locator('.pd-composer-row').boundingBox();
+    expect(Math.abs(actionBounds!.x + actionBounds!.width - rowBounds!.x - rowBounds!.width)).toBeLessThan(1);
     expect(await form.innerText()).not.toContain('Rejected request');
     expect(await form.innerText()).not.toContain('VERSION_CONFLICT');
     const folder = process.env.BATC_FIX1_SHOTS;
@@ -161,7 +170,10 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     await form.locator('[data-api-error] summary').click();
     await expect(form.locator('[data-error-details] code')).toHaveText('VERSION_CONFLICT');
     await expect(form.locator('[data-error-details]')).toContainText('Rejected request');
-    if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/version-conflict-${locale}-${width}-open.png`});
+    if (folder) {
+      await actions.scrollIntoViewIfNeeded();
+      await page.screenshot({animations: 'disabled', path: `${folder}/version-conflict-${locale}-${width}-open.png`});
+    }
     await expect(field).toHaveValue('Keep this original draft');
     expect(f.state.writes).toHaveLength(1); expect(f.state.ops.size).toBe(0);
     const [stored] = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.pm.message.append.')).map(([, value]) => JSON.parse(value)));
@@ -169,6 +181,47 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     expect(stored.intent.key).toBe(f.state.writes[0].idempotency_key);
     expect(stored.intent.request).toEqual(f.state.writes[0].body);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+  for (const width of [1440, 390]) for (const outcome of ['failed', 'cancelled']) test(`terminal input ${outcome} offers a new request without a dead primary ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    const f = pmFixture();
+    await mountConversation(page, false, async input => {
+      if (input.method === 'POST' && input.body?.action === 'pm.input.record') {
+        f.state.writes.push(input);
+        const operation = {...input.body, actor: f.state.actor, idempotency_key: input.idempotency_key,
+          operation_id: 'op_' + 'f'.repeat(32), status: outcome, result: null};
+        f.state.ops.set(input.idempotency_key, operation);
+        return {status: 200, data: {operation}};
+      }
+      return f.dispatch(input);
+    });
+    await page.goto(pmRoute); await openThreadTab(page, 'inputs');
+    await page.locator('[data-pm-add-input] > summary').click();
+    const form = page.locator('[data-pm-action="pm.input.record"]');
+    await form.locator('textarea').fill('Keep this terminal draft');
+    await form.locator('button[type=submit]').click();
+    const primary = form.locator('button[type=submit]');
+    await expect(primary).toBeHidden(); expect(await primary.isDisabled()).toBe(true);
+    const recovery = form.getByRole('button', {name: locale === 'en' ? 'New request' : '新請求', exact: true});
+    await expect(recovery).toBeVisible(); await expect(recovery).toBeEnabled();
+    await expect(form.locator('textarea')).toHaveValue('Keep this terminal draft');
+    const [stored] = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.pm.input.record.')).map(([, value]) => JSON.parse(value)));
+    expect(stored.intent.key).toBe(f.state.writes[0].idempotency_key);
+    expect(stored.intent.request).toEqual(f.state.writes[0].body);
+    expect(stored.intent.operation_id).toBe('op_' + 'f'.repeat(32));
+    const folder = process.env.BATC_FIX1_SHOTS;
+    if (folder) {
+      await mkdir(folder, {recursive: true}); await recovery.scrollIntoViewIfNeeded();
+      await page.screenshot({animations: 'disabled', path: `${folder}/terminal-input-${outcome}-${locale}-${width}.png`});
+    }
+    await page.reload(); await openThreadTab(page, 'inputs');
+    await expect(form).toBeVisible(); await expect(primary).toBeHidden();
+    await expect(recovery).toBeVisible(); await expect(form.locator('textarea')).toHaveValue('Keep this terminal draft');
+    expect(f.state.writes).toHaveLength(1); expect(f.state.ops.size).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await recovery.click(); await expect(primary).toBeVisible(); await expect(primary).toBeEnabled();
+    await expect(form.locator('textarea')).toHaveValue('Keep this terminal draft');
+    expect(f.state.writes).toHaveLength(1);
   });
   for (const width of [1440, 390]) for (const mode of ['refresh', 'earlier']) test(`workspace ${mode} one localized error ${width}`, async ({page}) => {
     await page.setViewportSize({width, height: width === 390 ? 844 : 900});

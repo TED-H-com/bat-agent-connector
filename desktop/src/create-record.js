@@ -172,7 +172,7 @@ export function createRecordDisclosure({label, hook, ...options}) {
       open = false; await options.onCreated(value); update();
       if (!toggle.hidden) toggle.focus();
     }});
-  record.box.querySelector('.actions').append(close);
+  record.box.querySelector('.actions > button:last-of-type').after(close);
   update();
   return {...record, toggle, actions, setAvailable: value => {available = value; update();}};
 }

@@ -154,6 +154,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (readOnlyWhenUnavailable) input.readOnly = locked;
     }
     button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+    button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
     button.textContent = t(saved.intent ? 'pm_check_original' : label);
     reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
     reset.disabled = busy || !allowed();
@@ -226,8 +227,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
           try {persist();} catch { /* keep the frozen original in memory */ }
         }
         const handled = onError(error);
-        if (!handled) status.replaceChildren(errorBox(error));
-        if (error.code === 'VERSION_CONFLICT' && !handled) status.replaceChildren(errorBox(error, {summary: t('pm_stale')}));
+        if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale')} : {}));
       }
     } finally {busy = false; update();}
   }

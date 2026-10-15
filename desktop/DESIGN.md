@@ -448,7 +448,10 @@ facts. A withdrawn finding chip stays unavailable and shows none of that identit
 A server that omits `finding` keeps Kind · stored label.
 Chips stay on one line with full accessible labels: up to three in the header, then
 +N opens Context; one per list row. The selected row has the table accent inset.
-The composer has one status/actions row with Send and Ask PM kept together. Failed
+The composer has one status/actions row with Send, New request and Ask PM kept
+together in the right-aligned action group. A refused or terminal original hides
+its disabled primary; New request remains available under the existing gates.
+Error summaries, Details and the connection note stay in the status column. Failed
 and pending note explanations stay visible. Search shares the list header with an
 icon-only New discussion button. A list-opened thread returns to Discussions.
 
@@ -1139,9 +1142,11 @@ event checkpoint.
 An issue mapping without a source title or number says Untitled issue / 未命名議題;
 its original mapping identity stays in Details. Projects and Resources Work items
 share a creation disclosure, starting closed behind New project or New work item.
-Cancel closes it and returns focus without discarding the draft. A pending original
-request stays open for receipt recovery; a verified successful creation refreshes
-the same list, closes the form and returns focus to its action. Source withdrawal
+Cancel sits after Add and Review, before the draft note; it closes the form and
+returns focus without discarding the draft. A pending original request stays open
+for receipt recovery. A verified project creation opens its project page for Quick
+project dispatch. A verified work-item creation refreshes the same list, closes the
+form and returns focus to New work item. Source withdrawal
 hides the form and action together. Project header chips center beside touch-sized
 actions without stretching. Captures disable animations so disclosure chevrons
 show their settled open rotation.

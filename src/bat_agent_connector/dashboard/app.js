@@ -13822,8 +13822,6 @@ function discussionComposer({ t, form, analysis, details, draft = false }) {
 		label: t("pd_details"),
 		body: receipt
 	}));
-	const recovery = actions.querySelector("button[type=button]");
-	if (recovery) status.append(recovery);
 	if (analysis) {
 		actions.append(analysis.querySelector("[data-discussion-ask]"));
 		status.append(analysis);
@@ -38707,6 +38705,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			if (readOnlyWhenUnavailable) input.readOnly = locked;
 		}
 		button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
 		button.textContent = t(saved.intent ? "pm_check_original" : label);
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
@@ -38815,9 +38814,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 						persist();
 					} catch {}
 				}
-				const handled = onError(error);
-				if (!handled) status.replaceChildren(errorBox(error));
-				if (error.code === "VERSION_CONFLICT" && !handled) status.replaceChildren(errorBox(error, { summary: t("pm_stale") }));
+				if (!onError(error)) status.replaceChildren(errorBox(error, error.code === "VERSION_CONFLICT" ? { summary: t("pm_stale") } : {}));
 			}
 		} finally {
 			busy = false;
@@ -46480,7 +46477,7 @@ function createRecordDisclosure({ label, hook, ...options }) {
 			if (!toggle.hidden) toggle.focus();
 		}
 	});
-	record.box.querySelector(".actions").append(close);
+	record.box.querySelector(".actions > button:last-of-type").after(close);
 	update();
 	return {
 		...record,
@@ -57410,8 +57407,8 @@ async function viewProjects(main) {
 		opStatus,
 		label: t("create_project"),
 		hook: "data-project-new",
-		onCreated: async () => {
-			await render();
+		onCreated: async (op) => {
+			location.hash = `#/project/${op.result.project_id}`;
 		}
 	});
 	const showArchived = h("input", { type: "checkbox" });

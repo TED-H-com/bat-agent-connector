@@ -6,7 +6,10 @@
   localized message with diagnostics in Details. Untitled issue mappings get a
   calm name, and Resources opens work-item creation on request while preserving
   drafts and original-request recovery. Projects uses the same collapsed creation
-  form and returns focus after creation. Context previews keep their specific stale
+  form and opens the new project's page after its receipt is verified. Cancel stays
+  beside Add, before the draft note. Refused and terminal PM requests hide their
+  disabled primary; Discussions keeps New request with its right-aligned actions.
+  Context previews keep their specific stale
   or invalid reason; version conflicts retain the full draft-preservation guidance.
   Project header chips stay compact on narrow screens.
 
