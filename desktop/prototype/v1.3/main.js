@@ -1,1490 +1,753 @@
-import "./main.css";
-import { h, place } from "../../src/ui/dom.js";
-import {
-  button,
-  pageHeader,
-  sectionCard,
-  statusPill,
-  contextChip,
-  disclosure,
-  inspector,
-} from "../../src/ui/components.js";
-import { icon } from "../../src/ui/icons.js";
-import { compactTime } from "../../src/ui/time.js";
-import { timeStamp } from "../../src/ui/stamps.js";
-import { viewState } from "../../src/ui/view-state.js";
-import { locale, setLocale, t } from "./proto-i18n.js";
-import {
-  FIXED_NOW,
-  GOLDEN_CONSTANTS,
-  WORK_LIFECYCLE_ORDER,
-  DIFF_HUNKS,
-  createScenarioState,
-} from "./golden-data.js";
-import {
-  kvList,
-  inlineNotice,
-  labeledPill,
-  diagnosticStateCard,
-  intentComposer,
-  shortPlanCard,
-  compoundStepList,
-  liveStreamOutput,
-  unifiedDiffView,
-  deliveryProgressionBar,
-  pmAssessmentCard,
-} from "./candidate-components.js";
-
-let currentTheme = "light";
-let currentInspector = null;
-let state = createScenarioState(detectInitialScenario(), locale);
-
-function detectInitialScenario() {
-  if (typeof window !== "undefined" && window.location) {
-    const params = new URLSearchParams(window.location.search);
-    const sc = params.get("scene");
-    if (
-      sc &&
-      [
-        "idea",
-        "planned",
-        "running",
-        "waiting_input",
-        "awaiting_verification",
-        "external_readonly",
-        "disconnect_recovery",
-        "maintenance",
-      ].includes(sc)
-    ) {
-      return sc;
-    }
-  }
-  return "idea";
+import './main.css';
+import { h, place } from '../../src/ui/dom.js';
+import { pageHeader, sectionCard, iconButton, inspector, tabs, searchField, menu, trapFocus } from '../../src/ui/components.js';
+import { icon } from '../../src/ui/icons.js';
+import { projectViewIds, viewIcons } from '../../src/pm-workbench.js';
+import { locale, setLocale, t } from './proto-i18n.js';
+import { GOLDEN_CONSTANTS as C, WORK_LIFECYCLE_ORDER, DIFF_HUNKS, createScenarioState } from './golden-data.js';
+import { pill, action, notice, details, facts, message, composer, planCard, stepList, deliveryBar, unifiedDiffView } from './candidate-components.js';
+const scenes = ['idea', 'planned', ...WORK_LIFECYCLE_ORDER, 'external_readonly', 'hermes', 'disconnect_recovery', 'maintenance'];
+const queryScene = new URLSearchParams(location.search).get('scene');
+let state = createScenarioState(scenes.includes(queryScene) ? queryScene : 'idea', locale);
+let theme = 'light',
+  barExpanded = false,
+  cleanups = [],
+  currentInspector = null,
+  streamTimer = null,
+  previousPanelOpen = false,
+  previousPanelView = null;
+if (queryScene === 'hermes') {
+  state.hermesVisible = true;
+  state.activeView = 'work_hermes';
 }
-
-function applyTheme(nextTheme) {
-  currentTheme = nextTheme === "dark" ? "dark" : "light";
-  if (typeof document !== "undefined" && document.documentElement) {
-    document.documentElement.dataset.theme = currentTheme;
+const tid = id => ({
+  'data-testid': id
+});
+const workViews = ['work_main', 'work_derived', 'work_separate'];
+const go = view => {
+  state.activeView = view;
+  renderApp();
+  window.scrollTo(0, 0);
+};
+const workTitle = () => t(state.activeView === 'work_derived' ? 'derivedTitle' : state.activeView === 'work_separate' ? 'separateTitle' : 'workTitle');
+const workCopy = key => t((state.activeView === 'work_derived' ? 'derived_' : state.activeView === 'work_separate' ? 'separate_' : '') + key);
+const workIdentity = () => state.activeView === 'work_derived' ? C.derivedIdentity : state.activeView === 'work_separate' ? C.separateIdentity : {
+  workId: C.workId,
+  attemptId: C.attemptId,
+  sessionId: C.managedSessionId,
+  worktreeId: C.managedWorktreeId,
+  operationKey: C.operationKey,
+  operationId: C.operationId
+};
+function startSeparate(view) {
+  if (!state.additionalWorks.includes(view)) {
+    state.additionalWorks.push(view);
+    state.startRequestsSent++;
   }
+  state.workState = 'running';
+  state.secondSentenceQueued = false;
+  state.nextStepDraft = '';
+  state.disconnectedDuringStart = false;
+  state.reconciledAfterDisconnect = false;
+  state.advancedExpanded = false;
+  go(view);
 }
-
-function switchLocale(nextLocale) {
-  const prevFirst = GOLDEN_CONSTANTS.firstSentence[locale];
-  const prevSecond = GOLDEN_CONSTANTS.secondSentence[locale];
-  setLocale(nextLocale);
-  if (state.composerDraft === prevFirst) {
-    state.composerDraft = GOLDEN_CONSTANTS.firstSentence[locale];
-  }
-  if (state.nextStepDraft === prevSecond) {
-    state.nextStepDraft = GOLDEN_CONSTANTS.secondSentence[locale];
+const scene = () => state.activeView === 'work_hermes' ? 'hermes' : state.activeView === 'work_manual' ? 'external_readonly' : ['maintenance', 'work_maint'].includes(state.activeView) ? 'maintenance' : workViews.includes(state.activeView) && state.disconnectedDuringStart ? 'disconnect_recovery' : workViews.includes(state.activeView) ? state.workState : state.workStarted && state.planVisible && state.adoptMode === 'completed' ? state.workState : state.planVisible ? 'planned' : 'idea';
+function switchScene(value) {
+  state = createScenarioState(value, locale);
+  if (value === 'hermes') {
+    state.hermesVisible = true;
+    state.activeView = 'work_hermes';
   }
   renderApp();
 }
-
-function switchScenario(nextScenario) {
-  state = createScenarioState(nextScenario, locale);
+function setLanguage(next) {
+  const first = C.firstSentence[locale],
+    second = C.secondSentence[locale];
+  setLocale(next);
+  if (state.composerDraft === first) state.composerDraft = C.firstSentence[locale];
+  if (state.nextStepDraft === second) state.nextStepDraft = C.secondSentence[locale];
   renderApp();
 }
-
-function renderPrototypeBar() {
-  const scenarios = [
-    { value: "idea", label: t("proto.scene.idea") },
-    { value: "planned", label: t("proto.scene.planned") },
-    { value: "running", label: t("proto.scene.running") },
-    { value: "waiting_input", label: t("proto.scene.waiting_input") },
-    { value: "awaiting_verification", label: t("proto.scene.awaiting_verification") },
-    { value: "external_readonly", label: t("proto.scene.external_readonly") },
-    { value: "disconnect_recovery", label: t("proto.scene.disconnect_recovery") },
-    { value: "maintenance", label: t("proto.scene.maintenance") },
-  ];
-
-  return h(
-    "aside",
-    {
-      class: "proto-bar",
-      "data-testid": "prototype-bar",
-      "aria-label": t("proto.bar.badge"),
-    },
-    h(
-      "div",
-      { class: "proto-bar__row" },
-      h(
-        "div",
-        { class: "proto-bar__identity" },
-        h("span", { class: "proto-bar__badge" }, t("proto.bar.badge")),
-        h("span", { class: "proto-bar__notice", "data-testid": "proto-synthetic-notice" }, t("proto.bar.notice")),
-      ),
-      h(
-        "div",
-        { class: "proto-bar__controls" },
-        h(
-          "label",
-          { class: "proto-bar__select-label" },
-          h("span", null, t("proto.bar.scenario_label")),
-          h(
-            "select",
-            {
-              class: "proto-bar__select",
-              "data-testid": "scenario-picker",
-              value: state.scenario,
-              onchange: (e) => switchScenario(e.target.value),
-            },
-            ...scenarios.map((sc) =>
-              h(
-                "option",
-                { value: sc.value, selected: sc.value === state.scenario ? "" : null },
-                sc.label,
-              ),
-            ),
-          ),
-        ),
-        button({
-          variant: "secondary",
-          size: "sm",
-          label: t("proto.bar.reset"),
-          "data-testid": "proto-reset",
-          onClick: () => switchScenario(state.scenario),
-        }),
-        button({
-          variant: locale === "en" ? "primary" : "secondary",
-          size: "sm",
-          label: t("proto.bar.lang_en"),
-          "data-testid": "proto-lang-en",
-          onClick: () => switchLocale("en"),
-        }),
-        button({
-          variant: locale === "zh-TW" ? "primary" : "secondary",
-          size: "sm",
-          label: t("proto.bar.lang_zh"),
-          "data-testid": "proto-lang-zh",
-          onClick: () => switchLocale("zh-TW"),
-        }),
-        button({
-          variant: "secondary",
-          size: "sm",
-          label: currentTheme === "light" ? t("proto.bar.theme_dark") : t("proto.bar.theme_light"),
-          "data-testid": "proto-theme-toggle",
-          onClick: () => {
-            applyTheme(currentTheme === "light" ? "dark" : "light");
-            renderApp();
-          },
-        }),
-        button({
-          variant: "ghost",
-          size: "sm",
-          label: t("proto.bar.hermes_trigger"),
-          "data-testid": "proto-trigger-hermes",
-          onClick: () => {
-            state.hermesVisible = true;
-            state.activeView = "work_hermes";
-            renderApp();
-          },
-        }),
-      ),
-    ),
-    h(
-      "div",
-      { class: "proto-bar__counters", "data-testid": "proto-safety-counters" },
-      h(
-        "span",
-        {
-          class: "proto-bar__counter",
-          "data-testid": "counter-model-calls",
-          "data-count": String(state.modelCalls),
-        },
-        t("proto.bar.counter_model_calls", { count: state.modelCalls }),
-      ),
-      h(
-        "span",
-        {
-          class: "proto-bar__counter",
-          "data-testid": "counter-manual-mutations",
-          "data-count": String(state.manualMutations),
-        },
-        t("proto.bar.counter_manual_mutations", { count: state.manualMutations }),
-      ),
-      h(
-        "span",
-        {
-          class: "proto-bar__counter",
-          "data-testid": "counter-hermes-mutations",
-          "data-count": String(state.hermesMutations),
-        },
-        t("proto.bar.counter_hermes_mutations", { count: state.hermesMutations }),
-      ),
-      h(
-        "span",
-        {
-          class: "proto-bar__counter",
-          "data-testid": "counter-start-requests",
-          "data-count": String(state.startRequestsSent),
-        },
-        t("proto.bar.counter_start_requests", { count: state.startRequestsSent }),
-      ),
-      h(
-        "span",
-        {
-          class: "proto-bar__counter",
-          "data-testid": "counter-duplicate-starts",
-          "data-count": String(state.duplicateStarts),
-        },
-        t("proto.bar.counter_duplicate_starts", { count: state.duplicateStarts }),
-      ),
-    ),
-  );
-}
-
-function renderFixedContextStrip() {
-  return h(
-    "div",
-    { class: "proto-context-strip", "data-testid": "fixed-context-strip" },
-    contextChip({
-      icon: "server",
-      text: `${t("proto.shell.server_label")}: ${GOLDEN_CONSTANTS.serverId}`,
-    }),
-    contextChip({
-      icon: "cpu",
-      text: `${t("proto.shell.host_label")}: ${GOLDEN_CONSTANTS.hostId}`,
-    }),
-    contextChip({
-      icon: "folder",
-      text: `${t("proto.shell.workspace_label")}: ${t("proto.shell.workspace_name")}`,
-    }),
-    contextChip({
-      icon: "layout-dashboard",
-      text: `${t("proto.shell.project_label")}: ${t("proto.shell.project_name")}`,
-    }),
-    contextChip({
-      icon: "list-checks",
-      text: `${t("proto.shell.requirement_label")}: ${GOLDEN_CONSTANTS.requirementKey}`,
-    }),
-    contextChip({
-      icon: "wrench",
-      text: `${t("proto.shell.profile_label")}: ${t("proto.shell.profile_name")}`,
-    }),
-    labeledPill("info", t("proto.shell.draft_saved_pill")),
-  );
-}
-
-function renderSidebar() {
-  const navViews = [
-    { id: "overview", label: t("proto.nav.overview") },
-    { id: "discussions", label: t("proto.nav.discussions") },
-    { id: "requirements", label: t("proto.nav.requirements") },
-    { id: "board", label: t("proto.nav.board") },
-    { id: "planning", label: t("proto.nav.planning") },
-    { id: "workspace", label: t("proto.nav.workspace") },
-    { id: "governance", label: t("proto.nav.governance") },
-    { id: "maintenance", label: t("proto.nav.maintenance") },
-  ];
-
-  const workItems = [
-    { id: "work_main", label: t("proto.nav.work_main") },
-    { id: "work_manual", label: t("proto.nav.work_manual") },
-    ...(state.hermesVisible ? [{ id: "work_hermes", label: t("proto.nav.work_hermes") }] : []),
-    { id: "work_maint", label: t("proto.nav.work_maint") },
-  ];
-
-  const makeNavButton = (item) => {
-    const active = state.activeView === item.id;
-    return h(
-      "button",
-      {
-        type: "button",
-        class: `shell__item ${active ? "is-active" : ""}`,
-        "aria-current": active ? "page" : null,
-        "data-testid": `nav-item-${item.id}`,
-        onclick: () => {
-          const vs = viewState("proto-v1.3", GOLDEN_CONSTANTS.workspaceId, item.id);
-          vs.lastVisitedAt = FIXED_NOW;
-          state.activeView = item.id;
-          state.navDrawerOpen = false;
-          renderApp();
-        },
-      },
-      h("span", { class: "shell__item-label" }, item.label),
-    );
-  };
-
-  return h(
-    "nav",
-    {
-      class: "shell__sidebar",
-      "data-testid": "shell-sidebar",
-      "aria-label": t("proto.shell.nav_menu"),
-    },
-    h(
-      "div",
-      { class: "shell__group" },
-      h("div", { class: "shell__group-label" }, t("proto.nav.group_views")),
-      h("div", { class: "shell__group-items" }, ...navViews.map(makeNavButton)),
-    ),
-    h(
-      "div",
-      { class: "shell__group" },
-      h("div", { class: "shell__group-label" }, t("proto.nav.group_work")),
-      h("div", { class: "shell__group-items" }, ...workItems.map(makeNavButton)),
-    ),
-  );
-}
-
-function handleAdoptAndStart() {
+function startWork(open = false) {
   state.planVisible = true;
-  state.adoptMode = "completed";
-  state.adoptSteps = state.adoptSteps.map((s) => ({ ...s, status: "done" }));
+  state.adoptMode = 'completed';
+  state.adoptSteps = state.adoptSteps.map(step => ({
+    ...step,
+    status: 'done'
+  }));
   if (!state.workStarted) {
     state.workStarted = true;
-    state.startRequestsSent += 1;
+    state.startRequestsSent++;
   }
-  state.workState = "running";
+  state.workState = 'running';
+  if (open) state.activeView = 'work_main';
+  renderApp();
 }
-
-function renderDiscussionsView() {
-  const threadMessages = [
-    {
-      author: t("proto.f2.msg_author_owner"),
-      timeNode: timeStamp(FIXED_NOW - 18 * 60_000, { milliseconds: true, now: FIXED_NOW }),
-      body: t("proto.f2.msg_1_body"),
-      kind: "message",
-    },
-    {
-      author: t("proto.f2.msg_author_pm"),
-      timeNode: timeStamp(FIXED_NOW - 15 * 60_000, { milliseconds: true, now: FIXED_NOW }),
-      body: t("proto.f2.msg_2_body"),
-      kind: "message",
-    },
-    ...state.discussionNotes.map((note) => ({
-      author: note.author,
-      timeNode: h("span", { "data-mono": "" }, compactTime(FIXED_NOW - 2 * 60_000, { locale, now: FIXED_NOW })),
-      body: note.body,
-      kind: note.kind,
-    })),
-  ];
-
-  if (state.pmReplied) {
-    threadMessages.push({
-      author: t("proto.f2.msg_author_pm"),
-      timeNode: timeStamp(FIXED_NOW - 60_000, { milliseconds: true, now: FIXED_NOW }),
-      body: t("proto.f2.msg_pm_reply"),
-      kind: "pm_reply",
-    });
+function partialStart() {
+  state.planVisible = true;
+  state.adoptMode = 'partial_failure';
+  state.adoptSteps = state.adoptSteps.map((step, i) => ({
+    ...step,
+    status: i < 3 ? 'done' : i === 3 ? 'failed' : 'pending'
+  }));
+  go('discussions');
+}
+function setWorkState(next) {
+  state.workStarted = true;
+  state.workState = next;
+  state.disconnectedDuringStart = false;
+  state.delivery.self_reported = ['turn_ended', 'awaiting_verification'].includes(next);
+  state.delivery.tests_passed = next === 'awaiting_verification';
+  go('work_main');
+}
+function disconnect() {
+  if (!state.workStarted) {
+    state.workStarted = true;
+    state.startRequestsSent++;
   }
-
-  return h(
-    "div",
-    { class: "proto-view", "data-testid": "view-discussions" },
-    pageHeader({
-      title: t("proto.f2.title"),
-      meta: t("proto.f2.subtitle"),
-      pill: labeledPill(
-        state.workStarted ? "ok" : "info",
-        state.workStarted ? t("proto.work.state.running") : t("proto.f2.state_idea"),
-      ),
-      actions: [
-        button({
-          variant: "ghost",
-          size: "sm",
-          label: state.pmAvailable
-            ? t("proto.f2.simulate_pm_unavailable")
-            : t("proto.f2.restore_pm_available"),
-          "data-testid": "toggle-pm-unavailable",
-          onClick: () => {
-            state.pmAvailable = !state.pmAvailable;
-            renderApp();
-          },
-        }),
-      ],
-    }),
-    state.ownerDecisionRecorded
-      ? inlineNotice({
-          tone: "good",
-          title: t("proto.pm.decision_recorded_banner", { decision: state.ownerDecisionRecorded }),
-          testId: "discussion-decision-banner",
-        })
-      : null,
-    !state.pmAvailable
-      ? diagnosticStateCard({
-          tone: "warn",
-          title: t("proto.f2.simulate_pm_unavailable"),
-          whatMissing: t("proto.f2.pm_unavail_what"),
-          whatCanDo: t("proto.f2.pm_unavail_here"),
-          whereToFix: t("proto.f2.pm_unavail_where"),
-          draftStatus: t("proto.f2.pm_unavail_draft"),
-          testId: "pm-unavailable-diagnostic",
-          actions: [
-            button({
-              variant: "primary",
-              label: t("proto.f2.restore_pm_available"),
-              "data-testid": "fix-pm-available",
-              onClick: () => {
-                state.pmAvailable = true;
-                renderApp();
-              },
-            }),
-          ],
-        })
-      : null,
-    sectionCard({
-      title: `${t("proto.nav.discussions")} (${GOLDEN_CONSTANTS.discussionId})`,
-      body: h(
-        "ul",
-        { class: "proto-thread-list", "data-testid": "discussion-thread-list" },
-        ...threadMessages.map((msg, idx) =>
-          h(
-            "li",
-            {
-              class: `proto-thread-msg ${msg.kind === "note" ? "proto-thread-msg--note" : ""}`,
-              "data-testid": `thread-msg-${idx + 1}`,
-              "data-msg-kind": msg.kind,
-            },
-            h(
-              "div",
-              { class: "proto-thread-msg__meta" },
-              h("span", null, msg.author),
-              msg.timeNode,
-            ),
-            h("p", { class: "proto-thread-msg__body" }, msg.body),
-          ),
-        ),
-      ),
-    }),
-    intentComposer({
-      intent: state.composerIntent,
-      draft: state.composerDraft,
-      workStarted: state.workStarted,
-      pmAvailable: state.pmAvailable,
-      noteSavedBanner: state.noteSavedBanner,
-      onIntentChange: (nextIntent) => {
-        state.composerIntent = nextIntent;
-        state.noteSavedBanner = false;
-        renderApp();
-      },
-      onDraftInput: (val) => {
-        state.composerDraft = val;
-      },
-      onFillFirstSentence: () => {
-        state.composerDraft = GOLDEN_CONSTANTS.firstSentence[locale];
-        renderApp();
-      },
-      onFillSecondSentence: () => {
-        state.composerDraft = GOLDEN_CONSTANTS.secondSentence[locale];
-        renderApp();
-      },
-      onSaveNoteOnly: () => {
-        const text = state.composerDraft.trim() || GOLDEN_CONSTANTS.firstSentence[locale];
-        state.discussionNotes.push({
-          author: t("proto.f2.msg_author_note"),
-          body: text,
-          kind: "note",
-        });
-        state.noteSavedBanner = true;
-        // Zero model calls!
-        renderApp();
-      },
-      onSendPm: () => {
-        if (!state.pmAvailable) return;
-        const text = state.composerDraft.trim() || GOLDEN_CONSTANTS.firstSentence[locale];
-        state.discussionNotes.push({
-          author: t("proto.f2.msg_author_owner"),
-          body: text,
-          kind: "message",
-        });
-        state.modelCalls += 1;
-        state.pmReplied = true;
-        state.noteSavedBanner = false;
-        renderApp();
-      },
-      onUpdatePlan: () => {
-        state.modelCalls += 1;
-        state.planVisible = true;
-        state.noteSavedBanner = false;
-        renderApp();
-      },
-      onStartWork: () => {
-        handleAdoptAndStart();
-        state.activeView = "work_main";
-        renderApp();
-      },
-      onSendNextStep: () => {
-        state.secondSentenceQueued = true;
-        state.secondSentenceSteered = false;
-        state.activeView = "work_main";
-        renderApp();
-      },
-    }),
-    state.planVisible
-      ? shortPlanCard({
-          adoptedLater: state.planAdoptedLater,
-          adoptMode: state.adoptMode,
-          onAdoptLater: () => {
-            state.planAdoptedLater = true;
-            state.adoptMode = "idle";
-            renderApp();
-          },
-          onAdoptAndStart: () => {
-            handleAdoptAndStart();
-            renderApp();
-          },
-          onSimulatePartial: () => {
-            state.planAdoptedLater = false;
-            state.adoptMode = "partial_failure";
-            state.adoptSteps = [
-              { id: "s1", status: "done" },
-              { id: "s2", status: "done" },
-              { id: "s3", status: "done" },
-              { id: "s4", status: "failed" },
-              { id: "s5", status: "pending" },
-              { id: "s6", status: "pending" },
-              { id: "s7", status: "pending" },
-              { id: "s8", status: "pending" },
-            ];
-            renderApp();
-          },
-        })
-      : null,
-    state.planVisible && (state.adoptMode !== "idle" || state.scenario === "planned")
-      ? compoundStepList({
-          steps: state.adoptSteps,
-          adoptMode: state.adoptMode,
-          onContinueUnfinished: () => {
-            handleAdoptAndStart();
-            renderApp();
-          },
-          onOpenWork: () => {
-            state.activeView = "work_main";
-            renderApp();
-          },
-        })
-      : null,
-  );
+  state.workState = 'starting';
+  state.disconnectedDuringStart = true;
+  state.advancedExpanded = false;
+  go('work_main');
 }
-
-function renderWorkMainView() {
-  const firstSentenceText =
-    locale === "zh-TW"
-      ? t("proto.work.turn1_sentence_zh")
-      : t("proto.work.turn1_sentence_en");
-
-  const nextStepSubtitle =
-    state.workState === "waiting_input"
-      ? t("proto.work.header_next_waiting")
-      : state.workState === "awaiting_verification"
-        ? t("proto.work.header_next")
-        : t("proto.work.header_next_running");
-
-  return h(
-    "div",
-    { class: "proto-view", "data-testid": "view-work-main" },
-    pageHeader({
-      title: t("proto.nav.work_main"),
-      meta: `${GOLDEN_CONSTANTS.workId} · ${GOLDEN_CONSTANTS.requirementKey}`,
-      pill: labeledPill(
-        state.workState === "awaiting_verification"
-          ? "ok"
-          : state.workState === "waiting_input"
-            ? "warn"
-            : "info",
-        t(`proto.work.state.${state.workState}`),
-      ),
-      actions: [
-        button({
-          variant: "ghost",
-          size: "sm",
-          label: t("proto.recovery.btn_simulate_disconnect"),
-          "data-testid": "simulate-disconnect-btn",
-          onClick: () => {
-            state.disconnectedDuringStart = true;
-            state.reconciledAfterDisconnect = false;
-            renderApp();
-          },
-        }),
-      ],
-    }),
-    state.disconnectedDuringStart
-      ? diagnosticStateCard({
-          tone: "warn",
-          title: t("proto.recovery.status_disconnected"),
-          whatMissing: t("proto.recovery.what_missing"),
-          whatCanDo: t("proto.recovery.what_can_do"),
-          whereToFix: t("proto.recovery.where_fix"),
-          draftStatus: t("proto.recovery.draft_kept"),
-          testId: "disconnect-recovery-card",
-          actions: [
-            button({
-              variant: "primary",
-              label: t("proto.recovery.btn_reconnect"),
-              "data-testid": "btn-reconnect-reconcile",
-              onClick: () => {
-                state.disconnectedDuringStart = false;
-                state.reconciledAfterDisconnect = true;
-                state.workState = "running";
-                renderApp();
-              },
-            }),
-          ],
-        })
-      : null,
-    state.reconciledAfterDisconnect
-      ? inlineNotice({
-          tone: "good",
-          title: t("proto.recovery.reconciled_banner"),
-          testId: "reconciled-banner",
-        })
-      : null,
-    h(
-      "div",
-      { class: "proto-state-stepper", "data-testid": "work-state-stepper" },
-      h("strong", null, t("proto.work.state_stepper_label")),
-      ...WORK_LIFECYCLE_ORDER.map((st) =>
-        button({
-          variant: state.workState === st ? "primary" : "ghost",
-          size: "sm",
-          label: t(`proto.work.state.${st}`),
-          "data-testid": `work-state-btn-${st}`,
-          "data-work-state": st,
-          onClick: () => {
-            state.workState = st;
-            if (st === "awaiting_verification") {
-              state.delivery.self_reported = true;
-              state.delivery.tests_passed = true;
-            }
-            renderApp();
-          },
-        }),
-      ),
-    ),
-    // Reading Area 1: Header (§6.3)
-    sectionCard({
-      title: t("proto.work.area1_header"),
-      body: h(
-        "div",
-        { "data-testid": "work-area-header" },
-        h("p", { class: "proto-composer__subtitle" }, nextStepSubtitle),
-        kvList([
-          { label: t("proto.plan.field_goal"), value: t("proto.work.header_goal") },
-          { label: t("proto.work.state_label"), value: t(`proto.work.state.${state.workState}`) },
-          { label: t("proto.shell.profile_label"), value: t("proto.work.header_runtime") },
-          { label: t("proto.shell.host_label"), value: t("proto.work.header_controller") },
-        ]),
-      ),
-    }),
-    // Reading Area 2: Main (§6.3)
-    sectionCard({
-      title: t("proto.work.area2_main"),
-      body: h(
-        "div",
-        { class: "proto-work-main-content", "data-testid": "work-area-main" },
-        h(
-          "div",
-          { class: "proto-thread-msg", "data-testid": "work-turn1-message" },
-          h(
-            "div",
-            { class: "proto-thread-msg__meta" },
-            h("span", null, t("proto.work.turn1_label")),
-            h("span", { "data-mono": "" }, GOLDEN_CONSTANTS.managedSessionId),
-          ),
-          h("p", { class: "proto-thread-msg__body" }, firstSentenceText),
-        ),
-        liveStreamOutput({
-          tools: [
-            t("proto.work.tool_1"),
-            t("proto.work.tool_2"),
-            t("proto.work.tool_3"),
-            t("proto.work.tool_4"),
-          ],
-          streamLines: [
-            t("proto.work.stream_line_1"),
-            t("proto.work.stream_line_2"),
-            t("proto.work.stream_line_3"),
-          ],
-        }),
-        h(
-          "div",
-          {
-            class: "proto-question-box",
-            "data-testid": "work-question-card",
-            "data-question-answered": state.questionAnswered ? "true" : "false",
-          },
-          h("strong", null, t("proto.work.question_card_title")),
-          h("p", { class: "proto-thread-msg__body" }, t("proto.work.question_text")),
-          state.questionAnswered
-            ? inlineNotice({
-                tone: "good",
-                title: t("proto.work.question_answered"),
-                testId: "question-answered-notice",
-              })
-            : h(
-                "div",
-                { class: "proto-question-box__actions" },
-                button({
-                  variant: "primary",
-                  size: "sm",
-                  label: t("proto.work.question_opt_keep"),
-                  "data-testid": "answer-question-keep",
-                  onClick: () => {
-                    state.questionAnswered = true;
-                    if (state.workState === "waiting_input") {
-                      state.workState = "awaiting_verification";
-                      state.delivery.self_reported = true;
-                      state.delivery.tests_passed = true;
-                    }
-                    renderApp();
-                  },
-                }),
-                button({
-                  variant: "secondary",
-                  size: "sm",
-                  label: t("proto.work.question_opt_clear"),
-                  "data-testid": "answer-question-clear",
-                  onClick: () => {
-                    state.questionAnswered = true;
-                    renderApp();
-                  },
-                }),
-              ),
-        ),
-        h(
-          "div",
-          {
-            class: "proto-queue-box",
-            "data-testid": "work-queue-box",
-            "data-second-queued": state.secondSentenceQueued ? "true" : "false",
-            "data-second-steered": state.secondSentenceSteered ? "true" : "false",
-          },
-          h("strong", null, t("proto.work.queue_box_title")),
-          h("p", { class: "proto-composer__subtitle" }, t("proto.work.queue_policy_note")),
-          h(
-            "label",
-            { class: "proto-composer__label" },
-            h("span", { class: "sr-only" }, t("proto.work.queue_box_title")),
-            h(
-              "textarea",
-              {
-                class: "proto-composer__textarea",
-                "data-testid": "second-sentence-input",
-                rows: "2",
-                oninput: (e) => {
-                  state.nextStepDraft = e.target.value;
-                },
-              },
-              state.nextStepDraft,
-            ),
-          ),
-          h(
-            "div",
-            { class: "proto-queue-box__actions" },
-            button({
-              variant: "primary",
-              label: t("proto.work.btn_queue_second"),
-              "data-testid": "btn-queue-second-sentence",
-              onClick: () => {
-                state.secondSentenceQueued = true;
-                state.secondSentenceSteered = false;
-                renderApp();
-              },
-            }),
-            button({
-              variant: "secondary",
-              label: t("proto.work.btn_interrupt"),
-              "data-testid": "btn-interrupt-turn",
-              onClick: () => {
-                state.turnInterrupted = true;
-                renderApp();
-              },
-            }),
-          ),
-          state.secondSentenceQueued
-            ? h(
-                "div",
-                {
-                  class: "proto-thread-msg",
-                  "data-testid": "queued-second-sentence-receipt",
-                  "data-queue-policy": "after_current",
-                  "data-steered": "false",
-                },
-                h(
-                  "div",
-                  { class: "proto-thread-msg__meta" },
-                  labeledPill("info", t("proto.work.queued_receipt_badge")),
-                  h("span", { "data-mono": "" }, "msg_q_02"),
-                ),
-                h("p", { class: "proto-thread-msg__body" }, state.nextStepDraft),
-                h("p", { class: "proto-composer__subtitle" }, t("proto.work.queued_receipt_detail")),
-              )
-            : null,
-          state.turnInterrupted
-            ? inlineNotice({
-                tone: "warn",
-                title: t("proto.work.interrupt_notice"),
-                testId: "interrupt-notice",
-              })
-            : null,
-        ),
-      ),
-    }),
-    // Reading Area 3: Results (expand on demand, §6.3, §10.2)
-    sectionCard({
-      title: t("proto.work.area3_results"),
-      body: h(
-        "div",
-        { class: "proto-work-results", "data-testid": "work-area-results" },
-        disclosure({
-          label: t("proto.work.results_files_summary"),
-          open: state.resultsExpanded.files,
-          key: "proto-results-files",
-          body: kvList([
-            {
-              label: "src/auth/sign_in_button.ts",
-              value: t("proto.work.file_1_desc"),
-              mono: true,
-            },
-            {
-              label: "tests/auth/test_sign_in_double_submit.py",
-              value: t("proto.work.file_2_desc"),
-              mono: true,
-            },
-          ]),
-        }),
-        disclosure({
-          label: t("proto.work.results_diff_summary"),
-          open: state.resultsExpanded.diff,
-          key: "proto-results-diff",
-          body: unifiedDiffView({ hunks: DIFF_HUNKS }),
-        }),
-        disclosure({
-          label: t("proto.work.results_tests_summary"),
-          open: state.resultsExpanded.tests,
-          key: "proto-results-tests",
-          body: kvList([
-            {
-              label: t("proto.work.test_cmd_label"),
-              value: "pytest -q tests/auth/test_sign_in_double_submit.py",
-              mono: true,
-            },
-            {
-              label: t("proto.delivery.state.tests_passed"),
-              value: t("proto.work.test_output_summary"),
-            },
-          ]),
-        }),
-        disclosure({
-          label: t("proto.work.results_pr_summary"),
-          open: true,
-          key: "proto-results-pr",
-          body: deliveryProgressionBar({
-            delivery: state.delivery,
-            onCreatePr: () => {
-              state.delivery.self_reported = true;
-              state.delivery.tests_passed = true;
-              state.delivery.pr_open = true;
-              state.pmAssessment = "passed";
-              renderApp();
-            },
-            onRecordAccept: () => {
-              state.delivery.accepted = true;
-              renderApp();
-            },
-            onRecordMerge: () => {
-              state.delivery.merged = true;
-              renderApp();
-            },
-            onRecordDeploy: () => {
-              state.delivery.deployed = true;
-              renderApp();
-            },
-          }),
-        }),
-        pmAssessmentCard({
-          assessment: state.pmAssessment,
-          ownerDecisionRecorded: state.ownerDecisionRecorded,
-          onSelectAssessment: (nextAss) => {
-            state.pmAssessment = nextAss;
-            renderApp();
-          },
-          onDecideAcceptOverview: () => {
-            state.delivery.accepted = true;
-            state.ownerDecisionRecorded = t("proto.pm.decision_accept_return_overview");
-            state.activeView = "overview";
-            renderApp();
-          },
-          onDecideAcceptDiscussion: () => {
-            state.delivery.accepted = true;
-            state.ownerDecisionRecorded = t("proto.pm.decision_accept_return_discussion");
-            state.activeView = "discussions";
-            renderApp();
-          },
-          onDecideKeepReview: () => {
-            state.ownerDecisionRecorded = t("proto.pm.decision_request_followup");
-            state.activeView = "discussions";
-            renderApp();
-          },
-        }),
-      ),
-    }),
-    // Reading Area 4: Advanced (collapsed by default, §6.3)
-    h(
-      "div",
-      { "data-testid": "work-area-advanced" },
-      disclosure({
-        label: t("proto.work.area4_advanced"),
-        open: state.advancedExpanded,
-        body: h(
-          "div",
-          { class: "proto-advanced-body" },
-          kvList([
-            { label: t("proto.work.adv_work_id"), value: GOLDEN_CONSTANTS.workId, mono: true },
-            { label: t("proto.work.adv_attempt_id"), value: GOLDEN_CONSTANTS.attemptId, mono: true },
-            { label: t("proto.work.adv_session_id"), value: GOLDEN_CONSTANTS.managedSessionId, mono: true },
-            { label: t("proto.work.adv_worktree_id"), value: GOLDEN_CONSTANTS.managedWorktreeId, mono: true },
-            { label: t("proto.work.adv_op_key"), value: GOLDEN_CONSTANTS.operationKey, mono: true },
-            { label: t("proto.work.adv_plan_rev"), value: GOLDEN_CONSTANTS.planRevision, mono: true },
-            { label: t("proto.work.adv_head_sha"), value: GOLDEN_CONSTANTS.headSha, mono: true },
-          ]),
-          h(
-            "pre",
-            { class: "proto-stream-console", "data-mono": "", "data-testid": "advanced-raw-events" },
-            [
-              `op_id: ${GOLDEN_CONSTANTS.operationId}`,
-              `op_key: ${GOLDEN_CONSTANTS.operationKey}`,
-              `work_id: ${GOLDEN_CONSTANTS.workId}`,
-              `attempt_id: ${GOLDEN_CONSTANTS.attemptId}`,
-              `queue_receipt: msg_q_02 (policy=after_current, steered=false)`,
-            ].join("\n"),
-          ),
-        ),
-      }),
-    ),
-  );
+const select = (label, id, options, value, onChange) => h('label', {
+  class: 'proto-select'
+}, h('span', {}, label), h('select', {
+  ...tid(id),
+  'aria-label': label,
+  onchange: e => onChange(e.target.value)
+}, ...options.map(([key, text]) => h('option', {
+  value: key,
+  selected: key === value
+}, text))));
+function renderBar() {
+  return h('aside', {
+    class: 'proto-bar',
+    ...tid('prototype-bar'),
+    'aria-label': t('prototype')
+  }, h('div', {
+    class: 'proto-bar-row'
+  }, h('strong', {}, t('prototype')), select(t('stateSim'), 'scenario-picker', scenes.map(key => [key, t(key)]), scene(), switchScene), iconButton({
+    icon: barExpanded ? 'chevron-up' : 'chevron-down',
+    label: t('controls'),
+    'aria-expanded': String(barExpanded),
+    ...tid('proto-expand'),
+    onClick: () => {
+      barExpanded = !barExpanded;
+      renderApp();
+    }
+  })), h('div', {
+    class: 'proto-bar-extra',
+    hidden: !barExpanded
+  }, h('p', {}, t('synthetic')), h('div', {
+    class: 'proto-actions'
+  }, action('reset', 'proto-reset', () => switchScene(scene())), action('first', 'fill-first-sentence', () => {
+    state.composerDraft = C.firstSentence[locale];
+    renderApp();
+  }), action('second', 'fill-second-sentence', () => {
+    state.nextStepDraft = C.secondSentence[locale];
+    state.composerDraft = C.secondSentence[locale];
+    renderApp();
+  }), action('pmUnavailableSim', 'toggle-pm-unavailable', () => {
+    state.pmAvailable = !state.pmAvailable;
+    go('discussions');
+  }), action('partialSim', 'plan-simulate-partial', partialStart), action('disconnectSim', 'simulate-disconnect', disconnect), action('hermesSim', 'proto-trigger-hermes', () => {
+    state.hermesVisible = true;
+    go('work_hermes');
+  }), action('mergedSim', 'btn-record-merge', () => {
+    state.delivery.merged = true;
+    renderApp();
+  }, 'secondary', {
+    disabled: !state.delivery.pr_open
+  }), action('deployedSim', 'btn-record-deploy', () => {
+    state.delivery.deployed = true;
+    renderApp();
+  }, 'secondary', {
+    disabled: !state.delivery.merged
+  }), action(theme === 'light' ? 'dark' : 'light', 'proto-theme-toggle', () => {
+    theme = theme === 'light' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = theme;
+    renderApp();
+  }), h('button', {
+    class: 'ui-button secondary sm',
+    ...tid('proto-lang-en'),
+    onclick: () => setLanguage('en')
+  }, 'English'), h('button', {
+    class: 'ui-button secondary sm',
+    ...tid('proto-lang-zh'),
+    onclick: () => setLanguage('zh-TW')
+  }, '繁體中文')), h('div', {
+    class: 'proto-actions'
+  }, select(t('stateSim'), 'work-state-picker', WORK_LIFECYCLE_ORDER.map(key => [key, t(key)]), state.workState, setWorkState), select(t('assessmentSim'), 'assessment-picker', ['passed', 'failed', 'insufficient'].map(key => [key, t(key)]), state.pmAssessment, value => {
+    state.pmAssessment = value;
+    renderApp();
+  })), h('div', {
+    class: 'proto-counters'
+  }, ...[['modelCalls', 'model-calls', 'modelCalls'], ['manualMutations', 'manual-mutations', 'manualMutations'], ['hermesMutations', 'hermes-mutations', 'hermesMutations'], ['startRequestsSent', 'start-requests', 'starts'], ['duplicateStarts', 'duplicate-starts', 'duplicates']].map(([field, id, label]) => h('span', {
+    ...tid('counter-' + id),
+    'data-count': state[field]
+  }, t(label, {
+    n: state[field]
+  }))))));
 }
-
-function renderOverviewView() {
-  return h(
-    "div",
-    { class: "proto-view", "data-testid": "view-overview" },
-    pageHeader({
-      title: t("proto.overview.title"),
-      meta: t("proto.overview.subtitle"),
-      pill: statusPill(state.delivery.accepted ? "accepted" : "in_review"),
-      actions: [
-        button({
-          variant: "secondary",
-          size: "sm",
-          label: t("proto.overview.open_work_btn"),
-          "data-testid": "overview-open-work",
-          onClick: () => {
-            state.activeView = "work_main";
-            renderApp();
-          },
-        }),
-        button({
-          variant: "secondary",
-          size: "sm",
-          label: t("proto.overview.open_discussion_btn"),
-          "data-testid": "overview-open-discussion",
-          onClick: () => {
-            state.activeView = "discussions";
-            renderApp();
-          },
-        }),
-      ],
-    }),
-    deliveryProgressionBar({
-      delivery: state.delivery,
-      onCreatePr: () => {
-        state.delivery.pr_open = true;
-        state.pmAssessment = "passed";
-        renderApp();
-      },
-      onRecordAccept: () => {
-        state.delivery.accepted = true;
-        renderApp();
-      },
-      onRecordMerge: () => {
-        state.delivery.merged = true;
-        renderApp();
-      },
-      onRecordDeploy: () => {
-        state.delivery.deployed = true;
-        renderApp();
-      },
-    }),
-    pmAssessmentCard({
-      assessment: state.pmAssessment,
-      ownerDecisionRecorded: state.ownerDecisionRecorded,
-      onSelectAssessment: (nextAss) => {
-        state.pmAssessment = nextAss;
-        renderApp();
-      },
-      onDecideAcceptOverview: () => {
-        state.delivery.accepted = true;
-        state.ownerDecisionRecorded = t("proto.pm.decision_accept_return_overview");
-        renderApp();
-      },
-      onDecideAcceptDiscussion: () => {
-        state.delivery.accepted = true;
-        state.ownerDecisionRecorded = t("proto.pm.decision_accept_return_discussion");
-        state.activeView = "discussions";
-        renderApp();
-      },
-      onDecideKeepReview: () => {
-        state.ownerDecisionRecorded = t("proto.pm.decision_request_followup");
-        state.activeView = "discussions";
-        renderApp();
-      },
-    }),
-  );
+function navButton(view, title, work = false) {
+  return h('button', {
+    type: 'button',
+    class: work ? 'workspace-tree-link proto-work-link' : 'ui-button ghost',
+    title,
+    'aria-current': state.activeView === view ? 'page' : 'false',
+    ...tid('nav-item-' + view),
+    'data-pm-view': work ? null : view,
+    onclick: () => go(view)
+  }, work ? null : icon(viewIcons[view], {
+    size: 20
+  }), h('span', {
+    class: work ? 'workspace-tree-label' : ''
+  }, title), work ? h('span', {
+    class: 'workspace-tree-state',
+    'aria-hidden': 'true'
+  }, h('span', {
+    class: 'workspace-dot info'
+  })) : null);
 }
-
-function renderExternalManualView() {
-  return h(
-    "div",
-    {
-      class: "proto-view",
-      "data-testid": "view-external-manual",
-      "data-session-readonly": "true",
-    },
-    pageHeader({
-      title: t("proto.f6.title"),
-      meta: t("proto.f6.subtitle"),
-      pill: statusPill("read_only"),
-    }),
-    inlineNotice({
-      tone: "info",
-      title: t("proto.f6.policy_banner"),
-      testId: "manual-readonly-banner",
-    }),
-    sectionCard({
-      title: t("proto.f6.transcript_title"),
-      body: h(
-        "div",
-        null,
-        h("p", { class: "proto-composer__subtitle", "data-mono": "" }, t("proto.f6.checkpoint_subtitle")),
-        h(
-          "ul",
-          { class: "proto-thread-list" },
-          h(
-            "li",
-            { class: "proto-thread-msg" },
-            h("p", { class: "proto-thread-msg__body", "data-mono": "" }, t("proto.f6.msg_1")),
-          ),
-          h(
-            "li",
-            { class: "proto-thread-msg" },
-            h("p", { class: "proto-thread-msg__body", "data-mono": "" }, t("proto.f6.msg_2")),
-          ),
-        ),
-      ),
-    }),
-    sectionCard({
-      title: t("proto.f6.actions_title"),
-      body: h(
-        "div",
-        null,
-        h(
-          "div",
-          { class: "proto-plan-card__actions", "data-testid": "manual-session-actions" },
-          button({
-            variant: "secondary",
-            label: t("proto.f6.btn_view_original"),
-            "data-testid": "manual-view-original",
-            onClick: () => {
-              state.manualActionFeedback = "view_original";
-              renderApp();
-            },
-          }),
-          button({
-            variant: "secondary",
-            label: t("proto.f6.btn_link_existing"),
-            "data-testid": "manual-link-existing",
-            onClick: () => {
-              state.manualActionFeedback = "linked";
-              renderApp();
-            },
-          }),
-          button({
-            variant: "primary",
-            label: t("proto.f6.btn_derive_new"),
-            "data-testid": "manual-derive-new",
-            onClick: () => {
-              state.manualActionFeedback = "derived";
-              renderApp();
-            },
-          }),
-        ),
-        state.manualActionFeedback === "view_original"
-          ? inlineNotice({
-              tone: "info",
-              title: t("proto.f6.view_original_feedback"),
-              testId: "manual-view-original-notice",
-            })
-          : null,
-        state.manualActionFeedback === "linked"
-          ? inlineNotice({
-              tone: "good",
-              title: t("proto.f6.linked_feedback"),
-              testId: "manual-linked-notice",
-            })
-          : null,
-        state.manualActionFeedback === "derived"
-          ? inlineNotice({
-              tone: "good",
-              title: t("proto.f6.derived_feedback"),
-              testId: "manual-derived-notice",
-            })
-          : null,
-      ),
-    }),
-  );
-}
-
-function renderHermesWorkView() {
-  return h(
-    "div",
-    {
-      class: "proto-view",
-      "data-testid": "view-hermes-work",
-      "data-external-controller": "Hermes",
-    },
-    pageHeader({
-      title: t("proto.f7.title"),
-      meta: t("proto.f7.live_arrived"),
-      pill: labeledPill("info", t("proto.f7.badge")),
-    }),
-    sectionCard({
-      title: GOLDEN_CONSTANTS.hermesWorkId,
-      body: h(
-        "div",
-        null,
-        kvList([
-          { label: t("proto.f7.label_requester"), value: t("proto.f7.requester") },
-          { label: t("proto.f7.label_controller"), value: t("proto.f7.controller") },
-          { label: t("proto.f7.label_runtime"), value: t("proto.f7.runtime") },
-          { label: t("proto.f7.label_attempt"), value: t("proto.f7.attempt") },
-        ]),
-        h("p", { class: "proto-pm-card__judgment" }, t("proto.f7.policy_note")),
-        h(
-          "div",
-          { class: "proto-plan-card__actions", "data-testid": "hermes-actions" },
-          button({
-            variant: "primary",
-            label: t("proto.f7.btn_send_inbox"),
-            "data-testid": "hermes-send-inbox",
-            onClick: () => {
-              state.hermesActionFeedback = "inbox";
-              renderApp();
-            },
-          }),
-          button({
-            variant: "secondary",
-            label: t("proto.f7.btn_start_separate"),
-            "data-testid": "hermes-start-separate",
-            onClick: () => {
-              state.hermesActionFeedback = "separate";
-              renderApp();
-            },
-          }),
-        ),
-        state.hermesActionFeedback === "inbox"
-          ? inlineNotice({
-              tone: "good",
-              title: t("proto.f7.inbox_sent_feedback"),
-              testId: "hermes-inbox-feedback",
-            })
-          : null,
-        state.hermesActionFeedback === "separate"
-          ? inlineNotice({
-              tone: "info",
-              title: t("proto.f7.separate_work_feedback"),
-              testId: "hermes-separate-feedback",
-            })
-          : null,
-      ),
-    }),
-  );
-}
-
-function renderMaintenanceView() {
-  return h(
-    "div",
-    { class: "proto-view", "data-testid": "view-maintenance" },
-    pageHeader({
-      title: t("proto.maint.title"),
-      meta: GOLDEN_CONSTANTS.maintReviewId,
-      pill: labeledPill(
-        state.maintenanceReviewReturned ? "ok" : "warn",
-        t("proto.maint.release_badge"),
-      ),
-    }),
-    sectionCard({
-      title: t("proto.maint.finding_title"),
-      actions: [
-        labeledPill("info", t("proto.maint.profile_badge")),
-        labeledPill("ok", t("proto.maint.work_id_badge")),
-      ],
-      body: h(
-        "div",
-        null,
-        h("p", { class: "proto-composer__subtitle" }, t("proto.maint.finding_detail")),
-        kvList([
-          { label: t("proto.work.adv_work_id"), value: GOLDEN_CONSTANTS.maintWorkId, mono: true },
-          { label: t("proto.shell.profile_label"), value: t("proto.shell.profile_maintainer") },
-          { label: t("proto.shell.requirement_label"), value: GOLDEN_CONSTANTS.requirementKey, mono: true },
-        ]),
-        h(
-          "div",
-          { class: "proto-plan-card__actions" },
-          button({
-            variant: "secondary",
-            label: t("proto.maint.btn_start_fix"),
-            "data-testid": "maint-start-fix",
-            onClick: () => {
-              state.maintenanceFixStarted = true;
-              renderApp();
-            },
-          }),
-          button({
-            variant: "primary",
-            label: t("proto.maint.btn_return_review"),
-            "data-testid": "maint-return-review",
-            onClick: () => {
-              state.maintenanceReviewReturned = true;
-              renderApp();
-            },
-          }),
-        ),
-        state.maintenanceReviewReturned
-          ? inlineNotice({
-              tone: "good",
-              title: t("proto.maint.review_returned_banner"),
-              testId: "maint-review-returned-banner",
-            })
-          : null,
-      ),
-    }),
-  );
-}
-
-function renderPlaceholderView(viewId) {
-  const viewTitleMap = {
-    requirements: t("proto.nav.requirements"),
-    board: t("proto.nav.board"),
-    planning: t("proto.nav.planning"),
-    workspace: t("proto.nav.workspace"),
-    governance: t("proto.nav.governance"),
-  };
-  const viewTitle = viewTitleMap[viewId] || viewId;
-
-  return h(
-    "div",
-    { class: "proto-view", "data-testid": `view-placeholder-${viewId}` },
-    pageHeader({
-      title: viewTitle,
-      meta: t("proto.placeholder.title", { view: viewTitle }),
-      pill: labeledPill("neutral", t("proto.placeholder.badge")),
-    }),
-    sectionCard({
-      title: t("proto.placeholder.title", { view: viewTitle }),
-      body: h(
-        "div",
-        null,
-        h("p", null, t("proto.placeholder.body")),
-        h(
-          "p",
-          { "data-testid": "preserved-draft-indicator" },
-          state.composerDraft
-            ? t("proto.placeholder.draft_status", { draft: state.composerDraft })
-            : t("proto.placeholder.draft_empty"),
-        ),
-        h(
-          "div",
-          { class: "proto-plan-card__actions" },
-          button({
-            variant: "primary",
-            label: t("proto.placeholder.return_discussions"),
-            "data-testid": "placeholder-return-discussions",
-            onClick: () => {
-              state.activeView = "discussions";
-              renderApp();
-            },
-          }),
-          button({
-            variant: "secondary",
-            label: t("proto.placeholder.return_work"),
-            "data-testid": "placeholder-return-work",
-            onClick: () => {
-              state.activeView = "work_main";
-              renderApp();
-            },
-          }),
-        ),
-      ),
-    }),
-  );
-}
-
-function renderActiveCanvas() {
-  switch (state.activeView) {
-    case "discussions":
-      return renderDiscussionsView();
-    case "work_main":
-      return renderWorkMainView();
-    case "overview":
-      return renderOverviewView();
-    case "work_manual":
-      return renderExternalManualView();
-    case "work_hermes":
-      return renderHermesWorkView();
-    case "maintenance":
-    case "work_maint":
-      return renderMaintenanceView();
-    default:
-      return renderPlaceholderView(state.activeView);
-  }
-}
-
-function renderInspectorPane() {
-  if (currentInspector) {
-    currentInspector.dispose();
-  }
-  const insp = inspector({
-    title: t("proto.inspector.title"),
-    dock: true,
-    onClose: () => {
-      state.inspectorDrawerOpen = false;
-    },
+function sidebar() {
+  const switcher = menu({
+    button: h('button', {
+      type: 'button',
+      class: 'shell-workspace-switch',
+      'aria-label': t('ui_switch_workspace')
+    }, h('span', {
+      class: 'shell-workspace-name'
+    }, t('projectName')), icon('chevron-down')),
+    items: [{
+      label: t('projectName'),
+      onSelect: () => go('overview')
+    }]
   });
-  insp.setAttribute("data-testid", "context-inspector");
-  place(
-    insp.body,
-    "replaceChildren",
-    sectionCard({
-      title: t("proto.inspector.sec_context"),
-      body: kvList([
-        { label: t("proto.shell.server_label"), value: GOLDEN_CONSTANTS.serverId, mono: true },
-        { label: t("proto.shell.host_label"), value: GOLDEN_CONSTANTS.hostId, mono: true },
-        { label: t("proto.shell.workspace_label"), value: GOLDEN_CONSTANTS.workspaceSlug, mono: true },
-        { label: t("proto.shell.repo_label"), value: GOLDEN_CONSTANTS.repository, mono: true },
-        { label: t("proto.shell.requirement_label"), value: GOLDEN_CONSTANTS.requirementKey, mono: true },
-      ]),
-    }),
-    sectionCard({
-      title: t("proto.inspector.sec_safety"),
-      body: kvList([
-        { label: t("proto.inspector.authority_label"), value: t("proto.inspector.authority_val") },
-        { label: t("proto.inspector.manual_policy_label"), value: t("proto.inspector.manual_policy_val") },
-        { label: t("proto.inspector.hermes_policy_label"), value: t("proto.inspector.hermes_policy_val") },
-      ]),
-    }),
-    sectionCard({
-      title: t("proto.inspector.sec_evidence"),
-      body: kvList([
-        { label: t("proto.work.adv_work_id"), value: GOLDEN_CONSTANTS.workId, mono: true },
-        { label: t("proto.work.adv_op_key"), value: GOLDEN_CONSTANTS.operationKey, mono: true },
-        { label: t("proto.work.adv_head_sha"), value: GOLDEN_CONSTANTS.headSha, mono: true },
-      ]),
-    }),
-  );
-  currentInspector = insp;
-  if (state.inspectorDrawerOpen) {
-    queueMicrotask(() => {
-      if (currentInspector === insp) {
-        insp.open();
-        for (const el of document.querySelectorAll('textarea[style=""]')) {
-          el.removeAttribute("style");
-        }
-      }
-    });
-  }
-  return insp;
+  cleanups.push(() => switcher.dispose());
+  const workRows = [state.workStarted ? ['work_main', t('workTitle')] : null, ...state.additionalWorks.map(view => [view, t(view === 'work_derived' ? 'derivedTitle' : 'separateTitle')]), ['work_manual', t('manualTitle')], state.hermesVisible ? ['work_hermes', t('hermesTitle')] : null, state.maintenanceFixStarted ? ['work_maint', t('maintenanceTitle')] : null].filter(Boolean);
+  const search = h('input', {
+    type: 'search',
+    placeholder: t('ui_search'),
+    'aria-label': t('ui_search_work'),
+    oninput: e => {
+      for (const row of document.querySelectorAll('.proto-work-link')) row.hidden = !row.textContent.toLowerCase().includes(e.target.value.toLowerCase());
+    }
+  });
+  return h('aside', {
+    class: 'workspace-nav has-pm-context',
+    id: 'workspace-sidebar',
+    ...tid('shell-sidebar'),
+    'aria-label': t('workspace_navigation')
+  }, h('div', {
+    class: 'shell-workspace-block'
+  }, switcher, pill(t(state.maintenanceFixStarted ? 'ui_phase_maintain' : state.workStarted ? 'ui_phase_development' : state.planVisible ? 'ui_phase_planning' : 'ui_phase_idea'))), h('div', {
+    class: 'shell-project-nav'
+  }, h('h2', {
+    class: 'shell-nav-label'
+  }, t('ui_project')), h('nav', {
+    class: 'pm-project-views',
+    'aria-label': t('wb_navigation')
+  }, ...projectViewIds.map(id => navButton(id, t('ui_' + id))))), h('div', {
+    class: 'shell-work-header'
+  }, h('h2', {
+    class: 'shell-nav-label'
+  }, t('ui_work')), action('ui_all_projects', 'all-projects', () => go('projects'), 'ghost')), searchField(search, {
+    class: 'workspace-search'
+  }), h('div', {
+    class: 'workspace-tree-scroll'
+  }, ...workRows.map(([id, title]) => navButton(id, title, true))), h('div', {
+    class: 'workspace-nav-footer'
+  }, ...[['pending', 'ui_pending', 'inbox'], ['tools', 'ui_tools', 'wrench'], ['settings', 'ui_settings', 'settings']].map(([id, key, glyph]) => h('a', {
+    href: '#' + id,
+    onclick: e => {
+      e.preventDefault();
+      go(id);
+    }
+  }, icon(glyph), h('span', {}, t(key))))));
 }
-
-export function renderApp() {
-  const root = document.getElementById("app");
-  if (!root) return;
-
-  const shellEl = h(
-    "div",
-    {
-      class: "shell",
-      "data-nav-open": state.navDrawerOpen ? "true" : "false",
-      "data-testid": "product-shell",
+function openDrawer() {
+  const aside = document.getElementById('workspace-sidebar');
+  document.body.classList.add('workspace-nav-open');
+  state.navDrawerOpen = true;
+  document.getElementById('main').inert = true;
+  document.querySelector('.shell-scrim').hidden = false;
+  aside.setAttribute('role', 'dialog');
+  aside.setAttribute('aria-modal', 'true');
+  document.getElementById('workspace-menu').setAttribute('aria-expanded', 'true');
+  aside.querySelector('button').focus();
+}
+function closeDrawer() {
+  state.navDrawerOpen = false;
+  document.body.classList.remove('workspace-nav-open');
+  document.getElementById('main').inert = false;
+  document.querySelector('.shell-scrim').hidden = true;
+  document.getElementById('workspace-sidebar').removeAttribute('role');
+  document.getElementById('workspace-sidebar').removeAttribute('aria-modal');
+  document.getElementById('workspace-menu').setAttribute('aria-expanded', 'false');
+  document.getElementById('workspace-menu').focus();
+}
+const header = (title, actions = [], status = null) => pageHeader({
+  title,
+  pill: status,
+  meta: `${t('projectName')} · ${C.serverId}`,
+  actions
+});
+function panel(titleKey, content, id = 'context-inspector') {
+  const node = inspector({
+    title: t(titleKey),
+    dock: true,
+    returnFocus: () => document.querySelector('[data-testid="inspector-drawer-toggle"]')
+  });
+  node.classList.add('proto-inspector');
+  node.dataset.testid = id;
+  node.dataset.view = state.activeView;
+  place(node.body, 'append', content);
+  cleanups.push(() => node.dispose());
+  currentInspector = node;
+  if (previousPanelOpen && previousPanelView === state.activeView) queueMicrotask(() => {
+    if (node.isConnected) node.open();
+  });
+  return node;
+}
+const inspectorToggle = key => iconButton({
+  icon: 'panel-right',
+  label: t(key),
+  ...tid('inspector-drawer-toggle'),
+  onClick: () => currentInspector?.open()
+});
+function discussionPanel() {
+  const body = h('div', {}, tabs({
+    label: t('discussionInfo'),
+    value: 'context',
+    options: ['context', 'inputs', 'planTab'].map(value => ({
+      value,
+      label: t(value)
+    })),
+    onChange: value => {
+      for (const el of body.querySelectorAll('[data-info-tab]')) el.hidden = el.dataset.infoTab !== value;
+    }
+  }), h('div', {
+    'data-info-tab': 'context'
+  }, facts([['requirement', t('requirementName')], ['server', C.serverId]]), details(h('code', {}, C.discussionId))), h('div', {
+    'data-info-tab': 'inputs',
+    hidden: true
+  }, h('p', {}, C.firstSentence[locale])), h('div', {
+    'data-info-tab': 'planTab',
+    hidden: true
+  }, h('p', {}, t('planVersion')), details(h('code', {}, C.planRevision))));
+  return panel('discussionInfo', body);
+}
+function openDiscussionComposer() {
+  state.composeOpen = true;
+  renderApp();
+  document.querySelector('[data-testid="composer-textarea"]').focus();
+}
+function renderDiscussions() {
+  const send = () => {
+    if (!state.composerDraft.trim()) return;
+    if (state.composerIntent === 'discuss') {
+      state.discussionNotes.push({
+        body: state.composerDraft
+      });
+      state.pmReplied = true;
+      state.modelCalls++;
+    }
+    if (state.composerIntent === 'plan') {
+      state.planVisible = true;
+      state.modelCalls++;
+    }
+    if (state.composerIntent === 'do') {
+      if (state.workStarted) {
+        state.nextStepDraft = state.composerDraft;
+        state.secondSentenceQueued = true;
+        go('work_main');
+      } else startWork(true);
+      return;
+    }
+    renderApp();
+  };
+  return h('div', {
+    class: 'proto-view',
+    ...tid('view-discussions')
+  }, header(t('ui_discussions'), [inspectorToggle('discussionInfo')]), h('div', {
+    class: 'proto-discussions'
+  }, h('div', {
+    class: 'proto-thread-list'
+  }, searchField(h('input', {
+    placeholder: t('ui_search'),
+    'aria-label': t('ui_search')
+  })), ...['idea', 'planVersion', 'threadTitle'].map((key, i) => h('button', {
+    class: `proto-thread ${i === 2 ? 'selected' : ''}`,
+    onclick: openDiscussionComposer
+  }, h('strong', {}, t(key)), h('small', {}, t(i === 1 ? 'planned' : 'idea'))))), h('div', {
+    class: 'proto-thread-detail'
+  }, h('header', {
+    class: 'proto-thread-heading'
+  }, h('strong', {}, t('threadTitle')), pill(t(state.workStarted ? 'running' : state.planAdoptedLater ? 'planned' : 'idea')), state.workStarted ? action('openWork', 'discussion-open-work', () => go('work_main'), 'ghost') : null, state.adoptMode !== 'idle' ? action('messageLabel', 'discussion-compose', openDiscussionComposer, 'ghost') : null, state.ownerDecisionRecorded ? notice(state.ownerDecisionRecorded, 'discussion-decision-banner', 'ok') : null), h('div', {
+    class: 'proto-transcript session-workspace'
+  }, h('div', {
+    class: 'conversation-scroll'
+  }, message('mei.lin', t('threadFirst')), message('PM', t('threadReply'), true), ...state.discussionNotes.map(note => message('mei.lin', note.body)), state.pmReplied ? message('PM', t('pmReply'), true) : null, state.planVisible && state.adoptMode === 'idle' ? planCard(state, () => {
+    state.planAdoptedLater = true;
+    renderApp();
+  }, () => startWork()) : null, state.adoptMode !== 'idle' ? stepList(state, () => startWork(), () => go('work_main')) : null)), !state.pmAvailable ? h('div', {
+    class: 'proto-diagnostic',
+    ...tid('pm-unavailable-diagnostic')
+  }, h('strong', {}, t('pmMissing')), h('p', {}, t('pmReason')), h('p', {}, t('pmHere')), h('p', {}, t('draftKept')), action('setupPm', 'fix-pm-available', () => go('pm_settings'))) : null, state.adoptMode === 'idle' || state.composeOpen ? composer({
+    state,
+    onIntent: value => {
+      state.composerIntent = value;
+      renderApp();
     },
-    h(
-      "header",
-      { class: "shell__topbar" },
-      h(
-        "button",
-        {
-          type: "button",
-          class: "shell__nav-toggle",
-          "data-testid": "nav-drawer-toggle",
-          "aria-label": t("proto.shell.nav_menu"),
-          "aria-expanded": state.navDrawerOpen ? "true" : "false",
-          onclick: () => {
-            state.navDrawerOpen = !state.navDrawerOpen;
-            renderApp();
-          },
-        },
-        icon("menu", { size: 16 }),
-      ),
-      h(
-        "div",
-        { class: "shell__brand" },
-        h("span", { class: "shell__brand-mark" }),
-        h("span", { class: "shell__brand-title" }, t("proto.shell.brand")),
-      ),
-      h("div", { class: "shell__spacer" }),
-      h(
-        "div",
-        { class: "shell__utilities" },
-        button({
-          variant: "secondary",
-          size: "sm",
-          label: t("proto.shell.inspector_toggle"),
-          "data-testid": "inspector-drawer-toggle",
-          onClick: () => {
-            state.inspectorDrawerOpen = !state.inspectorDrawerOpen;
-            if (state.inspectorDrawerOpen && currentInspector) {
-              currentInspector.open();
-            } else if (!state.inspectorDrawerOpen && currentInspector) {
-              currentInspector.close();
-            }
-            for (const el of document.querySelectorAll('textarea[style=""]')) {
-              el.removeAttribute("style");
-            }
-          },
-        }),
-      ),
-    ),
-    h(
-      "div",
-      { class: "shell__body" },
-      renderSidebar(),
-      h("div", {
-        class: "shell__backdrop",
-        "data-testid": "nav-drawer-backdrop",
-        onclick: () => {
-          state.navDrawerOpen = false;
-          renderApp();
-        },
-      }),
-      h(
-        "main",
-        { class: "shell__workspace" },
-        renderFixedContextStrip(),
-        h(
-          "div",
-          { class: "proto-workspace-grid" },
-          h("div", { class: "proto-canvas", "data-testid": "proto-canvas" }, renderActiveCanvas()),
-          renderInspectorPane(),
-        ),
-      ),
-    ),
-  );
-
-  place(root, "replaceChildren", renderPrototypeBar(), shellEl);
+    onInput: value => {
+      state.composerDraft = value;
+    },
+    onSend: send,
+    onNote: () => {
+      if (!state.composerDraft.trim()) return;
+      state.discussionNotes.push({
+        body: state.composerDraft
+      });
+      state.noteSavedBanner = true;
+      renderApp();
+    }
+  }) : null), discussionPanel()));
 }
-
-applyTheme("light");
+function advanced() {
+  const identity = workIdentity();
+  const node = details(h('div', {}, facts([['ui_work', identity.workId], ['attempt', identity.attemptId], ['ui_session', identity.sessionId], ['preparing_worktree', identity.worktreeId], ['operationKey', identity.operationKey], ['planVersion', C.planRevision]]), h('pre', tid('advanced-raw-events'), `operation: ${identity.operationId}\noperation_key: ${identity.operationKey}\nqueue_receipt: msg_q_02\nsteered: false`)), 'advanced');
+  node.dataset.testid = 'work-area-advanced';
+  node.open = state.advancedExpanded;
+  node.addEventListener('toggle', () => {
+    if (node.isConnected) state.advancedExpanded = node.open;
+  });
+  return node;
+}
+function queueSecond() {
+  if (!state.nextStepDraft.trim() || state.secondSentenceQueued) return;
+  state.secondSentenceQueued = true;
+  state.secondSentenceSteered = false;
+  renderApp();
+}
+function resultsPanel() {
+  return panel('results', h('div', tid('work-area-results'), details(h('ul', {}, ...DIFF_HUNKS.map(item => h('li', {}, h('code', {}, item.file)))), 'files'), details(unifiedDiffView({
+    hunks: DIFF_HUNKS
+  }), 'diff'), details(h('div', {}, h('code', {}, 'pytest -q tests/auth/test_sign_in_double_submit.py'), h('p', {}, t('testsSummary'))), 'tests'), deliveryBar(state.delivery, () => {
+    state.delivery.pr_open = true;
+    state.pmAssessment = 'passed';
+    renderApp();
+  }), h('p', {}, t('verificationOpen')), action('reviewPm', 'review-pm-summary', () => go('overview'), state.delivery.pr_open ? 'primary' : 'secondary')), 'results-inspector');
+}
+function renderWork() {
+  const unknown = state.disconnectedDuringStart,
+    running = state.workState === 'running' && !unknown,
+    waiting = state.workState === 'waiting_input' && !unknown,
+    ended = state.workState === 'turn_ended' && !unknown,
+    results = state.workState === 'awaiting_verification' && !unknown;
+  const nextKey = unknown || ['accepted', 'preparing_worktree', 'starting'].includes(state.workState) ? 'nextStarting' : waiting ? 'nextWaiting' : results ? state.delivery.pr_open ? 'nextReviewPm' : 'nextVerify' : ended ? 'nextEnded' : 'nextRunning';
+  const queue = h('section', {
+    class: 'proto-work-composer',
+    ...tid('work-queue-box'),
+    'data-second-steered': 'false'
+  }, state.secondSentenceQueued ? h('div', {
+    ...tid('queued-second-sentence-receipt'),
+    'data-queue-policy': 'after_current',
+    'data-steered': 'false'
+  }, notice('queueSaved'), h('p', {}, state.nextStepDraft), details(h('code', {}, 'msg_q_02'))) : null, h('textarea', {
+    rows: 2,
+    'aria-label': t('sendNext'),
+    placeholder: t('nextPlaceholder'),
+    ...tid('next-step-textarea'),
+    oninput: e => {
+      state.nextStepDraft = e.target.value;
+    }
+  }, state.nextStepDraft), h('div', {
+    class: 'proto-queue-row'
+  }, h('small', {}, t('queueHint')), h('div', {
+    class: 'proto-actions'
+  }, action('interrupt', 'interrupt-work', () => {
+    state.turnInterrupted = true;
+    renderApp();
+  }, 'danger'), action('sendNext', 'btn-queue-second-sentence', queueSecond, 'primary', {
+    disabled: state.secondSentenceQueued
+  }))), state.turnInterrupted ? notice('interrupted', 'interruption-feedback') : null);
+  return h('div', {
+    class: 'proto-view proto-session-view',
+    ...tid('view-work-main'),
+    'data-question-answered': String(state.questionAnswered)
+  }, header(workTitle(), results ? [inspectorToggle('results')] : [], pill(t(unknown ? 'disconnected' : state.workState), unknown ? 'warn' : 'info')), h('section', {
+    class: 'proto-work-header',
+    ...tid('work-area-header')
+  }, facts([['goal', workCopy('goalValue')], ['controller', t('controllerPerson')], ['runtime', `${t('profile')} · ${t('model')}`], ['host', C.hostId], ['nextStep', t(nextKey)]])), h('div', {
+    class: `proto-session-grid ${results ? 'has-results' : ''}`
+  }, h('div', {
+    class: 'proto-work-main',
+    ...tid('work-area-main')
+  }, h('div', {
+    class: 'session-workspace proto-work-transcript'
+  }, h('div', {
+    class: 'conversation-scroll'
+  }, unknown ? h('div', {
+    class: 'proto-diagnostic',
+    ...tid('disconnect-diagnostic')
+  }, h('strong', {}, t('disconnected')), h('p', {}, t('disconnectKnown')), h('p', {}, t('disconnectCheck')), h('p', {}, t('draftKept')), action('reconnect', 'reconnect-reconcile', () => {
+    state.disconnectedDuringStart = false;
+    state.reconciledAfterDisconnect = true;
+    state.workState = 'running';
+    renderApp();
+  }, 'primary')) : null, state.reconciledAfterDisconnect ? notice('reconciled', 'reconciled-notice', 'ok') : null, !unknown && ['accepted', 'preparing_worktree', 'starting'].includes(state.workState) ? notice({
+    accepted: 'requestAccepted',
+    preparing_worktree: 'preparing',
+    starting: 'startingText'
+  }[state.workState], 'work-pre-output') : null, running ? h('div', tid('live-stream-output'), message('mei.lin', state.activeView === 'work_main' ? C.firstSentence[locale] : workCopy('request')), message('Claude', workCopy('liveReply'), true), h('h3', {}, t('tools')), h('ul', {
+    class: 'proto-tools'
+  }, h('li', {}, icon('file-text'), workCopy('toolRead')), h('li', {}, icon('check'), workCopy('toolEdit'))), h('h3', {}, t('liveOutput')), h('pre', tid('stream-console'), workCopy('stream1'))) : null, waiting ? h('div', {
+    class: 'proto-question',
+    ...tid('work-question-card'),
+    'data-question-answered': 'false'
+  }, h('h2', {}, t('questionTitle')), h('p', {}, t('question')), action('keepPassword', 'answer-question-keep', () => {
+    state.questionAnswered = true;
+    setWorkState('awaiting_verification');
+  }, 'primary')) : null, ended || results ? h('div', tid('turn-summary'), message('Claude', t('turnSummary'), true)) : null, state.activeView === 'work_derived' ? notice('derivedStarted', 'manual-derived-notice', 'ok') : state.activeView === 'work_separate' ? notice('separateStarted', 'hermes-separate-notice', 'ok') : null)), running || waiting || ended || results ? queue : null, advanced()), results ? resultsPanel() : null));
+}
+function pmSummary() {
+  const suffix = state.pmAssessment === 'passed' ? 'Passed' : state.pmAssessment === 'failed' ? 'Failed' : 'Insufficient';
+  return sectionCard({
+    title: t('pmSummary'),
+    actions: [pill(t(state.pmAssessment), state.pmAssessment === 'passed' ? 'ok' : 'warn', tid('pm-assessment-pill'))],
+    body: h('div', tid('pm-assessment-card'), h('h3', {}, t('judgment')), h('p', tid('pm-current-judgment'), t('judgment' + suffix)), h('h3', {}, t('recommendation')), h('p', tid('pm-recommendation'), t('recommendation' + suffix)), h('h3', {}, t('sources')), h('ul', {}, state.delivery.self_reported ? h('li', {}, t('sourceWork')) : null, state.delivery.tests_passed ? h('li', {}, t('sourceTests')) : null, h('li', {}, t(state.delivery.pr_open ? 'sourcePr' : 'sourceMissing'))), state.ownerDecisionRecorded ? h('div', {}, notice(state.ownerDecisionRecorded, 'pm-owner-decision-banner', 'ok'), action('returnThread', 'overview-open-discussion', () => go('discussions'))) : h('div', {
+      class: 'proto-actions',
+      ...tid('pm-owner-decisions')
+    }, action('accept', 'decision-accept-overview', () => {
+      state.delivery.accepted = true;
+      state.ownerDecisionRecorded = 'decisionAccepted';
+      renderApp();
+    }, 'primary', {
+      disabled: state.pmAssessment !== 'passed' || !state.delivery.pr_open
+    }), action('followup', 'decision-keep-review', () => {
+      state.ownerDecisionRecorded = 'decisionFollowup';
+      renderApp();
+    })))
+  });
+}
+function renderOverview() {
+  return h('div', {
+    class: 'proto-view',
+    ...tid('view-overview')
+  }, header(t('ui_overview'), [action('ui_discuss', 'overview-discuss', () => go('discussions'))], pill(t('ui_phase_development'))), h('div', {
+    class: 'proto-status-strip'
+  }, ...[['goal', 'projectGoal'], ['progress', state.delivery.accepted ? 'progressAccepted' : 'progressValue'], ['blockers', 'blockerValue'], ['decisions', 'decisionValue']].map(([label, value]) => h('div', {}, h('small', {}, t(label)), h('strong', {}, t(value))))), h('div', {
+    class: 'proto-overview-columns'
+  }, h('div', {}, pmSummary(), sectionCard({
+    title: t('attention'),
+    body: h('p', {}, t('finding'))
+  })), h('div', {}, sectionCard({
+    title: t('milestones'),
+    body: h('p', {}, t('milestone'))
+  }), sectionCard({
+    title: t('deliveries'),
+    body: deliveryBar(state.delivery)
+  }))), h('h2', {}, t('charter')), h('div', {
+    class: 'proto-charter'
+  }, ...[['purpose', 'projectGoal'], ['scope', 'scopeCharter'], ['milestones', 'milestone'], ['resources', 'budget'], ['risks', 'risk'], ['decisions', 'decisionValue']].map(([title, body]) => sectionCard({
+    title: t(title),
+    body: h('p', {}, t(body))
+  }))));
+}
+function renderManual() {
+  const derive = () => {
+    const dialog = h('dialog', {
+      class: 'proto-dialog',
+      'aria-label': t('deriveTitle'),
+      ...tid('derive-confirmation')
+    }, h('h2', {}, t('deriveTitle')), h('p', {}, t('deriveBasis')), h('p', {}, t('deriveExcluded')), h('div', {
+      class: 'proto-actions'
+    }, action('cancel', 'derive-cancel', () => {
+      dialog.close();
+      document.querySelector('[data-testid="manual-derive-new"]').focus();
+    }), action('start', 'derive-start', () => {
+      dialog.close();
+      startSeparate('work_derived');
+    }, 'primary')));
+    document.querySelector('[data-testid="product-shell"]').append(dialog);
+    dialog.showModal();
+    dialog.addEventListener('close', () => dialog.remove());
+  };
+  return h('div', {
+    class: 'proto-view proto-session-view',
+    ...tid('view-external-manual'),
+    'data-session-readonly': 'true'
+  }, header(t('manualTitle'), [inspectorToggle('results')], pill(t('ui_status_read_only'), 'review')), h('div', {
+    class: 'proto-session-grid has-results'
+  }, h('div', {
+    class: 'proto-work-main'
+  }, h('div', {
+    class: 'session-workspace proto-work-transcript'
+  }, h('div', {
+    class: 'conversation-scroll'
+  }, message(t('message_person'), t('manualMessage')), message('BAT', t('manualReply')))), h('p', {
+    class: 'proto-readonly-reason'
+  }, t('sessionReason'))), panel('results', h('div', {}, h('h3', {}, t('checkpoints')), h('p', {}, '4b91e0c'), h('div', {
+    class: 'proto-actions proto-manual-actions',
+    ...tid('manual-session-actions')
+  }, action('viewOriginal', 'manual-view-original', () => {
+    state.manualActionFeedback = 'view_original';
+    renderApp();
+  }), action('linkWork', 'manual-link-existing', () => {
+    state.manualActionFeedback = 'linked';
+    renderApp();
+  }), action('derive', 'manual-derive-new', derive, 'primary')), state.manualActionFeedback ? notice(state.manualActionFeedback === 'linked' ? 'linked' : 'originalShown', state.manualActionFeedback === 'linked' ? 'manual-linked-notice' : 'manual-view-original-notice', 'ok') : null, details(h('div', {}, h('code', {}, C.manualSessionId), h('p', {}, C.manualUncommittedFiles)))))));
+}
+function renderHermes() {
+  return h('div', {
+    class: 'proto-view',
+    ...tid('view-hermes-work'),
+    'data-external-controller': 'Hermes'
+  }, header(t('hermesTitle'), [], pill(t('running'), 'info')), sectionCard({
+    title: t('ui_work'),
+    body: h('div', {}, facts([['requester', 'Hermes'], ['controller', 'Hermes'], ['runtime', t('hermesRuntime')], ['attempt', t('running')]]), h('p', {}, t('hermesPolicy')), h('div', {
+      class: 'proto-actions',
+      ...tid('hermes-actions')
+    }, action('inbox', 'hermes-send-inbox', () => {
+      state.hermesActionFeedback = 'inbox';
+      renderApp();
+    }, 'primary'), action('separate', 'hermes-start-separate', () => {
+      state.hermesActionFeedback = 'separate';
+      startSeparate('work_separate');
+    })), state.hermesActionFeedback === 'inbox' ? notice('inboxSent', 'hermes-inbox-feedback', 'ok') : null, details(h('pre', {}, `${C.hermesWorkId}\n${C.hermesAttemptId}\n${C.hermesControllerId}\n${C.hermesPrincipalId}\ninbox_msg_01`)))
+  }));
+}
+function renderMaintenance() {
+  return h('div', {
+    class: 'proto-view',
+    ...tid('view-maintenance')
+  }, header(t('ui_maintenance_review'), [], pill(t('released'), 'ok')), sectionCard({
+    title: t('finding'),
+    body: h('div', {}, h('p', {}, t('findingBody')), facts([['scope', t('boundedFix')], ['profileLabel', t('maintProfile')], ['host', C.hostId]]), !state.maintenanceFixStarted ? action('maintStart', 'maint-start-fix', () => {
+      state.maintenanceFixStarted = true;
+      renderApp();
+    }, 'primary') : h('div', {}, notice('maintResult', 'maint-result', 'ok'), action('maintReturn', 'maint-return-review', () => {
+      state.maintenanceReviewReturned = true;
+      renderApp();
+    }, 'primary')), state.maintenanceReviewReturned ? notice('maintReturned', 'maint-review-returned-banner', 'ok') : null, details(h('pre', {}, `${C.maintWorkId}\n${C.maintReviewId}`)))
+  }));
+}
+function renderCanvas() {
+  const views = {
+    discussions: renderDiscussions,
+    work_main: renderWork,
+    work_derived: renderWork,
+    work_separate: renderWork,
+    overview: renderOverview,
+    work_manual: renderManual,
+    work_hermes: renderHermes,
+    maintenance: renderMaintenance,
+    work_maint: renderMaintenance
+  };
+  if (views[state.activeView]) return views[state.activeView]();
+  if (state.activeView === 'pm_settings') return h('div', {
+    class: 'proto-view'
+  }, header(t('ui_settings')), sectionCard({
+    title: t('pmSettings'),
+    body: h('div', {}, h('p', {}, t('pmReason')), h('p', {}, t('draftKept')), action('pmSettings', 'restore-pm', () => {
+      state.pmAvailable = true;
+      go('discussions');
+    }, 'primary'))
+  }));
+  const key = {
+    pending: 'ui_pending',
+    tools: 'ui_tools',
+    settings: 'ui_settings',
+    projects: 'ui_all_projects'
+  }[state.activeView] || 'ui_' + state.activeView;
+  return h('div', {
+    class: 'proto-view',
+    ...tid('view-placeholder-' + state.activeView)
+  }, header(t(key)), h('p', {}, t('placeholder')), action('returnThread', 'placeholder-return-discussions', () => go('discussions')));
+}
+function pendingButton() {
+  const node = iconButton({
+    icon: 'inbox',
+    label: t('ui_pending'),
+    onClick: () => go('pending')
+  });
+  node.classList.add('shell-pending');
+  return node;
+}
+export function renderApp() {
+  previousPanelOpen = currentInspector?.getAttribute('aria-modal') === 'true';
+  previousPanelView = currentInspector ? currentInspector.dataset.view : null;
+  clearTimeout(streamTimer);
+  cleanups.forEach(dispose => dispose());
+  cleanups = [];
+  currentInspector = null;
+  document.body.classList.remove('workspace-nav-open');
+  document.body.classList.add('has-workspace');
+  state.navDrawerOpen = false;
+  const viewLabel = projectViewIds.includes(state.activeView) ? t('ui_' + state.activeView) : t('ui_work');
+  const shell = h('div', tid('product-shell'), h('header', {
+    class: 'top'
+  }, iconButton({
+    icon: 'menu',
+    label: t('ui_menu'),
+    id: 'workspace-menu',
+    'aria-expanded': 'false',
+    ...tid('nav-drawer-toggle'),
+    onClick: openDrawer
+  }), h('div', {
+    class: 'brand'
+  }, h('span', {
+    class: 'brand-mark'
+  }), 'BAT Dashboard'), h('nav', {
+    id: 'nav'
+  }, h('button', {
+    class: 'shell-crumb-workspace',
+    onclick: () => go('overview')
+  }, h('span', {
+    class: 'shell-workspace-name'
+  }, t('projectName'))), h('span', {
+    class: 'shell-breadcrumb-divider'
+  }, '/'), h('span', {
+    class: 'shell-crumb-view'
+  }, viewLabel), state.activeView.startsWith('work_') ? h('span', {
+    class: 'shell-crumb-view'
+  }, '/ ' + t('ui_session')) : null, h('button', {
+    class: 'shell-mobile-name',
+    onclick: openDrawer
+  }, t('projectName'))), h('div', {
+    class: 'shell-top-actions'
+  }, pendingButton(), h('span', {
+    class: `live ${state.disconnectedDuringStart ? 'down' : 'ok'}`,
+    title: C.serverId
+  }, t(state.disconnectedDuringStart ? 'ui_offline' : 'ui_connected')))), h('div', {
+    id: 'workspace'
+  }, sidebar(), h('div', {
+    class: 'shell-scrim',
+    hidden: true,
+    onclick: closeDrawer
+  }), h('main', {
+    id: 'main',
+    tabindex: -1
+  }, renderCanvas())));
+  place(document.getElementById('app'), 'replaceChildren', renderBar(), shell);
+  if (state.activeView === 'discussions' && state.planVisible) {
+    const transcript = document.querySelector('.proto-transcript');
+    const steps = transcript.querySelector('[data-testid=compound-step-list]')?.closest('.ui-section-card');
+    transcript.scrollTop = steps ? steps.getBoundingClientRect().top - transcript.getBoundingClientRect().top + transcript.scrollTop : transcript.scrollHeight;
+  }
+  // Fixed-clock, bounded output simulation. No network or runtime calls.
+  if (workViews.includes(state.activeView) && state.workState === 'running' && !state.disconnectedDuringStart) streamTimer = setTimeout(() => {
+    const el = document.querySelector('[data-testid="stream-console"]');
+    if (el) el.textContent += '\n' + workCopy('stream2');
+  }, 150);
+}
+document.addEventListener('keydown', event => {
+  if (!state.navDrawerOpen) return;
+  if (event.key === 'Escape' && !event.isComposing) {
+    event.preventDefault();
+    closeDrawer();
+  } else trapFocus(document.getElementById('workspace-sidebar'), event);
+});
 renderApp();
