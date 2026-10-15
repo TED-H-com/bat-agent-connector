@@ -39,9 +39,9 @@ for (const locale of ['en','zh-TW'] as const) for (const kind of kinds) test(`ce
   if(kind==='plan_revision')await expect(chip).toContainText(locale==='en'?'Revision 7':'版本 7');
   if(kind==='governance')await expect(chip).toContainText(locale==='en'?'Risk ·':'風險 ·');
   const composer=page.locator('[data-discussion-composer]');await composer.fill('Preserved local draft');
-  await expect(page.getByRole('button',{name:locale==='en'?'Send':'傳送',exact:true})).toBeEnabled();
+  await expect(page.getByRole('button',{name:locale==='en'?'Save note only':'只存筆記',exact:true})).toBeEnabled();
   withdrawn=true;await page.locator('[data-pm-refresh]').click();
   await expect(chip).toContainText(locale==='en'?'Unavailable':'無法取得');await expect(chip).not.toContainText(title);
-  await expect(composer).toHaveValue('Preserved local draft');await expect(page.getByRole('button',{name:locale==='en'?'Send':'傳送',exact:true})).toBeDisabled();
+  await expect(composer).toHaveValue('Preserved local draft');await expect(page.getByRole('button',{name:locale==='en'?'Save note only':'只存筆記',exact:true})).toBeDisabled();
   expect(writes).toEqual([]);await context.close();
 });

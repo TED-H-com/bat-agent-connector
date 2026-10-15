@@ -114,7 +114,7 @@ for(const native of [false,true])test.describe(native?'Native issue mapping':'We
 for(const locale of ['en-US','zh-TW'])for(const width of [390,768,1440])test(`issue mapping layout ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:900}}),page=await context.newPage(),f=issueFixture();
   f.revision({public_title:'A public heading · 公開標題',public_body:'A long literal source '.repeat(50)});
-  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);await picker.selectOption({label:(await picker.locator('option').allTextContents()).find(text=>/Restore member access/.test(text))||''});
+  await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page, 'requirements' , 'ui_packages');const picker=page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);await picker.selectOption(packageId);await expect(picker).toHaveValue(packageId);
   await openPmSection(page,'requirements','ui_publication');await expect(section(page)).toContainText('#41');await section(page).locator('details').filter({has:page.locator('[data-pm-action="pm.issue.publish"]')}).locator(':scope > summary').click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.PM_ISSUE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await section(page).screenshot({path:`${out}/${locale}-${width}.png`});}
