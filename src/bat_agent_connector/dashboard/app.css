@@ -189,6 +189,20 @@ a { color: var(--accent); }
   .ui-page-header h1 { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 }
 
+/* Icon-only headers keep their actions beside the title, including session sheets.
+   Hidden text actions do not reserve a second row while a read is unavailable. */
+@media (max-width: 800px) {
+  .ui-page-header:not(:has(> .ui-header-actions > :not(.ui-icon-button, .ui-menu, [hidden]))) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: var(--space-2);
+  }
+  .ui-page-header:not(:has(> .ui-header-actions > :not(.ui-icon-button, .ui-menu, [hidden]))) > .ui-page-heading { display: contents; }
+  .ui-page-header:not(:has(> .ui-header-actions > :not(.ui-icon-button, .ui-menu, [hidden]))) .ui-title-row { flex-wrap: nowrap; overflow: hidden; }
+  .ui-page-header:not(:has(> .ui-header-actions > :not(.ui-icon-button, .ui-menu, [hidden]))) > .ui-header-actions {
+    grid-column: 2; grid-row: 1; justify-self: end; flex-wrap: nowrap; margin-top: 0;
+  }
+}
+
 /* Legacy and new disclosures share chrome without replacing durable contents. */
 :root body :is(details, .ui-disclosure) > summary {
   display: flex; align-items: center; gap: var(--space-2); list-style: none;
@@ -576,6 +590,7 @@ button.danger { background: transparent; color: var(--bad); border-color: var(--
 button:disabled { opacity: .45; cursor: not-allowed; }
 input, select, textarea { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
   border-radius: var(--r-sm); min-height: 32px; padding: 5px 10px; max-width: 100%; min-width: 0; }
+input[type="checkbox"] { min-height: 0; padding: 0; flex-shrink: 0; vertical-align: middle; }
 .connection-token { width: min(100%, 28rem); }
 .connection-token input { display: block; width: 100%; }
 .managed-setup .setup-field { display: grid; align-content: start; gap: var(--space-1); }
@@ -848,7 +863,7 @@ button.mini.on { color: var(--warn); border-color: var(--warn); }
 .orchestration label > input[type="number"] { max-width:160px; }
 .orchestration textarea { margin-top:var(--space-1); }
 .orchestration .orch-check { display:flex; align-items:flex-start; gap:var(--space-2); margin:var(--space-3) 0; }
-.orchestration .orch-check input { flex:none; margin-top:5px; }
+.orchestration .orch-check input { flex:none; margin:var(--space-1) 0 0; }
 .orch-item { border-top:1px solid var(--line); margin-top:14px; padding-top:var(--space-1); }
 .orch-item label { margin-top:var(--space-2); }
 .orchestration li, .orchestration code { overflow-wrap:anywhere; }
@@ -1240,6 +1255,22 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .diagnostics-json { max-height: 40dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--fs-mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--space-4); }
 .diagnostics-dialog .actions { justify-content: flex-end; }
 @media (max-width: 800px) { .diagnostics-dialog { width: calc(100vw - var(--space-4)); max-height: calc(100dvh - var(--space-4)); padding: var(--space-4); } }
+
+/* Keep the desktop tree layout; compact rows read title, then facts and actions. */
+.record-row-meta { display: contents; }
+.record-row-summary { display: none; }
+[data-project-work-list] > h2:first-child { margin-top: 0; }
+@media (max-width: 600px) {
+  .row.record-row { gap: var(--space-1); }
+  .row.record-row > .grow { flex-basis: 100%; }
+  .record-row > .record-row-meta { display: flex; align-items: center; gap: var(--space-2); width: 100%; min-width: 0; }
+  .record-row-meta > .tree-actions { margin-inline-start: auto; flex: none; }
+  .record-row-meta > .record-row-summary { display: inline; font-size: var(--fs-caption); color: var(--text-2); }
+  .record-row-meta > .record-row-count { display: none; }
+  .record-row > .record-row-status { display: none; }
+  .record-row-meta > .record-row-status { display: inline-flex; }
+}
+@media (min-width: 601px) { .record-row-meta > .record-row-status { display: none; } }
 .pm-maintenance-policy { overflow-wrap: anywhere; }
 .pm-maintenance-policy .pm-policy-choices { border: 0; margin: var(--space-2) 0; padding: 0; }
 .pm-maintenance-policy .pm-policy-choices label { display: inline-flex; align-items: center; gap: var(--space-2); margin-right: var(--space-4); }

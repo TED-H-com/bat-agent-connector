@@ -16,7 +16,7 @@ for (const width of [390,768,1440]) test(`shared search and filter chip sizes su
 });
 
 for (const locale of ['en', 'zh-TW'] as const) for (const view of ['session', 'overview', 'issues', 'dependencies']) {
-  test(`full-width mobile header ${locale} ${view}`, async ({browser, baseURL}) => {
+  test(`responsive mobile header ${locale} ${view}`, async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, locale, viewport: {width:390, height:844}}), page = await context.newPage();
     const f = demoFixture({locale}); await mountConversation(page, false, f.dispatch);
     const route = view === 'session' ? `session/${f.ids.host}/${f.ids.sessions.implement}` : `pm/${f.ids.workspaceId}/${view}`;
@@ -27,9 +27,14 @@ for (const locale of ['en', 'zh-TW'] as const) for (const view of ['session', 'o
     const geometry = await title.evaluate(node => {const box=node.getBoundingClientRect(), header=node.closest('.ui-page-header')!;
       const actions=header.querySelector('.ui-header-actions')!.getBoundingClientRect();
       return {width:box.width, height:box.height,line:parseFloat(getComputedStyle(node).lineHeight),actionsY:actions.y,titleBottom:box.bottom,
+        iconsOnly: !header.querySelector('.ui-header-actions > :not(.ui-icon-button, .ui-menu, [hidden])'), actionsRight:actions.right, titleRight:box.right,
         overflow:document.documentElement.scrollWidth-innerWidth, wrap:getComputedStyle(node).overflowWrap};});
-    expect(geometry.width).toBeGreaterThan(250); expect(geometry.height).toBeLessThanOrEqual(geometry.line*2+1);
-    expect(geometry.actionsY).toBeGreaterThanOrEqual(geometry.titleBottom); expect(geometry.overflow).toBeLessThanOrEqual(1);
+    expect(geometry.width).toBeGreaterThan(geometry.iconsOnly ? 150 : 250); expect(geometry.height).toBeLessThanOrEqual(geometry.line*2+1);
+    if (geometry.iconsOnly) {
+      expect(geometry.actionsY).toBeLessThan(geometry.titleBottom);
+      expect(geometry.actionsRight).toBeGreaterThan(geometry.titleRight);
+    } else expect(geometry.actionsY).toBeGreaterThanOrEqual(geometry.titleBottom);
+    expect(geometry.overflow).toBeLessThanOrEqual(1);
     expect(geometry.wrap).toBe('break-word');
     for (const button of await page.locator('#main .ui-page-header > .ui-header-actions > button:visible, #main .ui-page-header > .ui-header-actions > .ui-menu > button:visible').all()) {
       const box=await button.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x+box!.width).toBeLessThanOrEqual(390);

@@ -9,6 +9,10 @@
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
+- Keep narrow icon headers on the title row, align checkbox labels, and give mobile
+  project rows a title-first layout with right-aligned actions. Remove the extra
+  Dispatched work heading gap and wait for discussion Send readiness after reload.
+
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
   and never cache loads affected by cycle or budget refusals, including raw metadata.

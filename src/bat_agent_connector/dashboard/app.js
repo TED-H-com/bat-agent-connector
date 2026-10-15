@@ -8985,6 +8985,8 @@ var STRINGS = {
 		archive_with_children: "封存（連同子項目）",
 		needs_decision: "等你決定",
 		no_items: "還沒有工作項目。",
+		project_row_active: "進行 {count}",
+		project_row_review: "審閱 {count}",
 		link_missing: "已找不到",
 		needs_manage_scope: "你的 token 沒有 manage 權限，不能修改專案與工作項目；用 --scope manage 重新發 token。",
 		needs_approve_scope: "你的 token 沒有 approve 權限，不能確認完成；用 --scope approve 重新發 token。",
@@ -10566,6 +10568,8 @@ var STRINGS = {
 		create_edit_request: "Edit a new creation request",
 		create_invalid_receipt: "The receipt does not match the original creation request; that request is retained.",
 		create_invalid_draft: "The saved creation request could not be read. Check operation history before creating a duplicate.",
+		project_row_active: "{count} active",
+		project_row_review: "{count} review",
 		create_project_help: "Parent sets the tree position; source keeps the derivation link. The Task Service name records a relationship. Creating a project does not start an agent.",
 		create_item_help: "Keep the original request and acceptance criteria with this work. New steps are unchecked; creating a work item does not dispatch work or change a BAT workspace.",
 		managed_locations: "Data and work locations",
@@ -11573,7 +11577,10 @@ function statusPill(status) {
 	}, t("ui_status_" + key));
 }
 function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
-	const actionRow = h$1("div", { class: "ui-header-actions" }, ...actions, overflow);
+	const actionRow = h$1("div", {
+		class: "ui-header-actions",
+		hidden: !actions.length && !overflow
+	}, ...actions, overflow);
 	actionRow.addEventListener("focusin", (event) => {
 		const target = event.target.closest("button, a, select");
 		if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;
@@ -58852,10 +58859,16 @@ async function viewProjects(main) {
 						if (await change(msg, "project.update", { project_id: p.project_id }, { archived: true }, { expected_version: p.version }, `project.archive.${p.project_id}`) || STALE.includes(lastFailure)) render();
 					}
 				}, t("archive"))));
-				const row = indent(h("div", { class: "row tree" }, h("div", { class: "grow" }, h("a", {
+				const rowCounts = counts(p.counts).filter(Boolean);
+				const compactCounts = rowCounts.map((node) => node.dataset.projectCount === "completion" ? `${p.counts.done}/${p.counts.total}` : t(node.dataset.projectCount === "doing" ? "project_row_active" : "project_row_review", { count: node.dataset.projectCount === "doing" ? p.counts.doing : p.counts.awaiting_approval })).join(" · ");
+				rowCounts.forEach((node) => node.classList.add("record-row-count"));
+				const row = indent(h("div", { class: "row tree record-row" }, h("div", { class: "grow" }, h("a", {
 					class: "title",
 					href: `#/project/${p.project_id}`
-				}, p.name), p.description ? h("div", { class: "muted clamp" }, p.description) : null), ...counts(p.counts), may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null), depth);
+				}, p.name), p.description ? h("div", { class: "muted clamp" }, p.description) : null), h("div", { class: "record-row-meta" }, ...rowCounts, h("span", {
+					class: "record-row-summary",
+					title: rowCounts.map((node) => node.textContent).join(" · ")
+				}, compactCounts), may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null)), depth);
 				if (may("manage")) d.box.prepend(h("div", { class: "actions" }, ...orderButtons(sibs, i, "project_id", run)));
 				if (may("manage")) row.querySelector(".tree-actions").prepend(treeInteractions({
 					h,
@@ -59163,10 +59176,15 @@ async function viewProject(main, pid) {
 				dr.open();
 			}
 			const done = w.steps.filter((s) => s.done).length;
-			const row = indent(h("div", { class: "row tree" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
+			const rowState = () => {
+				const pill = stateChip(w.completion);
+				pill.classList.add("record-row-status");
+				return pill;
+			};
+			const row = indent(h("div", { class: "row tree record-row" }, rowState(), h("div", { class: "grow" }, h("a", {
 				class: "title",
 				href: `#/item/${w.work_item_id}`
-			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
+			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), h("div", { class: "record-row-meta" }, rowState(), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null)), depth);
 			if (may("manage") && !p.archived) dr.box.prepend(h("div", { class: "actions" }, ...orderButtons(sibs, i, "work_item_id", run)));
 			if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({
 				h,

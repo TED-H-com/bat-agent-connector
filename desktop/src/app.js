@@ -3453,11 +3453,18 @@ async function viewProjects(main) {
               { expected_version: p.version }, `project.archive.${p.project_id}`);
             if (ok || STALE.includes(lastFailure)) render();
           } }, t("archive"))));
-        const row = indent(h("div", { class: "row tree" },
+        const rowCounts = counts(p.counts).filter(Boolean);
+        const compactCounts = rowCounts.map(node => node.dataset.projectCount === "completion" ? `${p.counts.done}/${p.counts.total}`
+          : t(node.dataset.projectCount === "doing" ? "project_row_active" : "project_row_review",
+            {count: node.dataset.projectCount === "doing" ? p.counts.doing : p.counts.awaiting_approval})).join(" · ");
+        rowCounts.forEach(node => node.classList.add("record-row-count"));
+        const row = indent(h("div", { class: "row tree record-row" },
           h("div", { class: "grow" }, h("a", { class: "title", href: `#/project/${p.project_id}` }, p.name),
             p.description ? h("div", { class: "muted clamp" }, p.description) : null),
-          ...counts(p.counts),
-          may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null), depth);
+          h("div", {class: "record-row-meta"}, ...rowCounts,
+            h("span", {class: "record-row-summary", title: rowCounts.map(node => node.textContent).join(" · ")},
+              compactCounts),
+            may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null)), depth);
         if (may("manage")) d.box.prepend(h("div", {class: "actions"}, ...orderButtons(sibs, i, "project_id", run)));
         if (may("manage")) row.querySelector(".tree-actions").prepend(treeInteractions({h, t, row, scope: `${connection.namespace}.project.${parent}`,
           siblings: sibs, index: i, key: "project_id", run, open: () => d.open(true), guard: () => assertView(connection),
@@ -3624,11 +3631,12 @@ async function viewProject(main, pid) {
       workEditors.set(w.work_item_id, {drawer: dr, child, branch});
       if (retained && may("manage") && !p.archived) {workDrafts.delete(w.work_item_id); dr.open();}
       const done = w.steps.filter(s => s.done).length;
-      const row = indent(h("div", { class: "row tree" }, stateChip(w.completion),
+      const rowState = () => {const pill = stateChip(w.completion); pill.classList.add("record-row-status"); return pill;};
+      const row = indent(h("div", { class: "row tree record-row" }, rowState(),
         h("div", { class: "grow" }, h("a", { class: "title", href: `#/item/${w.work_item_id}` }, w.title),
           w.derived_from ? h("span", { class: "muted" }, " ⑂") : null),
-        w.steps.length ? chip(`${done}/${w.steps.length}`) : null,
-        may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
+        h("div", {class: "record-row-meta"}, rowState(), w.steps.length ? chip(`${done}/${w.steps.length}`) : null,
+          may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null)), depth);
       if (may("manage") && !p.archived) dr.box.prepend(h("div", {class: "actions"}, ...orderButtons(sibs, i, "work_item_id", run)));
       if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({h, t, row,
         scope: `${connection.namespace}.item.${pid}.${parent}`, siblings: sibs, index: i, key: "work_item_id", run,
