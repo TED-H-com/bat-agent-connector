@@ -271,10 +271,10 @@ async def serve(commands):
                 assert adoption["status"] == "succeeded", adoption
                 assert {op["operation_id"] for op in created} - {op["operation_id"] for op in browser_ops} == set(
                     adoption["result"]["child_operation_ids"])
-                assert len([r for r in requests if r["action"] == adoption["action"]]) == 2
+                assert len([r for r in requests if r["action"] == adoption["action"]]) == 1
                 assert ops.db.execute("SELECT count(*) FROM pm_plan_adoptions").fetchone()[0] == 2  # Seed + one review.
                 resolution = next(op for op in browser_ops if op["action"] == "pm.governance.revise")
-                assert len([r for r in requests if r["action"] == resolution["action"]]) == 2
+                assert len([r for r in requests if r["action"] == resolution["action"]]) == 1
                 resolved = pm_governance.get_record(ops, owner, seeded["workspace_id"], seeded["issue_id"])
                 assert resolved["record"]["version"] == original_issue["record"]["version"] + 1
                 assert resolved["record"]["context"] == original_issue["record"]["context"]

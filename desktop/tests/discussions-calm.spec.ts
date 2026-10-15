@@ -56,17 +56,19 @@ for (const locale of ['en', 'zh-TW']) {
     expect(f.discussion.writes).toEqual([]); await context.close();
   });
 
-  test(`a proposal opens Plan and has one primary action ${locale}`, async ({browser, baseURL}) => {
+  test(`an inline proposal keeps the panel closed and has one primary action ${locale}`, async ({browser, baseURL}) => {
     const context = await browser.newContext({baseURL, locale, viewport: {width: 1440, height: 900}}), page = await context.newPage(), f = demoFixture({locale, discussions: true});
     await mountConversation(page, false, f.dispatch); await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
     await page.locator('[data-discussion-ask]').click();
-    await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();
+    await expect(page.locator('[data-discussion-panel]')).toBeHidden();
     const card = page.locator('[data-pm-plan-proposals]'); await expect(card.locator('[data-proposal-review]')).toBeEnabled();
     await expect(card.locator('[data-proposal-adopt-panel]')).toBeHidden();
     await expect(card.getByRole('heading')).toHaveCount(1);
     await expect(page.locator('.ui-button.primary:visible')).toHaveCount(1);
     await expect(page.locator('.ui-button.primary:visible')).toHaveText(zh ? '審閱並採用' : 'Review & adopt');
     await card.locator('[data-proposal-review]').click(); await expect(card.locator('[data-proposal-adopt-panel]')).toBeVisible();
+    await expect(card.locator('[data-proposal-details]')).toHaveCount(1);
+    await expect(card.locator('[data-proposal-adopt-panel] > details')).toHaveCount(0);
     await expect(card.locator('[data-proposal-candidate]').first()).toContainText(f.discussion.proposals.at(-1).document.candidates[0].text);
     await expect(page.locator('.ui-button.primary:visible')).toHaveCount(1);
     await expect(page.locator('.ui-button.primary:visible')).toHaveText(zh ? '採用' : 'Adopt');
@@ -180,6 +182,8 @@ for (const width of [1440, 1000]) test(`rename receipts survive Plan and a close
   const key = f.discussion.writes[0].idempotency_key;
   await page.reload(); await expect(page.getByRole('button', {name: 'Check original request', exact: true})).toBeEnabled();
   await page.getByRole('button', {name: 'Check original request', exact: true}).click();
+  await expect(page.locator('[data-discussion-details]')).not.toHaveAttribute('open', '');
+  await page.locator('[data-discussion-details] > summary').click();
   await expect(page.locator('[data-discussion-details] [data-discussion-receipt=rename]')).toBeVisible();
   await expect(page.locator('[data-discussion-details] [data-discussion-receipt=rename]')).toContainText('Completed');
   await expect(page.locator('[data-discussion-title]')).toHaveText('Reviewed name');
@@ -203,19 +207,18 @@ test('Brief and charter sources read as names and times with identities in Detai
   expect(f.discussion.writes).toEqual([]);
 });
 
-test('explicit panel choices last until a new proposal arrives', async ({page}) => {
+test('explicit panel choices last across inline proposals and refreshes', async ({page}) => {
   const f = demoFixture({discussions: true}); await page.setViewportSize({width: 1440, height: 900}); await mountConversation(page, false, f.dispatch);
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
-  await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-proposal-review]')).toBeEnabled(); await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();
-  await page.keyboard.press('Escape'); await page.getByRole('button', {name: 'Refresh', exact: true}).click();
-  await expect(page.locator('[data-discussion-panel]')).toBeHidden();
+  await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-proposal-review]')).toBeEnabled(); await expect(page.locator('[data-discussion-panel]')).toBeHidden();
   await openThreadTab(page, 'inputs'); await page.getByRole('button', {name: 'Refresh', exact: true}).click();
   await expect(page.locator('[data-discussion-tab=inputs]')).toBeVisible();
-  await page.keyboard.press('Escape');
-  // Another central proposal is new information, even after an explicit close.
+  // An inline conversation proposal does not override an explicit tab choice or reopen a closed panel.
   const proposal = structuredClone(f.discussion.proposals.at(-1)); proposal.proposal_id = 'pmcp_' + '8'.repeat(32); proposal.sequence++;
   f.discussion.proposals.push(proposal); await page.getByRole('button', {name: 'Refresh', exact: true}).click();
-  await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();
+  await expect(page.locator('[data-discussion-tab=inputs]')).toBeVisible();
+  await page.keyboard.press('Escape'); await page.getByRole('button', {name: 'Refresh', exact: true}).click();
+  await expect(page.locator('[data-discussion-panel]')).toBeHidden();
   expect(f.discussion.writes.map((row: any) => row.body.action)).toEqual(['pm.conversation.propose']);
 });
 
@@ -231,6 +234,8 @@ test('a message receipt remains visible with Context closed', async ({page}) => 
   await expect(page.getByRole('button', {name: 'Check original request', exact: true})).toBeEnabled();
   await page.reload(); await expect(page.locator('[data-discussion-panel]')).toBeHidden();
   await page.getByRole('button', {name: 'Check original request', exact: true}).click();
+  await expect(page.locator('[data-discussion-details]')).not.toHaveAttribute('open', '');
+  await page.locator('[data-discussion-details] > summary').click();
   await expect(page.locator('[data-discussion-details] [data-discussion-receipt=message]')).toContainText('Completed');
   await expect(page.locator('.pm-notes')).toContainText('Keep this original note');
   expect(f.discussion.writes).toHaveLength(2); expect(f.discussion.writes[1]).toEqual(f.discussion.writes[0]);

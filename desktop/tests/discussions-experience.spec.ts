@@ -62,6 +62,8 @@ for (const locale of ['en', 'zh-TW']) test(`new discussion stays focused when ce
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/new`);
   await expect(page.locator('[data-discussion-composer]')).toBeFocused();
   await expect(page.locator('[data-discussion-composer]')).toBeInViewport();
+  await expect(page.locator('[data-discussion-draft-ready]')).toHaveText(locale === 'zh-TW' ? '傳送第一則訊息後即可詢問 PM' : 'Send the first message to ask the PM');
+  await expect(page.locator('[data-discussion-pm-unavailable]')).toHaveCount(0);
   await expect(page.locator('[data-pm-action]:visible')).toHaveCount(1);
   await expect(page.locator('.pm-main > [data-pm-follow-up], .pm-main > [data-pm-meetings], .pm-main > .pm-evidence, .pm-main > .pm-spec-sources')).toHaveCount(0);
   expect(f.discussion.writes).toHaveLength(0);
@@ -114,7 +116,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await page.screenshot({path: `${dir}/discussions-default-${locale}-${width}.png`});
     await page.locator('[data-discussion-ask]').click();
     await expect(page.locator('[data-pm-plan-proposals]')).toContainText(f.copy.proposalSummary);
-    if (width < 1200) await page.keyboard.press('Escape');
+    await expect(page.locator('[data-discussion-panel]')).toBeHidden();
     await page.getByRole('button', {name: zh ? '重新命名' : 'Rename', exact: true}).click();
     const rename = page.locator('[data-pm-action="pm.thread.rename"]');
     await rename.getByLabel(zh ? '討論標題' : 'Discussion title').fill(zh ? '解除復原阻礙' : 'Unblock recovery');
@@ -129,13 +131,17 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await page.screenshot({path: `${dir}/discussions-proposed-${locale}-${width}.png`});
     await page.locator('[data-proposal-review]').press('Enter');
     const adopt = page.locator('[data-pm-action="pm.conversation.adopt"]');
+    await expect(adopt.locator('.pd-candidate input[type="checkbox"]').first()).toBeFocused();
+    await expect(page.locator('[data-pm-plan-proposals] [data-proposal-details]')).toHaveCount(1);
+    await expect(adopt.locator('[data-proposal-adopt-panel] > details')).toHaveCount(0);
     await adopt.getByLabel(zh ? '採用這組更新的理由' : 'Reason for adopting this update').fill(zh ? '保留未決事項並採用審閱後的範圍。' : 'Adopt the reviewed scope and preserve open decisions.');
     await adopt.getByRole('button', {name: zh ? '採用' : 'Adopt', exact: true}).click();
     await expect(page.locator('[data-proposal-adopted]')).toBeVisible();
     await expect(page.locator('[data-proposal-adopted] [data-status=adopted]')).toHaveText(zh ? '已採用' : 'Adopted');
     await expect(page.locator('[data-proposal-adopted-revision]')).toHaveText(zh ? '檢視版本' : 'Open revision');
     expect(f.discussion.writes.at(-1).body.action).toBe('pm.conversation.adopt');
-    if (width < 1200) {await page.locator('[data-discussion-panel-toggle]').click(); await expect(page.locator('.pd-panel-overlay')).toHaveAttribute('aria-modal', 'true');}
+    await page.locator('[data-discussion-panel-toggle]').click();
+    if (width < 1200) await expect(page.locator('.pd-panel-overlay')).toHaveAttribute('aria-modal', 'true');
     if (width === 390) await page.screenshot({path: `${dir}/discussions-sheet-${locale}-390.png`});
     await page.getByRole('tab', {name: zh ? '計畫' : 'Plan', exact: true}).click();
     await page.locator('[data-pm-section=pm_brief_title] > details > summary').click();
@@ -421,7 +427,7 @@ test('Plan tab lists central revision states and compares from the selected row'
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadPlanning}`);
   await openThreadTab(page, 'plan');
   const revisions = page.locator('[data-pm-revision]'); await expect(revisions).toHaveCount(2);
-  await expect(revisions.nth(0).locator('.ui-pill')).toHaveText('Historical'); await expect(revisions.nth(1).locator('.ui-pill')).toHaveText('Accepted');
+  await expect(revisions.nth(0).locator('.ui-pill')).toHaveText('Historical'); await expect(revisions.nth(1).locator('.ui-pill')).toHaveText('Adopted');
   expect(await revisions.evaluateAll(nodes => nodes.every(node => node.tagName !== 'DETAILS'))).toBe(true);
   const refresh = page.getByRole('button', {name: 'Refresh proposals', exact: true}); await expect(refresh).toHaveText(''); await expect(refresh.locator('svg')).toHaveCount(1);
   await revisions.nth(0).getByRole('button', {name: 'Compare', exact: true}).click();
@@ -568,7 +574,7 @@ test('refresh reads one proposal list and only its selected document, with revis
   await expect(page.getByRole('button', {name: 'Refresh', exact: true})).toBeEnabled();
   expect(reads.filter(path => path.includes('/conversation-proposals?'))).toHaveLength(1);
   expect(reads.filter(path => /\/conversation-proposals\/pmcp_/.test(path))).toHaveLength(1);
-  await expect(page.locator('[data-proposal-review]')).toBeVisible(); await expect.poll(() => revisions().length).toBe(2);
+  await expect(page.locator('[data-proposal-review]')).toBeVisible(); expect(revisions()).toHaveLength(0);
   await openThreadTab(page, 'plan'); await expect.poll(() => revisions().length).toBe(2);
   await page.getByRole('tab', {name: 'Context', exact: true}).click(); await openThreadTab(page, 'plan');
   expect(revisions()).toHaveLength(2);
@@ -724,7 +730,7 @@ test('adoption recovery opens Details and tolerates a completed receipt', async 
   });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
   await page.locator('[data-discussion-ask]').click();
-  await expect(page.locator('[data-proposal-review]')).toBeEnabled(); await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible(); await page.keyboard.press('Escape');
+  await expect(page.locator('[data-proposal-review]')).toBeEnabled(); await expect(page.locator('[data-discussion-panel]')).toBeHidden();
   await page.locator('[data-proposal-review]').click();
   await page.getByLabel('採用這組更新的理由', {exact: true}).fill('採用已審閱的範圍並保留原請求。');
   await page.getByRole('button', {name: '採用', exact: true}).click();
@@ -735,7 +741,7 @@ test('adoption recovery opens Details and tolerates a completed receipt', async 
   const retry = card.getByRole('button', {name: '查回原請求', exact: true, includeHidden: true});
   const saved = card.locator('[data-pm-action="pm.conversation.adopt"] [data-pm-saved]');
   await expect(retry).toHaveCount(1); await expect(retry).toBeHidden();
-  if (await page.locator('.pd-panel-overlay[aria-modal=true]:visible').count()) await page.keyboard.press('Escape');
+  await expect(page.locator('[data-discussion-panel]')).toBeHidden();
   await card.locator('[data-proposal-recovery] > summary').click(); await recoverOriginalAdoption(card, '查回原請求');
   await expect.poll(() => checks.length).toBe(1); await expect(retry).toBeEnabled();
   // The poll can observe this count before an asynchronous receipt changes the
