@@ -1,3 +1,4 @@
+import {errorPresentation} from './error-presentation.js';
 // Presentation preference only; the existing button retains all admission guards.
 export function composerShortcut({h, t, input, button, storageKey, guard}) {
   const modes = ['modified', 'enter', 'button'];
@@ -9,7 +10,7 @@ export function composerShortcut({h, t, input, button, storageKey, guard}) {
   const status = h('span', {class: 'muted', role: 'status'});
   select.addEventListener('change', () => {
     try {guard(); localStorage.setItem(storageKey, select.value); mode = select.value; status.textContent = '';}
-    catch (error) {select.value = mode; status.textContent = error.message || String(error);}
+    catch (error) {select.value = mode; status.textContent = errorPresentation(error, t).summary;}
   });
   const start = () => {composing = true;}, end = () => {composing = false; ended = performance.now();};
   const keydown = event => {

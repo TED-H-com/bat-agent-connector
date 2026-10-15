@@ -4,6 +4,7 @@ import {dataTable, disclosure, emptyState, inlineError, inspector, skeleton, sta
 import {joinLabel} from './label-text.js';
 import {actionLabel, formatTime, operationDuration, operationStatusKey, operationStatusLabel, operationTargetText, reasonText} from './global-labels.js';
 import {viewState} from './ui/view-state.js';
+import {errorPresentation} from './error-presentation.js';
 
 export function operationList({h, t, api, guard, statuses, namespace}) {
   const memory = viewState(namespace || '', '', 'operations:' + (statuses || 'all'));
@@ -159,7 +160,14 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     }).catch(error => {
       if (current()) {
         if ([403,404].includes(error.status)) {sourceWithdrawn = true; rows = []; before = null; pages = 1; request++; memory.selected = ''; sheet?.dispose(); sheet = null; layout.classList.remove('has-inspector'); paint();}
-        failed = true; status.replaceChildren(h('p', {class: 'error'}, error.message));}
+        failed = true;
+        const presentation = errorPresentation(error, t);
+        const diagnostics = [
+          presentation.code ? h('code', {}, presentation.code) : null,
+          presentation.message && presentation.message !== presentation.code ? h('p', {}, presentation.message) : null
+        ].filter(Boolean);
+        const details = diagnostics.length ? disclosure({label: t('global_details'), body: h('div', {'data-error-details': ''}, ...diagnostics)}) : null;
+        status.replaceChildren(h('p', {class: 'error', 'data-error-summary': ''}, presentation.summary), ...(details ? [details] : []));}
       throw error;
     }).finally(() => {pending--; if (current()) update();});
     queue = job; return job;

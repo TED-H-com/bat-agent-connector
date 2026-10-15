@@ -3,6 +3,7 @@ import {discussHref} from '../pm-discuss-link.js';
 import {t} from '../i18n.js';
 import {icon as drawIcon} from './icons.js';
 import {statusVocabulary} from './ui-strings.js';
+import {errorPresentation} from '../error-presentation.js';
 export {statusVocabulary};
 let sequence = 0;
 const uid = () => `ui-${++sequence}`;
@@ -168,8 +169,21 @@ export function disclosure({label, body, open = false, key, element}) {
   return root;
 }
 export function inlineError({error, retry}) {
-  return h('div', {class: 'ui-inline-error', role: 'alert'}, drawIcon('circle-alert'), h('span', {}, error?.message || String(error)),
-    retry ? button({size: 'sm', variant: 'ghost', label: t('ui_retry'), onClick: retry}) : null);
+  let summary = error?.message || String(error);
+  let details = null;
+  if (error instanceof Error) {
+    const presentation = errorPresentation(error, t);
+    summary = presentation.summary;
+    const diagnostics = [
+      presentation.code ? h('code', {}, presentation.code) : null,
+      presentation.message && presentation.message !== presentation.code ? h('p', {}, presentation.message) : null,
+    ].filter(Boolean);
+    if (diagnostics.length) {
+      details = disclosure({label: t('global_details'), body: h('div', {'data-error-details': ''}, ...diagnostics)});
+    }
+  }
+  return h('div', {class: 'ui-inline-error', role: 'alert'}, drawIcon('circle-alert'), h('span', {'data-error-summary': ''}, summary),
+    details, retry ? button({size: 'sm', variant: 'ghost', label: t('ui_retry'), onClick: retry}) : null);
 }
 export function contextChip({icon, text, onRemove}) {
   return h('span', {class: 'ui-context-chip', role:'group', title:text, 'aria-label':text}, nodeIcon(icon), h('span', {class:'ui-chip-label'}, text),

@@ -1,4 +1,5 @@
 import {button} from './ui/components.js';
+import {errorPresentation} from './error-presentation.js';
 // Repair rules retain the exact reviewed handoff; editing a preview never replaces a saved rule.
 export function maintenanceRepairPolicyControls({h,t,input,labelled,available,ciAvailable,reviewedHandoff,baseline,editable,changed}) {
   const hidden=()=>h('input',{type:'hidden'}),fields={repair_rules:hidden(),repair_rules_set:hidden(),repair_key:input('pmr_rule_key',{required:false,max:48}),
@@ -32,7 +33,7 @@ export function maintenanceRepairPolicyControls({h,t,input,labelled,available,ci
         commit_sha:release.document.commit_sha,release_version:structuredClone(release.document.release_version)},handoff:structuredClone(source.handoff),
         verification:{kind:'fixed_revision_verification',profile:'observed_runner_v1',command_digest:digest}});
       fields.repair_rules.value=JSON.stringify(rules);fields.repair_rules_set.value='1';status.textContent=t('pmr_rule_added');changed();
-    }catch(error){if(ticket===epoch&&visible)status.textContent=error.message;}finally{busy=false;update();}
+    }catch(error){if(ticket===epoch&&visible)status.textContent=errorPresentation(error, t).summary;}finally{busy=false;update();}
   }
   function update(show=visible){visible=show;rows.replaceChildren();element.hidden=!available()&&!fields.repair_rules_set.value&&!fields.repair_ci.value;
     add.disabled=!visible||!editable()||busy||!available()||!selected();fields.repair_ci.disabled=!visible||!editable()||!ciAvailable();

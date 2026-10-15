@@ -11404,6 +11404,29 @@ function icon(name, { label, size = 16 } = {}) {
 	return svg;
 }
 //#endregion
+//#region src/error-presentation.js
+var ApiError = class extends Error {
+	constructor(status, code, message, { localized = false } = {}) {
+		super(message || code);
+		this.status = status;
+		this.code = code;
+		this.localized = localized;
+	}
+};
+function errorPresentation(error, t, { summary } = {}) {
+	const code = error?.code || "";
+	const message = error?.message || String(error);
+	const key = `error_code_${code}`;
+	const known = code && t(key) !== key;
+	const client = error?.localized === true || !code && error?.constructor === Error;
+	const text = summary ?? (known ? t(key) : client ? message : t("error_generic"));
+	return {
+		summary: text,
+		code: code === text ? "" : code,
+		message: message === text ? "" : message
+	};
+}
+//#endregion
 //#region src/ui/components.js
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
@@ -11653,10 +11676,21 @@ function disclosure({ label, body, open = false, key, element }) {
 	return root;
 }
 function inlineError({ error, retry }) {
+	let summary = error?.message || String(error);
+	let details = null;
+	if (error instanceof Error) {
+		const presentation = errorPresentation(error, t);
+		summary = presentation.summary;
+		const diagnostics = [presentation.code ? h$1("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h$1("p", {}, presentation.message) : null].filter(Boolean);
+		if (diagnostics.length) details = disclosure({
+			label: t("global_details"),
+			body: h$1("div", { "data-error-details": "" }, ...diagnostics)
+		});
+	}
 	return h$1("div", {
 		class: "ui-inline-error",
 		role: "alert"
-	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
+	}, icon("circle-alert"), h$1("span", { "data-error-summary": "" }, summary), details, retry ? button({
 		size: "sm",
 		variant: "ghost",
 		label: t("ui_retry"),
@@ -37400,7 +37434,7 @@ function maintenanceRepairPolicyControls({ h, t, input, labelled, available, ciA
 			status.textContent = t("pmr_rule_added");
 			changed();
 		} catch (error) {
-			if (ticket === epoch && visible) status.textContent = error.message;
+			if (ticket === epoch && visible) status.textContent = errorPresentation(error, t).summary;
 		} finally {
 			busy = false;
 			update();
@@ -44529,29 +44563,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 	};
 }
-//#endregion
-//#region src/error-presentation.js
-var ApiError = class extends Error {
-	constructor(status, code, message, { localized = false } = {}) {
-		super(message || code);
-		this.status = status;
-		this.code = code;
-		this.localized = localized;
-	}
-};
-function errorPresentation(error, t, { summary } = {}) {
-	const code = error?.code || "";
-	const message = error?.message || String(error);
-	const key = `error_code_${code}`;
-	const known = code && t(key) !== key;
-	const client = error?.localized === true || !code && error?.constructor === Error;
-	const text = summary ?? (known ? t(key) : client ? message : t("error_generic"));
-	return {
-		summary: text,
-		code: code === text ? "" : code,
-		message: message === text ? "" : message
-	};
-}
 var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
 var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
 var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
@@ -46042,7 +46053,7 @@ function composerShortcut({ h, t, input, button, storageKey, guard }) {
 			status.textContent = "";
 		} catch (error) {
 			select.value = mode;
-			status.textContent = error.message || String(error);
+			status.textContent = errorPresentation(error, t).summary;
 		}
 	});
 	const start = () => {
@@ -46238,7 +46249,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 				if (op.status !== "succeeded") throw Error(op.status_reason || t("models_pending"));
 				await refresh(true);
 			} catch (error) {
-				note.textContent = error.message || String(error);
+				note.textContent = errorPresentation(error, t).summary;
 			} finally {
 				busy = false;
 				update();
@@ -46292,7 +46303,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 				if (request === serial) {
 					doc = null;
 					list.replaceChildren();
-					note.textContent = error.message || String(error);
+					note.textContent = errorPresentation(error, t).summary;
 					update();
 				}
 			} catch {}
@@ -46344,7 +46355,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 			persist();
 			status.textContent = t("models_unsaved");
 		} catch (error) {
-			status.textContent = error.message || String(error);
+			status.textContent = errorPresentation(error, t).summary;
 		}
 		update();
 	};
@@ -46380,7 +46391,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				renderRows();
 				update();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				status.textContent = errorPresentation(error, t).summary;
 			}
 		}
 	}, t("models_reset_display"));
@@ -46398,7 +46409,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				draft = null;
 				load(true);
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				status.textContent = errorPresentation(error, t).summary;
 			}
 		}
 	}, t("models_reload_saved"));
@@ -46439,7 +46450,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 						intent = null;
 						persist();
 					}
-					status.textContent = error.message || String(error);
+					status.textContent = errorPresentation(error, t).summary;
 				} catch {}
 			} finally {
 				busy = false;
@@ -46480,7 +46491,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				renderRows();
 				update();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				status.textContent = errorPresentation(error, t).summary;
 			}
 		};
 		rows.replaceChildren(h("h2", {}, t("models_display")), h("p", { class: "muted" }, t("models_display_help")), ...models.map((model, i) => {
@@ -46577,7 +46588,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					status.textContent = `${t("models_not_refreshed")} ${errorPresentation(error, t).summary}`;
 				}
 			} catch {}
 		}
@@ -46652,7 +46663,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 				draft = null;
 				load(true);
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				status.textContent = errorPresentation(error, t).summary;
 			}
 		}
 	}, t("skills_reload"));
@@ -46711,7 +46722,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 						draft.intent = null;
 						persist();
 					}
-					status.textContent = error.message || String(error);
+					status.textContent = errorPresentation(error, t).summary;
 				} catch {}
 			} finally {
 				busy = false;
@@ -46757,7 +46768,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 				status.textContent = t("skills_unsaved");
 				render();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				status.textContent = errorPresentation(error, t).summary;
 			}
 		};
 		const unresolved = draft.selected.filter((ref) => !catalog.skills.some((skill) => same$1(ref, skill) && skill.available));
@@ -46811,7 +46822,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					status.textContent = `${t("models_not_refreshed")} ${errorPresentation(error, t).summary}`;
 				}
 			} catch {}
 		}
@@ -46837,7 +46848,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		} catch (error) {
 			try {
 				guard();
-				if (request === discovery) status.textContent = error.message || String(error);
+				if (request === discovery) status.textContent = errorPresentation(error, t).summary;
 			} catch {}
 		}
 	}
@@ -50071,7 +50082,16 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 					paint();
 				}
 				failed = true;
-				status.replaceChildren(h("p", { class: "error" }, error.message));
+				const presentation = errorPresentation(error, t);
+				const diagnostics = [presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean);
+				const details = diagnostics.length ? disclosure({
+					label: t("global_details"),
+					body: h("div", { "data-error-details": "" }, ...diagnostics)
+				}) : null;
+				status.replaceChildren(h("p", {
+					class: "error",
+					"data-error-summary": ""
+				}, presentation.summary), ...details ? [details] : []);
 			}
 			throw error;
 		}).finally(() => {
@@ -52433,7 +52453,7 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 	const fail = (error) => {
 		try {
 			guard();
-			if (!disposed) status.textContent = error.message === "PREVIEW_UNSUPPORTED" ? t("ar_content_preview_limit") : error.message;
+			if (!disposed) status.textContent = error.message === "PREVIEW_UNSUPPORTED" ? t("ar_content_preview_limit") : errorPresentation(error, t).summary;
 		} catch {}
 	};
 	const close = () => {

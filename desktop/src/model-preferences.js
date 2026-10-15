@@ -1,5 +1,6 @@
 import {iconButton} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
+import {errorPresentation} from './error-presentation.js';
 // Catalogs and subscription observations come only from the selected BAT host.
 const fields = ['initial_agent', 'initial_model', 'last_agent', 'last_model', 'hidden', 'order'];
 const modelKey = model => `${model.agent}:${model.id}`;
@@ -42,7 +43,7 @@ export function modelChoice({h, t, api, caps, guard, host, agent, model, submit 
         {last_agent: agent.value, last_model: model.value || null}, {expected_revision: doc.model_preferences.revision}, `${storageKey}.last-model`);
       guard(); if (op.status !== 'succeeded') throw Error(op.status_reason || t('models_pending'));
       await refresh(true);
-    } catch (error) {note.textContent = error.message || String(error);} finally {busy = false; update();}
+    } catch (error) {note.textContent = errorPresentation(error, t).summary;} finally {busy = false; update();}
   }}, t('models_remember_last'));
   const box = h('div', {class: 'model-choice', hidden: true}, list, current, note, h('div', {class: 'actions'}, initial, last, remember));
   function update() {
@@ -69,7 +70,7 @@ export function modelChoice({h, t, api, caps, guard, host, agent, model, submit 
         : doc.model_catalog.status !== 'available' ? t('models_catalog_unavailable', {reason: doc.model_catalog.reason || doc.model_catalog.status})
         : t(doc.model_catalog.stale ? 'models_catalog_stale' : 'models_catalog_ready', {host: selectedHost, count: list.childElementCount});
       update();
-    } catch (error) {try {guard(); if (request === serial) {doc = null; list.replaceChildren(); note.textContent = error.message || String(error); update();}} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === serial) {doc = null; list.replaceChildren(); note.textContent = errorPresentation(error, t).summary; update();}} catch { /* retired */ }}
   }
   agent.addEventListener('change', () => refresh());
   model.addEventListener('input', () => {update(); if (doc && model.value && !doc.model_catalog.models?.some(value => value.id === model.value)) note.textContent = t('models_unknown_current', {model: model.value});});
@@ -93,7 +94,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
   const modified = () => {
     if (!draft || intent || busy || doc?.host !== host.value) return;
     for (const key of ['initial_agent', 'initial_model', 'last_agent', 'last_model']) draft.params[key] = inputs[key].value || null;
-    try {persist(); status.textContent = t('models_unsaved');} catch (error) {status.textContent = error.message || String(error);}
+    try {persist(); status.textContent = t('models_unsaved');} catch (error) {status.textContent = errorPresentation(error, t).summary;}
     update();
   };
   for (const role of ['initial', 'last']) {
@@ -108,14 +109,14 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
   const reset = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (!draft || busy || intent || doc?.host !== host.value) return;
     draft.params.hidden = []; draft.params.order = [];
-    try {persist(); status.textContent = t('models_unsaved'); renderRows(); update();} catch (error) {status.textContent = error.message || String(error);}
+    try {persist(); status.textContent = t('models_unsaved'); renderRows(); update();} catch (error) {status.textContent = errorPresentation(error, t).summary;}
   }}, t('models_reset_display'));
   const discard = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (busy || intent || doc?.host !== host.value) return;
     try {
       guard(); const next = {...drafts}; delete next[loadedHost]; localStorage.setItem(storageKey, JSON.stringify(next));
       drafts = next; draft = null; load(true);
-    } catch (error) {status.textContent = error.message || String(error);}
+    } catch (error) {status.textContent = errorPresentation(error, t).summary;}
   }}, t('models_reload_saved'));
   const save = h('button', {class: 'primary', type: 'button', onclick: async () => {
     if (busy || !draft || !doc || doc.host !== host.value) return;
@@ -134,7 +135,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
       }
     } catch (error) {
       try {guard(); if (error.code === 'VERSION_CONFLICT' && error.status === 409) {intent = null; persist();}
-        status.textContent = error.message || String(error);} catch { /* retired */ }
+        status.textContent = errorPresentation(error, t).summary;} catch { /* retired */ }
     } finally {busy = false; update();}
   }}, t('save'));
   const box = h('details', {class: 'panel model-preferences', 'data-model-preferences': ''}, h('summary', {}, t('models_title')),
@@ -160,7 +161,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     const models = [...catalog.models].sort((a, b) => (order.get(modelKey(a)) ?? 9999) - (order.get(modelKey(b)) ?? 9999));
     const change = action => {
       if (busy || intent || doc?.host !== host.value) return;
-      action(); try {persist(); status.textContent = t('models_unsaved'); renderRows(); update();} catch (error) {status.textContent = error.message || String(error);}
+      action(); try {persist(); status.textContent = t('models_unsaved'); renderRows(); update();} catch (error) {status.textContent = errorPresentation(error, t).summary;}
     };
     rows.replaceChildren(h('h2', {}, t('models_display')),
       h('p', {class: 'muted'}, t('models_display_help')),
@@ -218,7 +219,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
       if (draft.revision !== next.model_preferences.revision) status.textContent = t('models_conflict');
       else if (!equal(draft.params, copyPreferences(next.model_preferences))) status.textContent = t('models_unsaved');
       renderRows(); showUsage(next.usage); update();
-    } catch (error) {try {guard(); if (request === serial) {errorBox?.(error); status.textContent = `${t('models_not_refreshed')} ${error.message || error}`;}} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === serial) {errorBox?.(error); status.textContent = `${t('models_not_refreshed')} ${errorPresentation(error, t).summary}`;}} catch { /* retired */ }}
   }
   host.addEventListener('change', () => load()); catalogAgent.addEventListener('change', () => load());
   box.addEventListener('toggle', () => {if (box.open && !doc) load();});

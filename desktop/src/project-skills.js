@@ -1,5 +1,6 @@
 import {iconButton} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
+import {errorPresentation} from './error-presentation.js';
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 const refs = value => Array.isArray(value) && value.length <= 20 && value.every(ref => ref && typeof ref.skill_id === 'string' && digest(ref.digest)) && new Set(value.map(ref => ref.skill_id)).size === value.length;
 const record = value => value && refs(value.selected) && Number.isInteger(value.revision) && value.revision >= 0 && digest(value.digest);
@@ -22,7 +23,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
     if (busy || draft?.intent || !coherent()) return;
     try {guard(); const next = {...saved, drafts: {...saved.drafts}}; delete next.drafts[key(saved.host, saved.workspace)];
       localStorage.setItem(storageKey, JSON.stringify(next)); saved = next; draft = null; load(true);
-    } catch (error) {status.textContent = error.message || String(error);}
+    } catch (error) {status.textContent = errorPresentation(error, t).summary;}
   }}, t('skills_reload'));
   const save = h('button', {class: 'primary', type: 'button', onclick: async () => {
     if (busy || !draft || !coherent()) return;
@@ -45,7 +46,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
       }
     } catch (error) {
       try {guard(); if (error.status === 409 && ['VERSION_CONFLICT', 'SKILL_CATALOG_CHANGED', 'SKILL_SOURCE_CHANGED'].includes(error.code)) {draft.intent = null; persist();}
-        status.textContent = error.message || String(error);} catch { /* retired */ }
+        status.textContent = errorPresentation(error, t).summary;} catch { /* retired */ }
     } finally {busy = false; update();}
   }}, t('skills_save'));
   const box = h('details', {class: 'panel project-skills', 'data-project-skills': ''}, h('summary', {}, t('skills_title')),
@@ -70,7 +71,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
     if (doc.selection.selected.length && (doc.selection.host !== doc.host || doc.selection.workspace_id !== doc.workspace_id)) source.append(h('p', {class: 'note warn'}, t('skills_other_binding', {host: doc.selection.host, workspace: doc.selection.workspace_id})));
     const change = fn => {
       if (busy || draft.intent || !coherent()) return;
-      fn(); try {persist(); status.textContent = t('skills_unsaved'); render();} catch (error) {status.textContent = error.message || String(error);}
+      fn(); try {persist(); status.textContent = t('skills_unsaved'); render();} catch (error) {status.textContent = errorPresentation(error, t).summary;}
     };
     const unresolved = draft.selected.filter(ref => !catalog.skills.some(skill => same(ref, skill) && skill.available));
     list.replaceChildren(...unresolved.map(ref => h('div', {class: 'row'}, h('div', {class: 'grow'},
@@ -105,7 +106,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
       saved.drafts[draftKey] = draft;
       if (draft.revision !== next.selection.revision || draft.digest !== next.catalog.catalog_digest) status.textContent = t('skills_conflict');
       render();
-    } catch (error) {try {guard(); if (request === serial) {errorBox?.(error); status.textContent = `${t('models_not_refreshed')} ${error.message || error}`;}} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === serial) {errorBox?.(error); status.textContent = `${t('models_not_refreshed')} ${errorPresentation(error, t).summary}`;}} catch { /* retired */ }}
   }
   async function discover(force = false) {
     if (!saved.host) return;
@@ -120,7 +121,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
       workspace.value = saved.workspace; discoveredHost = selectedHost; discoveryReady = true;
       if (next.has_more) status.textContent = t('start_truncated');
       update(); await load(force);
-    } catch (error) {try {guard(); if (request === discovery) status.textContent = error.message || String(error);} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === discovery) status.textContent = errorPresentation(error, t).summary;} catch { /* retired */ }}
   }
   host.addEventListener('change', () => {if (busy || draft?.intent) return; saved.host = host.value; saved.workspace = ''; doc = draft = null; serial++; source.replaceChildren(); list.replaceChildren(); workspace.replaceChildren(); try {persist();} catch {} discover();});
   workspace.addEventListener('change', () => {if (busy || draft?.intent) return; saved.workspace = workspace.value; doc = draft = null; serial++; try {persist();} catch {} load();});
