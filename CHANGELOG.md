@@ -39,13 +39,13 @@
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
-- Keep narrow icon headers on the title row, align checkbox labels, and give mobile
-  project rows a title-first layout with right-aligned actions. Remove the extra
-  Dispatched work heading gap and wait for discussion Send readiness after reload.
-  Sessions distinguish first-run emptiness from filters and share activity labels
-  with resource rows. Reading actions explain unavailable states; failed message
-  reads show one Retry with diagnostics and export in Details. Use readable access
-  labels and consistent 代理 / 工作樹 terminology in Traditional Chinese.
+- At phone width, page headers keep icon actions beside the title, and project and
+  work-item rows put the title first with their actions on the right. Sessions says
+  "No sessions yet" before the first session instead of describing filters, and
+  resource rows use the same session labels. Mark read and Save position say why
+  they are unavailable, and a failed message read shows one alert with Retry, with
+  diagnostics in Details. Permission notes use the Connection access names (View,
+  Manage, Start…), and zh-TW uses 代理 and 工作樹 throughout.
 
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
