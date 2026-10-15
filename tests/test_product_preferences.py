@@ -110,11 +110,21 @@ async def test_source_change_during_observation_cannot_publish_under_new_host(da
 
 
 async def test_model_preferences_are_rotation_stable_but_scope_isolated(daemon):
+    from bat_agent_connector import host_git
+
+    assert isinstance(daemon.ops.context["git_runner"], host_git.HostGitRunner)
     op, _ = daemon.ops.create(PERSON, action="preferences.models.update", target={"host": "h1"},
         params={"initial_agent": "codex"}, preconditions={"expected_revision": 0}, idempotency_key="personal")
+    assert "git_execution" not in op["external_refs"]["admission_binding"]
     await settle_operations(daemon.ops)
     assert daemon.ops.get(op["operation_id"])["status"] == "succeeded"
+    replayed, created = daemon.ops.create(PERSON, action="preferences.models.update", target={"host": "h1"},
+        params={"initial_agent": "codex"}, preconditions={"expected_revision": 0}, idempotency_key="personal")
+    assert not created and replayed["operation_id"] == op["operation_id"] and replayed["status"] == "succeeded"
     rotated = api_auth.Principal("person", PERSON.scopes, credential_id="replacement")
+    rotated_replay, rotated_created = daemon.ops.create(rotated, action="preferences.models.update", target={"host": "h1"},
+        params={"initial_agent": "codex"}, preconditions={"expected_revision": 0}, idempotency_key="personal")
+    assert not rotated_created and rotated_replay["operation_id"] == op["operation_id"] and rotated_replay["status"] == "succeeded"
     a = preferences.dashboard_sync.identity(daemon.journal, PERSON)["principal_id"]
     b = preferences.dashboard_sync.identity(daemon.journal, rotated)["principal_id"]
     assert a == b

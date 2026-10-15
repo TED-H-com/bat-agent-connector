@@ -1991,7 +1991,9 @@ async def test_a07_session_operation_keeps_admission_incarnation(owned, mock, ki
     binding = {"task_id": tid, "control_version": 0, "host": "h1", "session_id": SID, "role": "lead",
                "controller_authority": task_control.authority(d.journal.get(tid)),
                "session_controller": {"host": "h1", "session_id": SID,
-                                      "controller_incarnation": registry.get("h1", SID)["controller_incarnation"]}}
+                                      "controller_incarnation": registry.get("h1", SID)["controller_incarnation"]},
+               "git_execution": {"h1": d.ops.context["git_runner"].execution_binding("h1")}}
+    assert binding["git_execution"]["h1"]["transport"] == "ssh"
     assert op["external_refs"]["admission_binding"] == binding
     assert op["preconditions"] == request["preconditions"]  # server metadata never changes the hashed request
     if raced:
@@ -2122,7 +2124,9 @@ async def test_a05_legacy_task_door_records_admission_binding(owned, entry):
     assert op["entry"] == entry and op["preconditions"] == {}
     binding = op["external_refs"]["admission_binding"]
     assert binding == {"task_id": tid, "control_version": 0,
-                       "controller_authority": task_control.authority(d.journal.get(tid))}
+                       "controller_authority": task_control.authority(d.journal.get(tid)),
+                       "git_execution": {"h1": d.ops.context["git_runner"].execution_binding("h1")}}
+    assert binding["git_execution"]["h1"]["transport"] == "ssh"
     d.journal.resume(tid)
     assert await call_owned(d, "work_pause", {"task_id": tid, "entry": entry, "idempotency_key": "legacy-door"}) == result
 

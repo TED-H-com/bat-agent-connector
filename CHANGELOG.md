@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Add the #141 backend Git transport contract: strict explicit host mode,
+  frozen execution bindings, unchanged SSH reader identity and original-key
+  setup recovery. Local Git remains disabled, with fixed readiness reasons;
+  existing SSH hosts and adjacent SSH services retain their mappings.
+
 - PM refresh, Lifecycle, accepted-plan preview and report export failures show one
   localized message with diagnostics in Details. Issue mappings without a title
   read "Untitled issue". Projects and Resources open their creation forms on
