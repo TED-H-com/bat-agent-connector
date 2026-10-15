@@ -10,7 +10,9 @@ from urllib.parse import urlencode
 
 import pytest
 
-from bat_agent_connector import dashboard_sync, pm_workspace
+from bat_agent_connector import dashboard_sync, pm_access, pm_read_cache, pm_workspace
+from bat_agent_connector.operations import OperationError
+from bat_agent_connector.pm_release_baselines import _snapshot
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import daemon as daemon  # noqa: F401
@@ -24,6 +26,35 @@ from tests.test_pm_workspace import ops as ops  # noqa: F401
 def same_identity(before, after):
     assert {key: before[key] for key in ('server_id', 'principal_id')} == {
         key: after[key] for key in ('server_id', 'principal_id')}
+
+
+async def test_operation_visibility_reuses_read_but_withdraws_after_membership_write(ops):
+    workspace = await create(ops)
+    operation = ops.get(ops.db.execute("SELECT operation_id FROM operations WHERE action='pm.workspace.create'").fetchone()[0])
+    selects = []
+    ops.db.set_trace_callback(lambda sql: selects.append(sql) if sql.lstrip().upper().startswith('SELECT') else None)
+    try:
+        with _snapshot(ops.db), pm_read_cache.scope(ops.db, OWNER):
+            before = ops.db.total_changes
+            assert pm_access.visible(ops.db, OWNER, operation)
+            first = len(selects)
+            assert pm_access.visible(ops.db, OWNER, operation)
+            # A completed grant already belongs to this request's WAL point.
+            assert selects[first:] == []
+            assert ops.db.total_changes == before
+            # Same ID with a changed projection cannot borrow the original
+            # workspace's cached permission. The key includes the full input.
+            changed = {**operation, 'target': {'workspace_id': 'ws_' + '0' * 32}}
+            assert not pm_access.visible(ops.db, OWNER, changed)
+            assert pm_access.visible(ops.db, OWNER, operation)
+            ops.db.execute('DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?',
+                (workspace['workspace_id'], OWNER.actor))
+            assert not pm_access.visible(ops.db, OWNER, operation)
+            with pytest.raises(OperationError, match='operation not found'):
+                ops.get(operation['operation_id'], principal=OWNER)
+            assert ops.list(principal=OWNER)['operations'] == []
+    finally:
+        ops.db.set_trace_callback(None)
 
 
 @pytest.mark.parametrize('old_role,new_role', [(None, 'reader'), ('reader', 'contributor'),

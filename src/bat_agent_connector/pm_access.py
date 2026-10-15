@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 
+from . import pm_read_cache
 from .operations import OperationError
 
 
@@ -26,8 +27,10 @@ def operation_source_visible(db, principal, operation_id):
 
 
 def require_operation_sources(db, principal, operation_ids):
-    if any(not operation_source_visible(db, principal, identity) for identity in set(operation_ids)):
-        raise OperationError("PM_SOURCE_UNAVAILABLE", "Original PM sources are unavailable", 404)
+    from .pm_source_reads import scope
+    with scope(db, principal):
+        if any(not operation_source_visible(db, principal, identity) for identity in set(operation_ids)):
+            raise OperationError("PM_SOURCE_UNAVAILABLE", "Original PM sources are unavailable", 404)
 
 
 def inherit_operation_sources(db, operation_id, source_operation_ids):
@@ -53,6 +56,53 @@ def inherit_operation_sources(db, operation_id, source_operation_ids):
 
 
 def visible(db, principal, operation):
+    from .pm_maintenance_repairs import source_read_context
+    from .pm_source_reads import MAX_NODES, scope, validate_scope
+    validate_scope(db, principal)
+    # A completed same-snapshot grant needs no second source savepoint or WAL
+    # anchor. Validate borrowed state first, including same-task loop turns.
+    selection = {key: operation[key] for key in ('operation_id', 'action', 'target', 'actor') if key in operation}
+    if not pm_read_cache.is_guarded() and not source_read_context(db, principal):
+        with pm_read_cache.scope(db, principal):
+            found, result = pm_read_cache.recall(_visible, (principal, selection))
+        if found and result:
+            return result
+    with scope(db, principal) as state:
+        # These are the visibility reader's entire inputs. Domain readers load
+        # their own canonical records by ID; caller results/contexts are not
+        # authority and need not be walked to construct an identical read key.
+        try:
+            key = pm_read_cache._key(selection)
+        except TypeError:
+            return _visible(db, principal, selection)
+        repairs = source_read_context(db, principal)
+        if repairs:
+            # Reuse only inside this exact guarded repair traversal. These
+            # answers may assume its backedges and never enter the full memo.
+            guard = pm_read_cache.guard_identity()
+            local_key = guard, repairs, key
+            if guard is not None and local_key in state['guarded_visibility']:
+                return True
+            generation = pm_read_cache.refusal_generation()
+            result = _visible(db, principal, selection)
+            if (result and guard is not None and generation == pm_read_cache.refusal_generation()
+                    and len(state['guarded_visibility']) < MAX_NODES):
+                state['guarded_visibility'][local_key] = True
+            return result
+        if key in state['visibility']:
+            return True
+        generation = pm_read_cache.refusal_generation()
+        result = pm_read_cache.remember(_visible, (principal, selection),
+            lambda: _visible(db, principal, selection), cache_errors=False, cache_if=bool)
+        # Conversation/spec cycles refuse, never grant. Keep only completed
+        # positives, separately bounded without consuming source depth/nodes.
+        if (result and not pm_read_cache.is_guarded() and generation == pm_read_cache.refusal_generation()
+                and len(state['visibility']) < MAX_NODES):
+            state['visibility'][key] = True
+        return result
+
+
+def _visible(db, principal, operation):
     from .pm_source_lineage import visible as source_visible
     if not source_visible(db, principal, "operation", operation.get("operation_id")):
         return False

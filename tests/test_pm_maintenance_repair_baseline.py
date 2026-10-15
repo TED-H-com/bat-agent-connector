@@ -105,7 +105,12 @@ def original_deployment(fixed, monkeypatch, adopted_delivery):
 async def finish_deployment(w):
     parent = await advance(w, w['parent'], rounds=10)
     completed = chain.child(w['d'].ops, parent)
-    assert completed and completed['status'] == 'waiting_external', completed
+    assert completed and completed['status'] == 'waiting_external', {
+        'child': completed,
+        'parent': {key: parent.get(key) for key in ('operation_id', 'status', 'error_code', 'error_message', 'reason', 'result')},
+        'operations': [{key: op.get(key) for key in ('operation_id', 'action', 'status', 'error_code', 'error_message', 'reason')}
+            for op in (w['d'].ops._decode(row) for row in w['d'].ops.db.execute('SELECT * FROM operations'))],
+    }
     for run_id, run in w['gh'].runs.items():
         run.update(status='completed', conclusion='success')
         w['gh'].jobs[run_id][1]['conclusion'] = 'success'

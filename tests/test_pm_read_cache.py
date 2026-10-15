@@ -1,8 +1,10 @@
 """The shared read memo must never extend source authority or a snapshot."""
 import asyncio
+import json
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from contextvars import copy_context
 from dataclasses import replace
 
@@ -318,6 +320,210 @@ def test_other_exceptions_are_not_cached(db):
     assert len(calls) == 2
 
 
+def test_positive_only_reader_does_not_retain_refusals_or_exceptions(db):
+    calls, available = [], False
+
+    def load():
+        calls.append(available)
+        if available is None:
+            raise OperationError('NOT_FOUND', 'Original source unavailable', 404)
+        return available
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        for _ in range(2):
+            assert not pm_read_cache.remember('positive', 'row', load, cache_errors=False, cache_if=bool)
+        available = None
+        for _ in range(2):
+            with pytest.raises(OperationError, match='Original source unavailable'):
+                pm_read_cache.remember('positive', 'row', load, cache_errors=False, cache_if=bool)
+        available = True
+        for _ in range(2):
+            assert pm_read_cache.remember('positive', 'row', load, cache_errors=False, cache_if=bool)
+        assert calls == [False, False, None, None, True]
+
+
+def test_json_projection_copies_preserve_values_and_withdraw_after_write(db):
+    calls = []
+
+    @pm_read_cache.memoized(freeze=pm_read_cache.json_snapshot, thaw=json.loads)
+    def read(connection, principal):
+        calls.append(principal.credential_id)
+        return {'label': '工程證據', 'count': None, 'rows': [
+            {'value': connection.execute('SELECT value FROM records').fetchone()[0], 'revision': 2**60}]}
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        first = read(db, OWNER)
+        first['rows'][0]['value'] = 'caller mutation'
+        first['count'] = 0
+        expected = {'label': '工程證據', 'count': None, 'rows': [{'value': 'original', 'revision': 2**60}]}
+        assert read(db, OWNER) == expected
+        assert pm_read_cache.recall(read.__wrapped__, ((OWNER,), [])) == (True, expected)
+        assert calls == [OWNER.credential_id]
+        other = replace(OWNER, credential_id='other')
+        assert read(db, other) == expected
+        assert calls == [OWNER.credential_id, 'other']
+        db.execute("UPDATE records SET value='withdrawn'")
+        assert read(db, OWNER)['rows'][0]['value'] == 'withdrawn'
+        assert read(db, OWNER)['rows'][0]['value'] == 'withdrawn'
+        assert calls == [OWNER.credential_id, 'other', OWNER.credential_id, OWNER.credential_id]
+        assert not pm_read_cache._CURRENT.get().scope.values
+
+
+@pytest.mark.parametrize('borrower', ['same_task', 'copied_task'])
+async def test_completed_visibility_still_rejects_invalid_borrowed_scope(db, monkeypatch, borrower):
+    from bat_agent_connector import pm_access, pm_source_reads
+
+    monkeypatch.setattr(pm_access, '_visible', lambda connection, principal, operation: True)
+    operation = {'operation_id': 'original-operation', 'action': 'fixture.read'}
+    async def rejected():
+        with pytest.raises(OperationError) as denied:
+            pm_access.visible(db, OWNER, operation)
+        assert denied.value.code == 'PM_SOURCE_READ_CHANGED'
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        before = db.total_changes
+        assert pm_access.visible(db, OWNER, operation)
+        with pytest.raises(OperationError) as closed:
+            with pm_source_reads.scope(db, OWNER):
+                if borrower == 'same_task':
+                    await asyncio.sleep(0)
+                    await rejected()
+                else:
+                    await asyncio.create_task(rejected())
+        assert closed.value.code == 'PM_SOURCE_READ_CHANGED'
+        assert db.total_changes == before
+
+
+def test_write_during_freeze_cannot_repopulate_scope(db):
+    def freeze(value):
+        db.execute("UPDATE records SET value='withdrawn'")
+        return pm_read_cache.json_snapshot(value)
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert pm_read_cache.remember('copy', 'row', lambda: {'value': 'original'},
+            freeze=freeze, thaw=json.loads) == {'value': 'original'}
+        assert not pm_read_cache._CURRENT.get().scope.values
+
+
+def test_recall_is_copy_safe_principal_scoped_and_disabled_by_write(db):
+    assert pm_read_cache.recall('source', 'row') == (False, None)
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert pm_read_cache.recall('source', 'row') == (False, None)
+        pm_read_cache.remember('source', 'row', lambda: {'rows': ['original']})
+        found, value = pm_read_cache.recall('source', 'row')
+        assert found
+        value['rows'].clear()
+        with pm_read_cache.guarded():
+            assert pm_read_cache.recall('source', 'row') == (True, {'rows': ['original']})
+        with pm_read_cache.scope(db, replace(OWNER, credential_id='other')):
+            assert pm_read_cache.recall('source', 'row') == (False, None)
+        copied = copy_context()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            assert pool.submit(copied.run, pm_read_cache.recall, 'source', 'row').result() == (False, None)
+        db.execute("UPDATE records SET value='withdrawn'")
+        assert pm_read_cache.recall('source', 'row') == (False, None)
+    assert pm_read_cache.recall('source', 'row') == (False, None)
+
+
+def test_raw_lineage_metadata_reuses_under_guard_and_invalidates_on_write(db):
+    db.row_factory = sqlite3.Row
+    db.execute('CREATE TABLE operations (operation_id TEXT, action TEXT, target TEXT, params TEXT)')
+    db.execute("INSERT INTO operations VALUES ('source','ordinary','{}','{}')")
+    db.execute('CREATE TABLE pm_source_lineage (resource_type TEXT, resource_id TEXT, original_operation_id TEXT)')
+    db.execute("INSERT INTO pm_source_lineage VALUES ('operation','source','original-one')")
+    selects = []
+    db.set_trace_callback(lambda sql: selects.append(sql) if sql.lstrip().upper().startswith('SELECT') else None)
+    try:
+        with _snapshot(db), pm_read_cache.scope(db, OWNER), pm_read_cache.guarded():
+            first = pm_read_cache.operation_row(db, 'source')
+            assert first['params'] == '{}'  # Raw columns, not a parsed permission/document.
+            roots = pm_source_lineage.roots(db, 'operation', 'source')
+            assert roots == {'original-one'}
+            count = len(selects)
+            first['params'] = 'caller mutation'
+            roots.add('caller-supplied-source')
+            assert pm_read_cache.operation_row(db, 'source')['params'] == '{}'
+            assert pm_source_lineage.roots(db, 'operation', 'source') == {'original-one'}
+            assert len(selects) == count
+            db.execute("UPDATE operations SET params='changed'")
+            db.execute("INSERT INTO pm_source_lineage VALUES ('operation','source','original-two')")
+            assert pm_read_cache.operation_row(db, 'source')['params'] == 'changed'
+            # Restore valid JSON without reviving any pre-write metadata memo.
+            db.execute("UPDATE operations SET params='{}'")
+            assert pm_source_lineage.roots(db, 'operation', 'source') == {'original-one', 'original-two'}
+            assert pm_read_cache._CURRENT.get().scope.values == {}
+    finally:
+        db.set_trace_callback(None)
+
+
+def test_canonical_operation_decodes_once_and_isolates_nested_caller_changes(db, monkeypatch):
+    from bat_agent_connector.operations import OperationService
+
+    db.row_factory = sqlite3.Row
+    db.execute('''CREATE TABLE operations (operation_id TEXT,action TEXT,target TEXT,params TEXT,
+        preconditions TEXT,result TEXT,external_refs TEXT,cancel_requested INTEGER,idem_key TEXT,request_hash TEXT)''')
+    db.execute('INSERT INTO operations VALUES (?,?,?,?,?,?,?,?,?,?)', (
+        'source', 'ordinary', '{}', '{"items":[{"value":"original"}]}', '{}',
+        '{"receipt":{"key":"original-key"}}', '{"binding":{"sources":["original-source"]}}', 0, 'original-key', 'hash'))
+    decode, calls = OperationService._decode, []
+    def counted(row):
+        calls.append(row['operation_id'])
+        return decode(row)
+    monkeypatch.setattr(OperationService, '_decode', staticmethod(counted))
+    changes = db.total_changes
+    with _snapshot(db), pm_read_cache.scope(db, OWNER), pm_read_cache.guarded():
+        first = pm_read_cache.operation(db, 'source')
+        expected = decode(pm_read_cache.operation_row(db, 'source'))
+        first['params']['items'][0]['value'] = 'caller change'
+        first['result']['receipt']['key'] = 'replacement-key'
+        first['external_refs']['binding']['sources'].append('caller source')
+        assert pm_read_cache.operation(db, 'source') == expected
+        assert calls == ['source'] and db.total_changes == changes
+        db.execute('UPDATE operations SET params=?', ('{"items":[{"value":"changed"}]}',))
+        current = pm_read_cache.operation(db, 'source')
+        assert current['params']['items'][0]['value'] == 'changed'
+        assert current['idempotency_key'] == 'original-key'
+        assert calls == ['source', 'source']
+        assert pm_read_cache._CURRENT.get().scope.values == {}
+
+
+@pytest.mark.parametrize('kind', ['baseline', 'policy'])
+def test_fixed_maintenance_metadata_reuses_only_verified_isolated_records(db, kind):
+    from bat_agent_connector import pm_maintenance_policy, pm_release_baselines
+
+    db.row_factory = sqlite3.Row
+    if kind == 'baseline':
+        module, table, id_key, identity = pm_release_baselines, 'pm_release_baselines', 'baseline_id', 'pmrb_' + '1' * 32
+        document = {'workspace_id': 'workspace', 'operation_id': 'operation', 'baseline_id': identity,
+            'version': 1, 'previous_baseline_id': None}
+        code = 'PM_BASELINE_CORRUPT'
+    else:
+        module, table, id_key, identity = pm_maintenance_policy, 'pm_maintenance_policies', 'policy_id', 'pmmp_' + '1' * 32
+        document = {'workspace_id': 'workspace', 'operation_id': 'operation', 'policy_id': identity,
+            'revision': 1, 'previous_policy_id': None, 'baseline_id': 'pmrb_' + '1' * 32}
+        code = 'PM_MAINTENANCE_POLICY_CORRUPT'
+    columns = tuple(document)
+    document['source'] = {'ids': ['original']}
+    db.execute(f'CREATE TABLE {table} ({",".join(columns)},document TEXT,document_digest TEXT)')
+    db.execute(f'INSERT INTO {table} VALUES ({",".join("?" for _ in range(len(columns) + 2))})',
+        tuple(document[key] for key in columns) + (json.dumps(document), pm_release_baselines.sources.digest(document)))
+    selects, changes = [], db.total_changes
+    db.set_trace_callback(lambda sql: selects.append(sql) if sql.startswith('SELECT * FROM ' + table) else None)
+    try:
+        with _snapshot(db), pm_read_cache.scope(db, OWNER), pm_read_cache.guarded():
+            first = module._record(db, 'workspace', identity)
+            first['document']['source']['ids'].append('caller change')
+            assert module._record(db, 'workspace', identity)['document'] == document
+            assert len(selects) == 1 and db.total_changes == changes
+            db.execute(f'UPDATE {table} SET document=? WHERE {id_key}=?', ('{}', identity))
+            with pytest.raises(OperationError) as corrupt:
+                module._record(db, 'workspace', identity)
+            assert corrupt.value.code == code
+            assert pm_read_cache._CURRENT.get().scope.values == {}
+    finally:
+        db.set_trace_callback(None)
+
+
 def test_explicit_namespaces_do_not_collide(db):
     with _snapshot(db), pm_read_cache.scope(db):
         assert pm_read_cache.remember('one', 'id', lambda: 1) == 1
@@ -415,6 +621,143 @@ def test_guarded_scope_reuses_only_its_own_assumptions_and_discards_them(db):
             assert pm_read_cache._CURRENT.get().scope is outer
             assert pm_read_cache.remember('source', 'id', lambda: load('duplicate')) == {'value': 'proven'}
     assert calls == ['proven', 'first', 'deeper', 'refused', 'fresh', 'second', 'deeper', 'refused', 'fresh']
+
+
+@pytest.mark.parametrize('private', [False, True])
+@pytest.mark.parametrize('guard_independent', [False, True])
+@pytest.mark.parametrize('fails', [False, True])
+def test_refused_loads_never_populate_ordinary_or_guarded_scopes(db, private, guard_independent, fails):
+    calls = []
+
+    def load():
+        calls.append(True)
+        pm_read_cache.refuse()
+        if fails:
+            raise OperationError('NOT_FOUND', 'Traversal refused', 404)
+        return True  # Even an ignored refusal cannot become a saved grant.
+
+    memo = pm_read_cache.guarded_scope if private else pm_read_cache.scope
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        outer = pm_read_cache._CURRENT.get().scope
+        with (pm_read_cache.guarded() if private else nullcontext()), memo(db, OWNER):
+            current = pm_read_cache._CURRENT.get().scope
+            for _ in range(2):
+                if fails:
+                    with pytest.raises(OperationError, match='Traversal refused'):
+                        pm_read_cache.remember('refused', 'id', load, guard_independent=guard_independent)
+                else:
+                    assert pm_read_cache.remember('refused', 'id', load, guard_independent=guard_independent)
+                assert current.values == {} and outer.values == {}
+                assert pm_read_cache.recall('refused', 'id') == (False, None)
+        assert pm_read_cache.recall('refused', 'id') == (False, None)
+    assert calls == [True, True]
+
+
+def test_guard_independent_metadata_in_guarded_scope_stays_private(db):
+    calls = []
+
+    def read(key, value):
+        def load():
+            calls.append(value)
+            return {'value': value}
+        return pm_read_cache.remember('raw', key, load, guard_independent=True)
+
+    changes = db.total_changes
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert read('id', 'outer') == {'value': 'outer'}
+        outer = pm_read_cache._CURRENT.get().scope
+        with pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+            private = pm_read_cache._CURRENT.get().scope
+            first = read('id', 'private')
+            first['value'] = 'caller mutation'
+            assert read('id', 'duplicate') == {'value': 'private'}
+            assert read('private-only', 'private-only') == {'value': 'private-only'}
+            assert pm_read_cache.recall('raw', 'id') == (True, {'value': 'private'})
+            assert private is not outer
+        assert not private.active and private.values == {}
+        assert read('id', 'duplicate') == {'value': 'outer'}
+        assert pm_read_cache.recall('raw', 'private-only') == (False, None)
+        # Preserve M4's independent-metadata exemption in ordinary scopes.
+        with pm_read_cache.guarded():
+            assert read('ordinary-raw', 'raw') == read('ordinary-raw', 'duplicate') == {'value': 'raw'}
+        assert read('ordinary-raw', 'duplicate') == {'value': 'raw'}
+    assert calls == ['outer', 'private', 'private-only', 'raw']
+    assert db.total_changes == changes
+
+
+@pytest.mark.parametrize('refusal', ['cycle', 'budget'])
+@pytest.mark.parametrize('guard_independent', [False, True])
+def test_guarded_scope_does_not_save_ignored_source_refusal(db, monkeypatch, refusal, guard_independent):
+    from bat_agent_connector import pm_source_reads
+
+    calls = []
+    if refusal == 'budget':
+        monkeypatch.setattr(pm_source_reads, 'MAX_NODES', 1)
+
+    def load():
+        calls.append(True)
+        def ignored_refusal():
+            child = 'parent' if refusal == 'cycle' else 'child'
+            assert not pm_source_reads.check(db, OWNER, 'original_root', child, lambda: True)
+            return True
+        return pm_source_reads.check(db, OWNER, 'original_root', 'parent', ignored_refusal)
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        outer = pm_read_cache._CURRENT.get().scope
+        with pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+            for _ in range(2):
+                assert pm_read_cache.remember('ignored', 'id', load, guard_independent=guard_independent)
+                assert pm_read_cache._CURRENT.get().scope.values == {}
+                assert pm_read_cache.recall('ignored', 'id') == (False, None)
+        assert outer.values == {}
+    assert calls == [True, True]
+
+
+@pytest.mark.parametrize('guard_independent', [False, True])
+def test_nested_guard_cannot_recall_read_or_store_private_entries(db, guard_independent):
+    calls = []
+
+    def read(key, value):
+        def load():
+            calls.append(value)
+            return value
+        return pm_read_cache.remember('source', key, load, guard_independent=guard_independent)
+
+    with _snapshot(db), pm_read_cache.guarded(), pm_read_cache.guarded_scope(db, OWNER):
+        assert read('id', 'private') == 'private'
+        with pytest.raises(OperationError, match='Private unavailable'):
+            pm_read_cache.remember('source', 'error', lambda: (_ for _ in ()).throw(
+                OperationError('NOT_FOUND', 'Private unavailable', 404)), guard_independent=guard_independent)
+        private = pm_read_cache._CURRENT.get().scope
+        stored = private.values.copy()
+        with pm_read_cache.guarded(), pm_read_cache.scope(db, OWNER):
+            assert pm_read_cache.recall('source', 'id') == (False, None)
+            assert pm_read_cache.recall('source', 'error') == (False, None)
+            assert read('id', 'deeper') == 'deeper'
+            assert read('error', 'deeper available') == 'deeper available'
+            assert read('nested-only', 'first') == 'first'
+            assert read('nested-only', 'second') == 'second'
+            assert private.values == stored
+        assert pm_read_cache.recall('source', 'id') == (True, 'private')
+        with pytest.raises(OperationError, match='Private unavailable'):
+            pm_read_cache.recall('source', 'error')
+        assert pm_read_cache.recall('source', 'nested-only') == (False, None)
+        assert read('id', 'duplicate') == 'private'
+    assert calls == ['private', 'deeper', 'deeper available', 'first', 'second']
+
+
+@pytest.mark.parametrize('private', [False, True])
+def test_refusal_during_freeze_cannot_populate_scope(db, private):
+    def freeze(value):
+        pm_read_cache.refuse()
+        return pm_read_cache.json_snapshot(value)
+
+    memo = pm_read_cache.guarded_scope if private else pm_read_cache.scope
+    with _snapshot(db), (pm_read_cache.guarded() if private else nullcontext()), memo(db, OWNER):
+        assert pm_read_cache.remember('raw', 'id', lambda: {'value': 'original'},
+            guard_independent=True, freeze=freeze, thaw=json.loads) == {'value': 'original'}
+        assert pm_read_cache._CURRENT.get().scope.values == {}
+        assert pm_read_cache.recall('raw', 'id') == (False, None)
 
 
 def test_guarded_scope_requires_a_guard_and_an_unchanged_snapshot(db, reader):
@@ -551,7 +894,7 @@ def test_repair_repeated_back_edges_are_bounded_without_exporting_partial_access
     def leaf(connection, principal):
         calls.append(bool(repairs._READING.get()))
         try:
-            repairs._full_access(ops, principal, parent)
+            repairs._full_access_sources(ops, principal, parent)
         except OperationError:
             return False
         return True
@@ -568,7 +911,7 @@ def test_repair_repeated_back_edges_are_bounded_without_exporting_partial_access
     monkeypatch.setattr(delivery, 'require_sources', withdrawn)
     with _snapshot(db), pm_read_cache.scope(db, OWNER):
         with pytest.raises(OperationError, match='withdrawn'):
-            repairs._full_access(ops, OWNER, parent)
+            repairs._full_access_sources(ops, OWNER, parent)
         assert calls == [True]  # Forty repeated references need one traversal.
         assert pm_read_cache._CURRENT.get().scope.values == {}
         assert leaf(db, OWNER) is False  # The conditional True never escapes.
@@ -592,7 +935,7 @@ def test_repeated_repair_source_reads_leave_delivery_budget_for_each_provider_fr
         # Model costly synchronous validation without sleeping or timer races.
         clock[0] += 1
         calls.append(True)
-        repairs._full_access(ops, principal, parent)
+        repairs._full_access_sources(ops, principal, parent)
         return True
 
     def sources(*args):
@@ -603,7 +946,7 @@ def test_repeated_repair_source_reads_leave_delivery_budget_for_each_provider_fr
     monkeypatch.setattr(evidence, 'require_evidence_sources', sources)
     monkeypatch.setattr(delivery, 'require_sources', lambda *args: None)
     monkeypatch.setattr(repairs, '_operation', lambda service, oid: parent)
-    monkeypatch.setattr(repairs, '_guard', lambda service, op: repairs._full_access(service, OWNER, op))
+    monkeypatch.setattr(repairs, '_guard', lambda service, op: repairs._full_access_sources(service, OWNER, op))
     monkeypatch.setattr(repairs, '_record_for', lambda service, op: {'deadline_at': 30})
     monkeypatch.setattr(delivery, 'time', SimpleNamespace(time=lambda: clock[0]))
     ctx = SimpleNamespace(service=ops, operation_id=parent['operation_id'])
@@ -647,6 +990,273 @@ def test_proposal_access_cycle_refusals_are_not_cached_request_wide(db):
         # A's traversal first: its nested B answer meets the cycle refusal.
         assert guard(db, OWNER, 'a', lambda: (b_visible(db, OWNER), True)[1]) is True
         assert b_visible(db, OWNER) is unscoped
+
+
+def test_original_source_cycle_refusal_taints_enclosing_request_loads(db):
+    from bat_agent_connector import pm_source_reads
+
+    def guard(connection, principal, identity, check):
+        return pm_source_reads.check(connection, principal, 'original_root', identity, check)
+
+    b_visible = _cycle_world(guard)
+    assert b_visible(db, OWNER) is True
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        assert guard(db, OWNER, 'a', lambda: (b_visible(db, OWNER), True)[1]) is True
+        assert not pm_read_cache._CURRENT.get().scope.values
+        assert b_visible(db, OWNER) is True
+
+
+def test_scope_local_cycle_answer_cannot_escape_into_request_memo(db):
+    from bat_agent_connector import pm_source_reads
+
+    @pm_read_cache.memoized
+    def b_visible(connection, principal):
+        return pm_source_reads.check(connection, principal, 'original_root', 'b', lambda:
+            pm_source_reads.check(connection, principal, 'original_root', 'a', lambda: True))
+
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        with pm_source_reads.scope(db, OWNER):
+            assert pm_source_reads.check(db, OWNER, 'original_root', 'a', lambda:
+                (b_visible(db, OWNER), True)[1]) is True
+            # Existing read-local refusal remains fail closed. Its second hit
+            # must not become a request-wide denial after the read closes.
+            assert b_visible(db, OWNER) is False
+            assert not pm_read_cache._CURRENT.get().scope.values
+        assert b_visible(db, OWNER) is True
+
+
+def test_operation_visibility_does_not_reuse_partial_repair_grant(db, monkeypatch):
+    from bat_agent_connector import pm_access, pm_source_reads
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    operation = {'operation_id': 'original', 'action': 'pm.maintenance.repair'}
+    calls = []
+
+    def visible(connection, principal, selected):
+        active = repairs.source_read_active(connection, principal)
+        calls.append(active)
+        return active  # A grant made only by the in-progress repair backedge.
+
+    monkeypatch.setattr(pm_access, '_visible', visible)
+    with pm_source_reads.scope(db, OWNER) as state:
+        token = repairs._READING.set({repairs._source_read_key(db, OWNER, 'repair')})
+        try:
+            assert pm_access.visible(db, OWNER, operation)
+            assert state['visibility'] == {}
+        finally:
+            repairs._READING.reset(token)
+        assert not pm_access.visible(db, OWNER, operation)
+        assert calls == [True, False]
+
+
+def test_operation_visibility_does_not_publish_guarded_positive(db, monkeypatch):
+    from bat_agent_connector import pm_access, pm_source_reads
+
+    monkeypatch.setattr(pm_access, '_visible', lambda *args: pm_read_cache.is_guarded())
+    with pm_source_reads.scope(db, OWNER) as state:
+        with pm_read_cache.guarded():
+            assert pm_access.visible(db, OWNER, {'operation_id': 'guarded'})
+        assert state['visibility'] == {}
+        assert not pm_access.visible(db, OWNER, {'operation_id': 'guarded'})
+
+
+def test_repair_visibility_reuses_only_exact_guard_and_active_repairs(db, monkeypatch):
+    from bat_agent_connector import pm_access, pm_source_reads
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    calls = []
+    first = frozenset({repairs._source_read_key(db, OWNER, 'first')})
+    second = frozenset({repairs._source_read_key(db, OWNER, 'second')})
+
+    def visible(connection, principal, selected):
+        context = repairs.source_read_context(connection, principal)
+        calls.append(context)
+        return context == first
+
+    monkeypatch.setattr(pm_access, '_visible', visible)
+    operation = {'operation_id': 'original'}
+    with pm_source_reads.scope(db, OWNER) as state:
+        token = repairs._READING.set(first)
+        try:
+            with pm_read_cache.guarded():
+                assert pm_access.visible(db, OWNER, operation)
+                assert pm_access.visible(db, OWNER, operation)
+                repairs._READING.set(second)
+                assert not pm_access.visible(db, OWNER, operation)
+                repairs._READING.set(first)
+                assert pm_access.visible(db, OWNER, operation)
+            with pm_read_cache.guarded():
+                assert pm_access.visible(db, OWNER, operation)
+            assert calls == [first, second, first]
+            assert state['visibility'] == {}
+            assert pm_read_cache._CURRENT.get().scope.values == {}
+        finally:
+            repairs._READING.reset(token)
+        assert not pm_access.visible(db, OWNER, operation)
+    assert not state['guarded_visibility']
+
+
+def test_repair_visibility_does_not_retain_ignored_refusal(db, monkeypatch):
+    from bat_agent_connector import pm_access, pm_source_reads
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    calls = []
+
+    def visible(connection, principal, selected):
+        calls.append(True)
+        return pm_source_reads.check(connection, principal, 'original_root', 'cycle', lambda:
+            (pm_source_reads.check(connection, principal, 'original_root', 'cycle', lambda: True), True)[1])
+
+    monkeypatch.setattr(pm_access, '_visible', visible)
+    with pm_source_reads.scope(db, OWNER) as state:
+        token = repairs._READING.set({repairs._source_read_key(db, OWNER, 'repair')})
+        try:
+            with pm_read_cache.guarded():
+                assert pm_access.visible(db, OWNER, {'operation_id': 'source'})
+                assert pm_access.visible(db, OWNER, {'operation_id': 'source'})
+            assert state['guarded_visibility'] == {}
+            assert calls == [True, True]
+        finally:
+            repairs._READING.reset(token)
+
+
+def test_write_cannot_reuse_repair_traversal_visibility(db, monkeypatch):
+    from bat_agent_connector import pm_access, pm_source_reads
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    monkeypatch.setattr(pm_access, '_visible', lambda *args:
+        db.execute('SELECT value FROM records').fetchone()[0] == 'original')
+    db.execute('BEGIN')  # Keep the caller's withdrawal when the reader refuses.
+    token = repairs._READING.set({repairs._source_read_key(db, OWNER, 'repair')})
+    try:
+        with pytest.raises(OperationError, match='fresh snapshot'):
+            with pm_source_reads.scope(db, OWNER) as state, pm_read_cache.guarded():
+                assert pm_access.visible(db, OWNER, {'operation_id': 'source'})
+                assert state['guarded_visibility']
+                db.execute("UPDATE records SET value='withdrawn'")
+                pm_access.visible(db, OWNER, {'operation_id': 'source'})
+        assert state['guarded_visibility'] == {}
+        assert db.in_transaction
+        assert db.execute('SELECT value FROM records').fetchone()[0] == 'withdrawn'
+        with pm_source_reads.scope(db, OWNER), pm_read_cache.guarded():
+            assert not pm_access.visible(db, OWNER, {'operation_id': 'source'})
+    finally:
+        repairs._READING.reset(token)
+        db.execute('ROLLBACK')
+
+
+def _repair_source_gate(db, monkeypatch, access):
+    from types import SimpleNamespace
+
+    from bat_agent_connector import pm_maintenance_repair_delivery as delivery
+    from bat_agent_connector import pm_maintenance_repair_evidence as evidence
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    def operation(ops, oid):
+        return {'operation_id': oid, 'action': repairs.ACTION, 'target': {'workspace_id': 'workspace'}}
+
+    monkeypatch.setattr(repairs, '_operation', operation)
+    monkeypatch.setattr(repairs, '_intent', lambda op: {})
+    monkeypatch.setattr(repairs.pm_workspace, 'require_member', lambda *args: None)
+    monkeypatch.setattr(repairs, '_access', access)
+    monkeypatch.setattr(evidence, 'require_evidence_sources', lambda *args: None)
+    monkeypatch.setattr(delivery, 'require_sources', lambda *args: None)
+    ops = SimpleNamespace(db=db)
+    return lambda oid: repairs._full_access(ops, OWNER, operation(ops, oid))
+
+
+def test_canonical_repair_frame_validates_repeated_sources_once_and_next_frame_rechecks(db, monkeypatch):
+    from bat_agent_connector import pm_maintenance_repair_evidence as evidence
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+
+    calls, changes = [], db.total_changes
+
+    @pm_read_cache.memoized
+    def leaf(connection, principal):
+        assert repairs.source_backedge(connection, principal, 'parent')
+        calls.append(True)
+        return True
+
+    def sources(ops, principal, operation):
+        for _ in range(20):
+            assert leaf(db, principal)
+
+    gate = _repair_source_gate(db, monkeypatch, sources)
+    monkeypatch.setattr(evidence, 'require_evidence_sources', sources)
+    for frame in range(2):
+        with _snapshot(db), pm_read_cache.scope(db, OWNER):
+            gate('parent')
+            # Access and evidence each validate twenty copies of this source.
+            assert len(calls) == frame + 1
+            assert pm_read_cache.recall(leaf.__wrapped__, ((OWNER,), [])) == (False, None)
+    assert db.total_changes == changes
+
+
+def test_completed_repair_dag_releases_only_proved_source_booleans(db, monkeypatch):
+    from bat_agent_connector import pm_source_reads
+
+    calls = []
+
+    def source():
+        calls.append(True)
+        return True
+
+    def access(ops, principal, operation):
+        assert pm_source_reads.check(db, principal, 'original_root', 'child', source)
+
+    gate = _repair_source_gate(db, monkeypatch, access)
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        gate('parent')
+        assert pm_source_reads.check(db, OWNER, 'original_root', 'child', source)
+        assert calls == [True]
+        db.execute("UPDATE records SET value='withdrawn'")
+        assert pm_source_reads.check(db, OWNER, 'original_root', 'child', source)
+        assert calls == [True, True]
+
+
+def test_failed_repair_dag_cannot_release_partial_or_poison_another_repair(db, monkeypatch):
+    from bat_agent_connector import pm_maintenance_repairs as repairs
+    from bat_agent_connector import pm_source_reads
+
+    calls = []
+
+    def source():
+        visible = repairs.source_backedge(db, OWNER, 'failed')
+        calls.append(visible)
+        return visible  # Assumes only the failed repair's active backedge.
+
+    def access(ops, principal, operation):
+        if not pm_source_reads.check(db, principal, 'original_root', 'partial-child', source):
+            raise OperationError('NOT_FOUND', 'Hidden original source', 404)
+        if operation['operation_id'] == 'failed':
+            raise OperationError('NOT_FOUND', 'Incomplete repair DAG', 404)
+
+    gate = _repair_source_gate(db, monkeypatch, access)
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        with pm_source_reads.scope(db, OWNER):
+            with pytest.raises(OperationError, match='Incomplete repair DAG'):
+                gate('failed')
+            with pytest.raises(OperationError, match='Hidden original source'):
+                gate('different')
+        assert pm_read_cache._CURRENT.get().scope.values == {}
+        assert not pm_source_reads.check(db, OWNER, 'original_root', 'partial-child', source)
+        assert calls == [True, False, False]
+
+
+def test_completed_repair_with_ignored_cycle_cannot_release_source_answers(db, monkeypatch):
+    from bat_agent_connector import pm_source_reads
+
+    def access(ops, principal, operation):
+        assert pm_source_reads.check(db, principal, 'original_root', 'cycle', lambda:
+            (pm_source_reads.check(db, principal, 'original_root', 'cycle', lambda: True), True)[1])
+
+    gate = _repair_source_gate(db, monkeypatch, access)
+    with _snapshot(db), pm_read_cache.scope(db, OWNER):
+        gate('parent')
+        assert pm_read_cache._CURRENT.get().scope.values == {}
+        calls = []
+        assert pm_source_reads.check(db, OWNER, 'original_root', 'cycle', lambda: (calls.append(True), True)[1])
+        assert calls == [True]
 
 
 def test_spec_source_cycle_refusals_are_not_cached_request_wide(db, monkeypatch):
@@ -701,7 +1311,9 @@ def test_traversal_budget_refusals_do_not_survive_in_the_request_memo(db, monkey
         def guard(identity, check):
             checks[identity] = check
             try:
-                repairs._full_access(SimpleNamespace(db=db), OWNER, {'operation_id': identity})
+                # M4 split the canonical record gate from this synthetic
+                # traversal seam. Exercise the actual repair backedge guard.
+                repairs._full_access_sources(SimpleNamespace(db=db), OWNER, {'operation_id': identity})
             except OperationError:
                 return False
             return True

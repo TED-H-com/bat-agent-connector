@@ -1,5 +1,6 @@
 """Memoization limited to one owner's immutable database read snapshot."""
 import asyncio
+import json
 import threading
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -14,6 +15,8 @@ _CURRENT = ContextVar('pm_read_cache', default=None)
 # Depth of active traversal guards. Inherited contexts still cannot use the
 # owner's memo; guarded answers stay private to their exact traversal depth.
 _GUARDS = ContextVar('pm_read_cache_guards', default=0)
+_GUARD_TOKEN = ContextVar('pm_read_cache_guard_token', default=None)
+_REFUSALS = ContextVar('pm_read_cache_refusals', default=0)
 
 
 def _task():
@@ -53,6 +56,17 @@ class _Frame:
     scope: _Scope
     principal: object
     parent: object = None
+
+
+@dataclass(frozen=True)
+class _SavedValue:
+    value: object
+    thaw: object
+
+
+def json_snapshot(value):
+    """Freeze readers whose public values already consist entirely of JSON."""
+    return json.dumps(value, ensure_ascii=False, separators=(',', ':'))
 
 
 def _key(value):
@@ -99,14 +113,17 @@ def guarded():
 
     Answers computed inside a guard can assume that an in-progress back edge is
     visible, or refuse because a traversal budget ran out. Neither is the
-    request-wide answer, so guarded loads cannot populate the request memo.
-    Entries stored outside every guard may still be served. An isolated
-    guarded_scope may store answers relative to its own unchanged guard only.
+    request-wide answer, so guarded loads cannot populate the request memo
+    except for explicitly independent raw metadata. Entries stored outside
+    every guard may still be served. A private guarded_scope may store answers
+    relative to its own unchanged guard only.
     """
     token = _GUARDS.set(_GUARDS.get() + 1)
+    identity = _GUARD_TOKEN.set(object())
     try:
         yield
     finally:
+        _GUARD_TOKEN.reset(identity)
         _GUARDS.reset(token)
 
 
@@ -136,45 +153,102 @@ def guarded_scope(db, principal):
         _CURRENT.reset(token)
 
 
-def remember(kind, key, load):
+def is_guarded():
+    """Whether new answers would depend on an active traversal guard."""
+    return _GUARDS.get() > 0
+
+
+def guard_identity():
+    """Identify one live traversal; never promote its partial grants."""
+    return _GUARD_TOKEN.get()
+
+
+def refusal_generation():
+    """Identify loads affected by a traversal-local cycle or budget refusal."""
+    return _REFUSALS.get()
+
+
+def refuse():
+    """Keep every enclosing load from storing a traversal-dependent answer."""
+    _REFUSALS.set(_REFUSALS.get() + 1)
+
+
+def _entry(entry):
+    available, value = entry
+    if not available:
+        from .operations import OperationError
+        raise OperationError(*value)
+    return value.thaw(value.value) if isinstance(value, _SavedValue) else deepcopy(value)
+
+
+def recall(kind, key):
+    """Return (found, value) without adding loader frames to a bounded walk."""
+    frame = _CURRENT.get()
+    if frame is None or not frame.scope.usable():
+        return False, None
+    if frame.scope.guard_depth and _GUARDS.get() != frame.scope.guard_depth:
+        return False, None  # Match remember: no conditional read from another guard.
+    try:
+        identity = (kind, frame.principal, _key(key))
+    except TypeError:
+        return False, None
+    entry = frame.scope.values.get(identity)
+    return (True, _entry(entry)) if entry is not None else (False, None)
+
+
+def remember(kind, key, load, *, cache_errors=True, cache_if=None, guard_independent=False,
+             freeze=deepcopy, thaw=deepcopy):
     """Remember a namespaced value; include explicit visibility inputs in key.
 
     The selected scope principal is also part of every key. Unsupported key
     types bypass caching, preserving the underlying reader's validation.
+    Readers with traversal-local refusals can retain only completed positive
+    answers with cache_if=bool and leave exceptions uncached.
+    guard_independent is only for raw snapshot metadata, never visibility,
+    sanitized projections or answers depending on a traversal guard.
+    freeze/thaw may optimize copies of known value types; each returned value
+    must remain isolated from the loader, other callers and the saved envelope.
     """
     frame = _CURRENT.get()
     if frame is None or not frame.scope.usable():
         return load()
     current = frame.scope
     if current.guard_depth and _GUARDS.get() != current.guard_depth:
-        return load()  # Conditional answers require this exact traversal guard.
+        return load()  # Even raw metadata cannot borrow a different private guard.
     try:
         identity = (kind, frame.principal, _key(key))
     except TypeError:
         return load()
     if identity not in current.values:
-        if _GUARDS.get() > current.guard_depth:
+        # Independent metadata keeps M4's ordinary-scope exemption. In a
+        # guarded_scope it stays private at this exact depth: do not export it
+        # to an outer memo or let a deeper guard reuse/populate this scope.
+        if _GUARDS.get() > current.guard_depth and not guard_independent:
             return load()
         from .operations import OperationError
+        generation = refusal_generation()
         try:
             value = load()
         except OperationError as exc:
-            if not current.usable():
+            if (not cache_errors or not current.usable()
+                    or generation != refusal_generation()):
                 raise
             current.values[identity] = (False, (exc.code, exc.message, exc.status))
         else:
             # Loading can itself write. Do not repopulate an invalidated memo.
-            if not current.usable():
+            if (not current.usable() or cache_if is not None and not cache_if(value)
+                    or generation != refusal_generation()):
                 return value
-            current.values[identity] = (True, deepcopy(value))
-    available, value = current.values[identity]
-    if not available:
-        from .operations import OperationError
-        raise OperationError(*value)
-    return deepcopy(value)
+            saved = freeze(value)
+            if not current.usable() or generation != refusal_generation():
+                return value
+            current.values[identity] = (True, _SavedValue(saved, thaw))
+    return _entry(current.values[identity])
 
 
-def memoized(fn):
+def memoized(fn=None, *, guard_independent=False, freeze=deepcopy, thaw=deepcopy):
+    if fn is None:
+        return lambda reader: memoized(reader, guard_independent=guard_independent, freeze=freeze, thaw=thaw)
     first_name = next(iter(signature(fn).parameters))
 
     @wraps(fn)
@@ -186,5 +260,35 @@ def memoized(fn):
             return fn(*args, **kwargs)
         key = (args[1:], sorted(kwargs.items())) if args else (
             (), sorted((name, value) for name, value in kwargs.items() if name != first_name))
-        return remember(fn, key, lambda: fn(*args, **kwargs))
+        return remember(fn, key, lambda: fn(*args, **kwargs), guard_independent=guard_independent,
+                        freeze=freeze, thaw=thaw)
     return read
+
+
+def _copy_columns(row):
+    # Journal uses native SQLite scalar columns (including encoded JSON text),
+    # so a new envelope suffices: no column contains a mutable source document.
+    return row.copy() if row is not None else None
+
+
+@memoized(guard_independent=True, freeze=_copy_columns, thaw=_copy_columns)
+def operation_row(db, operation_id):
+    """Raw canonical columns only; callers still decode and authorize each read.
+
+    SQL strings are immutable and independent of visibility/backedge guards.
+    Copies protect the saved envelope, and any write disables their reuse.
+    """
+    row = db.execute('SELECT * FROM operations WHERE operation_id=?', (operation_id,)).fetchone()
+    return dict(row) if row is not None else None
+
+
+@memoized(guard_independent=True, freeze=json_snapshot, thaw=json.loads)
+def operation(db, operation_id):
+    """Decode canonical JSON columns once; return an isolated raw record.
+
+    This supplies no visibility grant. Domain readers still authorize the
+    record, and mutations disable both the raw-row and decoded-record memos.
+    """
+    from .operations import OperationService
+    row = operation_row(db, operation_id)
+    return OperationService._decode(row) if row is not None else None

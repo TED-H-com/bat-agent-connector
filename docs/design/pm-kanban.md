@@ -77,7 +77,7 @@ A card contains:
 | `column`, `completion` | Projection of the existing WorkItem state and exact-content approval |
 | `flow` | Sourced management lifecycle times, current WIP, reopening count and history coverage |
 | `execution` | Separately observed tasks, operations, sessions and canonical send attempts |
-| `quality` | DoD and requirement acceptance remain `unassessed`; verification/deployment point to evidence |
+| `quality` | Explicit original quality assessment with requirement acceptance, DoD, proof references and applicability; missing evidence remains unassessed |
 | `latest_capture` | Original latest saved capture and currently visible evidence summaries |
 | `capture_matches_binding`, `capture_matches_work_version` | Whether that saved capture still describes this exact binding/work version |
 | `dependencies`, `assignment` | Explicit unknowns; existing model does not store these PM concepts |
@@ -98,6 +98,11 @@ source versions, timestamps and coverage remain fixed. Current WorkItem state
 and current execution observations are displayed separately from that snapshot.
 Consumers must not combine old capture facts with a new binding as if a new
 capture had been taken.
+
+The quality projection consumes the selected original assessment through the
+[quality review contract](pm-quality-review.md), including current source access
+and exact binding/scope applicability. Qualification does not change the WorkItem
+column or establish a merge, deployment or completed execution turn.
 
 ## WIP and trustworthy time
 
@@ -182,7 +187,8 @@ routes and query fields; reads accept no operation key or actor override.
 
 This foundation advertises read-only projection. Ready admission, assignments,
 work dependencies, configurable WIP limits/resource capacity, drag mutations,
-dispatch, quality assessment and throughput remain unavailable here. Parent IDs
+dispatch, creation of quality assessments and throughput remain unavailable here.
+Reading an existing assessment uses the shared quality projection above. Parent IDs
 are hierarchy, not dependencies; creators/execution actors are not assignees.
 Missing capacity/cost is unknown, not zero. Additional W14 work must extend the
 existing authoritative contracts instead of creating a second progress engine.
@@ -197,3 +203,14 @@ receipts. A linked task in `blocked` state is a recorded blocker; a generic work
 `waiting` column is not. The projection supplies neither the task's blocking reason
 nor execution start/end or PR CI results, so the client keeps these unknown. It
 never derives an agent from a session name or an assignee from an execution actor.
+
+M4 retains original-turn completion as a concise card fact. Exact activity receipts,
+localized retained-session runtime labels (including Idle / 閒置中), and the existing
+manual single-input observation form live in the shared inspector's Details,
+with the observation controls before the full source dump.
+Manual sessions remain read-only; recording quiescence grants no session control,
+quality acceptance or proof of process termination. Read-only members have no new
+observation entry point, but may recover an authorized original receipt. A source
+failure withdraws rows, lane counts, accounting, inspector facts and observation
+controls together. Late responses cannot restore them. Drafts and unknown admissions
+retain their original source and operation key; acknowledged receipts recover by GET.

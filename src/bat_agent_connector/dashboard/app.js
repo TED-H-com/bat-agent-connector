@@ -1507,6 +1507,8 @@ var globalStrings = {
 		action_pm_dependencies_retract: "Retract dependency",
 		action_pm_dod_revise: "Revise definition of done",
 		action_pm_evidence_capture: "Capture evidence",
+		action_pm_execution_runtime_observe: "Check original turn",
+		action_pm_session_quiescence_observe: "Check manual activity",
 		action_pm_execution_verify: "Verify execution",
 		action_pm_follow_up_analyze: "Analyze follow-up",
 		action_pm_follow_up_prepare: "Prepare follow-up",
@@ -1703,6 +1705,8 @@ var globalStrings = {
 		action_pm_dependencies_retract: "撤回相依",
 		action_pm_dod_revise: "修訂完成定義",
 		action_pm_evidence_capture: "記錄證據",
+		action_pm_execution_runtime_observe: "查核原始回合",
+		action_pm_session_quiescence_observe: "查核人工活動",
 		action_pm_execution_verify: "驗證執行",
 		action_pm_follow_up_analyze: "分析後續",
 		action_pm_follow_up_prepare: "準備後續",
@@ -2209,7 +2213,7 @@ var pmQualityReviewsStrings = {
 		pmq_assessment: "Assessment",
 		pmq_revocation: "Revocation",
 		pmq_selected: "This exact assessment is selected for the work.",
-		pmq_selection_help: "Select a currently qualified assessment explicitly. Later conclusions do not replace this selection.",
+		pmq_selection_help: "Explicitly select an original assessment for evidence. Rejected or unassessed conclusions do not qualify work; later conclusions do not replace this selection.",
 		pmq_assess_heading: "Record criterion conclusions",
 		pmq_assessment_reason: "Reason for this assessment",
 		pmq_verdict: "Reviewer conclusion",
@@ -2302,7 +2306,7 @@ var pmQualityReviewsStrings = {
 		pmq_assessment: "評估",
 		pmq_revocation: "撤銷",
 		pmq_selected: "已為這項工作選定這份確切評估。",
-		pmq_selection_help: "請明確選擇目前適用且合格的評估。後續結論不會取代原本選擇。",
+		pmq_selection_help: "請明確選取要納入證據的原始評估；不符合或未評估的結論不代表工作合格，後續結論也不會取代原本選擇。",
 		pmq_assess_heading: "記錄條件結論",
 		pmq_assessment_reason: "這次評估的理由",
 		pmq_verdict: "審查者結論",
@@ -2348,6 +2352,19 @@ var qualityProjectionStrings = {
 		pq_coverage: "Each original requirement is counted once. Unreviewed work remains unassessed.",
 		pq_increment: "Qualified Increment",
 		pq_recorded_by: "Assessed by {actor}",
+		pq_rejected_acceptance: "Reviewer rejected acceptance criterion",
+		pq_rejected_dod: "Reviewer rejected Definition of Done criterion",
+		pq_deviations_boundary: "Selected reviewer judgments about original criteria. They do not independently prove semantic failure; current applicability and other deviation dimensions are unassessed.",
+		pq_deviations_coverage: "Selected assessments and coverage",
+		pq_deviations_selected: "The saved selection is complete; unlinked activity remains unassessed.",
+		pq_deviations_partial: "Saved source coverage is incomplete. Missing assessments do not establish acceptance or resolution.",
+		pq_deviations_empty: "No rejection is projected from the applicable selected criteria. This does not establish that the project has no deviations.",
+		pq_deviation_reason_single_original_assessment_missing: "No single original assessment selected",
+		pq_deviation_reason_criterion_provenance_unavailable: "This older capture has no fixed criterion provenance",
+		pq_deviation_reason_binding_mismatch: "Assessment belongs to a different work binding",
+		pq_deviation_reason_scope_mismatch: "Assessment belongs to a different scope",
+		pq_deviation_reason_not_applicable_at_selection: "Assessment was not applicable when selected",
+		pm_brief_status_fixed_quality_deviations: "Selected original quality judgments",
 		pm_brief_status_fixed_quality_assessments: "Explicit original quality assessments",
 		pm_evidence_kind_quality_assessment: "Original quality assessment"
 	},
@@ -2371,6 +2388,19 @@ var qualityProjectionStrings = {
 		pq_coverage: "每個原始需求只計入一次；尚未審查的工作仍標示未評估。",
 		pq_increment: "符合品質條件的 Increment",
 		pq_recorded_by: "評估者：{actor}",
+		pq_rejected_acceptance: "審查者否決驗收條件",
+		pq_rejected_dod: "審查者否決完成定義條件",
+		pq_deviations_boundary: "這是對原始條件的選定審查判斷，不代表獨立驗證已證明語意缺陷；目前適用性與其他偏差面向尚未評估。",
+		pq_deviations_coverage: "選定評估與涵蓋範圍",
+		pq_deviations_selected: "已保存的選取範圍完整；未關聯的活動仍未評估。",
+		pq_deviations_partial: "已保存來源涵蓋不完整；缺少評估不代表符合條件或已解決。",
+		pq_deviations_empty: "所選適用條件未產生否決項目；這不代表專案沒有偏差。",
+		pq_deviation_reason_single_original_assessment_missing: "尚未選取單一原始評估",
+		pq_deviation_reason_criterion_provenance_unavailable: "這份舊擷取沒有固定的條件來源",
+		pq_deviation_reason_binding_mismatch: "評估屬於不同工作關聯",
+		pq_deviation_reason_scope_mismatch: "評估屬於不同範疇",
+		pq_deviation_reason_not_applicable_at_selection: "評估在選取當時不適用",
+		pm_brief_status_fixed_quality_deviations: "選定的原始品質判斷",
 		pm_brief_status_fixed_quality_assessments: "明確選取的原始品質評估",
 		pm_evidence_kind_quality_assessment: "原始品質評估"
 	}
@@ -3360,6 +3390,8 @@ var maintenanceObservationStrings = {
 		pmo_exclusion_pm_owned_session: "A session bound to the PM role is excluded from development work.",
 		pmo_exclusion_verified_ended_session_retained: "A verified ended session is retained as history.",
 		pmo_exclusion_original_maintenance_attempt_completed: "The original maintenance attempt has recorded completion evidence.",
+		pmo_exclusion_original_batch_attempt_completed: "The original batch attempt has recorded completion evidence; its retained session alone is not active work.",
+		pmo_exclusion_manual_session_currently_quiescent: "The linked manual session was quiescent for its single original input. Ownership and work acceptance are unchanged.",
 		pmo_exclusion_unknown: "This source was excluded in the saved observation. Review its original evidence.",
 		pmo_blocker_details: "Review blockers and coverage gaps",
 		pmo_reason_source_limit: "The source exceeds the bounded observation size.",
@@ -3434,6 +3466,8 @@ var maintenanceObservationStrings = {
 		pmo_exclusion_pm_owned_session: "已綁定 PM 角色的工作階段不計入開發工作。",
 		pmo_exclusion_verified_ended_session_retained: "已驗證結束的工作階段保留為歷史。",
 		pmo_exclusion_original_maintenance_attempt_completed: "原始維護嘗試已有保存的完成證據。",
+		pmo_exclusion_original_batch_attempt_completed: "原始批次嘗試已有保存的完成證據；保留該工作階段本身不算進行中的工作。",
+		pmo_exclusion_manual_session_currently_quiescent: "觀察時，已關聯人工工作階段的原始單次輸入已無活動；控制權與工作驗收不變。",
 		pmo_exclusion_unknown: "本次保存觀察未將此來源計入工作量，請核對其原始證據。",
 		pmo_blocker_details: "檢視阻止原因與涵蓋缺口",
 		pmo_reason_source_limit: "來源超過這次有界觀察的大小上限。",
@@ -6654,6 +6688,24 @@ var pmKanbanStrings = {
 		pm_kanban_truncated: "Source coverage is limited.",
 		pm_kanban_unsupported: "Some linked source types are not projected in this view.",
 		pm_kanban_saved_only: "Saved Connector records; hosts and providers were not checked by this read.",
+		pm_kanban_runtime_recorded: "Original turn completed",
+		pm_kanban_runtime_completed: "The original execution turn completed.",
+		pm_kanban_runtime_limits: "Historical activity evidence only. Quality acceptance, current workload eligibility and process termination are not established by this receipt.",
+		pm_kanban_runtime_recorded_at: "Completion recorded at",
+		pm_kanban_runtime_receipt: "Original activity receipt",
+		pm_kanban_manual_title: "Linked manual session",
+		pm_kanban_manual_source: "Session to observe",
+		pm_kanban_manual_choose: "Select a linked manual session",
+		pm_kanban_manual_observe: "Check current activity",
+		pm_kanban_manual_help: "Read one linked session’s original single input. This does not send, stop, take control of the session or accept the work.",
+		pm_kanban_manual_ready: "The selected source can be checked. Native identity and current authority are rechecked when the request runs.",
+		pm_kanban_manual_unavailable: "Select an available source from the current work details. An original pending request keeps its fixed source.",
+		pm_kanban_manual_authority: "New observations require observe access and a current workspace writer role. Original receipts remain readable with source access.",
+		pm_kanban_manual_original_missing: "Previously selected source is unavailable",
+		pm_kanban_manual_identity: "Authenticated native identity is unavailable or stale.",
+		pm_kanban_manual_multiple: "Only a single original input is supported; multiple inputs remain unproven.",
+		pm_kanban_manual_active: "The native turn is active or has pending input.",
+		pm_kanban_manual_recorded: "The selected single input was quiescent at observation time. The manual session remains under its existing control.",
 		pm_kanban_history_unknown: "Recorded flow history cannot establish reliable timing.",
 		pm_kanban_versions: "Fixed work association",
 		pm_kanban_binding: "Binding",
@@ -6687,6 +6739,7 @@ var pmKanbanStrings = {
 		pm_kanban_state_queued: "Queued",
 		pm_kanban_state_dispatching: "Dispatching",
 		pm_kanban_state_running: "Running",
+		pm_kanban_state_idle: "Idle",
 		pm_kanban_state_waiting_permission: "Waiting for permission",
 		pm_kanban_state_quota_limited: "Quota limited",
 		pm_kanban_state_human_owned: "Human controlled",
@@ -6773,6 +6826,24 @@ var pmKanbanStrings = {
 		pm_kanban_truncated: "來源涵蓋範圍有限。",
 		pm_kanban_unsupported: "這個畫面尚未呈現部分關聯來源類型。",
 		pm_kanban_saved_only: "內容來自 Connector 已保存的紀錄；本次讀取未查詢主機或服務供應者。",
+		pm_kanban_runtime_recorded: "已記錄原回合完成",
+		pm_kanban_runtime_completed: "原始執行回合已完成。",
+		pm_kanban_runtime_limits: "這是當時的活動證據；這份收據不代表品質已驗收、目前符合工作量排除條件，或程序已終止。",
+		pm_kanban_runtime_recorded_at: "完成記錄時間",
+		pm_kanban_runtime_receipt: "原始活動收據",
+		pm_kanban_manual_title: "已關聯的人工工作階段",
+		pm_kanban_manual_source: "要觀察的工作階段",
+		pm_kanban_manual_choose: "選擇已關聯的人工工作階段",
+		pm_kanban_manual_observe: "查核目前活動",
+		pm_kanban_manual_help: "唯讀查核已關聯工作階段的原始單次輸入。不會發送、停止、接管工作階段或核可工作。",
+		pm_kanban_manual_ready: "可以查核此來源；執行請求時會重新核對原生身分與目前權限。",
+		pm_kanban_manual_unavailable: "請從目前工作詳情選擇可用來源。尚待查回的原請求仍保留固定來源。",
+		pm_kanban_manual_authority: "新觀察需要觀察權限及目前工作區的寫入角色；仍有來源存取權時，可查回原收據。",
+		pm_kanban_manual_original_missing: "先前選定的來源目前不可用",
+		pm_kanban_manual_identity: "已驗證的原生身分不可用或已過期。",
+		pm_kanban_manual_multiple: "只支援原始單次輸入；多次輸入仍無法證明。",
+		pm_kanban_manual_active: "原生回合仍有活動或待處理輸入。",
+		pm_kanban_manual_recorded: "觀察當時，選定的單次輸入已無活動。人工工作階段仍維持原控制權。",
 		pm_kanban_history_unknown: "現有工作流歷史不足以確認可靠時間。",
 		pm_kanban_versions: "固定工作關聯",
 		pm_kanban_binding: "關聯",
@@ -6806,6 +6877,7 @@ var pmKanbanStrings = {
 		pm_kanban_state_queued: "排隊中",
 		pm_kanban_state_dispatching: "派送中",
 		pm_kanban_state_running: "執行中",
+		pm_kanban_state_idle: "閒置中",
 		pm_kanban_state_waiting_permission: "等待權限",
 		pm_kanban_state_quota_limited: "額度受限",
 		pm_kanban_state_human_owned: "由人控制",
@@ -7128,6 +7200,22 @@ var pmStrings = {
 		pm_roadmap_update_observation: "Review saved results",
 		pm_roadmap_observation_help: "Use a fixed snapshot. Matching work and evidence do not by themselves satisfy the Definition of Done.",
 		pm_roadmap_quality_unknown: "Completion has not been assessed",
+		pm_roadmap_quality_qualified: "Qualified by the selected assessments",
+		pm_roadmap_quality_not_qualified: "Not qualified by the selected assessments",
+		pm_roadmap_quality_unassessed: "Unassessed",
+		pm_roadmap_quality_accepted: "Accepted",
+		pm_roadmap_quality_rejected: "Rejected",
+		pm_roadmap_quality_count: "{qualified} of {total} requirements qualified",
+		pm_roadmap_quality_acceptance: "Acceptance criteria",
+		pm_roadmap_quality_coverage_complete: "All selected work contributions are covered.",
+		pm_roadmap_quality_coverage_incomplete: "Work contribution coverage is incomplete; this does not establish completion.",
+		pm_roadmap_quality_fixed: "Original selected assessments; current applicability has not been evaluated. This does not establish a finish date, stopped runtime, deployment or scope change.",
+		pm_roadmap_quality_details: "Requirements and original assessments",
+		pm_roadmap_quality_original: "Original assessment",
+		pm_roadmap_quality_version: "Version",
+		pm_roadmap_quality_candidate: "Candidate commit",
+		pm_roadmap_quality_digest: "Assessment digest",
+		pm_roadmap_quality_dod: "Definition of done",
 		pm_roadmap_no_observation: "No result snapshot selected",
 		pm_roadmap_sources: "View linked sources",
 		pm_roadmap_after: "After: {items}",
@@ -7490,6 +7578,22 @@ var pmStrings = {
 		pm_roadmap_update_observation: "查核已保存成果",
 		pm_roadmap_observation_help: "引用固定快照。工作與證據關聯吻合，本身不代表已符合完成定義。",
 		pm_roadmap_quality_unknown: "尚未評估是否完成",
+		pm_roadmap_quality_qualified: "所選評估判定合格",
+		pm_roadmap_quality_not_qualified: "所選評估判定未合格",
+		pm_roadmap_quality_unassessed: "尚未評估",
+		pm_roadmap_quality_accepted: "已接受",
+		pm_roadmap_quality_rejected: "未接受",
+		pm_roadmap_quality_count: "{total} 項需求中有 {qualified} 項合格",
+		pm_roadmap_quality_acceptance: "驗收條件",
+		pm_roadmap_quality_coverage_complete: "已涵蓋所有選定工作的貢獻。",
+		pm_roadmap_quality_coverage_incomplete: "工作貢獻涵蓋不完整，尚不足以證明完成。",
+		pm_roadmap_quality_fixed: "這是原先選定的評估，目前適用性尚未核對；不代表完成日期、執行程序已停止、已部署或範圍已變更。",
+		pm_roadmap_quality_details: "需求與原始評估",
+		pm_roadmap_quality_original: "原始評估",
+		pm_roadmap_quality_version: "版本",
+		pm_roadmap_quality_candidate: "候選提交",
+		pm_roadmap_quality_digest: "評估摘要雜湊",
+		pm_roadmap_quality_dod: "完成定義",
 		pm_roadmap_no_observation: "尚未選定成果快照",
 		pm_roadmap_sources: "查看關聯來源",
 		pm_roadmap_after: "依賴：{items}",
@@ -13109,6 +13213,8 @@ var ACTIONS = {
 	"pm.dependencies.retract": "action_pm_dependencies_retract",
 	"pm.dod.revise": "action_pm_dod_revise",
 	"pm.evidence.capture": "action_pm_evidence_capture",
+	"pm.execution.runtime.observe": "action_pm_execution_runtime_observe",
+	"pm.session.quiescence.observe": "action_pm_session_quiescence_observe",
 	"pm.execution.verify": "action_pm_execution_verify",
 	"pm.follow_up.analyze": "action_pm_follow_up_analyze",
 	"pm.follow_up.prepare": "action_pm_follow_up_prepare",
@@ -13510,7 +13616,7 @@ function qualityFact({ h, t, fact, current = false }) {
 		class: "pm-note-text"
 	}, h("p", {}, h("strong", {}, t(fact.qualified ? "pq_qualified" : "pq_not_qualified"))), h("p", {}, t("pq_acceptance"), ": ", label(fact.acceptance || fact.acceptance_criteria), " · ", t("pq_dod"), ": ", label(fact.dod)), !current ? h("p", { class: "muted" }, t("pq_fixed")) : "", fact.assessed_by ? h("p", { class: "muted" }, t("pq_recorded_by", { actor: fact.assessed_by })) : "", reference ? h("details", {}, h("summary", {}, t("pq_original")), h("code", { class: "pm-source" }, reference.candidate_commit), h("p", {}, h("code", { class: "pm-source" }, reference.review_id)), h("p", {}, h("code", { class: "pm-source" }, reference.operation_id)), h("p", {}, h("code", { class: "pm-source" }, reference.document_digest))) : "");
 }
-function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, errorBox }) {
+function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSelection, field, multiple = false, constraints = {}, requireQualified = true, errorBox }) {
 	let editor = null, pending = false;
 	const status = h("div", { role: "status" }), chosen = h("p", { class: "muted" });
 	const read = () => {
@@ -13546,7 +13652,7 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 				alive();
 				if (!element.isConnected || editor.locked()) return;
 				const row = data.review, context = row?.context, assessment = row?.assessment;
-				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || row.qualified !== true || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
+				if (data.workspace_id !== workspaceId || row?.review_id !== selected.review_id || (requireQualified ? row.qualified !== true : row.applicable !== true) || context?.work_ref?.work_item_id !== workItemId || context?.native_result?.candidate_commit !== selected.candidate_commit || [
 					"operation_id",
 					"version",
 					"document_digest"
@@ -13581,6 +13687,19 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 			update();
 		}
 	};
+}
+//#endregion
+//#region src/pm-runtime-completion.js
+function runtimeCompletion(t, attempt) {
+	const value = attempt.runtime_completion;
+	if (value == null) return null;
+	const operationId = (id) => /^op_[0-9a-f]{32}$/.test(id || "");
+	if (value.runtime_status !== "original_turn_completed" || value.process_death_proven !== false || !operationId(value.observation_operation_id) || !operationId(value.execution_operation_id) || value.execution_operation_id !== attempt.operation_id || !/^[0-9a-f]{64}$/.test(value.document_digest || "") || !Number.isFinite(value.recorded_at)) throw Error(t("pm_kanban_scope_error"));
+	return value;
+}
+function runtimeReceipt(t, attempt) {
+	const value = runtimeCompletion(t, attempt);
+	return value ? h$1("div", { "data-runtime-completion": value.execution_operation_id }, h$1("p", {}, t("pm_kanban_runtime_completed")), h$1("p", { class: "ui-meta" }, t("pm_kanban_runtime_limits")), h$1("p", {}, t("pm_kanban_runtime_recorded_at"), " · ", timeStamp(value.recorded_at)), h$1("a", { href: `#/op/${encodeURIComponent(value.observation_operation_id)}` }, t("pm_kanban_runtime_receipt")), h$1("p", { class: "mono" }, value.observation_operation_id), h$1("p", { class: "mono" }, value.document_digest)) : null;
 }
 //#endregion
 //#region src/pm-work-inspector.js
@@ -13843,6 +13962,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				current: true
 			}));
 			else result.append(paragraph(t("pm_kanban_quality_unknown")));
+			if (card.execution?.attempts?.some((attempt) => runtimeCompletion(t, attempt))) result.append(paragraph(t("pm_kanban_runtime_recorded")));
 			const capture = card.latest_capture;
 			if (capture) {
 				result.append(paragraph(t("pm_kanban_capture"), " · ", stamp(capture.captured_at)));
@@ -13932,7 +14052,10 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				"operations",
 				"sessions",
 				"attempts"
-			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), paragraph(t("wv_ci_times_missing")), h$1("pre", { class: "mono" }, JSON.stringify({
+			].flatMap((kind) => (card?.execution?.[kind] || []).map((row) => paragraph(t("pm_kanban_source_time"), " · ", stamp(row.observed_at)))), paragraph(t("pm_kanban_attempt_basis")), paragraph(t("wb_acceptance_separate")), paragraph(t("wv_ci_times_missing")), ...(card?.execution?.sessions || []).map((row) => {
+				const key = "pm_kanban_state_" + labelSegment(row.runtime_status), label = t(key);
+				return paragraph(t("pm_kanban_session"), " · ", label === key ? t("ui_status_unknown") : label, h$1("span", { class: "mono" }, " · ", labelSegment(row.resource_id)));
+			}), ...(card?.execution?.attempts || []).map((attempt) => runtimeReceipt(t, attempt)), h$1("pre", { class: "mono" }, JSON.stringify({
 				reviews: data.reviews,
 				criteria_results: data.criteriaResults,
 				register: data.register,
@@ -16095,7 +16218,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		try {
 			const report = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/snapshots/${encodeURIComponent(source.snapshot_id)}/brief-export?format=${kind}&locale=${language}`);
 			live(expected);
-			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
+			if (report?.version !== 1 || report.workspace_id !== workspaceId || report.snapshot_id !== source.snapshot_id || report.format !== kind || report.locale !== language || report.snapshot_digest !== source.snapshot_digest || report.view_digest !== source.view_digest || report.media_type !== formats[kind][1] || report.template_version !== 1 || report.renderer_version !== (source.brief?.deviations?.version === 1 ? 4 : source.brief?.delivery?.quality ? 3 : source.maintenance ? 2 : 1) || report.coverage?.projection !== (source.maintenance ? "project_brief_with_maintenance_review" : "project_brief_only") || report.coverage.content_truncated !== false || report.execution_authorized !== false || report.review_completed !== false || report.published !== false || typeof report.content !== "string" || !Number.isSafeInteger(report.byte_length) || report.byte_length < 0 || report.byte_length > 15e5 || !/^[0-9a-f]{64}$/.test(report.output_digest)) throw Error(t("pm_export_changed"));
 			const bytes = new TextEncoder().encode(report.content);
 			if (bytes.length !== report.byte_length) throw Error(t("pm_export_changed"));
 			const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
@@ -16325,14 +16448,21 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				qualified: section.quality.qualified_requirements,
 				total: section.quality.total_requirements
 			}))), h("p", { class: "muted" }, t("pq_coverage")));
+			if (name === "deviations" && section.version === 1) values.append(h("p", { class: "muted" }, t("pq_deviations_boundary")), h("details", { "data-pm-deviation-coverage": "" }, h("summary", {}, t("pq_deviations_coverage")), h("p", {}, t(section.coverage?.selected_source_coverage_complete ? "pq_deviations_selected" : "pq_deviations_partial")), ...(section.coverage?.selections || []).map((selection) => h("div", {}, h("a", { href: `#/item/${selection.work_item_id}` }, t("pm_evidence_open_work")), h("p", {}, selection.reason ? t("pq_deviation_reason_" + selection.reason) : `${t("pq_acceptance")}: ${t("pq_" + selection.acceptance)} · ${t("pq_dod")}: ${t("pq_" + selection.dod)}`))), proof({
+				h,
+				t,
+				value: section.coverage,
+				name: t("pq_deviations_coverage")
+			})));
 			for (const item of section.items || []) {
-				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.text), details);
+				const source = item.source || {}, details = h("div"), row = h("details", { "data-pm-brief-fact": item.kind || name }, h("summary", {}, item.kind === "quality_assessment" ? t(item.details?.qualified ? "pq_qualified" : "pq_not_qualified") : item.kind === "quality_rejection" ? `${t("pq_rejected_" + item.details.criterion.criterion.kind)}: ${item.text}` : item.text), details);
 				if (item.kind === "quality_assessment") details.append(qualityFact({
 					h,
 					t,
 					fact: item.details
 				}));
-				if (item.status) details.append(h("p", { class: "muted" }, readable("pm_status_", item.status)));
+				if (item.kind === "quality_rejection") details.append(h("p", {}, t("pq_recorded_by", { actor: item.details.assessed_by })), h("p", {}, item.details.assessment.rationale), h("p", { class: "muted" }, t("pq_fixed")));
+				if (item.status) details.append(h("p", { class: "muted" }, item.kind === "quality_rejection" ? t("pq_rejected") : readable("pm_status_", item.status)));
 				const record = source.kind === "evidence" ? (snapshot.evidence || []).find((entry) => entry.evidence_id === source.evidence_id) : source.kind === "plan_input" ? snapshot.baseline?.document?.selected_inputs?.find((entry) => entry.input_id === source.input_id) : source.kind === "plan_adoption" ? snapshot.baseline?.adoption : null;
 				details.append(proof({
 					h,
@@ -16348,7 +16478,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 				if (source.kind === "work_binding") details.append(h("a", { href: `#/item/${source.work_item_id}` }, t("pm_evidence_open_work")));
 				values.append(row);
 			}
-			if (!section.items?.length) values.append(h("p", {}, t("pm_brief_empty_" + name)));
+			if (!section.items?.length) values.append(h("p", {}, t(name === "deviations" && section.version === 1 ? "pq_deviations_empty" : "pm_brief_empty_" + name)));
 			sections.append(h("section", {
 				class: "pm-brief-row",
 				"data-pm-brief-section": name
@@ -30905,9 +31035,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		const use = h("button", {
 			type: "button",
 			class: "secondary",
-			disabled: !row.qualified,
+			disabled: !selectable(row),
 			onclick: () => {
-				if (!ready || !current()?.qualified) return;
+				if (!ready || !selectable(current())) return;
 				emit(reference(current()));
 				renderReview();
 			}
@@ -30941,6 +31071,9 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			document_digest: a.document_digest,
 			candidate_commit: row.context.native_result.candidate_commit
 		} : null;
+	}
+	function selectable(row) {
+		return Boolean(row?.assessment && row.applicable === true && !row.revocation);
 	}
 	function proofChoices(row, item) {
 		return model.proofs.filter((proof) => proof.reference.candidate_commit === row.context.native_result.candidate_commit && same$5(proof.condition, item.condition) && (!proof.source_operation_id || proof.source_operation_id === row.context.execution_operation_id));
@@ -31189,7 +31322,7 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 			await verifier.setSources(operations.filter((op) => packages.some((pkg) => children(pkg).some((child) => child.operation_id === op.operation_id))));
 			if (!valid(ticket)) return;
 			status.replaceChildren(...filtered ? [text("pmq_filtered")] : []);
-			if (previous && current()?.qualified && same$5(previous, reference(current()))) emit(previous);
+			if (previous && selectable(current()) && same$5(previous, reference(current()))) emit(previous);
 			update();
 		} catch (err) {
 			if (valid(ticket)) failure(err);
@@ -31239,14 +31372,139 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 	};
 }
 //#endregion
+//#region src/pm-kanban-observation.js
+function kanbanObservation({ h, t, api, alive, workspaceId, workId, caps, permitted, form, errorBox, onSourceFailure }) {
+	const action = "pm.session.quiescence.observe", sources = new Map();
+	let ready = false, generation = 0, editor = null;
+	const select = h("select", {
+		"aria-label": t("pm_kanban_manual_source"),
+		required: true
+	}), context = h("p", { class: "pm-kanban-note" }), result = h("div");
+	const key = (row) => JSON.stringify([
+		row.link_id,
+		row.expected_link_operation_id,
+		row.expected_project_binding_id,
+		row.expected_session_identity_digest
+	]);
+	const selected = () => sources.get(select.value);
+	const reader = () => ready && caps()?.scopes?.includes("observe");
+	const writer = () => reader() && permitted(false);
+	const source = () => {
+		const row = selected();
+		if (!row?.available) throw Error(t("pm_kanban_manual_unavailable"));
+		return row;
+	};
+	const reason = (row) => t("pm_kanban_" + ({
+		manual_native_identity_unavailable: "manual_identity",
+		manual_multiple_inputs_unsupported: "manual_multiple",
+		manual_native_turn_active: "manual_active"
+	}[row?.reason] || "manual_unavailable"));
+	function describe() {
+		select.disabled = Boolean(editor?.locked()) || !writer() || !caps()?.actions?.some((row) => row.action === action && row.allowed);
+		if (editor) editor.box.querySelector("button[type=submit]").hidden = !writer() && !editor.locked();
+		context.replaceChildren(t(!permitted(false) || !caps()?.scopes?.includes("observe") || !caps()?.actions?.some((row) => row.action === action && row.allowed) ? "pm_kanban_manual_authority" : !ready || !selected() ? "pm_kanban_manual_unavailable" : selected().available ? "pm_kanban_manual_ready" : "pm_kanban_manual_unavailable"));
+		if (selected()?.reason) context.append(" ", reason(selected()));
+	}
+	editor = form({
+		action,
+		target: {
+			workspace_id: workspaceId,
+			work_item_id: workId
+		},
+		fields: { source: select },
+		requiredScope: "observe",
+		statusText: (status) => {
+			const key = "reg_status_" + status, label = t(key);
+			return label === key ? t("ui_status_unknown") : label;
+		},
+		params: () => ({ link_id: source().link_id }),
+		preconditions: () => {
+			const row = source();
+			return {
+				expected_link_operation_id: row.expected_link_operation_id,
+				expected_project_binding_id: row.expected_project_binding_id,
+				expected_session_identity_digest: row.expected_session_identity_digest
+			};
+		},
+		permitted: () => writer() && selected()?.available === true,
+		recoverPermitted: reader,
+		label: "pm_kanban_manual_observe",
+		extra: h("div", {}, h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_help")), h("label", {}, t("pm_kanban_manual_source"), select), context),
+		onStateChange: describe,
+		onSaved: (receipt) => {
+			if (receipt?.schema !== "pm_manual_single_input_quiescence_v1" || receipt.workspace_id !== workspaceId || receipt.work_item_id !== workId || receipt.runtime_status !== "current_single_input_quiescent" || receipt.process_death_proven !== false || receipt.ownership !== "manual_read_only" || receipt.work_acceptance !== "not_evaluated" || !/^op_[0-9a-f]{32}$/.test(receipt.observation_operation_id || "") || !/^[0-9a-f]{64}$/.test(receipt.document_digest || "") || !Number.isFinite(receipt.recorded_at)) throw Error(t("pm_kanban_scope_error"));
+			result.replaceChildren(h("p", { class: "pm-kanban-note" }, t("pm_kanban_manual_recorded")), h("p", { class: "pm-kanban-note" }, t("pm_kanban_runtime_limits")), h("p", {}, t("pm_kanban_source_time"), ": ", timeStamp(receipt.recorded_at)), h("code", { class: "pm-source" }, receipt.document_digest));
+		},
+		api: async (...args) => {
+			const ticket = generation;
+			try {
+				const data = await api(...args);
+				alive();
+				if (ticket !== generation) throw Object.assign(Error(), { code: "PM_DISPOSED" });
+				return data;
+			} catch (error) {
+				alive();
+				if (ticket === generation && [
+					401,
+					403,
+					404
+				].includes(error.status)) onSourceFailure(error);
+				throw error;
+			}
+		},
+		errorBox
+	});
+	editor.box.querySelector("button[type=submit]").className = "ui-button secondary ui-sm";
+	select.addEventListener("change", () => {
+		result.replaceChildren();
+		editor.update();
+	});
+	const box = h("div", { "data-pm-manual-observation": workId }, h("h4", {}, t("pm_kanban_manual_title")), editor.box, result);
+	function update(rows) {
+		++generation;
+		if (!Array.isArray(rows) || rows.length > 64) throw Error(t("pm_kanban_scope_error"));
+		const value = select.value;
+		sources.clear();
+		select.replaceChildren(h("option", { value: "" }, t("pm_kanban_manual_choose")));
+		for (const row of rows) {
+			if (!Number.isSafeInteger(row.link_id) || row.link_id <= 0 || !/^op_[0-9a-f]{32}$/.test(row.expected_link_operation_id || "") || !/^pmpb_[0-9a-f]{32}$/.test(row.expected_project_binding_id || "") || !/^[0-9a-f]{64}$/.test(row.expected_session_identity_digest || "") || !["host", "session_id"].every((field) => typeof row[field] === "string" && row[field].length > 0 && row[field].length <= 4096) || typeof row.available !== "boolean" || row.reason != null && typeof row.reason !== "string" || row.available && row.reason != null || sources.has(key(row))) throw Error(t("pm_kanban_scope_error"));
+			sources.set(key(row), row);
+			select.append(h("option", { value: key(row) }, `${row.host} / ${row.session_id}${row.available ? "" : ` · ${reason(row)}`}`));
+		}
+		if (value && !sources.has(value)) select.append(h("option", { value }, t("pm_kanban_manual_original_missing")));
+		select.value = value;
+		ready = true;
+		editor.update();
+	}
+	function withdraw() {
+		++generation;
+		ready = false;
+		sources.clear();
+		const value = select.value;
+		select.replaceChildren(h("option", { value }, t("pm_kanban_manual_original_missing")));
+		result.replaceChildren();
+		editor.box.querySelector(".pm-receipt")?.replaceChildren();
+		editor.update();
+	}
+	return {
+		box,
+		update,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
+function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
 	let serial = 0, detailSerial = 0, next = null, reading = false, rows = new Map(), page = null, sources = new Map(), plan = null, earlierPlans = new Map(), milestones = [], pages = 1;
 	let selected = preference.selected || null, active = !embedded, preserveSelection = false, toolItems = () => [], deliveryPages = 1, stale = true;
 	let failureSignature = "";
+	const observers = new Map();
+	const withdrawObservers = () => {
+		for (const observer of observers.values()) observer.withdraw();
+	};
 	const meta = h$1("span"), status = h$1("div", { role: "status" }), list = h$1("div", { class: "pm-kanban-list" }), boardInfo = h$1("div");
 	const refreshButton = iconButton({
 		icon: "refresh-cw",
@@ -31322,6 +31580,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		tools: () => toolItems(),
 		returnFocus: () => rows.get(selected)?.node.querySelector("[data-board-open]") || viewHeading(),
 		onClose: () => {
+			withdrawObservers();
 			detailSerial++;
 			if (!preserveSelection) {
 				selected = null;
@@ -31342,6 +31601,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		if (!card || !/^wi_[0-9a-f]{20}$/.test(card.work_item_id || "") || expectedId && card.work_item_id !== expectedId || card.binding?.workspace_id !== workspaceId || card.binding?.work_item_id !== card.work_item_id || card.work?.work_item_id !== card.work_item_id || !integer(card.binding.sequence) || !integer(card.work.version)) throw Error(t("pm_kanban_scope_error"));
 		if (projectId && card.binding.project_id !== projectId || card.latest_capture && (card.latest_capture.workspace_id !== workspaceId || card.latest_capture.work_item_id !== card.work_item_id)) throw Error(t("pm_kanban_scope_error"));
 		for (const item of card.latest_capture?.evidence || []) if (item.workspace_id && item.workspace_id !== workspaceId) throw Error(t("pm_kanban_scope_error"));
+		for (const attempt of card.execution?.attempts || []) runtimeCompletion(t, attempt);
 		return card;
 	}
 	function checkPage(data, after) {
@@ -31373,6 +31633,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preserveSelection = false;
 	}
 	function withdraw({ forgetRoute = true, keepStatus = false } = {}) {
+		withdrawObservers();
 		++serial;
 		++detailSerial;
 		reading = false;
@@ -31546,7 +31807,10 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		}, workStatusPill(t, card)) : null, age ? h$1("span", {
 			class: "pm-board-age",
 			title: t(card.completion?.approved ? "pm_kanban_cycle" : "pm_kanban_age")
-		}, age) : null), coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];
+		}, age) : null), card.execution?.attempts?.some((attempt) => runtimeCompletion(t, attempt)) ? h$1("span", {
+			class: "ui-meta",
+			"data-runtime-summary": ""
+		}, t("pm_kanban_runtime_recorded")) : null, coverage.unavailable_sources || coverage.inaccessible_sources || coverage.truncated ? h$1("span", { class: "ui-meta" }, t("pm_kanban_partial_sources")) : null)];
 	}
 	function makeCard(card) {
 		const node = h$1("article", {
@@ -31678,6 +31942,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					card.column,
 					card.flow?.age_seconds,
 					card.flow?.cycle_seconds,
+					card.execution?.attempts,
 					blockedWork(card),
 					sources.get(card.work_item_id)
 				]);
@@ -31724,6 +31989,28 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				select(card.work_item_id, true);
 			}
 		});
+		if (form && caps()?.actions?.some((row) => row.action === "pm.session.quiescence.observe")) {
+			let observer = observers.get(card.work_item_id);
+			if (!observer) {
+				observer = kanbanObservation({
+					h: h$1,
+					t,
+					api,
+					alive,
+					workspaceId,
+					workId: card.work_item_id,
+					caps,
+					permitted,
+					form,
+					errorBox,
+					onSourceFailure: unavailable
+				});
+				observers.set(card.work_item_id, observer);
+			}
+			const body = detail.element.body.querySelector("[data-work-section=\"details\"] > div");
+			if (observer.box.parentNode !== body) body.insertBefore(observer.box, body.querySelector(":scope > pre"));
+			observer.update(card.execution?.manual_observation_sources ?? []);
+		}
 		if (opening) requestAnimationFrame(() => {
 			const node = rows.get(card.work_item_id)?.node;
 			if (selected === card.work_item_id && node?.isConnected && detail.element) revealCard(node);
@@ -31732,6 +32019,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	async function select(id, retain = false) {
 		const current = rows.get(id);
 		if (!current) return;
+		if (selected !== id || !retain) withdrawObservers();
 		if (selected !== id) deliveryPages = 1;
 		selected = id;
 		preference.selected = id;
@@ -31773,6 +32061,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			showDetail(data.card);
 		} catch (error) {
 			if (generation === serial && ticket === detailSerial) {
+				observers.get(id)?.withdraw();
 				if (error.message === t("pm_kanban_scope_error")) {
 					unavailable(error);
 					return;
@@ -31819,6 +32108,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			return;
 		}
 		stale = false;
+		withdrawObservers();
 		const ticket = ++serial;
 		detailSerial++;
 		reading = true;
@@ -34257,7 +34547,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						if (!detail.isConnected) return;
 						if (value.workspace_id !== workspaceId || value.revision.revision_id !== entry.revision_id) throw Error(t("pm_scope_mismatch"));
 						const doc = value.revision.document;
-						content.replaceChildren(h("p", {}, doc.rationale || t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
+						content.replaceChildren(h("p", {}, doc.rationale || t(doc.milestones?.some((row) => row.actual?.quality) ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
 						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
@@ -34294,6 +34584,34 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		}
 		return false;
 	}
+	function qualityResult(observed) {
+		const actual = observed?.actual, quality = actual?.quality, context = observed?.quality_context;
+		if (!quality) return t(observed ? "pm_roadmap_quality_unknown" : "pm_roadmap_no_observation");
+		const states = [
+			"accepted",
+			"rejected",
+			"unassessed"
+		], status = (value) => t("pm_roadmap_quality_" + value);
+		if (quality.profile !== "fixed_milestone_assessments_v1" || context?.profile !== quality.profile || [
+			"plan_revision_id",
+			"plan_document_digest",
+			"scope_revision"
+		].some((key) => quality[key] !== context[key]) || quality.current_applicability !== "not_evaluated" || typeof quality.contribution_coverage_complete !== "boolean" || ![
+			"qualified",
+			"not_qualified",
+			"unassessed"
+		].includes(actual.completion) || !states.includes(actual.dod) || !Number.isSafeInteger(quality.total_requirements) || quality.total_requirements < 0 || !Number.isSafeInteger(quality.qualified_requirements) || quality.qualified_requirements < 0 || quality.qualified_requirements > quality.total_requirements || !Array.isArray(quality.requirements) || quality.requirements.length !== quality.total_requirements || !Array.isArray(context.requirement_ids) || !Array.isArray(quality.assessments) || quality.requirements.some((row) => !context.requirement_ids.includes(row.requirement_id) || !states.includes(row.acceptance) || !states.includes(row.dod))) throw Error(t("pm_scope_mismatch"));
+		const sources = h("details", {}, h("summary", {}, t("pm_roadmap_quality_details")), h("ul", {}, ...quality.requirements.map((row) => h("li", {}, h("code", { class: "pm-source" }, row.requirement_id), h("p", {}, t("pm_roadmap_quality_acceptance"), ": ", status(row.acceptance), " · ", t("pm_roadmap_quality_dod"), ": ", status(row.dod))))));
+		for (const assessment of quality.assessments) {
+			const ref = assessment.reference;
+			if (!/^pmqr_[0-9a-f]{32}$/.test(ref?.review_id) || !/^op_[0-9a-f]{32}$/.test(ref?.operation_id) || !Number.isSafeInteger(ref.version) || ref.version < 1 || !/^([0-9a-f]{64})$/.test(ref.document_digest) || !/^([0-9a-f]{40})$/.test(ref.candidate_commit) || assessment.candidate_commit !== ref.candidate_commit) throw Error(t("pm_scope_mismatch"));
+			sources.append(h("p", { class: "pm-source" }, t("pm_roadmap_quality_original"), ": ", h("code", {}, ref.review_id), " · ", t("pm_roadmap_quality_version"), ": ", String(ref.version), h("span", { class: "pm-source" }, t("pm_roadmap_quality_candidate"), ": ", h("code", {}, ref.candidate_commit)), h("span", { class: "pm-source" }, t("pm_roadmap_quality_digest"), ": ", h("code", {}, ref.document_digest)), h("a", { href: `#/op/${encodeURIComponent(ref.operation_id)}` }, ref.operation_id)));
+		}
+		return h("div", { "data-pm-roadmap-quality": "" }, h("strong", {}, status(actual.completion)), h("p", {}, t("pm_roadmap_quality_dod"), ": ", status(actual.dod)), h("p", {}, t("pm_roadmap_quality_count", {
+			qualified: quality.qualified_requirements,
+			total: quality.total_requirements
+		})), h("p", { class: "muted" }, t(quality.contribution_coverage_complete ? "pm_roadmap_quality_coverage_complete" : "pm_roadmap_quality_coverage_incomplete")), h("p", { class: "muted" }, t("pm_roadmap_quality_fixed")), sources);
+	}
 	function render() {
 		const base = current.baseline?.document;
 		if (!base) {
@@ -34312,7 +34630,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 			const predicted = current.forecast?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
 			const observed = current.observation?.document.milestones.find((row) => row.milestone_id === milestone.milestone_id);
 			const dependencies = milestone.depends_on.map((id) => base.milestones.find((item) => item.milestone_id === id)?.title || id);
-			const source = h("details", {}, h("summary", {}, t("pm_roadmap_sources")), h("p", { class: "muted" }, t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
+			const source = h("details", {}, h("summary", {}, t("pm_roadmap_sources")), h("p", { class: "muted" }, t(observed?.actual?.quality ? "pm_roadmap_quality_fixed" : "pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
 				plan_revision_id: milestone.plan_revision_id,
 				requirement_ids: milestone.requirement_ids,
 				work_binding_ids: milestone.work_binding_ids,
@@ -34330,7 +34648,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				].map((key) => [key, current.observation.document[key]])) : null,
 				observation: observed || null
 			}, null, 2)));
-			body.append(h("tr", { "data-pm-milestone": milestone.milestone_id }, h("th", { scope: "row" }, milestone.title, dependencies.length ? h("small", { class: "muted pm-source" }, t("pm_roadmap_after", { items: dependencies.join(", ") })) : ""), h("td", {}, textDate(milestone.baseline_date)), h("td", {}, textDate(predicted?.forecast_date)), h("td", {}, t(observed ? "pm_roadmap_quality_unknown" : "pm_roadmap_no_observation"), source)));
+			body.append(h("tr", { "data-pm-milestone": milestone.milestone_id }, h("th", { scope: "row" }, milestone.title, dependencies.length ? h("small", { class: "muted pm-source" }, t("pm_roadmap_after", { items: dependencies.join(", ") })) : ""), h("td", {}, textDate(milestone.baseline_date)), h("td", {}, textDate(predicted?.forecast_date)), h("td", {}, qualityResult(observed), source)));
 		}
 		view.replaceChildren(h("p", {}, h("strong", {}, base.title), h("small", { class: "muted pm-source" }, base.rationale)), h("div", { class: "pm-roadmap-scroll" }, table));
 	}
@@ -34394,6 +34712,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 		} catch (error) {
 			if (ticket === serial) {
 				current = null;
+				signature = "";
 				view.replaceChildren();
 				historyBody.replaceChildren();
 				historyLoaded = false;
@@ -37160,7 +37479,9 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 			"unselected_backlog",
 			"pm_owned_session",
 			"verified_ended_session_retained",
-			"original_maintenance_attempt_completed"
+			"original_maintenance_attempt_completed",
+			"original_batch_attempt_completed",
+			"manual_session_currently_quiescent"
 		];
 		const item = h("li", {}, t("pmo_exclusion_" + (reasons.includes(row.reason) ? row.reason : "unknown")), sourceReference(row));
 		if (!reasons.includes(row.reason)) item.append(h("code", { class: "pm-source" }, row.reason));
@@ -38787,6 +39108,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				readSelection: qualitySelection,
 				field: selectedQuality,
 				constraints: { binding_id: binding.binding_id },
+				requireQualified: false,
 				errorBox
 			}) : null;
 			const capture = track(form({
@@ -39984,6 +40306,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		workspaceId,
 		errorBox,
 		caps,
+		permitted,
+		form,
 		embedded: true
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);

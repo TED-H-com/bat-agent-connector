@@ -140,7 +140,7 @@ def access(ops, principal, wid, context):
         dod = pm_sprints._artifact(ops.db, wid, ref['revision_id'], 'dod')
         if verification.digest(dod['document']) != ref['document_digest']:
             raise bad('The original DoD is unavailable', 'NOT_FOUND', 404)
-        pm_plans.get_plan(ops, principal, wid, dod['document']['plan_ref']['revision_id'])
+        pm_plans.require_revision_access(ops, principal, wid, dod['document']['plan_ref']['revision_id'])
     return child
 
 

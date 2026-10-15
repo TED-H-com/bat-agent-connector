@@ -40,6 +40,10 @@ def select(ops, principal, wid, reference, *, work_item_id, binding_id, scope_re
         'acceptance': current['acceptance'], 'dod': current['dod'], 'qualified': current['qualified'],
         'applicable_at_selection': current['applicable'], 'applicability_reasons': current['applicability_reasons'],
         'assessed_by': saved['assessment']['actor'], 'assessed_at': saved['assessment']['created_at'],
+        'criterion_assessments': {'version': 1, 'plan_ref': context['plan_ref'], 'work_ref': context['work_ref'],
+            'dod_ref': context['dod_ref'], 'package_ref': context['package_ref'],
+            'execution_operation_id': context['execution_operation_id'], 'criteria': context['criteria'],
+            'assessment': document},
         'semantics': 'fixed_selection_of_original_assessment', 'current_applicability': 'not_evaluated'}
 
 
