@@ -983,6 +983,7 @@ async function viewSessions(main) {
   const more = h("button", {class: "secondary", hidden: true}, t("load_more"));
   const navigation = h("nav", {"aria-label": t("sessions_workspaces"), class: "session-workspaces"});
   const scopeNote = h("p", {class: "muted"}, t("sessions_scope_note"));
+  const pageNote = h("span", {class: "muted"}, t("sessions_page_note"));
   const scope = h("details", {class: "panel session-scope", open: matchMedia("(min-width: 901px)").matches},
     h("summary", {}, t("sessions_workspaces")), scopeNote, navigation,
     h("a", {class: "session-project-link", href: "#/projects"}, t("sessions_projects")));
@@ -995,7 +996,7 @@ async function viewSessions(main) {
     h("div", {class: "filters session-filters"}, searchField(search), hostSel, accessSel,
       state.caps?.actions?.some(a => a.action === "session.approve_pending") ? h("a", {href: "#/approvals"}, t("bulk_title")) : null), status,
     h("div", {class: "session-layout"}, scope, h("section", {"aria-label": t("sessions_title"), class: "session-results"}, count, list,
-      h("div", {class: "session-pagination"}, more, h("span", {class: "muted"}, t("sessions_page_note"))))));
+      h("div", {class: "session-pagination"}, more, pageNote))));
   try {
     const hosts = (await api("GET", "/hosts")).hosts; assertView(connection);
     for (const x of hosts) hostSel.append(h("option", {value: x.host}, x.host));
@@ -1080,7 +1081,12 @@ async function viewSessions(main) {
           group.name && group.id && labels.get(labelKey(group)) > 1 ? h("code", {class: "muted"}, group.id) : null,
           group.name && !group.id ? h("span", {class: "muted"}, t("sessions_workspace_unverified")) : null), ...sessions.map(row))];
     });
-    list.replaceChildren(...(sections.length ? sections : [emptyState({title:t("sessions_no_matches"), text:t(cursor ? "sessions_more_hint" : "sessions_empty_hint")})]));
+    const filtered = Boolean(search.value.trim() || hostSel.value || accessSel.value || selected);
+    const empty = rows.size === 0 && !cursor;
+    list.replaceChildren(...(sections.length ? sections : [emptyState({title:t(empty && !filtered ? "sessions_empty" : "sessions_no_matches"),
+      text: empty && !filtered ? null : t(cursor ? "sessions_more_hint" : "sessions_empty_hint")})]));
+    count.hidden = empty; pageNote.hidden = empty;
+    pathsIntro.hidden = !empty || filtered;
     scopeNote.textContent = t(cursor ? "sessions_scope_note" : "sessions_scope_exact");
     count.textContent = t(cursor ? "sessions_showing" : "sessions_showing_exact", {shown: visible, loaded: rows.size});
   };
@@ -1387,7 +1393,7 @@ function sessionErrorBox(e, action = null, options = {}) {
   if (state.refreshCycle) state.refreshCycle.error ||= e;
   const code = typeof e?.code === "string" ? e.code : "";
   return h("div", {class: "session-error", role: "alert", "data-session-error": code},
-    h("p", {class: "session-error-line"}, icon("circle-alert", {size: 16}), h("span", {}, sessionErrorLine(e)),
+    h("p", {class: "session-error-line"}, icon("circle-alert", {size: 16}), h("span", {}, options.summary || sessionErrorLine(e)),
       action ? h("button", {type: "button", class: "session-error-action", onclick: action.run}, action.label) : null),
     sessionErrorDetails(e, options));
 }
@@ -1426,7 +1432,7 @@ async function viewSession(main, host, sid, context = null) {
   const backSlot = h("p", {class: "session-back", hidden: true});
   const metadata = h("div", {class: "workspace-metadata"});
   const result = h("section", {class: "workspace-result", "data-workspace-result": ""});
-  let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30;
+  let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30, messageFailure = null;
   const readingSupported = state.caps?.features?.session_reading?.version === 1;
   const saveReading = async (action, params, preconditions = {}) => {
     const op = await submit(action, {host, session_id: sid}, params, preconditions, `${action}.${host}.${sid}`);
@@ -1435,7 +1441,7 @@ async function viewSession(main, host, sid, context = null) {
     if (op.status !== "succeeded") throw new Error(op.status_reason || t("conversation_pending"));
   };
   const scrollMemory = viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`);
-  const conversation = conversationPanel({h, t, when: sessionWhen, guard: () => assertView(connection), memory: scrollMemory, readingActions: readingSupported ? {
+  const conversation = conversationPanel({h, t, errorBox, when: sessionWhen, guard: () => assertView(connection), memory: scrollMemory, readingActions: readingSupported ? {
     mark: messages => saveReading("session.read", {messages}),
     remember: (position, version) => saveReading("session.position", position, {expected_version: version}),
     older: () => loadMessages(nextMessageOffset, false),
@@ -1910,11 +1916,11 @@ async function viewSession(main, host, sid, context = null) {
       }
       messageOffset = offset; nextMessageOffset = read.next_offset; firstMessages = false;
       paintReadingDetail(readingSupported ? read.reading : null);
+      messageFailure = null;
       conversation.update(read.messages, readingSupported ? {...read, restore, latest, olderWindow: offset > 0} : {next_offset: read.next_offset});
     } catch (error) {
       if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
-      conversation.fail({title: error?.status === 413 ? t("session_err_too_large") : t("message_window_failed"),
-        retry: () => refresh().catch(() => {})});
+      messageFailure = error;
       throw error;
     }
   };
@@ -1978,9 +1984,15 @@ async function viewSession(main, host, sid, context = null) {
         // Withdrawal is the settled, displayed state: it does not keep the event batch failing.
         if (error?.sessionWithdrawn) {withdraw(error.sessionWithdrawn, error); return;}
         readReady = false; updateControls();
-        readError = sessionErrorBox(error, {label: t("ui_retry"), run: () => refresh().catch(() => {})}, {within:status});
+        readError?.remove();
+        const messagesFailed = messageFailure === error;
+        readError = sessionErrorBox(error, {label: t("ui_retry"), run: () => refresh().catch(() => {})},
+          {within: messagesFailed ? conversation.box : status, summary: messagesFailed ? t(error?.status === 413 ? "session_err_too_large" : "message_window_failed") : null});
         readError.error = error;
-        if (!withdrawn) status.replaceChildren(readError);
+        if (!withdrawn) {
+          if (messagesFailed) {status.replaceChildren(); conversation.fail({error: readError});}
+          else status.replaceChildren(readError);
+        }
         scheduleRetry(); throw error;
       }
     })();
@@ -3453,11 +3465,18 @@ async function viewProjects(main) {
               { expected_version: p.version }, `project.archive.${p.project_id}`);
             if (ok || STALE.includes(lastFailure)) render();
           } }, t("archive"))));
-        const row = indent(h("div", { class: "row tree" },
+        const rowCounts = counts(p.counts).filter(Boolean);
+        const compactCounts = rowCounts.map(node => node.dataset.projectCount === "completion" ? `${p.counts.done}/${p.counts.total}`
+          : t(node.dataset.projectCount === "doing" ? "project_row_active" : "project_row_review",
+            {count: node.dataset.projectCount === "doing" ? p.counts.doing : p.counts.awaiting_approval})).join(" · ");
+        rowCounts.forEach(node => node.classList.add("record-row-count"));
+        const row = indent(h("div", { class: "row tree record-row" },
           h("div", { class: "grow" }, h("a", { class: "title", href: `#/project/${p.project_id}` }, p.name),
             p.description ? h("div", { class: "muted clamp" }, p.description) : null),
-          ...counts(p.counts),
-          may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null), depth);
+          h("div", {class: "record-row-meta"}, ...rowCounts,
+            h("span", {class: "record-row-summary", title: rowCounts.map(node => node.textContent).join(" · ")},
+              compactCounts),
+            may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null)), depth);
         if (may("manage")) d.box.prepend(h("div", {class: "actions"}, ...orderButtons(sibs, i, "project_id", run)));
         if (may("manage")) row.querySelector(".tree-actions").prepend(treeInteractions({h, t, row, scope: `${connection.namespace}.project.${parent}`,
           siblings: sibs, index: i, key: "project_id", run, open: () => d.open(true), guard: () => assertView(connection),
@@ -3625,11 +3644,12 @@ async function viewProject(main, pid) {
       workEditors.set(w.work_item_id, {drawer: dr, child, branch});
       if (retained && may("manage") && !p.archived) {workDrafts.delete(w.work_item_id); dr.open();}
       const done = w.steps.filter(s => s.done).length;
-      const row = indent(h("div", { class: "row tree" }, stateChip(w.completion),
+      const rowState = () => {const pill = stateChip(w.completion); pill.classList.add("record-row-status"); return pill;};
+      const row = indent(h("div", { class: "row tree record-row" }, rowState(),
         h("div", { class: "grow" }, h("a", { class: "title", href: `#/item/${w.work_item_id}` }, w.title),
           w.derived_from ? h("span", { class: "muted" }, " ⑂") : null),
-        w.steps.length ? chip(`${done}/${w.steps.length}`) : null,
-        may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
+        h("div", {class: "record-row-meta"}, rowState(), w.steps.length ? chip(`${done}/${w.steps.length}`) : null,
+          may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null)), depth);
       if (may("manage") && !p.archived) dr.box.prepend(h("div", {class: "actions"}, ...orderButtons(sibs, i, "work_item_id", run)));
       if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({h, t, row,
         scope: `${connection.namespace}.item.${pid}.${parent}`, siblings: sibs, index: i, key: "work_item_id", run,

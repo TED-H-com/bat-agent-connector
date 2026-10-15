@@ -69,7 +69,7 @@ const rows={
   not_completed:['No completed discussion has been recorded. A prepared report is not an attended meeting.','尚未記錄已完成的討論；報告準備完成不代表已開會。'],
   prepare:['Prepare report','準備報告'],prepare_help:['Summarize saved evidence for a past period of up to 31 days. This makes no provider or model request.','彙整最多 31 天過去期間的已保存證據；不向供應商或模型發出請求。'],
   report_title:['Report title','報告標題'],start:['Period start','期間起點'],end:['Period end','期間終點'],previous:['Previous report to compare','要比較的前次報告'],no_previous:['No comparison selected','未選取比較報告'],
-  context_missing:['A readable current policy and release baseline are required.','需要可讀的目前政策與發布基準。'],write_scope:['A workspace owner or contributor with observe and manage can record this Review.','具觀察與管理權限的工作空間負責人或協作者可記錄這份維護審閱。'],
+  context_missing:['A readable current policy and release baseline are required.','需要可讀的目前政策與發布基準。'],write_scope:['A workspace owner or contributor with View and Manage access can record this Review.','具檢視與管理權限的工作空間負責人或協作者可記錄這份維護審閱。'],
   stale:['The source version changed. Your draft and original request are retained.','來源版本已改變；保留你的草稿與原請求。'],use_versions:['Update baseline','更新基準'],
   history:['Report history','報告歷史'],more_reports:['More reports','更多報告'],choose:['Select a report','選取報告'],current:['Latest report','最新報告'],
   source_refs:['Original report sources','原報告來源'],source_help:['Select the original evidence supporting this record.','選取支持這份紀錄的原始證據。'],reason:['Reason for this record','記錄理由'],

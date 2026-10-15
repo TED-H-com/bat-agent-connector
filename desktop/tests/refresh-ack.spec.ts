@@ -76,7 +76,7 @@ for (const native of [false, true]) for (const refresh of ["messages", "preview"
     await expect.poll(() => messageReads).toBe(2);
     expect(await saved()).toEqual(checkpoint(0));
     release();
-    await expect(page.locator('[data-session-error=UNAVAILABLE] .session-error-line')).toContainText('Server error');
+    await expect(page.locator('[data-session-error=UNAVAILABLE] .session-error-line')).toContainText(refresh === 'messages' ? 'Messages unavailable' : 'Server error');
     await expect(page.locator('[data-session-error=UNAVAILABLE] details')).toContainText('View refresh unavailable');
     expect(await saved()).toEqual(checkpoint(0));
     if (refresh === "preview") {

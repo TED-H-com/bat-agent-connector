@@ -10,7 +10,7 @@ export const dependencyStrings = {en: {
   dep_show_all_rows: 'Show all ({n})', dep_show_fewer: 'Show fewer',
   dep_legend_verified: 'Solid verified', dep_legend_declared: 'Outline declared', dep_legend_inferred: 'Dashed inferred',
   dep_other_repository: 'Other repository',
-  dep_capture_manage: 'Capture needs manage access.', dep_capture_no_source: 'This capture has no repository to read.',
+  dep_capture_manage: 'Capture needs Manage access', dep_capture_no_source: 'This capture has no repository to read.',
   dep_capture_not_ready: 'This projection is not ready to capture again.',
   dep_loaded: 'Loaded', dep_loaded_count: '{n} loaded',
   dep_kind_runtime_library: 'Runtime / library', dep_kind_api_schema: 'API / schema',

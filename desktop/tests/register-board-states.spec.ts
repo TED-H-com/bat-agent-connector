@@ -13,7 +13,7 @@ for (const locale of locales) for (const width of [1440, 390]) test(`Board clear
   const group = board.getByLabel(locale === 'en' ? 'Group by' : '分組方式', {exact: true});
   await group.selectOption('milestone');
   await board.getByLabel(locale === 'en' ? 'Requirement' : '需求', {exact: true}).selectOption(f.ids.requirements.email);
-  await board.getByLabel('Agent', {exact: true}).selectOption('codex');
+  await board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).selectOption('codex');
   await board.getByRole('searchbox').fill('zzzz-no-such-work');
   await expect(board.getByRole('heading', {name: noMatches(locale), exact: true})).toBeVisible();
   await expect(board.locator('[data-pm-kanban-column]:visible')).toHaveCount(0);
@@ -22,7 +22,7 @@ for (const locale of locales) for (const width of [1440, 390]) test(`Board clear
   await expect(clear).toHaveClass(/secondary/); await clear.click();
   await expect(board.getByRole('searchbox')).toHaveValue('');
   await expect(board.getByLabel(locale === 'en' ? 'Requirement' : '需求', {exact: true})).toHaveValue('');
-  await expect(board.getByLabel('Agent', {exact: true})).toHaveValue('');
+  await expect(board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true})).toHaveValue('');
   await expect(group).toHaveValue('milestone');
   await expect(rows(board)).toHaveCount(12); await expect(board.locator('.ui-empty')).toHaveCount(0);
   await expect(board.getByRole('searchbox')).toBeFocused();

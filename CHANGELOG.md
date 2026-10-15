@@ -49,6 +49,14 @@
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
+- At phone width, page headers keep icon actions beside the title, and project and
+  work-item rows put the title first with their actions on the right. Sessions says
+  "No sessions yet" before the first session instead of describing filters, and
+  resource rows use the same session labels. Mark read and Save position say why
+  they are unavailable, and a failed message read shows one alert with Retry, with
+  diagnostics in Details. Permission notes use the Connection access names (View,
+  Manage, Start…), and zh-TW uses 代理 and 工作樹 throughout.
+
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
   and never cache loads affected by cycle or budget refusals, including raw metadata.

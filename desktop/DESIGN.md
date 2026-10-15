@@ -258,7 +258,7 @@ extra fields (including display metadata) are rejected.
 
 ## Global screens
 
-Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header (`.ui-page-header`): header actions centre on the title row, with 16px before the next control. A meta line under the title does not move the actions. Below 800px actions occupy their own wrapping row under the full-width title and metadata. Titles clamp to two lines with the complete title in the tooltip and accessible name; they wrap at words and use pretty text wrapping. Actions retain their intrinsic width so labels stay on one line. Marks beside the title stay on the title line as well; the title shrinks and wraps inside that line instead of letting the marks wrap underneath it. Pending is an inbox hosted like Operations: the groups and the Details disclosure stay in one column, and the inspector is the column on the right at 1200px and up (the same sheet below that). The Needs you / Active operations / Unread switch is the shared segmented control and keeps focus on the checked option after the view rebuilds. Each group is one surface list: a title and count, hairline rows, and one secondary action. The row selects; the inspector is what opens the next page, and its first action is that row’s Answer, Review or Open link. When the session read already includes the pending question, that question is the first paragraph. A manual or read-only session shows Open and the Read-only pill, never Answer or Review. The row title is not underlined until hover or focus. The status pill sits beside the meta, not at the far edge. A chevron opens the inspector only when that is different from the row action. Needs attention (unknown outcomes, not failures) offers a quiet View all link in the group header. “N shown · Load more” appears only while another page exists. A group hides only after a fresh, successful, empty load. A failed read keeps earlier rows, shows no count, and stays marked Not updated · Retry. When every group fails in the same refresh, one alert and one Retry sit at the top instead of a bar on each group. An error does not turn the Pending badge into zero. Each tab has its own empty state and at most one link: Approvals only when there is something to approve and the inbox is empty, otherwise inside that empty state. Explanations sit once in a Details disclosure after the groups and name only the tabs that are offered. Operations is a dense table (action, target, status, actor, created, duration). Duration is the elapsed time for an active operation and `updated_at − created_at` once it is terminal, written as seconds, minutes, hours and minutes, or days and hours, with a zero remainder omitted. The shared segmented filter and the shared search field stay. Selecting a row opens an inspector whose first text is the localized status and whose first action is Open operation. The meta line is only the target. Actor, Created, Duration and Attempts sit above Details, and a server reason is a Reason row inside Details. Refresh stays disabled while a load is in progress. In the browser, the settings sub-nav (Connection, Desktop, Models, Fleet, Updates, About) shows only the selected section, remembers that section for the namespace, and stacks under 800px. Native settings keep mounted sections visible together and use links with `aria-current`, not tabs. Forms stay within 640px. Connection shows the endpoint, a live state pill, the live last-event time, access as Access · actor · scopes, and a secondary Disconnect. In the browser, the Tailscale note is one muted line inside that card, with no controls and no local calls. Fleet without configuration uses the shared empty state. About shows the product name, the version when one is known, and the setup guide. The signed-out screen is one centred card: the product mark, one sentence, the connect form with the setup guide on the connect row, and the same Tailscale note in the card footer. A rejected token says Token not accepted / 權杖無效 in an alert, with no raw status code. Sidebar names keep the row width minus a 16px mark: circle-alert for Needs you and Asking you, circle-x for Failed, an info dot for Running, and no mark for neutral states. The mark follows the work entry’s own status before the session’s activity. A numeric unread count sits after the name when the entry has one. The status word stays in the tooltip and accessible name. The Pending count badge stays. At 800px and below, row actions, row chevrons and View all keep a 44px hit area. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details. Registered operation names have an English and Traditional Chinese label; an unknown name is humanised rather than called Operation.
+Pending, Operations, Delivery, Settings, Projects, cleanup, artifact review and the signed-out card share one page header (`.ui-page-header`): header actions centre on the title row, with 16px before the next control. A meta line under the title does not move the actions. Below 800px icon actions stay right-aligned beside the title, including alongside a text action; text actions use a wrapping row below the title and metadata. Titles clamp to two lines with the complete title in the tooltip and accessible name; they wrap at words and use pretty text wrapping. Actions retain their intrinsic width so labels stay on one line. Marks beside the title stay on the title line as well; the title shrinks and wraps inside that line instead of letting the marks wrap underneath it. Pending is an inbox hosted like Operations: the groups and the Details disclosure stay in one column, and the inspector is the column on the right at 1200px and up (the same sheet below that). The Needs you / Active operations / Unread switch is the shared segmented control and keeps focus on the checked option after the view rebuilds. Each group is one surface list: a title and count, hairline rows, and one secondary action. The row selects; the inspector is what opens the next page, and its first action is that row’s Answer, Review or Open link. When the session read already includes the pending question, that question is the first paragraph. A manual or read-only session shows Open and the Read-only pill, never Answer or Review. The row title is not underlined until hover or focus. The status pill sits beside the meta, not at the far edge. A chevron opens the inspector only when that is different from the row action. Needs attention (unknown outcomes, not failures) offers a quiet View all link in the group header. “N shown · Load more” appears only while another page exists. A group hides only after a fresh, successful, empty load. A failed read keeps earlier rows, shows no count, and stays marked Not updated · Retry. When every group fails in the same refresh, one alert and one Retry sit at the top instead of a bar on each group. An error does not turn the Pending badge into zero. Each tab has its own empty state and at most one link: Approvals only when there is something to approve and the inbox is empty, otherwise inside that empty state. Explanations sit once in a Details disclosure after the groups and name only the tabs that are offered. Operations is a dense table (action, target, status, actor, created, duration). Duration is the elapsed time for an active operation and `updated_at − created_at` once it is terminal, written as seconds, minutes, hours and minutes, or days and hours, with a zero remainder omitted. The shared segmented filter and the shared search field stay. Selecting a row opens an inspector whose first text is the localized status and whose first action is Open operation. The meta line is only the target. Actor, Created, Duration and Attempts sit above Details, and a server reason is a Reason row inside Details. Refresh stays disabled while a load is in progress. In the browser, the settings sub-nav (Connection, Desktop, Models, Fleet, Updates, About) shows only the selected section, remembers that section for the namespace, and stacks under 800px. Native settings keep mounted sections visible together and use links with `aria-current`, not tabs. Forms stay within 640px. Connection shows the endpoint, a live state pill, the live last-event time, access as Access · actor · scopes, and a secondary Disconnect. In the browser, the Tailscale note is one muted line inside that card, with no controls and no local calls. Fleet without configuration uses the shared empty state. About shows the product name, the version when one is known, and the setup guide. The signed-out screen is one centred card: the product mark, one sentence, the connect form with the setup guide on the connect row, and the same Tailscale note in the card footer. A rejected token says Token not accepted / 權杖無效 in an alert, with no raw status code. Sidebar names keep the row width minus a 16px mark: circle-alert for Needs you and Asking you, circle-x for Failed, an info dot for Running, and no mark for neutral states. The mark follows the work entry’s own status before the session’s activity. A numeric unread count sits after the name when the entry has one. The status word stays in the tooltip and accessible name. The Pending count badge stays. At 800px and below, row actions, row chevrons and View all keep a 44px hit area. Composed metadata uses `label-text.js`, so a missing target does not leave a separator. Short status words come from the shared vocabulary; precise wording and raw codes stay in Details. Registered operation names have an English and Traditional Chinese label; an unknown name is humanised rather than called Operation.
 
 ## Shared actions and links
 
@@ -1092,7 +1092,7 @@ labels. PM writer states reuse nativeRunState; step names remain identifiers.
 ## Setup glossary
 
 Use these terms in setup, Settings and Connection. Product, provider and protocol
-names stay BAT, Connector, GitHub, Git, SSH, Tailscale, Codex and Claude. Keep Agent for an AI
+names stay BAT, Connector, GitHub, Git, SSH, Tailscale, Codex and Claude. Use Agent in English and 代理 in zh-TW for an AI
 worker; call the project manager PM. Platform labels are macOS / Linux
 (「macOS／Linux」) and Windows, with protocol values kept out of ordinary labels.
 BAT's own labels may be quoted exactly in field hints, including 「連線 Token」
@@ -1107,7 +1107,7 @@ and “Certificate fingerprint (SHA-256)”.
 | remote | 遠端 |
 | managed | 受管 |
 | session | 工作階段 |
-| worktree | 獨立工作目錄（Git worktree 可留在詳細資料） |
+| worktree | 工作樹 |
 | checkpoint | 檢查點 |
 | commit | 提交 |
 | workspace | 工作區 |
@@ -1117,8 +1117,8 @@ and “Certificate fingerprint (SHA-256)”.
 First use opens 1. Connect BAT with a masked connection URL and Host ID. Individual
 connection fields and managed-work permissions stay in collapsed disclosures.
 Fields stack label, input, hint and error, with a 4px hint gap and 12px between
-fields. Settings has one Refresh in the shared page header, whose mobile actions
-remain below the title. It reloads setup status in place, preserving the draft,
+fields. Settings has one Refresh in the shared page header, whose mobile icon action
+remains beside the title. It reloads setup status in place, preserving the draft,
 password field and page-only staged references; read failures retain their gates.
 Pasting parses locally, clears the URL and stores only non-secret drafts. A muted
 check-mark line confirms the host/port, abbreviated fingerprint and credential
@@ -1242,3 +1242,33 @@ Accepted-plan preview errors reuse the context panel's disclosure; closing the p
 hides the sentence, diagnostics and export action together.
 An expanded session error can use up to 32% of viewport height so its sentence,
 diagnostics and export action fit together on phones; longer content still scrolls.
+
+## Compact record rows
+
+At 600px and below, Projects and project work-item rows put the title first and
+facts plus right-aligned actions on the next line. Project rows summarize the
+recorded completed/total, active and review counts; full count labels remain in
+the tooltip. Work-item state precedes step progress on that line. Desktop keeps
+its existing order. Row controls retain 44px touch targets. Dispatched work starts
+at the card padding without the generic heading's extra top margin.
+Checkboxes retain their intrinsic height instead of the text-input minimum; their
+labels keep the existing touch area and orchestration aligns to the first text line.
+
+A complete empty Sessions read without filters says No sessions yet / 尚無工作階段.
+It omits zero counts and loaded-page guidance. Search, host, access and workspace
+filters keep the matching-empty state and the absence-is-not-completion caveat.
+Observed-resource session rows use sessionPill's labels and tones, while stale,
+gone and ended observations keep their activity pill hidden.
+Reading receipt controls retain their toolbar space and expose a short disabled
+reason through their accessible description and tooltip. Failures use the shared
+error presentation with a localized summary. Message-read failures have one alert
+and Retry inside the transcript; original diagnostics and export remain in Details.
+The existing formatted session detail timestamp already avoids duplicate ISO text.
+
+Setup and permission guidance uses the Connection access labels (View / 檢視,
+Manage / 管理, Start / 啟動, Operate / 操作, Approve / 核准, Cleanup / 整理,
+Deploy / 部署, Integrate / 整合). Protocol scopes stay
+unchanged in API data, CLI arguments and technical Details. zh-TW UI uses 代理 and
+工作樹 consistently, including PM and MCP workers. BAT, Connector, Codex, Claude,
+Git, GitHub, MCP and Task Service remain product or protocol names. JSON keys,
+credential placeholders and CLI syntax remain literal technical examples.

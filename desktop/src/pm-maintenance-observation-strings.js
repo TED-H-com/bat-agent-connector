@@ -46,7 +46,7 @@ export const maintenanceObservationStrings={
     pmo_source_central_project:'Connector 專案',pmo_source_github:'GitHub',pmo_source_bat:'BAT 工作區',pmo_source_other:'其他來源',
     pmo_blockers:'已記錄的阻止原因或涵蓋缺口',pmo_capture_limits:'這份工作量觀察不做品質評估。保存觀察不會變更管理階段，也不構成執行授權。',
     pmo_recorded_source:'本次觀察保存的來源',pmo_ref_work:'工作項目',pmo_ref_task:'任務',pmo_ref_operation:'操作',pmo_ref_command:'命令',pmo_ref_session:'工作階段',pmo_ref_sprint:'Sprint',pmo_ref_bat:'BAT 工作區',
-    pmo_exclusions:'擷取時未計入工作量的來源',pmo_exclusion_boundary:'這些保存的排除原因不授予控制權、不代表品質驗收，也不證明程序已停止。保留 worktree 本身不算進行中的工作。',pmo_runtime_receipt:'原始執行觀察',
+    pmo_exclusions:'擷取時未計入工作量的來源',pmo_exclusion_boundary:'這些保存的排除原因不授予控制權、不代表品質驗收，也不證明程序已停止。保留工作樹本身不算進行中的工作。',pmo_runtime_receipt:'原始執行觀察',
     pmo_exclusion_checkpoint_is_not_activity:'單獨保存的 checkpoint 不代表活動仍在進行。',pmo_exclusion_failed_attempt_explicitly_deferred:'失敗的嘗試已明確延後處理。',
     pmo_exclusion_unselected_backlog:'尚未選入執行的待辦不算生效中的承諾。',pmo_exclusion_pm_owned_session:'已綁定 PM 角色的工作階段不計入開發工作。',
     pmo_exclusion_verified_ended_session_retained:'已驗證結束的工作階段保留為歷史。',pmo_exclusion_original_maintenance_attempt_completed:'原始維護嘗試已有保存的完成證據。',
