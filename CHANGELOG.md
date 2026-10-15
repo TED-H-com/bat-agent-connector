@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
+
 - Pull requests select the Python matrix and no/Linux/all native builds from their
   merge diff. Existing desktop path filters remain; workflows triggered on `main`
   keep full coverage. Every selected Python version retains all five pytest shards
