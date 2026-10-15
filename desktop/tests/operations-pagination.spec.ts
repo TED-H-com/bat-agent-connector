@@ -36,7 +36,10 @@ for(const native of [false,true]) {
     await expect.poll(()=>Boolean(state.holdList)).toBe(true);
     state.events.push({seq:1,resource_type:'operation',resource_id:state.list[3].operation_id,kind:'operation.updated'});
     state.failList=true; state.holdList();
-    await expect(page.getByText('List read failed',{exact:true})).toBeVisible();
+    await expect(page.locator('[data-error-summary]')).toHaveText('This request could not be completed. Check Details.');
+    await page.locator('summary').filter({hasText: 'Details'}).click();
+    await expect(page.locator('[data-error-details] code')).toHaveText('READ_FAILED');
+    await expect(page.locator('[data-error-details] p')).toHaveText('List read failed');
     expect(state.after).toBe(0);
     await expect(page.locator('[data-operation-count]')).toContainText('2 shown');
     state.failList=false;
