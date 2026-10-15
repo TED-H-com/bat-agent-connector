@@ -109,7 +109,7 @@ for (const native of [false, true]) test.describe(native ? 'Native verification 
     const panel = page.locator('[data-managed-setup]'), form = await verificationForm(page); await fillVerification(form);
     state.revision = 'b'.repeat(64); state.verification.commands.other = ['newer-command'];
     await page.locator('#main > .ui-page-header').getByRole('button', {name: 'Refresh', exact: true}).click();
-    await expect(form).toContainText('Central configuration changed'); await expect(form.getByLabel('Executable', {exact: true})).toHaveValue('python');
+    await expect(form).toContainText('Connector configuration changed'); await expect(form.getByLabel('Executable', {exact: true})).toHaveValue('python');
     state.refused = true; await form.getByRole('button', {name: 'Save verification command', exact: true}).click();
     await expect(panel).toContainText('Read the new configuration.');
     expect(state.posts[0].body.params.commands.other).toEqual(['uv', 'run', 'pytest', '-q']);
@@ -125,7 +125,7 @@ for (const native of [false, true]) test.describe(native ? 'Native verification 
   test('verification setup requires both manage scope and an allowed central action', async ({page}) => {
     const state = await fixture(page, native); state.scopes = ['observe']; await page.goto('/dashboard/#/settings');
     let form = await verificationForm(page);
-    await expect(form).toContainText('Your central identity is not permitted');
+    await expect(form).toContainText('Your Connector identity is not permitted');
     await expect(form.getByRole('button', {name: 'Save verification command', exact: true})).toBeDisabled();
     await form.evaluate(node => node.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true})));
     state.scopes = ['observe', 'manage']; state.allowed = false; await page.reload(); form = await verificationForm(page);

@@ -12,6 +12,29 @@ async function expectConnectedIdentity(page: Page) {
   await expect(page.locator('.native-connection > details code').filter({hasText: 'observe, operate'})).toHaveText('observe, operate');
 }
 
+for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
+  test(`Connector connection wording ${locale} ${width}`, async ({browser}) => {
+    const context = await browser.newContext({locale, colorScheme: 'light', viewport: {width, height: width === 390 ? 844 : 900}});
+    const page = await context.newPage(), errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await setup(page, {setup: true});
+    const zh = locale === 'zh-TW', connection = page.getByRole('region', {name: zh ? '桌面 Connector 連線' : 'Desktop Connector connection', exact: true});
+    await expect(connection.getByLabel(zh ? 'Connector 位址' : 'Connector address', {exact: true})).toBeVisible();
+    await expect(connection).toContainText(zh
+      ? 'Connector 位址與預期身分由本機設定指定；憑證保留在原生程式，不存入此畫面。'
+      : 'The Connector address and expected identity come from local configuration. Credentials stay in the native app, outside this page.');
+    expect(await connection.innerText()).not.toMatch(/\bcentral\b|中央/i);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const folder = process.env.POLISH_COPY_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/polish-copy-shots`;
+    await mkdir(folder, {recursive: true});
+    await page.screenshot({path: `${folder}/connection-${locale}-${width}.png`, fullPage: true});
+    expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((call: any) =>
+      ['connector_setup_configuration', 'connector_enroll', 'connector_connect'].includes(call.command)))).toEqual([]);
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
+
 async function setup(page: any, options: any = {}) {
   await page.addInitScript((options: any) => {
     const caps = (principal: string) => ({actor: 'fixture-operator', scopes: ['observe', 'operate'], api_version: 1,
@@ -66,7 +89,7 @@ async function setup(page: any, options: any = {}) {
     }}});
   }, options);
   await page.goto('/dashboard/#/settings');
-  await expect(page.getByRole('region', {name: /Desktop central connection|桌面中央連線/})).toBeVisible();
+  await expect(page.getByRole('region', {name: /Desktop Connector connection|桌面 Connector 連線/})).toBeVisible();
 }
 
 test('managed startup failure remains visible beside advanced external setup', async ({page}) => {
@@ -75,7 +98,7 @@ test('managed startup failure remains visible beside advanced external setup', a
   await expectErrorDetails(page, 'MANAGED_RUNTIME_START_FAILED');
   await expect(page.locator('[data-native-setup] input')).toHaveCount(2);
   await expect(page.locator('[data-native-setup] input').first()).toBeHidden();
-  await page.getByText('Advanced: join an existing central', {exact: true}).click();
+  await page.getByText('Join another Connector', {exact: true}).click();
   await expect(page.locator('[data-native-setup] input').first()).toBeVisible();
   const calls = await page.evaluate(() => (window as any).__credentialFixture.calls);
   expect(calls.some((call: any) => ['connector_setup_configuration', 'connector_enroll', 'connector_connect'].includes(call.command))).toBe(false);
@@ -215,10 +238,10 @@ for (const kind of ['connect', 'enroll']) {
     const disconnect = page.getByRole('button', {name: 'Disconnect', exact: true});
     await expect(disconnect).toBeEnabled(); // no navigation or rerender is needed to cancel
     await disconnect.click();
-    await expect(page.getByText('Disconnected. Central work continues.')).toBeVisible();
+    await expect(page.getByText('Disconnected · Connector work continues')).toBeVisible();
     await expect(page.locator('[data-connection-access]')).toHaveCount(0);
     await page.evaluate(kind => (window as any).__credentialFixture[kind === 'connect' ? 'releaseConnect' : 'release'](), kind);
-    await expect(page.getByText('Disconnected. Central work continues.')).toBeVisible();
+    await expect(page.getByText('Disconnected · Connector work continues')).toBeVisible();
     await expect(page.locator('[data-connection-access]')).toHaveCount(0);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_request' && c.args.input.path === '/bootstrap').length)).toBe(1);
     expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_disconnect').length)).toBe(1);
@@ -313,7 +336,7 @@ test('slow startup renders recovery controls and discards verification completed
   await expect(page.getByText('Connection in progress…', {exact: true})).toBeVisible();
   await expect.poll(() => page.evaluate(() => typeof (window as any).__credentialFixture.releaseConnect)).toBe('function');
   await page.getByRole('button', {name: 'Disconnect', exact: true}).click();
-  await expect(page.getByText('Disconnected. Central work continues.')).toBeVisible();
+  await expect(page.getByText('Disconnected · Connector work continues')).toBeVisible();
   await page.evaluate(() => (window as any).__credentialFixture.releaseConnect());
   await expect(page.locator('[data-connection-access]')).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__credentialFixture.calls.filter((c: any) => c.command === 'connector_request' && c.args.input.path === '/bootstrap'))).toEqual([]);

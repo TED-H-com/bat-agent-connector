@@ -30,7 +30,7 @@ try {
  const sourceLink=page.getByRole('link',{name:"Capture and review this execution's file",exact:true});
  await expect(sourceLink).toBeVisible();await sourceLink.click();
  let capture=page.locator('[data-managed-capture]');
- await capture.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify({execution_operation_id:fixture.execution_id}));
+ await capture.getByRole('combobox',{name:'Connector execution evidence'}).selectOption(JSON.stringify({execution_operation_id:fixture.execution_id}));
  await capture.getByRole('textbox',{name:'Relative file path'}).fill('result.bin');await capture.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(capture).toContainText(fixture.digest);
  await capture.getByRole('checkbox').check();await capture.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('.error')).toBeVisible();
  await page.reload();capture=page.locator('[data-managed-capture]');await capture.getByRole('button',{name:'Check original capture',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toBeVisible({timeout:30000});

@@ -50,7 +50,7 @@ test('missing recipe and healthy central never offer remote repair',async({page}
  await expect(panel(page)).toContainText('No startup recipe configured');
  expect(await calls(page,'prepare')).toHaveLength(0);expect(await calls(page,'advance')).toHaveLength(0);
  await page.evaluate(()=>Object.assign((window as any).__bootstrap,{configured:true,eligible:false}));
- await button(page,'Refresh startup status').click();await expect(panel(page)).toContainText('no startup is needed');
+ await button(page,'Refresh startup status').click();await expect(panel(page).getByText('Connector is available · no startup needed',{exact:true})).toBeVisible();
  await expect(button(page,'Prepare fixed service request')).toBeDisabled();
 });
 test('native request is persisted before ensure and original envelope is exact',async({page})=>{

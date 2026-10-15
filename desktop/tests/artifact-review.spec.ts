@@ -1,7 +1,7 @@
 import {expectErrorDetails, expectClientError} from './api-error-assertions.ts';
 import {test,expect,type Page} from '@playwright/test';
 import {createHash} from 'node:crypto';
-import {readFile} from 'node:fs/promises';
+import {readFile,mkdir} from 'node:fs/promises';
 const captureId='op_'+'a'.repeat(32),acceptId='op_'+'b'.repeat(32),executionId='op_'+'c'.repeat(32),artifactId='art_'+'d'.repeat(32);
 const taskId='11111111-2222-4333-8444-555555555555',ref={artifact_id:artifactId,revision:1,digest:'e'.repeat(64)},selector={execution_operation_id:executionId};
 const source={host:'demo',session_id:'managed-session',root:'/managed/work',repository_root:'/managed/work',provenance:'connector_managed',selector,lineage:{kind:'execution_operation',execution_operation_id:executionId}};
@@ -59,7 +59,25 @@ async function contentFixture(page:Page,native:boolean,options:any={}){
  return fixture(page,native,{scopes:['observe','approve'],content,row:exact,...options});
 }
 
-async function captureForm(page:Page){await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText(ref.digest);await box.getByRole('checkbox').check();return box;}
+async function captureForm(page:Page){await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');await box.getByRole('combobox',{name:'Connector execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText(ref.digest);await box.getByRole('checkbox').check();return box;}
+for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
+ test(`Connector execution evidence wording ${locale} ${width}`,async({browser})=>{
+  const context=await browser.newContext({locale,colorScheme:'light',viewport:{width,height:width===390?844:900}});
+  const page=await context.newPage(),state=await fixture(page,false),zh=locale==='zh-TW';
+  await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
+  const capture=page.locator('[data-managed-capture]');
+  const execution=capture.getByRole('combobox',{name:zh?'Connector 執行證據':'Connector execution evidence',exact:true});
+  await execution.selectOption(JSON.stringify(selector));
+  await capture.getByRole('textbox',{name:zh?'遠端相對檔案路徑':'Remote relative file path',exact:true}).fill('result.txt');
+  await expect(execution).toHaveValue(JSON.stringify(selector));
+  expect(await capture.innerText()).not.toMatch(/\bcentral\b|中央/i);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  const folder=process.env.POLISH_COPY_SCREENSHOTS||`${process.env.TMPDIR||'/tmp'}/polish-copy-shots`;
+  await mkdir(folder,{recursive:true});
+  await page.screenshot({path:`${folder}/artifact-review-${locale}-${width}.png`,fullPage:true});
+  expect(state.writes).toEqual([]);expect(state.errors).toEqual([]);await context.close();
+ });
+}
 for(const native of [false,true]){
  const mode=native?'native':'browser';
  test(`foreign managed source permits reviewed capture without session control (${mode})`,async({page})=>{
@@ -90,24 +108,24 @@ for(const native of [false,true]){
  });
  test(`published-version execution is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'repository.continue'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Continue from published version'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Connector execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Connector execution evidence'}).locator('option').filter({hasText:'Continue from published version'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`unproven published-version execution stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
-  const state=await fixture(page,native,{executionAction:'repository.continue',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);expect(state.writes).toHaveLength(0);
+  const state=await fixture(page,native,{executionAction:'repository.continue',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Connector execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);expect(state.writes).toHaveLength(0);
  });
  test(`successful prompted start is a capture candidate and operation entrypoint (${mode})`,async({page})=>{
   const state=await fixture(page,native,{executionAction:'session.start'});await page.goto('/dashboard/#/op/'+executionId);await page.getByRole('link',{name:"Capture and review this execution's file",exact:true}).click();
-  await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:'Start session'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
+  await expect(page.getByRole('combobox',{name:'Connector execution evidence'})).toHaveValue(JSON.stringify(selector));await expect(page.getByRole('combobox',{name:'Connector execution evidence'}).locator('option').filter({hasText:'Start session'})).toHaveCount(1);expect(state.writes).toHaveLength(0);
  });
  for(const excluded of [{promptSent:false},{executionStatus:'uncertain'}])test(`prompt-free or unknown start stays ineligible ${JSON.stringify(excluded)} (${mode})`,async({page})=>{
-  const state=await fixture(page,native,{executionAction:'session.start',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Central execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);
+  const state=await fixture(page,native,{executionAction:'session.start',...excluded});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');await expect(page.getByRole('combobox',{name:'Connector execution evidence'}).locator('option').filter({hasText:executionId})).toHaveCount(0);
   await page.goto('/dashboard/#/op/'+executionId);await expect(page.getByRole('link',{name:"Capture and review this execution's file",exact:true})).toHaveCount(0);await page.goto('/dashboard/#/artifact-review/operation/'+executionId);await expectClientError(page, 'Connector-managed');await expect(page.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();expect(state.previews).toHaveLength(0);expect(state.writes).toHaveLength(0);
  });
  test(`managed capture and acceptance keep separate exact intents (${mode})`,async({page})=>{
   const state=await fixture(page,native),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toContainText(artifactId);
   const review=page.locator('[data-artifact-accept]');await review.getByRole('textbox').fill('Reviewed the exact report.');await review.getByRole('button',{name:'Record review of this revision',exact:true}).click();await expect(page.locator('[data-artifact-accepted]')).toBeVisible();
   expect(state.writes.map((x:any)=>x.body.action)).toEqual(['artifact.capture.managed','artifact.accept']);expect(state.writes[1].body).toEqual({action:'artifact.accept',target:{artifact_id:artifactId,revision:1},params:{digest:ref.digest,source_fingerprint:proof.fingerprint,receipt:'Reviewed the exact report.'},preconditions:{}});
-  await page.reload();await expect(page.locator('[data-artifact-accepted]')).toBeVisible();expect(state.writes).toHaveLength(2);expect(state.errors).toEqual([]);await expect(page.getByRole('combobox',{name:'Central execution evidence'})).toHaveValue(JSON.stringify(selector));
+  await page.reload();await expect(page.locator('[data-artifact-accepted]')).toBeVisible();expect(state.writes).toHaveLength(2);expect(state.errors).toEqual([]);await expect(page.getByRole('combobox',{name:'Connector execution evidence'})).toHaveValue(JSON.stringify(selector));
  });
  test(`lost capture keeps original credential key after source cleanup (${mode})`,async({page})=>{
   const state=await fixture(page,native,{lostCapture:true}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expectErrorDetails(page, 'Reply lost');
@@ -142,7 +160,7 @@ for(const native of [false,true]){
   await expect(page.locator('[data-artifact-accepted]')).toHaveCount(0);await expect(page.getByRole('button',{name:'Record another review',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(1);
  });
  test(`task selector offers accepted commands and rejects unsafe file paths (${mode})`,async({page})=>{
-  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/task/'+taskId);const box=page.locator('[data-managed-capture]'),select=box.getByRole('combobox',{name:'Central execution evidence'});
+  const state=await fixture(page,native);await page.goto('/dashboard/#/artifact-review/task/'+taskId);const box=page.locator('[data-managed-capture]'),select=box.getByRole('combobox',{name:'Connector execution evidence'});
   await expect(select.locator('option')).toContainText(['Choose an accepted execution or command','Task Service command']);await expect(select.locator('option').filter({hasText:'cmd-unknown'})).toHaveCount(0);
   await select.selectOption(JSON.stringify({command_id:'cmd-accepted',task_id:taskId}));await box.getByRole('textbox',{name:'Relative file path'}).fill('../unsafe');await expect(box.getByRole('button',{name:'Preview source file',exact:true})).toBeDisabled();
   await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText(ref.digest);expect(state.previews[0].body).toEqual({host:'demo',session_id:'managed-session',relative_path:'result.txt',task_id:taskId,command_id:'cmd-accepted'});expect(state.writes).toHaveLength(0);
@@ -158,11 +176,11 @@ for(const native of [false,true]){
 
  test(`preview mismatch and expiry cannot submit managed capture (${mode})`,async({page})=>{
   const state=await fixture(page,native,{badPreview:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');
-  await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expectClientError(page, 'does not match');
+  await box.getByRole('combobox',{name:'Connector execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expectClientError(page, 'does not match');
   state.badPreview=false;state.expired=true;await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect(box).toContainText('Preview expired');await expect(box.getByRole('button',{name:'Save reviewed file',exact:true})).toBeDisabled();expect(state.writes).toHaveLength(0);
  });
  test(`late preview cannot follow navigation into another principal (${mode})`,async({page})=>{
-  const state=await fixture(page,native,{holdPreview:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');await box.getByRole('combobox',{name:'Central execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect.poll(()=>typeof state.releasePreview).toBe('function');
+  const state=await fixture(page,native,{holdPreview:true});await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');const box=page.locator('[data-managed-capture]');await box.getByRole('combobox',{name:'Connector execution evidence'}).selectOption(JSON.stringify(selector));await box.getByRole('textbox',{name:'Relative file path'}).fill('result.txt');await box.getByRole('button',{name:'Preview source file',exact:true}).click();await expect.poll(()=>typeof state.releasePreview).toBe('function');
   state.actor='other-reviewer';state.principal='other-principal';await page.goto('/dashboard/#/settings');await page.getByRole('button',{name:'Disconnect',exact:true}).click();if(!native)await page.getByPlaceholder('batc_…').fill('different-fixture-token');await page.getByRole('button',{name:'Connect',exact:true}).click();await expect(page).toHaveURL(/#\/home$/);state.releasePreview();await page.goto('/dashboard/#/artifact-review/session/demo/managed-session');
   await expect(page.getByRole('textbox',{name:'Relative file path'})).toHaveValue('');expect(state.writes).toHaveLength(0);expect(state.errors).toEqual([]);expect(await page.evaluate(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('batc.artifact-review.')).some(([,v])=>v.includes('result.txt')))).toBe(true);
  });
