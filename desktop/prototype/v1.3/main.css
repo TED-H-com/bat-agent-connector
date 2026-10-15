@@ -101,6 +101,9 @@ body.has-workspace .workspace-nav { display: flex; flex-direction: column; }
   body.has-workspace .proto-inspector { position: static; top: auto; bottom: auto; width: auto; max-height: none; z-index: auto; box-shadow: none; }
   .proto-discussions .proto-inspector { width: 300px; }
   .proto-inspector .ui-inspector-body { overflow: visible; }
+  /* A longer assessment scrolls beside the work, keeping its output in view. */
+  body.has-workspace .proto-session-grid > .proto-inspector { max-height: max(340px, calc(100dvh - 360px)); }
+  .proto-session-grid > .proto-inspector .ui-inspector-body { overflow: auto; }
 }
 @media (max-width:1399px) and (min-width:1200px) { .proto-discussions { grid-template-columns: 200px minmax(0,1fr) 300px; } }
 @media (max-width:1199px) { .proto-discussions { grid-template-columns: 240px minmax(0,1fr); } .proto-session-grid.has-results { grid-template-columns: minmax(0,1fr); } }

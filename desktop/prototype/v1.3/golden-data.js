@@ -217,6 +217,7 @@ export function createScenarioState(scenario = "idea", currentLocale = "en") {
     duplicateStarts: 0,
     // Composer state (§6.2)
     composerIntent: "discuss",
+    discussionTab: "context",
     composerDraft: firstSentence,
     noteSavedBanner: false,
     pmAvailable: true,
@@ -283,6 +284,7 @@ export function createScenarioState(scenario = "idea", currentLocale = "en") {
       deployed: false
     },
     pmAssessment: "insufficient",
+    pmReviewOpen: false,
     // "insufficient" | "passed" | "failed"
     ownerDecisionRecorded: null,
     // External Read-Only Session (F6)
@@ -307,7 +309,7 @@ export function createScenarioState(scenario = "idea", currentLocale = "en") {
     base.composerDraft = firstSentence;
   } else if (scenario === "planned") {
     base.activeView = "discussions";
-    base.composerIntent = "plan";
+    base.composerIntent = "discuss";
     base.composerDraft = firstSentence;
     base.planVisible = true;
     base.modelCalls = 1;
