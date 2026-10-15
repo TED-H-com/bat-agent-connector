@@ -441,7 +441,7 @@ var overviewStrings = {
 		ov_recent_decisions: "近期決策",
 		ov_accepted: "{total} 項中 {accepted} 項已驗收",
 		ov_requirements: "{n} 項需求",
-		ov_adopted: "{date} 採用",
+		ov_adopted: "{date}採用",
 		ov_acceptance_gap: "已有交付紀錄，尚缺對應本輪接受條件的驗收。",
 		ov_see_unaccepted: "查看待驗收需求",
 		ov_ask_pm: "請 PM 整理",
