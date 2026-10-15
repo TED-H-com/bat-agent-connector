@@ -149,7 +149,8 @@ def install(ops) -> None:
 
 
 def _member(ops, principal: Principal, wid: str, *, write: bool = False, decide: bool = False) -> dict:
-    if not principal.allows("observe") or (write and not REQUIRED_SCOPES <= principal.scopes):
+    scopes = REQUIRED_SCOPES if write else {"observe"}
+    if not all(principal.allows(scope) for scope in scopes):
         raise _bad("FORBIDDEN", "Starting work requires observe, manage and start scopes", 403)
     return pm_workspace.require_member(ops.db, principal, wid, write=write, decide=decide)
 
@@ -195,6 +196,27 @@ def require_work_controller(db, workspace_id: str, work_item_id: str, candidate:
         )
 
 
+def require_no_active_attempt(db, workspace_id: str, work_item_id: str) -> None:
+    """Reject a second concurrent work.start when the Work's latest attempt is not terminal."""
+    if not installed(db):
+        return
+    row = db.execute(
+        """SELECT start_operation_id, origin_id FROM work_attempts
+        WHERE workspace_id=? AND work_item_id=? ORDER BY sequence DESC LIMIT 1""",
+        (workspace_id, work_item_id),
+    ).fetchone()
+    if row is None:
+        return
+    op_id = row["start_operation_id"] or row["origin_id"]
+    op_row = db.execute("SELECT status FROM operations WHERE operation_id=?", (op_id,)).fetchone()
+    if op_row is None or op_row["status"] not in TERMINAL:
+        raise _bad(
+            "PM_WORK_START_IN_PROGRESS",
+            f"Work item already has an active start in progress ({op_id}); follow or settle that operation first",
+            409,
+        )
+
+
 def latest_attempt_id(db, workspace_id: str, work_item_id: str) -> str | None:
     if not installed(db):
         return None
@@ -223,6 +245,7 @@ def admit_operation(db, operation_id: str, action: str, target: dict, binding: d
     if not isinstance(controller, dict):
         raise _bad("PM_WORK_START_CONTEXT_INVALID", "Work start controller authority is missing", 409)
     require_work_controller(db, wid, work_item_id, controller)
+    require_no_active_attempt(db, wid, work_item_id)
     predecessor = latest_attempt_id(db, wid, work_item_id)
     created_at = time.time() if now is None else now
     db.execute(
@@ -580,6 +603,7 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
     workspace = _member(ops, principal, wid, write=True)
     controller = controller_authority.binding(ops.db, principal, pm_workspace_id=wid)
     require_work_controller(ops.db, wid, wi_id, controller)
+    require_no_active_attempt(ops.db, wid, wi_id)
     if (
         not isinstance(params, dict)
         or not PARAMS_REQUIRED <= set(params)

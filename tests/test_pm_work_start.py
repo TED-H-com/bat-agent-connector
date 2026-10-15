@@ -106,6 +106,7 @@ def test_schema_immutability_and_no_user_version(tmp_path):
 
 def test_insert_hook_predecessor_chain_and_controller_rollback(tmp_path):
     ops = _service(tmp_path)
+    pm_work_start.schema(ops.journal)
     ws = "ws_" + "1" * 32
     wi = "wi_" + "2" * 20
     first, _ = ops.create(
@@ -116,6 +117,24 @@ def test_insert_hook_predecessor_chain_and_controller_rollback(tmp_path):
         preconditions={},
         idempotency_key="k-first",
     )
+    # While first is non-terminal (accepted), a second start with a new key rolls back in admit_operation.
+    ops_after_first = ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
+    with pytest.raises(OperationError) as in_prog_exc:
+        ops.create(
+            OWNER,
+            action="work.start",
+            target={"workspace_id": ws, "work_item_id": wi},
+            params={"instruction": "Concurrent second attempt"},
+            preconditions={},
+            idempotency_key="k-second-too-early",
+        )
+    assert in_prog_exc.value.code == "PM_WORK_START_IN_PROGRESS"
+    assert first["operation_id"] in in_prog_exc.value.message
+    assert ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0] == ops_after_first
+    assert ops.db.execute("SELECT COUNT(*) FROM work_attempts").fetchone()[0] == 1
+
+    # Once first reaches a terminal state, a new start is admitted and links predecessor_attempt_id.
+    ops._transition(first["operation_id"], "failed", error_code="TEST_FAIL", reason="Terminal failure")
     second, _ = ops.create(
         OWNER,
         action="work.start",
@@ -936,3 +955,171 @@ def test_admission_scopes_membership_preconditions_and_lifecycle_gates(tmp_path)
     assert fresh is True
     assert op["status"] == "accepted"
     assert ops.db.execute("SELECT stage FROM pm_lifecycle_heads WHERE workspace_id=?", (ws,)).fetchone()[0] == "idea"
+
+
+def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(tmp_path):
+    from types import SimpleNamespace
+
+    from bat_agent_connector import api_auth, pm_plans, pm_work_packages
+
+    ops, ws = _setup_full_pm_world(tmp_path)
+    ctx = _seed_plan_and_work(ops, ws)
+
+    # 1. Admin principal (with empty scopes frozenset but admin=True) can start and resume work.
+    admin_token = "adm_secret_token"
+    ops.context["daemon"] = SimpleNamespace(_admin_token=admin_token)
+    admin_principal = api_auth.authenticate(ops.db, admin_token, admin_token)
+    assert admin_principal is not None and admin_principal.admin is True
+    # Also test a Principal with admin=True and empty scopes directly.
+    minimal_admin = Principal(api_auth.ADMIN_ACTOR, frozenset(), admin=True, credential_id=admin_principal.credential_id)
+
+    op_admin, fresh_admin = ops.create(
+        minimal_admin,
+        action="work.start",
+        target=ctx["target"],
+        params=ctx["params"],
+        preconditions=ctx["preconditions"],
+        idempotency_key="k-admin-1",
+    )
+    assert fresh_admin is True
+    assert op_admin["actor"] == api_auth.ADMIN_ACTOR
+    # _current_principal resolves the admin principal via daemon._admin_token and passes _member.
+    resolved_admin = pm_work_start._current_principal(ops, op_admin)
+    assert resolved_admin.admin is True
+    assert resolved_admin.actor == api_auth.ADMIN_ACTOR
+
+    # Transition to needs_attention and verify admin can resume.
+    ops._transition(op_admin["operation_id"], "running")
+    ops._transition(op_admin["operation_id"], "needs_attention", error_code="TEST_PAUSE", reason="Paused")
+    resumed = ops.resume(minimal_admin, op_admin["operation_id"])
+    assert resumed["status"] == "running"
+
+    # 2. While op_admin is running (not terminal), a second start with a different key is rejected with PM_WORK_START_IN_PROGRESS.
+    with pytest.raises(OperationError) as exc_in_prog:
+        ops.create(
+            minimal_admin,
+            action="work.start",
+            target=ctx["target"],
+            params=ctx["params"],
+            preconditions=ctx["preconditions"],
+            idempotency_key="k-admin-concurrent",
+        )
+    assert exc_in_prog.value.code == "PM_WORK_START_IN_PROGRESS"
+    assert op_admin["operation_id"] in exc_in_prog.value.message
+    assert ops.db.execute("SELECT COUNT(*) FROM pm_work_start_children").fetchone()[0] == 0
+
+    # Same idempotency_key still replays the original operation rather than hitting PM_WORK_START_IN_PROGRESS.
+    replay, fresh_replay = ops.create(
+        minimal_admin,
+        action="work.start",
+        target=ctx["target"],
+        params=ctx["params"],
+        preconditions=ctx["preconditions"],
+        idempotency_key="k-admin-1",
+    )
+    assert fresh_replay is False
+    assert replay["operation_id"] == op_admin["operation_id"]
+
+    # 3. Once the first start is in a terminal failure state, a new start is allowed, links predecessor_attempt_id,
+    # and reuses a matching package when present.
+    ops._transition(op_admin["operation_id"], "failed", error_code="START_FAILED", reason="Terminal failure")
+    plan = pm_plans.accepted_plan(ops, minimal_admin, ws)["plan"]
+    plan_ref = pm_work_packages._plan_ref(plan)
+    code_source = {
+        **ctx["params"]["code_target"],
+        "source_sha": ctx["preconditions"]["expected_source_sha"],
+        "repository_id": ctx["preconditions"]["repository_id"],
+        "binding_digest": ctx["preconditions"]["binding_digest"],
+    }
+    _, composed = pm_work_start.compose_thin_package(
+        ops,
+        {"title": "Implement login flow"},
+        plan,
+        ["req-login.1"],
+        code_source,
+        "pull_request",
+        ctx["params"]["instruction"],
+    )
+    pkg_id = "pmwp_" + "e" * 32
+    now = time.time()
+    binding_row = ops.db.execute(
+        "SELECT * FROM pm_work_bindings WHERE workspace_id=? AND binding_id=?", (ws, ctx["binding_id"])
+    ).fetchone()
+    binding_obj = {**dict(binding_row), "requirement_ids": json.loads(binding_row["requirement_ids"])}
+    pkg_doc = {
+        **composed,
+        "package_id": pkg_id,
+        "workspace_id": ws,
+        "work_item_id": ctx["work_item_id"],
+        "previous_package_id": None,
+        "operation_id": "op_" + "e" * 32,
+        "created_by": api_auth.ADMIN_ACTOR,
+        "created_at": now,
+        "schema_version": 1,
+        "status": "frozen_engineering_description",
+        "execution_authorized": False,
+        "execution_spec": "not_assigned",
+        "quality_assessment": "unassessed",
+        "claims_as_evidence": False,
+        "context": {
+            "server_id": pm_workspace.server_id(ops.db),
+            "plan_ref": plan_ref,
+            "work_ref": {
+                "binding_id": ctx["binding_id"],
+                "work_item_id": ctx["work_item_id"],
+                "project_id": ctx["project_id"],
+                "binding_document_digest": pm_work_packages._digest(binding_obj),
+                "work_version": 1,
+                "work_fingerprint": ctx["preconditions"]["expected_work_item_fingerprint"],
+                "project_version": 1,
+            },
+            "evidence_refs": [],
+            "dod_ref": None,
+            "git_binding": None,
+            "code_config_digest": pm_work_start.repository_sync.digest(
+                pm_work_start.repository_sync.config_snapshot(
+                    ops, {"repository": "o/r", "host": "h1", "workspace_id": "w1"}
+                )
+            ),
+            "previous_package_id": None,
+        },
+        "dod": None,
+        "evidence": [],
+        "source_inputs": plan["document"]["selected_inputs"],
+        "requirement_coverage": "explicit_selected_adopted_requirements",
+    }
+    with ops.journal.tx():
+        ops.db.execute(
+            "INSERT INTO pm_work_packages VALUES(1,?,?,?,?,?,?,?,?,?)",
+            (
+                pkg_id,
+                ws,
+                ctx["work_item_id"],
+                None,
+                pm_work_packages._digest(pkg_doc),
+                pm_work_packages._json(pkg_doc),
+                api_auth.ADMIN_ACTOR,
+                now,
+                "op_" + "e" * 32,
+            ),
+        )
+
+    pre2 = {**ctx["preconditions"], "expected_previous_package_id": pkg_id}
+    op_admin2, fresh_admin2 = ops.create(
+        minimal_admin,
+        action="work.start",
+        target=ctx["target"],
+        params=ctx["params"],
+        preconditions=pre2,
+        idempotency_key="k-admin-2",
+    )
+    assert fresh_admin2 is True
+    intent2 = op_admin2["external_refs"]["admission_binding"]["work_start"]
+    assert intent2["package_plan"]["mode"] == "reuse"
+    assert intent2["package_plan"]["package_reused"] is True
+    assert intent2["package_plan"]["package_id"] == pkg_id
+    attempt2 = ops.db.execute(
+        "SELECT * FROM work_attempts WHERE start_operation_id=?", (op_admin2["operation_id"],)
+    ).fetchone()
+    assert attempt2["predecessor_attempt_id"] == "att_" + op_admin["operation_id"][3:]
+
