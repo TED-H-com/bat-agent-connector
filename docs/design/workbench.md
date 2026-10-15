@@ -32,6 +32,24 @@ allows. The list moves into the existing keyboard-accessible mobile drawer at
 less than 1000px. No second catalog or search cache is created. The original
 workspace binding, partial-source and permission rules still select its rows.
 
+### Classic → preview location
+
+| Classic destination | Route | Preview location | Reached via |
+| --- | --- | --- | --- |
+| Pending | `#/home` | Today daily entry | Daily entry (`data-daily="today"`) / header badge |
+| Settings | `#/settings` | Resources fallback / footer link | Navigation footer / Resources daily entry (when unbound) |
+| All projects | `#/projects` | Projects fallback / Switcher | Projects daily entry (when unbound) / direct link |
+| Operations | `#/operations` | Tools menu | Tools menu (`[data-shell-tools]`) |
+| Delivery | `#/delivery` | Tools menu | Tools menu (`[data-shell-tools]`) |
+| Artifact review | `#/artifact-review` | Tools menu | Tools menu (`[data-shell-tools]`) |
+| Cleanup | `#/cleanup` | Tools menu | Tools menu (`[data-shell-tools]`) |
+| Sessions | `#/sessions` | Work fallback / Tools menu | Work daily entry (when unbound) / Tools menu |
+| New workspace | `#/pm/new` | Tools menu / Switcher | Tools menu (`[data-shell-tools]`) / Switcher |
+| Overview | `#/pm/{id}/overview` | Projects daily entry | Daily entry (`data-daily="projects"`) / management selector |
+| Discussions | `#/pm/{id}/discussions` | Project management selector | Management selector (`select[data-workbench-management]`) |
+| Requirements | `#/pm/{id}/requirements` | Project management selector | Management selector (`select[data-workbench-management]`) |
+| Board | `#/pm/{id}/board` | Work daily entry | Daily entry (`data-daily="work"`) / management selector |
+
 ## Source mapping
 
 | Presentation | Existing authority | Current limit |
