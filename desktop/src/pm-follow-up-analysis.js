@@ -23,7 +23,7 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
   }
   function fail(error) {
     ++serial;reading=false;rows=[];next=null;list.replaceChildren();detail.replaceChildren();more.hidden=true;
-    status.replaceChildren([t('pm_fa_mismatch'),t('pm_fa_read_failed')].includes(error.message)?inlineError({error:error.message}):errorBox(error));
+    status.replaceChildren([t('pm_fa_mismatch'),t('pm_fa_read_failed')].includes(error.message)?inlineError({error:error.message}):errorBox(error, {within:status}));
     onAccessFailure(error);
   }
   function valid(row) {

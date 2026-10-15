@@ -19,7 +19,7 @@ const COPY = {
     alertPackage: name => `Security alert: ${name}`,
   },
   'zh-TW': {
-    issue: 'GitHub Issue',
+    issue: 'GitHub 議題',
     pr: 'Dependabot PR',
     alert: '安全性警示',
     alertPackage: name => `安全性警示：${name}`,

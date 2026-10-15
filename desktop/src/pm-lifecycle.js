@@ -159,7 +159,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
   }
   function withdraw(){++serial;ready=false;current=null;rows=[];cursor=null;historyCursor=null;historyLoaded=false;historyRequest=null;workFiltered=false;
     maintenanceNote.textContent='';summary.replaceChildren();work.replaceChildren();retentionChoices.replaceChildren();historyBody.replaceChildren();status.replaceChildren();notify();}
-  function unavailable(error){withdraw();status.replaceChildren(errorBox(error,{summary:t('pm_lifecycle_unknown')}));}
+  function unavailable(error){withdraw();status.replaceChildren(errorBox(error,{summary:t('pm_lifecycle_unknown'),within:status}));}
   async function refresh({event=false}={}){
     // An unrelated background read does not withdraw the last observed policy.
     // Disabling a pressed submit button here makes the browser drop its click.

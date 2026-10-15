@@ -108,7 +108,7 @@ export function maintenanceObservations({h,t,api,alive,workspaceId,workspace,cap
       h('a',{href:`#/op/${encodeURIComponent(row.operation_id)}`},t('pm_operation'))));return box;
   }
   function withdraw(){epoch++;ready=false;policy=null;baseline=null;lifecycle=null;facts.replaceChildren();context.replaceChildren();status.replaceChildren();update();}
-  function failure(error){withdraw();status.append(errorBox(error,{summary:t('pmo_unavailable')}));}
+  function failure(error){withdraw();status.append(errorBox(error,{summary:t('pmo_unavailable'), within:status}));}
   async function refresh(){
     withdraw();const ticket=epoch;
     try{

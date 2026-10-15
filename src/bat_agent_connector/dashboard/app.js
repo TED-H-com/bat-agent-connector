@@ -19,6 +19,282 @@ var __exportAll = (all, no_symbols) => {
 	return target;
 };
 //#endregion
+//#region src/diagnostics.js
+var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
+var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
+var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+var commit = (value) => typeof value === "string" && [40, 64].includes(value.length) && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
+var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
+var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
+var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+var bool = (value) => typeof value === "boolean" ? value : null;
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var time = (value) => {
+	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+};
+var select = (value, values) => values.includes(value) ? value : null;
+var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
+var resourceNames = {
+	hosts: "host",
+	projects: "project",
+	"work-items": "work_item",
+	tasks: "task",
+	operations: "operation",
+	workspaces: "workspace",
+	threads: "thread",
+	snapshots: "snapshot",
+	artifacts: "artifact",
+	uploads: "operation",
+	checkpoints: "checkpoint"
+};
+function pathTemplate(path) {
+	const parts = String(path).replace(/^\/api(?=\/v1)/, "").split(/[?#]/)[0].split("/").filter(Boolean);
+	if (parts[0] !== "v1") parts.unshift("v1");
+	return "/" + parts.map((part, i) => {
+		const si = parts.indexOf("sessions");
+		if (si >= 0 && i === si + 1) return parts[si - 2] === "hosts" ? ":session" : ":host";
+		if (si >= 0 && i === si + 2 && parts[si - 2] !== "hosts") return ":session";
+		if (resourceNames[parts[i - 1]]) return ":" + resourceNames[parts[i - 1]];
+		return routeWords.has(part) ? part : ":id";
+	}).join("/");
+}
+function failedCall({ at, method, path, status, code: errorCode, admissionRefused, operation }) {
+	return {
+		at: time(at),
+		method: select(method, [
+			"GET",
+			"POST",
+			"PUT",
+			"PATCH",
+			"DELETE",
+			"HEAD"
+		]) || "GET",
+		path_template: pathTemplate(path),
+		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
+		admission_refused: admissionRefused === true,
+		operation_id: operationId$3(operation?.operation_id)
+	};
+}
+function errorRing(limit = 50) {
+	const entries = [];
+	return {
+		record(input) {
+			entries.push(failedCall(input));
+			entries.splice(0, Math.max(0, entries.length - Math.min(50, limit)));
+		},
+		entries: () => entries.map((entry) => ({ ...entry })),
+		clear() {
+			entries.length = 0;
+		}
+	};
+}
+function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+	return {
+		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
+		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
+		connector_version: version$2(caps?.build?.version ?? caps?.connector),
+		connector_commit: commit(caps?.build?.commit),
+		connector_source: select(caps?.build?.source, [
+			"vcs",
+			"package",
+			"bundled"
+		]),
+		api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
+		contract_version: contractVersion(caps?.contract_version),
+		platform: desktop ? "desktop" : "browser",
+		os_family: select(os, [
+			"windows",
+			"macos",
+			"linux"
+		]) || "unknown",
+		locale: locale === "zh-TW" ? "zh-TW" : "en",
+		viewport_class: width > 0 ? width < 800 ? "small" : width < 1200 ? "medium" : "large" : "unknown"
+	};
+}
+function buildLine(client, t) {
+	const unknown = t("diag_unknown");
+	const connector = t("diag_connector_build", {
+		version: client.connector_version || unknown,
+		commit: client.connector_commit?.slice(0, 7) || unknown
+	});
+	return client.platform === "desktop" ? t("diag_desktop_build", {
+		version: client.app_version || unknown,
+		commit: client.app_commit?.slice(0, 7) || unknown
+	}) + " · " + connector : connector;
+}
+var APP = "io.betteragent.dashboard";
+function logLocations(os, managed) {
+	const root = managed ? {
+		linux: `~/.local/share/${APP}/central`,
+		macos: `~/Library/Application Support/${APP}/central`,
+		windows: `%LOCALAPPDATA%\\${APP}\\central`
+	}[os] : {
+		linux: "~/.local/state/bat-agent-connector",
+		macos: "~/.local/state/bat-agent-connector",
+		windows: "~\\.local\\state\\bat-agent-connector"
+	}[os];
+	return {
+		state_database: root ? root + (os === "windows" ? "\\" : "/") + (managed ? os === "windows" ? "state\\" : "state/" : "") + "tasks.sqlite3" : null,
+		runtime_stderr: managed ? "not_persisted_by_desktop" : "external_service_configuration",
+		location: "default_template_only"
+	};
+}
+var databaseTemplates = (managed) => Object.fromEntries([
+	"linux",
+	"macos",
+	"windows"
+].map((os) => [os, logLocations(os, managed).state_database]));
+function scrubDiagnostics(text) {
+	const safeLogs = new Set([
+		"linux",
+		"macos",
+		"windows"
+	].flatMap((os) => [false, true].map((managed) => logLocations(os, managed).state_database)));
+	return JSON.stringify(JSON.parse(text, (_key, input) => {
+		if (typeof input !== "string") return input;
+		let value = input;
+		try {
+			value = decodeURIComponent(value);
+		} catch {}
+		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
+		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$3(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+	}));
+}
+function sessionFacts(session) {
+	return {
+		loaded: bool(session.loaded),
+		streaming: bool(session.streaming),
+		unknown_activity: ![true, false].includes(session.streaming),
+		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
+		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
+	};
+}
+function buildDiagnostics(input) {
+	const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a, b) => String(a.host).localeCompare(String(b.host), "en")) : [];
+	const flags = (source, keys) => Object.fromEntries(keys.map((key) => [key, bool(source?.[key])]));
+	const sessions = Array.isArray(input.sessions) ? input.sessions.map(sessionFacts) : null;
+	const count = (key) => sessions?.length === 0 ? 0 : sessions?.some((s) => typeof s[key] === "boolean") ? sessions.filter((s) => s[key] === true).length : null;
+	const history = sessions?.some((s) => s.history_reasons !== null) ? Object.create(null) : null;
+	if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
+	const sources = Object.fromEntries([
+		"capabilities",
+		"hosts",
+		"operations",
+		"managed_setup",
+		"observation"
+	].map((key) => [key, select(input.sources?.[key], ["available", "not_available"]) || "not_available"]));
+	const bundle = {
+		schema: "batc.diagnostics.v1",
+		exported_at: time(input.exportedAt),
+		client: clientIdentity(input),
+		sources,
+		hosts: hosts.map((host, i) => {
+			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
+			const policyFlags = flags(host.policy || policy, [
+				"enabled",
+				"writes",
+				"orchestrate",
+				"shared_clone_worktrees",
+				"managed_roots_configured",
+				"ssh_configured",
+				"checkpoint_available"
+			]);
+			if (policyFlags.managed_roots_configured === null && Array.isArray(policy.managed_roots)) policyFlags.managed_roots_configured = policy.managed_roots.length > 0;
+			const setupHost = Array.isArray(input.setup?.hosts) ? input.setup.hosts.find((item) => item.name === host.host) : null;
+			if (policyFlags.ssh_configured === null && setupHost && (typeof setupHost.ssh_alias === "string" || setupHost.ssh_alias === null)) policyFlags.ssh_configured = Boolean(setupHost.ssh_alias);
+			const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find((scan) => scan.profile_id === policy.profile_id) : null;
+			return {
+				alias: `host-${i + 1}`,
+				connection_state: select(host.connection_state, [
+					"connected",
+					"disconnected",
+					"reconnecting",
+					"never_connected",
+					"stale"
+				]) || (host.reachable === true ? "reachable" : host.reachable === false ? "unreachable" : "unknown"),
+				stale: bool(host.stale),
+				stale_reason: reason(host.stale_reason),
+				last_error_code: code(host.last_error?.code ?? discovery?.error_code),
+				bat: {
+					status: select(host.bat?.status, [
+						"ready",
+						"unavailable",
+						"unknown"
+					]),
+					version: version$2(host.bat?.version ?? host.server_version),
+					protocol: select(host.bat?.protocol, protocols),
+					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
+						"claude",
+						"codex",
+						"terminal",
+						"git"
+					])
+				},
+				coverage: {
+					basis: "configured_profile_enumeration",
+					complete: bool(discovery?.complete_enumeration),
+					reasons: Array.isArray(discovery?.outside_scan) ? [...new Set(discovery.outside_scan.map((item) => reason(item.reason)).filter(Boolean))] : null
+				},
+				policy: policyFlags
+			};
+		}),
+		sessions: {
+			basis: "client_loaded_reads",
+			sampled: sessions?.length ?? null,
+			loaded: count("loaded"),
+			streaming: count("streaming"),
+			unknown_activity: count("unknown_activity"),
+			stale: count("stale"),
+			pending: count("pending"),
+			history_reasons: history,
+			unreported: Object.fromEntries([
+				"loaded",
+				"streaming",
+				"stale",
+				"pending"
+			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
+		},
+		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
+			id: operationId$3(op.operation_id),
+			action: action(op.action),
+			status: op.status,
+			error_code: code(op.error_code ?? op.error?.code),
+			created_at: time(op.created_at),
+			updated_at: time(op.updated_at)
+		})) : null,
+		coverage: {
+			complete: bool(input.observation?.coverage?.complete),
+			reasons: Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null
+		},
+		operations_basis: "loaded_page",
+		recent_errors: (input.recentErrors || []).slice(-50).map((e) => failedCall({
+			at: e.at,
+			method: e.method,
+			path: e.path_template,
+			status: e.status,
+			code: e.code,
+			admissionRefused: e.admission_refused,
+			operation: { operation_id: e.operation_id }
+		})),
+		log_locations: {
+			basis: "default_templates_only",
+			state_database: {
+				managed_desktop: databaseTemplates(true),
+				standalone: databaseTemplates(false)
+			},
+			runtime_stderr: {
+				managed_desktop: "not_persisted_by_desktop",
+				standalone: "external_service_configuration"
+			}
+		}
+	};
+	return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
+}
+//#endregion
 //#region src/ui/dom.js
 function place(node, method, ...children) {
 	const kept = children.flat(Infinity).filter((child) => child !== null && child !== void 0 && child !== false);
@@ -43,6 +319,205 @@ function h$1(tag, attrs = {}, ...children) {
 	}
 	return el;
 }
+//#endregion
+//#region src/session-navigation.js
+var projectViews$2 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function sessionHref$1({ host, sessionId, from = "" }) {
+	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
+	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
+}
+function sessionOrigin(value) {
+	if (typeof value !== "string" || value.length > 4096) return "";
+	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
+	if (!match) return "";
+	try {
+		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
+		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
+		const query = new URLSearchParams(match[3] || "");
+		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
+		const from = query.get("from") || "";
+		if (from && !projectViews$2.has(from)) return "";
+		return sessionHref$1({
+			host,
+			sessionId,
+			from
+		});
+	} catch {
+		return "";
+	}
+}
+var contextFields = {
+	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
+	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
+	requirement: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrev_[0-9a-f]{32}$/
+	},
+	milestone: {
+		id: /^[a-z][a-z0-9_.-]{0,79}$/,
+		revision_id: /^pmrb_[0-9a-f]{32}$/
+	},
+	work_item: { id: /^wi_[0-9a-f]{20}$/ },
+	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
+	finding: {
+		id: /^pmfn_[0-9a-f]{32}$/,
+		observation_id: /^pmgh_[0-9a-f]{32}$/,
+		document_digest: /^[0-9a-f]{64}$/
+	},
+	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
+	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
+	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
+	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
+	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
+	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
+};
+var projectViews$1 = new Set([
+	"overview",
+	"discussions",
+	"requirements",
+	"schedule",
+	"dependencies",
+	"issues",
+	"agents",
+	"board"
+]);
+function fullMatch(value, pattern) {
+	return typeof value === "string" && pattern.exec(value)?.[0] === value;
+}
+function isContextRef(ref) {
+	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
+	const fields = Object.entries(contextFields[ref.kind]);
+	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
+}
+function normalizeRefs(refs) {
+	const result = [], seen = new Set();
+	if (!Array.isArray(refs)) return result;
+	for (const ref of refs) {
+		if (!isContextRef(ref)) continue;
+		const item = { kind: ref.kind };
+		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
+		const identity = JSON.stringify(item);
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		result.push(item);
+		if (result.length === 8) break;
+	}
+	return result;
+}
+function normalizeDetails(title, from, report) {
+	return {
+		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
+		from: projectViews$1.has(from) ? from : sessionOrigin(from),
+		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
+	};
+}
+function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
+	const query = new URLSearchParams();
+	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
+	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
+	const search = query.toString();
+	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
+}
+function parseDiscussRefs(query) {
+	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
+	return {
+		refs: normalizeRefs(params.getAll("ref").map((value) => {
+			try {
+				return JSON.parse(value);
+			} catch {
+				return null;
+			}
+		})),
+		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
+	};
+}
+//#endregion
+//#region src/diagnostics-strings.js
+var diagnosticsStrings = {
+	en: {
+		diag_export: "Export diagnostics",
+		diag_title: "Diagnostics",
+		diag_save: "Save",
+		diag_copy: "Copy",
+		diag_close: "Close",
+		diag_unknown: "unknown",
+		diag_connector_build: "Connector {version} ({commit})",
+		diag_desktop_build: "Desktop {version} ({commit})",
+		diag_privacy: "Redacted preview. Saving and copying stay on this device.",
+		diag_counts: "{errors} · {operations}",
+		diag_errors_one: "1 recent error",
+		diag_errors_many: "{count} recent errors",
+		diag_operations_one: "1 failed or uncertain operation",
+		diag_operations_many: "{count} failed or uncertain operations",
+		diag_operations_unavailable: "Operations not available",
+		diag_hosts_unavailable: "Hosts not available",
+		diag_sample: "Session counts cover client reads only. Operation counts cover the loaded page.",
+		diag_unavailable: "Not available",
+		diag_loading: "Preparing preview…",
+		diag_json: "Full JSON",
+		diag_copied: "Copied",
+		diag_copy_failed: "Copy failed. Select the JSON to copy it.",
+		diag_download_started: "Download started",
+		diag_saved: "Saved",
+		diag_save_failed: "Save could not be confirmed. Check the destination before saving again.",
+		diag_withdrawn: "Source access changed. Close and reopen diagnostics for a fresh preview.",
+		diag_too_large: "This preview exceeds the 256 KB save limit.",
+		diag_connected: "Connected",
+		diag_disconnected: "Disconnected",
+		diag_reconnecting: "Reconnecting",
+		diag_never_connected: "Never connected",
+		diag_stale: "Stale",
+		diag_reachable: "Reachable",
+		diag_unreachable: "Unreachable",
+		diag_state_unknown: "Unknown"
+	},
+	"zh-TW": {
+		diag_export: "匯出診斷資料",
+		diag_title: "診斷資料",
+		diag_save: "儲存",
+		diag_copy: "複製",
+		diag_close: "關閉",
+		diag_unknown: "未知",
+		diag_connector_build: "Connector {version}（{commit}）",
+		diag_desktop_build: "桌面版 {version}（{commit}）",
+		diag_privacy: "預覽已去識別化。儲存與複製都只在這台裝置上進行。",
+		diag_counts: "{errors} · {operations}",
+		diag_errors_one: "最近 1 筆錯誤",
+		diag_errors_many: "最近 {count} 筆錯誤",
+		diag_operations_one: "1 筆失敗或結果未確認的操作",
+		diag_operations_many: "{count} 筆失敗或結果未確認的操作",
+		diag_operations_unavailable: "無法取得操作資料",
+		diag_hosts_unavailable: "無法取得主機資料",
+		diag_sample: "工作階段僅計算介面已讀取的資料；操作僅計算已載入的頁面。",
+		diag_unavailable: "無法取得",
+		diag_loading: "正在準備預覽…",
+		diag_json: "完整 JSON",
+		diag_copied: "已複製",
+		diag_copy_failed: "複製失敗，請選取 JSON 後手動複製。",
+		diag_download_started: "已開始下載",
+		diag_saved: "已儲存",
+		diag_save_failed: "無法確認是否已儲存，請先檢查目的地再重新儲存。",
+		diag_withdrawn: "來源存取權已變更，請關閉後重新開啟診斷資料。",
+		diag_too_large: "此預覽超過 256 KB 的儲存上限。",
+		diag_connected: "已連線",
+		diag_disconnected: "已中斷",
+		diag_reconnecting: "重新連線中",
+		diag_never_connected: "尚未連線",
+		diag_stale: "資料已過期",
+		diag_reachable: "可連線",
+		diag_unreachable: "無法連線",
+		diag_state_unknown: "未知"
+	}
+};
 //#endregion
 //#region src/pm-overview-strings.js
 var overviewStrings = {
@@ -2342,7 +2817,7 @@ var COPY = {
 		alertPackage: (name) => `Security alert: ${name}`
 	},
 	"zh-TW": {
-		issue: "GitHub Issue",
+		issue: "GitHub 議題",
 		pr: "Dependabot PR",
 		alert: "安全性警示",
 		alertPackage: (name) => `安全性警示：${name}`
@@ -2605,7 +3080,7 @@ var rows$1 = {
 	attributed_source: ["Dated actor-attributed source; not independently verified here.", "有日期與歸屬的來源聲明，此處未獨立查證。"],
 	direction: ["Proposed direction", "提議方向"],
 	direction_continue_maintenance: ["Continue maintenance", "繼續維護"],
-	direction_bounded_repair_proposal: ["Propose a bounded repair", "提議有界修復"],
+	direction_bounded_repair_proposal: ["Propose a bounded repair", "提議限定範圍修復"],
 	direction_explore_idea: ["Explore an Idea", "探索構想"],
 	direction_request_planning: ["Request Planning", "要求進入規劃"],
 	direction_revise_policy: ["Propose a policy revision", "提議修改政策"],
@@ -2708,15 +3183,15 @@ var maintenanceCheckStrings = {
 	en: {
 		pmc_title: "Maintenance checks",
 		pmc_refresh: "Refresh maintenance checks",
-		pmc_intro: "The central checks GitHub, then captures current workload within the adopted limits. Each result describes that observation only.",
+		pmc_intro: "Connector checks GitHub, then captures current workload within the adopted limits. Each result describes that observation only.",
 		pmc_runtime_available: "Enabled policies schedule bounded checks in Development or Maintain. Repairs and automatic stage changes remain unavailable.",
 		pmc_check: "Check once",
-		pmc_schedule: "Server schedule",
+		pmc_schedule: "Connector schedule",
 		pmc_next: "Next due",
 		pmc_last_success: "Last complete observation",
 		pmc_no_success: "None recorded",
-		pmc_scheduled: "The central will check when due, subject to current access and limits.",
-		pmc_overdue: "Due now. The central admits only the latest due window.",
+		pmc_scheduled: "Connector will check when due, subject to current access and limits.",
+		pmc_overdue: "Due now · Connector admits only the latest due window",
 		pmc_no_schedule: "Adopt a readable policy to see its schedule.",
 		pmc_hidden: "The latest record is outside your current source access.",
 		pmc_skipped: "Earlier windows not run",
@@ -2769,15 +3244,15 @@ var maintenanceCheckStrings = {
 	"zh-TW": {
 		pmc_title: "維護檢查",
 		pmc_refresh: "重新讀取維護檢查",
-		pmc_intro: "中央依採用的上限讀取 GitHub，再保存目前工作量。每份結果只代表該次觀察。",
+		pmc_intro: "Connector 依採用的上限讀取 GitHub，再保存目前工作量。每份結果只代表該次觀察。",
 		pmc_runtime_available: "啟用的政策會在開發或維護階段排程執行有界檢查。目前尚不支援自動修復或自動變更專案階段。",
 		pmc_check: "檢查一次",
-		pmc_schedule: "中央排程",
+		pmc_schedule: "Connector 排程",
 		pmc_next: "下次到期時間",
 		pmc_last_success: "上次完整觀察",
 		pmc_no_success: "尚無紀錄",
-		pmc_scheduled: "中央會在到期時依目前權限與額度進行檢查。",
-		pmc_overdue: "已到期，中央只會採用最新一期。",
+		pmc_scheduled: "Connector 會在到期時依目前權限與額度進行檢查。",
+		pmc_overdue: "已到期，Connector 只會採用最新一期。",
 		pmc_no_schedule: "採用可讀取的政策後，即可查看排程。",
 		pmc_hidden: "最新紀錄的原始來源不在你目前的讀取權限內。",
 		pmc_skipped: "未執行的較早期數",
@@ -2838,9 +3313,9 @@ var maintenanceObservationStrings = {
 		pmo_observe: "Read GitHub workload",
 		pmo_observe_help: "Make one bounded, read-only check of the adopted GitHub scope. This does not start a repair.",
 		pmo_capture: "Capture saved workload",
-		pmo_capture_help: "Capture current central records, including saved GitHub evidence. This does not refresh BAT or GitHub.",
+		pmo_capture_help: "Capture current Connector records, including saved GitHub evidence. This does not refresh BAT or GitHub.",
 		pmo_github: "GitHub evidence",
-		pmo_workload: "Central workload evidence",
+		pmo_workload: "Connector workload evidence",
 		pmo_hidden: "The latest evidence is outside your current source access.",
 		pmo_empty: "No saved observation. This source has not been checked.",
 		pmo_as_of: "Observation time",
@@ -2862,7 +3337,7 @@ var maintenanceObservationStrings = {
 		pmo_stability: "Required stability window",
 		pmo_stable: "Established by these saved observations",
 		pmo_not_stable: "Not established",
-		pmo_source_central_project: "Central project",
+		pmo_source_central_project: "Connector project",
 		pmo_source_github: "GitHub",
 		pmo_source_bat: "BAT workspace",
 		pmo_source_other: "Additional source",
@@ -2911,10 +3386,10 @@ var maintenanceObservationStrings = {
 		pmo_intro: "先核對已保存的證據與涵蓋範圍，再決定下一步。",
 		pmo_observe: "讀取 GitHub 工作狀態",
 		pmo_observe_help: "依已採用範圍進行一次有上限的 GitHub 唯讀查核；不啟動修復。",
-		pmo_capture: "保存中央工作量快照",
-		pmo_capture_help: "保存目前中央紀錄與已存 GitHub 證據；不重新查詢 BAT 或 GitHub。",
+		pmo_capture: "保存工作量快照",
+		pmo_capture_help: "保存 Connector 目前的紀錄與已存的 GitHub 證據；不重新查詢 BAT 或 GitHub。",
 		pmo_github: "GitHub 證據",
-		pmo_workload: "中央工作量證據",
+		pmo_workload: "Connector 工作量證據",
 		pmo_hidden: "最新證據的原始來源不在你目前的讀取權限內。",
 		pmo_empty: "尚無已存觀察；此來源尚未查核。",
 		pmo_as_of: "觀察時間",
@@ -2936,7 +3411,7 @@ var maintenanceObservationStrings = {
 		pmo_stability: "必要的穩定期間",
 		pmo_stable: "已由這些保存觀察證明",
 		pmo_not_stable: "尚未證明",
-		pmo_source_central_project: "中央專案",
+		pmo_source_central_project: "Connector 專案",
 		pmo_source_github: "GitHub",
 		pmo_source_bat: "BAT 工作區",
 		pmo_source_other: "其他來源",
@@ -2964,11 +3439,11 @@ var maintenanceObservationStrings = {
 		pmo_reason_source_limit: "來源超過這次有界觀察的大小上限。",
 		pmo_reason_source_access: "目前無法讀取某項原始來源。",
 		pmo_reason_source_age: "某項來源觀察已過期，或其時間尚未證實。",
-		pmo_reason_pending_work: "任務、工作項目或 coding session 仍有待處理工作。",
-		pmo_reason_verification: "已回報的成果或結束的 session 仍缺少完成驗證。",
+		pmo_reason_pending_work: "任務、工作項目或程式開發工作階段仍有待處理工作。",
+		pmo_reason_verification: "已回報的成果或已結束的工作階段仍缺少完成驗證。",
 		pmo_reason_uncertain: "操作、命令或部署仍待處理，或結果不確定。",
 		pmo_reason_sprint: "Sprint 仍有生效中的承諾。",
-		pmo_reason_adapter: "尚無法證明 BAT 工作區或 session 的涵蓋程度。",
+		pmo_reason_adapter: "尚無法證明 BAT 工作區或工作階段的涵蓋程度。",
 		pmo_reason_github_gap: "目前 GitHub 證據不足以證明已採用的觀察範圍。",
 		pmo_reason_github_prs: "仍有開啟中的 PR。",
 		pmo_reason_github_actions: "仍有未結束的 GitHub Actions。",
@@ -3914,7 +4389,7 @@ var resourceStrings = {
 		res_empty: "No usage sources are connected to this workspace.",
 		res_no_match: "No sources match this filter.",
 		res_unknown: "Unknown",
-		res_local: "Central host · local files",
+		res_local: "Connector host · local files",
 		res_observations: "Usage observations",
 		res_calls: "Messages",
 		res_current: "Up to date",
@@ -3939,7 +4414,7 @@ var resourceStrings = {
 		res_codex_units: "Input includes cache; output includes reasoning. Total adds input and output once. Model context records describe the requested model.",
 		res_claude_units: "Input excludes cache. Total adds input, cache read, cache write and output once. Repeated fragments of one message are counted once.",
 		res_scope: "Only explicitly connected local files are included. These observations do not establish complete project cost, execution capacity or accepted delivery performance.",
-		res_setup: "A central administrator can connect a versioned CLI source to this workspace. Other hosts and unconnected sessions are outside this view.",
+		res_setup: "A Connector administrator can connect a versioned CLI source to this workspace. Other hosts and unconnected sessions are outside this view.",
 		res_forecast: "Remaining usage estimate: insufficient comparable accepted-work evidence.",
 		res_quota_unknown: "No current quota balance was provided.",
 		res_quota_scope: "Pools use explicit operator bindings. Each limit is shown once; balances are never added. Reports expire after five minutes or at reset.",
@@ -4022,7 +4497,7 @@ var resourceStrings = {
 		res_empty: "此工作區尚未連接用量來源。",
 		res_no_match: "沒有符合篩選條件的來源。",
 		res_unknown: "未知",
-		res_local: "中央主機・本機檔案",
+		res_local: "Connector 主機 · 本機檔案",
 		res_observations: "用量觀測筆數",
 		res_calls: "訊息數",
 		res_current: "最新",
@@ -4047,7 +4522,7 @@ var resourceStrings = {
 		res_codex_units: "輸入已包含快取，輸出已包含推理；總量僅將輸入與輸出各加一次。模型脈絡紀錄代表要求的模型。",
 		res_claude_units: "輸入不含快取；總量將輸入、快取讀取、快取寫入與輸出各加一次。同一訊息的重複片段只計一次。",
 		res_scope: "只涵蓋已明確連接的本機檔案。這些觀測尚不能代表完整專案成本、執行容量或已驗收交付表現。",
-		res_setup: "中央管理者可將具名版本的 CLI 來源連接到此工作區。其他主機與未連接的 session 不在此頁涵蓋範圍。",
+		res_setup: "Connector 管理者可將具名版本的 CLI 來源連接到此工作區。其他主機與未連接的工作階段不在此頁涵蓋範圍。",
 		res_forecast: "剩餘耗量預估：可比較的已驗收工作證據不足。",
 		res_quota_unknown: "來源未提供目前可用的配額餘額。",
 		res_quota_scope: "配額池依管理者明確綁定，各限制只顯示一次，不相加餘額。回報超過五分鐘或到達重設時間即失效。",
@@ -4416,7 +4891,7 @@ var pmPlanProposalStrings = {
 		pcp_stale: "討論或計畫已有變更。草稿已保留，請以目前版本重新整理提案。",
 		pcp_readonly: "具有計畫採用權限的工作空間擁有者可採用這組更新。",
 		pcp_unavailable: "此連線尚未提供計畫提案。",
-		pcp_runtime: "中央執行環境就緒後才能整理提案。",
+		pcp_runtime: "所選執行環境就緒後才能整理提案。",
 		pcp_mismatch: "提案與原討論或來源不符。",
 		pcp_partial: "目前只載入部分提案，可繼續讀取。",
 		pcp_missing: "每項需求與接受條件都必須選用已納入的資訊。",
@@ -4468,7 +4943,7 @@ var pmContextBundleStrings = {
 	},
 	"zh-TW": {
 		pm_cb_title: "分析使用的已採用計畫（選填）",
-		pm_cb_help: "先預覽固定的已採用版本，再選擇納入保存的文件。PM 也會讀取有界的討論內容。",
+		pm_cb_help: "先預覽固定的已採用版本，再選擇納入保存的文件。PM 也會讀取限定範圍內的討論內容。",
 		pm_cb_preview: "預覽已採用計畫",
 		pm_cb_loading: "正在核對已採用版本與原始來源…",
 		pm_cb_select: "納入這個已採用版本",
@@ -4907,7 +5382,7 @@ var pmIssueStrings = {
 		pmi_private_reason: "私有管理理由",
 		pmi_public_reason: "公開說明（可留空）",
 		pmi_remove_public: "移除公開說明",
-		pmi_stop_help: "公開說明留空時，只停止本地追蹤，不連線 GitHub；issue 與各個 session 保持開啟。"
+		pmi_stop_help: "公開說明留空時，只停止本機追蹤，不連線 GitHub；議題與各工作階段保持開啟。"
 	}
 };
 //#endregion
@@ -5345,7 +5820,7 @@ var pmFollowUpStrings = {
 		pm_fu_ref_evidence_id: "Evidence",
 		pm_fu_ref_fact_digest: "Fact digest",
 		pm_fu_ref_plan_revision_id: "Plan revision",
-		pm_fu_coverage: "Only explicitly selected central records were read. Business priority and quality remain unassessed; cost is unknown.",
+		pm_fu_coverage: "Only explicitly selected Connector records were read. Business priority and quality remain unassessed; cost is unknown.",
 		pm_fu_truncated: "The selected thread exceeds this intake’s input limit; its coverage is partial.",
 		pm_fu_partial: "Partial source coverage",
 		pm_fu_partial_help: "Some source records were omitted from this fixed preparation. The agenda does not assess those omitted records.",
@@ -5396,7 +5871,7 @@ var pmFollowUpStrings = {
 		pm_fu_actor_changed: "The signed-in actor changed. Reopen this workspace to use that actor’s drafts.",
 		pm_fu_scope_error: "The Follow-up response does not match this workspace, source or page.",
 		pm_fu_basis_explicit_review_at_reached: "Recorded review time reached",
-		pm_fu_basis_observed_central_attention_state: "Saved central state needs attention",
+		pm_fu_basis_observed_central_attention_state: "Saved Connector state needs attention",
 		pm_fu_basis_explicit_follow_up_blocked_report: "The assigned follow-up explicitly reports a blocker",
 		pm_fu_basis_explicit_conflicting_input: "Recorded conflicting input",
 		pm_fu_basis_explicit_unresolved_input: "Recorded unresolved input",
@@ -5476,7 +5951,7 @@ var pmFollowUpStrings = {
 		pm_fu_ref_evidence_id: "證據",
 		pm_fu_ref_fact_digest: "事實摘要值",
 		pm_fu_ref_plan_revision_id: "計畫版本",
-		pm_fu_coverage: "僅讀取明確選定的中央紀錄；業務優先序與品質尚未評估，成本仍未知。",
+		pm_fu_coverage: "僅讀取明確選定的 Connector 紀錄；業務優先序與品質尚未評估，成本仍未知。",
 		pm_fu_truncated: "所選討論超過本次資訊筆數上限，涵蓋範圍不完整。",
 		pm_fu_partial: "來源涵蓋不完整",
 		pm_fu_partial_help: "這份固定準備省略了部分來源紀錄；議程並未評估那些省略的紀錄。",
@@ -5527,7 +6002,7 @@ var pmFollowUpStrings = {
 		pm_fu_actor_changed: "登入身分已改變；請重新開啟工作區，使用該身分的草稿。",
 		pm_fu_scope_error: "後續追蹤回應與這個工作區、來源或分頁不符。",
 		pm_fu_basis_explicit_review_at_reached: "已到明確記錄的檢視時間",
-		pm_fu_basis_observed_central_attention_state: "已保存的中央狀態需要處理",
+		pm_fu_basis_observed_central_attention_state: "Connector 已保存的狀態需要處理",
 		pm_fu_basis_explicit_follow_up_blocked_report: "追蹤項目明確回報阻塞",
 		pm_fu_basis_explicit_conflicting_input: "已記錄的衝突資訊",
 		pm_fu_basis_explicit_unresolved_input: "已記錄的未決資訊",
@@ -6182,7 +6657,7 @@ var pmKanbanStrings = {
 		pm_kanban_missing: "Some linked sources are unavailable to this read.",
 		pm_kanban_truncated: "Source coverage is limited.",
 		pm_kanban_unsupported: "Some linked source types are not projected in this view.",
-		pm_kanban_saved_only: "Saved central records; hosts and providers were not checked by this read.",
+		pm_kanban_saved_only: "Saved Connector records; hosts and providers were not checked by this read.",
 		pm_kanban_history_unknown: "Recorded flow history cannot establish reliable timing.",
 		pm_kanban_versions: "Fixed work association",
 		pm_kanban_binding: "Binding",
@@ -6301,7 +6776,7 @@ var pmKanbanStrings = {
 		pm_kanban_missing: "本次讀取無法取得部分關聯來源。",
 		pm_kanban_truncated: "來源涵蓋範圍有限。",
 		pm_kanban_unsupported: "這個畫面尚未呈現部分關聯來源類型。",
-		pm_kanban_saved_only: "內容來自中央已保存紀錄；本次讀取未查詢主機或服務供應者。",
+		pm_kanban_saved_only: "內容來自 Connector 已保存的紀錄；本次讀取未查詢主機或服務供應者。",
 		pm_kanban_history_unknown: "現有工作流歷史不足以確認可靠時間。",
 		pm_kanban_versions: "固定工作關聯",
 		pm_kanban_binding: "關聯",
@@ -6775,7 +7250,7 @@ var pmStrings = {
 		pm_evidence_kind_pr_observation: "PR observation",
 		pm_evidence_kind_deployment: "Deployment evidence",
 		pm_analysis_adapter: "Run analysis with",
-		pm_analysis_local: "Central service · native Codex",
+		pm_analysis_local: "Connector · native Codex",
 		pm_analysis_bat: "Selected BAT workspace · dedicated Codex",
 		pm_analysis_original: "Original request",
 		pm_analysis_recover_other: "Check the original request before starting another analysis. Select:",
@@ -6879,10 +7354,10 @@ var pmStrings = {
 		pm_back_projects: "Projects and work →",
 		pm_intro: "Keep ideas, evidence and a planning draft together.",
 		pm_refresh: "Refresh",
-		pm_unavailable: "This central does not provide PM workspaces for this account.",
+		pm_unavailable: "This Connector does not provide PM workspaces for this account.",
 		pm_no_workspaces: "No PM workspaces yet.",
 		pm_start_title: "A place to work through an idea",
-		pm_start_help: "Create a workspace in the left list, then start a discussion. Notes are saved centrally so you can continue later.",
+		pm_start_help: "Create a workspace in the left list, then start a discussion. Notes are saved in Connector so you can continue later.",
 		pm_new_thread: "Start an idea discussion",
 		pm_thread_title: "Discussion title",
 		pm_create_thread: "Start discussion",
@@ -6935,7 +7410,7 @@ var pmStrings = {
 		pm_draft_help: "Saved draft only. Requirements have not been adopted, and execution is not authorized.",
 		pm_readonly: "You can read this workspace. Editing requires contributor access.",
 		pm_owner_decides: "Contributors can add notes and inputs. A workspace owner confirms facts and selects the planning direction.",
-		pm_saved: "Saved centrally.",
+		pm_saved: "Saved in Connector.",
 		pm_pending: "The original operation is still pending. Check its receipt before another change.",
 		pm_terminal: "The original operation ended without success. Review its result before editing a new request.",
 		pm_check_original: "Check original request",
@@ -7137,11 +7612,11 @@ var pmStrings = {
 		pm_evidence_kind_pr_observation: "PR 觀察",
 		pm_evidence_kind_deployment: "部署證據",
 		pm_analysis_adapter: "分析執行方式",
-		pm_analysis_local: "中央服務・原生 Codex",
+		pm_analysis_local: "Connector · 原生 Codex",
 		pm_analysis_bat: "所選 BAT 工作區・獨立 Codex",
 		pm_analysis_original: "原始請求",
 		pm_analysis_recover_other: "開始另一個分析前，請先查回原始請求。請選擇：",
-		pm_analysis_bat_preflight: "在所選 BAT 主機使用一個全新的隔離 Codex session。每次請求都會先檢查執行環境；登入有效性與模型可用性尚未驗證。",
+		pm_analysis_bat_preflight: "在所選 BAT 主機使用一個全新的隔離 Codex 工作階段。每次請求都會先檢查執行環境；登入有效性與模型可用性尚未驗證。",
 		pm_analysis_bat_worktree: "請先以預定的 repository 綁定準備討論脈絡，建立此工作區的 PM worktree。",
 		pm_analysis_bat_binding_changed: "已保存的 PM worktree 綁定已變更，請先檢視 repository 選擇再請求分析。",
 		pm_analysis_bat_readonly: "所選 BAT 主機未開放受管理工作。",
@@ -7154,7 +7629,7 @@ var pmStrings = {
 		pm_native_analyze: "請 PM 分析",
 		pm_native_discussion: "已儲存筆記與有界 PM 分析",
 		pm_native_note_only: "只儲存筆記，不請求分析",
-		pm_native_context_only: "分析一次已儲存的討論、來源狀態與 PM 引導設定。Repository 引用仍屬未驗證資料，不會開啟檔案或既有 session。",
+		pm_native_context_only: "分析一次已儲存的討論、來源狀態與 PM 引導設定。儲存庫引用仍屬未驗證資料，不會開啟檔案或既有工作階段。",
 		pm_native_preflight_pending: "已偵測到安裝項目；每次請求會在傳送脈絡前核對執行限制。登入有效性與模型可用性尚未驗證。",
 		pm_native_permissions: "PM 分析需要工作區協作者身分與啟動工作權限。",
 		pm_native_platform: "目前這個分析 adapter 需要 Linux 工作區服務。",
@@ -7241,10 +7716,10 @@ var pmStrings = {
 		pm_back_projects: "專案與工作 →",
 		pm_intro: "將想法、依據與規劃草稿放在同一處。",
 		pm_refresh: "重新整理",
-		pm_unavailable: "目前中央未向此帳號提供 PM 工作區。",
+		pm_unavailable: "此 Connector 未向目前帳號提供 PM 工作區。",
 		pm_no_workspaces: "尚無 PM 工作區。",
 		pm_start_title: "從一個想法開始討論",
-		pm_start_help: "先在左側建立工作區，再開啟討論。筆記會存到中央，之後可以接著整理。",
+		pm_start_help: "先在左側建立工作區，再開啟討論。筆記會存到 Connector，之後可以接著整理。",
 		pm_new_thread: "開啟想法討論",
 		pm_thread_title: "討論標題",
 		pm_create_thread: "開始討論",
@@ -7297,7 +7772,7 @@ var pmStrings = {
 		pm_draft_help: "目前僅保存草稿。尚未採納需求，也未授權執行。",
 		pm_readonly: "你可以閱讀此工作區；編輯需要協作者權限。",
 		pm_owner_decides: "協作者可以新增筆記與紀錄。由工作區擁有者確認事實並選定規劃方向。",
-		pm_saved: "已儲存到中央。",
+		pm_saved: "已儲存到 Connector。",
 		pm_pending: "原操作仍待確認。請先查回原回執，再進行下一筆變更。",
 		pm_terminal: "原操作已結束，但未成功。請檢視結果後，再編輯新的請求。",
 		pm_check_original: "查回原請求",
@@ -7334,17 +7809,17 @@ var pmStrings = {
 var instructionReceiptStrings = {
 	"en-US": {
 		instruction_receipts: "Sent instructions",
-		instruction_receipts_note: "These are central send receipts. “Was queued” records submission history; it does not show a current queue position. Interrupt affects the session.",
+		instruction_receipts_note: "These are send receipts from Connector. “Was queued” records submission history; it does not show a current queue position. Interrupt affects the session.",
 		instruction_accepted: "Accepted by BAT",
 		instruction_not_accepted: "Not accepted",
 		instruction_unconfirmed: "Acceptance unconfirmed",
-		instruction_operation_cancelled: "Central operation cancelled",
-		instruction_operation_failed: "Central operation failed",
+		instruction_operation_cancelled: "Connector operation cancelled",
+		instruction_operation_failed: "Connector operation failed",
 		instruction_pending: "Send pending",
 		instruction_was_queued: "Was queued at submission",
 		instruction_requested_queue: "Queueing requested",
 		instruction_operation: "View original operation",
-		instruction_empty: "No central send receipts for this session.",
+		instruction_empty: "No send receipts for this session",
 		instruction_more: "Older instructions",
 		instruction_refresh: "Refresh receipts",
 		instruction_stale: "Receipts could not be refreshed. Previously loaded records remain visible.",
@@ -7352,17 +7827,17 @@ var instructionReceiptStrings = {
 	},
 	"zh-TW": {
 		instruction_receipts: "已送出指示",
-		instruction_receipts_note: "這裡顯示中央送出紀錄。「曾排隊」是提交當時的紀錄，不代表目前排隊位置。中斷會作用於整個工作階段。",
+		instruction_receipts_note: "這裡顯示 Connector 的送出紀錄。「曾排隊」是提交當時的紀錄，不代表目前排隊位置。中斷會作用於整個工作階段。",
 		instruction_accepted: "BAT 已接受",
 		instruction_not_accepted: "未被接受",
 		instruction_unconfirmed: "尚未確認接受",
-		instruction_operation_cancelled: "中央操作已取消",
-		instruction_operation_failed: "中央操作失敗",
+		instruction_operation_cancelled: "Connector 操作已取消",
+		instruction_operation_failed: "Connector 操作失敗",
 		instruction_pending: "等待送出結果",
 		instruction_was_queued: "提交時曾排隊",
 		instruction_requested_queue: "已要求排隊",
 		instruction_operation: "查看原操作",
-		instruction_empty: "這個工作階段尚無中央送出紀錄。",
+		instruction_empty: "這個工作階段尚無送出紀錄",
 		instruction_more: "較早的指示",
 		instruction_refresh: "重新讀取紀錄",
 		instruction_stale: "無法更新紀錄，保留上次讀取的內容。",
@@ -7379,6 +7854,7 @@ var createRecordStrings = {
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
+		...diagnosticsStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
@@ -7403,7 +7879,7 @@ var STRINGS = {
 		...maintenanceFindingStrings["zh-TW"],
 		...findingNameStrings["zh-TW"],
 		managed_recovery_title: "本機背景服務尚未就緒",
-		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。下方提供此次啟動錯誤；加入另一個中央仍可從進階選項設定。",
+		managed_recovery_help: "既有資料與背景工作會保留。若舊版本仍有工作，先讓它完成，再結束並重新開啟桌面程式。此次啟動錯誤列在下方，也可以展開「加入既有的 Connector」設定連線。",
 		...instructionReceiptStrings["zh-TW"],
 		repair_title: "建立修復工作",
 		repair_help: "選擇歸屬專案，讀取這次失敗的固定證據，再建立或查回修復工作。派工前仍會讓你核對目的地與版本。",
@@ -7523,9 +7999,9 @@ var STRINGS = {
 		setup_save_verification: "儲存驗證命令",
 		setup_verification_reload: "重新載入已存驗證設定",
 		setup_verification_edit: "編輯 {project} 的命令",
-		setup_verification_changed: "中央設定已變動；目前草稿保留。重新載入已存驗證設定後，再檢視並儲存。",
+		setup_verification_changed: "Connector 設定已變更，草稿已保留；請重新載入已存的驗證設定，再檢視並儲存。",
 		setup_verification_invalid: "請輸入有效專案、執行程式、最多 63 個非空參數，以及 1–3600 秒逾時。",
-		setup_scope_required: "目前中央身分未獲准修改此設定。",
+		setup_scope_required: "目前 Connector 帳號無權修改此設定。",
 		setup_roots_help: "指定專供新受管工作使用的遠端目錄；人工專案保持唯讀。Git 同步與成果操作使用你選擇的 SSH 連線。",
 		setup_save_host: "驗證並儲存主機",
 		setup_repository_title: "2. 連結 GitHub 儲存庫",
@@ -7551,8 +8027,8 @@ var STRINGS = {
 		setup_unverified: "等待連線驗證",
 		setup_busy: "目前仍有工作或操作；設定會等安全時機再變更。",
 		setup_profiles_unavailable: "無法讀取 BAT 連線設定檔，請貼上連線網址或手動輸入。",
-		managed_join_existing: "進階：加入既有中央",
-		managed_join_help: "輸入另一個中央的位址與預期帳號，再於原生視窗確認。設定後須另行加入該中央的憑證；此電腦原有的背景工作會繼續運作。",
+		managed_join_existing: "加入既有的 Connector",
+		managed_join_help: "輸入另一個 Connector 的位址與預期帳號，在原生視窗確認後，再加入該 Connector 的憑證。此電腦原有的背景工作會繼續運作。",
 		managed_background_help: "Connector 在背景持續運作。關閉這個畫面不會停止工作。",
 		managed_open_browser: "在瀏覽器開啟 Dashboard",
 		managed_start_login: "登入電腦時啟動",
@@ -7619,14 +8095,14 @@ var STRINGS = {
 		delivery_project_work: "派出的工作",
 		delivery_no_work: "尚無明確關聯的派工紀錄。",
 		delivery_dispatch_state: "派工狀態：",
-		kind_execution: "中央派工",
+		kind_execution: "Connector 派工",
 		kind_task_command: "Task Service 成果",
 		delivery_dispatch_accepted: "已受理",
 		delivery_worktree_branch: "分支",
 		delivery_worktree_path: "工作目錄",
 		delivery_worktree_owner: "建立依據",
 		delivery_worktree_sessions: "關聯工作階段",
-		delivery_worktree_recorded: "中央目前保存的關聯；活動狀態以各工作階段的觀測為準。",
+		delivery_worktree_recorded: "Connector 目前保存的關聯；活動狀態以各工作階段的觀察為準。",
 		delivery_worktree_cleanup: "整理資格需要最新預覽。預覽會列出使用中的工作、未交付成果、資源保留與其他阻擋原因。",
 		delivery_merge_read_receipts: "查核已保存回執",
 		delivery_merge_recovery: "Worktree merge 復原",
@@ -7635,10 +8111,10 @@ var STRINGS = {
 		delivery_merge_destination: "目的工作目錄",
 		delivery_merge_ack: "已保存正面 ACK",
 		delivery_merge_no_ack: "尚無正面 ACK 證據",
-		delivery_merge_safe_reads: "可讀取 session、檢查 Git 與操作紀錄，或使用既有停止／中斷功能。查核回執不會重送未知的 merge。",
+		delivery_merge_safe_reads: "可讀取工作階段、檢查 Git 與操作紀錄，或使用既有停止／中斷功能。查核回執不會重送未知的 merge。",
 		delivery_merge_closeout: "安全結案需要原步驟的正面 ACK 與原資源保留身分。完全遺失 ACK 的人工裁決尚未提供；不要用目前 HEAD 猜測結果或清除 reservation。",
 		delivery_setup_title: "首次連接與使用方式",
-		delivery_setup_central: "首次使用時填入既有中央服務的位址與預期身分，在原生視窗確認後保存。已有設定可重新載入。",
+		delivery_setup_central: "首次使用時，輸入既有 Connector 的位址與預期身分，在原生視窗確認後儲存。已有設定可重新載入。",
 		delivery_setup_identity: "連線後確認實際身分與權限。主機是否就緒，請查看 Fleet 的各項原因。",
 		delivery_setup_mode: "只管理遠端工作可直接使用 Dashboard。需要 Windows 本機連線與 BAT 啟動時，再於 Fleet 選擇連線、profile 與登入啟動項目。Mac 可作為 Dashboard 使用。",
 		delivery_fleet_current_backend: "目前 Fleet backend：{backend}",
@@ -7759,19 +8235,19 @@ var STRINGS = {
 		update_phase_verified: "簽章與版本已驗證，可安裝此版本。",
 		update_phase_stopping_fleet: "正在準備安裝並停止本機連線…",
 		update_phase_installation_unknown: "已保存原安裝請求，等待確認安裝結果。",
-		bootstrap_title: "中央服務啟動",
+		bootstrap_title: "Connector 啟動",
 		bootstrap_help: "只查核並啟用已配置的既有 Connector 服務；不重啟服務，也不建立新的資料庫。",
 		bootstrap_configured: "已有固定啟動設定",
 		bootstrap_missing: "尚未配置啟動方式",
 		bootstrap_auto_on: "已設定不可用時自動查核啟動",
 		bootstrap_auto_off: "未啟用自動啟動",
-		bootstrap_healthy: "中央服務目前可用，不需要啟動。",
+		bootstrap_healthy: "Connector 目前可用，不需要啟動。",
 		bootstrap_blocked: "需先確認已選連線、目前 owner 與服務不可用的最新觀測。登入、權限或版本問題不會觸發服務啟動。",
 		bootstrap_prepared: "已保存原請求，尚未傳送遠端查核。",
 		bootstrap_querying: "正在查核原請求；尚未確認服務狀態。",
 		bootstrap_ensure_requested: "已記錄啟動請求；回應未全部確認，只能查證原結果。",
 		bootstrap_needs_attention: "有限查核仍未確認結果，需檢查既有部署。原請求保留，不會再送啟動。",
-		bootstrap_service_running: "既有服務的執行身分已確認。這是服務證據，並不表示中央登入或 API 已通過。",
+		bootstrap_service_running: "已確認既有服務的執行身分；這不代表 Connector 登入或 API 相容性已通過驗證。",
 		bootstrap_unknown: "結果尚未確認。請讀取原請求；重新開啟此頁不會再送啟動。",
 		bootstrap_request: "原請求",
 		bootstrap_queries: "已查核 {count}／4 次",
@@ -7781,7 +8257,7 @@ var STRINGS = {
 		bootstrap_reconcile: "繼續查證原結果",
 		bootstrap_read: "讀取原請求",
 		bootstrap_refresh: "更新啟動狀態",
-		bootstrap_separate: "一般中央連線與身分驗證持續獨立進行。本機回執不等於中央已接受操作。",
+		bootstrap_separate: "Connector 連線與身分驗證各自持續進行。本機回執不代表 Connector 已接受操作。",
 		bootstrap_working: "正在查核本機回執…",
 		bootstrap_unproven: "無法確認回應與原請求一致。",
 		task_title: "工作執行",
@@ -7821,17 +8297,17 @@ var STRINGS = {
 		operations_view_attention: "查看需要處理的操作",
 		operations_view_active: "查看執行中操作",
 		orch_waiting_children: "正在查回原有子操作",
-		orch_body_limit: "完整請求超過中央的 200,000 位元組上限。請縮短項目原文；目前尚未提交。",
+		orch_body_limit: "完整請求超過 Connector 的 200,000 位元組上限；請縮短項目原文，目前尚未提交。",
 		orch_title: "安排工作執行",
 		orch_relay: "轉交原始指示",
 		orch_planner: "啟動規劃者",
 		orch_items: "執行已檢視項目",
 		orch_failover: "改由 Codex 接續",
-		orch_help_relay: "將你的原文與中央整理的轉交背景送往一個固定的受管理工作階段。若它無法接收，這個表單不會另建替代工作階段。",
+		orch_help_relay: "將你的原文與 Connector 整理的轉交背景送往一個固定的受管工作階段。若它無法接收，這個表單不會另建替代工作階段。",
 		orch_help_planner: "在新 worktree 啟動一個唯讀 Codex 規劃者。讀取回覆後，再另外輸入並逐項檢視要執行的工作。",
 		orch_help_items: "依下列逐項原文建立各自獨立的受管理 worktree。不會自動匯入規劃者回覆，也不會停止規劃者。",
-		orch_help_failover: "由 Codex 接續一個閒置且配額耗盡的受管理 Claude 工作階段。中央會檢查所有寫入者與任務擁有權；保留來源分頁與 worktree，不提供強制或任務中途切換。",
-		orch_preparation: "請檢視這些選定輸入。提交後，中央才會準備並記錄固定的轉交背景、計畫或交接內容；此頁不是對話或交接內容的預覽。",
+		orch_help_failover: "由 Codex 接續一個閒置且配額耗盡的受管 Claude 工作階段。Connector 會檢查所有寫入者與任務擁有權；保留來源分頁與 worktree，不提供強制或任務中途切換。",
+		orch_preparation: "請檢視這些選定輸入。提交後，Connector 才會準備並記錄固定的轉交背景、計畫或交接內容；此頁不是對話或交接內容的預覽。",
 		orch_session: "固定的受管理工作階段",
 		orch_choose_session: "選擇受管理工作階段",
 		orch_message: "原始指示",
@@ -7845,22 +8321,22 @@ var STRINGS = {
 		orch_remove_item: "移除項目 {n}",
 		orch_add_item: "新增另一個項目",
 		orch_reload: "重新讀取可用目標",
-		orch_loading: "正在讀取中央目標…",
-		orch_selection_help: "只選用最新觀測的 Connector 管理工作階段或中央固定工作區 ID。中央仍會在產生影響前重新檢查政策。",
+		orch_loading: "正在讀取目標…",
+		orch_selection_help: "只可選用最新觀察的 Connector 受管工作階段，或 Connector 傳回的固定工作區 ID。Connector 會在產生影響前重新檢查政策。",
 		orch_truncated: "只顯示前 200 筆，並非完整清單。可從「工作階段」開啟未列於此頁的固定工作階段。",
 		orch_empty: "此主機未傳回可選目標。人工、過期、來源不明，以及有任務關聯的切換來源均不列入。",
 		orch_discovery_failed: "目標識別尚未確認。請重新讀取後再提交。",
 		orch_review_relay: "我已檢視這個固定工作階段與原始指示。",
 		orch_review_planner: "我已檢視工作區、原始指示與規劃項目上限。",
 		orch_review_items: "我已檢視工作區、agent 與上述每一項完整原文。",
-		orch_review_failover: "我已檢視這個固定 Claude 來源。配額、閒置或共用擁有權檢查未通過時，中央會拒絕執行。",
+		orch_review_failover: "我已檢視這個固定的 Claude 來源。配額、閒置或共用擁有權檢查未通過時，Connector 會拒絕執行。",
 		orch_apply_relay: "轉交至此工作階段",
 		orch_apply_planner: "啟動規劃者",
 		orch_apply_items: "執行已檢視項目",
 		orch_apply_failover: "要求由 Codex 接續",
 		orch_new: "準備另一筆請求",
 		orch_invalid_result: "操作回應與原請求或識別不符。",
-		orch_unavailable: "需要 {scopes} 權限與中央明確允許此功能；新請求也需要最新目標與主機可寫證據。",
+		orch_unavailable: "需要 {scopes} 權限與 Connector 明確支援此功能；新請求也需要最新目標與主機可寫證據。",
 		orch_fixed: "保留原輸入與 key。受理後的查回只讀取這筆操作；結果不明不代表可以另送新請求或另建子操作。",
 		orch_partial: "尚未證明整筆請求完成。進一步操作前，請檢視原操作與逐項回執。",
 		orch_receipts: "個別操作回執",
@@ -7905,7 +8381,7 @@ var STRINGS = {
 		pub_choose: "選擇已綁定的工作區",
 		pub_ref: "已發佈分支 ref",
 		pub_prompt: "原始指示",
-		pub_head_only: "目前只接受指定分支的精確最新提交。若預覽後分支改變，中央會停止，而不替換你選定的版本。",
+		pub_head_only: "目前只接受指定分支的精確最新提交。若預覽後分支改變，Connector 會停止，不會替換你選定的版本。",
 		pub_preview: "預覽已發佈版本",
 		pub_loading: "正在讀取版本…",
 		pub_invalid_preview: "版本預覽與所選儲存庫、工作區或分支不符。",
@@ -7915,8 +8391,8 @@ var STRINGS = {
 		pub_isolation: "建立新的受管理 clone、worktree 與工作階段；不更新或接管既有人工工作目錄。",
 		pub_reviewed: "請確認以下來源與完整提交 SHA：",
 		pub_sha: "固定提交 SHA",
-		pub_unavailable: "需要 observe 與 start 權限，以及中央明確允許此操作。",
-		pub_no_bindings: "中央尚未設定儲存庫與工作區的明確綁定。",
+		pub_unavailable: "需要 observe 與 start 權限，以及 Connector 明確支援此操作。",
+		pub_no_bindings: "Connector 尚未設定儲存庫與工作區的明確綁定。",
 		pub_fixed: "保留原提交、目標、指示與操作 key。查回只讀取原操作，不追蹤新的分支 head，也不另外啟動工作階段。",
 		start_title_page: "開始新工作階段",
 		start_intro: "在選定主機與工作區建立獨立的受管理工作階段。",
@@ -7925,10 +8401,10 @@ var STRINGS = {
 		dispatch_advanced: "進階設定",
 		dispatch_intro: "選擇專案已綁定的目的地，確認已發布版本，再帶著原始指示與附件開始工作。",
 		dispatch_project_help: "只顯示此專案已明確綁定的儲存庫、主機與工作區。不會自動建立工作項目或 Task Service 任務。",
-		dispatch_no_bindings: "此專案沒有可用的目的地。請先在專案設定儲存庫，並在中央設定對應的主機與工作區綁定。",
+		dispatch_no_bindings: "此專案沒有可用的目的地；請先在專案設定儲存庫，並在 Connector 設定對應的主機與工作區綁定。",
 		dispatch_archived: "此專案已封存，不能派送新工作。既有操作仍可查回。",
 		dispatch_project_unavailable: "無法確認目前專案。草稿保留，確認前不會派工。",
-		dispatch_unsupported: "中央尚未支援專案快速派工。請先更新中央服務。",
+		dispatch_unsupported: "請更新 Connector 以使用專案快速派工。",
 		dispatch_fixed_inputs: "這筆操作固定使用下列附件版本；查回不會重傳或另開工作。",
 		start_choose_host: "選擇主機",
 		start_workspace: "工作區",
@@ -7939,16 +8415,16 @@ var STRINGS = {
 		start_title: "標題（選填）",
 		start_prompt: "原始指示（選填）",
 		start_reload_workspaces: "重新讀取工作區",
-		start_loading_workspaces: "正在讀取中央工作區清單…",
+		start_loading_workspaces: "正在讀取工作區…",
 		start_discovery_failed: "工作區清單尚未確認。請重新讀取後再選擇。",
 		start_no_workspaces: "此主機目前未傳回工作區。",
 		start_truncated: "只顯示前 200 個工作區；此清單不代表所有工作區。",
-		start_workspace_help: "使用中央傳回的固定工作區 ID；主機仍會檢查儲存庫與權限。",
+		start_workspace_help: "使用 Connector 傳回的固定工作區 ID；主機仍會檢查儲存庫與權限。",
 		start_isolation: "使用新 worktree。此操作不會接管既有人工或任務工作階段。",
 		start_prompt_help: "原文會完整保留。留白只啟動工作階段，不會自動產生指示。",
 		start_apply: "開始工作階段",
 		start_new: "準備另一個工作階段",
-		start_unavailable: "需要 observe 與 start 權限，以及中央允許啟動的主機。",
+		start_unavailable: "需要 observe 與 start 權限，以及 Connector 允許啟動工作階段的主機。",
 		start_invalid_result: "操作回應與原啟動請求不符。",
 		start_unknown: "提交結果尚未確認；原請求與 key 已保留。",
 		start_fixed: "主機、工作區、選項與原文已固定。查回不會重新啟動；結果不明時只能重試同一筆請求。",
@@ -8007,9 +8483,9 @@ var STRINGS = {
 		permissions_help: "選擇要套用的權限。這裡不表示目前實際模式；主機政策與隔離限制仍然適用。",
 		permissions_default_help: "使用一般核准流程，保留需要確認的操作提示。",
 		permissions_allow_help: "略過 agent 的操作核准提示，包括寫入與命令執行。主機仍可拒絕此變更。",
-		permissions_unavailable: "需要最新 Session 資料、operate 權限，以及中央明確允許此操作與主機寫入。",
+		permissions_unavailable: "需要最新工作階段資料、operate 權限，以及 Connector 明確允許此操作與主機寫入。",
 		permissions_unknown: "結果尚未確認。原請求已保留。",
-		permissions_fixed: "保留同一筆模式、Session 與操作。部分完成或結果不明時，請先檢視回執。",
+		permissions_fixed: "保留同一筆模式、工作階段與操作。部分完成或結果不明時，請先檢視回執。",
 		permissions_invalid_result: "操作回應與原權限請求不符。",
 		permissions_damaged: "已儲存的請求不完整。請先在操作紀錄確認結果。",
 		permissions_accepted: "BAT 已接受要求的設定；尚未獨立查證執行中的 agent 已套用。",
@@ -8030,7 +8506,7 @@ var STRINGS = {
 		ar_help: "保存一個管理中來源的固定檔案版本，再明確記錄對該版本的審閱。原工作樹與執行狀態不會因此改變。",
 		ar_capture_title: "保存來源檔案",
 		ar_review_title: "審閱固定版本",
-		ar_execution: "中央執行證據",
+		ar_execution: "Connector 執行證據",
 		ar_choose_execution: "選擇已接受的執行或指令",
 		ar_evidence_kind: "證據類型",
 		ar_operation: "執行操作",
@@ -8040,20 +8516,20 @@ var STRINGS = {
 		ar_exact_evidence: "輸入較早的完整證據 ID…",
 		ar_more_executions: "更多執行紀錄",
 		ar_refresh_sources: "重新讀取執行證據",
-		ar_source_unavailable: "來源須為目前由 Connector 管理的完整 session；中央仍會查核原始執行證據。",
+		ar_source_unavailable: "請選擇目前由 Connector 管理的工作階段並提供完整 ID；Connector 仍會查核原始執行證據。",
 		ar_receipt: "對此版本的審閱紀錄（最多 2000 字）",
 		ar_accept: "記錄此版本的審閱",
 		ar_check_accept: "查回原審閱提交",
 		ar_accept_help: "請先檢視這份成果，再記錄審閱依據。此回執只對應下列版本，不表示測試通過、任務完成、合併或部署。",
 		ar_approve_scope: "記錄審閱需要 approve 權限；查看附件需要 observe 權限。",
 		ar_revision: "固定附件版本",
-		ar_lineage: "中央來源與執行證據",
+		ar_lineage: "Connector 來源與執行證據",
 		ar_check: "查回原操作",
 		ar_new_review: "新增另一筆審閱",
 		ar_recorded: "已記錄對此固定版本的審閱。任務與工作項目的完成狀態未改變。",
 		ar_catalog: "已保存的管理中來源成果",
 		ar_no_artifacts: "這一頁尚無可審閱的管理中來源成果。",
-		ar_invalid_result: "回應與原操作、固定版本或中央來源證據不符。原請求與 key 已保留。",
+		ar_invalid_result: "回應與原操作、固定版本或 Connector 來源證據不符；原請求與操作識別碼已保留。",
 		ar_storage: "無法保存原操作的復原資料。請先允許此應用程式使用本機儲存空間。",
 		ar_original_credential: "擷取查回需要原始憑證及 manage、observe 權限。請恢復原憑證；原請求與 key 會繼續保留。",
 		ar_original_preview: "原始擷取預覽與來源證據",
@@ -8061,7 +8537,7 @@ var STRINGS = {
 		capture_host: "來源主機",
 		capture_session: "完整人工工作階段 ID",
 		capture_path: "遠端相對檔案路徑",
-		capture_help: "輸入一個相對於所選人工 session 資料夾的檔案路徑。讀取過程不會更動來源。",
+		capture_help: "輸入一個相對於所選人工工作階段資料夾的檔案路徑。讀取過程不會更動來源。",
 		capture_preview: "預覽來源檔案",
 		capture_review: "我已檢視此檔案與來源證據",
 		capture_save: "保存已檢視的檔案",
@@ -8072,7 +8548,7 @@ var STRINGS = {
 		capture_name: "檔名",
 		capture_bytes: "位元組",
 		capture_source: "來源",
-		capture_root: "Session 資料夾",
+		capture_root: "工作階段資料夾",
 		capture_repository: "儲存庫",
 		capture_expiry: "預覽有效期限",
 		capture_single_file: "只擷取這一個檔案；不包含其他尚未提交的變更。",
@@ -8081,15 +8557,15 @@ var STRINGS = {
 		capture_unknown: "提交結果尚未確認。請查回同一筆擷取；原草稿與操作 key 已保留。",
 		capture_saved: "已保存固定附件版本，可在附件選擇中使用：",
 		capture_scope_observe: "預覽需要 observe 權限。",
-		capture_scope_manage: "保存需要 manage 與 observe 權限及中央擷取能力。",
-		capture_manual_only: "來源必須是中央明確觀測為人工建立的完整 session。",
-		capture_invalid_preview: "中央預覽與選定來源不符。",
+		capture_scope_manage: "保存需要 manage 與 observe 權限，以及 Connector 支援檔案擷取。",
+		capture_manual_only: "來源必須提供完整工作階段 ID，且 Connector 已明確觀察到該工作階段是由人員建立。",
+		capture_invalid_preview: "Connector 預覽與選定來源不符。",
 		capture_invalid_result: "無法查證已保存附件的固定版本與擷取來源。",
 		obs_unknown: "未知",
 		obs_state_evidence: "分項狀態與證據",
 		obs_lifecycle_note: "閒置、未載入或沒有分頁都不代表結束；沒有結束證據就保留未知。",
 		obs_discovery: "Discovery 涵蓋範圍",
-		obs_discovery_note: "這裡顯示中央已記錄的掃描範圍，不會另行掃描主機；沒有看見不代表不存在。",
+		obs_discovery_note: "這裡顯示 Connector 已記錄的掃描範圍，不會另行掃描主機；沒有觀察到不代表不存在。",
 		obs_scan_status: "最近掃描",
 		obs_last_success: "最後成功觀測",
 		obs_last_attempt: "最近查詢完成",
@@ -8106,7 +8582,7 @@ var STRINGS = {
 		obs_evidence: "原始 ID 與證據",
 		obs_occurred: "發生時間",
 		obs_recorded: "記錄時間",
-		obs_pending_binding: "尚未綁定 session",
+		obs_pending_binding: "尚未綁定工作階段",
 		obs_half_open: "序號區間 [{start}, {end})",
 		obs_follow_up: "接續執行",
 		obs_empty: "這個範圍沒有已記錄的證據。",
@@ -8118,7 +8594,7 @@ var STRINGS = {
 		obs_include_closed: "包含已關閉關係",
 		obs_execution: "Execution",
 		obs_worktree: "Worktree",
-		obs_known_identity: "顯示中央的已知資源 ID；關係與歷程不授予操作權限。",
+		obs_known_identity: "顯示 Connector 已知的資源 ID；關係與歷程不授予操作權限。",
 		obs_inventory_note: "依穩定 ID 巡覽，保留已載入頁數。列表反映持續變化的觀測，不是隔離快照。",
 		obs_axis_connection: "連線",
 		obs_axis_loading: "載入",
@@ -8144,7 +8620,7 @@ var STRINGS = {
 		obs_value_fresh: "新鮮",
 		obs_value_stale: "過期",
 		obs_scope_other_profiles_and_hosts: "其他 profile 與主機",
-		obs_scope_manual_sessions_without_tabs_or_facts: "沒有分頁或事實的手動 session",
+		obs_scope_manual_sessions_without_tabs_or_facts: "沒有分頁或事實的人工工作階段",
 		obs_scope_arbitrary_transcripts: "未綁定的逐字稿",
 		obs_scope_codex_rollouts: "Codex rollout 掃描",
 		obs_scope_background_git_state: "背景 Git 狀態探測",
@@ -8210,7 +8686,7 @@ var STRINGS = {
 		"cleanup_check": "查回原整理操作",
 		"cleanup_new": "預覽另一筆整理",
 		"cleanup_invalid_result": "操作回應與原整理請求不符。",
-		"cleanup_task_help": "任務整理使用完整任務 ID，由中央檢查結束狀態、共用資源與未確認指令。未提交的任務內容與分支仍保留；不會刪除任務歷史。",
+		"cleanup_task_help": "任務整理使用完整任務 ID，由 Connector 檢查結束狀態、共用資源與未確認指令。未提交的任務內容、分支與任務歷史都會保留。",
 		"cleanup_target_checkpoint": "Checkpoint",
 		"cleanup_target_integration": "整合操作",
 		"cleanup_target_host": "主機",
@@ -8247,7 +8723,7 @@ var STRINGS = {
 		"cleanup_reason_recorded": "已有整理紀錄，詳細來源請見回執。",
 		"cleanup_choice_UNCOMMITTED_CHANGES": "已選擇永久丟棄未提交內容。",
 		"cleanup_choice_RESULTS_NOT_DELIVERED": "已選擇釋放；保留尚未送達的 commits 與 branch。",
-		"cleanup_kind_session": "Session",
+		"cleanup_kind_session": "工作階段",
 		"cleanup_kind_worktree": "Worktree",
 		"cleanup_kind_local_branch": "本機 branch",
 		"cleanup_kind_clone": "Managed clone",
@@ -8261,7 +8737,7 @@ var STRINGS = {
 		"cleanup_decision_reclaim": "回收",
 		"cleanup_decision_already_absent": "已不存在",
 		"cleanup_step_preserve": "Pin commit",
-		"cleanup_step_stop": "停止 session",
+		"cleanup_step_stop": "停止工作階段",
 		"cleanup_step_discard": "丟棄檔案",
 		"cleanup_step_remove.worktree": "移除 worktree",
 		"cleanup_step_remove.branch": "刪除已送達 branch",
@@ -8276,8 +8752,8 @@ var STRINGS = {
 		"cleanup_reason_CLONE_NOT_OURS": "沒有符合的 Connector 建立標記。",
 		"cleanup_reason_CLONE_CONFIG_TAMPERED": "Repository 設定或 object 儲存不安全。",
 		"cleanup_reason_OBSERVATION_UNAVAILABLE": "無法在主機讀取期限內觀測。",
-		"cleanup_reason_ACTIVE_WRITER": "Session 正在串流或寫入。",
-		"cleanup_reason_SESSION_WAITING": "Session 有待回答問題、權限或排隊指令。",
+		"cleanup_reason_ACTIVE_WRITER": "工作階段正在串流或寫入。",
+		"cleanup_reason_SESSION_WAITING": "工作階段有待回答問題、權限或排隊指令。",
 		"cleanup_reason_COMMAND_UNRESOLVED": "指令或外部步驟的結果尚未確認。",
 		"cleanup_reason_ACTIVE_EXECUTION": "另一個執行仍需要資源。",
 		"cleanup_reason_CONTENT_REQUIRED": "有效整合預覽或執行仍需要內容。",
@@ -8369,19 +8845,19 @@ var STRINGS = {
 		dep_operation: "操作",
 		dep_status: "狀態",
 		dep_generation: "環境第 {generation} 代",
-		offline_actions_paused: "中央離線，暫停操作",
+		offline_actions_paused: "Connector 離線 · 暫停操作",
 		sync_waiting: "等待更新，草稿已保留",
 		desktop_add_credential: "新增憑證",
 		desktop_replace_credential: "更換憑證",
 		desktop_forget_credential: "移除此電腦儲存的憑證",
 		desktop_reload_configuration: "重新載入設定",
 		desktop_connecting: "正在處理連線…",
-		desktop_setup_help: "先連接你已有的中央服務。輸入位址與預期帳號，再到原生視窗確認儲存。",
+		desktop_setup_help: "連接既有的 Connector。輸入位址與預期帳號，再到原生視窗確認儲存。",
 		desktop_setup_origin: "使用 HTTPS 位址；已建立的本機通道可用 http://127.0.0.1:連接埠。此處不需輸入權杖。",
 		desktop_setup_review: "檢視連線設定",
 		desktop_setup_saved: "設定已儲存。請新增憑證並驗證身分。",
 		desktop_setup_cancelled: "已取消儲存；輸入內容仍保留。",
-		desktop_endpoint: "中央位置",
+		desktop_endpoint: "Connector 位址",
 		desktop_expected_actor: "預期身分",
 		desktop_configuration_file: "設定檔",
 		desktop_credential_source: "憑證來源",
@@ -8393,16 +8869,16 @@ var STRINGS = {
 		desktop_forget_help: "只移除此電腦的已儲存憑證並中斷連線；不會撤銷 Connector 權杖。草稿與原操作識別仍保留。",
 		desktop_forgotten: "已移除本機憑證並中斷連線。",
 		desktop_reloaded: "已重新載入設定。請驗證連線；原草稿仍保留。",
-		desktop_disconnected: "已中斷連線；中央工作仍繼續。",
+		desktop_disconnected: "已中斷連線 · Connector 工作仍繼續",
 		desktop_enrollment_cancelled: "已取消憑證輸入，保留原連線。",
-		desktop_connection: "桌面中央連線",
+		desktop_connection: "桌面 Connector 連線",
 		desktop_local: "本機功能",
 		desktop_connect_needed: "請連到已配置的 Connector。",
 		desktop_polling: "已連線 · 每秒更新",
-		desktop_config_needed: "尚未配置中央連線。",
+		desktop_config_needed: "尚未設定 Connector 連線。",
 		desktop_credential_missing: "尚未提供可用的本機憑證。",
-		desktop_credential_help: "中央位置與身份由本機設定指定；憑證保留在原生程式，不存入此畫面。",
-		desktop_dashboard_only: "Dashboard 無需安裝 BAT。Windows 可在本機 Fleet 控制中檢視連線、視窗與登入啟動。關閉視窗會留在系統匣；退出程式會等待所屬 Fleet 連線停止。中央工作仍獨立執行。",
+		desktop_credential_help: "Connector 位址與預期身分由本機設定指定；憑證保留在原生程式，不存入此畫面。",
+		desktop_dashboard_only: "Dashboard 無需安裝 BAT。Windows 可在本機 Fleet 控制中檢視連線、視窗與登入啟動。關閉視窗會留在系統匣；退出程式會等待所屬 Fleet 連線停止。Connector 工作仍獨立執行。",
 		fleet_login_waiting: "正在等待所選 BAT 工作區就緒，Dashboard 可繼續使用。",
 		fleet_login_attention: "登入啟動需要檢查。請先讀取原始啟動結果，再重試。",
 		fleet_login_complete: "已處理登入啟動選擇。這不代表 BAT 視窗或工作區已開啟。",
@@ -8508,7 +8984,7 @@ var STRINGS = {
 		merged_newer_base: "合併到較新的 base：另有 {count} 個 commits 會一起發布。",
 		close: "關閉",
 		nav_projects: "專案",
-		projects_help: "專案與工作項目是 Connector 自己的紀錄：目標、需求原文、驗收、步驟，以及做這件事的 sessions、版本、操作與 PR。改名不會改 ID；排序與固定只影響顯示。",
+		projects_help: "專案與工作項目是 Connector 自己的紀錄：目標、需求原文、驗收、步驟，以及執行這項工作的工作階段、版本、操作與 PR。改名不會改 ID；排序與固定只影響顯示。",
 		create_details: "詳細資料與關係",
 		create_no_parent: "最上層",
 		create_no_source: "沒有來源",
@@ -8524,8 +9000,8 @@ var STRINGS = {
 		create_project_help: "上層決定樹狀位置，來源保留衍生關係。Task Service 名稱只建立關聯；建立專案不會啟動 Agent。",
 		create_item_help: "工作保留需求原文與驗收條件。步驟初始皆未完成；建立工作不會派工或修改 BAT 工作區。",
 		managed_locations: "資料與工作位置",
-		managed_locations_central: "中央服務將身分、操作紀錄與成果保存在安裝電腦的應用程式資料中。Dashboard 的草稿與閱讀版面設定則保存在目前瀏覽器或桌面用戶端。",
-		managed_locations_work: "程式碼與 Agent 執行位於你選定的 BAT 主機和工作區。設定中央服務不會搬移這些工作目錄；跨主機程式碼同步使用已綁定的 GitHub 儲存庫與已發布版本。",
+		managed_locations_central: "Connector 將身分、操作紀錄與成果保存在安裝電腦的應用程式資料中。Dashboard 的草稿與閱讀版面設定則保存在目前瀏覽器或桌面用戶端。",
+		managed_locations_work: "程式碼與 Agent 執行位於你選定的 BAT 主機和工作區。設定 Connector 不會搬移這些工作目錄；跨主機程式碼同步使用已綁定的 GitHub 儲存庫與已發布版本。",
 		new_project_name: "新專案名稱",
 		add_project: "新增",
 		show_archived: "顯示已封存",
@@ -8635,7 +9111,7 @@ var STRINGS = {
 		attention_tab_active: "執行中操作",
 		attention_tab_unread: "未讀工作更新",
 		attention_replies: "提問",
-		attention_replies_note: "依中央實際問題與權限請求列出；閱讀不會解除請求。",
+		attention_replies_note: "列出 Connector 回報的問題與權限請求；閱讀不會解除請求。",
 		attention_completion: "待你確認",
 		attention_completion_note: "工作回報完成或步驟已勾完，仍需你確認或退回繼續。",
 		attention_problems: "需要處理",
@@ -8662,7 +9138,7 @@ var STRINGS = {
 		conversation_archive_unconfirmed_detail: "BAT 未確認歷史紀錄是否已到結尾。",
 		conversation_partial: "{count}+ 則未讀 · 較早的訊息可能未載入",
 		conversation_unknown: "尚未讀取對話紀錄",
-		conversation_count_note: "中央記錄已觀察訊息的版本；新內容須重新讀取才會計入，未完整索引時僅代表下限。捲動與事件同步不會標記已讀。",
+		conversation_count_note: "Connector 記錄已觀察訊息的版本；新內容須重新讀取才會計入，未完整索引時僅代表下限。捲動與事件同步不會標記已讀。",
 		conversation_badge: "{count} 未讀",
 		composer_shortcut: "送出快捷鍵",
 		composer_shortcut_modified: "Ctrl／⌘ + Enter",
@@ -8699,13 +9175,13 @@ var STRINGS = {
 		results_unavailable: "成果目前不可讀：{reason}",
 		results_provenance: "檢視固定版本與來源",
 		results_source_operation: "開啟來源操作",
-		results_consumers: "中央已記錄 {count} 筆引用；目前是否仍在執行消費尚不確定。",
+		results_consumers: "Connector 已記錄 {count} 筆引用；目前是否仍在使用尚不確定。",
 		results_open_child: "開啟子工作與對話",
 		results_parent: "返回父工作與成果",
 		results_unfinished: "目前載入的 {count} 個子工作尚未被驗收；繼續父工作前請先核對。這不表示它們目前正在執行。",
 		results_children_partial: "仍有尚未載入的子工作；目前摘要不能代表全部子工作的狀態。",
 		results_independent: "子工作成果、交付紀錄和父工作完成狀態分別判定；此檢視不會自動整合或標記完成。",
-		results_invalid: "中央成果來源回應無效。",
+		results_invalid: "Connector 傳回的成果來源無效。",
 		skills_title: "專案 Skill 來源與選取",
 		skills_not_applied: "已選取的 Skill 只固定來源版本；尚未套用到 Agent，也未放入 prompt。",
 		skills_refresh: "重新掃描 Skill 來源",
@@ -8713,19 +9189,19 @@ var STRINGS = {
 		skills_save: "保存 Skill 選取",
 		skills_saved: "Skill 選取已保存；尚未套用。",
 		skills_unsaved: "有尚未儲存的 Skill 選取。",
-		skills_conflict: "來源或中央選取已變動；保留目前草稿，請重新載入已存選取後再修改。",
+		skills_conflict: "來源或 Connector 保存的選取已變更，草稿已保留；請重新載入已存選取後再修改。",
 		skills_unresolved: "原選取已遺失或內容改變；保留固定版本",
 		skills_version: "檢視固定內容版本",
 		skills_compatibility: "目前可掃描 Claude Skill；Agent 相容性由來源回報，保存不等於執行套用。最多選取 20 項。",
 		skills_catalog_state: "來源未完整驗證：{state}",
 		skills_other_binding: "已存選取來自 {host} / {workspace}。保存目前選取會明確取代該來源。",
-		skills_invalid: "中央 Skill 回應無效。",
+		skills_invalid: "Connector 傳回的 Skill 資料無效。",
 		skills_workspace_missing: "目前探索中未找到",
 		models_current: "所選模型：{model}",
 		models_title: "模型偏好與主機額度",
 		models_host: "設定的 BAT 主機",
 		models_catalog_agent: "檢視模型目錄",
-		models_personal: "這是中央身分 {actor} 的個人選項。儲存不會更換既有工作的模型。",
+		models_personal: "這是 Connector 帳號 {actor} 的個人選項。儲存不會更換既有工作的模型。",
 		models_use_initial: "使用初始偏好",
 		models_use_last: "使用上次選擇",
 		models_remember_last: "記為上次選擇",
@@ -8737,7 +9213,7 @@ var STRINGS = {
 		models_unsaved: "有尚未儲存的偏好。",
 		models_saved: "個人模型偏好已保存。",
 		models_pending: "偏好操作尚未完成；用同一按鈕查回或重試。",
-		models_conflict: "中央偏好已有新版本；目前草稿保留，重新載入已存偏好後再修改。",
+		models_conflict: "Connector 偏好已有新版本，草稿已保留；請重新載入已存偏好後再修改。",
 		models_refresh: "重新取得目錄與額度",
 		models_reload_saved: "重新載入已存偏好",
 		models_reset_display: "重設顯示順序與隱藏項目",
@@ -8749,7 +9225,7 @@ var STRINGS = {
 		models_catalog_unavailable: "模型目錄尚不可用：{reason}",
 		models_catalog_ready: "{host} 提供 {count} 個可見模型候選。",
 		models_catalog_stale: "{host} 的模型目錄已過期，請重新取得。",
-		models_invalid: "中央模型偏好回應無效。",
+		models_invalid: "Connector 傳回的模型偏好無效。",
 		models_not_refreshed: "這次未能更新；保留上次觀察。",
 		models_usage: "主機回報的訂閱額度",
 		models_usage_unavailable: "尚無可驗證的訂閱額度：{reason}",
@@ -8767,7 +9243,7 @@ var STRINGS = {
 		reading_mark: "標記此版本已讀",
 		reading_note: "已讀只記錄你看過的工作項目版本，會同步至同一身分的其他入口；不會確認完成或解除待回覆。",
 		ev_work_item_read: "標記已讀",
-		reading_newer: "中央已有較新版本；目前顯示的內容與未提交編輯仍保留，關閉編輯後會更新。",
+		reading_newer: "Connector 已有較新版本；目前內容與未提交編輯會保留到關閉編輯為止。",
 		empty_needs_you: "目前沒有需要你處理的項目。",
 		empty_to_confirm: "沒有等待確認的操作。",
 		stale: "資料過期",
@@ -8989,7 +9465,7 @@ var STRINGS = {
 		integration_RESOLUTION_INVALID: "解衝突的結果不符合要求（要剛好一個 merge commit、沒有未提交修改或衝突標記）；修好後按「重新執行」。",
 		integration_waiting_resolver: "等 agent 解完衝突（它還在工作）",
 		hand_to_agent: "交給 agent 解衝突",
-		handoff_started: "已開始解衝突的 session；它 commit 之後按「重新執行」。",
+		handoff_started: "已開始處理衝突的工作階段；提交完成後按「重新執行」。",
 		integration_REMOTE_MOVED: "PR 在整合時有新的推送，沒有覆蓋它，也沒有推送。請取消並以最新版本重新預覽。",
 		integration_PUSH_REJECTED: "GitHub 拒絕這次推送（保護規則或簽章要求）。",
 		integration_PUSH_AUTH_FAILED: "這台主機的 git 憑證無法推送；修好後按「重新執行」。",
@@ -9012,6 +9488,7 @@ var STRINGS = {
 		integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 	},
 	en: {
+		...diagnosticsStrings.en,
 		...pmStrings.en,
 		...createRecordStrings.en,
 		...uiStrings.en,
@@ -9036,7 +9513,7 @@ var STRINGS = {
 		...maintenanceFindingStrings.en,
 		...findingNameStrings.en,
 		managed_recovery_title: "Local background service is not ready",
-		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below; joining another central remains an advanced option.",
+		managed_recovery_help: "Existing data and background work are retained. If an older version still has work, let it finish, then quit and reopen the desktop app. The startup error appears below. You can also join another Connector.",
 		...instructionReceiptStrings["en-US"],
 		repair_title: "Create repair work",
 		repair_help: "Choose a project and read fixed evidence from this failure. Create or recover repair work, then review its destination and version before starting it.",
@@ -9156,9 +9633,9 @@ var STRINGS = {
 		setup_save_verification: "Save verification command",
 		setup_verification_reload: "Reload saved verification settings",
 		setup_verification_edit: "Edit command for {project}",
-		setup_verification_changed: "Central configuration changed; your draft is preserved. Reload saved verification settings, review, and save again.",
+		setup_verification_changed: "Connector configuration changed; your draft is preserved. Reload saved verification settings, review, and save again.",
 		setup_verification_invalid: "Enter a valid project, executable, at most 63 nonempty arguments and a 1–3600 second timeout.",
-		setup_scope_required: "Your central identity is not permitted to change this setting.",
+		setup_scope_required: "Your Connector identity is not permitted to change this setting.",
 		setup_roots_help: "Choose remote directories dedicated to new managed work; human projects remain read-only. Git synchronization and artifact actions use your selected SSH connection.",
 		setup_save_host: "Verify and save host",
 		setup_repository_title: "2. Bind a GitHub repository",
@@ -9184,8 +9661,8 @@ var STRINGS = {
 		setup_unverified: "Awaiting connection verification",
 		setup_busy: "Work or operations are still active; configuration changes wait for a safe point.",
 		setup_profiles_unavailable: "BAT connection profiles could not be read. Paste a connection URL or enter the values manually.",
-		managed_join_existing: "Advanced: join an existing central",
-		managed_join_help: "Enter another central address and expected account, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
+		managed_join_existing: "Join another Connector",
+		managed_join_help: "Enter the address and expected account for another Connector, then confirm in the native window. Enroll its credential separately afterward. Existing background work on this computer keeps running.",
 		managed_background_help: "Connector keeps running in the background. Closing this view does not stop work.",
 		managed_open_browser: "Open Dashboard in browser",
 		managed_start_login: "Start when I sign in",
@@ -9253,14 +9730,14 @@ var STRINGS = {
 		delivery_project_work: "Dispatched work",
 		delivery_no_work: "No explicitly linked dispatch records yet.",
 		delivery_dispatch_state: "Dispatch state:",
-		kind_execution: "central execution",
+		kind_execution: "Connector execution",
 		kind_task_command: "Task Service result",
 		delivery_dispatch_accepted: "accepted",
 		delivery_worktree_branch: "Branch",
 		delivery_worktree_path: "Working directory",
 		delivery_worktree_owner: "Creation evidence",
 		delivery_worktree_sessions: "Related sessions",
-		delivery_worktree_recorded: "Bindings currently recorded by central; activity comes from each session's observation.",
+		delivery_worktree_recorded: "Bindings currently recorded by Connector; activity comes from each session's observation.",
 		delivery_worktree_cleanup: "Cleanup eligibility needs a fresh preview. It lists active work, undelivered results, reservations and other blockers.",
 		delivery_merge_read_receipts: "Check saved receipts",
 		delivery_merge_recovery: "Worktree merge recovery",
@@ -9272,7 +9749,7 @@ var STRINGS = {
 		delivery_merge_safe_reads: "Read the session, inspect Git and operation records, or use the existing stop/interrupt controls. Checking receipts does not resend an unknown merge.",
 		delivery_merge_closeout: "Safe closeout requires the original step's positive ACK and reservation identity. Manual adjudication for a wholly lost ACK is not available; do not infer the outcome from HEAD or clear reservations.",
 		delivery_setup_title: "First connection and usage",
-		delivery_setup_central: "On first use, enter your existing central address and expected identity, then confirm in the native window. Existing configuration can be reloaded.",
+		delivery_setup_central: "On first use, enter your existing Connector address and expected identity, then confirm in the native window. Existing configuration can be reloaded.",
 		delivery_setup_identity: "After connecting, confirm the actual identity and scopes. Fleet shows each host's readiness and blocking reasons.",
 		delivery_setup_mode: "Use Dashboard directly to manage remote work. For local Windows connections and BAT startup, select connections, profiles and login startup in Fleet. Mac supports Dashboard use.",
 		delivery_fleet_current_backend: "Current Fleet backend: {backend}",
@@ -9393,19 +9870,19 @@ var STRINGS = {
 		update_phase_verified: "The signature and version are verified. This update is ready to install.",
 		update_phase_stopping_fleet: "Preparing installation and stopping local connections…",
 		update_phase_installation_unknown: "The original installation request is saved; its outcome is not confirmed.",
-		bootstrap_title: "Central service startup",
+		bootstrap_title: "Connector startup",
 		bootstrap_help: "Check and ensure only the configured existing Connector service. This never restarts it or creates a new database.",
 		bootstrap_configured: "Fixed startup recipe configured",
 		bootstrap_missing: "No startup recipe configured",
 		bootstrap_auto_on: "Automatic check and ensure enabled",
 		bootstrap_auto_off: "Automatic startup disabled",
-		bootstrap_healthy: "The central service is available; no startup is needed.",
+		bootstrap_healthy: "Connector is available · no startup needed",
 		bootstrap_blocked: "Requires the selected connection, a proven current owner and recent service-unavailable evidence. Login, scope and version failures do not trigger startup.",
 		bootstrap_prepared: "Original request saved. No remote query has been sent.",
 		bootstrap_querying: "Checking the original request; service state is not yet confirmed.",
 		bootstrap_ensure_requested: "Startup intent recorded. The outcome is not fully confirmed; only reconcile the original result.",
 		bootstrap_needs_attention: "Bounded checks did not confirm the result. Check the existing deployment. The original request stays saved and ensure will not be sent again.",
-		bootstrap_service_running: "The existing service owner was confirmed. This service evidence does not prove central login or API compatibility.",
+		bootstrap_service_running: "The existing service owner was confirmed. This service evidence does not prove Connector login or API compatibility.",
 		bootstrap_unknown: "Outcome not confirmed. Read the original request; reopening this page never sends ensure again.",
 		bootstrap_request: "Original request",
 		bootstrap_queries: "{count}/4 queries used",
@@ -9415,7 +9892,7 @@ var STRINGS = {
 		bootstrap_reconcile: "Reconcile original result",
 		bootstrap_read: "Read original request",
 		bootstrap_refresh: "Refresh startup status",
-		bootstrap_separate: "Normal central connection and identity checks continue independently. A local receipt is not a central operation acceptance.",
+		bootstrap_separate: "Connector connection and identity checks continue independently. A local receipt does not mean Connector accepted the operation.",
 		bootstrap_working: "Reading local receipts…",
 		bootstrap_unproven: "The response could not be bound to the original request.",
 		task_title: "Execution",
@@ -9455,17 +9932,17 @@ var STRINGS = {
 		operations_view_attention: "View operations needing attention",
 		operations_view_active: "View active operations",
 		orch_waiting_children: "Waiting for original child operations",
-		orch_body_limit: "The complete request exceeds central's 200,000-byte limit. Shorten the item instructions; nothing has been submitted.",
+		orch_body_limit: "The complete request exceeds Connector's 200,000-byte limit. Shorten the item instructions; nothing has been submitted.",
 		orch_title: "Orchestrate work",
 		orch_relay: "Relay instructions",
 		orch_planner: "Start a planner",
 		orch_items: "Start reviewed items",
 		orch_failover: "Continue with Codex",
-		orch_help_relay: "Send your original words with central relay context to one exact managed session. If it cannot receive them, this form does not create a replacement.",
+		orch_help_relay: "Send your original words with relay context prepared by Connector to one exact managed session. If it cannot receive them, this form does not create a replacement.",
 		orch_help_planner: "Start one read-only Codex planner in a new worktree. Read its response, then enter and review the individual work items separately.",
 		orch_help_items: "Start an independent managed worktree for each literal item below. No planner response is automatically imported, and this form does not stop a planner.",
-		orch_help_failover: "Continue one idle, quota-exhausted managed Claude session with Codex. Central checks all writers and task ownership. The source tab and worktree remain; no force or task failover is offered.",
-		orch_preparation: "Review these selected inputs. Central prepares and records the exact relay context, plan or handoff after submission; this page is not a transcript or handoff preview.",
+		orch_help_failover: "Continue one idle, quota-exhausted managed Claude session with Codex. Connector checks all writers and task ownership. The source tab and worktree remain; no force or task failover is offered.",
+		orch_preparation: "Review these selected inputs. Connector prepares and records the exact relay context, plan or handoff after submission; this page is not a transcript or handoff preview.",
 		orch_session: "Exact managed session",
 		orch_choose_session: "Choose a managed session",
 		orch_message: "Original instructions",
@@ -9479,22 +9956,22 @@ var STRINGS = {
 		orch_remove_item: "Remove item {n}",
 		orch_add_item: "Add another item",
 		orch_reload: "Reload available targets",
-		orch_loading: "Reading central targets…",
-		orch_selection_help: "Only fresh Connector-managed sessions or exact central workspace IDs are selectable. Central rechecks policy before any effect.",
+		orch_loading: "Reading targets…",
+		orch_selection_help: "Only fresh Connector-managed sessions or exact Connector workspace IDs are selectable. Connector rechecks policy before any effect.",
 		orch_truncated: "Showing the first 200 records only. This is not a complete inventory. Open an exact session from Sessions if it is not in this page.",
 		orch_empty: "No eligible targets were returned for this host. Manual, stale, unknown and task-linked failover sources are excluded.",
 		orch_discovery_failed: "Target identity is unconfirmed. Reload the targets before submitting.",
 		orch_review_relay: "I reviewed this exact session and the original instructions.",
 		orch_review_planner: "I reviewed the workspace, original instructions and planner limit.",
 		orch_review_items: "I reviewed the workspace, agent and every literal item above.",
-		orch_review_failover: "I reviewed this exact Claude source. Central may refuse if quota, idle or shared ownership checks fail.",
+		orch_review_failover: "I reviewed this exact Claude source. Connector may refuse if quota, idle or shared ownership checks fail.",
 		orch_apply_relay: "Relay to this session",
 		orch_apply_planner: "Start planner",
 		orch_apply_items: "Start reviewed items",
 		orch_apply_failover: "Request Codex continuation",
 		orch_new: "Prepare another request",
 		orch_invalid_result: "Operation response does not match the original request and identity.",
-		orch_unavailable: "Requires {scopes} scopes and explicit central capability. New requests also require current target and host write evidence.",
+		orch_unavailable: "Requires {scopes} scopes and explicit Connector capability. New requests also require current target and host write evidence.",
 		orch_fixed: "The original inputs and key stay fixed. Accepted recovery only reads this operation. An unknown result does not authorize a new request or another child.",
 		orch_partial: "Completion is not proven for the whole request. Inspect the original operation and individual receipts before any further action.",
 		orch_receipts: "Individual operation receipts",
@@ -9539,7 +10016,7 @@ var STRINGS = {
 		pub_choose: "Choose a bound workspace",
 		pub_ref: "Published branch ref",
 		pub_prompt: "Original instructions",
-		pub_head_only: "Only the exact head of the selected branch is supported. If it changes after preview, central stops instead of replacing your selected version.",
+		pub_head_only: "Only the exact head of the selected branch is supported. If it changes after preview, Connector stops instead of replacing your selected version.",
 		pub_preview: "Preview published version",
 		pub_loading: "Reading version…",
 		pub_invalid_preview: "The version preview does not match the selected repository, workspace or branch.",
@@ -9549,8 +10026,8 @@ var STRINGS = {
 		pub_isolation: "Creates a new managed clone, worktree and session. Existing manual working folders stay unchanged.",
 		pub_reviewed: "Review this source and its full commit SHA:",
 		pub_sha: "Fixed commit SHA",
-		pub_unavailable: "Requires observe and start scopes, and an explicit central capability for this action.",
-		pub_no_bindings: "Central has no explicit repository and workspace bindings configured.",
+		pub_unavailable: "Requires observe and start scopes, and explicit Connector support for this action.",
+		pub_no_bindings: "No repository and workspace bindings configured in Connector.",
 		pub_fixed: "Keeps the original commit, target, instructions and operation key. Readback only checks that operation; it does not follow a newer branch head or start another session.",
 		start_title_page: "Start a new session",
 		start_intro: "Create a standalone managed session on the host and workspace you choose.",
@@ -9559,10 +10036,10 @@ var STRINGS = {
 		dispatch_advanced: "Advanced settings",
 		dispatch_intro: "Choose a bound project destination, review its published version, then start with your original instructions and attachments.",
 		dispatch_project_help: "Only this project's explicit repository, host and workspace bindings are shown. No work item or Task Service task is created automatically.",
-		dispatch_no_bindings: "This project has no available destination. Add its repository to the project and configure the corresponding host/workspace binding in central.",
+		dispatch_no_bindings: "This project has no available destination. Add its repository to the project and configure the corresponding host/workspace binding in Connector.",
 		dispatch_archived: "This project is archived. New dispatch is unavailable; existing operations can still be read back.",
 		dispatch_project_unavailable: "The current project could not be verified. Your draft is preserved and dispatch stays paused.",
-		dispatch_unsupported: "Central does not support project dispatch yet. Update central first.",
+		dispatch_unsupported: "Update Connector to use project dispatch.",
 		dispatch_fixed_inputs: "This operation uses the exact input revisions below. Read-back does not transfer again or start another session.",
 		start_choose_host: "Choose a host",
 		start_workspace: "Workspace",
@@ -9573,16 +10050,16 @@ var STRINGS = {
 		start_title: "Title (optional)",
 		start_prompt: "Original instructions (optional)",
 		start_reload_workspaces: "Reload workspaces",
-		start_loading_workspaces: "Reading central workspaces…",
+		start_loading_workspaces: "Reading workspaces…",
 		start_discovery_failed: "Workspace discovery is unconfirmed. Reload before selecting.",
 		start_no_workspaces: "This host returned no workspaces.",
 		start_truncated: "Only the first 200 workspaces are shown; this is not a complete listing.",
-		start_workspace_help: "Uses the exact workspace ID returned by central. Host repository and policy checks still apply.",
+		start_workspace_help: "Uses the exact workspace ID returned by Connector. Host repository and policy checks still apply.",
 		start_isolation: "Uses a new worktree. This action does not adopt an existing manual or task session.",
 		start_prompt_help: "Your original text is preserved. Leave this empty to start without sending instructions.",
 		start_apply: "Start session",
 		start_new: "Prepare another session",
-		start_unavailable: "Requires observe and start scopes, and a host central permits for starting sessions.",
+		start_unavailable: "Requires observe and start scopes, and a host Connector permits for starting sessions.",
 		start_invalid_result: "The operation response does not match the original start request.",
 		start_unknown: "Submission is unconfirmed; the original request and key are preserved.",
 		start_fixed: "Host, workspace, options and original text are fixed. Read-back never starts again; an unknown submission can only retry the same request.",
@@ -9606,7 +10083,7 @@ var STRINGS = {
 		ar_help: "Save one fixed file revision from a managed source, then explicitly record a review of that revision. This does not change the source worktree or execution state.",
 		ar_capture_title: "Save source file",
 		ar_review_title: "Review fixed revision",
-		ar_execution: "Central execution evidence",
+		ar_execution: "Connector execution evidence",
 		ar_choose_execution: "Choose an accepted execution or command",
 		ar_evidence_kind: "Evidence type",
 		ar_operation: "Execution operation",
@@ -9616,20 +10093,20 @@ var STRINGS = {
 		ar_exact_evidence: "Enter an older exact evidence ID…",
 		ar_more_executions: "More executions",
 		ar_refresh_sources: "Reload execution evidence",
-		ar_source_unavailable: "Choose a current Connector-managed session with its full ID. Central still verifies the original execution evidence.",
+		ar_source_unavailable: "Choose a current Connector-managed session with its full ID. Connector still verifies the original execution evidence.",
 		ar_receipt: "Review receipt for this revision (up to 2000 characters)",
 		ar_accept: "Record review of this revision",
 		ar_check_accept: "Check original review submission",
 		ar_accept_help: "Inspect the result before recording your review. This receipt covers only the fixed revision below; it does not prove passing tests, task completion, merge or deployment.",
 		ar_approve_scope: "Recording review requires approve; reading artifacts requires observe.",
 		ar_revision: "Fixed artifact revision",
-		ar_lineage: "Central source and execution evidence",
+		ar_lineage: "Connector source and execution evidence",
 		ar_check: "Check original operations",
 		ar_new_review: "Record another review",
 		ar_recorded: "Review of this exact revision was recorded. Task and work-item completion are unchanged.",
 		ar_catalog: "Saved results from managed sources",
 		ar_no_artifacts: "No reviewable managed-source results on this page.",
-		ar_invalid_result: "The response does not match the original operation, fixed revision or central source proof. The original request and key are retained.",
+		ar_invalid_result: "The response does not match the original operation, fixed revision or Connector source proof. The original request and key are retained.",
 		ar_storage: "The original operation recovery data could not be saved. Enable local storage for this application before submitting.",
 		ar_original_credential: "Capture recovery requires the original credential and manage/observe scopes. Restore that credential; the original request and key stay saved.",
 		ar_original_preview: "Original capture preview and source evidence",
@@ -9683,7 +10160,7 @@ var STRINGS = {
 		permissions_help: "Choose the permissions to apply. This does not show the current mode; host policy and confinement limits still apply.",
 		permissions_default_help: "Use the normal approval flow, keeping prompts for actions that need confirmation.",
 		permissions_allow_help: "Bypass the agent's approval prompts, including file writes and command execution. The host may still refuse this change.",
-		permissions_unavailable: "Requires current session data, operate scope, and explicit central permission for this action and host writes.",
+		permissions_unavailable: "Requires current session data, operate scope, and explicit Connector permission for this action and host writes.",
 		permissions_unknown: "The result is not yet confirmed. The original request is retained.",
 		permissions_fixed: "The mode, session and operation stay fixed. Check the receipts for partial or unknown results.",
 		permissions_invalid_result: "The operation reply does not match the original permission request.",
@@ -9715,15 +10192,15 @@ var STRINGS = {
 		capture_unknown: "Submission outcome is unknown. Check the same capture; its draft and operation key are retained.",
 		capture_saved: "Saved a fixed attachment revision, available in attachment selection:",
 		capture_scope_observe: "Preview requires observe scope.",
-		capture_scope_manage: "Saving requires manage and observe scopes and central capture capability.",
+		capture_scope_manage: "Saving requires manage and observe scopes and Connector capture capability.",
 		capture_manual_only: "The source must be a full session explicitly observed as manually created.",
-		capture_invalid_preview: "Central preview does not match the selected source.",
+		capture_invalid_preview: "Connector preview does not match the selected source.",
 		capture_invalid_result: "Unable to verify the saved attachment revision and capture source.",
 		obs_unknown: "unknown",
 		obs_state_evidence: "State and evidence",
 		obs_lifecycle_note: "Idle, unloaded and no tab do not mean ended. Lifecycle stays unknown without end evidence.",
 		obs_discovery: "Discovery coverage",
-		obs_discovery_note: "This shows central recorded discovery; it does not start another host scan. Not observed does not mean absent.",
+		obs_discovery_note: "This shows discovery recorded by Connector; it does not start another host scan. Not observed does not mean absent.",
 		obs_scan_status: "Latest scan",
 		obs_last_success: "Last successful observation",
 		obs_last_attempt: "Latest read completed",
@@ -9752,7 +10229,7 @@ var STRINGS = {
 		obs_include_closed: "Include closed relations",
 		obs_execution: "Execution",
 		obs_worktree: "Worktree",
-		obs_known_identity: "Central known resource ID. Relations and history do not grant write authority.",
+		obs_known_identity: "Resource ID known to Connector. Relations and history do not grant write authority.",
 		obs_inventory_note: "Browse by stable ID while retaining loaded pages. Inventory reflects changing observations, without snapshot isolation.",
 		obs_axis_connection: "Connection",
 		obs_axis_loading: "Loading",
@@ -9844,7 +10321,7 @@ var STRINGS = {
 		"cleanup_check": "Check original cleanup",
 		"cleanup_new": "Preview another cleanup",
 		"cleanup_invalid_result": "The operation response does not match the original cleanup request.",
-		"cleanup_task_help": "Task cleanup uses the complete task ID. Central checks terminal state, shared resources and unresolved commands. Uncommitted task content, task branches and task history are retained.",
+		"cleanup_task_help": "Task cleanup uses the complete task ID. Connector checks terminal state, shared resources and unresolved commands. Uncommitted task content, task branches and task history are retained.",
 		"cleanup_target_checkpoint": "Checkpoint",
 		"cleanup_target_integration": "Integration",
 		"cleanup_target_host": "Host",
@@ -10003,19 +10480,19 @@ var STRINGS = {
 		dep_operation: "Operation",
 		dep_status: "State",
 		dep_generation: "Environment generation {generation}",
-		offline_actions_paused: "Central offline · actions paused",
+		offline_actions_paused: "Connector offline · actions paused",
 		sync_waiting: "Waiting to refresh · draft preserved",
 		desktop_add_credential: "Add credential",
 		desktop_replace_credential: "Replace credential",
 		desktop_forget_credential: "Forget saved credential",
 		desktop_reload_configuration: "Reload configuration",
 		desktop_connecting: "Connection in progress…",
-		desktop_setup_help: "Connect to your existing central service. Enter its address and expected account, then review and save in the native window.",
+		desktop_setup_help: "Connect to your existing Connector. Enter its address and expected account, then review and save in the native window.",
 		desktop_setup_origin: "Use an HTTPS origin, or http://127.0.0.1:port for an existing local tunnel. No token is needed here.",
 		desktop_setup_review: "Review connection settings",
 		desktop_setup_saved: "Configuration saved. Add a credential and verify your identity next.",
 		desktop_setup_cancelled: "Saving cancelled; your inputs are preserved.",
-		desktop_endpoint: "Central address",
+		desktop_endpoint: "Connector address",
 		desktop_expected_actor: "Expected identity",
 		desktop_configuration_file: "Configuration file",
 		desktop_credential_source: "Credential source",
@@ -10027,16 +10504,16 @@ var STRINGS = {
 		desktop_forget_help: "Removes this computer’s saved credential and disconnects; it does not revoke the Connector token. Drafts and original operation IDs stay saved.",
 		desktop_forgotten: "Saved credential removed and disconnected.",
 		desktop_reloaded: "Configuration reloaded. Verify the connection to continue; existing drafts stay saved.",
-		desktop_disconnected: "Disconnected. Central work continues.",
+		desktop_disconnected: "Disconnected · Connector work continues",
 		desktop_enrollment_cancelled: "Credential entry cancelled. The existing connection is unchanged.",
-		desktop_connection: "Desktop central connection",
+		desktop_connection: "Desktop Connector connection",
 		desktop_local: "Local capabilities",
 		desktop_connect_needed: "Connect to the configured Connector.",
 		desktop_polling: "connected · updates every second",
-		desktop_config_needed: "Central connection is not configured.",
+		desktop_config_needed: "Connector connection is not configured.",
 		desktop_credential_missing: "No native credential is available yet.",
-		desktop_credential_help: "The central address and expected identity come from local configuration. Credentials stay in the native app, outside this page.",
-		desktop_dashboard_only: "Dashboard is available without BAT installed. On Windows, use the local Fleet controls to review connections, windows and login startup. Closing the window keeps the app in the tray; Quit waits for owned Fleet connections to stop. Central work continues independently.",
+		desktop_credential_help: "The Connector address and expected identity come from local configuration. Credentials stay in the native app, outside this page.",
+		desktop_dashboard_only: "Dashboard is available without BAT installed. On Windows, use the local Fleet controls to review connections, windows and login startup. Closing the window keeps the app in the tray; Quit waits for owned Fleet connections to stop. Connector work continues independently.",
 		fleet_login_waiting: "Waiting for selected BAT workspaces; Dashboard remains available.",
 		fleet_login_attention: "Login startup needs attention. Read the original launch result before retrying.",
 		fleet_login_complete: "Login choices were processed. This does not prove BAT windows or workspaces opened.",
@@ -10142,7 +10619,7 @@ var STRINGS = {
 		merged_newer_base: "Merged onto a newer base: {count} other commits will ship too.",
 		close: "Close",
 		nav_projects: "Projects",
-		projects_help: "Projects and work items are the connector's own records: goals, the request verbatim, acceptance, steps, and the sessions, checkpoints, operations and PRs that carried them. A rename never changes an ID; order and pins only change the display.",
+		projects_help: "Projects and work items are Connector's own records: goals, the request verbatim, acceptance, steps, and the sessions, checkpoints, operations and PRs that carried them. A rename never changes an ID; order and pins only change the display.",
 		create_details: "Details and relationships",
 		create_no_parent: "Top level",
 		create_no_source: "No source",
@@ -10158,8 +10635,8 @@ var STRINGS = {
 		create_project_help: "Parent sets the tree position; source keeps the derivation link. The Task Service name records a relationship. Creating a project does not start an agent.",
 		create_item_help: "Keep the original request and acceptance criteria with this work. New steps are unchecked; creating a work item does not dispatch work or change a BAT workspace.",
 		managed_locations: "Data and work locations",
-		managed_locations_central: "Central stores your identity, operation history and artifacts in application data on the installation computer. Dashboard drafts and reading layout choices stay in the current browser or desktop client.",
-		managed_locations_work: "Code and agent execution stay on the selected BAT host and workspace. Configuring central does not relocate those directories; code synchronization between hosts uses the bound GitHub repository and published commits.",
+		managed_locations_central: "Connector stores your identity, operation history and artifacts in application data on the installation computer. Dashboard drafts and reading layout choices stay in the current browser or desktop client.",
+		managed_locations_work: "Code and agent execution stay on the selected BAT host and workspace. Configuring Connector does not relocate those directories; code synchronization between hosts uses the bound GitHub repository and published commits.",
 		new_project_name: "New project name",
 		add_project: "Add",
 		show_archived: "Show archived",
@@ -10269,7 +10746,7 @@ var STRINGS = {
 		attention_tab_active: "Active operations",
 		attention_tab_unread: "Unread work updates",
 		attention_replies: "Questions",
-		attention_replies_note: "Questions and permission requests reported by central. Reading does not resolve them.",
+		attention_replies_note: "Questions and permission requests reported by Connector. Reading does not resolve them.",
 		attention_completion: "Reviews",
 		attention_completion_note: "Work reported done or with every step checked still needs your decision.",
 		attention_problems: "Needs attention",
@@ -10296,7 +10773,7 @@ var STRINGS = {
 		conversation_archive_unconfirmed_detail: "BAT did not confirm the end of the history.",
 		conversation_partial: "{count}+ unread · earlier messages may not be loaded",
 		conversation_unknown: "Conversation has not been observed",
-		conversation_count_note: "Central tracks observed message revisions. New content is counted after refreshing; incomplete indexing is a lower bound, not a complete total. Scrolling and event sync never mark messages read.",
+		conversation_count_note: "Connector tracks observed message revisions. New content is counted after refreshing; incomplete indexing is a lower bound, not a complete total. Scrolling and event sync never mark messages read.",
 		conversation_badge: "{count} unread",
 		composer_shortcut: "Send shortcut",
 		composer_shortcut_modified: "Ctrl / ⌘ + Enter",
@@ -10333,13 +10810,13 @@ var STRINGS = {
 		results_unavailable: "Result currently unavailable: {reason}",
 		results_provenance: "Inspect fixed version and source",
 		results_source_operation: "Open source operation",
-		results_consumers: "Central records {count} references; live consumption remains unknown.",
+		results_consumers: "Connector records {count} references; live consumption remains unknown.",
 		results_open_child: "Open child work and conversation",
 		results_parent: "Return to parent work and results",
 		results_unfinished: "{count} loaded child work items have not been accepted. Check them before continuing the parent; this does not establish that they are running.",
 		results_children_partial: "More child work is not loaded. This summary does not establish the state of every child.",
 		results_independent: "Child results, delivery receipts and parent completion are separate. This view does not integrate results or mark work complete.",
-		results_invalid: "Invalid central result-source response.",
+		results_invalid: "Invalid result-source response from Connector.",
 		skills_title: "Project skill sources and selection",
 		skills_not_applied: "Selected skills pin source versions only. They are not applied to an agent or inserted into a prompt.",
 		skills_refresh: "Rescan skill sources",
@@ -10347,19 +10824,19 @@ var STRINGS = {
 		skills_save: "Save skill selection",
 		skills_saved: "Skill selection saved; not applied.",
 		skills_unsaved: "Unsaved skill selection.",
-		skills_conflict: "The source or central selection changed. Your draft is preserved; reload saved selection before editing again.",
+		skills_conflict: "The source or saved selection in Connector changed. Your draft is preserved; reload saved selection before editing again.",
 		skills_unresolved: "Previously selected source is missing or changed; fixed version retained",
 		skills_version: "Inspect fixed source version",
 		skills_compatibility: "Claude skill sources are supported. Source-reported compatibility does not establish runtime application. Select at most 20 skills.",
 		skills_catalog_state: "Source verification is incomplete: {state}",
 		skills_other_binding: "Saved selection belongs to {host} / {workspace}. Saving this selection explicitly replaces that source.",
-		skills_invalid: "Invalid central skill response.",
+		skills_invalid: "Invalid skill response from Connector.",
 		skills_workspace_missing: "not found in current discovery",
 		models_current: "Selected model: {model}",
 		models_title: "Model preferences and host usage",
 		models_host: "Configured BAT host",
 		models_catalog_agent: "Model catalog agent",
-		models_personal: "Personal choices for central identity {actor}. Saving does not change a running session's model.",
+		models_personal: "Personal choices for your Connector identity {actor}. Saving does not change a running session's model.",
 		models_use_initial: "Use initial preference",
 		models_use_last: "Use last choice",
 		models_remember_last: "Remember as last choice",
@@ -10371,7 +10848,7 @@ var STRINGS = {
 		models_unsaved: "Unsaved model preferences.",
 		models_saved: "Personal model preferences saved.",
 		models_pending: "The preference operation is pending; use the same button to check or retry.",
-		models_conflict: "Central has newer preferences. Your draft is preserved; reload saved preferences before editing again.",
+		models_conflict: "Connector has newer preferences. Your draft is preserved; reload saved preferences before editing again.",
 		models_refresh: "Refresh catalog and usage",
 		models_reload_saved: "Reload saved preferences",
 		models_reset_display: "Reset display order and hidden models",
@@ -10383,7 +10860,7 @@ var STRINGS = {
 		models_catalog_unavailable: "Model catalog unavailable: {reason}",
 		models_catalog_ready: "{host} provides {count} visible model candidates.",
 		models_catalog_stale: "The model catalog for {host} is stale; refresh it.",
-		models_invalid: "Invalid central model preference response.",
+		models_invalid: "Invalid model preference response from Connector.",
 		models_not_refreshed: "Not refreshed; retaining the last observation.",
 		models_usage: "Host-reported subscription usage",
 		models_usage_unavailable: "No verified subscription usage: {reason}",
@@ -10401,7 +10878,7 @@ var STRINGS = {
 		reading_mark: "Mark this version read",
 		reading_note: "Reading tracks the work-item version you saw and syncs across clients using the same identity. It does not approve completion or resolve requests.",
 		ev_work_item_read: "Marked read",
-		reading_newer: "Central has a newer version. The displayed content and unsaved edits are preserved until you close the editor.",
+		reading_newer: "Connector has a newer version. The displayed content and unsaved edits are preserved until you close the editor.",
 		empty_needs_you: "Nothing needs you right now.",
 		empty_to_confirm: "Nothing is waiting.",
 		stale: "stale",
@@ -10649,127 +11126,6 @@ var STRINGS = {
 var locale = (globalThis.navigator?.language || "en").toLowerCase().startsWith("zh") ? "zh-TW" : "en";
 function t(key, vars = {}) {
 	return (STRINGS[locale][key] ?? STRINGS["zh-TW"][key] ?? key).replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ""));
-}
-//#endregion
-//#region src/session-navigation.js
-var projectViews$2 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function sessionHref$1({ host, sessionId, from = "" }) {
-	const query = projectViews$2.has(from) ? "?" + new URLSearchParams({ from }) : "";
-	return `#/session/${encodeURIComponent(host)}/${encodeURIComponent(sessionId)}${query}`;
-}
-function sessionOrigin(value) {
-	if (typeof value !== "string" || value.length > 4096) return "";
-	const match = /^#\/session\/([^/?#]+)\/([^/?#]+)(?:\?([^#]*))?$/.exec(value);
-	if (!match) return "";
-	try {
-		const host = decodeURIComponent(match[1]), sessionId = decodeURIComponent(match[2]);
-		if (!host || !sessionId || /[\u0000-\u001f\u007f]/.test(host + sessionId)) return "";
-		const query = new URLSearchParams(match[3] || "");
-		if ([...query.keys()].some((key) => key !== "from") || query.getAll("from").length > 1) return "";
-		const from = query.get("from") || "";
-		if (from && !projectViews$2.has(from)) return "";
-		return sessionHref$1({
-			host,
-			sessionId,
-			from
-		});
-	} catch {
-		return "";
-	}
-}
-var contextFields = {
-	snapshot: { id: /^pmsnap_[0-9a-f]{32}$/ },
-	plan_revision: { id: /^pmrev_[0-9a-f]{32}$/ },
-	requirement: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrev_[0-9a-f]{32}$/
-	},
-	milestone: {
-		id: /^[a-z][a-z0-9_.-]{0,79}$/,
-		revision_id: /^pmrb_[0-9a-f]{32}$/
-	},
-	work_item: { id: /^wi_[0-9a-f]{20}$/ },
-	governance: { id: /^pmgov_[0-9a-f]{32}$/ },
-	finding: {
-		id: /^pmfn_[0-9a-f]{32}$/,
-		observation_id: /^pmgh_[0-9a-f]{32}$/,
-		document_digest: /^[0-9a-f]{64}$/
-	},
-	repair: { id: /^pmrp_[0-9a-f]{32}$/ },
-	follow_up: { id: /^pmfu_[0-9a-f]{32}$/ },
-	proposal: { id: /^pmcp_[0-9a-f]{32}$/ },
-	issue_mapping: { id: /^pmim_[0-9a-f]{32}$/ },
-	meeting: { id: /^pmmeet_[0-9a-f]{32}$/ },
-	lifecycle_transition: { id: /^pmlt_[0-9a-f]{32}$/ }
-};
-var projectViews$1 = new Set([
-	"overview",
-	"discussions",
-	"requirements",
-	"schedule",
-	"dependencies",
-	"issues",
-	"agents",
-	"board"
-]);
-function fullMatch(value, pattern) {
-	return typeof value === "string" && pattern.exec(value)?.[0] === value;
-}
-function isContextRef(ref) {
-	if (!ref || typeof ref !== "object" || Array.isArray(ref) || typeof ref.kind !== "string" || !Object.hasOwn(contextFields, ref.kind)) return false;
-	const fields = Object.entries(contextFields[ref.kind]);
-	return Object.hasOwn(ref, "kind") && Object.keys(ref).length === fields.length + 1 && fields.every(([key, pattern]) => Object.hasOwn(ref, key) && fullMatch(ref[key], pattern));
-}
-function normalizeRefs(refs) {
-	const result = [], seen = new Set();
-	if (!Array.isArray(refs)) return result;
-	for (const ref of refs) {
-		if (!isContextRef(ref)) continue;
-		const item = { kind: ref.kind };
-		for (const key of Object.keys(contextFields[ref.kind])) item[key] = ref[key];
-		const identity = JSON.stringify(item);
-		if (seen.has(identity)) continue;
-		seen.add(identity);
-		result.push(item);
-		if (result.length === 8) break;
-	}
-	return result;
-}
-function normalizeDetails(title, from, report) {
-	return {
-		title: typeof title === "string" ? Array.from(title.trim()).slice(0, 160).join("") : "",
-		from: projectViews$1.has(from) ? from : sessionOrigin(from),
-		report: fullMatch(report, contextFields.snapshot.id) ? report : ""
-	};
-}
-function discussHref({ workspaceId, refs = [], title = "", from = "", report = "" }) {
-	const query = new URLSearchParams();
-	for (const ref of normalizeRefs(refs)) query.append("ref", JSON.stringify(ref));
-	for (const [key, value] of Object.entries(normalizeDetails(title, from, report))) if (value) query.set(key, value);
-	const search = query.toString();
-	return `#/pm/${encodeURIComponent(workspaceId)}/discussions/new${search ? "?" + search : ""}`;
-}
-function parseDiscussRefs(query) {
-	const params = new URLSearchParams(typeof query === "string" || query instanceof URLSearchParams ? query : "");
-	return {
-		refs: normalizeRefs(params.getAll("ref").map((value) => {
-			try {
-				return JSON.parse(value);
-			} catch {
-				return null;
-			}
-		})),
-		...normalizeDetails(params.get("title"), params.get("from"), params.get("report"))
-	};
 }
 //#endregion
 //#region src/ui/icons.js
@@ -11732,6 +12088,125 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 		controls[index].focus();
 	});
 	return root;
+}
+//#endregion
+//#region src/diagnostics-dialog.js
+function diagnosticsDialog({ h, t, load, save, onClose }) {
+	const origin = document.activeElement;
+	const summary = h("div", { "data-diagnostics-summary": "" });
+	const pre = h("pre", {
+		class: "diagnostics-json",
+		tabindex: 0,
+		"aria-label": t("diag_json"),
+		"data-diagnostics-json": ""
+	});
+	const status = h("p", {
+		class: "muted",
+		role: "status"
+	}, t("diag_loading"));
+	let content = "", filename = "", serial = 0;
+	const close = () => {
+		serial++;
+		dialog.close();
+		dialog.remove();
+		onClose();
+		if (origin?.isConnected) origin.focus();
+	};
+	const saved = button({
+		variant: "primary",
+		label: t("diag_save"),
+		disabled: true,
+		onClick: async () => {
+			const current = serial;
+			saved.disabled = true;
+			try {
+				const result = await save(content, filename);
+				if (current === serial && result) status.textContent = t(result === true ? "diag_download_started" : "diag_saved");
+			} catch {
+				if (current === serial) status.textContent = t("diag_save_failed");
+			} finally {
+				if (current === serial) saved.disabled = false;
+			}
+		}
+	});
+	const copy = button({
+		label: t("diag_copy"),
+		disabled: true,
+		onClick: async () => {
+			const current = serial;
+			try {
+				await navigator.clipboard.writeText(content);
+				if (current === serial) status.textContent = t("diag_copied");
+			} catch {
+				if (current === serial) {
+					status.textContent = t("diag_copy_failed");
+					pre.focus();
+				}
+			}
+		}
+	});
+	const closing = button({
+		label: t("diag_close"),
+		onClick: close
+	});
+	const dialog = h("dialog", {
+		class: "diagnostics-dialog",
+		"aria-labelledby": "diagnostics-title",
+		"data-diagnostics-dialog": ""
+	}, h("h2", { id: "diagnostics-title" }, t("diag_title")), h("p", { class: "muted" }, t("diag_privacy")), summary, pre, status, h("div", { class: "actions" }, saved, copy, closing));
+	dialog.addEventListener("cancel", (event) => {
+		event.preventDefault();
+		close();
+	});
+	dialog.addEventListener("keydown", (event) => {
+		if (event.key !== "Tab") return;
+		const nodes = [
+			pre,
+			saved,
+			copy,
+			closing
+		].filter((node) => !node.disabled && !node.hidden), first = nodes[0], last = nodes.at(-1);
+		if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	});
+	document.body.append(dialog);
+	dialog.showModal();
+	closing.focus();
+	const withdraw = (force = false) => {
+		if (!content && !force) return;
+		serial++;
+		content = "";
+		summary.replaceChildren();
+		pre.textContent = "";
+		saved.disabled = copy.disabled = true;
+		status.textContent = t("diag_withdrawn");
+	};
+	const current = serial;
+	load().then((bundle) => {
+		if (current !== serial || !dialog.isConnected) return;
+		content = JSON.stringify(bundle, null, 2) + "\n";
+		filename = "batc-diagnostics-" + bundle.exported_at.slice(0, 10).replaceAll("-", "") + "-" + bundle.exported_at.slice(11, 16).replace(":", "") + ".json";
+		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
+			errors: t(bundle.recent_errors.length === 1 ? "diag_errors_one" : "diag_errors_many", { count: bundle.recent_errors.length }),
+			operations: bundle.operations === null ? t("diag_operations_unavailable") : t(bundle.operations.length === 1 ? "diag_operations_one" : "diag_operations_many", { count: bundle.operations.length })
+		})), h("p", { class: "muted" }, t("diag_sample"))));
+		pre.textContent = content;
+		const tooLarge = new TextEncoder().encode(content).length > 262144;
+		saved.disabled = tooLarge;
+		copy.disabled = false;
+		status.textContent = tooLarge ? t("diag_too_large") : "";
+	}).catch(() => {
+		if (current === serial) withdraw(true);
+	});
+	return {
+		close,
+		withdraw
+	};
 }
 //#endregion
 //#region src/pm-workbench.js
@@ -13090,7 +13565,7 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
 				write(selected);
 			} catch (error) {
-				if (element.isConnected) status.replaceChildren(errorBox(error));
+				if (element.isConnected) status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				pending = false;
 				update();
@@ -15368,7 +15843,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				return;
 			}
 			withdraw({ keepSerial: true });
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			follow = false;
 		} finally {
 			if (ticket !== serial) return;
@@ -15528,7 +16003,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	nativeDesktop = isTauri();
@@ -15536,6 +16011,7 @@ var init_transport = __esmMin((() => {
 	nativeBriefExportSupport = false;
 	browserSessionToken = "managed-browser-session";
 	browserCsrf = null;
+	nativeDiagnosticsSave = (input) => invoke("native_diagnostics_save", { input });
 	nativeFilesStatus = () => invoke("native_files_status");
 	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
 	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
@@ -15607,7 +16083,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
 		if (pendingReceipt && caps()?.actor === actor) {
 			if (pendingReceipt.error) {
-				status.replaceChildren(errorBox(pendingReceipt.error));
+				status.replaceChildren(errorBox(pendingReceipt.error, { within: status }));
 				return;
 			}
 			const value = pendingReceipt.receipt;
@@ -15813,7 +16289,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	const stamp = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
 	const check = (data) => {
@@ -16233,7 +16709,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 			alive();
 			if (box.isConnected) update(page);
 		} catch (error) {
-			if (box.isConnected) status.replaceChildren(errorBox(error));
+			if (box.isConnected) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			morePlans.disabled = false;
 		}
@@ -16277,7 +16753,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 			if (box.isConnected) showBindings(page);
 		} catch (error) {
 			if (box.isConnected) {
-				bindingStatus.replaceChildren(errorBox(error));
+				bindingStatus.replaceChildren(errorBox(error, { within: bindingStatus }));
 				loadBindings.hidden = false;
 			}
 		} finally {
@@ -16364,7 +16840,10 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 		} catch (error) {
 			if (box.isConnected && ticket === request) {
 				result.replaceChildren();
-				status.replaceChildren(errorBox(error, { summary: text("pm_diff_failure") }));
+				status.replaceChildren(errorBox(error, {
+					summary: text("pm_diff_failure"),
+					within: status
+				}));
 			}
 		} finally {
 			if (ticket === request) {
@@ -16733,7 +17212,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				if (item.isConnected) {
 					if ([403, 404].includes(error.status)) item.remove();
 					else {
-						detail.replaceChildren(errorBox(error));
+						detail.replaceChildren(errorBox(error, { within: detail }));
 						pill.replaceChildren(statusPill("unknown"));
 					}
 				}
@@ -16770,7 +17249,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						more.remove();
 						renderRows(next, true);
 					} catch (error) {
-						if (more.isConnected) more.after(errorBox(error));
+						if (more.isConnected) more.after(errorBox(error, { within: more }));
 					} finally {
 						busy = false;
 						more.disabled = false;
@@ -16818,7 +17297,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						try {
 							await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);
 						} catch (error) {
-							if (details.isConnected) details.append(errorBox(error));
+							if (details.isConnected) details.append(errorBox(error, { within: details }));
 						}
 					}
 				}, t("pd_copy"))));
@@ -16970,7 +17449,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		readable: canRead,
 		onUnavailable: (error) => {
 			withdraw();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			onChange(null, "error", error);
 		},
 		errorBox
@@ -17091,7 +17570,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			return;
 		}
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 		onChange(null, "error", error);
 	}
 	function acceptHistory(data, after, append = false) {
@@ -18172,7 +18651,7 @@ function workspaceOverview(options) {
 			signature = "";
 			closeReader();
 			render();
-			status.replaceChildren(options.errorBox(error));
+			status.replaceChildren(options.errorBox(error, { within: status }));
 		}
 	}
 	async function refresh() {
@@ -19130,7 +19609,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					withdraw();
 					statusBox.replaceChildren(readError(error, () => {
 						refresh();
-					}));
+					}, statusBox));
 					return;
 				}
 				impact = {
@@ -19266,7 +19745,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		else if (impact.error) affected.append(readError(impact.error, () => {
 			impactKey = "";
 			syncImpact();
-		}));
+		}, affected));
 		else {
 			const reasons = [];
 			for (const code of [
@@ -19746,8 +20225,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			}
 		}
 	}
-	function readError(error, retry) {
-		return h("div", {}, errorBox(error), button({
+	function readError(error, retry, within) {
+		return h("div", {}, errorBox(error, { within }), button({
 			size: "sm",
 			variant: "ghost",
 			label: t("ui_retry"),
@@ -19793,7 +20272,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			else clearData();
 			statusBox.replaceChildren(readError(error, () => {
 				refresh();
-			}));
+			}, statusBox));
 		}
 	}
 	function clearData() {
@@ -21080,7 +21559,10 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			if (valid(ticket)) {
 				item.catalog = null;
 				item.catalogBox.replaceChildren();
-				status.replaceChildren(errorBox(error, { summary: t("ahp_selection_unavailable") }));
+				status.replaceChildren(errorBox(error, {
+					summary: t("ahp_selection_unavailable"),
+					within: status
+				}));
 				for (const f of item.forms) f.update();
 			}
 		}
@@ -21115,7 +21597,10 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		withdraw();
 		adapterFields.hidden = true;
 		historyDetails.hidden = true;
-		status.append(errorBox(error, { summary: t("ahp_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("ahp_unavailable"),
+			within: status
+		}));
 	}
 	async function refresh() {
 		const prior = selected;
@@ -21424,7 +21909,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			enabled = false;
 			workspace = null;
 			box.replaceChildren();
-			if (![403, 404].includes(error.status)) box.append(errorBox(error));
+			if (![403, 404].includes(error.status)) box.append(errorBox(error, { within: box }));
 		}
 	}
 	function withdraw() {
@@ -22197,7 +22682,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		}
@@ -22257,7 +22742,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		} finally {
@@ -22282,7 +22767,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		} finally {
@@ -22522,7 +23007,10 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			cursor = null;
 			facts.replaceChildren();
 			status.replaceChildren();
-			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error, { summary: t("wd_unavailable") })), refreshButton);
+			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error, {
+				summary: t("wd_unavailable"),
+				within: head
+			})), refreshButton);
 		} finally {
 			if (ticket === sequence) {
 				busy = false;
@@ -22676,7 +23164,10 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 	}
 	function fail(error) {
 		clear();
-		status.replaceChildren(errorBox(error, { summary: t(error.message?.startsWith("PM_SPEC_") ? "psm_invalid" : "psm_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t(error.message?.startsWith("PM_SPEC_") ? "psm_invalid" : "psm_unavailable"),
+			within: status
+		}));
 		if ([
 			401,
 			403,
@@ -23122,7 +23613,10 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		facts.hidden = true;
 		proofView.hidden = true;
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, { summary: t(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? "pmb_invalid" : "pmb_unavailable") })), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, {
+			summary: t(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? "pmb_invalid" : "pmb_unavailable"),
+			within: status
+		})), refreshButton));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -23814,7 +24308,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		detail.replaceChildren();
 		editors.hidden = true;
 		update();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	async function currentWorkspace() {
 		const value = await api("GET", endpoint);
@@ -24200,7 +24694,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					proof = candidate;
 					proofStatus.replaceChildren(text(value.plan.document?.title || candidate), text(value.plan.document_digest), note("pm_gov_direction_only"));
 				} catch (error) {
-					if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error));
+					if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error, { within: proofStatus }));
 				} finally {
 					update();
 				}
@@ -24295,7 +24789,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					try {
 						await currentWorkspace();
 						if (ticket !== sourceTicket || !editor.box.isConnected) return;
-						sourceStatus.replaceChildren(errorBox(error));
+						sourceStatus.replaceChildren(errorBox(error, { within: sourceStatus }));
 						update();
 					} catch (failure) {
 						if (ticket === sourceTicket && editor.box.isConnected) unavailable(failure);
@@ -24376,7 +24870,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					proof = value;
 					receipt.replaceChildren(note("pm_gov_adoption_historical"), id(operation.target.revision_id), h("a", { href: `#/op/${value}` }, t("pm_operation")));
 				} catch (error) {
-					if (editor.box.isConnected) receipt.replaceChildren(errorBox(error));
+					if (editor.box.isConnected) receipt.replaceChildren(errorBox(error, { within: receipt }));
 				} finally {
 					update();
 				}
@@ -24498,7 +24992,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				current = null;
 				fixed = null;
 				force = true;
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 			const next = JSON.stringify([
 				selectedId,
@@ -26025,7 +26519,10 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		facts.replaceChildren();
 		outcome.replaceChildren();
 		const mismatch = error.message?.startsWith("PM_SPEC_") || error.code === "PM_REQUIREMENT_QUALITY_INVALID";
-		status.replaceChildren(errorBox(error, error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t(mismatch ? "ph_invalid" : "ph_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			...error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t(mismatch ? "ph_invalid" : "ph_unavailable") },
+			within: status
+		}));
 		update();
 	}
 	function bindEditor(row) {
@@ -26988,7 +27485,10 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("pm_lifecycle_unknown") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pm_lifecycle_unknown"),
+			within: status
+		}));
 	}
 	async function refresh({ event = false } = {}) {
 		if (!event || !ready || !current) {
@@ -27379,7 +27879,10 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}
 		packageRow = null;
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("pmi_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pmi_unavailable"),
+			within: status
+		}));
 		refreshButton.disabled = false;
 	}
 	async function selectMapping(mid) {
@@ -27558,7 +28061,7 @@ function specSources({ h, t, api, alive, workspaceId, errorBox }) {
 			clear();
 			caps = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (ticket === refreshId) {
 				checking = false;
@@ -27598,7 +28101,7 @@ function specSources({ h, t, api, alive, workspaceId, errorBox }) {
 			clear();
 			caps = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			reading = false;
 			controls();
@@ -27667,7 +28170,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 		list.replaceChildren();
 		detail.replaceChildren();
 		more.hidden = true;
-		status.replaceChildren([t("pm_fa_mismatch"), t("pm_fa_read_failed")].includes(error.message) ? inlineError({ error: error.message }) : errorBox(error));
+		status.replaceChildren([t("pm_fa_mismatch"), t("pm_fa_read_failed")].includes(error.message) ? inlineError({ error: error.message }) : errorBox(error, { within: status }));
 		onAccessFailure(error);
 	}
 	function valid(row) {
@@ -27938,7 +28441,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		request?.dispose();
 		request = null;
 		body.replaceChildren();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 		onAccessFailure(error);
 	}
 	function navigation() {
@@ -28279,7 +28782,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		editor?.update();
 		editorFold.hidden = true;
 		if (retired) editor?.box.remove();
-		status.replaceChildren(errorBox(error), h("button", {
+		status.replaceChildren(errorBox(error, { within: status }), h("button", {
 			type: "button",
 			class: "ui-button secondary ui-sm",
 			onclick: () => void refresh()
@@ -28926,7 +29429,10 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		onSelection(null);
 		picker.replaceChildren();
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, { summary: t("wp_unavailable") })), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, {
+			summary: t("wp_unavailable"),
+			within: status
+		})), refreshButton));
 	}
 	async function select(id) {
 		if (busy || !idPattern.test(id)) return;
@@ -29169,7 +29675,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		choose.replaceChildren();
 		editors.hidden = true;
 		toolbar.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error)), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, { within: status })), refreshButton));
 	}
 	const rationale = () => input("pm_sprint_reason", {
 		multiline: true,
@@ -30032,7 +30538,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		} catch (err) {
 			if (valid(ticket)) {
 				clear();
-				status.replaceChildren(errorBox(err));
+				status.replaceChildren(errorBox(err, { within: status }));
 				if ([
 					401,
 					403,
@@ -30166,7 +30672,10 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		clear();
 		purge();
 		workChoice.replaceChildren();
-		status.replaceChildren(errorBox(err, { summary: t("pmq_unavailable") }));
+		status.replaceChildren(errorBox(err, {
+			summary: t("pmq_unavailable"),
+			within: status
+		}));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -31635,7 +32144,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		view.replaceChildren();
 		choose.replaceChildren();
 		editors.hidden = true;
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	function localForm(config) {
 		const expected = JSON.stringify({
@@ -33773,7 +34282,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						const doc = value.revision.document;
 						content.replaceChildren(h("p", {}, doc.rationale || t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
-						content.replaceChildren(errorBox(error));
+						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
 					}
 				});
@@ -33793,7 +34302,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 			}
 			return true;
 		} catch (error) {
-			if (history.isConnected) historyBody.append(errorBox(error));
+			if (history.isConnected) historyBody.append(errorBox(error, { within: historyBody }));
 			return false;
 		} finally {
 			historyBusy = false;
@@ -33911,7 +34420,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				view.replaceChildren();
 				historyBody.replaceChildren();
 				historyLoaded = false;
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				baselineForm.update();
 				forecast.update();
 				observe.update();
@@ -34464,7 +34973,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (n === ticket && !dead) {
 				thread = null;
 				body.replaceChildren();
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		} finally {
 			reading = false;
@@ -34490,7 +34999,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (n === ticket && !dead) {
 				thread = null;
 				request?.update();
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		} finally {
 			reading = false;
@@ -34772,7 +35281,10 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("pmrv_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pmrv_unavailable"),
+			within: status
+		}));
 		paintHeading();
 	}
 	function localForm(config) {
@@ -36024,7 +36536,10 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	}
 	function failure(error) {
 		withdraw();
-		status.append(errorBox(error, { summary: t("pmr_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("pmr_unavailable"),
+			within: status
+		}));
 	}
 	async function refresh() {
 		withdraw();
@@ -36487,7 +37002,10 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 	}
 	function failure(error) {
 		withdraw();
-		status.append(errorBox(error, { summary: t("pmc_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("pmc_unavailable"),
+			within: status
+		}));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? cursor : 0;
@@ -36787,7 +37305,10 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 	}
 	function failure(error) {
 		withdraw();
-		status.append(errorBox(error, { summary: t("pmo_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("pmo_unavailable"),
+			within: status
+		}));
 	}
 	async function refresh() {
 		withdraw();
@@ -37382,7 +37903,10 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("pmp_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pmp_unavailable"),
+			within: status
+		}));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? historyCursor : 0;
@@ -37631,7 +38155,10 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("prb_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("prb_unavailable"),
+			within: status
+		}));
 	}
 	const editorApi = async (...args) => {
 		const ticket = epoch;
@@ -38107,7 +38634,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 						body.replaceChildren(h("dl", { class: "pm-evidence-fields" }, ...brief.flatMap((key) => [h("dt", {}, t("pm_evidence_field_" + key)), h("dd", {}, ["state", "status"].includes(key) ? stateText(fact[key]) : String(fact[key]))])), h("details", { class: "pm-evidence-original" }, h("summary", {}, t("pm_evidence_original")), h("dl", { class: "pm-evidence-fields" }, ...Object.entries(fact).flatMap(([key, value]) => [h("dt", {}, key), h("dd", {}, value === null ? t("pm_evidence_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value))]))), h("small", { class: "muted" }, timeLabel(t, "pm_evidence_saved_at", { time: sourceTime(detail.evidence.captured_at) })));
 						fetched = true;
 					} catch (error) {
-						if (row.isConnected) body.replaceChildren(errorBox(error));
+						if (row.isConnected) body.replaceChildren(errorBox(error, { within: body }));
 					} finally {
 						busy = false;
 					}
@@ -38121,10 +38648,10 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		const binding = workBindings.find((row) => row.work_item_id === item.work_item_id);
 		const detail = h("div"), row = h("details", { "data-pm-work": item.work_item_id }, h("summary", {}, item.title, h("small", { class: "muted" }, " · " + t(binding ? "pm_evidence_associated" : "pm_evidence_unassociated"))), detail);
 		const planReadError = (error) => {
-			const failure = errorBox(error, { summary: t("pm_evidence_plan_unread") });
-			const diagnostics = failure.querySelector("[data-error-details]");
-			if (diagnostics) diagnostics.closest(".ui-disclosure")?.replaceWith(diagnostics);
-			return failure;
+			return errorBox(error, {
+				summary: t("pm_evidence_plan_unread"),
+				within: detail
+			});
 		};
 		let opened = false;
 		row.addEventListener("toggle", async () => {
@@ -38305,7 +38832,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			try {
 				await loadEvidence(item, holder);
 			} catch (error) {
-				if (holder.isConnected) holder.replaceChildren(errorBox(error));
+				if (holder.isConnected) holder.replaceChildren(errorBox(error, { within: holder }));
 			}
 		});
 		return row;
@@ -38362,7 +38889,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				status.replaceChildren(emptyState({
 					title: t("pm_evidence_unavailable"),
 					text: h("span", { class: "muted" }, t("pm_evidence_unavailable_help"))
-				}), errorBox(error));
+				}), errorBox(error, { within: status }));
 			}
 		}
 	}
@@ -38409,6 +38936,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				workBindings = [];
 				choose.replaceChildren(h("option", { value: "" }, t("pm_evidence_choose")));
 				projectField.hidden = true;
+				errorBox(error);
 				status.replaceChildren(emptyState({
 					title: t("pm_evidence_unavailable"),
 					text: h("span", { class: "muted" }, unavailableReason(error))
@@ -38466,7 +38994,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				}));
 				renderProof();
 			} catch (error) {
-				if (ticket === sequence) proof.replaceChildren(errorBox(error));
+				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
 			} finally {
 				if (ticket === sequence) {
 					reading = false;
@@ -38613,7 +39141,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	for (const [name, input] of Object.entries(fields)) {
@@ -38661,7 +39189,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retired(error)) status.replaceChildren(errorBox(error));
+				if (!retired(error)) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -38814,7 +39342,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 						persist();
 					} catch {}
 				}
-				if (!onError(error)) status.replaceChildren(errorBox(error, error.code === "VERSION_CONFLICT" ? { summary: t("pm_stale") } : {}));
+				if (!onError(error)) status.replaceChildren(errorBox(error, error.code === "VERSION_CONFLICT" ? {
+					summary: t("pm_stale"),
+					within: status
+				} : { within: status }));
 			}
 		} finally {
 			busy = false;
@@ -39783,6 +40314,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	const drawersHome = h("div", { hidden: true });
 	body.append(drawersHome);
 	let detailPanel = null;
+	let cancelReportFocus = null;
 	const toolPreference = viewState(namespace, workspaceId, "work-tools");
 	function openPanel(label, node, refreshStale = true) {
 		if (!node || !loaded) return;
@@ -39797,6 +40329,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			title: label,
 			overlay: Boolean(threadId) || workbench?.selected() === "discussions",
 			onClose: () => {
+				cancelReportFocus?.();
 				home.insertBefore(node, next?.parentNode === home ? next : null);
 				detailPanel = null;
 				if (!disposed) toolPreference.open = null;
@@ -39870,12 +40403,45 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	reportTools.append(reportState);
 	function focusReportControl(node, panel, read) {
 		if (!node) return;
+		cancelReportFocus?.();
 		queueMicrotask(() => {
+			if (disposed || detailPanel !== panel) return;
 			const initialFocus = document.activeElement;
-			Promise.resolve(read).then(() => {
-				if (detailPanel !== panel || !node.isConnected || node.closest("[hidden], [inert]") || node.matches(":disabled")) return;
-				if (document.activeElement === initialFocus) node.focus();
+			let readComplete = false, stopped = false;
+			const stop = () => {
+				if (stopped) return;
+				stopped = true;
+				observer.disconnect();
+				document.removeEventListener("focusin", check);
+				if (cancelReportFocus === stop) cancelReportFocus = null;
+			};
+			const check = () => {
+				if (stopped) return;
+				if (disposed || detailPanel !== panel || !node.isConnected || document.activeElement !== initialFocus) {
+					stop();
+					return;
+				}
+				if (!readComplete || node.closest("[hidden], [inert]") || node.matches(":disabled") || !node.getClientRects().length) return;
+				stop();
+				node.focus();
+			};
+			const observer = new MutationObserver(check);
+			observer.observe(reportTools, {
+				attributes: true,
+				childList: true,
+				subtree: true,
+				attributeFilter: [
+					"disabled",
+					"hidden",
+					"inert"
+				]
 			});
+			document.addEventListener("focusin", check);
+			cancelReportFocus = stop;
+			Promise.resolve(read).then(() => {
+				readComplete = true;
+				check();
+			}, stop);
 		});
 	}
 	function openReport(task) {
@@ -41009,7 +41575,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				} catch (error) {
 					if (!item.isConnected || retired(error)) return;
 					if ([403, 404].includes(error.status)) item.remove();
-					else detail.replaceChildren(errorBox(error));
+					else detail.replaceChildren(errorBox(error, { within: detail }));
 				}
 			})();
 			let fetched = false, pending = false;
@@ -41032,7 +41598,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
-					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error));
+					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
 				} finally {
 					pending = false;
 				}
@@ -41057,7 +41623,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						renderPackages(next, true);
 					} catch (error) {
 						if (!retired(error)) {
-							status.replaceChildren(errorBox(error));
+							status.replaceChildren(errorBox(error, { within: status }));
 							more.disabled = false;
 						}
 					}
@@ -41094,7 +41660,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				proposalReview?.withdraw();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error, { summary: t("pm_stale") }));
+				status.replaceChildren(errorBox(error, {
+					summary: t("pm_stale"),
+					within: status
+				}));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -41455,7 +42024,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error, { summary: t("pm_stale") }));
+				status.replaceChildren(errorBox(error, {
+					summary: t("pm_stale"),
+					within: status
+				}));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -41551,7 +42123,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			discussionTools?.close();
 			publishContext();
 			updateForms();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
 		}
 	}
@@ -41626,7 +42198,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				updateForms();
 			}
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
 		}
 	}
@@ -42152,7 +42724,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	};
 	let catalogRows = null;
 	const showReadError = (error) => {
-		const detail = error ? errorBox(error) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
+		const detail = error ? errorBox(error, { insideDetails: true }) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
 		const label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
 		status.replaceChildren(h("div", {
 			class: "workspace-read-error",
@@ -42552,7 +43124,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				try {
 					persist();
 				} catch (error) {
-					message.replaceChildren(errorBox(error));
+					message.replaceChildren(errorBox(error, { within: message }));
 				}
 			}
 			unsaved.hidden = false;
@@ -42895,7 +43467,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function showError(error, options) {
 		if (alive()) {
-			message.replaceChildren(errorBox(error, options));
+			message.replaceChildren(errorBox(error, {
+				...options,
+				within: message
+			}));
 			update();
 		}
 	}
@@ -43935,7 +44510,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	const tags = h("div", { class: "actions session-label-tags" }), message = h("div", { role: "status" }), result = h("div"), restriction = h("p", { class: "muted" });
 	const error = (e) => {
 		if (live()) {
-			message.replaceChildren(errorBox(e));
+			message.replaceChildren(errorBox(e, { within: message }));
 			update();
 		}
 	};
@@ -45822,7 +46397,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			try {
 				show(await (controller.snapshot().intent ? controller.check() : controller.create(document)));
 			} catch (error) {
-				if (alive()) status.replaceChildren(errorBox(error));
+				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				busy = false;
 				if (alive()) update();
@@ -45845,7 +46420,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				outcome.replaceChildren();
 				read();
 			} catch (error) {
-				if (alive()) status.replaceChildren(errorBox(error));
+				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("repair_review_new"));
@@ -45909,7 +46484,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				links(doc.existing);
 			}
 		} catch (error) {
-			if (alive() && mine === serial) status.replaceChildren(errorBox(error));
+			if (alive() && mine === serial) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (alive() && mine === serial) update();
 		}
@@ -45934,7 +46509,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			update();
 			if (controller.snapshot().intent?.operation_id) show(await controller.check());
 		} catch (error) {
-			if (alive()) status.replaceChildren(errorBox(error));
+			if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (alive()) update();
 		}
@@ -45989,7 +46564,7 @@ function repairWorkItemPanel({ h, t, api, guard, projectId, workItemId, originOp
 					box.replaceChildren();
 					box.hidden = true;
 				} else {
-					box.replaceChildren(errorBox(error));
+					box.replaceChildren(errorBox(error, { within: box }));
 					box.hidden = false;
 				}
 			}
@@ -46151,7 +46726,7 @@ function instructionReceiptPanel({ h, t, when, api, guard, host, sessionId, erro
 			status.replaceChildren();
 			more.hidden = !value.can_load_more;
 		} catch (error) {
-			if (alive()) status.replaceChildren(h("p", { class: "muted" }, t("instruction_stale")), errorBox(error));
+			if (alive()) status.replaceChildren(h("p", { class: "muted" }, t("instruction_stale")), errorBox(error, { within: status }));
 		} finally {
 			if (alive()) reload.disabled = more.disabled = false;
 		}
@@ -46239,7 +46814,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	const field = (name, label, multiline = false, max = 2e4) => {
@@ -46348,7 +46923,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 					saved.intent.initialAdmissionRefused = true;
 					persist();
 				}
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			} catch {}
 		} finally {
 			busy = false;
@@ -46382,7 +46957,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				status.replaceChildren();
 				update();
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	});
@@ -48000,7 +48575,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const validInput = (input) => input.host && input.session_id.length >= 6 && input.session_id.length <= 256 && !/[\x00-\x1f\x7f-\x9f/\\]/.test(input.session_id) && input.relative_path && new TextEncoder().encode(input.relative_path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(input.relative_path) && input.relative_path.split("/").every((part) => part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
 	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error));
+		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
 	};
 	const preview = h("button", {
 		class: "secondary",
@@ -48310,7 +48885,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	const message = h("div", { role: "status" }), result = h("div", { "data-task-result": "" }), restriction = h("p", { class: "muted" });
 	const showError = (error) => {
 		if (live()) {
-			message.replaceChildren(errorBox(error));
+			message.replaceChildren(errorBox(error, { within: message }));
 			update();
 		}
 	};
@@ -48868,7 +49443,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 							intent.refused = error.code;
 							persist();
 						}
-						message.replaceChildren(errorBox(error));
+						message.replaceChildren(errorBox(error, { within: message }));
 					}
 				} finally {
 					busy = false;
@@ -48937,7 +49512,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 	function showError(error) {
 		if (current()) {
 			readFailed = true;
-			message.replaceChildren(errorBox(error));
+			message.replaceChildren(errorBox(error, { within: message }));
 			update();
 		}
 	}
@@ -49085,7 +49660,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 				status.replaceChildren();
 				renderPreview();
 			} catch (e) {
-				if (current()) status.replaceChildren(errorBox(e));
+				if (current()) status.replaceChildren(errorBox(e, { within: status }));
 			} finally {
 				busy = false;
 				if (current()) update();
@@ -49139,7 +49714,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 			try {
 				persist(true);
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				update();
 				return;
 			}
@@ -49157,7 +49732,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 							intent.refused = e.code;
 							persist();
 						}
-						status.replaceChildren(errorBox(e));
+						status.replaceChildren(errorBox(e, { within: status }));
 					}
 				} finally {
 					busy = false;
@@ -49301,7 +49876,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 		} catch (e) {
 			if (current()) {
 				readFailed = true;
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(errorBox(e, { within: status }));
 				update();
 			}
 			throw e;
@@ -49435,7 +50010,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	};
 	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e));
+		if (current()) status.replaceChildren(errorBox(e, { within: status }));
 	};
 	function renderWorkspaces() {
 		workspace.replaceChildren(h("option", { value: "" }, t("start_choose_workspace")), ...workspaces.map((w) => h("option", { value: w.workspace_id }, `${w.name || w.workspace_id} · ${w.workspace_id}`)));
@@ -50075,7 +50650,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		maximum.value = saved.max_items;
 	}
 	const showError = (error) => {
-		if (current()) status.replaceChildren(errorBox(error));
+		if (current()) status.replaceChildren(errorBox(error, { within: status }));
 	};
 	function renderSelection() {
 		const id = (row) => sessionMode(mode) ? row.session_id : row.workspace_id;
@@ -50651,7 +51226,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	}
 	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e));
+		if (current()) status.replaceChildren(errorBox(e, { within: status }));
 	};
 	const selected = () => ({
 		target: saved.target,
@@ -50969,7 +51544,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		} catch (e) {
 			if (current()) {
 				projectFailed = true;
-				projectStatus.replaceChildren(errorBox(e));
+				projectStatus.replaceChildren(errorBox(e, { within: projectStatus }));
 				update();
 			}
 			throw e;
@@ -51411,7 +51986,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		}
 	};
 	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error));
+		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
 	};
 	const supported = () => caps()?.artifacts?.capture?.managed_single_file === true;
 	const scope = (name) => caps()?.scopes?.includes(name);
@@ -51725,7 +52300,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	const moreArtifacts = h("button", {
 		class: "secondary",
 		hidden: true,
-		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e)))
+		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice })))
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
 	container.append(pageHeader({ title: t("ar_title") }), disclosure({
@@ -51915,7 +52490,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		try {
 			await catalogReading;
 		} catch (error) {
-			if (currentView()) catalogNotice.replaceChildren(errorBox(error));
+			if (currentView()) catalogNotice.replaceChildren(errorBox(error, { within: catalogNotice }));
 			throw error;
 		} finally {
 			catalogReading = null;
@@ -51975,7 +52550,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	if (!saved.capture) initial.push(loadSource());
 	if (saved.capture?.operation_id || saved.accept?.operation_id || context.kind === "artifact") initial.push(refresh());
 	initial.push(loadCatalog().catch((error) => {
-		if (currentView()) catalogNotice.replaceChildren(errorBox(error));
+		if (currentView()) catalogNotice.replaceChildren(errorBox(error, { within: catalogNotice }));
 	}));
 	const results = await Promise.allSettled(initial);
 	for (const result of results) if (result.status === "rejected") {
@@ -52325,7 +52900,104 @@ var state = {
 	connectionNotice: null,
 	refreshCycle: null
 };
+var recentErrors = errorRing();
+var diagnosticSessions = new Map();
+var diagnosticSessionsRead = false;
+var diagnosticRevision = 0;
+var diagnosticsPreview = null;
+var desktopBuild = null;
+function withdrawDiagnostics() {
+	diagnosticRevision++;
+	diagnosticSessions.clear();
+	diagnosticSessionsRead = false;
+	diagnosticsPreview?.withdraw();
+}
+function diagnosticsClient(caps = state.caps) {
+	const platform = navigator.platform || navigator.userAgent;
+	return {
+		caps,
+		appBuild: desktopBuild,
+		desktop: nativeDesktop,
+		os: /win/i.test(platform) ? "windows" : /mac/i.test(platform) ? "macos" : /linux/i.test(platform) ? "linux" : "unknown",
+		locale,
+		width: innerWidth
+	};
+}
+async function openDiagnostics() {
+	if (diagnosticsPreview) return;
+	const epoch = state.epoch;
+	diagnosticsPreview = diagnosticsDialog({
+		h,
+		t,
+		onClose: () => {
+			diagnosticsPreview = null;
+		},
+		load: async () => {
+			if (nativeDesktop && !desktopBuild) try {
+				desktopBuild = (await nativeStatus()).app_build;
+			} catch {}
+			let caps = null;
+			try {
+				caps = await api("GET", "/capabilities");
+			} catch {}
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (!caps?.scopes?.includes("observe")) withdrawDiagnostics();
+			const revision = diagnosticRevision;
+			const read = async (path, scope) => {
+				if (!caps?.scopes?.includes(scope)) return null;
+				try {
+					const data = await api("GET", path);
+					return revision === diagnosticRevision ? data : null;
+				} catch {
+					return null;
+				}
+			};
+			let [hosts, operations, setup] = await Promise.all([
+				read("/hosts", "observe"),
+				read("/operations?limit=50", "observe"),
+				caps?.managed_installation ? read("/managed/setup", "manage") : null
+			]);
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (revision !== diagnosticRevision) hosts = operations = setup = null;
+			return buildDiagnostics({
+				...diagnosticsClient(caps),
+				exportedAt: new Date().toISOString(),
+				hosts: hosts?.hosts,
+				operations: operations?.operations,
+				setup,
+				sessions: hosts && caps?.scopes?.includes("observe") && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
+				recentErrors: recentErrors.entries(),
+				sources: {
+					capabilities: caps ? "available" : "not_available",
+					hosts: hosts ? "available" : "not_available",
+					operations: operations ? "available" : "not_available",
+					managed_setup: setup ? "available" : "not_available"
+				}
+			});
+		},
+		save: async (content, filename) => {
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (nativeDesktop) return nativeDiagnosticsSave({
+				content,
+				filename,
+				locale
+			});
+			const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+			const link = h("a", {
+				href: url,
+				download: filename
+			});
+			document.body.append(link);
+			link.click();
+			link.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1e3);
+			return true;
+		}
+	});
+}
 async function activate(caps, endpoint = location.origin, reset = false) {
+	withdrawDiagnostics();
+	recentErrors.clear();
 	state.epoch++;
 	state.observations = new Map();
 	state.connectionError = null;
@@ -52365,6 +53037,8 @@ function saveCursor() {
 }
 function disconnect() {
 	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
+	withdrawDiagnostics();
+	recentErrors.clear();
 	state.epoch++;
 	clearToken();
 	state.token = null;
@@ -52404,7 +53078,7 @@ function h(tag, attrs = {}, ...children) {
 		try {
 			await openExternal(attrs.href);
 		} catch (error) {
-			document.getElementById("main").prepend(errorBox(error));
+			document.getElementById("main").prepend(errorBox(error, { within: document.getElementById("main") }));
 		}
 	});
 	return el;
@@ -52484,6 +53158,59 @@ function dropKey(scope, namespace) {
 	} catch {}
 }
 async function api(method, path, body, key, collectReceipt) {
+	const revision = diagnosticRevision, epoch = state.epoch;
+	try {
+		const data = await apiRequest(method, path, body, key, collectReceipt);
+		if (epoch === state.epoch && revision === diagnosticRevision && method === "GET" && /^\/sessions(?:[/?]|$)/.test(path)) {
+			const previous = new Map(diagnosticSessions);
+			if (Array.isArray(data.sessions)) {
+				if (!new URLSearchParams(path.split("?")[1] || "").has("cursor")) diagnosticSessions.clear();
+				diagnosticSessionsRead = true;
+			} else if (data.session) diagnosticSessionsRead = true;
+			for (const session of data.sessions || (data.session ? [data.session] : [])) {
+				const facts = sessionFacts(session), id = `${session.host}/${session.session_id}`;
+				const history = facts.history_reasons ?? previous.get(id)?.reading?.incomplete_reasons ?? null;
+				diagnosticSessions.set(id, {
+					loaded: facts.loaded,
+					streaming: facts.streaming,
+					stale: facts.stale,
+					pending: facts.pending === true ? {} : facts.pending === false ? null : void 0,
+					reading: { incomplete_reasons: history }
+				});
+			}
+			const messages = path.match(/^\/sessions\/([^/?]+)\/([^/?]+)\/messages(?:[/?]|$)/);
+			if (messages) {
+				const id = messages.slice(1).map(decodeURIComponent).join("/");
+				const history = sessionFacts({ reading: data.reading }).history_reasons;
+				diagnosticSessions.set(id, {
+					...diagnosticSessions.get(id),
+					reading: { incomplete_reasons: history }
+				});
+				diagnosticSessionsRead = true;
+			}
+		}
+		return data;
+	} catch (error) {
+		if (epoch === state.epoch) {
+			recentErrors.record({
+				at: new Date().toISOString(),
+				method,
+				path,
+				status: error.status,
+				code: error.code,
+				admissionRefused: error.admissionRefused,
+				operation: error.operation
+			});
+			if ([
+				401,
+				403,
+				404
+			].includes(error.status)) withdrawDiagnostics();
+		}
+		throw error;
+	}
+}
+async function apiRequest(method, path, body, key, collectReceipt) {
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
 	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 	const epoch = state.epoch;
@@ -52500,21 +53227,27 @@ async function api(method, path, body, key, collectReceipt) {
 		const error = new ApiError(status, data.error?.code, data.error?.message);
 		error.admissionRefused = data.error?.admission_refused === true;
 		error.reason = data.error?.reason;
+		error.operation = data.operation ?? data.error?.operation;
 		throw error;
 	}
 	return data;
 }
-function errorBox(e, { summary } = {}) {
+function errorBox(e, { summary, within, insideDetails = false } = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
 	const presentation = errorPresentation(e, t, { summary });
-	const diagnostics = [presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean);
+	const body = h("div", { "data-error-details": "" }, ...[presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean), button({
+		variant: "ghost",
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}));
 	return h("div", { "data-api-error": "" }, h("p", {
 		class: "error",
 		"data-error-summary": ""
-	}, presentation.summary), diagnostics.length ? disclosure({
+	}, presentation.summary), insideDetails || within?.closest?.("details") ? body : disclosure({
 		label: t("global_details"),
-		body: h("div", { "data-error-details": "" }, ...diagnostics)
-	}) : null);
+		body
+	}));
 }
 async function submit(action, target, params, preconditions, scope) {
 	const connection = {
@@ -52894,11 +53627,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		fill(status);
 		const limit = Math.min(state.caps?.artifacts?.limits?.max_file_bytes || 16777216, nativeDesktop ? 16777216 : Number.MAX_SAFE_INTEGER);
 		if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-			fill(status, errorBox(new Error(t("attachment_unsupported_image"))));
+			fill(status, errorBox(new Error(t("attachment_unsupported_image")), { within: status }));
 			return;
 		}
 		if (file.size > limit) {
-			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`)));
+			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`), { within: status }));
 			return;
 		}
 		let name = file.name;
@@ -52943,7 +53676,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		if (!imageCandidates.length) return;
 		e.preventDefault();
 		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused"))));
+			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
 			return;
 		}
 		for (const file of imageCandidates) handleIncomingFile(file);
@@ -52969,7 +53702,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		if (nativeFiles || !e.dataTransfer?.files?.length) return;
 		e.preventDefault();
 		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused"))));
+			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
 			return;
 		}
 		for (const file of e.dataTransfer.files) handleIncomingFile(file);
@@ -53009,7 +53742,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				persist();
 				render();
 			} catch (e) {
-				if (connection.epoch === state.epoch) fill(status, errorBox(e));
+				if (connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 			} finally {
 				pendingSelections--;
 				changed();
@@ -53025,7 +53758,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			try {
 				await loadCatalog(catalogCursor);
 			} catch (e) {
-				if (box.isConnected) fill(status, errorBox(e));
+				if (box.isConnected) fill(status, errorBox(e, { within: status }));
 			} finally {
 				more.disabled = false;
 			}
@@ -53135,7 +53868,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			if (ev.resource_id === saved.submission?.operation_id || saved.attachments.some((a) => a.operation_id === ev.resource_id)) return refresh();
 		});
 		queueMicrotask(() => settleRefreshes([loadCatalog(), refresh()]).catch((e) => {
-			if (box.isConnected && connection.epoch === state.epoch) fill(status, errorBox(e));
+			if (box.isConnected && connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 		}));
 	}
 	const bindFields = (fields) => {
@@ -53553,7 +54286,7 @@ async function viewSessions(main) {
 		assertView(connection);
 		for (const x of hosts) hostSel.append(h("option", { value: x.host }, x.host));
 	} catch (e) {
-		status.replaceChildren(errorBox(e));
+		status.replaceChildren(errorBox(e, { within: status }));
 		return;
 	}
 	hostSel.value = q.get("host") || "";
@@ -53715,7 +54448,7 @@ async function viewSessions(main) {
 			const current = [...list.querySelectorAll("[data-resource-id]")].find((node) => node.dataset.resourceId === anchorID);
 			if (mode === "refresh" && current && Math.abs(scrollY - before) < 1) scrollBy(0, current.getBoundingClientRect().top - offset);
 		} catch (e) {
-			status.replaceChildren(errorBox(e));
+			status.replaceChildren(errorBox(e, { within: status }));
 		} finally {
 			more.disabled = false;
 		}
@@ -53913,7 +54646,7 @@ function observationPanels(type, id, path, plain = false) {
 				].flat());
 				status.replaceChildren();
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				busy = false;
 				refresh.disabled = more.disabled = false;
@@ -54013,7 +54746,7 @@ async function viewTask(main, id) {
 					404,
 					410
 				].includes(error?.status)) place(head, "replaceChildren");
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				clearTimeout(retry);
 				retry = setTimeout(() => load().catch(() => {}), 3e3);
 			}
@@ -54078,7 +54811,7 @@ async function viewObservedResource(main, type, id) {
 				404,
 				410
 			].includes(error?.status)) place(head, "replaceChildren");
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	await load();
@@ -54124,7 +54857,7 @@ async function viewHostDiscovery(main, host) {
 			assertView(connection);
 			head.replaceChildren(discoveryEvidence(data.scopes));
 		} catch (error) {
-			head.append(errorBox(error));
+			head.append(errorBox(error, { within: head }));
 		}
 	};
 	await load();
@@ -54155,19 +54888,25 @@ function sessionErrorLine(e) {
 	if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
 	return t("session_err_unknown");
 }
-function sessionErrorDetails(e) {
+function sessionErrorDetails(e, { within, insideDetails = false } = {}) {
 	const code = typeof e?.code === "string" ? e.code : "";
 	const detail = [
 		code,
 		e?.status ? `HTTP ${e.status}` : "",
 		e?.message && e.message !== code ? e.message : ""
 	].filter(Boolean).join(" · ");
-	return detail ? disclosure({
+	const body = h("div", {}, detail ? h("p", { class: "muted" }, h("code", {}, detail)) : null, button({
+		variant: "ghost",
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}));
+	return insideDetails || within?.closest?.("details") ? body : disclosure({
 		label: t("session_error_details"),
-		body: h("p", { class: "muted" }, h("code", {}, detail))
-	}) : null;
+		body
+	});
 }
-function sessionErrorBox(e, action = null) {
+function sessionErrorBox(e, action = null, options = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
 	return h("div", {
 		class: "session-error",
@@ -54177,7 +54916,7 @@ function sessionErrorBox(e, action = null) {
 		type: "button",
 		class: "session-error-action",
 		onclick: action.run
-	}, action.label) : null), sessionErrorDetails(e));
+	}, action.label) : null), sessionErrorDetails(e, options));
 }
 function sessionPullHref(target) {
 	try {
@@ -54356,7 +55095,7 @@ async function viewSession(main, host, sid, context = null) {
 					mobileLayout?.updateDraft();
 				}
 			} catch (e) {
-				status.replaceChildren(sessionErrorBox(e, sendRecovery(e)));
+				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), { within: status }));
 			} finally {
 				sending = false;
 				send.disabled = !allowed("session.send");
@@ -54382,7 +55121,7 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => stop.click()
-				}));
+				}, { within: status }));
 			}
 		}
 	});
@@ -54816,7 +55555,7 @@ async function viewSession(main, host, sid, context = null) {
 				} : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => answer(params)
-				}));
+				}, { within: status }));
 			}
 		};
 		const actions = h("div", { class: "actions session-asking-actions" });
@@ -55183,7 +55922,7 @@ async function viewSession(main, host, sid, context = null) {
 		withdrawnSlot.replaceChildren(h("div", { "data-session-withdrawn": kind }, emptyState({
 			icon: "circle-alert",
 			title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"),
-			action: h("div", {}, backLink(), sessionErrorDetails(error))
+			action: h("div", {}, backLink(), sessionErrorDetails(error, { within: withdrawnSlot }))
 		})));
 	};
 	const reinstate = () => {
@@ -55226,7 +55965,7 @@ async function viewSession(main, host, sid, context = null) {
 				readError = sessionErrorBox(error, {
 					label: t("ui_retry"),
 					run: () => refresh().catch(() => {})
-				});
+				}, { within: status });
 				readError.error = error;
 				if (!withdrawn) status.replaceChildren(readError);
 				scheduleRetry();
@@ -55323,7 +56062,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					out.replaceChildren(sessionErrorBox(e, {
 						label: t("ui_retry"),
 						run: () => go.click()
-					}));
+					}, { within: out }));
 				}
 				go.disabled = false;
 			}
@@ -55353,7 +56092,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					fill(out, sessionErrorBox(e, {
 						label: t("ui_retry"),
 						run: () => load().catch(() => {})
-					}));
+					}, { within: out }));
 				}
 			}
 		}, t("continue_from_checkpoint"));
@@ -55372,7 +56111,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {
 				label: t("ui_retry"),
 				run: () => load().catch(() => {})
-			}));
+			}, { within: list }));
 		}
 	};
 	const pick = h("select", {
@@ -55406,7 +56145,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			status.replaceChildren(sessionErrorBox(error, {
 				label: t("ui_retry"),
 				run: () => loadPreview().catch(() => {})
-			}));
+			}, { within: status }));
 		}
 	};
 	const create = h("button", {
@@ -55435,7 +56174,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 				status.replaceChildren(sessionErrorBox(e, {
 					label: t("ui_retry"),
 					run: () => load().catch(() => {})
-				}));
+				}, { within: status }));
 			}
 			create.disabled = !can || previewFailed;
 		}
@@ -55621,7 +56360,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 					const receipt = op.result?.merge || op.result || op.external_refs?.merge_receipt;
 					fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), receipt?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: receipt.other_commits_count })) : null);
 				} catch (e) {
-					fill(status, errorBox(e));
+					fill(status, errorBox(e, { within: status }));
 				}
 			};
 			const blocked = pr.state !== "open" || pr.draft || pr.merged || pv.blocking.length > 0 || scopeChanged;
@@ -55656,7 +56395,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 								}
 							}, `merge_deploy.${pv.preview_id}.${r.name}`);
 						} catch (e) {
-							fill(status, errorBox(e));
+							fill(status, errorBox(e, { within: status }));
 						}
 					}
 				}, t("merge_and_deploy_to", { env: r.environment })));
@@ -55669,7 +56408,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 							const op = await submit("deployment.start", { recipe: r.name }, { source_sha: pr.merge_commit_sha }, deploymentPreview.preconditions, `deploy.${r.name}.${pr.merge_commit_sha}`);
 							fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 						} catch (e) {
-							fill(status, errorBox(e));
+							fill(status, errorBox(e, { within: status }));
 						}
 					}
 				}, t("deploy_to", { env: r.environment })));
@@ -55687,7 +56426,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 				rel: "noopener"
 			}, `#${pr.pull_number} ${pr.title || ""}`)), h("dl", { class: "kv" }, h("dt", {}, t("head")), h("dd", {}, h("code", {}, `${pr.head_ref} @ ${pr.head_sha}`)), h("dt", {}, t("base")), h("dd", {}, h("code", {}, `${pr.base_ref} @ ${pr.base_sha}`)), h("dt", {}, t("mergeable")), h("dd", {}, `${pr.state}${pr.draft ? " · draft" : ""} · ${pr.mergeable_state || "?"}`), h("dt", {}, t("checks")), h("dd", {}, t("checks_summary", pr.checks)), pr.merged ? [h("dt", {}, t("merged_sha")), h("dd", {}, h("code", {}, pr.merge_commit_sha))] : null), metadataDrawer(pr, load), scopeChanged ? h("p", { class: "note warn" }, t("merge_scope_reload")) : null, h("h2", {}, t("merge_scope")), h("label", {}, t("merge_method"), " ", method), h("p", { class: "muted" }, t("merge_preview_fixed"), " ", h("code", {}, pv.preview_id)), commitList, affected.length ? h("div", {}, ...affected) : h("p", { class: "muted" }, t("scope_single_pr")), ...pv.blocking.map((b) => h("p", { class: "note warn" }, h("code", {}, b.code), " · ", b.message)), ...pv.warnings.map((w) => h("p", { class: "muted" }, w)), h("div", { class: "actions" }, ...buttons), status, flash instanceof Node ? flash : null, pr.integration?.allowed ? integrationPanel(pr, load, source) : null);
 		} catch (e) {
-			if (!holdCard()) fill(card, errorBox(e));
+			if (!holdCard()) fill(card, errorBox(e, { within: card }));
 		}
 	};
 	reload = async (fromEvent = true) => {
@@ -55764,7 +56503,7 @@ function deploymentReceipt(dep) {
 			];
 			fill(body, h("dl", { class: "kv" }, ...values.filter(([, v]) => v !== null && v !== void 0 && v !== "").flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])), op.status_reason ? h("p", {}, op.status_reason) : null, ...(op.steps || []).map((s) => h("div", { class: "row" }, h("code", {}, s.name), h("span", {}, operationStatusLabel(s.status)))));
 		} catch (e) {
-			fill(body, errorBox(e));
+			fill(body, errorBox(e, { within: body }));
 			read = false;
 		}
 	});
@@ -55824,7 +56563,7 @@ function deploymentIntent(dep, kind, reload) {
 					fill(out, h("p", {}, opStatus(op), " · ", h("a", { href: `#/op/${op.operation_id}` }, t("dep_open_operation"))), deploymentReceipt({ operation_id: op.operation_id }));
 				}
 			} catch (e) {
-				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e)]));
+				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e, { insideDetails: true })]));
 				if ([
 					"DEPLOY_PREVIEW_REQUIRED",
 					"ENVIRONMENT_CHANGED",
@@ -55849,7 +56588,7 @@ function deploymentIntent(dep, kind, reload) {
 			fill(previewBox, deploymentPreviewSummary(preview), preview.readiness?.ready ? null : h("p", { class: "note warn" }, t("dep_missing_verification")));
 			confirm.disabled = busy || accepted || !preview.readiness?.ready;
 		} catch (e) {
-			fill(previewBox, errorBox(e));
+			fill(previewBox, errorBox(e, { within: previewBox }));
 		}
 	}
 	fill(d.box, h("h3", {}, t(kind === "rollback" ? "dep_rollback_review" : "dep_retry_review")), deploymentIdentity(dep.identity), h("p", {}, `${dep.repository} · ${dep.environment}`), kind === "rollback" ? deploymentLimits(dep.rollback?.not_undone) : h("p", { class: "muted" }, t("dep_retry_only")), previewBox, out, h("div", { class: "actions" }, confirm, h("button", {
@@ -55986,7 +56725,7 @@ function environmentCard(group) {
 				fill(card, h("div", { class: "deployment-card-heading" }, h("h2", {}, group[0].environment), needs ? chip(t("dep_attention"), "warn") : null), h("p", { class: "muted" }, group[0].repository, " · ", t("dep_generation", { generation: env.desired_generation })), needs ? h("p", { class: "note warn" }, t(env.attention === "ENVIRONMENT_VERSION_DRIFT" ? "dep_drift" : "dep_attention_help")) : null, h("div", { class: "deployment-versions" }, h("div", {}, h("h3", {}, t("dep_desired")), deploymentRecord(env.desired, env, load, true)), h("div", {}, h("h3", {}, t("dep_observed")), deploymentIdentity(observed), h("p", { class: "muted" }, timeLabel(t, "dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })), env.current?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(env.current.evidence.runtime)) : null)), h("div", { class: "deployment-last-verified" }, h("h3", {}, t("dep_last_verified")), deploymentIdentity(verified?.identity), h("p", { class: "muted" }, timeLabel(t, "dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })), verified?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(verified.evidence.runtime)) : null, verified ? deploymentReceipt(verified) : null), h("h3", {}, t("dep_history")), h("div", { "data-testid": "deployment-history" }, ...history.items.length ? history.items.map((dep) => deploymentRecord(dep, env, load)) : [h("p", { class: "muted" }, t("dep_no_history"))]), !history.items.length && group.every((r) => !r.rollback?.supported) ? h("p", { class: "muted" }, t("dep_ROLLBACK_UNSUPPORTED")) : null, h("div", { class: "actions deployment-pagination" }, previous, h("span", { class: "muted" }, t("dep_page", { page: page + 1 })), more));
 			} catch (e) {
 				if (["CONNECTION_CHANGED", "VIEW_CHANGED"].includes(e.code)) return;
-				const failure = errorBox(e);
+				const failure = errorBox(e, { within: card });
 				if (!holdRender(fromEvent, opens) && !editing) fill(card, failure);
 			}
 		})();
@@ -56043,7 +56782,7 @@ function metadataDrawer(pr, reload) {
 				fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), op.error_code ? chip(op.error_code, "bad") : null, contents, h("p", { class: "muted" }, t("metadata_result_help")));
 				idleReload = () => reload();
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 				save.disabled = false;
 			}
 		}
@@ -56162,7 +56901,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 			doc = op.result;
 			renderPreview();
 		} catch (e) {
-			if (mine === generation) previewBox.replaceChildren(errorBox(e));
+			if (mine === generation) previewBox.replaceChildren(errorBox(e, { within: previewBox }));
 		}
 	};
 	const changed = debounce(() => {
@@ -56199,7 +56938,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 					};
 					follow((await api("POST", "/operations?wait=3", req, "integrate." + doc.preview_id)).operation);
 				} catch (e) {
-					status.replaceChildren(errorBox(e));
+					status.replaceChildren(errorBox(e, { within: status }));
 					go.disabled = false;
 				}
 			}
@@ -56228,7 +56967,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 					try {
 						follow((await api("POST", `/operations/${op.operation_id}/resume`, {})).operation);
 					} catch (e) {
-						status.append(errorBox(e));
+						status.append(errorBox(e, { within: status }));
 					}
 				},
 				cancel: async () => {
@@ -56292,7 +57031,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 				}
 			}, t("add_branch"))));
 		} catch (e) {
-			pickList.replaceChildren(errorBox(e));
+			pickList.replaceChildren(errorBox(e, { within: pickList }));
 		}
 	})();
 	box.append(pickList, h("h3", {}, t("selected_in_order")), order, previewBox, status);
@@ -56317,7 +57056,7 @@ function repairControl(op) {
 					const o = await submit("integration.handoff", { operation_id: op.operation_id }, { agent: agent.value }, {}, `handoff.${op.operation_id}`);
 					out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ", h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
 				} catch (e) {
-					out.append(errorBox(e));
+					out.append(errorBox(e, { within: out }));
 				}
 				go.disabled = false;
 			}
@@ -56466,7 +57205,7 @@ async function viewOperation(main, id) {
 						const o = await submit("deployment.start", { recipe: op.target.recipe }, { source_sha: refs.merged_sha }, preview.preconditions, `deploy.${op.target.recipe}.${refs.merged_sha}`);
 						location.hash = `#/op/${o.operation_id}`;
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("retry_deploy")) : null;
@@ -56479,7 +57218,7 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/resume`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
@@ -56498,7 +57237,7 @@ async function viewOperation(main, id) {
 						await submit("checkpoint.continue.revalidate", { operation_id: id }, { observed_source_head_sha: seen }, { expected_input_manifest_digest: refs.input_manifest_digest }, `revalidate.${id}.${seen}`);
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("confirm_source")) : null;
@@ -56519,7 +57258,7 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/cancel`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("cancel")) : null;
@@ -56537,7 +57276,7 @@ async function viewOperation(main, id) {
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
 		} catch (e) {
-			fill(panel, errorBox(e));
+			fill(panel, errorBox(e, { within: panel }));
 		}
 	};
 	await render();
@@ -56672,7 +57411,15 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 			onClick: () => route()
 		})]
 	}));
-	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("a", { href: setupGuide() }, t("global_setup_guide"))));
+	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("p", { "data-build-line": "" }, buildLine(clientIdentity(diagnosticsClient()), t)), h("div", { class: "actions" }, button({
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
+	if (nativeDesktop) nativeStatus().then((status) => {
+		desktopBuild = status.app_build;
+		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
+	}).catch(() => {});
 	main.append(frame.root);
 	return frame;
 }
@@ -56704,7 +57451,7 @@ function viewBrowserSignedOut(main) {
 	const info = h("div", { class: "global-connect-status" });
 	const showConnectError = (error) => {
 		info.setAttribute("role", "alert");
-		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error));
+		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
 	};
 	if (state.connectionError) showConnectError(state.connectionError);
 	const root = firstRunCard({
@@ -56811,7 +57558,7 @@ async function viewManagedSettings(main) {
 					guard();
 					status.replaceChildren();
 				} catch (error) {
-					if (connection.generation === generation) status.replaceChildren(errorBox(error));
+					if (connection.generation === generation) status.replaceChildren(errorBox(error, { within: status }));
 				} finally {
 					open.disabled = false;
 				}
@@ -56824,7 +57571,7 @@ async function viewManagedSettings(main) {
 			login.checked = !!state.login_enabled;
 			login.disabled = false;
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 		login.addEventListener("change", async () => {
 			const wanted = login.checked;
@@ -56840,7 +57587,7 @@ async function viewManagedSettings(main) {
 			} catch (error) {
 				if (connection.generation === generation) {
 					login.checked = !wanted;
-					status.replaceChildren(errorBox(error));
+					status.replaceChildren(errorBox(error, { within: status }));
 				}
 			} finally {
 				login.disabled = false;
@@ -56895,7 +57642,7 @@ async function viewManagedSettings(main) {
 				frame.show("desktop");
 			}
 		} catch (error) {
-			if (connection.generation === generation) status.append(errorBox(error));
+			if (connection.generation === generation) status.append(errorBox(error, { within: status }));
 		}
 		disposeFleet = await mountFleet(fleetRoot, {
 			h,
@@ -57032,7 +57779,7 @@ async function viewNativeSettings(main) {
 		technicalDetails.replaceChildren();
 		if (state.caps) technicalDetails.append(connectionIdentity());
 		if (state.connectionNotice) info.append(h("p", {}, state.connectionNotice));
-		if (state.connectionError) info.append(errorBox(state.connectionError));
+		if (state.connectionError) info.append(errorBox(state.connectionError, { within: info }));
 		if (state.nativeBusy) info.append(h("p", {}, t("desktop_connecting")));
 	};
 	showInfo();
@@ -57109,7 +57856,10 @@ async function viewNativeSettings(main) {
 		if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
 		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
-		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), { summary: t("desktop_status_error") }));
+		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
+			summary: t("desktop_status_error"),
+			within: info
+		}));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
 		platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help") : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";
 		connect.disabled = state.nativeBusy || !!status.error || !status.credential_available;
@@ -57124,7 +57874,7 @@ async function viewNativeSettings(main) {
 		saved.hidden = !status.credential_saved;
 		forget.disabled = state.nativeBusy || !status.credential_saved;
 	} catch (error) {
-		if (mine === generation) info.append(errorBox(error));
+		if (mine === generation) info.append(errorBox(error, { within: info }));
 	}
 	if (mine !== generation) return;
 	if (disposeUpdates) frame.show("updates");
@@ -57196,7 +57946,7 @@ async function change(out, action, target, params, pre, scope) {
 		else fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 	} catch (e) {
 		lastFailure = e.code || "ERROR";
-		fill(out, e.status === 403 ? errorBox(e) : problem(e.code, e.message));
+		fill(out, e.status === 403 ? errorBox(e, { within: out }) : problem(e.code, e.message));
 	}
 	return null;
 }
@@ -57919,7 +58669,7 @@ async function viewWorkItem(main, wid) {
 				archiveLocks.clear();
 			}
 		} catch (error) {
-			fill(notice, errorBox(error));
+			fill(notice, errorBox(error, { within: notice }));
 			throw error;
 		}
 	};
@@ -57968,7 +58718,7 @@ async function viewWorkItem(main, wid) {
 						assertView(connection);
 						await render(true);
 					} catch (error) {
-						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error));
+						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error, { within: notice }));
 					} finally {
 						if (mark.isConnected) mark.disabled = !canRead || progress.read_version >= w.version;
 					}
@@ -57989,7 +58739,7 @@ async function viewWorkItem(main, wid) {
 		try {
 			data = await api("GET", `/work-items/${wid}`);
 		} catch (e) {
-			fill(panel, errorBox(e));
+			fill(panel, errorBox(e, { within: panel }));
 			return;
 		}
 		if (!panel.isConnected) return;
@@ -58083,7 +58833,7 @@ async function viewWorkItem(main, wid) {
 					requireMutable();
 					op = await attachment.perform("work_item.update", { work_item_id: wid }, params, pre, `wi.edit.${wid}`);
 				} catch (e) {
-					fill(notice, errorBox(e));
+					fill(notice, errorBox(e, { within: notice }));
 					if (STALE.includes(e.code)) {
 						draft = params;
 						render();
@@ -58236,7 +58986,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
 					expected_work_item_fingerprint: w.completion.fingerprint
 				} : {}, `continue.${checkpointId}`);
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 				go.disabled = false;
 				return;
 			}
@@ -58265,7 +59015,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
 			if (state.caps?.artifacts && !expectedHead) try {
 				expectedHead = (await api("GET", `/checkpoints/${checkpointId}?live=true`)).source.head;
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 			}
 		}
 	}, t("start_from_checkpoint")), d.box);
@@ -58500,7 +59250,7 @@ async function viewCleanup(main, section, ident) {
 		} catch (e) {
 			assertView(connection);
 			readFailed = true;
-			fill(status, errorBox(e), h("a", { href: `#/op/${intent.operation_id}` }, t("cleanup_open_receipts")));
+			fill(status, errorBox(e, { within: status }), h("a", { href: `#/op/${intent.operation_id}` }, t("cleanup_open_receipts")));
 			throw e;
 		} finally {
 			operationRead = null;
@@ -58581,7 +59331,7 @@ async function viewCleanup(main, section, ident) {
 					intent.refused = e.code;
 					persist(intentKey, intent);
 				}
-				fill(status, errorBox(e), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
+				fill(status, errorBox(e, { within: status }), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
 			} finally {
 				busy = false;
 				finish();
@@ -58629,7 +59379,7 @@ async function viewCleanup(main, section, ident) {
 				renderPreview();
 				fill(status);
 			} catch (e) {
-				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e));
+				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 			} finally {
 				previewButton.disabled = false;
 			}
@@ -58679,7 +59429,7 @@ async function viewCleanup(main, section, ident) {
 				}
 			}, t("more")));
 		} catch (e) {
-			fill(historyOut, errorBox(e));
+			fill(historyOut, errorBox(e, { within: historyOut }));
 		}
 	}
 	async function loadRetained(cursor = "") {
@@ -58698,7 +59448,7 @@ async function viewCleanup(main, section, ident) {
 				}
 			}, t("more")));
 		} catch (e) {
-			fill(retainedOut, errorBox(e));
+			fill(retainedOut, errorBox(e, { within: retainedOut }));
 		}
 	}
 	main.append(pageHeader({
@@ -58721,7 +59471,7 @@ async function viewCleanup(main, section, ident) {
 			const data = await api("GET", `/cleanup-tombstones/${encodeURIComponent(ident)}`);
 			main.append(h("a", { href: "#/cleanup" }, t("nav_cleanup")), resourceRow(data.tombstone), h("h2", {}, t("cleanup_open_receipts")), h("pre", { class: "panel pre" }, JSON.stringify(data.receipts, null, 2)));
 		} catch (e) {
-			main.append(errorBox(e));
+			main.append(errorBox(e, { within: main }));
 		}
 		return;
 	}
@@ -58910,7 +59660,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		}
 		repairSeed = repairDispatchSeed(record);
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 		return;
 	}
 	const panel = repositoryStartPanel({
@@ -59001,7 +59751,7 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
 		data = await api("GET", `/work-items/${encodeURIComponent(wid)}`);
 		assertView(connection);
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 		return;
 	}
 	const sessions = new Map();
@@ -59014,7 +59764,7 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
 	if (!sessions.size) return viewWorkItem(main, wid);
 	const selected = host && sid ? sessions.get(JSON.stringify([host, sid])) : sessions.values().next().value;
 	if (!selected) {
-		main.append(errorBox(new Error(t("workspace_work_missing"))));
+		main.append(errorBox(new Error(t("workspace_work_missing")), { within: main }));
 		return;
 	}
 	main.classList.add("session-view");
@@ -59064,7 +59814,7 @@ async function viewProjectWork(main, pid, kind, id) {
 		if (item.host && item.session_id) return viewSession(main, item.host, item.session_id, { project: data.project });
 		main.append(pageHeader({ title: item.title || item.action || item.id }), deliveryWork(item, data.project.repositories));
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 	}
 }
 async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
@@ -59171,6 +59921,7 @@ function mountWorkspace(name) {
 var teardown = null;
 var generation = 0;
 async function route() {
+	diagnosticsPreview?.close();
 	let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (nextName === "pm") {
 		if (nextView?.startsWith("pmt_")) {

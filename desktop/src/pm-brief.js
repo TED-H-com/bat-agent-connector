@@ -68,7 +68,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
     ?briefExport({h,t,api,alive,workspaceId,caps,snapshot:()=>snapshot,readable:canRead,onUnavailable:error=>unavailable(error),errorBox}):null;
   if(exports)box.insertBefore(exports.element,box.lastChild);
   function withdraw(){++serial;head=null;snapshot=null;signature='';view.replaceChildren();history.replaceChildren();create.update();exports?.update();}
-  function unavailable(error){withdraw();status.replaceChildren(errorBox(error));}
+  function unavailable(error){withdraw();status.replaceChildren(errorBox(error, {within:status}));}
   const stamp = value => timeStamp(value, {empty: t('pm_evidence_time_unknown')});
   const check = data => {if (data.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch')); return data;};
   const readable = (prefix, value) => {

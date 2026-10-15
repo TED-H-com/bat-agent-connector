@@ -301,7 +301,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
 
   test('managed location explanation separates central data and selected BAT workspaces',async({page})=>{
     const f=fixture(); f.state.managed=true; await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/settings');
-    await expect(page.locator('[data-managed-locations]')).toContainText('Central stores your identity, operation history and artifacts');
+    await expect(page.locator('[data-managed-locations]')).toContainText('Connector stores your identity, operation history and artifacts');
     await expect(page.locator('[data-managed-locations]')).toContainText('selected BAT host and workspace');
     expect(f.state.writes).toHaveLength(0);
   });

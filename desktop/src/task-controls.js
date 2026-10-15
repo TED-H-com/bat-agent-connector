@@ -33,7 +33,7 @@ export function taskControlsPanel({h, t, api, caps, guard, ready, task, taskId, 
   const writable = () => ready() && observed() && permitted() && (saved.intent || !["done", "failed"].includes(task()?.state));
   const abort = h("input", {type: "checkbox", checked: saved.abort});
   const message = h("div", {role: "status"}), result = h("div", {"data-task-result": ""}), restriction = h("p", {class: "muted"});
-  const showError = error => {if (live()) {message.replaceChildren(errorBox(error)); update();}};
+  const showError = error => {if (live()) {message.replaceChildren(errorBox(error, {within:message})); update();}};
   const accept = candidate => {
     guard(); const intent = saved.intent;
     if (!intent || !opId(candidate?.operation_id) || !["task.pause", "task.resume"].includes(candidate.action) ||

@@ -62,7 +62,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (c
       await editor.getByLabel(zh ? '計畫內容（Markdown）' : 'Plan document (Markdown)', {exact: true})
         .fill(zh ? '# 首次使用計畫\n\n保留來源。' : '# First visit plan\n\nKeep the sources.');
       await editor.getByRole('button', {name: saveLabel, exact: true}).click();
-      await expect(editor.locator('[data-pm-saved]')).toHaveText(zh ? '已儲存到中央。' : 'Saved centrally.');
+      await expect(editor.locator('[data-pm-saved]')).toHaveText(zh ? '已儲存到 Connector。' : 'Saved in Connector.');
       await expect(page.locator('[data-pm-revision]')).toHaveCount(1);
       await editor.getByLabel(zh ? '計畫名稱' : 'Plan title', {exact: true}).fill(title);
       await editor.getByLabel(zh ? '計畫內容（Markdown）' : 'Plan document (Markdown)', {exact: true})
@@ -80,7 +80,7 @@ for (const native of [false, true]) for (const locale of ['en', 'zh-TW']) for (c
         await page.mouse.up();
       } finally {release(); await page.mouse.up();}
       await expect(page.locator('[data-pm-revision]')).toHaveCount(2);
-      await expect(editor.locator('[data-pm-saved]')).toHaveText(zh ? '已儲存到中央。' : 'Saved centrally.');
+      await expect(editor.locator('[data-pm-saved]')).toHaveText(zh ? '已儲存到 Connector。' : 'Saved in Connector.');
       await expect(page.locator('[data-pm-revision-open]')).toHaveText(zh ? ['版本 1', '版本 2'] : ['Revision 1', 'Revision 2']);
       await page.locator('[data-pm-revision-open]').last().click();
       await expect(page.locator('[data-pm-revision]').last()).toContainText(title);

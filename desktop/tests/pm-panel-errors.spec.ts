@@ -1,4 +1,5 @@
 import {test, expect, type Page} from '@playwright/test';
+import {expectNoNestedErrorDetails} from './api-error-assertions.ts';
 import {readFile, mkdir} from 'node:fs/promises';
 import {handoffFixture} from './pm-package-handoff-fixture.ts';
 import {specFixture} from './pm-spec-materialization-fixture.ts';
@@ -76,9 +77,10 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
     await route.fulfill({contentType: 'text/javascript', body: `
       import {h} from '/src/ui/dom.js';
       import {t} from '/src/i18n.js';
-      import {disclosure} from '/src/ui/components.js';
+      import {disclosure, button} from '/src/ui/components.js';
       import {errorPresentation} from '/src/error-presentation.js';
       export const state = {refreshCycle: {}};
+      function openDiagnostics() {} // Entry-point behavior is covered by diagnostics.spec.ts.
       export ${app.slice(start, end)}`});
   });
   await page.route('**/__c4-form.js', async route => {
@@ -262,6 +264,15 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     expect(calls.filter(input => input.method !== 'GET')).toEqual([]);
     expect(f.state.writes).toEqual([]);
   });
+  test('Evidence unavailable preserves the refresh-cycle read gate with its shell empty state', async ({page}) => {
+    const f = await mountFailure(page, 'evidence', 'workspaceEvidence', 503, {code, message: serverMessage, detached: false});
+    const root = page.locator('#fixture');
+    await expect(root.locator('.ui-empty h2')).toHaveText(locale === 'en' ? 'Projects unavailable' : '無法取得專案');
+    expect(await page.evaluate(() => (window as any).c4State.refreshCycle.error?.code)).toBe(code);
+    await expect(root.locator('[data-error-summary]')).toHaveCount(0);
+    await expect(root).not.toContainText(serverMessage);
+    expect(f.reads()).toBeGreaterThan(0); expect(f.writes()).toBe(0);
+  });
   for (const width of [1440, 390]) for (const failure of failures) {
     const {name, factory, key, cause, code, message} = failure;
     test(`${name} ${cause} one failure message ${width}`, async ({page}) => {
@@ -283,13 +294,20 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
         expect(await page.evaluate(() => document.querySelector('[data-report-status]') === (window as any).c4ReportStatus)).toBe(true);
       }
       await expect(root.locator('form button[type=submit]:visible:enabled')).toHaveCount(0);
+      const error = root.locator('[data-api-error]');
+      await expectNoNestedErrorDetails(error);
+      const ownDetails = error.locator(':scope > details');
+      const details = await ownDetails.count() ? ownDetails : error.locator('xpath=ancestor::details[1]');
+      // A panel already opened in Details uses that disclosure for diagnostics.
+      // Closing it must still hide the original message and code together.
+      if (!await ownDetails.count()) await details.evaluate(node => (node as HTMLDetailsElement).open = false);
       await expect(root.locator('[data-error-details]')).toBeHidden();
       expect(await root.innerText()).not.toContain(message);
       expect(await root.innerText()).not.toContain(code);
       expect(await page.evaluate(() => (window as any).c4State.refreshCycle.error.code)).toBe(code);
       const shots = process.env.BATC_C4_SHOTS;
       if (shots) {await mkdir(shots, {recursive: true}); await page.screenshot({path: `${shots}/c4-r2-${name}-${cause}-${locale}-${width}-closed.png`});}
-      await root.locator('[data-api-error] summary').click();
+      await details.locator(':scope > summary').click();
       await expect(root.locator('[data-error-details] code')).toHaveText(code);
       await expect(root.locator('[data-error-details]')).toContainText(message);
       await expect(root.locator('[data-error-details] b')).toHaveCount(0);

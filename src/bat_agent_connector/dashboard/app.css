@@ -1218,6 +1218,14 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 
 [data-pm-source-pending] { visibility: hidden; position: relative; }
 [data-pm-source-pending] > [data-pm-source-loading] { visibility: visible; position: absolute; inset: 0; }
+
+/* Diagnostics uses the existing overlay, type and spacing tokens. */
+.diagnostics-dialog { box-sizing: border-box; width: min(760px, calc(100vw - var(--space-8))); max-height: calc(100dvh - var(--space-8)); overflow: auto; margin: auto; padding: var(--space-6); color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-overlay); }
+.diagnostics-dialog::backdrop { background: var(--scrim); }
+.diagnostics-dialog h2 { margin-top: 0; font-size: var(--fs-title); }
+.diagnostics-json { max-height: 40dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: var(--fs-mono); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm); padding: var(--space-4); }
+.diagnostics-dialog .actions { justify-content: flex-end; }
+@media (max-width: 800px) { .diagnostics-dialog { width: calc(100vw - var(--space-4)); max-height: calc(100dvh - var(--space-4)); padding: var(--space-4); } }
 .pm-maintenance-policy { overflow-wrap: anywhere; }
 .pm-maintenance-policy .pm-policy-choices { border: 0; margin: var(--space-2) 0; padding: 0; }
 .pm-maintenance-policy .pm-policy-choices label { display: inline-flex; align-items: center; gap: var(--space-2); margin-right: var(--space-4); }
@@ -2765,6 +2773,7 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .session-workspace .session-status:empty { display: none; }
 .session-workspace .session-status { flex: none; max-height: 20dvh; overflow: auto; }
+.session-workspace .session-status:has(details[open]) { max-height: 32dvh; }
 .session-error-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); color: var(--bad); margin: var(--space-2) 0; }
 .session-error-action { border: 0; background: transparent; color: inherit; padding: 0; font: inherit; text-decoration: underline; cursor: pointer; }
 .session-error { padding: var(--space-2); background: var(--bad-soft); border-radius: var(--r-sm); }

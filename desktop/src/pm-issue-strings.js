@@ -27,5 +27,5 @@ export const pmIssueStrings={en:{
   pmi_tracking:'持續追蹤',pmi_cancelled:'已停止追蹤',pmi_cancelled_help:'這份關聯已明確停止，發布不會自動重新開啟。',
   pmi_not_done:'發布 issue 是分享工作依據；實作、驗收、合併與發布成果仍分別核對。',
   pmi_stop:'停止此工作區的追蹤',pmi_private_reason:'私有管理理由',pmi_public_reason:'公開說明（可留空）',pmi_remove_public:'移除公開說明',
-  pmi_stop_help:'公開說明留空時，只停止本地追蹤，不連線 GitHub；issue 與各個 session 保持開啟。',
+  pmi_stop_help:'公開說明留空時，只停止本機追蹤，不連線 GitHub；議題與各工作階段保持開啟。',
 }};

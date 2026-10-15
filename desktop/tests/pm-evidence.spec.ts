@@ -1,3 +1,4 @@
+import {expectErrorDetails,expectNoNestedErrorDetails} from './api-error-assertions.ts';
 import {openPmSection, openPmPanel} from './pm-navigation.ts';
 import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
@@ -6,7 +7,7 @@ import {pmFixture, pmRoute, workspaceId} from './pm-fixture.ts';
 import {expectShellEmpty, shellShot} from './shell-empty-state.ts';
 const pid='prj_'+'1'.repeat(20), wid='wi_'+'2'.repeat(20), rid='pmrev_'+'3'.repeat(32), eid='pme_'+'4'.repeat(32);
 function fixture() {
-  const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, catalogReads:0, catalogWait:null as Promise<void>|null, associated:false, tracked:false, lost:false, planDenied:false, acceptedPlan:rid, planReads:[] as string[], boundPlan:null as string|null, boundRequirements:[] as string[], sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any};
+  const base=pmFixture(), state={...base.state, accessVersion:0, bootstraps:0, catalogReads:0, catalogWait:null as Promise<void>|null, associated:false, tracked:false, lost:false, planDenied:false, acceptedPlan:rid, planReads:[] as string[], boundPlan:null as string|null, boundRequirements:[] as string[], sources:[] as any[], writes:[] as any[], ops:new Map<string,any>(), capture:null as any,evidenceReadFails:false};
   const project={project_id:pid,name:'Reader experience',version:2};
   const binding=()=>({workspace_id:workspaceId,work_item_id:wid,binding_id:'pmwb_'+'5'.repeat(32),project_id:pid,plan_revision_id:state.boundPlan||null,requirement_ids:state.boundRequirements||[]});
   let workBinding:any=null;
@@ -36,6 +37,7 @@ function fixture() {
         document:{title:id===rid?'First useful action':'Previous supported release',requirements:[{id:'first-action',text:id===rid?'Visitors find the first useful action':'Members can use the supported release'}]}}}};
     }
     if(path===endpoint+'/work/'+wid+'/capture')return {status:200,data:{workspace_id:workspaceId,capture:state.capture}};
+    if(path===endpoint+'/evidence/'+eid&&state.evidenceReadFails)return {status:503,data:{error:{code:'BAT_ERROR',message:'Fixture evidence read failed'}}};
     if(path===endpoint+'/evidence/'+eid)return {status:200,data:{evidence:{...summary,document:{facts:{state:'done',authority:'recorded_work_claim_and_approval',description:'<script>literal evidence</script>'}}}}};
     if(input.method==='GET'&&path.startsWith('/operations/'))return {status:200,data:{operation:[...state.ops.values()].find(op=>path.endsWith(op.operation_id))}};
     if(input.method==='POST'&&path==='/operations'&&['pm.project.bind','pm.work.bind','pm.evidence.capture'].includes(input.body.action)){
@@ -293,5 +295,19 @@ for(const locale of ['en','zh-TW'])for(const width of [390,1440])test(`evidence 
   await expect(page.locator('[data-pm-evidence] h2')).toHaveText(locale==='en'?'Work and delivery evidence':'工作與交付證據');
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   const out=process.env.BATC_PM_EVIDENCE_SCREENSHOTS;if(out){await mkdir(out,{recursive:true});await page.screenshot({path:`${out}/evidence-${locale}-${width}.png`,fullPage:true});}
+  await context.close();
+});
+
+for(const locale of ['en','zh-TW'])test(`evidence error reuses its open Details in ${locale}`,async({browser,baseURL})=>{
+  const context=await browser.newContext({locale,baseURL}),page=await context.newPage();
+  const f=fixture();f.state.associated=true;f.state.tracked=true;f.state.evidenceReadFails=true;
+  await mountConversation(page,false,f.dispatch);await page.goto(pmRoute);await openPmSection(page,'requirements','ui_evidence');
+  await page.locator('[data-pm-evidence] select').first().selectOption(pid);await openWork(page);
+  await action(page,'pm.evidence.capture').getByRole('button',{name:locale==='en'?'Collect saved evidence':'整理已保存的證據',exact:true}).click();
+  const fact=page.locator('[data-pm-fact]');await fact.locator(':scope > summary').click();
+  await expectErrorDetails(fact,'Fixture evidence read failed','BAT_ERROR');
+  const error=fact.locator('[data-api-error]');await expectNoNestedErrorDetails(error);await expect(error.locator('details')).toHaveCount(0);
+  await expect(fact.locator('summary')).toHaveCount(1);await expect(error.locator('[data-error-summary]')).toHaveCount(1);
+  expect(f.state.writes.map(row=>row.body.action)).toEqual(['pm.evidence.capture']);
   await context.close();
 });

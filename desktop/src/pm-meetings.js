@@ -64,7 +64,7 @@ export function workspaceMeetings({h, t, api, alive, namespace, workspaceId, wor
   }
   function unavailable(error) {
     loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true;
-    status.replaceChildren(errorBox(error));
+    status.replaceChildren(errorBox(error, {within:status}));
   }
   function localForm(config) {
     const expected = JSON.stringify({preconditions: config.preconditions(), context: config.context || null});

@@ -99,7 +99,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
     binding.value = saved.target ? key(saved.target) : '';
     for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
   }
-  const showError = e => {if (current()) status.replaceChildren(errorBox(e));};
+  const showError = e => {if (current()) status.replaceChildren(errorBox(e, {within:status}));};
   const selected = () => ({target: saved.target, source_ref: branchRef(saved.source_ref)});
   const effectivePrompt = () => saved.prompt.trim() ? saved.prompt : (attachments?.refs().length ? t('dispatch_inspect_images') : saved.prompt);
   const request = () => ({action: 'repository.continue', target: saved.target,
@@ -258,7 +258,7 @@ export function repositoryStartPanel({h, t, api, caps, guard, ready, errorBox, o
       projectStatus.replaceChildren(h('p', {}, h('a', {href: `#/project/${project}`}, p.name)),
         p.archived || !expanded() ? h('p', {class: 'muted'}, t(p.archived ? 'dispatch_archived' : 'dispatch_unsupported')) : '');
       update();
-    } catch (e) {if (current()) {projectFailed = true; projectStatus.replaceChildren(errorBox(e)); update();} throw e;}
+    } catch (e) {if (current()) {projectFailed = true; projectStatus.replaceChildren(errorBox(e, {within:projectStatus})); update();} throw e;}
   }
   function loadProject() {
     projectQueue = projectQueue.catch(() => {}).then(() => {guard(); return readProject();});

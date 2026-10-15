@@ -71,7 +71,7 @@ export function permissionsPanel({h, t, api, caps, guard, errorBox, opStatus, st
           if (error.status >= 400 && error.status < 500 && admissionRefusals.has(error.code)) {
             intent.refused = error.code; persist();
           }
-          message.replaceChildren(errorBox(error));
+          message.replaceChildren(errorBox(error, {within:message}));
         }
       } finally {busy = false; if (current()) update();}
     })();
@@ -114,7 +114,7 @@ export function permissionsPanel({h, t, api, caps, guard, errorBox, opStatus, st
       if (!saved.intent.request && !saved.intent.operation_id) result.append(h("p", {class: "error"}, t("permissions_damaged")));
     }
   }
-  function showError(error) {if (current()) {readFailed = true; message.replaceChildren(errorBox(error)); update();}}
+  function showError(error) {if (current()) {readFailed = true; message.replaceChildren(errorBox(error, {within:message})); update();}}
   async function refresh(fresh = false) {
     // An operation event may precede the first POST reply. Wait for its identity,
     // then read again before acknowledging the event rather than keeping an older reply snapshot.

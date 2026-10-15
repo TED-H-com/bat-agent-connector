@@ -38,7 +38,7 @@ export function fixedQualityPicker({h,t,api,alive,workspaceId,workItemId,readSel
           || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id
           || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t('pq_changed'));
       write(selected);
-    } catch (error) {if (element.isConnected) status.replaceChildren(errorBox(error));}
+    } catch (error) {if (element.isConnected) status.replaceChildren(errorBox(error, {within:status}));}
     finally {pending = false; update();}
   }}, t('pq_include'));
   const clear = h('button', {type: 'button', class: 'secondary', onclick: () => write(null)}, t('pq_clear'));

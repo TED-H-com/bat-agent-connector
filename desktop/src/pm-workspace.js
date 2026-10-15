@@ -90,7 +90,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     const values = capture();
     if (same(saved.values, values)) return;
     saved.values = values;
-    try {persist();} catch (error) {status.replaceChildren(errorBox(error));}
+    try {persist();} catch (error) {status.replaceChildren(errorBox(error, {within:status}));}
   };
   for (const [name, input] of Object.entries(fields)) {
     const value = saved.values[name] ?? input.value;
@@ -127,7 +127,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     try {
       guard(); if (!terminal() && !saved.intent?.initialAdmissionRefused) return;
       saved = {version: 1, values: capture()}; persist(); operation = null; status.replaceChildren(); receipt.replaceChildren(); update();
-    } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error));}
+    } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error, {within:status}));}
   }}, t('pm_edit_request'));
   const button = h('button', {type: 'submit', class: 'ui-button primary'}, t(label));
   const form = h('form', {'data-pm-action': action, onsubmit: event => {event.preventDefault(); void run();}},
@@ -227,7 +227,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
           try {persist();} catch { /* keep the frozen original in memory */ }
         }
         const handled = onError(error);
-        if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale')} : {}));
+        if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale'), within: status} : {within: status}));
       }
     } finally {busy = false; update();}
   }
@@ -631,6 +631,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const drawersHome = h('div', {hidden: true});
   body.append(drawersHome);
   let detailPanel = null;
+  let cancelReportFocus = null;
   const toolPreference = viewState(namespace, workspaceId, 'work-tools');
   function openPanel(label, node, refreshStale = true) {
     if (!node || !loaded) return;
@@ -638,7 +639,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     detailPanel?.close(); schedule?.setActive(false); traceability?.hideInspector(); kanban?.hideInspector();
     const home = node.parentNode, next = node.nextSibling;
     toolPreference.open = node.dataset.pmTool || null;
-    detailPanel = inspector({title: label, overlay: Boolean(threadId) || workbench?.selected() === 'discussions', onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
+    detailPanel = inspector({title: label, overlay: Boolean(threadId) || workbench?.selected() === 'discussions', onClose: () => {cancelReportFocus?.(); home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
     if (refreshStale) void refreshStaleVisible();
   }
@@ -681,12 +682,29 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   reportState.hidden = true; reportState.dataset.pmReportState = ''; reportTools.append(reportState);
   function focusReportControl(node, panel, read) {
     if (!node) return;
+    cancelReportFocus?.();
     queueMicrotask(() => {
+      if (disposed || detailPanel !== panel) return;
       const initialFocus = document.activeElement;
-      void Promise.resolve(read).then(() => {
-        if (detailPanel !== panel || !node.isConnected || node.closest('[hidden], [inert]') || node.matches(':disabled')) return;
-        if (document.activeElement === initialFocus) node.focus();
-      });
+      let readComplete = false, stopped = false;
+      const stop = () => {
+        if (stopped) return; stopped = true;
+        observer.disconnect(); document.removeEventListener('focusin', check);
+        if (cancelReportFocus === stop) cancelReportFocus = null;
+      };
+      const check = () => {
+        if (stopped) return;
+        if (disposed || detailPanel !== panel || !node.isConnected || document.activeElement !== initialFocus) {stop(); return;}
+        if (!readComplete || node.closest('[hidden], [inert]') || node.matches(':disabled') || !node.getClientRects().length) return;
+        stop(); node.focus();
+      };
+      // A report read can finish before the workspace's initial admission or
+      // transport gate opens. Focus only after the actual control is enabled;
+      // closing the task or moving focus cancels this one pending handoff.
+      const observer = new MutationObserver(check);
+      observer.observe(reportTools, {attributes: true, childList: true, subtree: true, attributeFilter: ['disabled', 'hidden', 'inert']});
+      document.addEventListener('focusin', check); cancelReportFocus = stop;
+      void Promise.resolve(read).then(() => {readComplete = true; check();}, stop);
     });
   }
   function openReport(task) {
@@ -1220,7 +1238,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         } catch (error) {
           if (!item.isConnected || retired(error)) return;
           if ([403, 404].includes(error.status)) item.remove();
-          else detail.replaceChildren(errorBox(error));
+          else detail.replaceChildren(errorBox(error, {within:detail}));
         }
       })();
       let fetched = false, pending = false;
@@ -1247,7 +1265,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
               || context.coverage?.messages_truncated || context.coverage?.inputs_truncated)
             detail.append(h('p', {class: 'muted'}, t('pm_partial')));
           fetched = true;
-        } catch (error) {if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error));}
+        } catch (error) {if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, {within:detail}));}
         finally {pending = false;}
       });
       packages.append(item);
@@ -1260,7 +1278,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
           const next = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20&after=${encodeURIComponent(page.next_cursor)}`);
           alive(); if (next.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
           more.remove(); renderPackages(next, true);
-        } catch (error) {if (!retired(error)) {status.replaceChildren(errorBox(error)); more.disabled = false;}}
+        } catch (error) {if (!retired(error)) {status.replaceChildren(errorBox(error, {within:status})); more.disabled = false;}}
       }}, t('pm_packages_more'));
       packages.append(more);
     }
@@ -1277,7 +1295,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!retired(error) && ticket === sequence) {
         loaded = false; lastThreadList = null; workspace = null; publishContext(); detailPanel?.close(); discussionTools?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
         for (const section of sourceSections()) section.hidden = true;
-        updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale')}));
+        updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
       }
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false; earlier.disabled = !loaded;}}
   }
@@ -1438,7 +1456,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         detailPanel?.close(); discussionTools?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
         for (const section of sourceSections()) section.hidden = true;
-        updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale')}));
+        updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
       }
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false;}}
   }
@@ -1497,7 +1515,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       for (const node of sourceSections()) node.hidden = true;
       workspaceList.replaceChildren(); lastThreadList = null; phasePill.hidden = true;
       detailPanel?.close(); discussionTools?.close(); publishContext(); updateForms();
-      status.replaceChildren(errorBox(error));
+      status.replaceChildren(errorBox(error, {within:status}));
       throw error;
     }
   }
@@ -1536,7 +1554,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         workspaceList.replaceChildren(); boundContext?.replaceChildren(); panelContext?.replaceChildren();
         discussionTools?.close(); publishContext(); updateForms();
       }
-      status.replaceChildren(errorBox(error)); throw error;
+      status.replaceChildren(errorBox(error, {within:status})); throw error;
     }
   }
   const pmEvent = kind => kind.startsWith('pm_');
