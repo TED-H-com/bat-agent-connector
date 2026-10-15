@@ -77,8 +77,11 @@ async function runPowerShell(name, script, args, timeoutMs) {
 }
 let primaryFailure;
 try {
-  const support = await runPowerShell("fixture_helpers", "tests/windows-installed-support-test.ps1", [], 15_000);
-  assert(!support.timed_out && !support.spawn_error && !support.output_drain_incomplete && support.exit_code === 0, "Windows fixture helper regressions failed");
+  // The helper checks take seconds; compiling and running the UIA probe tests with csc.exe
+  // on a cold runner can take longer, so the budget covers both while staying bounded.
+  const support = await runPowerShell("fixture_helpers", "tests/windows-installed-support-test.ps1", [], 60_000);
+  assert(!support.timed_out && !support.spawn_error && !support.output_drain_incomplete && support.exit_code === 0,
+    `Windows fixture helper regressions failed: ${JSON.stringify(support)}`);
   const installed = await runPowerShell("installed_app", "tests/windows-installed-smoke.ps1", [
     "-Endpoint", `http://127.0.0.1:${server.address().port}`, "-Evidence", evidence], 240_000);
   let receipt;
