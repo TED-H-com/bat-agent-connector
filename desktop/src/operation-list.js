@@ -1,9 +1,10 @@
 import {timeStamp} from './ui/stamps.js';
 // Refresh the loaded window through central cursors. A shown count is only the loaded page.
-import {dataTable, disclosure, emptyState, inlineError, inspector, skeleton, statusPill} from './ui/components.js';
+import {dataTable, disclosure, emptyState, errorDetails, inlineError, inspector, skeleton, statusPill} from './ui/components.js';
 import {joinLabel} from './label-text.js';
 import {actionLabel, formatTime, operationDuration, operationStatusKey, operationStatusLabel, operationTargetText, reasonText} from './global-labels.js';
 import {viewState} from './ui/view-state.js';
+import {errorPresentation} from './error-presentation.js';
 
 export function operationList({h, t, api, guard, statuses, namespace}) {
   const memory = viewState(namespace || '', '', 'operations:' + (statuses || 'all'));
@@ -159,7 +160,10 @@ export function operationList({h, t, api, guard, statuses, namespace}) {
     }).catch(error => {
       if (current()) {
         if ([403,404].includes(error.status)) {sourceWithdrawn = true; rows = []; before = null; pages = 1; request++; memory.selected = ''; sheet?.dispose(); sheet = null; layout.classList.remove('has-inspector'); paint();}
-        failed = true; status.replaceChildren(h('p', {class: 'error'}, error.message));}
+        failed = true;
+        const presentation = errorPresentation(error, t);
+        const details = errorDetails(presentation);
+        status.replaceChildren(h('p', {class: 'error', 'data-error-summary': ''}, presentation.summary), ...(details ? [details] : []));}
       throw error;
     }).finally(() => {pending--; if (current()) update();});
     queue = job; return job;

@@ -7868,6 +7868,7 @@ var STRINGS = {
 		setup_retained_request: "原設定請求仍保留。請先查回這筆請求，再進行其他變更。",
 		setup_view_sessions: "查看工作階段",
 		error_generic: "無法完成此要求，請查看詳細資料。",
+		error_generic_short: "無法完成此要求。",
 		desktop_status_error: "無法使用本機 Connector 連線，請檢查設定。",
 		error_code_ARTIFACT_TOO_LARGE: "檔案過大，請選擇較小的檔案。",
 		connection_actor: "帳號識別碼",
@@ -9099,6 +9100,7 @@ var STRINGS = {
 		composer_shortcut_enter: "Enter",
 		composer_shortcut_button: "只用按鈕",
 		composer_newline: "Shift + Enter 換行；選字時不送出。",
+		composer_shortcut_storage_failed: "無法在這個瀏覽器儲存這項設定。",
 		tree_drag: "拖曳排序：{name}",
 		tree_drag_help: "只在同層移動；也可使用上移／下移按鈕。",
 		message_tool_details: "工具輸入與結果",
@@ -9510,6 +9512,7 @@ var STRINGS = {
 		setup_retained_request: "The original request is kept. Check it before making another change.",
 		setup_view_sessions: "View sessions",
 		error_generic: "This request could not be completed. Check Details.",
+		error_generic_short: "This request could not be completed.",
 		desktop_status_error: "The local Connector connection is unavailable. Check its settings.",
 		error_code_ARTIFACT_TOO_LARGE: "This file is too large. Choose a smaller file.",
 		connection_actor: "Actor ID",
@@ -10742,6 +10745,7 @@ var STRINGS = {
 		composer_shortcut_enter: "Enter",
 		composer_shortcut_button: "Button only",
 		composer_newline: "Shift + Enter adds a line; composition never sends.",
+		composer_shortcut_storage_failed: "This setting could not be saved in this browser.",
 		tree_drag: "Drag to reorder: {name}",
 		tree_drag_help: "Move within these siblings, or use the Move up / Move down buttons.",
 		message_tool_details: "Tool input and result",
@@ -11420,6 +11424,29 @@ function icon(name, { label, size = 16 } = {}) {
 	return svg;
 }
 //#endregion
+//#region src/error-presentation.js
+var ApiError = class extends Error {
+	constructor(status, code, message, { localized = false } = {}) {
+		super(message || code);
+		this.status = status;
+		this.code = code;
+		this.localized = localized;
+	}
+};
+function errorPresentation(error, t, { summary, fallback } = {}) {
+	const code = error?.code || "";
+	const message = error?.message || String(error);
+	const key = `error_code_${code}`;
+	const known = code && t(key) !== key;
+	const client = error?.localized === true || !code && error?.constructor === Error;
+	const text = summary ?? (known ? t(key) : client ? message : t(fallback || "error_generic"));
+	return {
+		summary: text,
+		code: code === text ? "" : code,
+		message: message === text ? "" : message
+	};
+}
+//#endregion
 //#region src/ui/components.js
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
@@ -11671,16 +11698,31 @@ function disclosure({ label, body, open = false, key, element }) {
 	});
 	return root;
 }
+function errorDetails(presentation) {
+	if (!presentation) return null;
+	const diagnostics = [presentation.code ? h$1("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h$1("p", {}, presentation.message) : null].filter(Boolean);
+	return diagnostics.length ? disclosure({
+		label: t("global_details"),
+		body: h$1("div", { "data-error-details": "" }, ...diagnostics)
+	}) : null;
+}
 function inlineError({ error, retry }) {
+	let summary = error?.message || String(error);
+	let details = null;
+	if (error instanceof Error) {
+		const presentation = errorPresentation(error, t);
+		summary = presentation.summary;
+		details = errorDetails(presentation);
+	}
 	return h$1("div", {
 		class: "ui-inline-error",
 		role: "alert"
-	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
+	}, icon("circle-alert"), h$1("span", { "data-error-summary": "" }, summary), retry ? button({
 		size: "sm",
 		variant: "ghost",
 		label: t("ui_retry"),
 		onClick: retry
-	}) : null);
+	}) : null, details);
 }
 function contextChip({ icon, text, onRemove }) {
 	return h$1("span", {
@@ -37452,7 +37494,7 @@ function maintenanceRepairPolicyControls({ h, t, input, labelled, available, ciA
 			status.textContent = t("pmr_rule_added");
 			changed();
 		} catch (error) {
-			if (ticket === epoch && visible) status.textContent = error.message;
+			if (ticket === epoch && visible) status.textContent = errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 		} finally {
 			busy = false;
 			update();
@@ -44587,29 +44629,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 	};
 }
-//#endregion
-//#region src/error-presentation.js
-var ApiError = class extends Error {
-	constructor(status, code, message, { localized = false } = {}) {
-		super(message || code);
-		this.status = status;
-		this.code = code;
-		this.localized = localized;
-	}
-};
-function errorPresentation(error, t, { summary } = {}) {
-	const code = error?.code || "";
-	const message = error?.message || String(error);
-	const key = `error_code_${code}`;
-	const known = code && t(key) !== key;
-	const client = error?.localized === true || !code && error?.constructor === Error;
-	const text = summary ?? (known ? t(key) : client ? message : t("error_generic"));
-	return {
-		summary: text,
-		code: code === text ? "" : code,
-		message: message === text ? "" : message
-	};
-}
 var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
 var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
 var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
@@ -45638,7 +45657,7 @@ function readingSummary(t, reading) {
 		detail: ""
 	};
 }
-function conversationPanel({ h, t, when, guard, errorBox, readingActions = null, memory = null }) {
+function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
 		tabindex: "0",
@@ -45660,7 +45679,7 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 		hidden: true,
 		onclick: () => {
 			if (olderWindow && readingActions) {
-				run(() => readingActions.latest());
+				run(() => readingActions.latest(), t("message_window_failed"), false);
 				return;
 			}
 			follow();
@@ -45681,7 +45700,7 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 				message_id: row.id,
 				revision: row.reading.revision
 			}));
-			if (messages.length) run(() => readingActions.mark(messages));
+			if (messages.length) run(() => readingActions.mark(messages), t("conversation_save_failed"), true);
 		}
 	}, t("conversation_mark"));
 	const remember = h("button", {
@@ -45693,14 +45712,14 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 				message_id: row.id,
 				revision: row.reading.revision,
 				offset: Math.round(row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)
-			}, reading?.position?.version || 0));
+			}, reading?.position?.version || 0), t("conversation_save_failed"), true);
 		}
 	}, t("conversation_remember"));
 	const older = h("button", {
 		class: "conversation-earlier",
 		type: "button",
 		hidden: true,
-		onclick: () => run(() => readingActions.older())
+		onclick: () => run(() => readingActions.older(), t("message_window_failed"), false)
 	}, t("message_load_earlier"));
 	const caption = h("p", { class: "muted conversation-window" });
 	const captionRow = h("div", { class: "conversation-caption" }, caption);
@@ -45747,19 +45766,23 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 		viewport.scrollTop = viewport.scrollHeight;
 		indicator();
 	};
-	const run = async (action) => {
+	const run = async (action, summary = t("conversation_save_failed"), isSave = true) => {
 		if (!alive() || busy) return;
 		busy = true;
 		status.replaceChildren();
 		indicator();
 		try {
 			await action();
-			if (alive()) status.textContent = t("conversation_saved");
+			if (alive() && isSave) status.textContent = t("conversation_saved");
 		} catch (error) {
-			if (alive()) status.replaceChildren(errorBox(error, {
-				summary: t("conversation_save_failed"),
-				within: status
-			}));
+			if (alive()) {
+				const presentation = errorPresentation(error, t, { summary });
+				const details = errorDetails(presentation);
+				status.replaceChildren(h("div", { "data-api-error": "" }, h("span", {
+					"data-error-summary": "",
+					class: "error"
+				}, presentation.summary), details || ""));
+			}
 		} finally {
 			busy = false;
 			if (alive()) indicator();
@@ -46103,7 +46126,7 @@ function composerShortcut({ h, t, input, button, storageKey, guard }) {
 			status.textContent = "";
 		} catch (error) {
 			select.value = mode;
-			status.textContent = error.message || String(error);
+			status.textContent = t("composer_shortcut_storage_failed");
 		}
 	});
 	const start = () => {
@@ -46299,7 +46322,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 				if (op.status !== "succeeded") throw Error(op.status_reason || t("models_pending"));
 				await refresh(true);
 			} catch (error) {
-				note.textContent = error.message || String(error);
+				note.textContent = errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 			} finally {
 				busy = false;
 				update();
@@ -46353,7 +46376,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 				if (request === serial) {
 					doc = null;
 					list.replaceChildren();
-					note.textContent = error.message || String(error);
+					note.textContent = errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 					update();
 				}
 			} catch {}
@@ -46383,8 +46406,16 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 	const status = h("p", {
 		class: "muted",
 		role: "status"
-	}), evidence = h("div"), usage = h("div"), rows = h("div"), form = h("div", { class: "capture-fields" });
+	}), statusDetails = h("div"), evidence = h("div"), usage = h("div"), rows = h("div"), form = h("div", { class: "capture-fields" });
 	const inputs = {};
+	const showError = (error) => {
+		const presentation = errorPresentation(error, t);
+		status.textContent = presentation.summary;
+		statusDetails.replaceChildren(errorDetails(presentation) || "");
+	};
+	const clearError = () => {
+		statusDetails.replaceChildren();
+	};
 	const persist = () => {
 		guard();
 		if (loadedHost) drafts[loadedHost] = {
@@ -46404,8 +46435,9 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		try {
 			persist();
 			status.textContent = t("models_unsaved");
+			clearError();
 		} catch (error) {
-			status.textContent = error.message || String(error);
+			showError(error);
 		}
 		update();
 	};
@@ -46438,10 +46470,11 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 			try {
 				persist();
 				status.textContent = t("models_unsaved");
+				clearError();
 				renderRows();
 				update();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		}
 	}, t("models_reset_display"));
@@ -46459,7 +46492,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				draft = null;
 				load(true);
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		}
 	}, t("models_reload_saved"));
@@ -46485,6 +46518,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 					delete drafts[loadedHost];
 					localStorage.setItem(storageKey, JSON.stringify(drafts));
 					status.textContent = t("models_saved");
+					clearError();
 					await load(false);
 				} else {
 					if (["failed", "cancelled"].includes(op.status)) {
@@ -46492,6 +46526,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 						persist();
 					}
 					status.textContent = op.status_reason || t("models_pending");
+					clearError();
 				}
 			} catch (error) {
 				try {
@@ -46500,7 +46535,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 						intent = null;
 						persist();
 					}
-					status.textContent = error.message || String(error);
+					showError(error);
 				} catch {}
 			} finally {
 				busy = false;
@@ -46511,7 +46546,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 	const box = h("details", {
 		class: "panel model-preferences",
 		"data-model-preferences": ""
-	}, h("summary", {}, t("models_title")), h("p", { class: "muted" }, t("models_personal", { actor: caps()?.actor || "" })), h("div", { class: "capture-fields" }, h("label", {}, t("models_host"), host), h("label", {}, t("models_catalog_agent"), catalogAgent)), h("div", { class: "actions" }, refresh), status, evidence, form, rows, h("div", { class: "actions" }, save, reset, discard), h("h2", {}, t("models_usage")), usage);
+	}, h("summary", {}, t("models_title")), h("p", { class: "muted" }, t("models_personal", { actor: caps()?.actor || "" })), h("div", { class: "capture-fields" }, h("label", {}, t("models_host"), host), h("label", {}, t("models_catalog_agent"), catalogAgent)), h("div", { class: "actions" }, refresh), status, statusDetails, evidence, form, rows, h("div", { class: "actions" }, save, reset, discard), h("h2", {}, t("models_usage")), usage);
 	function update() {
 		const locked = busy || Boolean(intent), coherent = doc?.host === host.value;
 		for (const input of Object.values(inputs)) input.disabled = locked || !draft || !coherent;
@@ -46538,10 +46573,11 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 			try {
 				persist();
 				status.textContent = t("models_unsaved");
+				clearError();
 				renderRows();
 				update();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		};
 		rows.replaceChildren(h("h2", {}, t("models_display")), h("p", { class: "muted" }, t("models_display_help")), ...models.map((model, i) => {
@@ -46630,6 +46666,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 			].filter(Boolean));
 			if (draft.revision !== next.model_preferences.revision) status.textContent = t("models_conflict");
 			else if (!equal$7(draft.params, copyPreferences(next.model_preferences))) status.textContent = t("models_unsaved");
+			clearError();
 			renderRows();
 			showUsage(next.usage);
 			update();
@@ -46638,7 +46675,9 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					const presentation = errorPresentation(error, t);
+					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
+					statusDetails.replaceChildren(errorDetails(presentation) || "");
 				}
 			} catch {}
 		}
@@ -46683,7 +46722,15 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 	const status = h("p", {
 		class: "muted",
 		role: "status"
-	}), source = h("div"), list = h("div");
+	}), statusDetails = h("div"), source = h("div"), list = h("div");
+	const showError = (error) => {
+		const presentation = errorPresentation(error, t);
+		status.textContent = presentation.summary;
+		statusDetails.replaceChildren(errorDetails(presentation) || "");
+	};
+	const clearError = () => {
+		statusDetails.replaceChildren();
+	};
 	const persist = () => {
 		guard();
 		localStorage.setItem(storageKey, JSON.stringify(saved));
@@ -46713,7 +46760,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 				draft = null;
 				load(true);
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		}
 	}, t("skills_reload"));
@@ -46753,6 +46800,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 					saved = next;
 					draft = null;
 					status.textContent = t("skills_saved");
+					clearError();
 					await load();
 				} else {
 					if (["failed", "cancelled"].includes(op.status)) {
@@ -46760,6 +46808,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 						persist();
 					}
 					status.textContent = op.status_reason || t("models_pending");
+					clearError();
 				}
 			} catch (error) {
 				try {
@@ -46772,7 +46821,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 						draft.intent = null;
 						persist();
 					}
-					status.textContent = error.message || String(error);
+					showError(error);
 				} catch {}
 			} finally {
 				busy = false;
@@ -46783,7 +46832,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 	const box = h("details", {
 		class: "panel project-skills",
 		"data-project-skills": ""
-	}, h("summary", {}, t("skills_title")), h("p", { class: "note" }, t("skills_not_applied")), h("div", { class: "capture-fields" }, h("label", {}, t("host"), host), h("label", {}, t("start_workspace"), workspace)), h("div", { class: "actions" }, refresh), status, source, list, h("div", { class: "actions" }, save, discard));
+	}, h("summary", {}, t("skills_title")), h("p", { class: "note" }, t("skills_not_applied")), h("div", { class: "capture-fields" }, h("label", {}, t("host"), host), h("label", {}, t("start_workspace"), workspace)), h("div", { class: "actions" }, refresh), status, statusDetails, source, list, h("div", { class: "actions" }, save, discard));
 	function update() {
 		const locked = busy || Boolean(draft?.intent), valid = coherent();
 		host.disabled = locked;
@@ -46816,9 +46865,10 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			try {
 				persist();
 				status.textContent = t("skills_unsaved");
+				clearError();
 				render();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		};
 		const unresolved = draft.selected.filter((ref) => !catalog.skills.some((skill) => same$1(ref, skill) && skill.available));
@@ -46866,13 +46916,16 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			if (draft.intent && !record$3(draft.intent)) draft.intent = null;
 			saved.drafts[draftKey] = draft;
 			if (draft.revision !== next.selection.revision || draft.digest !== next.catalog.catalog_digest) status.textContent = t("skills_conflict");
+			clearError();
 			render();
 		} catch (error) {
 			try {
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					const presentation = errorPresentation(error, t);
+					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
+					statusDetails.replaceChildren(errorDetails(presentation) || "");
 				}
 			} catch {}
 		}
@@ -46893,12 +46946,13 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			discoveredHost = selectedHost;
 			discoveryReady = true;
 			if (next.has_more) status.textContent = t("start_truncated");
+			clearError();
 			update();
 			await load(force);
 		} catch (error) {
 			try {
 				guard();
-				if (request === discovery) status.textContent = error.message || String(error);
+				if (request === discovery) showError(error);
 			} catch {}
 		}
 	}
@@ -46950,7 +47004,7 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
 		class: "muted",
 		role: "status"
-	}), body = h("div");
+	}), statusDetails = h("div"), body = h("div");
 	const refresh = iconButton({
 		icon: "refresh-cw",
 		label: t("results_refresh"),
@@ -46967,7 +47021,7 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 	const box = h("section", {
 		class: "result-sources panel",
 		"data-result-sources": ""
-	}, warning, h("details", {}, h("summary", {}, t("results_title")), status, h("div", { class: "actions" }, refresh), body, more));
+	}, warning, h("details", {}, h("summary", {}, t("results_title")), status, statusDetails, h("div", { class: "actions" }, refresh), body, more));
 	function renderSource(item, own = false) {
 		const content = h("div", {}, h("p", { class: "muted" }, t("results_completion", { state: t(`wi_state_${item.completion.display_state}`) })));
 		if (!item.links.length && !item.result_artifacts.length) content.append(emptyState({ title: t("results_empty") }));
@@ -47014,6 +47068,7 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 			source: doc.source,
 			time: date(doc.read_at)
 		}));
+		statusDetails.replaceChildren();
 		more.hidden = !doc.children_next_cursor;
 	}
 	function load(after = "") {
@@ -47039,7 +47094,9 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					const presentation = errorPresentation(error, t);
+					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
+					statusDetails.replaceChildren(errorDetails(presentation) || "");
 				}
 			} catch {}
 		} finally {
@@ -50132,7 +50189,12 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 					paint();
 				}
 				failed = true;
-				status.replaceChildren(h("p", { class: "error" }, error.message));
+				const presentation = errorPresentation(error, t);
+				const details = errorDetails(presentation);
+				status.replaceChildren(h("p", {
+					class: "error",
+					"data-error-summary": ""
+				}, presentation.summary), ...details ? [details] : []);
 			}
 			throw error;
 		}).finally(() => {
@@ -52494,7 +52556,7 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 	const fail = (error) => {
 		try {
 			guard();
-			if (!disposed) status.textContent = error.message === "PREVIEW_UNSUPPORTED" ? t("ar_content_preview_limit") : error.message;
+			if (!disposed) status.textContent = error.message === "PREVIEW_UNSUPPORTED" ? t("ar_content_preview_limit") : errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 		} catch {}
 	};
 	const close = () => {
@@ -55837,7 +55899,6 @@ async function viewSession(main, host, sid, context = null) {
 	const conversation = conversationPanel({
 		h,
 		t,
-		errorBox,
 		when: sessionWhen,
 		guard: () => assertView(connection),
 		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
@@ -57896,9 +57957,10 @@ function integrationPanel(pr, reloadCard, source = null) {
 					session.pending && runtimeStale(session) ? chip(t("sessions_stale"), "stale") : null,
 					h("p", { class: "muted" }, t("delivery_result_unverified")),
 					h("p", { class: "muted" }, session.observed_at ? timeLabel(t, "delivery_observed_at", { time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at) }) : t("delivery_unobserved")),
-					r.unavailable ? h("p", { class: "note" }, t("delivery_source_unavailable"), " ", h("code", {}, r.unavailable.code)) : null,
+					r.unavailable ? h("p", { class: "note" }, t("delivery_source_unavailable")) : null,
+					r.unavailable ? errorDetails(typeof r.unavailable === "object" ? r.unavailable : { code: String(r.unavailable) }) : null,
 					...delivered(r)
-				];
+				].filter(Boolean);
 			};
 			const results = source ? c.selected && c.selected.kind === source.kind && c.selected.id === source.id && c.selected.host === source.host ? [c.selected] : [] : c.agent_results;
 			pickList.replaceChildren(h("h3", {}, t("agent_results")), ...results.length ? results.map((r) => row(r.kind || "checkpoint_run", r.id, r.branch || r.id, evidence(r), r.eligible !== false)) : [h("p", { class: "muted" }, t("none"))], h("h3", {}, t("your_checkpoints")), ...c.checkpoints.length ? c.checkpoints.map((r) => row("checkpoint", r.id, `${r.branch || "?"} @ ${r.commit_sha.slice(0, 10)}`, [r.note ? h("span", { class: "muted" }, r.note.slice(0, 60)) : null, ...delivered(r)])) : [h("p", { class: "muted" }, t("none"))], h("div", { class: "actions" }, branch, h("button", {

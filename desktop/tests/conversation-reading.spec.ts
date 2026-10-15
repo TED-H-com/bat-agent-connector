@@ -151,7 +151,7 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
     expect(await failure.innerText()).not.toContain('Private receipt diagnostic');
     await failure.locator('details > summary').click();
     await expect(failure).toContainText('Private receipt diagnostic');
-    await expect(failure.locator('[data-export-diagnostics]')).toBeVisible();
+    await expect(failure.locator('[data-error-details] code')).toHaveText('RECEIPT_FAILURE');
     expect(data.writes).toHaveLength(1); await context.close();
   });
 }
