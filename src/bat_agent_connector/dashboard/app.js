@@ -19284,6 +19284,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 	}
 	function syncCapture() {
 		if (!captureButton) return;
+		captureButton.hidden = !active || captureForm.replaceable();
 		const reason = captureHintText();
 		captureButton.className = captureButton.disabled ? "ui-button secondary ui-md" : "ui-button primary ui-md";
 		captureHint.textContent = reason;
@@ -19558,7 +19559,6 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			header.pills.hidden = true;
 			header.pills.replaceChildren();
 		}
-		captureButton.hidden = !active;
 		syncCapture();
 		if (!active || !data) return;
 		const commit = shortSha(data.capture?.commit_sha);

@@ -1155,6 +1155,10 @@ hides the form and action together. Project header chips center beside touch-siz
 actions without stretching. Captures disable animations so disclosure chevrons
 show their settled open rotation.
 
+The Dependencies capture action stays in its own view after shared form updates.
+Its visibility combines the active view with the original request's terminal or
+refused state; refreshing Overview cannot reveal it.
+
 ## Diagnostics preview
 
 About retains its existing Settings frame and adds one build line and Export

@@ -12,6 +12,7 @@
   conflicts keep the full draft-preservation guidance, and project header chips
   stay compact on narrow screens. Accepted-plan preview diagnostics and their
   export action reuse the context panel's disclosure.
+  Dependencies keeps its capture action hidden on other views after refresh.
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 

@@ -21,6 +21,7 @@ try {
   for (const page of [web, desktop]) page.on('pageerror', e => errors.push(e.message));
   await web.addInitScript(token => sessionStorage.setItem('batc.dashboard.token', token), fixture.token);
   await web.goto(origin+'/dashboard/#/projects');
+  await web.getByRole('button', {name: 'New project', exact: true}).click();
   await web.getByRole('textbox', {name: 'New project name'}).fill('First project');
   const repository = web.getByRole('combobox', {name: 'Repository for dispatch (optional)'});
   await expect(repository).toHaveValue('');
