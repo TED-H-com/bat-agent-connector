@@ -200,7 +200,8 @@ export async function boot(page: Page, locale = 'en') {
   await expect(page.locator('[data-pm-governance]')).toBeVisible();
 }
 export async function openAction(page: Page, name: string) {
-  if (name === 'record' && !await action(page, name).isVisible() && await page.locator('[data-pm-governance-record]').isVisible()) await page.locator('[data-pm-governance-record]').click();
+  // A lazy read may not have revealed New finding yet; click waits for that gate.
+  if (name === 'record' && !await action(page, name).isVisible()) await page.locator('[data-pm-governance-record]').click();
   await action(page, name).evaluate(node => {for (let parent = node.parentElement; parent; parent = parent.parentElement) if (parent.tagName === 'DETAILS') (parent as HTMLDetailsElement).open = true;});
 }
 export async function reason(page: Page, name: string, value = 'Preserve the fixed evidence and make this uncertainty explicit') {

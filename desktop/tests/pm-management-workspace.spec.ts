@@ -67,7 +67,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
     await openPmSection(page,'board');await card.locator('[data-board-open]').click();
     await page.locator('[data-work-section=details] > summary').click();
     await expect(page.locator('[data-work-inspector]')).toContainText('3 accepted sends');
-    await expect(page.locator('[data-pm-sprints]')).toContainText('A returning member can sign in');
+    await openPmSection(page,'schedule','ui_sprints');await expect(page.locator('[data-pm-sprints]')).toContainText('A returning member can sign in');
     await expect(page.getByRole('tab')).toHaveCount(0);expect(f.kanban.state.writes).toHaveLength(0);
   });
   test('another client’s work and Sprint changes are read from central events',async({page})=>{
@@ -84,7 +84,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
   });
   test('failed workspace authorization hides previous facts and recovers the local draft',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');const region=page.locator('[data-pm-sprints]');
-    await expect(region).toContainText('A returning member can sign in');
+    await openPmSection(page,'schedule','ui_sprints');await expect(region).toContainText('A returning member can sign in');
     await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});await draft.fill('Keep this unsent direction');
@@ -96,7 +96,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
   });
   for(const bootstrapFails of [false,true])test(`access reset clears focused private facts and preserves drafts (bootstrap failure: ${bootstrapFails})`,async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
-    const region=page.locator('[data-pm-sprints]');await expect(region).toContainText('A returning member can sign in');
+    const region=page.locator('[data-pm-sprints]');await openPmSection(page,'schedule','ui_sprints');await expect(region).toContainText('A returning member can sign in');
     await openPmSection(page,'schedule','ui_sprints');await region.getByRole('button',{name:'More actions',exact:true}).click();await region.locator('[data-menu-key="pm.sprint.commitments"]').click();
     await region.locator('summary').filter({hasText:/^Revise Product Goal$/}).click();
     const draft=region.locator('[data-pm-action="pm.product_goal.revise"]').getByRole('textbox',{name:'Product Goal',exact:true});
@@ -113,7 +113,7 @@ for(const native of [false,true])test.describe(native?'native management workspa
   });
   test('discussion draft and explicit completion recover the original command after reload',async({page})=>{
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page,'board');
-    await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
+    await openPmSection(page,'discussions','ui_meetings');await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
     await openPmSection(page,'discussions','ui_meetings');await openAction(page,'note');await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('We reviewed the evidence and retained the current direction.');
     await reason(page,'note');await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();
     await expect(page.locator('[data-pm-meetings]')).toContainText('We reviewed the evidence');
@@ -151,9 +151,9 @@ for(const native of [false,true])test.describe(native?'native management workspa
 for(const locale of ['en','zh-TW'])for(const width of [390,768,1440])test(`management workspace ${locale} ${width}`,async({browser,baseURL})=>{
   const context=await browser.newContext({baseURL,locale,viewport:{width,height:1000}}),page=await context.newPage(),f=fixture();
   await mountConversation(page,false,f.dispatch);await page.goto(route);await openPmSection(page,'board');
-  await expect(page.locator('[data-pm-sprints] [data-pm-sprint-status]')).toHaveText(locale==='en'?'Planned':'已規劃');
+  await openPmSection(page,'schedule','ui_sprints');await expect(page.locator('[data-pm-sprints] [data-pm-sprint-status]')).toHaveText(locale==='en'?'Planned':'已規劃');
   await expect(page.locator('[data-pm-kanban-work]')).toHaveCount(3);
-  await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
+  await openPmSection(page,'discussions','ui_meetings');await expect(page.locator('[data-pm-meetings]')).toContainText('A returning member can sign in');
   for (const [view, section] of [['board', undefined], ['discussions', 'ui_meetings'], ['schedule', 'ui_sprints']]) {
     await openPmSection(page, view!, section);
     expect(await page.locator('.pm-main').innerText()).not.toMatch(/pm_kanban_|pm_sprint_|pm_meeting_|\bundefined\b/);

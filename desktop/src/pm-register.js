@@ -336,6 +336,19 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     return h('button', {type: 'button', class: 'reg-chip', title: name || id, 'aria-label': name || `${fallback} ${id}`, onclick, ...attrs},
       h('span', {class: 'reg-chip-label'}, text));
   }
+  function relabel() {
+    if (!active) return;
+    render();
+    for (const chip of sheet?.querySelectorAll('.reg-chip[data-reg-requirement], .reg-chip[data-reg-work]') || []) {
+      const requirement = chip.hasAttribute('data-reg-requirement'), kind = requirement ? 'requirement' : 'work_item';
+      const id = chip.getAttribute(requirement ? 'data-reg-requirement' : 'data-reg-work'), fallback = t(requirement ? 'reg_requirement' : 'reg_work');
+      const name = labelSegment(nameFor(kind, id));
+      chip.querySelector('.reg-chip-label').textContent = name || fallback;
+      chip.title = name || id; chip.setAttribute('aria-label', name || `${fallback} ${id}`);
+    }
+    const row = rows.find(row => row.row_id === selected);
+    if (sheet && row) sheet.querySelector('h2').textContent = displayTitle(row) || t('reg_type_' + row.type);
+  }
   function relatedItems(row) {
     const related = row.related || {};
     const items = [];
@@ -803,5 +816,6 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     await loadDetail(rowId);
   }
   render();
-  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose, closeSheet, openRef};
+  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose, closeSheet, openRef, relabel,
+    requirementIds: () => rows.flatMap(row => [...(row.related?.requirement_ids || []), ...(row.source?.kind === 'requirement' ? [row.source.id] : [])])};
 }

@@ -30,15 +30,21 @@ export function conversationFixture() {
 export async function mountConversation(page: Page, native: boolean, dispatch: (input: any) => Promise<any>) {
   if (native) {
     await page.exposeFunction('fixtureConnector', dispatch);
-    await page.addInitScript(c => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
+    await page.addInitScript(() => Object.assign(window, {isTauri: true, __TAURI_INTERNALS__: {
       invoke: async (command: string, args: any) => {
         if (command === 'native_status') return {endpoint: 'https://central.example/', credential_available: true};
-        if (command === 'connector_connect') return c;
+        // The native connect receipt comes from the same Connector principal as
+        // subsequent reads, including demos with a named human participant.
+        if (command === 'connector_connect') {
+          const result = await (window as any).fixtureConnector({method: 'GET', path: '/capabilities'});
+          if (result.status !== 200) throw new Error('Fixture connection capability read failed');
+          return result.data;
+        }
         if (command === 'connector_disconnect') return null;
         if (command === 'connector_request') return (window as any).fixtureConnector(args.input);
         throw new Error(`Unexpected native command ${command}`);
       }
-    }}), caps);
+    }}));
   } else await page.addInitScript(() => sessionStorage.setItem('batc.dashboard.token', 'fixture-token'));
   await page.route('**/api/v1/**', async route => {
     if (native) throw new Error('Native must use IPC');

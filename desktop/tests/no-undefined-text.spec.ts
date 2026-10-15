@@ -1,6 +1,6 @@
 import {test, expect, type Page} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, openThreadBrief} from './pm-navigation.ts';
 import {handoffFixture} from './pm-package-handoff-fixture.ts';
 import {pmRoute} from './pm-fixture.ts';
 import {workbenchFixture, route, workspaceId} from './pm-workbench-fixture.ts';
@@ -116,6 +116,7 @@ for (const locale of ['en-US', 'zh-TW']) test(`PM views hide missing values (${l
   await assertNoMissingLabels(page);
 
   await page.goto(pmRoute);
+  await openThreadBrief(page);
   await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
   const unknown = zh ? '未知' : 'Unknown';
   const unavailable = zh ? '資訊尚未取得' : 'Information unavailable';
@@ -148,6 +149,7 @@ for (const locale of ['en-US', 'zh-TW']) test(`Selected work package omits missi
   await mountConversation(page, false, fixture.dispatch); await page.goto(route);
   await openPmSection(page, 'requirements', 'ui_packages');
   const picker = page.locator('[data-pm-work-packages]').getByLabel(/^(Package|工作包)$/);
+  await expect(picker.locator('option').filter({hasText: /Restore member access/})).toHaveCount(1);
   await picker.selectOption({label: (await picker.locator('option').allTextContents()).find(text => /Restore member access/.test(text)) || ''});
   await openPmSection(page, 'requirements', 'ui_handoff');
   await page.locator('[data-pm-package-handoff-controls] > summary').click();

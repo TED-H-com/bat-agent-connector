@@ -16,8 +16,12 @@ Never substitute zero for missing data or count a loaded page as a complete inve
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
+Links from Overview or the Register wait for the destination's first read and
+loading mask to finish before focusing its selected record.
 Events coalesce reads for the visible view and tools mounted in its drawer. Hidden
-sections become stale and stay masked until a fresh read settles when shown. A held
+sections become stale and stay masked until a fresh read settles when shown.
+Loading masks have their own hosts, separate from each panel's status slot. They
+hide content until reveal removes the mask and shows settled content in one turn. A held
 projection read can still be superseded by a newer withdrawal read. PM record events
 follow the same visibility rule; workspace authority and lifecycle admission have
 their own scoped reads even while the Lifecycle drawer is closed. A newer event
@@ -28,6 +32,16 @@ lose the click. Manual Refresh and selected-workspace authority/lifecycle events
 withdraw admission before reading; a policy event in a coalesced page still closes
 the gates. Failed or withdrawn lifecycle reads clear the prior policy, and older
 responses cannot restore it.
+
+The initial workspace snapshot and manual Refresh follow the same visibility rule:
+only the selected view and its open secondary tools read their projections. Unopened
+sections remain stale and load through the existing view/disclosure path. Opening
+toggles share a pending opening read, while event reads still require a post-event
+read before acknowledgment. Shared shell/workspace reads and lifecycle admission
+remain available independently of the selected view. Visible package consumers
+also retain the shared immutable package source across a parent refresh.
+Workspace withdrawal clears
+all modules, including unopened ones, before any later reply can reveal data.
 
 ## Tokens and type
 
@@ -1054,6 +1068,19 @@ masks hidden stale views before navigation can expose them. Recovery rereads the
 visible view and restores an open tool with its unsent draft. An Overview related
 inspector keeps its owning Overview projection subscribed while it is mounted in
 Issues. Closed discussion tools wait for their next visible disclosure.
+
+Visible Register and Governance labels share a requirement-name source. Loaded
+Requirements or Overview names take precedence; otherwise one accepted-plan read
+supplies names without loading either full view. Governance can supply its own
+accepted-plan read. Plan events invalidate the cache, including while Issues is
+hidden. Withdrawal clears names and rejects older replies. Relabeling preserves
+the inspector and authored form fields. A saved requirement with an unknown name
+does not assert that its original source is unavailable. Work labels keep their
+existing loaded-table or fixed-snapshot sources and do not cause another read.
+
+Follow-up preparation and assessment read discussion identity from
+`thread.workspace_id`, matching the Connector envelope. The assessment request
+also retains the fixed thread ID, version and Planning mode checks.
 
 Agents event reads respect Pause updates. A later event can supersede an older
 in-flight source read while updates are running; only explicit Refresh bypasses

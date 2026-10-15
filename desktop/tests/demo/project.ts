@@ -97,7 +97,7 @@ export function demoProject(localeInput?: string, now = DEMO_NOW) {
     repository: 'example/membership',
     repositoryId: 7,
     providerOrigin: 'https://api.github.com',
-    actor: 'reader',
+    actor: 'mei.lin',
     requirements: requirementIds,
     work: Object.fromEntries(workSpec.map(row => [row.key, hexId('wi_', row.n, 20)])) as Record<WorkKey, string>,
     bindings: Object.fromEntries(workSpec.map(row => [row.key, hexId('pmwb_', row.n, 32)])) as Record<WorkKey, string>,

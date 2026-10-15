@@ -19,6 +19,24 @@
   provides installation-aware MCP guidance and a read-only PM eligibility check, with
   localized reasons and a return link to the originating discussion.
 
+- Lazy PM loading keeps its loading status separate from each panel's status
+  slot, while revealing settled content and removing its mask together.
+
+- Issues and Governance retain requirement names on direct opening with one
+  shared accepted-plan read, without loading the Requirements or Board views.
+  Unknown names no longer claim that a saved Governance source is missing.
+- Follow-up preparation and assessment accept the Connector's nested discussion
+  identity while retaining their thread and workspace checks.
+
+- Bind the demo follow-up assessment to its fixed Planning discussion using the backend-supported discussion mode and original version.
+
+- PM workspaces load the selected view and open secondary tools on demand,
+  including on first load and manual Refresh. Hidden event updates wait until
+  opened, while workspace withdrawal and lifecycle admission checks remain intact.
+
+- The member sign-in demo names its human participant `mei.lin` while retaining
+  the existing read-only role, agent names and stable record identities.
+
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
