@@ -1,5 +1,15 @@
 # BAT Dashboard design v2
 
+The October 15 [workbench supplement](../docs/product/workbench-ux-plan.md)
+revises navigation and information hierarchy. Its first candidate is selected
+through Tools → Workbench preview (`?workbench=1`); legacy layout remains the
+default until review. See [source mapping and limits](../docs/design/workbench.md).
+Reuse the tokens and components below. The candidate separates the 208px daily
+rail from a 256px context list, collapses the list into the drawer below 1000px,
+and uses an optional Results inspector. Work/Lineage/Live keep the selected
+identity, conversation nodes and original composer. The item purpose and observed
+activity precede details; the session's Interrupt action lives in More.
+
 The Web and Tauri clients share `src/`. Python Connector / Task Service remains the
 only authority for permissions, project bindings, lifecycle, operations and evidence.
 This foundation changes presentation and navigation; individual view projections

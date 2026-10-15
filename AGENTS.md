@@ -12,7 +12,11 @@ direction for direct work in the Dashboard, cross-CLI session results and one AP
 path for people and agents. Unrevised v1.2 lifecycle, retention and safety requirements
 still apply. Start from its [agent handoff](docs/product/v1.3-agent-handoff.md):
 E00 (baseline, reuse map and a clickable flow built from the shared components) and the
-owner's R0 confirmation of that interaction come before E01–E11 implementation.
+owner's R0 confirmation establish the interaction baseline. The owner explicitly
+authorized continued implementation on October 15 while personal testing is
+pending; do not treat that authorization as R0/R1 acceptance. The new
+[workbench UX supplement](docs/product/workbench-ux-plan.md) guides shell,
+selection and presentation; see its [mapping and remaining work](docs/design/workbench.md).
 Report against E00–E11, R0–R5 and A01–A40; they do not replace open v1.2 items.
 
 Read [the shared product decisions](docs/product/realignment-v2.md),

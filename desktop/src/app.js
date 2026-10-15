@@ -1,3 +1,5 @@
+import {workbenchEnabled} from './workbench-mode.js';
+import {workbenchViews} from './workbench-views.js';
 import {settingsAgents} from './settings-agents.js';
 import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation} from './work-paths.js';
 import {buildDiagnostics, clientIdentity, buildLine, errorRing, sessionFacts} from './diagnostics.js';
@@ -1410,6 +1412,7 @@ function sessionPullHref(target) {
 async function viewSession(main, host, sid, context = null) {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   let fromQuery = params.get("from") || "";
+  let workRecord = workbenchEnabled() ? context?.workRecord : null;
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const path = `/sessions/${encodeURIComponent(host)}/${encodeURIComponent(sid)}`;
   const projectViews = new Set(["overview", "discussions", "requirements", "schedule", "dependencies", "issues", "agents", "board"]);
@@ -1540,10 +1543,11 @@ async function viewSession(main, host, sid, context = null) {
   const details = disclosure({label: t("session_details_session"), body: metadata, key: `session-details:${connection.namespace}:${host}:${sid}`});
   details.classList.add("workspace-evidence");
   details.dataset.sessionDetails = "";
-  const results = inspector({title: t("session_results"), dock: true, returnFocus: () => openResults});
-  const openResults = iconButton({icon: "inbox", label: t("session_results"), onClick: () => results.open()});
+  const results = inspector({title: t("session_results"), dock: true, overlay: workbenchEnabled(), returnFocus: () => openResults});
+  const openResults = workbenchEnabled() ? button({variant: "secondary", icon: "panel-right", label: t("session_results"), onClick: () => results.open()})
+    : iconButton({icon: "inbox", label: t("session_results"), onClick: () => results.open()});
   const wide = matchMedia("(min-width: 1200px)");
-  const syncWide = () => {openResults.hidden = wide.matches || Boolean(withdrawn);};
+  const syncWide = () => {openResults.hidden = !workbenchEnabled() && wide.matches || Boolean(withdrawn);};
   syncWide(); wide.addEventListener("change", syncWide);
   const sessionSection = (name, title, body, action = null) => h("section", {class: "session-section"},
     h("div", {class: "session-section-head"}, h("h3", {class: "session-section-title"}, icon(name, {size: 16}), title), action), body);
@@ -1553,13 +1557,15 @@ async function viewSession(main, host, sid, context = null) {
   syncChanges();
   const overflow = menu({button: iconButton({icon: "more-horizontal", label: t("ui_more")}),
     items: [
+      ...(workbenchEnabled() ? [{key: "interrupt", label: t("interrupt"), content: stop}] : []),
       {key: "discuss", label: t("ui_discuss"), href: "#", icon: "message-square"},
       {key: "copy-title", label: t("bat_menu_title"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyTitle()},
       {key: "copy-id", label: t("bat_menu_id"), icon: "clipboard", title: t("bat_browser"), onSelect: () => batHandoff?.copyId()},
       {key: "open-bat", label: t("bat_open"), icon: "external-link", title: t("bat_browser"), disabled: !nativeDesktop, onSelect: () => batHandoff?.open()},
       {key: "shortcut", label: t("composer_shortcut"), content: shortcut.box},
     ]});
-  const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: [stop, openResults], overflow});
+  if (workbenchEnabled()) {stop.setAttribute('role', 'menuitem'); stop.addEventListener('click', () => overflow.close());}
+  const header = pageHeader({title: titleNode, mark: markSlot, pill: pillSlot, meta, actions: workbenchEnabled() ? [openResults] : [stop, openResults], overflow});
   head.append(backSlot, header);
   results.body.append(...[context?.itemBox,
     changesSection,
@@ -1574,6 +1580,8 @@ async function viewSession(main, host, sid, context = null) {
   const workspaceNode = h("div", {class: "workspace-session session-workspace", "data-session-view": ""}, lane, results);
   const withdrawnSlot = h("div", {class: "session-withdrawn"});
   main.append(head, workspaceNode);
+  const perspectives = workbenchEnabled() ? workbenchViews({main, head, work: workspaceNode, results, namespace: connection.namespace,
+    workspace: sessionWorkspace || host, host, sessionId: sid, workId: workRecord?.work_item?.work_item_id, t}) : null;
   const originHref = () => {
     const view = originView(), workspaceId = sessionWorkspace;
     return view && workspaceId ? {href: `#/pm/${encodeURIComponent(workspaceId)}/${view}`, view} : null;
@@ -1763,11 +1771,12 @@ async function viewSession(main, host, sid, context = null) {
     if (!row) throw new Error(t("obs_unknown"));
     rememberObservation("session", `${host}/${sid}`, data, [`host:${host}`,
       ...(data.work_items || []).map(item => `work_item:${item.work_item_id}`),
+      ...(workRecord ? [`work_item:${workRecord.work_item.work_item_id}`] : []),
       ...(data.relations_summary || []).flatMap(relation => [`execution:${relation.execution_id}`, `task:${relation.execution_id}`]),
       ...(data.started_from?.operation_id ? [`operation:${data.started_from.operation_id}`] : [])]);
     if (!queueKnown) {queue.checked = Boolean(row.streaming); queueKnown = true;}
     // Unknown stays unknown: no ID as a title and no BAT mark for an unreported agent.
-    titleNode.textContent = row.title || t("session_untitled");
+    titleNode.textContent = workRecord?.work_item?.title || row.title || t("session_untitled");
     markSlot.replaceChildren(agentMark(row.agent_kind));
     const headerPill = sessionPill(row);
     const pillTone = headerPill?.tone === "stale" ? "warn" : headerPill?.tone || "neutral";
@@ -1849,13 +1858,27 @@ async function viewSession(main, host, sid, context = null) {
         ...[reason ? h("p", {class: "muted", "data-checkpoint-reason": ""}, t(reason), " ", h("a", {href: "#/settings?section=connection"}, t("paths_setup"))) : null].filter(Boolean),
         h("a", {class: "global-quiet-link", href: "#/settings?section=agents"}, t("paths_mcp")));
     } else readonly.textContent = t("session_readonly_unknown");
+    perspectives?.update(data, workRecord);
     renderPending(); updateControls();
   };
   const loadObservation = async () => {
     const request = ++observationRequest;
     const current = () => {assertView(connection); return !disposed && request === observationRequest;};
     let data;
-    try { data = await api("GET", path); }
+    try {
+      data = await api("GET", path);
+      if (workRecord && current()) {
+        const id = workRecord.work_item.work_item_id;
+        const next = await api("GET", `/work-items/${encodeURIComponent(id)}`);
+        if (!current()) return;
+        const linked = next.links?.some(link => {
+          const target = link.target?.found ? link.kind === 'session' ? link.target : link.kind === 'operation' ? link.target.session : null : null;
+          return target?.host === host && target?.session_id === sid;
+        });
+        if (next.work_item?.work_item_id !== id || !linked) throw new ApiError(404, 'WORK_LINK_REMOVED', t('workspace_work_missing'));
+        workRecord = next;
+      }
+    }
     catch (error) {
       if ([403, 404, 410].includes(error?.status) && current()) {
         error.sessionWithdrawn = error.status === 403 ? "forbidden" : "gone";
@@ -1941,12 +1964,13 @@ async function viewSession(main, host, sid, context = null) {
   const withdraw = (kind, error = null) => {
     const first = !withdrawn;
     withdrawn = kind;
+    perspectives?.withdraw();
     withdrawalVersion += 1;
     clearTimeout(retryTimer); retryTimer = null; retryDelay = 1000;
     // Late reads for the withdrawn session must not paint again.
     ++observationRequest; ++deliveryTicket; ++messageRequest; cps.clear(); deliveryKnown.clear();
     state.observations?.delete(`session:${host}/${sid}`);
-    if (first && !results.hidden && !wide.matches) results.close();
+    if (first && !results.hidden && (!wide.matches || workbenchEnabled())) results.close();
     conversation.clear(); pending.replaceChildren(); pendingIdentity = undefined; status.replaceChildren(); readError = null;
     deliveryPills.replaceChildren(); result.replaceChildren(); metadata.replaceChildren();
     sourcesPanel?.dispose(); sourcesPanel = null; sourcesBody.replaceChildren(sourcesEmpty());
@@ -1959,6 +1983,7 @@ async function viewSession(main, host, sid, context = null) {
   };
   const reinstate = () => {
     withdrawn = "";
+    perspectives?.restore();
     withdrawnSlot.remove(); if (context?.picker) context.picker.hidden = false; head.after(workspaceNode);
     overflow.hidden = false; syncWide();
     void settleRefreshes([cps.load(), labels.refresh()]).catch(() => {});
@@ -1986,6 +2011,7 @@ async function viewSession(main, host, sid, context = null) {
         readReady = false; updateControls();
         readError?.remove();
         const messagesFailed = messageFailure === error;
+        if (!messagesFailed) perspectives?.fail();
         readError = sessionErrorBox(error, {label: t("ui_retry"), run: () => refresh().catch(() => {})},
           {within: messagesFailed ? conversation.box : status, summary: messagesFailed ? t(error?.status === 413 ? "session_err_too_large" : "message_window_failed") : null});
         readError.error = error;
@@ -2019,7 +2045,7 @@ async function viewSession(main, host, sid, context = null) {
       ]);
     });
   });
-  return () => {disposed = true; clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
+  return () => {disposed = true; perspectives?.dispose(); clearTimeout(retryTimer); off(); instructions?.dispose(); batHandoff?.dispose(); conversation.dispose(); mobileLayout?.dispose(); shortcut.dispose();
     cps.clear(); results.dispose(); overflow.dispose(); sourcesPanel?.dispose(); wide.removeEventListener("change", syncWide);};
 }
 
@@ -4362,7 +4388,7 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
       location.hash = `#/item/${[wid, nextHost, nextSid].map(encodeURIComponent).join("/")}`;
     }}, ...[...sessions].map(([key, session]) => h("option", {value: key, selected: session === selected},
       `${session.title || session.session_id} · ${session.host}`)))) : null;
-  const offSession = await viewSession(main, selected.host, selected.session_id, {project: data.project, itemBox, picker});
+  const offSession = await viewSession(main, selected.host, selected.session_id, {project: data.project, itemBox, picker, workRecord: data});
   try {
     assertView(connection);
     const offItem = await viewWorkItem(itemBox, wid);

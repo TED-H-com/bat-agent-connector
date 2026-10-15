@@ -24,9 +24,9 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   const search = h('input', {type: 'search', 'aria-label': t('workspace_search'), placeholder: t('ui_search_work')});
   const createProject = h('a', {href: '#/projects', title: t('workspace_manage'), 'aria-label': t('workspace_manage'),
     'data-project-create': '', hidden: true}, '+');
+  const heading = h('div', {class: 'workspace-nav-heading'}, h('strong', {}, t('nav_projects')), createProject);
   const box = h('aside', {class: 'workspace-nav', 'aria-label': t('workspace_navigation')},
-    h('div', {class: 'workspace-nav-heading'}, h('strong', {}, t('nav_projects')),
-      createProject),
+    heading,
     searchField(search, {class:'workspace-search'}), status, bindingNote, h('div', {class: 'workspace-tree-scroll'}, tree, sessionTree),
     h('div', {class: 'workspace-nav-footer'},
       h('a', {href: '#/sessions'}, t('workspace_all_sessions')),
@@ -252,7 +252,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
     if (pmWorkspace === id && bindingSource === source && globalTree === all) return;
     pmWorkspace = id; bindingSource = source; globalTree = all; contextVersion++; catalogRows = null; catalogKnown = false;
     roots = []; bindingKnown = false; bindingPartial = false; projects.clear(); sessionRows.replaceChildren(); sessionsLoaded = false; status.replaceChildren();
-    sessionTree.hidden = Boolean(id) && !all; box.querySelector('.workspace-nav-heading').hidden = Boolean(id) && !all;
+    sessionTree.hidden = Boolean(id) && !all; heading.hidden = Boolean(id) && !all;
     render(); refresh().catch(() => {});
   }, select(hash) {
     selected = hash;
@@ -261,7 +261,8 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
       revealProject = decodeURIComponent(pid); refresh().catch(() => {});
     }
     // Selection updates do not remount the tree, search or disclosure controls.
-    for (const node of box.querySelectorAll('a')) {
+    for (const node of new Set([...box.querySelectorAll('a'), ...tree.querySelectorAll('a'), ...sessionTree.querySelectorAll('a')])) {
+      if (node.closest('.wc-daily')) continue;
       if (node.getAttribute('href') === hash) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current');
     }
   }, dispose() {disposed = true; off(); document.removeEventListener('keydown', escape); box.remove();}};
