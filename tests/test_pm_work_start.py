@@ -1148,15 +1148,14 @@ STARTER_OWNER = Principal(PLAN_OWNER.actor, frozenset({"observe", "manage", "sta
 
 
 @pytest.fixture
-async def start_ready(ready, monkeypatch):
-    from bat_agent_connector import api_auth, pm_source_lineage
+async def start_ready(ready):
+    from bat_agent_connector import api_auth
 
     w = ready
     dispatch_runner(w)
     ops = w["d"].ops
     pm_work_start.install(ops)
     api_auth.issue(ops.db, PLAN_OWNER.actor, ["observe", "manage", "start", "operate"])
-    monkeypatch.setattr(pm_source_lineage, "DERIVED_ACTIONS", pm_source_lineage.DERIVED_ACTIONS | {"work.start"})
     return w
 
 
@@ -1562,5 +1561,157 @@ async def test_restart_mid_chain_and_parent_cancellation_preserve_child_authorit
         ).fetchone()[0]
         == 1
     )
+
+
+# ---------------------------------------------------------------------------
+# Step 5 tests: STARTS_SESSION, visibility, events, lineage, and child guards
+# ---------------------------------------------------------------------------
+
+
+async def test_starts_session_repository_continue_links_and_unchanged_other_links(start_ready, mock, monkeypatch):
+    from bat_agent_connector import pm_source_lineage, work_items
+
+    w = start_ready
+    ops = w["d"].ops
+    wi_id = w["target"]["work_item_id"]
+
+    env = await _start_envelope(w, key="start-links-1")
+    parent, _ = ops.create(STARTER_OWNER, **env)
+    done = await _advance_start(ops, parent["operation_id"])
+    assert done["status"] == "succeeded", done
+    handoff_id = done["result"]["execution_operation_id"]
+    expected_session = done["result"]["session"]
+
+    # 1. Work read includes operation link for repository.continue with session: {host, session_id}.
+    wi_doc = work_items.work_item_get(ops.db, wi_id)
+    op_links = [lnk for lnk in wi_doc["links"] if lnk["kind"] == "operation" and lnk["ref"] == handoff_id]
+    assert len(op_links) == 1
+    current_summary = op_links[0]["target"]
+    assert current_summary["action"] == "repository.continue"
+    assert current_summary["session"] == expected_session
+
+    # Compare against legacy STARTS_SESSION tuple without repository.continue: only the "session" key changes!
+    monkeypatch.setattr(work_items, "STARTS_SESSION", ("checkpoint.continue", "integration.handoff"))
+    legacy_summary = work_items._link_summary(ops.db, "operation", handoff_id)
+    assert {k: v for k, v in current_summary.items() if k != "session"} == {
+        k: v for k, v in legacy_summary.items() if k != "session"
+    }
+    assert legacy_summary["session"] is None
+
+    # 2. Links of other actions are 100% byte-identical before and after adding repository.continue to STARTS_SESSION.
+    now = time.time()
+    other_ops = [
+        ("op_" + "1" * 32, "checkpoint.continue", json.dumps({"host": "h1", "session_id": "s-cp"})),
+        ("op_" + "2" * 32, "integration.handoff", json.dumps({"host": "h1", "session_id": "s-int"})),
+        ("op_" + "3" * 32, "work_item.create", json.dumps({"work_item_id": wi_id})),
+        ("op_" + "4" * 32, "session.send", json.dumps({"host": "h1", "session_id": "s-send"})),
+    ]
+    with ops.journal.tx():
+        for oid, act, res_json in other_ops:
+            ops.db.execute(
+                """INSERT INTO operations(
+                    operation_id,actor,entry,idem_key,request_hash,action,target,params,preconditions,
+                    status,result,created_at,updated_at
+                ) VALUES(?,?, 'test', ?, 'h', ?, '{}', '{}', '{}', 'succeeded', ?, ?, ?)""",
+                (oid, STARTER_OWNER.actor, "k-" + oid, act, res_json, now, now),
+            )
+    legacy_other = [work_items._link_summary(ops.db, "operation", oid) for oid, _, _ in other_ops]
+    monkeypatch.setattr(
+        work_items, "STARTS_SESSION", ("checkpoint.continue", "integration.handoff", "repository.continue")
+    )
+    new_other = [work_items._link_summary(ops.db, "operation", oid) for oid, _, _ in other_ops]
+    assert new_other == legacy_other
+
+    # 3. Visibility is not widened: non-member still fails pm_source_lineage.require on the Work item and session.
+    outsider = Principal("outsider", frozenset({"observe", "manage", "start", "operate"}))
+    pm_source_lineage.require(ops.db, STARTER_OWNER, "work_item", wi_id)
+    pm_source_lineage.require(ops.db, STARTER_OWNER, "session", f"h1/{expected_session['session_id']}")
+    with pytest.raises(OperationError) as exc_wi:
+        pm_source_lineage.require(ops.db, outsider, "work_item", wi_id)
+    assert exc_wi.value.code == "NOT_FOUND"
+    assert exc_wi.value.status == 404
+    with pytest.raises(OperationError) as exc_sess:
+        pm_source_lineage.require(ops.db, outsider, "session", f"h1/{expected_session['session_id']}")
+    assert exc_sess.value.code == "NOT_FOUND"
+    assert exc_sess.value.status == 404
+
+
+async def test_visibility_events_and_late_child_guard(start_ready, mock):
+    from bat_agent_connector import pm_access, pm_workspace, work_items
+
+    w = start_ready
+    ops = w["d"].ops
+    wid = w["workspace_id"]
+    outsider = Principal("outsider", frozenset({"observe", "manage", "start", "operate"}))
+
+    env = await _start_envelope(w, key="start-vis-1")
+    parent, _ = ops.create(STARTER_OWNER, **env)
+    done = await _advance_start(ops, parent["operation_id"])
+    assert done["status"] == "succeeded", done
+
+    # 1. Member sees parent operation via pm_workspace.operation_visible and pm_access.visible; non-member gets False / 404.
+    assert pm_workspace.operation_visible(ops.db, STARTER_OWNER, done) is True
+    assert pm_access.visible(ops.db, STARTER_OWNER, done) is True
+    pm_access.require_visible(ops.db, STARTER_OWNER, done)
+
+    assert pm_workspace.operation_visible(ops.db, outsider, done) is False
+    assert pm_access.visible(ops.db, outsider, done) is False
+    with pytest.raises(OperationError) as exc_vis:
+        pm_access.require_visible(ops.db, outsider, done)
+    assert exc_vis.value.code == "NOT_FOUND"
+    assert exc_vis.value.status == 404
+
+    # 2. Events: member sees both operation events and pm_work_attempt ('work.start.succeeded') event;
+    # non-member sees neither while preserving page next_cursor.
+    raw_page = ops.journal.api_events(0, limit=500)
+    member_page = pm_access.filter_events(ops.db, STARTER_OWNER, raw_page)
+    outsider_page = pm_access.filter_events(ops.db, outsider, raw_page)
+    assert outsider_page["next_cursor"] == raw_page["next_cursor"]
+    assert any(
+        e["resource_type"] == "pm_work_attempt" and e["kind"] == "work.start.succeeded"
+        for e in member_page["events"]
+    )
+    assert any(
+        e["resource_type"] == "operation" and e["resource_id"] == done["operation_id"]
+        for e in member_page["events"]
+    )
+    assert not any(e["resource_type"] == "pm_work_attempt" for e in outsider_page["events"])
+    assert not any(
+        e["resource_type"] == "operation" and e["resource_id"] == done["operation_id"]
+        for e in outsider_page["events"]
+    )
+
+    # 3. Late child guard (require_child): if the Work item changes after handoff fetch before worktree prepare,
+    # require_child blocks the next frame before any BAT session is started.
+    base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
+    wi_guard = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Guarded slice", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    env_guard = await _start_envelope(w, work_item_id=wi_guard, key="start-late-guard")
+    starts_before = mock.channels().count("claude:start-session")
+
+    def mutate_work_mid_handoff(_):
+        ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (wi_guard,))
+
+    w["runner"].after["fetch"] = mutate_work_mid_handoff
+    op_guard, _ = ops.create(STARTER_OWNER, **env_guard)
+    done_guard = await _advance_start(ops, op_guard["operation_id"])
+    assert done_guard["status"] == "needs_attention", done_guard
+    assert done_guard["error_code"] == "WORK_ITEM_CHANGED"
+    assert done_guard["result"]["stage"] == "start_failed"
+    assert mock.channels().count("claude:start-session") == starts_before
+
+    # 4. Source withdrawal (removing member from workspace) hides the original work.start operation and its events.
+    ops.db.execute("DELETE FROM pm_workspace_members WHERE workspace_id=? AND actor=?", (wid, STARTER_OWNER.actor))
+    assert pm_access.visible(ops.db, STARTER_OWNER, done) is False
+    withdrawn_page = pm_access.filter_events(ops.db, STARTER_OWNER, raw_page)
+    assert withdrawn_page["next_cursor"] == raw_page["next_cursor"]
+    assert not any(e["resource_type"] == "pm_work_attempt" for e in withdrawn_page["events"])
+
 
 

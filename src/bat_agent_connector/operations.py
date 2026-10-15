@@ -470,6 +470,8 @@ class OperationService:
                 from .pm_work_batches import admit_restart
                 require_new_effect(self, operation_id)
                 admit_restart(self, operation_id, name)
+                from .pm_work_start import admit_restart as admit_work_start_restart
+                admit_work_start_restart(self, operation_id, name)
                 from .pm_maintenance_repairs import admit_restart as admit_repair_restart
                 admit_repair_restart(self, operation_id, name, request)
             from .pm_lifecycle_gates import admit_step
@@ -746,6 +748,9 @@ class OperationService:
         if op["action"] in {"session.relay", "fanout.plan", "fanout.start"}:
             from .orchestration_operations import resume_children
             resume_children(self, principal, op)
+        if op["action"] == "work.start":
+            from .pm_work_start import resume_children as resume_work_start_children
+            resume_work_start_children(self, principal, op)
         self.kick()
         return op
 

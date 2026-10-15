@@ -112,6 +112,9 @@ def get_workspace(db, principal: Principal, workspace_id: str) -> dict:
 
 def operation_visible(db, principal: Principal, op: dict) -> bool:
     """Read filter for all PM actions; callers retain their ordinary scope checks."""
+    if op.get("action") == "work.start":
+        from .pm_work_start import operation_visible as work_start_visible
+        return work_start_visible(db, principal, op)
     if not op.get("action", "").startswith("pm."):
         return True
     workspace_id = (op.get("target") or {}).get("workspace_id")

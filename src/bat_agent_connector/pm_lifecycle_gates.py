@@ -117,6 +117,8 @@ def require_local(db, operation_id, *, bookkeeping=False):
     if not bookkeeping:
         from .pm_conversation_adoption import require_child
         require_child(db, operation_id)
+        from .pm_work_start import require_child as require_work_start_child
+        require_work_start_child(db, operation_id)
     binding = operation_binding(db, operation_id)
     if binding and binding['kind'] == 'investment' and not bookkeeping:
         _require(head(db, binding['workspace_id']), binding['execution_epoch'])
