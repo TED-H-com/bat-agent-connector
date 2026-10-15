@@ -760,6 +760,8 @@ test('adoption recovery opens Details and tolerates a completed receipt', async 
   await recoverOriginalAdoption(card, '查回原請求');
   await expect(card.locator('[data-proposal-adopted]')).toBeVisible();
   await expect(saved).toHaveCount(1);
+  await expect(saved).toBeVisible();
+  await expect(card.locator('[data-pm-action="pm.conversation.adopt"] button[type=submit]')).toBeHidden();
   expect(checks).toEqual(['/operations/' + op.operation_id, '/operations/' + op.operation_id]);
   expect(f.discussion.writes).toHaveLength(2);
   expect(f.discussion.writes.filter((row: any) => row.body.action === 'pm.conversation.adopt')).toHaveLength(1);

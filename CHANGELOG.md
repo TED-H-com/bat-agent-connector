@@ -27,7 +27,8 @@
   adoption no longer shows Out of date or Ask PM again. A new discussion says
   that the first message reaches the PM when one is set up. The current plan
   revision reads Adopted. After adoption, Resolve issue is the primary action
-  under the issue's title, and Cancel keeps its draft.
+  under the issue's title, and Cancel keeps its draft. Original-request recovery
+  retains its saved receipt after completion and hides the finished Adopt control.
 
 - Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
   Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents

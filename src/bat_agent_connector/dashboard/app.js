@@ -22792,6 +22792,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			const pending = prepare.locked() || adopt.locked();
 			box.hidden = !active && !pending && !notice.querySelector(".error, [role=alert]");
 			pendingPill.hidden = !pending || Boolean(active);
+			if (adopted() && !adopt.locked()) adopt.box.querySelector("button[type=submit]").hidden = true;
 			onActivity({
 				proposalId: fresh() ? active?.proposal_id : null,
 				pending,

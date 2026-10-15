@@ -126,6 +126,9 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       const pending=prepare.locked()||adopt.locked();
       box.hidden=!active&&!pending&&!notice.querySelector('.error, [role=alert]');
       pendingPill.hidden=!pending||Boolean(active);
+      // Keep the original recovery controls until its receipt settles, including
+      // when the adopted projection arrived first. Preserve the saved receipt.
+      if(adopted()&&!adopt.locked())adopt.box.querySelector('button[type=submit]').hidden=true;
       onActivity({proposalId:fresh()?active?.proposal_id:null,pending,reviewable:fresh()||Boolean(resolution?.actionable?.()),inline:true});
       if(reviewButton){reviewButton.classList.toggle('primary',!reviewOpen);reviewButton.classList.toggle('secondary',reviewOpen);reviewButton.setAttribute('aria-expanded',String(reviewOpen));}
     }const locked=adopt.locked()||!deciding();picker.disabled=loading||adopt.locked();reload.disabled=loading;more.disabled=loading;
