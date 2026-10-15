@@ -212,6 +212,7 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
     const folder = process.env.BATC_FIX1_SHOTS;
     if (folder) {
       await mkdir(folder, {recursive: true}); await recovery.scrollIntoViewIfNeeded();
+      await form.locator(':scope > .pm-receipt').scrollIntoViewIfNeeded();
       await page.screenshot({animations: 'disabled', path: `${folder}/terminal-input-${outcome}-${locale}-${width}.png`});
     }
     await page.reload(); await openThreadTab(page, 'inputs');
