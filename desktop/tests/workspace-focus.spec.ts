@@ -6,7 +6,7 @@ import {policyFixture} from './pm-maintenance-policy-fixture.ts';
 import {fixture as sprintFixture, actions, pid} from './pm-sprint-fixture.ts';
 import {demoFixture, demoRoute} from './demo/index.ts';
 import {expectShellEmpty, shellShot} from './shell-empty-state.ts';
-import {openPmSection} from './pm-navigation.ts';
+import {openPmSection, openReportTask} from './pm-navigation.ts';
 
 function scheduleOnly() {
   const base = pmFixture(), sprint = sprintFixture(), prefix = `/pm/workspaces/${workspaceId}`;
@@ -115,6 +115,45 @@ for (const task of ['versions', 'save']) test(`live Overview opens only the ${ta
   await expect(page.locator('[data-pm-brief-export]')).toBeHidden();
   await expect(page.getByRole('heading', {name: task === 'save' ? 'Save report' : 'Versions', exact: true})).toBeVisible();
   expect(writes).toHaveLength(0);
+});
+
+for (const locale of ['en', 'zh-TW']) for (const navigation of ['stay', 'move', 'close']) test(`save focus waits for initial admission and respects ${navigation} ${locale}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({locale, baseURL}), page = await context.newPage();
+  const base = demoFixture(), writes: any[] = [];
+  let release!: () => void, overviewStarted = false, reportRead = false;
+  const waiting = new Promise<void>(resolve => {release = resolve;});
+  const dispatch = async (input: any) => {
+    if (input.method === 'POST') writes.push(input);
+    const path = new URL(input.path, 'http://fixture').pathname, result = await base.dispatch(input);
+    if (path === '/bootstrap' || path === '/capabilities') {
+      const caps = path === '/bootstrap' ? result.data.capabilities : result.data;
+      caps.scopes.push('manage'); caps.actions.push({action: 'pm.snapshot.create', allowed: true});
+    }
+    if (path === `/pm/workspaces/${base.ids.workspaceId}`) result.data.workspace.membership.role = 'owner';
+    // Keep the initial permission gate closed after the independent report read.
+    if (path.endsWith('/overview')) {overviewStarted = true; await waiting;}
+    if (path.endsWith('/snapshots/latest')) reportRead = true;
+    return result;
+  };
+  await mountConversation(page, false, dispatch); await page.goto(demoRoute());
+  await expect.poll(() => overviewStarted).toBe(true);
+  await openReportTask(page, 'save');
+  await expect.poll(() => reportRead).toBe(true);
+  const submit = page.locator('[data-pm-action="pm.snapshot.create"] button[type=submit]');
+  const trigger = page.locator('[data-pm-report-menu]');
+  await expect(submit).toBeVisible(); await expect(submit).toBeDisabled();
+  if (navigation === 'move') await trigger.focus();
+  if (navigation === 'close') await page.keyboard.press('Escape');
+  release(); await expect(submit).toBeEnabled();
+  if (navigation === 'stay') {
+    await expect(submit).toBeFocused();
+    await expect(page.getByRole('combobox', {name: locale === 'en' ? 'Report version' : '報告版本', exact: true})).toBeHidden();
+  } else {
+    await expect(submit).not.toBeFocused();
+    if (navigation === 'move') await expect(trigger).toBeFocused();
+    else {await expect(page.locator('.ui-inspector')).toHaveCount(0); await expect(submit).toBeHidden();}
+  }
+  expect(writes).toHaveLength(0); await context.close();
 });
 
 for (const [locale, copy] of [['en', {schedule: 'Schedule unavailable', scheduleReason: 'Schedule data is not provided here.',

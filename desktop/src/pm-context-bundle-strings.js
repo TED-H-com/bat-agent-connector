@@ -8,7 +8,7 @@ export const pmContextBundleStrings={
     pm_cb_stale:'The discussion changed. Preview the accepted plan again.',pm_cb_invalid:'The accepted context preview is invalid or does not match this discussion.',pm_cb_unavailable:'The accepted plan or its original sources are unavailable.',
   },
   'zh-TW':{
-    pm_cb_title:'分析使用的已採用計畫（選填）',pm_cb_help:'先預覽固定的已採用版本，再選擇納入保存的文件。PM 也會讀取有界的討論內容。',
+    pm_cb_title:'分析使用的已採用計畫（選填）',pm_cb_help:'先預覽固定的已採用版本，再選擇納入保存的文件。PM 也會讀取限定範圍內的討論內容。',
     pm_cb_preview:'預覽已採用計畫',pm_cb_loading:'正在核對已採用版本與原始來源…',pm_cb_select:'納入這個已採用版本',pm_cb_select_partial:'納入這份不完整文件',pm_cb_clear:'只使用討論內容',
     pm_cb_selected:'選定的已採用版本',pm_cb_revision:'已採用修訂',pm_cb_complete:'已完整納入所有採用文件',pm_cb_incomplete:'採用文件不完整：部分檔案已省略',
     pm_cb_included:'完整納入',pm_cb_omitted:'已省略',pm_cb_bytes:'位元組',pm_cb_boundary:'不完整內容不等於完整的已採用需求。這份脈絡用於分析，不授權採用決策或執行工作。',

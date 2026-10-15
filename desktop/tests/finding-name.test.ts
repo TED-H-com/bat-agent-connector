@@ -10,13 +10,13 @@ test('finding names cover each kind, missing facts and both locales', () => {
   const pull = {source: 'dependabot_pull_requests', number: 12, manifests: ['package.json']};
   const alert = {source: 'dependabot_alerts', number: 14, package: 'lodash', ecosystem: 'npm', ghsa_id: 'GHSA-35jh-r3h4-6jhm', severity: 'high'};
   assert.equal(findingName(issue, 'en', fallback), 'GitHub issue #87');
-  assert.equal(findingName(issue, 'zh-TW', zhFallback), 'GitHub Issue #87');
+  assert.equal(findingName(issue, 'zh-TW', zhFallback), 'GitHub 議題 #87');
   assert.equal(findingName(pull, 'en', fallback), 'Dependabot PR #12');
   assert.equal(findingName(pull, 'zh-TW', zhFallback), 'Dependabot PR #12');
   assert.equal(findingName(alert, 'en', fallback), 'Security alert: lodash');
   assert.equal(findingName(alert, 'zh-TW', zhFallback), '安全性警示：lodash');
   assert.equal(findingName({source: 'issues', labels: ['dependency']}, 'en', fallback), 'GitHub issue');
-  assert.equal(findingName({source: 'issues'}, 'zh-TW', zhFallback), 'GitHub Issue');
+  assert.equal(findingName({source: 'issues'}, 'zh-TW', zhFallback), 'GitHub 議題');
   assert.equal(findingName({source: 'dependabot_pull_requests'}, 'en', fallback), 'Dependabot PR');
   assert.equal(findingName({source: 'dependabot_alerts', number: 5}, 'en', fallback), 'Security alert #5');
   assert.equal(findingName({source: 'dependabot_alerts', number: 5}, 'zh-TW', zhFallback), '安全性警示 #5');
@@ -67,7 +67,7 @@ test('native observations contribute only proven kind-specific facts', () => {
   assert.equal(Object.hasOwn(named, 'manifest_path'), false);
   assert.equal(findingFromNative({facts: {statement: 'Recovery support budget'}}), null);
   assert.equal(findingFromNative({source: 'issues', native: {number: 87}, facts: {labels: ['dependency']}}), null);
-  assert.equal(findingName(findingFromNative({native: {kind: 'issues', number: '87'}, facts: {labels: ['dependency']}}), 'zh-TW', zhFallback), 'GitHub Issue');
+  assert.equal(findingName(findingFromNative({native: {kind: 'issues', number: '87'}, facts: {labels: ['dependency']}}), 'zh-TW', zhFallback), 'GitHub 議題');
   assert.deepEqual(findingSeverity('high', 'en'), {severity: 'high', label: 'High', tone: 'bad'});
   assert.deepEqual(findingSeverity('critical', 'zh-TW'), {severity: 'critical', label: '嚴重', tone: 'bad'});
   assert.deepEqual(findingSeverity('low', 'zh-TW'), {severity: 'low', label: '低', tone: 'neutral'});

@@ -631,6 +631,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   const drawersHome = h('div', {hidden: true});
   body.append(drawersHome);
   let detailPanel = null;
+  let cancelReportFocus = null;
   const toolPreference = viewState(namespace, workspaceId, 'work-tools');
   function openPanel(label, node, refreshStale = true) {
     if (!node || !loaded) return;
@@ -638,7 +639,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     detailPanel?.close(); schedule?.setActive(false); traceability?.hideInspector(); kanban?.hideInspector();
     const home = node.parentNode, next = node.nextSibling;
     toolPreference.open = node.dataset.pmTool || null;
-    detailPanel = inspector({title: label, overlay: Boolean(threadId) || workbench?.selected() === 'discussions', onClose: () => {home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
+    detailPanel = inspector({title: label, overlay: Boolean(threadId) || workbench?.selected() === 'discussions', onClose: () => {cancelReportFocus?.(); home.insertBefore(node, next?.parentNode === home ? next : null); detailPanel = null; if (!disposed) toolPreference.open = null; schedule?.setActive(workbench?.selected() === 'schedule');}});
     node.hidden = false; detailPanel.body.append(node); main.append(detailPanel);
     if (refreshStale) void refreshStaleVisible();
   }
@@ -681,12 +682,29 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
   reportState.hidden = true; reportState.dataset.pmReportState = ''; reportTools.append(reportState);
   function focusReportControl(node, panel, read) {
     if (!node) return;
+    cancelReportFocus?.();
     queueMicrotask(() => {
+      if (disposed || detailPanel !== panel) return;
       const initialFocus = document.activeElement;
-      void Promise.resolve(read).then(() => {
-        if (detailPanel !== panel || !node.isConnected || node.closest('[hidden], [inert]') || node.matches(':disabled')) return;
-        if (document.activeElement === initialFocus) node.focus();
-      });
+      let readComplete = false, stopped = false;
+      const stop = () => {
+        if (stopped) return; stopped = true;
+        observer.disconnect(); document.removeEventListener('focusin', check);
+        if (cancelReportFocus === stop) cancelReportFocus = null;
+      };
+      const check = () => {
+        if (stopped) return;
+        if (disposed || detailPanel !== panel || !node.isConnected || document.activeElement !== initialFocus) {stop(); return;}
+        if (!readComplete || node.closest('[hidden], [inert]') || node.matches(':disabled') || !node.getClientRects().length) return;
+        stop(); node.focus();
+      };
+      // A report read can finish before the workspace's initial admission or
+      // transport gate opens. Focus only after the actual control is enabled;
+      // closing the task or moving focus cancels this one pending handoff.
+      const observer = new MutationObserver(check);
+      observer.observe(reportTools, {attributes: true, childList: true, subtree: true, attributeFilter: ['disabled', 'hidden', 'inert']});
+      document.addEventListener('focusin', check); cancelReportFocus = stop;
+      void Promise.resolve(read).then(() => {readComplete = true; check();}, stop);
     });
   }
   function openReport(task) {

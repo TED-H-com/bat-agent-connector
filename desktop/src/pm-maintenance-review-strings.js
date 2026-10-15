@@ -60,7 +60,7 @@ const rows={
   event_follow_up_record:['Follow-up result','後續追蹤結果'],candidate_help:['This is a sourced proposal. It has not changed the accepted scope or started work.','這是有來源的提案，尚未改變已採用範圍或啟動工作。'],
   problem:['Observed problem','觀察到的問題'],goal_relation:['Relationship to the goal','與目標的關係'],expected_effect:['Expected effect','預期效果'],options:['Options (one per line)','選項（每行一項）'],
   hypotheses:['Unverified hypotheses (one per line)','尚未驗證的假設（每行一項）'],attributed_source:['Dated actor-attributed source; not independently verified here.','有日期與歸屬的來源聲明，此處未獨立查證。'],
-  direction:['Proposed direction','提議方向'],direction_continue_maintenance:['Continue maintenance','繼續維護'],direction_bounded_repair_proposal:['Propose a bounded repair','提議有界修復'],
+  direction:['Proposed direction','提議方向'],direction_continue_maintenance:['Continue maintenance','繼續維護'],direction_bounded_repair_proposal:['Propose a bounded repair','提議限定範圍修復'],
   direction_explore_idea:['Explore an Idea','探索構想'],direction_request_planning:['Request Planning','要求進入規劃'],direction_revise_policy:['Propose a policy revision','提議修改政策'],
   direction_pause_proposal:['Propose a pause','提議暫停'],direction_close_proposal:['Propose closing','提議關閉'],direction_defer:['Defer a decision','暫不決定'],
   completion_help:['This records the discussion. Proposed actions still need their existing adoption or operation flow.','這裡記錄討論結果；提議的行動仍須經過原有採用或操作流程。'],
