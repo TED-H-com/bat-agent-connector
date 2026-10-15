@@ -41,6 +41,8 @@ def schema(journal) -> None:
         install_pm_access(journal.db)
         from .pm_lifecycle import schema as lifecycle_schema
         lifecycle_schema(journal)
+        from .pm_work_start import schema as work_start_schema
+        work_start_schema(journal)
 
 
 def server_id(db) -> str:
