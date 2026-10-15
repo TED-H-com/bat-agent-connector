@@ -1823,7 +1823,7 @@ export const STRINGS = {
     create_project_scope: "Create in project: {name} · {id}", create_operation: "View creation operation", create_check_original: "Check original creation request",
     create_edit_request: "Edit a new creation request", create_invalid_receipt: "The receipt does not match the original creation request; that request is retained.",
     create_invalid_draft: "The saved creation request could not be read. Check operation history before creating a duplicate.",
-    project_row_active: "{count} active", project_row_review: "{count} review",
+    project_row_active: "{count} active", project_row_review: "{count} in review",
     create_project_help: "Parent sets the tree position; source keeps the derivation link. The Task Service name records a relationship. Creating a project does not start an agent.",
     create_item_help: "Keep the original request and acceptance criteria with this work. New steps are unchecked; creating a work item does not dispatch work or change a BAT workspace.",
     managed_locations: "Data and work locations", managed_locations_central: "Connector stores your identity, operation history and artifacts in application data on the installation computer. Dashboard drafts and reading layout choices stay in the current browser or desktop client.",
