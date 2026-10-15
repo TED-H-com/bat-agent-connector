@@ -19,10 +19,10 @@
   provides installation-aware MCP guidance and a read-only PM eligibility check, with
   localized reasons and a return link to the originating discussion.
 
-- Overview adopted time in zh-TW removes the stray space before adoption text,
-  the acceptance gap action aligns with Discussions' Ask PM phrasing, Issues &
-  changes uses shared empty blocking reason wording, and the register owner
-  column widens to fit walkthrough owners on a single line with ellipsis.
+- In zh-TW, the Overview's adoption time reads 「剛剛採用」 without a stray space,
+  and its Ask PM button reads 「詢問 PM」 as in Discussions. Issues & changes says
+  "None recorded" when no blocking reasons exist, and the owner column keeps a
+  name on one line, ending a longer name with an ellipsis.
 
 - Lazy PM loading keeps its loading status separate from each panel's status
   slot, while revealing settled content and removing its mask together.
