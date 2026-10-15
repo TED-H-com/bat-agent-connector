@@ -27,7 +27,7 @@ function validRequirements(values,included){
 }
 export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceId,threadId,thread,permitted,refresh:refreshParent,errorBox,conversation=false,backLink=()=>null,onFollowUp=()=>{},onAnswer=()=>{},onRevision=()=>{},onActivity=()=>{}}) {
   const base=`/pm/workspaces/${encodeURIComponent(workspaceId)}`,endpoint=base+'/conversation-proposals',target={workspace_id:workspaceId,thread_id:threadId};
-  let head=null,capability=null,rows=[],cursor=null,active=null,ticket=0,loading=false,ready=false,prepare,adopt,preferredId=null,latestId=null;
+  let head=null,capability=null,rows=[],cursor=null,active=null,ticket=0,loading=false,refreshAgain=false,queuedPreferred=null,inFlight=null,ready=false,prepare,adopt,preferredId=null,latestId=null;
   let candidateFields=[],requirementFields=[],rendered='',visible=false,conflict=false,composerNode=null,ask=null,connection=null,working=null,clock=null,adoptedId=null,reviewOpen=false,reviewButton=null,adapterInitialized=false;
   const enabled=()=>caps()?.features?.pm_workspaces?.conversation_proposals?.version===1;
   const writing=()=>visible&&enabled()&&permitted(false)&&thread()?.capabilities?.write===true&&caps()?.scopes?.includes('manage');
@@ -62,8 +62,8 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     preconditions:()=>{const saved=original();if(!saved?.preconditions)throw fail();return saved.preconditions;},
     permitted:()=>active?.proposal_id!==adoptedId&&deciding()&&fresh()&&active?.validation.status==='format_valid'&&validReview(original()?.review)&&!prepare.locked(),
     recoverPermitted:()=>writing()&&permitted(true)&&caps()?.scopes?.includes('start'),label:'pcp_adopt',onError:error=>{if(!conversation||error.code!=='VERSION_CONFLICT')return false;conflict=true;updateControls();return true;},onSaved:async()=>{adoptedId=active?.proposal_id;if(conversation&&refreshParent)await refreshParent();else{await refreshParent?.();await refresh();}},
-    onStateChange:()=>{if(ready)updateControls();},extra:h('div',{'data-proposal-adopt-panel':''},review,content,labelled('pcp_rationale',rationale),disclosure({label:t('pd_details'),body:note('pcp_review_help')}))});
-  const resolution = conversation ? issueResolution({h,t,api,alive,caps,workspaceId,thread,permitted,form,input,labelled,errorBox,refreshParent}) : null;
+    onStateChange:()=>{if(ready)updateControls();},extra:h('div',{'data-proposal-adopt-panel':''},review,content,labelled('pcp_rationale',rationale))});
+  const resolution = conversation ? issueResolution({h,t,api,alive,caps,workspaceId,thread,permitted,form,input,labelled,errorBox,refreshParent,onStateChange:()=>{if(ready)updateControls();}}) : null;
   const more=actionButton({type:'button',class:'secondary',hidden:true,onclick:()=>void loadMore()},t('pcp_more'));
   const reload=iconButton({icon:'refresh-cw',label:t('pcp_refresh'),onClick:()=>void refresh()});
   const prepareBox=h('details',{open:true,'data-proposal-prepare':''},h('summary',{},t('pcp_prepare')),prepare.box);
@@ -119,13 +119,13 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       const pending=prepare.locked()||adopt.locked();
       box.hidden=!active&&!pending&&!notice.querySelector('.error, [role=alert]');
       pendingPill.hidden=!pending||Boolean(active);
-      onActivity({proposalId:fresh()?active?.proposal_id:null,pending,reviewable:fresh()});
+      onActivity({proposalId:fresh()?active?.proposal_id:null,pending,reviewable:fresh()||Boolean(resolution?.actionable?.()),inline:true});
       if(reviewButton){reviewButton.classList.toggle('primary',!reviewOpen);reviewButton.classList.toggle('secondary',reviewOpen);reviewButton.setAttribute('aria-expanded',String(reviewOpen));}
     }const locked=adopt.locked()||!deciding();picker.disabled=loading||adopt.locked();reload.disabled=loading;more.disabled=loading;
     runtime.update(prepare);
     if(composerNode){
       ask.disabled=!prepare.canSubmit();
-      ask.textContent=t(prepare.locked()?'pm_check_original':'pd_ask');
+      ask.textContent=t(prepare.locked()&&!prepare.initialChecking?.()?'pm_check_original':'pd_ask');
       connection.hidden=runtime.eligible();ask.hidden=!runtime.eligible()&&!prepare.locked();
       discussionFeedback({t,request:prepare,node:working,eligible:runtime.eligible()});
     }
@@ -133,7 +133,8 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     if(reviewButton)reviewButton.disabled=!fresh()&&!adopt.locked();
     if(active&&active.validation.status==='format_valid'){
       const rawReason=content.querySelector('[data-proposal-adoptable-reason]');if(rawReason)rawReason.textContent=active.adoptable_reason||'';
-      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?(conversation?'pd_stale':'pcp_stale'):reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';if(reason==='pd_stale'&&!conflict){const label=proposalReasonLabel(t,active.adoptable_reason);if(label!==t('pd_stale'))reasons.textContent+=' · '+label;}reasons.hidden=!reason;const summaryReason=detail.querySelector('[data-proposal-summary-reason]');if(summaryReason){summaryReason.textContent=reason?t(reason):'';summaryReason.hidden=!reason;}const retry=detail.querySelector('[data-proposal-again]');if(retry){retry.hidden=fresh()||adopted();retry.disabled=!prepare.canSubmit();}}
+      const settling=(adopt.locked()&&!adopt.replaceable()&&!conflict)||Boolean(resolution?.locked?.()&&!resolution?.replaceable?.());
+      const reasons=content.querySelector('[data-proposal-reason]');if(reasons){const reason=settling?null:capability?.plan_adoption_available===false?'pm_plan_worktree_required':!deciding()?'pcp_readonly':!fresh()?(conversation?'pd_stale':'pcp_stale'):reviewIssue(original()?.review);reasons.textContent=reason?t(reason):'';if(reason==='pd_stale'&&!conflict){const label=proposalReasonLabel(t,active.adoptable_reason);if(label!==t('pd_stale'))reasons.textContent+=' · '+label;}reasons.hidden=!reason;const summaryReason=detail.querySelector('[data-proposal-summary-reason]');if(summaryReason){summaryReason.textContent=reason?t(reason):'';summaryReason.hidden=!reason;}const retry=detail.querySelector('[data-proposal-again]');if(retry){retry.hidden=fresh()||adopted()||settling;retry.disabled=!prepare.canSubmit();}}
     }
   }
   function saveEditor(title){
@@ -184,7 +185,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     }
     const before=h('details',{},h('summary',{},t('pcp_before')),
       accepted?h('div',{},h('strong',{},accepted.title||''),h('p',{class:'pm-note-text'},accepted.markdown||''),h('ul',{},...(accepted.requirements||[]).map(row=>h('li',{},row.id,' · ',row.text))),h('small',{class:'pm-source'},t('pcp_baseline'),' · ',p.context.plan_head.accepted_revision_id)):note('pcp_first'));
-    const technical=h('details',{'data-proposal-details':''},h('summary',{},t('pd_details')),labelled('pcp_name',title),h('code',{class:'mono'},p.proposal_id),h('code',{class:'mono','data-proposal-adoptable-reason':''},p.adoptable_reason||''),before);
+    const technical=h('details',{'data-proposal-details':''},h('summary',{},t('pd_details')),note('pcp_review_help'),labelled('pcp_name',title),h('code',{class:'mono'},p.proposal_id),h('code',{class:'mono','data-proposal-adoptable-reason':''},p.adoptable_reason||''),before);
     if(!conversation)content.append(h('p',{class:'pm-note-text'},p.document.summary),before,labelled('pcp_name',title));
     content.append(h('h4',{},t('pcp_candidates')));
     title.addEventListener('input',()=>saveEditor(title));
@@ -232,14 +233,18 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     if(!conversation)content.prepend(actionButton({type:'button',class:'secondary','data-proposal-again':'',hidden:true,onclick:()=>{ask?.click();}},t('pd_again')));
     content.prepend(h('p',{class:'muted','data-proposal-reason':''}));
     const raw=h('details',{},h('summary',{},t('pcp_raw')),h('pre',{class:'pm-note-text'},p.raw_reply));
-    if(conversation){technical.append(raw);content.append(technical);}else content.append(raw);
+    if(conversation){technical.append(raw);content.append(technical);}else content.append(raw,disclosure({label:t('pd_details'),body:note('pcp_review_help')}));
     adopt.box.firstElementChild.hidden=false;
     if(conversation){
       adopt.box.hidden=!reviewOpen;
       reviewButton=button({variant:reviewOpen?'secondary':'primary',label:t('pd_review'),'data-proposal-review':'',
         'aria-expanded':String(reviewOpen),onClick:()=>{
           reviewOpen=!reviewOpen;adopt.box.hidden=!reviewOpen;updateControls();
-          if(reviewOpen){content.scrollIntoView({block:'nearest'});content.querySelector('input[type=checkbox]')?.focus();}
+          if(reviewOpen){
+            const heading=detail.querySelector('h4')||box,rect=heading.getBoundingClientRect();
+            if(rect.top<0||rect.bottom>innerHeight)heading.scrollIntoView({block:'start'});
+            content.querySelector('input[type=checkbox]')?.focus({preventScroll:true});
+          }
         }});
       detail.append(h('p',{class:'ui-meta','data-proposal-summary-reason':'',hidden:true}),h('div',{class:'actions pd-review-actions'},reviewButton,button({label:t('pd_follow_up'),onClick:onFollowUp}),
         button({label:t('pd_again'),'data-proposal-again':'',hidden:fresh(),onClick:()=>ask?.click()})),adopt.box);
@@ -256,20 +261,22 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     rows=append?[...rows,...value.proposals]:value.proposals;cursor=next??null;const selected=picker.value;picker.replaceChildren(h('option',{value:''},t('pcp_choose')),...rows.map(row=>h('option',{value:row.proposal_id},[row.title??t('pd_proposed'),row.adoptable_reason==='adopted'?t('ui_status_adopted'):row.validation?.status!=='format_valid'?proposalReasonLabel(t,'invalid_proposal'):t(row.adoptable===false?'pd_stale':'pcp_proposal')].join(' · '))));picker.value=selected;more.hidden=cursor===null;
     notice.replaceChildren(...(!rows.length&&!conversation?[emptyState({title:t('pcp_empty_title'),text:t('pcp_empty')})]:[]),...(cursor!==null?[note('pcp_partial')]:[]));
   }
-  async function refresh(preferred){if(!enabled()){withdraw();box.hidden=true;return;}if(loading)return;loading=true;const own=++ticket;updateControls();
-    try{const [list,plans]=await Promise.all([api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`),api('GET',base+'/plans?limit=1')]);alive();if(own!==ticket)return;
-      if(plans.workspace_id!==workspaceId||!record(plans.head))throw fail();head=plans.head;
-      visible=true;box.hidden=false;page(list);
-      const newest=rows.at(-1)?.proposal_id,newArrival=conversation&&latestId&&newest!==latestId;latestId=newest;
-      const id=preferred||preferredId||(adopt.locked()?original()?.proposal_id:null)||(newArrival?newest:null)||original()?.proposal_id||active?.proposal_id||picker.value||(conversation?newest:null);if(id&&!rows.some(row=>row.proposal_id===id))picker.append(h('option',{value:id},t('pd_proposed')));picker.value=id||'';preferredId=null;
-      // Re-read original sources even if the document digest is unchanged.
-      if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
-        await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
-    }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}
-    finally{if(own===ticket||!visible){loading=false;prepare.update();adopt.update();updateControls();}}
+  async function refresh(preferred){if(!enabled()){withdraw();box.hidden=true;return;}if(preferred)queuedPreferred=preferred;if(loading){refreshAgain=true;return inFlight;}loading=true;
+    inFlight=(async()=>{do{refreshAgain=false;const nextPreferred=queuedPreferred;queuedPreferred=null;const own=++ticket;updateControls();
+      try{const [list,plans]=await Promise.all([api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`),api('GET',base+'/plans?limit=1')]);alive();if(own!==ticket)return;
+        if(plans.workspace_id!==workspaceId||!record(plans.head))throw fail();head=plans.head;
+        visible=true;box.hidden=false;page(list);
+        const newest=rows.at(-1)?.proposal_id,newArrival=conversation&&latestId&&newest!==latestId;latestId=newest;
+        const id=nextPreferred||preferredId||(adopt.locked()?original()?.proposal_id:null)||(newArrival?newest:null)||original()?.proposal_id||active?.proposal_id||picker.value||(conversation?newest:null);if(id&&!rows.some(row=>row.proposal_id===id))picker.append(h('option',{value:id},t('pd_proposed')));picker.value=id||'';preferredId=null;
+        // Re-read original sources even if the document digest is unchanged.
+        if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
+          await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
+      }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}
+    }while(refreshAgain&&visible&&enabled());})().finally(()=>{loading=false;inFlight=null;prepare.update();adopt.update();updateControls();});
+    return inFlight;
   }
   async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}finally{loading=false;updateControls();}}
-  function withdraw(){ticket++;visible=false;active=head=latestId=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;reviewButton=null;resolution?.withdraw();prepare?.update();adopt?.update();}
+  function withdraw(){ticket++;refreshAgain=false;queuedPreferred=null;visible=false;active=head=latestId=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;reviewButton=null;resolution?.withdraw();prepare?.update();adopt?.update();}
   function composer(textarea){
     ask=actionButton({type:'button',class:'secondary','data-discussion-ask':'',onclick:()=>{
       if(adopt.replaceable())adopt.edit();
@@ -283,7 +290,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
     updateControls();return composerNode;
   }
   ready=true;updateControls();
-  return {box,tools,composer,refresh,withdraw,recheck:()=>prepare.recheck(),update(value={}){
+  return {box,tools,composer,refresh,withdraw,recheck:()=>{prepare.recheck();if(['accepted','queued','pending','running','waiting_external','waiting_checks'].includes(adopt.operation()?.status))adopt.recheck();resolution?.recheck();},update(value={}){
     if(value.capabilities){
       capability=value.capabilities;
       if(conversation&&!adapterInitialized){

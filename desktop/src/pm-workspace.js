@@ -69,7 +69,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
   let saved = {version: 1, values: {}}, damaged = false, busy = false, operation = null;
   const receiptDelays = [250, 500, 1000, 1500, 2000, 3000];
-  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false;
+  let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false;
   const stopTimer = () => {clearTimeout(receiptTimer); receiptTimer = null;};
   try {
     const raw = localStorage.getItem(storage);
@@ -126,7 +126,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   const reset = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => {
     try {
       guard(); if (!terminal() && !saved.intent?.initialAdmissionRefused) return;
-      saved = {version: 1, values: capture()}; persist(); operation = null; status.replaceChildren(); receipt.replaceChildren(); update();
+      saved = {version: 1, values: capture()}; persist(); operation = null; initialChecking = false; status.replaceChildren(); receipt.replaceChildren(); update();
     } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error, {within:status}));}
   }}, t('pm_edit_request'));
   const button = h('button', {type: 'submit', class: 'ui-button primary'}, t(label));
@@ -146,6 +146,9 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
   }
   function update() {
     if (disposed || !form.isConnected) return;
+    pollReceipt();
+    if (!busy && receiptTimer === null) initialChecking = false;
+    const autoChecking = initialChecking && (busy || receiptTimer !== null);
     const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
     for (const input of Object.values(fields)) {
       // A restored title draft must receive Escape while initial reads gate Save.
@@ -153,12 +156,11 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
       if (readOnlyWhenUnavailable) input.readOnly = locked;
     }
-    button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+    button.disabled = busy || autoChecking || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
     button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
-    button.textContent = t(saved.intent ? 'pm_check_original' : label);
+    button.textContent = t(saved.intent && !autoChecking ? 'pm_check_original' : label);
     reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
     reset.disabled = busy || !allowed();
-    pollReceipt();
     onStateChange();
   }
   async function run(automatic = false) {
@@ -170,12 +172,13 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     stopTimer();
     if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
     let firstAttempt = stagedHere; stagedHere = false;
+    if (firstAttempt) initialChecking = true;
     try {
       guard(); busy = true; status.replaceChildren();
       if (!saved.intent) {
         saved.values = capture();
         const request = {action, target, params: params(saved.values), preconditions: preconditions()};
-        saved.intent = {key: crypto.randomUUID(), request}; persist(); firstAttempt = true;
+        saved.intent = {key: crypto.randomUUID(), request}; persist(); firstAttempt = true; initialChecking = true;
         operation = null; receipt.replaceChildren();
       }
       update();
@@ -243,7 +246,8 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     } else {stopTimer(); unsubscribe();}
   });
   form.append(connection);
-  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+  return {box: form, fields, update, changed, hasDraft: () => Object.keys(saved.values).length > 0, submit: run, edit: () => reset.click(), replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused), canSubmit: () => !disposed && !busy && !(initialChecking && receiptTimer !== null) && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused, operation: () => operation, locked: () => busy || damaged || Boolean(saved.intent),
+    initialChecking: () => initialChecking && (busy || receiptTimer !== null),
     stage: () => {
       if (disposed || busy || saved.intent || damaged) return false;
       guard(); saved.values = capture();
@@ -253,11 +257,13 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     discard: () => {if (busy || saved.intent || damaged) return; saved.values = {}; persist();},
     checking: () => busy || receiptTimer !== null,
     recheck: () => {
-      if (disposed || busy || !saved.intent?.operation_id || !allowed()) return;
-      receiptAttempt = 0; receiptPolling = true; void run(true);
+      if (disposed || !saved.intent?.operation_id || !allowed()) return;
+      if (operation && !['accepted', 'queued', 'pending', 'running', 'waiting_external', 'waiting_checks'].includes(operation.status)) return;
+      receiptAttempt = 0; receiptPolling = true;
+      if (!busy) void run(true);
     },
     dispose: () => {
-      disposed = true; receiptPolling = false; stopTimer(); unsubscribe(); onConnectionChange(false);
+      disposed = true; receiptPolling = false; initialChecking = false; stopTimer(); unsubscribe(); onConnectionChange(false);
       for (const input of Object.values(fields)) input.disabled = true;
       button.disabled = reset.disabled = true;
     },
@@ -1061,7 +1067,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         preconditions, permitted: write, label: 'pd_save', onBeforeSaved: (_result, values) => {threadTitle.dataset.pmDefault = values.title;},
         onSaved: () => {titleView.finish({focus: true}); return load();}, onStateChange: () => {if (threadData) titleView?.update(threadData.thread.title);}, extra: threadTitle});
       renameForm.box.querySelector('.pm-receipt').dataset.discussionReceipt = 'rename';
-      const threadDetails = h('details', {'data-discussion-details': '', open: true}, h('summary', {}, t('pd_details')), renameForm.box.querySelector('.pm-receipt'));
+      const threadDetails = h('details', {'data-discussion-details': ''}, h('summary', {}, t('pd_details')), renameForm.box.querySelector('.pm-receipt'));
       titleView = discussionTitle({t, field: threadTitle, form: renameForm, value: thread.title});
       boundContext = h('div', {class: 'pd-context'}); panelContext = h('div', {class: 'pd-context-details'});
       discussionHint = h('p', {class: 'muted'});
@@ -1457,6 +1463,15 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             onSaved: result => {alive(); location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);},
             extra: threadId === 'new' ? text : h('div', {}, labelled('pd_title', name), text)});
           titleDraft = threadId === 'new' ? discussionTitle({t, field: name, form: create, value: name.value, local: true}) : null;
+          if (threadId === 'new' && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
+            workspaceCaps = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`); alive();
+            if (ticket !== sequence) return;
+            pmCapabilities = workspaceCaps;
+          }
+          const pmReady = Boolean(threadId === 'new' && (workspaceCaps?.structured_analysis?.version === 1
+            ? (workspaceCaps.structured_analysis.actions?.['pm.conversation.propose']?.adapters || []).some(row => ['codex-native-linux', 'bat-pm-linux-v1'].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true)
+            : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true
+              || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
           const contextDraft = h('section', {'data-discussion-tab': 'context'}, ...discussionContext(t, draftRefs || launch.refs, {title: launch.title}));
           const draftPanel = discussionPanel({t, namespace, workspaceId, threadId, panes: {context: contextDraft}});
           if (threadId === 'new') discussionTools = draftPanel;
@@ -1466,7 +1481,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleDraft?.box || h('h2', {}, t('pd_new'))), draftPanel.trigger),
               h('div', {class: 'pd-thread-meta'}, h('span', {class: 'ui-pill tone-neutral'}, t('ui_status_draft')),
                 boundContext)),
-            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_notes_empty'),text:t('pd_empty')})), discussionComposer({t, form: create, draft: true})),
+            h('div', {class: 'pd-transcript'}, emptyState({title:t('pd_notes_empty'),text:t('pd_empty')})), discussionComposer({t, form: create, draft: true, pmReady})),
             draftPanel.home));
 
 

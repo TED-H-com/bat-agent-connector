@@ -53,7 +53,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
 
   function revisionRow(summary) {
     const detail = h('div', {class: 'pd-revision-detail', hidden: true});
-    const pill = h('span', {}, statusPill(summary.revision_id === head.accepted_revision_id ? 'accepted' : 'unknown'));
+    const pill = h('span', {}, statusPill(summary.revision_id === head.accepted_revision_id ? 'adopted' : 'unknown'));
     const open = button({variant: 'ghost', label: t('pm_revision_number', {number: summary.sequence}),
       'data-pm-revision-open': '', 'aria-expanded': 'false', onClick: () => {
         const show = detail.hidden;
@@ -78,7 +78,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
         alive(); if (!item.isConnected) return;
         const plan = data.plan;
         if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t('pm_scope_mismatch'));
-        pill.replaceChildren(statusPill(plan.is_current_accepted ? 'accepted' : plan.status === 'adopted' ? 'historical' : plan.status === 'draft' ? 'draft' : 'unknown'));
+        pill.replaceChildren(statusPill(plan.is_current_accepted ? 'adopted' : plan.status === 'adopted' ? 'historical' : plan.status === 'draft' ? 'draft' : 'unknown'));
         const document = plan.document, source = h('div', {class: 'pm-plan-domains'});
         for (const [domain, section] of Object.entries(document.sections || {})) {
           source.append(h('details', {}, h('summary', {}, discussionLabel(t, 'pm_slot_', domain)),

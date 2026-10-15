@@ -76,7 +76,7 @@ export function discussionTitle({t, field, form, value, local = false}) {
 }
 
 export const discussionSettingsHref = () => '#/settings?section=agents&from=' + encodeURIComponent(location.hash);
-export function discussionComposer({t, form, analysis, details, draft = false}) {
+export function discussionComposer({t, form, analysis, details, draft = false, pmReady = false}) {
   const actions = form.box.querySelector(':scope > .actions');
   const status = h('div', {class: 'pd-composer-status'}, form.box.querySelector(':scope > [role=status]'));
   const receipt = form.box.querySelector(':scope > .pm-receipt');
@@ -85,7 +85,8 @@ export function discussionComposer({t, form, analysis, details, draft = false}) 
   if (analysis) {
     actions.append(analysis.querySelector('[data-discussion-ask]'));
     status.append(analysis);
-  } else status.append(h('p', {class: 'muted'}, h('span', {}, t('pd_not_connected')), ' ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
+  } else if (draft && pmReady) status.append(h('p', {class: 'muted', 'data-discussion-draft-ready': ''}, t('pd_draft_ready')));
+  else status.append(h('p', {class: 'muted', 'data-discussion-pm-unavailable': ''}, h('span', {}, t('pd_not_connected')), ' ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
   form.box.append(h('div', {class: 'pd-composer-row'}, status, actions));
   if (details) form.box.append(details);
   return h('div', {class: 'pd-composer'}, form.box);
@@ -171,10 +172,11 @@ export function discussionPanel({t, namespace, workspaceId, threadId = 'new', pa
   }
   media.addEventListener('change', locate);
   return {home, trigger, select(key) {select(key); controls.setValue(key);}, open(key, options) {open(key, options);},
-    sync({proposalId = null, pending = false, inputs = false} = {}) {
-      const arrived = proposalId && state.proposalId !== proposalId;
+    sync({proposalId = null, pending = false, inputs = false, inline = false} = {}) {
+      const plan = !inline && (pending || Boolean(proposalId));
+      const arrived = !inline && proposalId && state.proposalId !== proposalId;
       if (arrived) {state.proposalId = proposalId; state.explicit = false;}
-      if (arrived || !state.explicit && (pending || inputs || proposalId)) open(inputs && !pending && !proposalId ? 'inputs' : 'plan', {explicit: false});
+      if (arrived || !state.explicit && (plan || inputs)) open(inputs && !plan ? 'inputs' : 'plan', {explicit: false});
       else if (!overlay && state.open) open(state.tab, {explicit: false});
     }, close() {close();}, dispose() {disposed = true; media.removeEventListener('change', locate); overlay?.close();}};
 }

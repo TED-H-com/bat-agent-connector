@@ -1,6 +1,6 @@
 export const discussionStrings = {
   en: {
-    pd_notes_empty: 'No notes yet', pd_notes_empty_help: 'Record the problem, an option, or a question to revisit.',
+    pd_notes_empty: 'No messages yet', pd_notes_empty_help: 'Record the problem, an option, or a question to revisit.',
     pd_search_empty_help: 'Try another title or context name.', pd_no_context_help: 'Open a discussion from a project record to add context.',
     pd_inputs_empty: 'No inputs yet', pd_inputs_empty_help: 'Add a sourced statement or a question from this discussion.',
     pd_packages_empty: 'No saved context', pd_packages_empty_help: 'Prepare a context package for the next run.',
@@ -14,7 +14,7 @@ export const discussionStrings = {
     pd_new: 'New discussion', pd_search: 'Search', pd_message: 'Message the PM…', pd_send: 'Send', pd_ask: 'Ask PM',
     pd_panel: 'Discussion info', pd_tab_context: 'Context', pd_tab_inputs: 'Inputs', pd_tab_plan: 'Plan', pd_back: 'Back to {view}',
     pd_title: 'Discussion title', pd_rename: 'Rename', pd_unavailable: 'Unavailable', pd_bound_label: 'Originally: {label}',
-    pd_not_connected: 'Messages are saved. The PM is not connected and will not reply.', pd_setup: 'Set up PM', pd_working: 'PM is working', pd_proposed: 'Proposed update',
+    pd_not_connected: 'Messages are saved. The PM is not connected and will not reply.', pd_draft_ready: 'Send the first message to ask the PM', pd_setup: 'Set up PM', pd_working: 'PM is working', pd_proposed: 'Proposed update',
     pd_review: 'Review & adopt', pd_follow_up: 'Ask follow-up', pd_stale: 'Out of date', pd_again: 'Ask PM again',
     pd_adopted: 'Update adopted', pd_details: 'Details', pd_copy: 'Copy digest', pd_answer: 'Your answer', pd_answer_send: 'Send answers',
     pd_empty: 'Start with what needs a decision.', pd_no_context: 'No bound context', pd_analysis: 'Analysis options', pd_history: 'Saved proposals',
@@ -26,7 +26,7 @@ export const discussionStrings = {
     pm_mode_follow_up: 'Follow-up',
   },
   'zh-TW': {
-    pd_notes_empty: '尚無筆記', pd_notes_empty_help: '先記下問題、一個選項，或待釐清的疑問。',
+    pd_notes_empty: '尚無訊息', pd_notes_empty_help: '先記下問題、一個選項，或待釐清的疑問。',
     pd_search_empty_help: '試試其他標題或脈絡名稱。', pd_no_context_help: '從專案紀錄開啟討論，即可帶入脈絡。',
     pd_inputs_empty: '尚無資訊', pd_inputs_empty_help: '加入有來源的陳述，或這段討論中的疑問。',
     pd_packages_empty: '尚無脈絡紀錄', pd_packages_empty_help: '為下次執行準備脈絡套件。',
@@ -40,7 +40,7 @@ export const discussionStrings = {
     pd_new: '新增討論', pd_search: '搜尋', pd_message: '傳訊息給 PM…', pd_send: '傳送', pd_ask: '詢問 PM',
     pd_panel: '討論資料', pd_tab_context: '脈絡', pd_tab_inputs: '資訊', pd_tab_plan: '計畫', pd_back: '返回{view}',
     pd_title: '討論標題', pd_rename: '重新命名', pd_unavailable: '無法取得', pd_bound_label: '建立討論時：{label}',
-    pd_not_connected: '訊息會儲存；PM 尚未連線，不會回覆。', pd_setup: '設定 PM', pd_working: 'PM 處理中', pd_proposed: '建議更新',
+    pd_not_connected: '訊息會儲存；PM 尚未連線，不會回覆。', pd_draft_ready: '傳送第一則訊息後即可詢問 PM', pd_setup: '設定 PM', pd_working: 'PM 處理中', pd_proposed: '建議更新',
     pd_review: '審閱並採用', pd_follow_up: '繼續追問', pd_stale: '已過期', pd_again: '再次詢問 PM',
     pd_adopted: '已採用更新', pd_details: '詳細資訊', pd_copy: '複製摘要碼', pd_answer: '你的回答', pd_answer_send: '傳送回答',
     pd_empty: '從需要決定的事開始。', pd_no_context: '尚未連結脈絡', pd_analysis: '分析選項', pd_history: '已存提案',
