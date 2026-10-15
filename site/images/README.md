@@ -3,7 +3,7 @@
 These sixteen unedited PNGs show the real shared browser frontend from merged main
 `d66f032d342562322479c5087c6982d662d11a01`, using the single membership demo project
 in [`desktop/tests/demo/index.ts`](../../desktop/tests/demo/index.ts).
-This pin includes merged updates through #181 on 2026-10-15: quiet session status and explained history (#152), shell focus (#155), single-message failure presentation and meetings guidance (#162, #175), M4 lifecycle evidence (#116), Settings diagnostics export (#171), read-only session work paths and agent setup (#169), on-demand PM views (#174), TED-H-com repository links (#177), Git transport contract (#167), and UI polish across phone headers, single-line owner columns and zh-TW localization (#172, #179, #180).
+This pin includes merged updates through #181 on 2026-10-15. Since the previous pin (#161) it adds quiet session status and explained partial history (#152), focused workspace tasks and short empty states (#155), one message per PM failure and Meetings guidance (#162, #175), M4 lifecycle evidence (#116), the exact build and redacted diagnostics in Settings (#171), read-only session paths and Settings → Agents (#169), on-demand PM views (#174), the Git transport contract with local Git still disabled (#167), TED-H-com repository links (#177), and wording and layout fixes for phone headers, owner columns and zh-TW terms (#172, #179, #180).
 The development preview is shared-browser evidence; this refresh provides no installation or live acceptance evidence.
 The [progress report](../../docs/product/progress-2026-10-14.md) separates those states.
 
@@ -16,7 +16,7 @@ The [progress report](../../docs/product/progress-2026-10-14.md) separates those
 | `schedule-en.png`, `schedule-zh.png` | Recorded baseline, forecast and actual dates on a labelled axis, with Design review collapsed through its normal control. Phone tracks use one fitted date range. Recovery review is forecast three days late; undated session attempts remain unscheduled. |
 | `dependencies-en.png`, `dependencies-zh.png` | Pinned inventory graph with its Partial label and evidence legend. The graph is bounded; missing versions, ownership and freshness remain unknown. |
 | `board-en.png`, `board-zh.png` | Search, requirement and agent filters above twelve synthetic work items across five workflow lanes. Waiting and review states remain distinct from accepted content and delivery. |
-| `session-en.png`, `session-zh.png` | Manual BAT session on `demo-host`, with its read-only transcript and reviewed work paths. There are no send, answer or interrupt controls. |
+| `session-en.png`, `session-zh.png` | Manual BAT session on `demo-host`, with its read-only transcript. A View only panel points to the ways to continue: reply in BAT, continue from a checkpoint in a new managed session, or dispatch from an agent (MCP). There are no send, answer or interrupt controls. |
 
 All product data is synthetic, including acceptance and delivery receipts.
 The capture script projects Recently decided from the demo's existing plan adoption

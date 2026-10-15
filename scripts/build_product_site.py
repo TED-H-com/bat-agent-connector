@@ -73,8 +73,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "Screenshots pin merged main at d66f032d342562322479c5087c6982d662d11a01, through #181 on October 15, 2026. They show quiet session status, on-demand PM views, read-only work paths, single-line owner columns and updated localization. This refresh provides no installation or live acceptance evidence. Match the package to its source before installing.",
-        "截圖固定於已合併主線的 d66f032d342562322479c5087c6982d662d11a01，包含 2026 年 10 月 15 日的 #181。展示靜態工作階段狀態、隨選載入 PM 視圖、唯讀工作路徑、單行負責人欄位與繁體中文在地化更新。本次沒有安裝或實機驗收證據；安裝前請核對套件來源。",
+        "Screenshots pin merged main at d66f032d342562322479c5087c6982d662d11a01, through #181 on October 15, 2026. They show the read-only session page with its ways to continue, single-line owner columns and updated zh-TW wording. This refresh provides no installation or live acceptance evidence. Match the package to its source before installing.",
+        "截圖固定於已合併主線的 d66f032d342562322479c5087c6982d662d11a01，包含 2026 年 10 月 15 日的 #181。展示唯讀工作階段頁面及其接續方式、單行負責人欄位與更新後的繁體中文用詞。本次沒有安裝或實機驗收證據；安裝前請核對套件來源。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -593,8 +593,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Merged main at d66f032d includes quiet session status (#152), shell focus (#155), single-message PM failure presentation (#162, #175), M4 lifecycle evidence (#116), Settings diagnostics export (#171), read-only session work paths (#169), on-demand PM views (#174), TED-H-com links (#177), Git transport contract (#167), and UI polish (#172, #179, #180). Installation and live acceptance remain separate.",
-        "已合併主線 d66f032d 包含靜態工作階段狀態（#152）、工作空間聚焦（#155）、單一 PM 錯誤訊息（#162、#175）、M4 生命週期證據（#116）、設定診斷匯出（#171）、唯讀工作階段路徑（#169）、隨選載入 PM 視圖（#174）、TED-H-com 連結（#177）、Git 傳輸合約（#167）與介面修整（#172、#179、#180）。安裝與實機驗收另列。",
+        "Since #161, merged main at d66f032d adds quiet session status (#152), focused workspace tasks (#155), one message per PM failure (#162, #175), M4 lifecycle evidence (#116), the exact build and redacted diagnostics in Settings (#171), read-only session paths and Settings → Agents (#169), on-demand PM views (#174), the Git transport contract with local Git still disabled (#167), TED-H-com links (#177), and wording and layout fixes (#172, #179, #180). Installation and live acceptance remain separate.",
+        "自 #161 之後，已合併主線 d66f032d 新增：只在需要處理時顯示的工作階段狀態（#152）、聚焦的工作區任務（#155）、PM 每次失敗只顯示一則訊息（#162、#175）、M4 生命週期證據（#116）、設定中的確切版本與已遮蔽的診斷資訊（#171）、唯讀工作階段路徑與設定 → 代理（#169）、PM 視圖按需載入（#174）、Git 傳輸合約（本機 Git 仍停用，#167）、TED-H-com 連結（#177），以及用詞與版面修正（#172、#179、#180）。安裝與實機驗收另列。",
     ),
     (
         "Still ahead",
