@@ -3,6 +3,7 @@
 .wc-daily > a { display: flex; justify-content: flex-start; gap: var(--space-3); padding: var(--space-2); color: var(--text-2); text-decoration: none; }
 .wc-daily > [aria-current=page] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 body.workbench-preview.has-workspace #workspace { grid-template-columns: 208px minmax(0, 1fr); }
+body.workbench-preview.has-workspace #workspace::before { width: 208px; }
 body.workbench-preview.has-workspace.wc-has-list #workspace { grid-template-columns: 208px 256px minmax(0, 1fr); }
 .workbench-preview .workspace-resizer, .workbench-preview .shell-project-nav { display: none; }
 .workbench-preview .workspace-nav { padding-top: var(--space-5); }
@@ -39,6 +40,7 @@ body.workbench-preview.has-workspace.wc-has-list #workspace { grid-template-colu
 .workbench-preview [data-workbench-management] { max-width: 220px; }
 @media (min-width: 1000px) and (max-width: 1279px) {
   body.workbench-preview.has-workspace.wc-has-list #workspace { grid-template-columns: 176px 220px minmax(0, 1fr); }
+  body.workbench-preview.has-workspace.wc-has-list #workspace::before { width: 176px; }
   .wc-live-lanes { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 999px) {
