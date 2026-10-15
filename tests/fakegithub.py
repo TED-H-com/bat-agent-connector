@@ -21,6 +21,7 @@ class FakeGitHub:
         self.merge_requests: dict[str, dict] = {}
         self.commits: dict[str, dict] = {"b" * 40: {"sha": "b" * 40, "parents": [], "commit": {"message": "base"}}}
         self.branches = {"main": "b" * 40}
+        self.default_branch = "main"
         self.stacks: dict[int, dict] = {}
         self.before_request = None
         self.patch_mode = "ok"
@@ -186,7 +187,7 @@ class FakeGitHub:
                 if self.headers.get("X-GitHub-Api-Version") != "2026-03-10":
                     return self._send(400, {"message": "unsupported API version"})
                 if path == "/repos/o/r" and method == "GET":
-                    return self._send(200, {"id": fake.repository_id, "full_name": "o/r"})
+                    return self._send(200, {"id": fake.repository_id, "full_name": "o/r", "default_branch": fake.default_branch})
                 if path == "/repos/o/r/pulls" and method == "GET":
                     prs = [p for p in fake.pulls.values() if query.get("state") == "all"
                            or p["state"] == query.get("state", "open")]

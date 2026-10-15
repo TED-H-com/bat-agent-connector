@@ -830,15 +830,17 @@ def _access_intent(ops, principal: Principal, op: dict) -> None:
     if not principal.allows("observe"):
         raise _bad("FORBIDDEN", "Observing work.start requires observe", 403)
     workspace = pm_workspace.require_member(ops.db, principal, wid)
-    if workspace["server_id"] != intent.get("server_id"):
+    if intent.get("server_id") is not None and workspace["server_id"] != intent.get("server_id"):
         raise _bad("PM_WORK_START_SOURCE_UNAVAILABLE", "Original workspace identity is unavailable", 404)
-    pm_work_packages._original_plan(ops, principal, wid, intent["plan_ref"])
-    previous = intent["package_plan"].get("previous_package_id")
-    if previous:
-        pm_work_packages._access(ops, principal, pm_work_packages._record(ops.db, wid, previous))
-    reused_id = intent["package_plan"].get("package_id")
-    if reused_id:
-        pm_work_packages._access(ops, principal, pm_work_packages._record(ops.db, wid, reused_id))
+    if "plan_ref" in intent:
+        pm_work_packages._original_plan(ops, principal, wid, intent["plan_ref"])
+    if isinstance(intent.get("package_plan"), dict):
+        previous = intent["package_plan"].get("previous_package_id")
+        if previous:
+            pm_work_packages._access(ops, principal, pm_work_packages._record(ops.db, wid, previous))
+        reused_id = intent["package_plan"].get("package_id")
+        if reused_id:
+            pm_work_packages._access(ops, principal, pm_work_packages._record(ops.db, wid, reused_id))
 
 
 def operation_visible(db, principal: Principal, operation: dict) -> bool:
@@ -1567,3 +1569,210 @@ async def _run(ctx):
         ),
     )
     return _finish(ctx, final_state)
+
+
+def _load_preview_local(ops, principal: Principal, wid: str, wi_id: str, body: dict):
+    _member(ops, principal, wid, write=False)
+    if not isinstance(wi_id, str) or not work_items.WORK_ITEM_ID.fullmatch(wi_id):
+        raise _bad("INVALID_TARGET", "work_item_id must identify a Connector work item", 422)
+    pm_source_lineage.require(ops.db, principal, "work_item", wi_id)
+    work = work_items._get_item(ops.db, wi_id, active=True)
+    project = work_items._get_project(ops.db, work["project_id"], active=True)
+    if not ops.db.execute(
+        "SELECT 1 FROM pm_project_bindings WHERE workspace_id=? AND project_id=?",
+        (wid, work["project_id"]),
+    ).fetchone():
+        raise _bad("PM_PROJECT_BINDING_REQUIRED", "Explicitly bind this work's project first", 409)
+    binding = pm_evidence._binding(ops.db, wid, wi_id)
+    if binding is not None and binding["project_id"] != work["project_id"]:
+        raise _bad("PM_WORK_BINDING_CHANGED", "The work item moved to another project; reassociate it first", 409)
+    current_plan = pm_plans.accepted_plan(ops, principal, wid)["plan"]
+    if current_plan is None:
+        raise _bad("PM_ADOPTED_PLAN_REQUIRED", "Starting work requires an explicitly adopted plan", 409)
+    plan_ref = pm_work_packages._plan_ref(current_plan)
+    latest_package_id = pm_work_packages._latest(ops.db, wid, wi_id)
+    requirement_ids, bind_needed = _resolve_requirement_ids(current_plan, binding, body.get("requirement_ids"))
+    return work, project, binding, current_plan, plan_ref, latest_package_id, requirement_ids, bind_needed
+
+
+async def preview(
+    ops,
+    principal: Principal,
+    workspace_id: str,
+    work_item_id: str,
+    body: dict | None = None,
+) -> dict:
+    """Read-only start preview: resolve candidate bindings, default branch and SHA, package plan, readiness and preconditions."""
+    body = {} if body is None else body
+    if not isinstance(body, dict) or set(body) - {"code_target", "delivery", "requirement_ids", "instruction"}:
+        raise _bad("INVALID_PARAMS", "start preview accepts code_target, delivery, requirement_ids and instruction", 422)
+    delivery_goal = body.get("delivery") if body.get("delivery") is not None else "pull_request"
+    if not isinstance(delivery_goal, str) or delivery_goal not in DELIVERY_GOALS:
+        raise _bad("INVALID_PARAMS", "delivery must be pull_request or reviewable_changes", 422)
+    raw_target = body.get("code_target") if body.get("code_target") is not None else {}
+    if not isinstance(raw_target, dict) or set(raw_target) - set(CODE_TARGET_KEYS):
+        raise _bad("INVALID_PARAMS", "code_target may only contain repository, host, workspace_id and source_ref", 422)
+    for k, v in raw_target.items():
+        if v is not None and (not isinstance(v, str) or not v.strip() or len(v) > 256):
+            raise _bad("INVALID_PARAMS", f"code_target.{k} must be a non-empty string", 422)
+    if raw_target.get("source_ref") is not None:
+        repository_sync.check_ref(raw_target["source_ref"].strip())
+    if body.get("instruction") is not None:
+        instruction_override = pm_plans._text(body.get("instruction"), "instruction", 4000)
+        if not _bind_rationale(instruction_override):
+            raise _bad("INVALID_PARAMS", "instruction must contain non-whitespace characters", 422)
+    else:
+        instruction_override = None
+
+    with snapshots._snapshot(ops.db):
+        (
+            work,
+            project,
+            binding,
+            current_plan,
+            plan_ref,
+            latest_package_id,
+            requirement_ids,
+            bind_needed,
+        ) = _load_preview_local(ops, principal, workspace_id, work_item_id, body)
+        proj_repos = {r.lower() for r in project["repositories"]}
+        all_candidates = [
+            b for b in repository_sync.capabilities(ops) if b["repository"].lower() in proj_repos
+        ]
+        matching = [
+            b
+            for b in all_candidates
+            if (not raw_target.get("repository") or b["repository"].lower() == raw_target["repository"].strip().lower())
+            and (not raw_target.get("host") or b["host"] == raw_target["host"].strip())
+            and (not raw_target.get("workspace_id") or b["workspace_id"] == raw_target["workspace_id"].strip())
+        ]
+        binding_state = {
+            "bound": not bind_needed,
+            "bind_needed": bind_needed,
+            "binding_id": binding["binding_id"] if binding else None,
+            "plan_revision_id": current_plan["revision_id"],
+            "scope_revision": plan_ref["scope_revision"],
+            "requirement_ids": requirement_ids,
+        }
+        if len(matching) != 1:
+            return {
+                "workspace_id": workspace_id,
+                "work_item_id": work_item_id,
+                "code_target": None,
+                "candidates": matching,
+                "source": None,
+                "binding": binding_state,
+                "package_plan": None,
+                "readiness": {
+                    "status": "blocked",
+                    "checks": [
+                        {
+                            "check": "code_target",
+                            "status": "blocked",
+                            "detail": (
+                                "Multiple repository bindings match this project; select an explicit code_target."
+                                if len(matching) > 1
+                                else "No configured repository binding matches this work item's project."
+                            ),
+                        }
+                    ],
+                },
+                "preconditions": None,
+                "observed_at": time.time(),
+            }
+        selected_target = {k: matching[0][k] for k in ("repository", "host", "workspace_id")}
+        config = repository_sync.config_snapshot(ops, selected_target)
+
+    if raw_target.get("source_ref") is not None:
+        source_ref = raw_target["source_ref"].strip()
+        repository_sync.check_ref(source_ref)
+    else:
+        repo_doc = await repository_sync.gh_read(ops.context["github"].repository(config["repository"]))
+        default_branch = repo_doc.get("default_branch")
+        if not isinstance(default_branch, str) or not default_branch.strip():
+            raise _bad("REPOSITORY_SOURCE_UNAVAILABLE", "GitHub repository default_branch is unavailable", 409)
+        source_ref = f"refs/heads/{default_branch.strip()}"
+        repository_sync.check_ref(source_ref)
+
+    src_preview = await repository_sync.source_preview(ops, {**selected_target, "source_ref": source_ref})
+    full_code_target = {
+        "repository": src_preview["target"]["repository"],
+        "host": src_preview["target"]["host"],
+        "workspace_id": src_preview["target"]["workspace_id"],
+        "source_ref": src_preview["source_ref"],
+    }
+    source = {
+        "source_ref": src_preview["source_ref"],
+        "source_sha": src_preview["source_sha"],
+        "repository_id": src_preview["repository_id"],
+        "binding_digest": src_preview["binding_digest"],
+    }
+    code_source = {
+        **full_code_target,
+        "source_sha": source["source_sha"],
+        "repository_id": source["repository_id"],
+        "binding_digest": source["binding_digest"],
+    }
+
+    with snapshots._snapshot(ops.db):
+        (
+            work,
+            project,
+            binding,
+            current_plan,
+            plan_ref,
+            latest_package_id,
+            requirement_ids,
+            bind_needed,
+        ) = _load_preview_local(ops, principal, workspace_id, work_item_id, body)
+        instruction_text = (
+            instruction_override
+            or (work.get("request") or work.get("goal") or work["title"] or "Start work").strip()[:4000]
+            or "Start work"
+        )
+        package_plan, readiness = evaluate_package_plan(
+            ops,
+            principal,
+            workspace_id,
+            work,
+            project,
+            binding,
+            current_plan,
+            plan_ref,
+            requirement_ids,
+            code_source,
+            delivery_goal,
+            instruction_text,
+        )
+        binding_state = {
+            "bound": not bind_needed,
+            "bind_needed": bind_needed,
+            "binding_id": binding["binding_id"] if binding else None,
+            "plan_revision_id": current_plan["revision_id"],
+            "scope_revision": plan_ref["scope_revision"],
+            "requirement_ids": requirement_ids,
+        }
+        preconditions = {
+            "expected_work_item_fingerprint": work_items.fingerprint(work),
+            "expected_work_version": work["version"],
+            "expected_binding_id": binding["binding_id"] if binding else None,
+            "expected_scope_revision": plan_ref["scope_revision"],
+            "expected_previous_package_id": latest_package_id,
+            "expected_project_version": project["version"],
+            "repository_id": source["repository_id"],
+            "binding_digest": source["binding_digest"],
+            "expected_source_sha": source["source_sha"],
+        }
+        return {
+            "workspace_id": workspace_id,
+            "work_item_id": work_item_id,
+            "code_target": full_code_target,
+            "candidates": matching,
+            "source": source,
+            "binding": binding_state,
+            "package_plan": package_plan,
+            "readiness": readiness,
+            "preconditions": preconditions,
+            "observed_at": time.time(),
+        }
+

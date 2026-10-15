@@ -189,6 +189,8 @@ class ApiV1:
         pm_execution_verification.install(daemon.ops)
         from . import pr_publication
         pr_publication.install(daemon.ops)
+        from . import pm_work_start
+        pm_work_start.install(daemon.ops)
         from .session_observation import SessionObservation
         self.session_observation = SessionObservation(daemon)
         self.allowed_origins = allowed_origins
@@ -242,6 +244,7 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/github-releases", self.pm_release_baseline_releases, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
+            ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/start-preview", self.pm_work_start_preview, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/deliveries", self.pm_work_deliveries, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-reviews", self.pm_maintenance_reviews, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-reviews/current", self.pm_maintenance_review_current, "observe"),
@@ -532,6 +535,7 @@ class ApiV1:
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
                       self.pm_release_baseline_sources, self.pm_release_baseline_releases,
                       self.pm_release_baseline_deployments, self.pm_release_baseline_preview,
+                      self.pm_work_start_preview,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
@@ -847,6 +851,11 @@ class ApiV1:
 
     async def pm_release_baseline_preview(self, principal, query, workspace_id, **_):
         return await self._pm_release_source_read(principal, "pm_release_baseline_preview", query, workspace_id)
+
+    async def pm_work_start_preview(self, principal, query, body, workspace_id, work_item_id, **_):
+        from . import pm_work_start
+        self._exact_query(query, set())
+        return 200, await pm_work_start.preview(self.daemon.ops, principal, workspace_id, work_item_id, body)
 
     async def pm_work_deliveries(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_work_deliveries_list", query, workspace_id=workspace_id, work_item_id=work_item_id)
@@ -1439,7 +1448,7 @@ class ApiV1:
                 preconditions=body.get("preconditions"), idempotency_key=key, entry="http")
         except OperationError as error:
             if (not str(body.get("action", "")).startswith("pm.")
-                    and body.get("action") not in {"setup.host", "setup.repository", "setup.verification"}):
+                    and body.get("action") not in {"setup.host", "setup.repository", "setup.verification", "work.start"}):
                 raise
             # A source-hidden replay is still the original admitted operation.
             # Only proven absence in this actor/key namespace permits a fresh UI key.

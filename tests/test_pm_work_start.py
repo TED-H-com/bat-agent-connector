@@ -649,15 +649,17 @@ def _seed_plan_and_work(
 
     work = work_items._get_item(ops.db, wi_id)
     project = work_items._get_project(ops.db, project_id)
+    caps = repository_sync.capabilities(ops)
+    bat_ws = caps[0]["workspace_id"] if caps else "w1"
     code_target = {
         "repository": "o/r",
         "host": "h1",
-        "workspace_id": "w1",
+        "workspace_id": bat_ws,
         "source_ref": "refs/heads/main",
     }
-    config = repository_sync.config_snapshot(ops, {"repository": "o/r", "host": "h1", "workspace_id": "w1"})
+    config = repository_sync.config_snapshot(ops, {"repository": "o/r", "host": "h1", "workspace_id": bat_ws})
     binding_digest = repository_sync.digest(
-        {"config": config, "workspace": {"workspace_id": "w1", "folder": "/tmp/w1"}, "repository_id": 42}
+        {"config": config, "workspace": {"workspace_id": bat_ws, "folder": f"/tmp/{bat_ws}"}, "repository_id": 42}
     )
     preconditions = {
         "expected_work_item_fingerprint": work_items.fingerprint(work),
@@ -1714,4 +1716,207 @@ async def test_visibility_events_and_late_child_guard(start_ready, mock):
     assert not any(e["resource_type"] == "pm_work_attempt" for e in withdrawn_page["events"])
 
 
+# ---------------------------------------------------------------------------
+# Step 6 tests: pm_work_start_preview (candidates, default_branch, zero writes, start acceptance)
+# ---------------------------------------------------------------------------
+
+
+async def test_work_start_preview_candidates_default_branch_zero_writes_and_start_acceptance(world, mock):
+    from tests.test_api_v1 import http, token
+
+    w = world
+    ops = w["d"].ops
+    pm_work_start.install(ops)
+
+    now = time.time()
+    srv = pm_workspace.server_id(ops.db)
+    wid = "ws_" + "b" * 32
+    with ops.journal.tx():
+        ops.db.execute(
+            "INSERT INTO pm_workspaces VALUES(?,?,?,?,1,?,?,?,?)",
+            (wid, srv, "Preview WS", '["o/r"]', OWNER.actor, now, now, "op_" + "0" * 32),
+        )
+        ops.db.execute(
+            "INSERT INTO pm_workspace_members VALUES(?,?,?,?,?,?)",
+            (wid, OWNER.actor, "owner", pm_workspace.controller_for(ops.db, OWNER), now, now),
+        )
+    seeded = _seed_plan_and_work(ops, wid)
+    wi_id = seeded["work_item_id"]
+
+    outsider_tok = token(w["d"], "outsider-pv", "observe", "manage", "start")
+    member_tok = token(w["d"], OWNER.actor, "observe", "manage", "start", "operate")
+
+    def _journal_counts():
+        return (
+            ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0],
+            ops.db.execute("SELECT COUNT(*) FROM operation_steps").fetchone()[0],
+            ops.db.execute("SELECT COUNT(*) FROM api_events").fetchone()[0],
+            ops.db.execute("SELECT COUNT(*) FROM work_attempts").fetchone()[0],
+        )
+
+    counts_before = _journal_counts()
+
+    # 1. Single candidate auto-selects; omitted source_ref uses GitHub default_branch ("main").
+    pv = await pm_work_start.preview(ops, OWNER, wid, wi_id, {"instruction": "Preview and start."})
+    assert _journal_counts() == counts_before
+    assert pv["workspace_id"] == wid
+    assert pv["work_item_id"] == wi_id
+    assert len(pv["candidates"]) == 1
+    assert pv["code_target"] == {
+        "repository": "o/r",
+        "host": "h1",
+        "workspace_id": "ws-1",
+        "source_ref": "refs/heads/main",
+    }
+    assert pv["source"] == {
+        "source_ref": "refs/heads/main",
+        "source_sha": w["sha"],
+        "repository_id": 4242,
+        "binding_digest": pv["preconditions"]["binding_digest"],
+    }
+    assert pv["binding"]["bound"] is True
+    assert pv["binding"]["bind_needed"] is False
+    assert pv["package_plan"]["mode"] == "compose"
+    assert pv["package_plan"]["package_reused"] is False
+    assert pv["readiness"]["status"] == "ready"
+    assert pv["preconditions"]["expected_source_sha"] == w["sha"]
+
+    # 2. Custom GitHub default_branch ("trunk") when source_ref is omitted.
+    w["gh"].default_branch = "trunk"
+    w["gh"].script.append(
+        (
+            "GET",
+            r"/repos/o/r/git/ref/heads/trunk$",
+            200,
+            {},
+            {"ref": "refs/heads/trunk", "object": {"type": "commit", "sha": w["sha"]}},
+        )
+    )
+    try:
+        pv_trunk = await pm_work_start.preview(ops, OWNER, wid, wi_id, {})
+        assert pv_trunk["code_target"]["source_ref"] == "refs/heads/trunk"
+        assert pv_trunk["source"]["source_ref"] == "refs/heads/trunk"
+    finally:
+        w["gh"].default_branch = "main"
+
+    # 3. Multiple candidates or 0 candidates never guess: code_target, source, package_plan, preconditions are None.
+    sync_cfg = ops.context["fleet"].config.github.repos["o/r"].sync
+    orig_bindings = sync_cfg.bindings
+    try:
+        object.__setattr__(sync_cfg, "bindings", orig_bindings + (("h1", "ws-2"),))
+        pv_multi = await pm_work_start.preview(ops, OWNER, wid, wi_id, {})
+        assert len(pv_multi["candidates"]) == 2
+        assert pv_multi["code_target"] is None
+        assert pv_multi["source"] is None
+        assert pv_multi["package_plan"] is None
+        assert pv_multi["preconditions"] is None
+        assert pv_multi["readiness"]["status"] == "blocked"
+        assert pv_multi["readiness"]["checks"][0]["check"] == "code_target"
+
+        # Selecting explicit workspace_id resolves the ambiguity.
+        pv_explicit = await pm_work_start.preview(
+            ops, OWNER, wid, wi_id, {"code_target": {"workspace_id": "ws-1"}}
+        )
+        assert pv_explicit["code_target"]["workspace_id"] == "ws-1"
+        assert pv_explicit["preconditions"] is not None
+
+        # Zero candidates when project repositories have no matching binding.
+        object.__setattr__(sync_cfg, "bindings", ())
+        pv_zero = await pm_work_start.preview(ops, OWNER, wid, wi_id, {})
+        assert pv_zero["candidates"] == []
+        assert pv_zero["code_target"] is None
+        assert pv_zero["source"] is None
+        assert pv_zero["package_plan"] is None
+        assert pv_zero["preconditions"] is None
+        assert pv_zero["readiness"]["status"] == "blocked"
+    finally:
+        object.__setattr__(sync_cfg, "bindings", orig_bindings)
+
+    assert _journal_counts() == counts_before
+
+    # 4. HTTP POST /api/v1/pm/workspaces/{ws}/work/{wi}/start-preview and RPC pm_work_start_preview work,
+    # non-member gets 404, and preview's code_target + preconditions are accepted directly by work.start.
+    st_out, body_out = await http(
+        w["port"],
+        "POST",
+        f"/api/v1/pm/workspaces/{wid}/work/{wi_id}/start-preview",
+        tok=outsider_tok,
+        body={},
+    )
+    assert st_out == 404
+    assert body_out["error"]["code"] == "NOT_FOUND"
+
+    st_ok, http_pv = await http(
+        w["port"],
+        "POST",
+        f"/api/v1/pm/workspaces/{wid}/work/{wi_id}/start-preview",
+        tok=member_tok,
+        body={"instruction": "Previewed via HTTP."},
+    )
+    assert st_ok == 200, http_pv
+    assert http_pv["code_target"] == pv["code_target"]
+    assert http_pv["preconditions"] == pv["preconditions"]
+
+    rpc_pv = await w["d"]._call_api_bound(
+        "pm_work_start_preview",
+        {"workspace_id": wid, "work_item_id": wi_id, "instruction": "Previewed via HTTP."},
+        OWNER,
+    )
+    assert rpc_pv["preconditions"] == http_pv["preconditions"]
+    assert _journal_counts() == counts_before
+
+    # Direct submission of preview's code_target and preconditions to work.start (compose path, then reuse path).
+    op1, fresh1 = ops.create(
+        OWNER,
+        action="work.start",
+        target={"workspace_id": wid, "work_item_id": wi_id},
+        params={
+            "instruction": "Previewed via HTTP.",
+            "agent": "claude",
+            "delivery": "pull_request",
+            "code_target": http_pv["code_target"],
+        },
+        preconditions=http_pv["preconditions"],
+        idempotency_key="pv-start-1",
+    )
+    assert fresh1 is True
+    assert op1["result"]["package_reused"] is False
+    assert op1["result"]["stage"] == "preparing"
+
+    # Execute the package creation child (pure local DB step since source_refs is empty) and cancel before handoff.
+    await ops._execute(op1["operation_id"])
+    pkg_child_id = ops.get(op1["operation_id"])["result"]["children"]["package"]
+    assert pkg_child_id is not None
+    await ops._execute(pkg_child_id)
+    pkg_child = ops.get(pkg_child_id)
+    assert pkg_child["status"] == "succeeded", pkg_child
+    created_pkg_id = pkg_child["result"]["package_id"]
+    ops.cancel(OWNER, op1["operation_id"])
+
+    # Second preview after package exists plans 'reuse' and its preconditions are accepted by work.start.
+    pv_reuse = await pm_work_start.preview(
+        ops, OWNER, wid, wi_id, {"instruction": "Second run reusing package."}
+    )
+    assert pv_reuse["package_plan"]["mode"] == "reuse"
+    assert pv_reuse["package_plan"]["package_reused"] is True
+    assert pv_reuse["package_plan"]["package_id"] == created_pkg_id
+    assert pv_reuse["preconditions"]["expected_previous_package_id"] == created_pkg_id
+
+    op2, fresh2 = ops.create(
+        OWNER,
+        action="work.start",
+        target={"workspace_id": wid, "work_item_id": wi_id},
+        params={
+            "instruction": "Second run reusing package.",
+            "agent": "claude",
+            "delivery": "pull_request",
+            "code_target": pv_reuse["code_target"],
+        },
+        preconditions=pv_reuse["preconditions"],
+        idempotency_key="pv-start-2",
+    )
+    assert fresh2 is True
+    assert op2["result"]["package_reused"] is True
+    assert op2["result"]["package_id"] == created_pkg_id
+    assert op2["result"]["stage"] == "package_prepared"
 

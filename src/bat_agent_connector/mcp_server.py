@@ -69,6 +69,7 @@ READ_TOOLS = [
     "pm_snapshots_list", "pm_snapshot_get", "pm_snapshot_latest_get",
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
+    "pm_work_start_preview",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
     "pm_work_deliveries_list",
@@ -886,6 +887,16 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         return await pm_daemon("pm_work_package_readiness_get", workspace_id=workspace_id, package_id=package_id,
                                **({'quality_refs': quality_refs} if quality_refs is not None else {}))
 
+    async def pm_work_start_preview(workspace_id: str, work_item_id: str,
+                                    code_target: dict[str, Any] | None = None,
+                                    delivery: str | None = None,
+                                    requirement_ids: list[str] | None = None,
+                                    instruction: str | None = None) -> dict[str, Any]:
+        """Preview code basis, package plan, readiness and exact preconditions before work.start; read-only."""
+        body = {k: v for k, v in {"code_target": code_target, "delivery": delivery,
+                                  "requirement_ids": requirement_ids, "instruction": instruction}.items() if v is not None}
+        return await pm_daemon("pm_work_start_preview", workspace_id=workspace_id, work_item_id=work_item_id, body=body)
+
     async def pm_conversation_proposals_list(workspace_id: str, thread_id: str | None = None, after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:
         """List sourced conversation proposal metadata; no adoption or execution."""
         return await pm_daemon("pm_conversation_proposals_list", workspace_id=workspace_id, thread_id=thread_id, after=after, limit=limit)
@@ -1119,6 +1130,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_snapshots_list, pm_snapshot_get, pm_snapshot_latest_get,
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
+               pm_work_start_preview,
                pm_issue_mappings_list, pm_issue_mapping_get,
 
                pm_work_deliveries_list,
