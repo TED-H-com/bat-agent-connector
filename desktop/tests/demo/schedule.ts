@@ -40,7 +40,7 @@ export function scheduleRows(project: DemoProject) {
 }
 export function schedulePage(project: DemoProject, url: URL, pageSize = 100) {
   const rows = scheduleRows(project), token = url.searchParams.get('after');
-  const after = token ? Buffer.from(token, 'base64url').toString() : null;
+  const after = token ? atob(token.replaceAll('-', '+').replaceAll('_', '/')) : null;
   const index = after ? rows.findIndex(row => row.id === after) + 1 : 0;
   if (after && !index) throw Error('Unknown schedule cursor');
   const selected = rows.slice(index, index + Math.min(pageSize, Number(url.searchParams.get('limit') || 100)));
@@ -55,7 +55,7 @@ export function schedulePage(project: DemoProject, url: URL, pageSize = 100) {
       {field: 'blocked', reason: 'no_explicit_blocked_record'}, {field: 'phase', reason: 'no_explicit_phase_records'},
       {field: 'ci_wait', reason: 'no_explicit_check_binding'}, {field: 'token_usage', reason: 'no_explicit_attribution'},
       {field: 'milestone.actual', reason: 'no_explicit_finish_evidence'}, {field: 'work.depends_on', reason: 'no_work_dependency_contract'},
-    ], partial, truncated: partial, next_cursor: partial ? Buffer.from(selected.at(-1)!.id).toString('base64url') : null,
+    ], partial, truncated: partial, next_cursor: partial ? btoa(selected.at(-1)!.id).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') : null,
     capabilities: {version: 1, read_only: true, forecast: 'recorded_revision_only', critical_path: false, token_attribution: false, phases: false, drag_proposal: false},
     coverage: {basis: 'explicit_roadmap_scope_and_links', visibility_filtered: false, attempts_truncated: false, attempts_unavailable: false,
       work_bindings_truncated: false, issues_truncated: false, network_checked: false, forecast: 'recorded_revision_only', critical_path: false, token_attribution: false},

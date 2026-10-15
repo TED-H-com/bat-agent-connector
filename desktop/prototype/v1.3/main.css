@@ -8,6 +8,9 @@
 
 /* Product markup/classes above are shared unchanged. These rules only size the fixture host
    and the candidate v1.3 surfaces; the prototype controls are outside the product region. */
+.proto-demo-nav {display:flex; align-items:center; justify-content:space-between; min-height:36px; padding:6px var(--space-2); color:var(--text-2); text-decoration:none; font-size:var(--fs-body);}
+.proto-demo-nav > span {display:flex; align-items:center; gap:var(--space-3);}
+.proto-demo-nav:hover {background:var(--surface-2);}
 .proto-bar { background: var(--surface-2); border-bottom: 1px dashed var(--warn); padding: var(--space-1) var(--space-4); color: var(--text-2); font-size: var(--fs-caption); }
 .proto-bar-row { display: flex; align-items: center; gap: var(--space-3); min-height: 40px; }
 .proto-bar-row > strong { color: var(--warn); white-space: nowrap; }

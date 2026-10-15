@@ -64,9 +64,12 @@ parts += [
         "hero-description",
     ),
     '<div class="actions">'
-    + link("#product", "Explore the workspace", "看看工作空間", "button primary")
+    + '<a href="demo/?lang=en" class="button primary lang-en">Open interactive demo</a>'
+    + '<a href="demo/?lang=zh-TW" class="button primary lang-zh">開啟互動展示</a>'
     + link("#start", "Install and start", "安裝與開始使用", "text-link")
     + "</div>",
+    bi("Explore the current Dashboard with sample data. The v1.3 work-flow preview is available inside the demo.",
+       "用展示資料操作目前的 Dashboard；也可以從展示內試走 v1.3 的新工作流程。", "p", "hero-description"),
     '</div></div></section>',
 ]
 release_note = (

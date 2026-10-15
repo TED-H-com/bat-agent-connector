@@ -1,5 +1,9 @@
 # Better Agent Dashboard
 
+[開啟 Dashboard 互動展示](https://ted-h-com.github.io/bat-agent-connector/demo/?lang=zh-TW)。
+用合成的唯讀專案資料操作正式共用介面：搜尋工作、展開需求、查看交付證據與工作階段。
+展示內另有 v1.3 工作流程預覽，可模擬開始工作、追加修改與驗收決策；兩者都不連線到 BAT 或模型。
+
 **看懂專案、找到問題，與 PM 完成一次決策。**
 
 [English](README.md) · **繁體中文** · [網站](https://ted-h-com.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-14.md)

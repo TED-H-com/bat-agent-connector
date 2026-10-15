@@ -11,6 +11,7 @@
     "build": "tsc --noEmit && vite build",
     "build:browser": "tsc --noEmit && vite build --mode browser && node scripts/browser-assets.mjs",
     "build:prototype": "vite build --config prototype/v1.3/vite.config.ts",
+    "build:demo": "vite build --config demo/vite.config.ts",
     "build:all": "npm run build && npm run build:browser",
     "check:browser": "node scripts/check-browser-assets.mjs",
     "test": "node --experimental-strip-types --test tests/*.test.ts",

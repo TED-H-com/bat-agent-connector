@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 
 const root = new URL("../../src/bat_agent_connector/dashboard/", import.meta.url);
 const protoRoot = new URL("../dist-prototype/v1.3/", import.meta.url);
+const demoRoot = new URL("../dist-demo/", import.meta.url);
 
 const port = Number(process.env.BATC_UI_TEST_PORT || process.env.BATC_TEST_PORT || 1421);
 if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error("Invalid fixture port");
@@ -16,16 +17,18 @@ createServer(async (req, res) => {
         ? path.slice("/prototype/v1.3/".length)
         : null;
   const isProto = Boolean(protoFile && ["index.html", "app.js", "app.css"].includes(protoFile));
+  const demoFile = path === '/demo/' ? 'index.html' : path.startsWith('/demo/') ? path.slice('/demo/'.length) : null;
+  const isDemo = Boolean(demoFile && ['index.html', 'app.js', 'app.css'].includes(demoFile));
   const source = /^\/src\/[a-z0-9/_-]+\.(js|css)$/.test(path);
   const componentTest = path === "/ui-components.html";
-  if (!isProto && !source && !componentTest && !["index.html", "app.js", "app.css", "i18n.js"].includes(file)) {
+  if (!isDemo && !isProto && !source && !componentTest && !["index.html", "app.js", "app.css", "i18n.js"].includes(file)) {
     res.writeHead(404).end();
     return;
   }
-  const targetName = isProto ? protoFile : componentTest ? "ui-components.html" : source ? path : file;
+  const targetName = isDemo ? demoFile : isProto ? protoFile : componentTest ? "ui-components.html" : source ? path : file;
   try {
     const body = await readFile(
-      isProto
+      isDemo ? new URL(demoFile, demoRoot) : isProto
         ? new URL(protoFile, protoRoot)
         : source
           ? new URL(".." + path, import.meta.url)
