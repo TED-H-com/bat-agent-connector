@@ -120,7 +120,7 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
       enabled = false; workspace = null; box.replaceChildren();
-      if (![403, 404].includes(error.status)) box.append(errorBox(error));
+      if (![403, 404].includes(error.status)) box.append(errorBox(error, {within:box}));
     }
   }
   function withdraw() {

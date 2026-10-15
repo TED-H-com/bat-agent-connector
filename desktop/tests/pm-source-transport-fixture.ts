@@ -14,13 +14,15 @@ export async function unavailableBriefTransport(page:Page,sourcePrefix:string) {
     if (start < 0 || end < start) throw Error('Production error renderer was not found');
     await route.fulfill({contentType: 'text/javascript', body: `
       import {errorPresentation} from '/src/error-presentation.js';
-      import {disclosure} from '/src/ui/components.js';
+      import {disclosure, button} from '/src/ui/components.js';
       import {t as appText} from '/src/i18n.js';
       import {globalStrings} from '/src/global-strings.js';
+      import {diagnosticsStrings} from '/src/diagnostics-strings.js';
       export function createErrorBox(h, panelText, locale = 'en', state = {}) {
+        function openDiagnostics() {} // The entry point is exercised by diagnostics.spec.ts.
         const t = (key, vars) => {
           const value = panelText(key, vars);
-          return value !== key ? value : globalStrings[locale]?.[key] || appText(key, vars);
+          return value !== key ? value : globalStrings[locale]?.[key] || diagnosticsStrings[locale]?.[key] || appText(key, vars);
         };
         ${source.slice(start, end)}
         return errorBox;

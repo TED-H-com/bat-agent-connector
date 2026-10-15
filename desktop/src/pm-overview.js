@@ -409,7 +409,7 @@ export function workspaceOverview(options) {
       projection = data; plan = adopted; loading = false; status.replaceChildren(); render(anchor);
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
-      projection = null; plan = null; loading = false; signature = ''; closeReader(); render(); status.replaceChildren(options.errorBox(error));
+      projection = null; plan = null; loading = false; signature = ''; closeReader(); render(); status.replaceChildren(options.errorBox(error, {within:status}));
     }
   }
   async function refresh() {if (mode === 'live') await refreshLive(); if (reportsLoaded || mode === 'saved') {await reports.refresh(); if (mode === 'saved') render();}}

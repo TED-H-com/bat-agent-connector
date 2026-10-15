@@ -658,7 +658,7 @@ export function workspaceResources({h, t, api, alive, namespace, workspaceId, er
     } catch (error) {
       try {alive(); if (ticket !== serial) return;} catch {return;}
       withdraw({keepSerial: true});
-      status.replaceChildren(errorBox(error));
+      status.replaceChildren(errorBox(error, {within:status}));
       follow = false;
     } finally {
       if (ticket !== serial) return;

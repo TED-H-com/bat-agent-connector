@@ -35,6 +35,7 @@ from . import (
     session_start_operations,
     work_items,
 )
+from .build_identity import build_identity
 from .errors import BatError, ResourceReadOnly
 from .operations import STATES, OperationError
 
@@ -1125,7 +1126,7 @@ class ApiV1:
                             "runtime_version": managed["runtime_version"], "background": True},
                           "desktop_identity": dashboard_sync.identity(self.daemon.journal, principal)} if managed else {}
         return 200, {**managed_fields, "actor": principal.actor, "scopes": sorted(principal.scopes), "api_version": API_VERSION,
-                     "contract_version": CONTRACT_VERSION, "connector": __version__, "hosts": hosts,
+                     "contract_version": CONTRACT_VERSION, "connector": __version__, "build": build_identity(), "hosts": hosts,
                      "artifacts": {"limits": self.daemon.artifact_store.settings.limits(),
                                    "capture": {"manual_single_file": True, "managed_single_file": True, "snapshot": False,
                                                "managed_selectors": ["execution_operation_id", "task_command"],

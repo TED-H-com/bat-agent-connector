@@ -93,7 +93,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
                   [h('dt', {}, key), h('dd', {}, value === null ? t('pm_evidence_unknown') : typeof value === 'object' ? JSON.stringify(value) : String(value))]))),
               h('small', {class: 'muted'}, timeLabel(t, 'pm_evidence_saved_at', {time: sourceTime(detail.evidence.captured_at)})));
             fetched = true;
-          } catch (error) {if (row.isConnected) body.replaceChildren(errorBox(error));} finally {busy = false;}
+          } catch (error) {if (row.isConnected) body.replaceChildren(errorBox(error, {within:body}));} finally {busy = false;}
         }); facts.append(row);
       }
     }
@@ -104,11 +104,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
     const detail = h('div'), row = h('details', {'data-pm-work': item.work_item_id},
       h('summary', {}, item.title, h('small', {class: 'muted'}, ' · ' + t(binding ? 'pm_evidence_associated' : 'pm_evidence_unassociated'))), detail);
     const planReadError = error => {
-      const failure = errorBox(error, {summary: t('pm_evidence_plan_unread')});
-      // Keep errorBox's refresh gate and reuse its facts in the row's Details.
-      const diagnostics = failure.querySelector('[data-error-details]');
-      if (diagnostics) diagnostics.closest('.ui-disclosure')?.replaceWith(diagnostics);
-      return failure;
+      return errorBox(error, {summary: t('pm_evidence_plan_unread'), within:detail});
     };
     let opened = false;
     row.addEventListener('toggle', async () => {
@@ -218,7 +214,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
         onStateChange:()=>picker?.update(),extra:picker ? h('div',{},selectedQuality,picker.element) : undefined}));
       picker?.attach(capture);
       detail.append(capture.box, holder);
-      try {await loadEvidence(item, holder);} catch (error) {if (holder.isConnected) holder.replaceChildren(errorBox(error));}
+      try {await loadEvidence(item, holder);} catch (error) {if (holder.isConnected) holder.replaceChildren(errorBox(error, {within:holder}));}
     }); return row;
   }
   async function loadProject() {
@@ -244,7 +240,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
       }
     } catch (error) {if (ticket === generation) {
       rows.replaceChildren(); active = null;
-      status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},t('pm_evidence_unavailable_help'))}),errorBox(error));
+      status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},t('pm_evidence_unavailable_help'))}),errorBox(error, {within:status}));
     }}
   }
   async function allBindings(suffix) {
@@ -273,6 +269,7 @@ export function workspaceEvidence({h, t, api, alive, namespace, workspaceId, wor
       rows.replaceChildren(); active = null; projects = []; bindings = []; workBindings = [];
       choose.replaceChildren(h('option', {value: ''}, t('pm_evidence_choose')));
       projectField.hidden = true;
+      errorBox(error); // Keep the shared refresh-cycle read gate with the shell's concise empty state.
       status.replaceChildren(emptyState({title:t('pm_evidence_unavailable'),text:h('span',{class:'muted'},unavailableReason(error))}));
     }}
   }

@@ -144,14 +144,14 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
             if(value.workspace_id!==workspaceId||value.revision.revision_id!==entry.revision_id)throw Error(t('pm_scope_mismatch'));
             const doc=value.revision.document;content.replaceChildren(h('p',{},doc.rationale||t(doc.milestones?.some(row=>row.actual?.quality)?'pm_roadmap_quality_fixed':'pm_roadmap_quality_unknown')),
               h('pre',{class:'pm-brief-proof'},JSON.stringify(value.revision,null,2)));
-          }catch(error){content.replaceChildren(errorBox(error));fetched=false;}
+          }catch(error){content.replaceChildren(errorBox(error, {within:content}));fetched=false;}
         });historyBody.append(detail);
       }
       if(page.next_cursor!==null&&page.next_cursor!==undefined){
         const more=h('button',{type:'button',class:'secondary',onclick:async()=>{more.disabled=true;if(await loadHistory(page.next_cursor))more.remove();else more.disabled=false;}},t('pm_roadmap_more_history'));historyBody.append(more);
       }
       return true;
-    }catch(error){if(history.isConnected)historyBody.append(errorBox(error));return false;}
+    }catch(error){if(history.isConnected)historyBody.append(errorBox(error, {within:historyBody}));return false;}
     finally{historyBusy=false;if(history.open&&current&&expectedVersion!==current.head.version)void loadHistory();}
   }
   function initializeAction(editor,baseField){
@@ -238,7 +238,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
         options(snapshot,(snapshots.snapshots||[]).map(row=>[row.snapshot_id,row.title]));initializeEditor();}
       baselineForm.update();forecast.update();observe.update();
       if(historyVersion!==data.head.version){historyLoaded=false;if(history.open)void loadHistory();}
-    }catch(error){if(ticket===serial){current=null;signature='';view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error));baselineForm.update();forecast.update();observe.update();}}
+    }catch(error){if(ticket===serial){current=null;signature='';view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error, {within:status}));baselineForm.update();forecast.update();observe.update();}}
   }
   return{box,refresh};
 }
