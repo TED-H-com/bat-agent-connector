@@ -452,7 +452,10 @@ facts. A withdrawn finding chip stays unavailable and shows none of that identit
 A server that omits `finding` keeps Kind · stored label.
 Chips stay on one line with full accessible labels: up to three in the header, then
 +N opens Context; one per list row. The selected row has the table accent inset.
-The composer has one status/actions row with Send and Ask PM kept together. Failed
+The composer has one status/actions row with Send, New request and Ask PM kept
+together in the right-aligned action group. A refused or terminal original hides
+its disabled primary; New request remains available under the existing gates.
+Error summaries, Details and the connection note stay in the status column. Failed
 and pending note explanations stay visible. Search shares the list header with an
 icon-only New discussion button. A list-opened thread returns to Discussions.
 
@@ -1141,6 +1144,30 @@ Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
 Its title and Refresh stay on the first row; the read-only reason wraps beneath
 the title when the inspector is narrow instead of being squeezed between them.
 
+Workspace refresh and earlier-note failures, Lifecycle and accepted-plan preview
+use one complete localized error sentence with original diagnostics in Details.
+The version-conflict sentence keeps its draft-preservation and refresh guidance.
+Accepted-plan validation keeps its own stale or invalid reason; API and transport
+failures use the unavailable sentence. Export
+source failures belong to the report's parent; withdrawal removes or hides the
+export control without adding a second error. Failed reads never acknowledge an
+event checkpoint.
+
+An issue mapping without a source title or number says Untitled issue / 未命名議題;
+its original mapping identity stays in Details. Projects and Resources Work items
+share a creation disclosure, starting closed behind New project or New work item.
+Cancel sits after Add and Review, before the draft note; it closes the form and
+returns focus without discarding the draft. A pending original request stays open
+for receipt recovery. A verified project creation opens its project page for Quick
+project dispatch. A verified work-item creation refreshes the same list, closes the
+form and returns focus to New work item. Source withdrawal
+hides the form and action together. Project header chips center beside touch-sized
+actions without stretching. Captures disable animations so disclosure chevrons
+show their settled open rotation.
+
+The Dependencies capture action stays in its own view after shared form updates.
+Its visibility combines the active view with the original request's terminal or
+refused state; refreshing Overview cannot reveal it.
 
 ## Read-only paths and agent setup
 
@@ -1184,5 +1211,7 @@ and disables export actions together. See [the diagnostics contract](../docs/des
 Diagnostics export stays inside error Details as a ghost action. Error renderers
 pass their destination via `within` (or `insideDetails: true` when constructing a
 detached disclosure) so code, server diagnostics and export reuse existing Details.
+Accepted-plan preview errors reuse the context panel's disclosure; closing the panel
+hides the sentence, diagnostics and export action together.
 An expanded session error can use up to 32% of viewport height so its sentence,
 diagnostics and export action fit together on phones; longer content still scrolls.

@@ -5,6 +5,11 @@ import {handoffFixture} from './pm-package-handoff-fixture.ts';
 import {specFixture} from './pm-spec-materialization-fixture.ts';
 import {meetingFixture, mount as mountMeetings} from './pm-meetings-fixture.ts';
 import {unavailableBriefTransport} from './pm-source-transport-fixture.ts';
+import {workbenchFixture} from './pm-workbench-fixture.ts';
+import {reviewFixture as maintenanceFixture} from './pm-maintenance-review-fixture.ts';
+import {pmFixture, pmPath, pmRoute} from './pm-fixture.ts';
+import {mountConversation} from './conversation-fixture.ts';
+import {openThreadTab} from './pm-navigation.ts';
 
 const panels = [
   ['maintenance-review', 'workspaceMaintenanceReview', 'pmrv_unavailable'],
@@ -26,6 +31,11 @@ const panels = [
   ['overview', 'workspaceOverview', 'error_generic'],
   ['overview-saved', 'workspaceOverview', 'error_generic'],
   ['meetings', 'workspaceMeetings', 'error_generic'],
+  ['lifecycle', 'workspaceLifecycle', 'pm_lifecycle_unknown'],
+  ['context-bundle', 'pmContextBundle', 'pm_cb_unavailable'],
+  ['export-brief', 'projectBrief', 'error_generic'],
+  ['export-charter', 'workspaceCharter', 'error_generic'],
+  ['export-maintenance', 'workspaceMaintenanceReview', 'pmrv_unavailable'],
 ];
 const code = 'PM_PANEL_READ_FAILED', serverMessage = 'Original English source diagnostics <b>stay text</b>';
 const failures = panels.map(([name, factory, key]) => ({name, factory, key, cause: 'unavailable', code, message: serverMessage, detached: false}));
@@ -44,11 +54,20 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
   const caps = bootstrap.data.capabilities, row = handoffFixture().row;
   const workspace = (await f.dispatch({method: 'GET', path: `/pm/workspaces/${row.workspace_id}`})).data.workspace;
   Object.assign(caps.features.pm_workspaces, {quality_reviews: {version: 1}, maintenance_checks: {version: 1}, maintenance_review: {version: 1},
+    lifecycle: {version: 1, gated_actions: []}, accepted_context_bundle: {schema: 'pm_context_bundle_v1'},
     work_batches: {version: 1, actions: ['pm.work_batch.start'], profiles: ['github_reported_checks_v1']}});
   caps.features.pm_ahp_observer = {version: 1};
+  caps.features.pm_workspaces.brief_export = {formats: ['markdown', 'html', 'svg'], locales: ['en', 'zh-TW']};
+  const maintenance = maintenanceFixture(), snapshot = workbenchFixture().snapshot(1);
   let reads = 0, writes = 0;
-  await page.exposeFunction('c4Request', (method: string) => {
+  await page.exposeFunction('c4Request', async (method: string, path: string) => {
     if (method === 'GET') reads++; else writes++;
+    if (name.startsWith('export-') && !path.includes('/brief-export')) {
+      if (name === 'export-maintenance') return maintenance.dispatch({method, path});
+      if (path.endsWith('/plans/head')) return {status: 200, data: {head: {workspace_id: row.workspace_id, version: 1}}};
+      if (new URL(path, 'http://fixture').pathname.endsWith('/snapshots')) return {status: 200, data: {workspace_id: row.workspace_id, snapshots: [snapshot], next_cursor: null}};
+      return {status: 200, data: {workspace_id: row.workspace_id, snapshot}};
+    }
     return {status, data: {error: {code: failure.code, message: failure.message}}};
   });
   await page.route('**/__c4-error.js', async route => {
@@ -73,11 +92,13 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
   await page.evaluate(async ({name, factory, caps, workspace, row, detached}) => {
     const {h} = await import('/src/ui/dom.js'), {t} = await import('/src/i18n.js');
     const {errorBox, state} = await import('/__c4-error.js'), {durableForm} = await import('/__c4-form.js');
-    const module = await import(`/src/pm-${name === 'overview-saved' ? 'overview' : name}.js`), win = window as any;
+    const source = {'overview-saved': 'overview', 'export-brief': 'brief', 'export-charter': 'charter', 'export-maintenance': 'maintenance-review'}[name] || name;
+    const module = await import(`/src/pm-${source}.js`), win = window as any;
     const {planDiffText} = await import('/src/pm-plan-diff-strings.js');
-    const api = async (method: string) => {
-      const result = await win.c4Request(method);
-      throw Object.assign(Error(result.data.error.message), {code: result.data.error.code, status: result.status});
+    const api = async (method: string, path: string) => {
+      const result = await win.c4Request(method, path);
+      if (result.status >= 400) throw Object.assign(Error(result.data.error.message), {code: result.data.error.code, status: result.status});
+      return result.data;
     };
     const input = (key: string, {multiline = false, max = 4000, required = true, value = ''}: any = {}) =>
       h(multiline ? 'textarea' : 'input', {'aria-label': t(key), maxlength: max, required, value});
@@ -90,11 +111,13 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
       viewState('c4', row.workspace_id, 'overview').mode = 'saved';
     }
     const ui = module[factory]({h, t, api, alive, namespace: 'c4', workspaceId: row.workspace_id, workspace: () => workspace,
-      caps: getCaps, permitted: () => true, canRead: () => true, form, input, labelled, errorBox, main, onDiscuss: () => {}});
+      caps: getCaps, permitted: () => true, canRead: () => true, form, input, labelled, errorBox, main, onDiscuss: () => {}, onChange: () => {},
+      guard: alive, target: {workspace_id: row.workspace_id, thread_id: 'pmt_' + '1'.repeat(32)}, thread: () => ({thread: {version: 1}})});
     const root = ui.element || ui.box; main.append(root); root.hidden = false;
     if (root instanceof HTMLDetailsElement) root.open = true;
     win.c4Ui = ui; win.c4State = state; win.c4Text = (key: string) => planDiffText(t, key);
-    if (name === 'plan-diff') {
+    if (name === 'context-bundle') root.querySelector('button').click();
+    else if (name === 'plan-diff') {
       const first = 'pmrev_' + '1'.repeat(32), second = 'pmrev_' + '2'.repeat(32);
       ui.update({workspace_id: row.workspace_id, revisions: [{revision_id: first, sequence: 1}, {revision_id: second, sequence: 2}], next_cursor: null});
       ui.select(first, second); root.querySelector('.actions button').click();
@@ -110,12 +133,137 @@ async function mountFailure(page: Page, name: string, factory: string, status: n
       await ui.prepareReports();
     }
     else await ui.refresh();
+    if (name.startsWith('export-')) root.querySelector('[data-pm-brief-export] button').click();
   }, {name, factory, caps, workspace, row, detached: failure.detached});
   return {reads: () => reads, writes: () => writes};
 }
 
 for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
   test.use({locale: locale === 'en' ? 'en-US' : 'zh-TW', colorScheme: 'light', reducedMotion: 'reduce'});
+  for (const width of [1440, 390]) test(`version conflict has one complete summary and keeps its original draft ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    const f = pmFixture(); f.state.reject = {status: 409, code: 'VERSION_CONFLICT'};
+    await mountConversation(page, false, f.dispatch); await page.goto(pmRoute);
+    const form = page.locator('[data-pm-action="pm.message.append"]'), field = form.locator('textarea');
+    await field.fill('Keep this original draft');
+    await form.getByRole('button', {name: locale === 'en' ? 'Send' : '傳送', exact: true}).click();
+    const sentence = locale === 'en'
+      ? 'Could not confirm the current version. Your draft is preserved. Refresh and review before another change.'
+      : '目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。';
+    await expect(form.locator('[data-api-error]')).toHaveCount(1);
+    await expect(form.locator('[data-error-summary]')).toHaveText(sentence);
+    await expect(form.getByText(sentence, {exact: true})).toHaveCount(1);
+    await expect(form.locator('[data-error-details]')).toBeHidden();
+    const primary = form.locator('button[type=submit]');
+    await expect(primary).toBeHidden(); expect(await primary.isDisabled()).toBe(true);
+    const actions = form.locator('.pd-composer-row > .actions');
+    const recovery = actions.getByRole('button', {name: locale === 'en' ? 'New request' : '新請求', exact: true});
+    await expect(recovery).toBeVisible(); await expect(recovery).toBeEnabled();
+    await expect(form.locator('.pd-composer-status').getByRole('button')).toHaveCount(0);
+    const actionBounds = await actions.boundingBox(), rowBounds = await form.locator('.pd-composer-row').boundingBox();
+    expect(Math.abs(actionBounds!.x + actionBounds!.width - rowBounds!.x - rowBounds!.width)).toBeLessThan(1);
+    expect(await form.innerText()).not.toContain('Rejected request');
+    expect(await form.innerText()).not.toContain('VERSION_CONFLICT');
+    const folder = process.env.BATC_FIX1_SHOTS;
+    if (folder) {
+      await mkdir(folder, {recursive: true}); await form.locator('[data-api-error]').scrollIntoViewIfNeeded();
+      await page.screenshot({animations: 'disabled', path: `${folder}/version-conflict-${locale}-${width}-closed.png`});
+    }
+    await form.locator('[data-api-error] summary').click();
+    await expect(form.locator('[data-error-details] code')).toHaveText('VERSION_CONFLICT');
+    await expect(form.locator('[data-error-details]')).toContainText('Rejected request');
+    if (folder) {
+      await actions.scrollIntoViewIfNeeded();
+      await page.screenshot({animations: 'disabled', path: `${folder}/version-conflict-${locale}-${width}-open.png`});
+    }
+    await expect(field).toHaveValue('Keep this original draft');
+    expect(f.state.writes).toHaveLength(1); expect(f.state.ops.size).toBe(0);
+    const [stored] = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.pm.message.append.')).map(([, value]) => JSON.parse(value)));
+    expect(stored.values.content).toBe('Keep this original draft');
+    expect(stored.intent.key).toBe(f.state.writes[0].idempotency_key);
+    expect(stored.intent.request).toEqual(f.state.writes[0].body);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+  for (const width of [1440, 390]) for (const outcome of ['failed', 'cancelled']) test(`terminal input ${outcome} offers a new request without a dead primary ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    const f = pmFixture();
+    await mountConversation(page, false, async input => {
+      if (input.method === 'POST' && input.body?.action === 'pm.input.record') {
+        f.state.writes.push(input);
+        const operation = {...input.body, actor: f.state.actor, idempotency_key: input.idempotency_key,
+          operation_id: 'op_' + 'f'.repeat(32), status: outcome, result: null};
+        f.state.ops.set(input.idempotency_key, operation);
+        return {status: 200, data: {operation}};
+      }
+      return f.dispatch(input);
+    });
+    await page.goto(pmRoute); await openThreadTab(page, 'inputs');
+    await page.locator('[data-pm-add-input] > summary').click();
+    const form = page.locator('[data-pm-action="pm.input.record"]');
+    await form.locator('textarea').fill('Keep this terminal draft');
+    await form.locator('button[type=submit]').click();
+    const primary = form.locator('button[type=submit]');
+    await expect(primary).toBeHidden(); expect(await primary.isDisabled()).toBe(true);
+    const recovery = form.getByRole('button', {name: locale === 'en' ? 'New request' : '新請求', exact: true});
+    await expect(recovery).toBeVisible(); await expect(recovery).toBeEnabled();
+    await expect(form.locator('textarea')).toHaveValue('Keep this terminal draft');
+    const [stored] = await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.includes('.pm.input.record.')).map(([, value]) => JSON.parse(value)));
+    expect(stored.intent.key).toBe(f.state.writes[0].idempotency_key);
+    expect(stored.intent.request).toEqual(f.state.writes[0].body);
+    expect(stored.intent.operation_id).toBe('op_' + 'f'.repeat(32));
+    const folder = process.env.BATC_FIX1_SHOTS;
+    if (folder) {
+      await mkdir(folder, {recursive: true}); await recovery.scrollIntoViewIfNeeded();
+      await form.locator(':scope > .pm-receipt').scrollIntoViewIfNeeded();
+      await page.screenshot({animations: 'disabled', path: `${folder}/terminal-input-${outcome}-${locale}-${width}.png`});
+    }
+    await page.reload(); await openThreadTab(page, 'inputs');
+    await expect(form).toBeVisible(); await expect(primary).toBeHidden();
+    await expect(recovery).toBeVisible(); await expect(form.locator('textarea')).toHaveValue('Keep this terminal draft');
+    expect(f.state.writes).toHaveLength(1); expect(f.state.ops.size).toBe(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await recovery.click(); await expect(primary).toBeVisible(); await expect(primary).toBeEnabled();
+    await expect(form.locator('textarea')).toHaveValue('Keep this terminal draft');
+    expect(f.state.writes).toHaveLength(1);
+  });
+  for (const width of [1440, 390]) for (const mode of ['refresh', 'earlier']) test(`workspace ${mode} one localized error ${width}`, async ({page}) => {
+    await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+    const f = pmFixture(); let denied = false, failedReads = 0;
+    const calls: {method: string, path: string, body: any}[] = [];
+    await mountConversation(page, false, async input => {
+      calls.push(input);
+      const url = new URL(input.path, 'http://fixture');
+      if (url.pathname === pmPath) {
+        if (denied) {failedReads++; return {status: 503, data: {error: {code, message: serverMessage}}};}
+        return {status: 200, data: {...f.detail(), next_message_cursor: 50}};
+      }
+      return f.dispatch(input);
+    });
+    await page.goto(pmRoute);
+    const composer = page.locator('[data-pm-action="pm.message.append"] textarea'); await composer.fill('Preserved local draft');
+    denied = true;
+    if (mode === 'earlier') await page.getByRole('button', {name: locale === 'en' ? 'Load earlier notes' : '載入較早筆記', exact: true}).click();
+    else await page.locator('.pm-main > header').getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true}).click();
+    const root = page.locator('#main'), summary = root.locator('[data-error-summary]');
+    await expect(summary).toHaveCount(1);
+    await expect(summary).toHaveText(locale === 'en' ? 'Could not confirm the current version. Your draft is preserved. Refresh and review before another change.' : '目前無法確認最新版本。草稿仍保留；請重新整理並檢視後，再進行變更。');
+    await expect(root.locator('[data-api-error]')).toHaveCount(1);
+    await expect(root.locator('[data-error-details]')).toBeHidden(); await expect(root).not.toContainText(serverMessage, {useInnerText: true});
+    const shots = process.env.BATC_C4_SHOTS;
+    if (shots) {await mkdir(shots, {recursive: true}); await page.screenshot({path: `${shots}/workspace-${mode}-${locale}-${width}-closed.png`});}
+    await root.locator('[data-api-error] summary').click();
+    await expect(root.locator('[data-error-details]')).toContainText(serverMessage);
+    await expect(root.locator('[data-error-details] code')).toHaveText(code);
+    await expect(root.locator('[data-error-details] b')).toHaveCount(0);
+    if (shots) await page.screenshot({path: `${shots}/workspace-${mode}-${locale}-${width}-open.png`});
+    await expect(composer).toHaveValue('Preserved local draft');
+    const before = failedReads; f.state.cursor++;
+    await expect.poll(() => failedReads).toBeGreaterThan(before);
+    expect(await page.evaluate(() => Object.entries(localStorage).filter(([key]) => key.startsWith('batc.sync.'))
+      .every(([, value]) => JSON.parse(value).cursor === 0))).toBe(true);
+    expect(calls.filter(input => input.method !== 'GET')).toEqual([]);
+    expect(f.state.writes).toEqual([]);
+  });
   test('Evidence unavailable preserves the refresh-cycle read gate with its shell empty state', async ({page}) => {
     const f = await mountFailure(page, 'evidence', 'workspaceEvidence', 503, {code, message: serverMessage, detached: false});
     const root = page.locator('#fixture');
@@ -138,6 +286,8 @@ for (const locale of ['en', 'zh-TW']) test.describe(locale, () => {
       await expect(summary).toHaveText(sentence);
       await expect(root.getByText(sentence, {exact: true})).toHaveCount(1);
       await expect(root.locator('.error:visible, .ui-inline-error:visible')).toHaveCount(1);
+      await expect(root.locator('[data-api-error]')).toHaveCount(1);
+      if (name.startsWith('export-')) await expect(root.locator('[data-pm-brief-export]')).toBeHidden();
       if (name.startsWith('overview')) {
         await expect(root.locator('[data-pm-overview] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 1 : 0);
         await expect(root.locator('[data-pm-report-tools] [data-error-summary]')).toHaveCount(name === 'overview-saved' ? 0 : 1);

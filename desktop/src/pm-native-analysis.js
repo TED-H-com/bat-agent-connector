@@ -3,7 +3,7 @@ import {discussionFeedback} from './pm-discussions.js';
 import {agentMark} from './ui/components.js';
 import {pmContextBundle} from './pm-context-bundle.js';
 // A native turn consumes a frozen central snapshot; the client never starts a local agent.
-export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard}) {
+export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capability, thread, permitted, target, refresh, namespace, guard, errorBox}) {
   const specs = [
     {key: 'native_analysis', adapter: 'codex-native-linux', action: 'pm.run.analyze', label: 'pm_analysis_local'},
     {key: 'bat_analysis', adapter: 'bat-pm-linux-v1', action: 'pm.run.bat.analyze', label: 'pm_analysis_bat'},
@@ -29,7 +29,7 @@ export function pmNativeAnalysis({h, t, api, form, input, labelled, caps, capabi
     const purpose = input('pm_native_purpose', {multiline: true, max: 4000});
     const model = input('pm_native_model', {max: 128, required: false});
     model.placeholder = t('pm_native_default_model');
-    const context = pmContextBundle({h,t,api,guard,caps,target,thread});
+    const context = pmContextBundle({h,t,api,guard,caps,target,thread,errorBox});
     const request = form({action: spec.action, target, fields: {purpose, model, accepted_context: context.value},
       params: values => ({purpose: values.purpose, ...context.params(values), ...(values.model.trim() ? {model: values.model.trim()} : {})}),
       preconditions: () => ({expected_version: thread().thread.version}),

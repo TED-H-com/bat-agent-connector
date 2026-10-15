@@ -144,7 +144,8 @@ for(const native of [false,true])test.describe(native?'Native PM':'Web PM',()=>{
   test('stale admission retains text and read failure freezes mutation until refresh',async({page})=>{
     const f=pmFixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);const note=action(page,'pm.message.append');
     await note.getByLabel('Message the PM…',{exact:true}).fill('Keep this draft');f.state.reject={status:409,code:'VERSION_CONFLICT'};
-    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(note).toContainText('Your draft is preserved');
+    await note.getByRole('button',{name:'Send',exact:true}).click();await expect(note).toContainText('Could not confirm the current version. Your draft is preserved. Refresh and review before another change.');
+    await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Keep this draft');
     await note.getByRole('button',{name:'New request',exact:true}).click();f.state.reject=null;f.state.thread.version=9;
     f.state.failRead=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await expect(page.locator('.pm-status')).toContainText('PM read unavailable');
     await expect(note).toBeHidden();await expect(note.locator('button[type=submit]')).toBeDisabled();await expect(note.getByLabel('Message the PM…',{exact:true})).toHaveValue('Keep this draft');

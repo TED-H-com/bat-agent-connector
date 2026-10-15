@@ -154,6 +154,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       if (readOnlyWhenUnavailable) input.readOnly = locked;
     }
     button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+    button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
     button.textContent = t(saved.intent ? 'pm_check_original' : label);
     reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
     reset.disabled = busy || !allowed();
@@ -226,8 +227,7 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
           try {persist();} catch { /* keep the frozen original in memory */ }
         }
         const handled = onError(error);
-        if (!handled) status.replaceChildren(errorBox(error, {within:status}));
-        if (error.code === 'VERSION_CONFLICT' && !handled) status.append(h('p', {class: 'muted'}, t('pm_stale')));
+        if (!handled) status.replaceChildren(errorBox(error, error.code === 'VERSION_CONFLICT' ? {summary: t('pm_stale'), within: status} : {within: status}));
       }
     } finally {busy = false; update();}
   }
@@ -1001,7 +1001,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const column = h('section', {class: 'pm-discussion'},
         h('header', {class: 'pd-thread-header'}, h('div', {class: 'pd-header-main'}, h('div', {class: 'pd-heading'}, backLink(), titleView.box)), h('div', {class: 'pd-thread-meta'}, mode, boundContext)), discussionHint, h('div', {class: 'pd-transcript'}, earlier, notes, coverage));
       if (caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis) {
-        nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, guard: alive,
+        nativeAnalysis = pmNativeAnalysis({h, t, api, form, input, labelled, caps, namespace, errorBox, guard: alive,
           capability: () => pmCapabilities, thread: () => threadData, permitted, target, refresh: load});
       }
       if (caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1) {
@@ -1295,7 +1295,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       if (!retired(error) && ticket === sequence) {
         loaded = false; lastThreadList = null; workspace = null; publishContext(); detailPanel?.close(); discussionTools?.close(); brief?.withdraw();lifecycle?.withdraw();proposalReview?.withdraw();
         for (const section of sourceSections()) section.hidden = true;
-        updateForms(); status.replaceChildren(errorBox(error, {within:status}), h('p', {class: 'muted'}, t('pm_stale')));
+        updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
       }
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false; earlier.disabled = !loaded;}}
   }
@@ -1456,7 +1456,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         detailPanel?.close(); discussionTools?.close(); phasePill.hidden = true;
         title.textContent = t('pm_title'); workspaceList.replaceChildren(); lastThreadList = null; publishContext();
         for (const section of sourceSections()) section.hidden = true;
-        updateForms(); status.replaceChildren(errorBox(error, {within:status}), h('p', {class: 'muted'}, t('pm_stale')));
+        updateForms(); status.replaceChildren(errorBox(error, {summary: t('pm_stale'), within: status}));
       }
     } finally {if (ticket === sequence) {refreshing = false; refresh.disabled = false;}}
   }

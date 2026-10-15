@@ -37,6 +37,30 @@ function fixture() {
   return {state,dispatch};
 }
 
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`work item form opens on request and retains its draft ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}});
+  try {
+    const page = await context.newPage(), f = fixture(); await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    const form = page.locator('[data-create-record="work_item"]');
+    const open = page.locator('[data-project-work-create]'); await expect(open).toBeVisible();
+    const folder = process.env.BATC_POLISH_SHOTS;
+    if (folder) {mkdirSync(folder, {recursive: true}); await page.screenshot({animations: 'disabled', path: `${folder}/work-items-closed-${locale}-${width}.png`});}
+    await expect(form).toBeHidden();
+    await open.click();
+    const title = form.getByLabel(locale === 'en' ? 'New work item' : '新工作項目', {exact: true});
+    await expect(title).toBeFocused(); await title.fill('Retained draft');
+    expect(await form.locator('.actions').evaluate(node => [...node.children].map(child => child.tagName))).toEqual(['BUTTON', 'BUTTON', 'BUTTON', 'SPAN']);
+    if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/work-items-open-${locale}-${width}.png`});
+    await form.getByRole('button', {name: locale === 'en' ? 'Cancel' : '取消', exact: true}).click();
+    await expect(form).toBeHidden(); await expect(open).toBeFocused();
+    await open.click(); await expect(title).toHaveValue('Retained draft');
+    await page.reload(); await expect(form).toBeHidden(); await open.click(); await expect(title).toHaveValue('Retained draft');
+    expect(f.state.writes).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {await context.close();}
+});
+
 test('creation layout', async ({browser, baseURL}, testInfo) => {
   const folder = process.env.CREATE_SCREENSHOTS || testInfo.outputPath('screenshots');
   mkdirSync(folder,{recursive:true});
@@ -48,21 +72,75 @@ test('creation layout', async ({browser, baseURL}, testInfo) => {
       await page.setViewportSize({width,height:900});
       for (const [name, route] of [['project','projects'],['item','project/'+pid],['locations','settings']]) {
         await page.goto('/dashboard/#/'+route);
+        if (name === 'project') await page.locator('[data-project-new]').click();
+        if (name === 'item') await page.locator('[data-project-work-create]').click();
         const details = page.locator(name === 'locations' ? '[data-connection-card] > details' : '[data-create-advanced]');
         await details.locator('summary').click();
         await expect(details).toHaveAttribute('open','');
         expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        await page.screenshot({path:`${folder}/${name}-${locale}-${width}.png`,fullPage:true});
+        await page.screenshot({animations: 'disabled', path:`${folder}/${name}-${locale}-${width}.png`,fullPage:true});
+        if (name !== 'locations') {
+          // Fast-forward the chevron transition before checking its settled geometry.
+          const transform = await details.locator('summary').evaluate(el => getComputedStyle(el, '::before').transform);
+          expect(transform).toBe('matrix(-0.707107, 0.707107, -0.707107, -0.707107, 0, 0)');
+        }
       }
     }
     await context.close();
   }
 });
 
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`project form opens on request and retains its draft ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}});
+  try {
+    const page = await context.newPage(), f = fixture(), errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await mountConversation(page, false, f.dispatch); await page.goto('/dashboard/#/projects');
+    const form = page.locator('[data-create-record="project"]'), open = page.locator('[data-project-new]');
+    await expect(open).toHaveText(locale === 'en' ? 'New project' : '新增專案');
+    await expect(open).toBeVisible(); await expect(form).toBeHidden();
+    const folder = process.env.BATC_FIX1_SHOTS;
+    if (folder) {mkdirSync(folder, {recursive: true}); await page.screenshot({animations: 'disabled', path: `${folder}/projects-closed-${locale}-${width}.png`});}
+    await open.click();
+    const name = form.getByLabel(locale === 'en' ? 'New project name' : '新專案名稱', {exact: true});
+    await expect(name).toBeFocused(); await name.fill('Retained project draft');
+    expect(await form.locator('.actions').evaluate(node => [...node.children].map(child => child.tagName))).toEqual(['BUTTON', 'BUTTON', 'BUTTON', 'SPAN']);
+    if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/projects-open-${locale}-${width}.png`});
+    await form.getByRole('button', {name: locale === 'en' ? 'Cancel' : '取消', exact: true}).click();
+    await expect(form).toBeHidden(); await expect(open).toBeFocused();
+    await open.click(); await expect(name).toHaveValue('Retained project draft');
+    await page.reload(); await expect(form).toBeHidden(); await open.click(); await expect(name).toHaveValue('Retained project draft');
+    expect(f.state.writes).toEqual([]);
+    await form.getByRole('button', {name: locale === 'en' ? 'Add' : '新增', exact: true}).click();
+    await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
+    await expect(page.locator('[data-project-summary]')).toBeVisible();
+    if (folder) await page.screenshot({animations: 'disabled', path: `${folder}/project-created-${locale}-${width}.png`});
+    expect(f.state.writes).toHaveLength(1);
+    expect(f.state.writes[0].body).toEqual({action: 'project.create', target: {}, params: {name: 'Retained project draft'}, preconditions: {}});
+    expect(errors).toEqual([]); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {await context.close();}
+});
+
+for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test(`project repository chip stays compact ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}});
+  try {
+    const page = await context.newPage(), f = fixture(); await mountConversation(page, false, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid);
+    const chip = page.locator('[data-project-summary] .chip').filter({hasText: 'example/docs'});
+    await expect(chip).toBeVisible(); const bounds = await chip.boundingBox();
+    expect(bounds!.height).toBeLessThanOrEqual(24);
+    const row = await page.locator('.project-summary-actions').boundingBox();
+    expect(Math.abs(bounds!.y + bounds!.height / 2 - row!.y - row!.height / 2)).toBeLessThan(1);
+    const folder = process.env.BATC_FIX1_SHOTS;
+    if (folder) {mkdirSync(folder, {recursive: true}); await page.screenshot({animations: 'disabled', path: `${folder}/project-header-${locale}-${width}.png`});}
+    expect(f.state.writes).toEqual([]); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  } finally {await context.close();}
+});
+
 for (const native of [false,true]) test.describe(native ? 'Native create' : 'Browser create',()=>{
   test('advanced project creation keeps exact central relationships and original lost-reply request',async({page})=>{
     const f=fixture(); f.state.lost=true; await mountConversation(page,native,f.dispatch);
-    await page.goto('/dashboard/#/projects');
+    await page.goto('/dashboard/#/projects'); await page.locator('[data-project-new]').click();
     const form=page.locator('[data-create-record="project"]');
     await form.getByLabel('New project name',{exact:true}).fill('Source review');
     await form.getByLabel('Repository for dispatch (optional)',{exact:true}).selectOption('example/docs');
@@ -75,7 +153,9 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await form.getByRole('button',{name:'Add',exact:true}).click();
     await expect(form).toContainText('Original reply unavailable');
     await expect(form.getByLabel('New project name',{exact:true})).toBeDisabled();
+    await expect(form.getByRole('button',{name:'Cancel',exact:true})).toHaveCount(0);
     await page.reload();
+    await expect(form).toBeVisible(); await expect(page.locator('[data-project-new]')).toBeHidden();
     await expect(form.getByLabel('New project name',{exact:true})).toHaveValue('Source review');
     await form.getByRole('button',{name:'Check original creation request',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(2);
@@ -89,6 +169,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     const f=fixture(); await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/project/'+pid);
     const form=page.locator('[data-create-record="work_item"]');
     await expect(page.getByRole('heading',{name:'Documentation',exact:true})).toBeVisible();
+    await page.locator('[data-project-work-create]').click();
     await expect(form).not.toContainText(pid);
     await form.getByLabel('New work item',{exact:true}).fill('Review changed files');
     await form.locator('summary').click();
@@ -99,7 +180,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await form.getByLabel('State',{exact:true}).selectOption('waiting');
     await form.getByLabel('Parent',{exact:true}).selectOption(wid);
     await form.getByLabel('Branched from',{exact:true}).selectOption(wid);
-    await page.reload(); await form.locator('summary').click();
+    await page.reload(); await page.locator('[data-project-work-create]').click(); await form.locator('summary').click();
     await expect(form.getByLabel('Request (verbatim)',{exact:true})).toHaveValue('Preserve this exact request.');
     await form.getByRole('button',{name:'Add',exact:true}).click();
     await expect.poll(()=>f.state.writes.length).toBe(1);
@@ -107,16 +188,34 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
       goal:'Keep the requested behavior',request:'Preserve this exact request.',acceptance:'Focused checks pass.',
       steps:[{text:'Read source',done:false},{text:'Run checks',done:false}],state:'waiting',parent_id:wid,derived_from:wid},preconditions:{}});
     await expect(form.getByLabel('New work item',{exact:true})).toHaveValue('');
-    await expect(form.getByRole('button',{name:'Add',exact:true})).toBeEnabled();
+    await expect(form.getByRole('button',{name:'Add',exact:true,includeHidden:true})).toBeEnabled();
+    await expect(form).toBeHidden();
+    await expect(page.locator('[data-project-work-create]')).toBeFocused();
   });
 
   test('unavailable draft storage prevents a creation request',async({page})=>{
-    const f=fixture(); await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects');
+    const f=fixture(); await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects'); await page.locator('[data-project-new]').click();
     const form=page.locator('[data-create-record="project"]');
     await form.getByLabel('New project name',{exact:true}).fill('Never sent');
     await page.evaluate(()=>{const set=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key.startsWith('batc.create.'))throw Error('Draft storage unavailable');return set.call(this,key,value);};});
     await form.getByRole('button',{name:'Add',exact:true}).click();
     await expect(form).toContainText('Draft storage unavailable'); expect(f.state.writes).toHaveLength(0);
+  });
+
+  test('work item recovery stays open and uses the original request after reload', async ({page}) => {
+    const f = fixture(); f.state.lost = true; await mountConversation(page, native, f.dispatch);
+    await page.goto('/dashboard/#/project/' + pid); await page.locator('[data-project-work-create]').click();
+    const form = page.locator('[data-create-record="work_item"]');
+    await form.getByLabel('New work item', {exact: true}).fill('Recover this creation');
+    await form.getByRole('button', {name: 'Add', exact: true}).click();
+    await expect(form).toContainText('Original reply unavailable');
+    await expect(form.getByRole('button', {name: 'Cancel', exact: true})).toHaveCount(0);
+    await page.reload(); await expect(form).toBeVisible();
+    await expect(page.locator('[data-project-work-create]')).toBeHidden();
+    await expect(form.getByLabel('New work item', {exact: true})).toHaveValue('Recover this creation');
+    await form.getByRole('button', {name: 'Check original creation request', exact: true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(2);
+    expect(f.state.writes[1]).toEqual(f.state.writes[0]); await expect(form).toBeHidden();
   });
 
   test('observe scope and archived projects keep creation disabled',async({page})=>{
@@ -134,7 +233,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
   });
 
   test('a foreign receipt retains the draft and frozen request until its original receipt is verified',async({page})=>{
-    const f=fixture(); f.state.wrongReceipt=true; await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects');
+    const f=fixture(); f.state.wrongReceipt=true; await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects'); await page.locator('[data-project-new]').click();
     const form=page.locator('[data-create-record="project"]');
     await form.getByLabel('New project name',{exact:true}).fill('Original work');
     await form.getByRole('button',{name:'Add',exact:true}).click();
@@ -146,13 +245,13 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await expect.poll(()=>f.state.writes.length).toBe(2);
     expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
-    await expect(page).toHaveURL(new RegExp('#/project/'+pid+'$'));
+    await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
   });
 
   for (const uncertain of ['lost reply','foreign receipt']) for (const status of [401,403,422])
     test(`${uncertain} followed by ${status} retains the original creation across reload`,async({page})=>{
       const f=fixture(); f.state.lost=uncertain==='lost reply'; f.state.wrongReceipt=uncertain==='foreign receipt';
-      await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects');
+      await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects'); await page.locator('[data-project-new]').click();
       const form=page.locator('[data-create-record="project"]');
       await form.getByLabel('New project name',{exact:true}).fill('Only one creation');
       await form.getByRole('button',{name:'Add',exact:true}).click();
@@ -175,7 +274,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
       await expect(form.getByRole('button',{name:'Edit a new creation request',exact:true})).toBeHidden();
       f.state.reject=null; f.state.wrongReceipt=false;
       await form.getByRole('button',{name:'Check original creation request',exact:true}).click();
-      await expect(page).toHaveURL(new RegExp('#/project/'+pid+'$'));
+      await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
       expect(f.state.writes).toHaveLength(3); expect(f.state.ops.size).toBe(1);
       for (const request of f.state.writes.slice(1)) {
         expect(request.idempotency_key).toBe(f.state.writes[0].idempotency_key);
@@ -185,7 +284,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
 
   test('proven first-attempt validation refusal allows reviewing a new creation request',async({page})=>{
     const f=fixture(); f.state.reject={status:422,code:'INVALID_PARAMS'};
-    await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects');
+    await mountConversation(page,native,f.dispatch); await page.goto('/dashboard/#/projects'); await page.locator('[data-project-new]').click();
     const form=page.locator('[data-create-record="project"]');
     await form.getByLabel('New project name',{exact:true}).fill('Invalid original');
     await form.getByRole('button',{name:'Add',exact:true}).click();
@@ -195,7 +294,7 @@ for (const native of [false,true]) test.describe(native ? 'Native create' : 'Bro
     await form.getByRole('button',{name:'Edit a new creation request',exact:true}).click();
     await form.getByLabel('New project name',{exact:true}).fill('Corrected work');
     f.state.reject=null; await form.getByRole('button',{name:'Add',exact:true}).click();
-    await expect(page).toHaveURL(new RegExp('#/project/'+pid+'$'));
+    await expect(page).toHaveURL(new RegExp('#/project/' + pid + '$'));
     expect(f.state.ops.size).toBe(1);
     expect(f.state.writes[1].idempotency_key).not.toBe(f.state.writes[0].idempotency_key);
   });
