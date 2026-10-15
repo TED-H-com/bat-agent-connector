@@ -4,6 +4,12 @@ This repository owns the public GitHub Pages introduction. The operational Web
 Dashboard is served by Python and shares `desktop/src` with Tauri; this static
 site does not contact a central, BAT host, model provider or analytics service.
 
+The introduction links to `/demo/`, a build of the actual shared Dashboard with
+synthetic read-only data. Its transport is replaced only in this build and its CSP
+blocks network connections. `/prototype/v1.3/` remains a separate simulated workflow
+preview; neither is evidence of live execution. Preview links to existing product
+views open the demo in a new tab, preserving the preview's draft and work.
+
 ## What the page explains
 
 The product introduction follows one project journey: understand its state, find a
@@ -32,6 +38,8 @@ steps, while [PM status](../docs/product/pm-v1.2-status.md) retains the full bac
 | `site/404.html` | Bilingual missing-page recovery at the production Pages base path |
 | `scripts/capture_site.mjs` | Actual shared-frontend capture with local synthetic fixtures |
 | `site/images/manifest.json` | Pinned frontend source, fixture/browser details and image/source hashes |
+| `desktop/demo/` | Build-time transport, locale and banner for the shared Dashboard demo |
+| `desktop/prototype/v1.3/` | Separate fixture preview of the proposed work flow |
 
 Keep the English and [Traditional Chinese README](../README.zh-TW.md) aligned with
 the same source. Preserve the [first-use guides](../docs/getting-started.md) as the
@@ -65,6 +73,13 @@ screens, private conversations or later candidate UI under a main-version captio
 From the repository root, with `desktop/` dependencies and Playwright Chromium installed:
 
 ```bash
+cd desktop
+npm run build:demo
+npm run build:prototype
+cd ..
+mkdir -p site/demo site/prototype/v1.3
+cp -R desktop/dist-demo/. site/demo/
+cp -R desktop/dist-prototype/v1.3/. site/prototype/v1.3/
 python3 scripts/build_product_site.py
 python3 scripts/build_product_site.py --check
 python3 scripts/check_product_site.py
@@ -77,6 +92,8 @@ The browser verifier owns an ephemeral loopback server at the production
 `/bat-agent-connector/` path and closes it on exit. It checks both languages at
 390/768/1440, all eight gallery choices, keyboard/mobile navigation, preferences,
 blocked storage, no-JavaScript fallback, image decoding, overflow and 404 recovery.
+It also follows the introduction → Dashboard demo → workflow preview → Requirements
+demo journey at the production base path, checking that the preview keeps its draft.
 It rejects page/console errors and external requests. Inspect the resulting images;
 a green script does not prove the prose describes the product accurately.
 

@@ -5,6 +5,9 @@ __pycache__/
 .ruff_cache/
 dist/
 desktop/dist-prototype/v1.3/
+desktop/dist-demo/
+site/demo/
+site/prototype/
 build/
 *.egg-info/
 # never commit real configs or tokens

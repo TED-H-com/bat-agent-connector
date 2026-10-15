@@ -144,15 +144,12 @@ async function discussionToQueue({page, lang, width, all, capture}: Flow) {
   if (lang === 'en' && width === 1440) await shot(page, 'compare-discussions-en-1440.png');
   // The shell's names come from the product dictionaries in both locales.
   if (width === 390) await page.getByTestId('nav-drawer-toggle').click();
-  await expect(page.locator('.pm-project-views button span')).toHaveText(['overview', 'discussions', 'requirements', 'schedule', 'dependencies', 'issues', 'agents', 'board'].map(id => uiStrings[lang][`ui_${id}` as keyof typeof uiStrings[typeof lang]]));
+  await expect(page.locator('.pm-project-views > :is(button, a) > span')).toHaveText(['overview', 'discussions', 'requirements', 'schedule', 'dependencies', 'issues', 'agents', 'board'].map(id => uiStrings[lang][`ui_${id}` as keyof typeof uiStrings[typeof lang]]));
   await page.keyboard.press('Escape');
   const draft = await page.getByTestId('composer-textarea').inputValue();
   for (const view of ['requirements', 'schedule', 'dependencies', 'issues', 'agents', 'board']) {
-    if (width === 390) await page.getByTestId('nav-drawer-toggle').click();
-    await page.getByTestId(`nav-item-${view}`).click();
-    await expect(page.getByTestId(`view-placeholder-${view}`)).toBeVisible();
-    await health(page, lang);
-    await page.getByTestId('placeholder-return-discussions').click();
+    await expect(page.getByTestId(`nav-item-${view}`)).toHaveAttribute('href', `../../demo/?lang=${lang}&view=${view}`);
+    await expect(page.getByTestId(`nav-item-${view}`)).toHaveAttribute('target', '_blank');
     await expect(page.getByTestId('composer-textarea')).toHaveValue(draft);
   }
   await expect(page.locator('.proto-composer [role=radio]')).toHaveText(lang === 'en' ? ['Discuss', 'Plan', 'Do'] : ['討論', '規劃', '做事']);

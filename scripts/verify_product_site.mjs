@@ -12,7 +12,8 @@ const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
   const prefix = '/bat-agent-connector/';
-  const file = resolve(root, path.startsWith(prefix) ? path.slice(prefix.length) || 'index.html' : '404.html');
+  const relative = path.startsWith(prefix) ? path.slice(prefix.length) : '404.html';
+  const file = resolve(root, !relative || relative.endsWith('/') ? relative + 'index.html' : relative);
   if (!file.startsWith(resolve(root) + sep)) { res.writeHead(400).end(); return; }
   try {
     const body = await readFile(file);
@@ -48,6 +49,23 @@ try {
     assert.ok(firstUse.join(' ').includes(lang === 'en' ? 'collapsed until needed' : '需要時再展開'));
     assert.ok((await page.locator('#product .release-note').innerText()).includes(manifest.frontend_source_commit));
     await page.screenshot({ path: resolve(output, `hero-${lang}-${width}.png`) });
+    const demoLink = page.locator('.hero a[href="demo/?lang=' + lang + '"]:visible');
+    assert.equal(await demoLink.count(), 1);
+    await demoLink.click();
+    await page.locator('[data-pm-overview]').waitFor();
+    assert.ok((await page.locator('#demo-bar').innerText()).includes(lang === 'en' ? 'Sample data' : '合成資料'));
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.locator('#demo-bar a[href*="prototype"]').click();
+    await page.getByTestId('composer-textarea').waitFor();
+    await page.getByTestId('composer-textarea').fill('Keep this preview draft');
+    if (!await page.getByTestId('nav-item-requirements').isVisible()) await page.getByTestId('nav-drawer-toggle').click();
+    const opened = page.waitForEvent('popup');
+    await page.getByTestId('nav-item-requirements').click();
+    const other = await opened;
+    await other.locator('[data-pm-region="requirements"]').waitFor();
+    assert.equal(await page.getByTestId('composer-textarea').inputValue(), 'Keep this preview draft');
+    await other.close();
+    await page.goto(base + '?lang=' + lang);
     await page.locator('#product').scrollIntoViewIfNeeded();
     assert.equal(await page.locator('[data-view]').count(), views.length);
     assert.equal(await page.locator('#view-overview').isVisible(), true);

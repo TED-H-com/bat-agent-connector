@@ -6,6 +6,10 @@ on:
     paths:
       - "site/**"
       - "desktop/prototype/**"
+      - "desktop/demo/**"
+      - "desktop/src/**"
+      - "desktop/tests/demo/**"
+      - "desktop/package*.json"
       - "scripts/*product_site*"
       - "README*.md"
       - "docs/getting-started*.md"
@@ -15,6 +19,10 @@ on:
     paths:
       - "site/**"
       - "desktop/prototype/**"
+      - "desktop/demo/**"
+      - "desktop/src/**"
+      - "desktop/tests/demo/**"
+      - "desktop/package*.json"
       - "scripts/*product_site*"
       - "README*.md"
       - "docs/getting-started*.md"
@@ -42,10 +50,6 @@ jobs:
         run: |
           commit=$(python3 -c 'import json; print(json.load(open("site/images/manifest.json"))["frontend_source_commit"])')
           git fetch --no-tags --depth=1 origin "$commit"
-      - name: Generated content and local documentation links
-        run: |
-          python3 scripts/build_product_site.py --check
-          python3 scripts/check_product_site.py
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: "24.21.0"
@@ -89,6 +93,19 @@ jobs:
               raise ValueError("Prototype must include a robots noindex meta tag")
           print("Prototype build: noindex and relative asset URLs verified")
           PY
+      - name: Build and verify the shared Dashboard demo
+        working-directory: desktop
+        run: |
+          npm run build:demo
+          npm run build:browser
+          npx playwright test tests/public-demo.spec.ts
+      - name: Stage interactive examples and check website links
+        run: |
+          mkdir -p site/demo site/prototype/v1.3
+          cp -R desktop/dist-demo/. site/demo/
+          cp -R desktop/dist-prototype/v1.3/. site/prototype/v1.3/
+          python3 scripts/build_product_site.py --check
+          python3 scripts/check_product_site.py
       - name: Responsive bilingual browser checks
         env:
           SITE_SCREENSHOT_DIR: ${{ runner.temp }}/product-site-evidence
@@ -129,16 +146,18 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
 
-      - name: Build the unindexed prototype
+      - name: Build the shared demo and workflow preview
         working-directory: desktop
         run: |
           npm ci
           npm run build:prototype
+          npm run build:demo
 
-      - name: Stage the prototype without site navigation links
+      - name: Stage the interactive examples
         run: |
-          mkdir -p site/prototype/v1.3
+          mkdir -p site/demo site/prototype/v1.3
           cp -R desktop/dist-prototype/v1.3/. site/prototype/v1.3/
+          cp -R desktop/dist-demo/. site/demo/
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
