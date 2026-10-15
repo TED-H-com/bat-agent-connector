@@ -107,13 +107,13 @@ test('a Register row without its own title uses the shared requirement name', as
   await mountConversation(page, false, async input => {
     const result = await f.dispatch(input);
     if (new URL(input.path, 'http://fixture').pathname === f.root + '/register') {
-      Object.assign(result.data.rows[0], {title: null, statement: null, source: {kind: 'requirement', id}});
+      Object.assign(result.data.rows[1], {title: null, statement: null, source: {kind: 'requirement', id}});
     }
     return result;
   });
   const plan = await f.originalDispatch({path: f.root + '/plans/accepted'}), name = plan.data.plan.document.requirements.find((row: any) => row.id === id).text;
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/issues`);
-  await expect(page.locator('[data-reg-table] [data-row-key]').first().getByRole('cell').nth(1)).toContainText(name);
+  await expect(page.locator('[data-reg-table] [data-row-key]').nth(1).locator('[data-column="title"]')).toContainText(name);
   expect(f.count('/plans/accepted')).toBe(1); expect(f.writes).toEqual([]);
 });
 test('a plan event invalidates a hidden name source and reads it once when Issues reopens', async ({page}) => {
