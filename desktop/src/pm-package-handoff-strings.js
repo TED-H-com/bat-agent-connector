@@ -14,7 +14,7 @@ export const pmPackageHandoffStrings={en:{
   ph_blocked:'The package has unresolved checks beyond the implementation-base decision. Review the package details above.',
   ph_target_changed:'The published code or repository binding differs from the fixed package. Prepare a new package with an explicitly chosen base; this preview cannot rewrite it.',
   ph_unavailable:'Implementation sources or permissions could not be verified. Displayed source facts were removed; local drafts and original requests remain.',
-  ph_not_allowed:'This handoff needs workspace write membership, permission to view, manage, and start, and managed work to be allowed.',
+  ph_not_allowed:'This handoff needs workspace write membership, View, Manage and Start access, and permission for managed work.',
   ph_invalid:'The response does not match the selected fixed engineering package.',ph_reading:'Reading the original package, project and published base…',
   ph_started:'Implementation was started. Verification and delivery remain unassessed.',ph_open:'Open managed execution',ph_preparation:'Preparation',ph_project_version:'Project version',
 },'zh-TW':{
@@ -26,7 +26,7 @@ export const pmPackageHandoffStrings={en:{
   ph_select:'先在上方選取工程工作包，再準備實作。',ph_review:'核對基底',ph_reviewed:'已核對實作基底',
   ph_base:'程式起始版本',ph_spec:'規格版本',ph_separate:'程式與規格可以來自不同提交。選定此基底不代表已證明相容，也不會略過其餘就緒檢查。',
   ph_boundary:'工作包準備完成不等於已授權執行。這個操作只開始實作，不代表品質驗證、合併或部署完成。',
-  ph_rationale:'為何使用這個實作基底？',ph_prompt:'這次實作的指示',ph_agent:'Agent',ph_agent_help:'選擇 Claude 或 Codex。送出時會核對能否啟動；選單上的選項不代表目的地已就緒。',
+  ph_rationale:'為何使用這個實作基底？',ph_prompt:'這次實作的指示',ph_agent:'代理',ph_agent_help:'選擇 Claude 或 Codex。送出時會核對能否啟動；選單上的選項不代表目的地已就緒。',
   ph_options:'工作階段選項',ph_start:'開始實作',ph_sources:'固定版本與原始來源',ph_use_review:'使用此版本',
   ph_details:'詳細資訊',
   ph_stale:'草稿仍保留先前的專案版本。請重新核對目前來源，再明確使用這個專案版本開始新請求。',

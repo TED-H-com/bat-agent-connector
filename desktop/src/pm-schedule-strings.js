@@ -23,7 +23,7 @@ export const scheduleStrings = {
     sched_empty: '尚無排定日期', sched_empty_unscheduled: '沒有未排期項目', sched_details: '詳細資訊',
     sched_open: '未結束', sched_no_dates: '尚無日期紀錄', sched_not_observed: '尚未觀察到', sched_delta: '{n} 天',
     sched_requirement: '對應需求', sched_status: '狀態與工作階段', sched_result: '最新結果',
-    sched_blocker: '阻礙與下一步', sched_delivery: '交付', sched_attempts: '執行嘗試', sched_agent: 'Agent 未知',
+    sched_blocker: '阻礙與下一步', sched_delivery: '交付', sched_attempts: '執行嘗試', sched_agent: '代理未知',
     sched_unavailable: '無法取得', sched_session: '開啟工作階段', sched_run: '開啟執行紀錄', sched_requirements: '在需求中開啟',
     sched_propose: '提議變更', sched_change_title: '變更：{title}', sched_roadmap: '路線圖', sched_error: '無法取得時程',
     sched_too_large: '時程資料超過大小上限。',

@@ -14,7 +14,8 @@
   Dispatched work heading gap and wait for discussion Send readiness after reload.
   Sessions distinguish first-run emptiness from filters and share activity labels
   with resource rows. Reading actions explain unavailable states; failed message
-  reads show one Retry with diagnostics and export in Details.
+  reads show one Retry with diagnostics and export in Details. Use readable access
+  labels and consistent 代理 / 工作樹 terminology in Traditional Chinese.
 
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,

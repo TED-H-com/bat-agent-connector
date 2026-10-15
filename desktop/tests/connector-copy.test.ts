@@ -31,3 +31,24 @@ for (const locale of ['en', 'zh-TW'] as const) {
     if (locale === 'en') assert.match(copy.projects_help, /^Projects and work items are Connector's own records:/);
   });
 }
+
+for (const locale of ['en', 'zh-TW'] as const) {
+  test(`permission guidance reuses readable Connection labels in ${locale}`, () => {
+    const copy = STRINGS[locale];
+    for (const [key, scopes] of Object.entries({capture_scope_observe: ['observe'], capture_scope_manage: ['observe', 'manage'],
+      agents_scope: ['observe', 'manage', 'start'], agents_token: ['observe', 'operate', 'start'], ar_approve_scope: ['approve', 'observe']})) {
+      for (const scope of scopes) assert.ok(copy[key].includes(copy['connection_scope_' + scope]), key + ' / ' + scope);
+      assert.doesNotMatch(copy[key], /\b(?:observe|manage|start|operate|approve)\b(?! access)/, key);
+    }
+  });
+}
+test('Traditional Chinese uses one agent and worktree vocabulary', () => {
+  for (const [key, value] of Object.entries(STRINGS['zh-TW'])) {
+    assert.doesNotMatch(value.replace(/\{\w+\}/g, ''), /\b(?:agents?|worktrees?)\b/i, key);
+    if (key !== 'needs_start_scope_key') assert.doesNotMatch(value.replace(/\{\w+\}/g, ''), /\b(?:observe|start|manage|admin)\b/, key);
+  }
+});
+
+test('English labels keep their English agent and worktree vocabulary', () => {
+  for (const value of Object.values(STRINGS.en)) assert.doesNotMatch(value, /代理|工作樹/);
+});

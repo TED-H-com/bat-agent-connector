@@ -44,7 +44,7 @@ export const pmFollowUpStrings={
     pm_fu_more_snapshots:'More snapshots',pm_fu_more_threads:'More discussions',pm_fu_more_governance:'More governance findings',pm_fu_more_meetings:'More meetings',
     pm_fu_saved_selection:'Previously selected source',pm_fu_source_help:'Selections stay fixed. Preparing does not confirm assumptions or verify reported completion.',
     pm_fu_accepted_required:'Choose a snapshot that contains an explicitly adopted plan.',pm_fu_source_wait:'Select an adopted-plan snapshot and wait for the selected sources to be checked.',
-    pm_fu_read_only:'Preparation requires current workspace write access and manage scope.',
+    pm_fu_read_only:'Preparation needs current workspace write access and Manage access',
     pm_fu_stale:'Versions changed. Review your saved selections before using the current versions.',pm_fu_use_versions:'Use current versions',
     pm_fu_actor_changed:'The signed-in actor changed. Reopen this workspace to use that actor’s drafts.',
     pm_fu_scope_error:'The Follow-up response does not match this workspace, source or page.',

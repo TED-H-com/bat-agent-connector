@@ -56,7 +56,7 @@ export const uiStrings = {
   'zh-TW': {ui_discuss:'討論', ui_search:'搜尋', ui_reason_detail: '{label}（{code}）', ui_search_work: '搜尋工作', ui_report_versions: '版本', ui_save_snapshot: '儲存報告', ui_compare: '比較', ui_print: '列印', ui_export_brief: '匯出報告', ui_close: '關閉', ui_back: '返回', ui_retry: '重試', ui_remove: '移除{text}', ui_loading: '載入中',
     ui_more: '更多操作', ui_expand: '展開{title}', ui_collapse: '收合{title}',
     ui_overview: '專案總覽', ui_discussions: '討論', ui_requirements: '需求', ui_schedule: '時程',
-    ui_dependencies: '技術相依', ui_issues: '問題與變更', ui_agents: 'Agent 資源', ui_board: '工作看板',
+    ui_dependencies: '技術相依', ui_issues: '問題與變更', ui_agents: '代理資源', ui_board: '工作看板',
     ui_project: '專案', sync_actions_paused: '資料更新失敗；取得最新紀錄前暫停操作。', ui_work_item: '工作項目', ui_bound_partial: '部分連結專案無法取得', ui_work: '工作', ui_session: '工作階段', ui_all_projects: '所有專案', ui_settings: '設定', ui_pending: '待處理',
     ui_connected: '已連線', ui_offline: '離線', ui_reconnecting: '重新連線中', ui_workspace: '工作空間',
     ui_switch_workspace: '切換工作空間', ui_new_workspace: '新增工作空間', ui_report: '報告',

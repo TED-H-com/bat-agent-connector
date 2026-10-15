@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {STRINGS} from '../src/i18n.js';
 import {demoFixture} from './demo/index.ts';
 import {mountConversation} from './conversation-fixture.ts';
 import {mount, project, workItem, projectId} from './observed-resource-fixture.ts';
@@ -9,12 +10,14 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of [390, 768, 14
     const context = await browser.newContext({baseURL, locale, viewport: {width, height: 900}}), page = await context.newPage();
     const f = demoFixture({locale, discussions: true}), writes: string[] = [];
     await mountConversation(page, false, async input => {if (input.method !== 'GET') writes.push(input.path); return f.dispatch(input);});
-    for (const route of ['settings', 'sessions', ...['overview', 'requirements', 'issues', 'discussions', 'agents'].map(view => `pm/${f.ids.workspaceId}/${view}`)]) {
+    for (const route of ['settings', 'sessions', `session/${f.ids.host}/${f.ids.sessions.implement}`, ...['overview', 'requirements', 'issues', 'discussions', 'agents'].map(view => `pm/${f.ids.workspaceId}/${view}`)]) {
       await page.goto('/dashboard/#/' + route);
-      const header = page.locator('#main .ui-page-header').first(); await expect(header.locator('h1')).toBeVisible();
+      const header = page.locator('#main .ui-page-header').first();
+      const label = route.startsWith('pm/') ? STRINGS[locale]['ui_' + route.split('/').at(-1)!]
+        : route.startsWith('session/') ? f.copy.sessionImplement : STRINGS[locale][route === 'settings' ? 'ui_settings' : 'sessions_title'];
+      await expect(header.locator('h1')).toHaveText(label);
       await expect(header.locator('h1')).toHaveAttribute('title', await header.locator('h1').textContent() || '');
-      const iconsOnly = await header.evaluate(node => !node.querySelector('.ui-header-actions > :not(.ui-icon-button, .ui-menu, [hidden])'));
-      if (iconsOnly) for (const action of await header.locator('.ui-header-actions > .ui-icon-button:visible, .ui-header-actions > .ui-menu > button:visible').all()) {
+      for (const action of await header.locator('.ui-header-actions > .ui-icon-button:visible, .ui-header-actions > .ui-menu > .ui-icon-button:visible').all()) {
         const title = await header.locator('h1').boundingBox(), box = await action.boundingBox();
         expect(box!.y).toBeLessThan(title!.y + title!.height);
         expect(box!.x).toBeGreaterThanOrEqual(title!.x + title!.width);
