@@ -860,6 +860,24 @@ the original key to recover; never copy the package into an ordinary artifact or
 unrelated start to bypass source checks. Current source and scope checks apply before
 unsent frames. Original sent effects are reconciled without restarting a session.
 
+When `features.pm_workspaces.work_start` is advertised, first call
+`pm_work_start_preview(workspace_id, work_item_id, code_target?, delivery?, requirement_ids?, instruction?)`
+with `observe` and workspace membership. It resolves eligible repository bindings
+(auto-selecting only when exactly one candidate matches, never guessing among zero
+or multiple), the published branch head, current work/plan/package state, readiness
+checks and the exact `preconditions` object without writing to the journal. Then
+submit `work.start` through `operation_submit` with target `{workspace_id, work_item_id}`,
+params `{instruction, agent, model?, delivery, requirement_ids?, code_target}` (all four
+`code_target` fields required), and the nine preview `preconditions`. It requires
+`observe`, `manage` and `start` scopes plus write membership, and composes at most
+one `pm.work.bind`, one deterministic `work_start_thin_v1` `pm.work_package.create`
+(or reuses the matching ready latest package) and one `repository.continue` child
+under the same controller. A second concurrent start on the same Work item is
+refused with `PM_WORK_START_IN_PROGRESS` (409); keep the original key and read
+`pm_work_attempts_list(workspace_id, work_item_id, after?, limit?)` or
+`pm_work_attempt_get(workspace_id, attempt_id)` to inspect immutable attempts,
+child operations and the resulting managed session.
+
 ## Concept
 
 - **BAT** (Better Agent Terminal, github.com/tony1223/better-agent-terminal) runs agent sessions (Claude Code or Codex)

@@ -2,6 +2,16 @@
 
 ## Next release (unreleased)
 
+- Add the `work.start` compound action, read-only `pm_work_start_preview` and
+  immutable `work_attempts` reads (`pm_work_attempts_list`, `pm_work_attempt_get`)
+  to start a bound Work item in its own managed BAT worktree and session from a
+  reviewed published commit and adopted PM plan. Existing `pm.work.bind`,
+  `pm.work_package.create` (with deterministic `work_start_thin_v1` composition
+  or package reuse) and `repository.continue` run as durable children under the
+  same controller and original-key recovery rules, while concurrent duplicate
+  starts, unready requirements and foreign controllers are refused before any
+  host write.
+
 - Existing discussions offer Send to PM for ordinary native or BAT PM analysis,
   Save note only for a stored note, and Make a plan for an explicit proposal.
   Saved PM requests and replies appear together in the transcript. Recovery
