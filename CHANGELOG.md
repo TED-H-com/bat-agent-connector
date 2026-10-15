@@ -7,6 +7,12 @@
   Saved PM requests and replies appear together in the transcript. Recovery
   checks the original request and preserves any newer composer draft.
 
+- The project website links to an interactive demo built from the shared Dashboard
+  source. Its eight project views, work inspectors and session history use synthetic
+  read-only data with no backend connection. The separate v1.3 workflow preview links
+  its previously empty navigation pages to these views in a new tab, preserving the
+  preview's current draft and work. English and zh-TW are available in both examples.
+
 - Add the #141 backend Git transport contract: strict explicit host mode,
   frozen execution bindings, unchanged SSH reader identity and original-key
   setup recovery. Local Git remains disabled, with fixed readiness reasons;

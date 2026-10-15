@@ -8,6 +8,12 @@ Better Agent Dashboard keeps project state, PM discussions and decisions in one 
 Start with the live Overview, open a problem's original record, and discuss it with the PM without rebuilding the context.
 Review the proposed update and explicitly adopt it; requirements, work and delivery keep their own evidence.
 
+[Open the interactive Dashboard demo](https://ted-h-com.github.io/bat-agent-connector/demo/?lang=en).
+Explore the actual shared interface with synthetic, read-only project data: search work,
+expand requirements, inspect delivery evidence and browse sessions. The demo also links to
+the v1.3 workflow preview, which simulates the proposed start, follow-up and decision flow.
+Neither example connects to a BAT host or model.
+
 ![Overview: live project progress, blockers and pending decisions.](site/images/overview-en.png)
 
 *Actual shared UI · synthetic demonstration data · merged-main preview · [capture source](site/images/README.md).*

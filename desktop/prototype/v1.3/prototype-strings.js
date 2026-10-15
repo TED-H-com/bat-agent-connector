@@ -10,6 +10,8 @@ const pairs = {
   model: ['Claude (BAT default)', 'Claude（BAT 預設）'],
   maintProfile: ['Maintenance via BAT', '透過 BAT 執行維護工作'],
   prototype: ['v1.3 prototype', 'v1.3 互動原型'],
+  currentDemo: ['Explore current Dashboard', '瀏覽目前的 Dashboard'],
+  currentDemoNewTab: ['Open the current Dashboard demo in a new tab', '在新分頁開啟目前的 Dashboard 展示'],
   synthetic: ['Synthetic data · nothing runs or connects', '合成資料・不執行工作、不連線'],
   controls: ['Demo controls', '示範控制'],
   reset: ['Reset', '重設'],

@@ -25,7 +25,16 @@ const tid = id => ({
   'data-testid': id
 });
 const workViews = ['work_main', 'work_derived', 'work_separate'];
+const demoViews = new Set(projectViewIds.filter(view => !['overview', 'discussions'].includes(view)));
+const demoHref = view => '../../demo/?lang=' + locale + (demoViews.has(view) ? '&view=' + view
+  : ({pending: '#/home', tools: '#/sessions', settings: '#/settings', projects: '#/projects'}[view] || ''));
+const demoLink = (view, label, attrs = {}) => h('a', {href: demoHref(view), target: '_blank', rel: 'noopener',
+  title: t('currentDemoNewTab'), ...attrs}, label, ' ↗');
 const go = view => {
+  if (demoViews.has(view) || ['pending', 'tools', 'settings', 'projects'].includes(view)) {
+    window.open(demoHref(view), '_blank', 'noopener');
+    return;
+  }
   state.noteSavedBanner = false;
   state.activeView = view;
   if (workViews.includes(view)) state.workOpened = true;
@@ -176,7 +185,7 @@ function renderBar() {
     'aria-label': t('prototype')
   }, h('div', {
     class: 'proto-bar-row'
-  }, h('strong', {}, t('prototype')), select(t('stateSim'), 'scenario-picker', scenes.map(key => [key, t(key)]), scene(), switchScene), iconButton({
+  }, h('strong', {}, t('prototype')), demoLink('overview', t('currentDemo'), {class: 'ui-button secondary ui-sm'}), select(t('stateSim'), 'scenario-picker', scenes.map(key => [key, t(key)]), scene(), switchScene), iconButton({
     icon: barExpanded ? 'chevron-up' : 'chevron-down',
     label: t('controls'),
     'aria-expanded': String(barExpanded),
@@ -244,6 +253,9 @@ function renderBar() {
   }))))));
 }
 function navButton(view, title, work = false) {
+  if (demoViews.has(view)) return demoLink(view, h('span', {}, icon(viewIcons[view], {size: 20}), title), {
+    class: 'proto-demo-nav', ...tid('nav-item-' + view), 'data-pm-view': view,
+  });
   return h('button', {
     type: 'button',
     class: work ? 'workspace-tree-link proto-work-link' : 'ui-button ghost',
@@ -311,13 +323,8 @@ function sidebar() {
     class: 'workspace-tree-scroll'
   }, ...workRows.map(([id, title]) => navButton(id, title, true))), h('div', {
     class: 'workspace-nav-footer'
-  }, ...[['pending', 'ui_pending', 'inbox'], ['tools', 'ui_tools', 'wrench'], ['settings', 'ui_settings', 'settings']].map(([id, key, glyph]) => h('a', {
-    href: '#' + id,
-    onclick: e => {
-      e.preventDefault();
-      go(id);
-    }
-  }, icon(glyph), h('span', {}, t(key))))));
+  }, ...[['pending', 'ui_pending', 'inbox'], ['tools', 'ui_tools', 'wrench'], ['settings', 'ui_settings', 'settings']].map(([id, key, glyph]) =>
+    demoLink(id, h('span', {}, icon(glyph), ' ', t(key))))));
 }
 function openDrawer() {
   const aside = document.getElementById('workspace-sidebar');
@@ -796,16 +803,7 @@ function renderCanvas() {
       go('discussions');
     }, 'primary'))
   }));
-  const key = {
-    pending: 'ui_pending',
-    tools: 'ui_tools',
-    settings: 'ui_settings',
-    projects: 'ui_all_projects'
-  }[state.activeView] || 'ui_' + state.activeView;
-  return h('div', {
-    class: 'proto-view',
-    ...tid('view-placeholder-' + state.activeView)
-  }, header(t(key)), h('p', {}, t('placeholder')), action('returnThread', 'placeholder-return-discussions', () => go('discussions')));
+  return renderOverview();
 }
 function pendingButton() {
   const node = iconButton({
