@@ -43,8 +43,9 @@ try {
   output = createInterface({input: child.stdout});
   const lines = output[Symbol.asyncIterator]();
   const next = async () => {
+    // Fixture schema and seed writes can wait for disk commits on a shared host.
     const line = await bounded(Promise.race([lines.next(), stopped.then(() => {throw spawnError || Error('PM fixture stopped');})]),
-      30000, 'Timed out waiting for PM fixture output');
+      120000, 'Timed out waiting for PM fixture output');
     if (line.done) throw spawnError || Error('PM fixture stopped');
     return JSON.parse(line.value);
   };
