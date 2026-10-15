@@ -93,8 +93,14 @@ async def test_rotation_shares_identity_but_changed_scopes_cannot_replay_or_resu
 
 @pytest.mark.parametrize("create", [mark, position])
 async def test_pre_controller_personal_metadata_receipts_remain_replayable(daemon, mock, create):
-    message = observe(daemon)["messages"][0]
+    from dataclasses import replace
+
+    from bat_agent_connector import host_git, managed_setup
+    assert isinstance(daemon.ops.context["git_runner"], host_git.HostGitRunner)
+    doc = observe(daemon)
+    message = doc["messages"][0]
     original = create(daemon, message)
+    assert "git_execution" not in (original["external_refs"].get("admission_binding") or {})
     await settle_operations(daemon.ops)
     refs = daemon.ops.get(original["operation_id"])["external_refs"]
     refs["admission_binding"].pop("controller_authority")
@@ -104,6 +110,15 @@ async def test_pre_controller_personal_metadata_receipts_remain_replayable(daemo
     changed = api_auth.Principal(READER.actor, READER.scopes | {"manage"})
     with pytest.raises(OperationError, match="original effective principal"):
         create(daemon, message, principal=changed)
+    daemon.fleet.config.hosts["h1"] = replace(daemon.fleet.config.host("h1"), git="local")
+    managed_setup._activate(daemon, daemon.fleet.config, {})
+    reconfigured = mark(daemon, doc["messages"][1], key="after-reconfigure") if create is mark else position(
+        daemon, doc["messages"][1], version=1, key="after-reconfigure")
+    assert "git_execution" not in (reconfigured["external_refs"].get("admission_binding") or {})
+    daemon.fleet.config.hosts.pop("h1", None)
+    managed_setup._activate(daemon, daemon.fleet.config, {})
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(reconfigured["operation_id"])["status"] == "succeeded"
     assert not mock.frames
 
 
@@ -345,4 +360,3 @@ async def test_incomplete_reasons_and_unindexed_count_follow_current_read_with_m
     assert status == 200 and doc["reading"]["complete"] is False
     assert doc["reading"]["incomplete_reasons"] == ["message_ids"]
     assert doc["reading"]["unindexed_count"] == 3
-

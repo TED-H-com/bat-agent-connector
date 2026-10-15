@@ -2,6 +2,7 @@ import {t} from './i18n.js';
 import {actionLabel} from './global-labels.js';
 import {cliName} from './pm-agents-trend.js';
 import {button, disclosure, emptyState, iconButton, menu, pageHeader, sectionCard, statusPill} from './ui/components.js';
+import {sessionPill} from './state/sessions.js';
 import {timeStamp} from './ui/stamps.js';
 import {observedText as textOf} from './observed-resource-strings.js';
 
@@ -62,9 +63,8 @@ function sessionRow(h, session) {
   const title = text(observation.title) || text(session?.title) || t('session_untitled');
   const fresh = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale
     && !observation.gone_at && !['gone', 'missing'].includes(observation.state?.enumeration) && observation.state?.lifecycle !== 'ended';
-  const activity = fresh && observation.pending ? statusPill('asking_you')
-    : fresh && observation.streaming === true ? statusPill('running')
-    : fresh && observation.streaming === false ? statusPill('waiting') : null;
+  const pill = fresh ? sessionPill(observation) : null;
+  const activity = pill ? h('span', {class: `ui-pill tone-${pill.tone === 'stale' ? 'warn' : pill.tone}`, 'data-status': pill.status}, t(pill.key)) : null;
   return h('div', {class: 'or-session', 'data-observed-session': ''},
     h('div', {class: 'or-session-name'},
       session?.host && session?.session_id ? h('a', {href: sessionHref(session)}, title) : h('span', {}, title),

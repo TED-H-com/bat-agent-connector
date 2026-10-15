@@ -293,9 +293,10 @@ async def check_account(fleet, host: str) -> dict:
     try:
         runner = getattr(fleet, "confinement_runner", None)
         if runner is None:
-            from .checkpoints import SshGitRunner
+            from .host_git import HostGitRunner
             from .task_verifier import load_settings
-            runner = SshGitRunner(load_settings().ssh_hosts)
+            runner = HostGitRunner(fleet.config, load_settings().ssh_hosts, current_config=lambda: fleet.config)
+            fleet.confinement_runner = runner
         raw = await runner.run_account_check(host, account_script(config),
                                              timeout_s=config.get("check_timeout_s", 10) + 2,
                                              ssh_alias=config["check_ssh_alias"])

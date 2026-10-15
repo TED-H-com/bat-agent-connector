@@ -118,7 +118,7 @@ export function statusPill(status) {
   return h('span', {class: `ui-pill tone-${statusVocabulary[key].tone}`, 'data-status': key}, t('ui_status_' + key));
 }
 export function pageHeader({title, mark, pill, meta, actions = [], overflow} = {}) {
-  const actionRow = h('div', {class:'ui-header-actions'}, ...actions, overflow);
+  const actionRow = h('div', {class:'ui-header-actions', hidden: !actions.length && !overflow}, ...actions, overflow);
   actionRow.addEventListener('focusin', event => {
     const target = event.target.closest('button, a, select');
     if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;

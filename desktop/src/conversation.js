@@ -39,7 +39,7 @@ export function readingSummary(t, reading) {
 }
 
 // Scrolling never marks messages read. Personal receipts require an explicit action.
-export function conversationPanel({h, t, when, guard, readingActions = null, memory = null}) {
+export function conversationPanel({h, t, when, guard, errorBox, readingActions = null, memory = null}) {
   const viewport = h("div", {class: "conversation-scroll", tabindex: "0", role: "region", "aria-label": t("messages")});
   const status = h("span", {class: "muted", role: "status"}), fallback = h("div", {class: "conversation-copy"});
   const notice = h("p", {class: "muted", role: "status", hidden: true}, t("message_anchor_missing"));
@@ -88,16 +88,20 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     latest.hidden = !olderWindow && (pinned || !rows.size);
     if (memory && initialized) memory.scrollTop = viewport.scrollTop;
     if (!readingActions) return;
-    mark.disabled = busy || !visible().some(row => row.reading?.can_mark && row.reading?.unread);
-    remember.disabled = busy || !visible().some(row => row.reading);
-    older.disabled = busy;
+    const availability = (control, reason) => {
+      control.disabled = Boolean(reason);
+      control.setAttribute("aria-description", reason); control.title = reason;
+    };
+    availability(mark, busy ? t("conversation_saving") : !visible().some(row => row.reading?.can_mark && row.reading?.unread) ? t("conversation_no_unread") : "");
+    availability(remember, busy ? t("conversation_saving") : !visible().some(row => row.reading) ? t("conversation_no_position") : "");
+    availability(older, busy ? t("conversation_saving") : "");
   };
   const follow = () => {pinned = true; unseen = 0; viewport.scrollTop = viewport.scrollHeight; indicator();};
   const run = async action => {
     if (!alive() || busy) return;
-    busy = true; indicator();
+    busy = true; status.replaceChildren(); indicator();
     try {await action(); if (alive()) status.textContent = t("conversation_saved");}
-    catch (error) {if (alive()) status.textContent = error.message || String(error);}
+    catch (error) {if (alive()) status.replaceChildren(errorBox(error, {summary: t("conversation_save_failed"), within: status}));}
     finally {busy = false; if (alive()) indicator();}
   };
   const onScroll = () => {if (initialized && !resizing) pinned = atBottom(); indicator();};
@@ -279,14 +283,15 @@ export function conversationPanel({h, t, when, guard, readingActions = null, mem
     initialized = true; indicator();
   };
   // A failed read draws its state in the transcript. Rows already shown stay, marked as not updated.
-  const fail = ({title, retry}) => {
+  const fail = ({error}) => {
     if (!alive()) return;
-    const action = retry ? h("button", {class: "ui-button secondary ui-sm", type: "button", onclick: retry}, t("ui_retry")) : null;
     if (!rows.size) {
-      viewport.replaceChildren(h("div", {class: "conversation-state", "data-conversation-state": "error"},
-        emptyState({icon: "circle-alert", title, action})));
-      caption.textContent = t("message_window_failed");
-    } else caption.replaceChildren(t("message_window_stale"), action ? "\u00a0· " : "", action || "");
+      viewport.replaceChildren(h("div", {class: "conversation-state", "data-conversation-state": "error"}, error));
+      caption.textContent = "";
+    } else {
+      viewport.prepend(error);
+      caption.textContent = t("message_window_stale");
+    }
     indicator();
   };
   // Withdrawal: drop every row and its text together.

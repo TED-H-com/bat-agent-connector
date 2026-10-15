@@ -4,7 +4,7 @@
 
 ## 選擇相符的候選安裝包
 
-這版原始碼包含打包本機中央與桌面引導設定。開啟 [`main` 的 desktop workflow](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain)，選擇目前公開歷史的成功 run，核對 artifact 的來源 commit、平台 job 與安裝 fixture 紀錄。若該 commit 還在建置，請等平台 job 成功。歷史 PR artifact 與早期 release 資產不作為目前下載來源。
+這版原始碼包含打包本機中央與桌面引導設定。開啟 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain)，選擇目前公開歷史的成功 run，核對 artifact 的來源 commit、平台 job 與安裝 fixture 紀錄。若該 commit 還在建置，請等平台 job 成功。歷史 PR artifact 與早期 release 資產不作為目前下載來源。
 
 | 平台 | Artifact | 格式 |
 | --- | --- | --- |
@@ -189,7 +189,7 @@ Dashboard 登入欄位不能填 BAT remote token。
 在中央主機使用 `uv` 安裝。正式版本選定前，固定一個已檢視 commit，避免不知情跟著 `main` 變動。請將 `REVIEWED_COMMIT` 換成與選定桌面／中央部署相符、已檢視的來源 commit：
 
 ```bash
-uv tool install 'git+https://github.com/teddashh/bat-agent-connector@REVIEWED_COMMIT'
+uv tool install 'git+https://github.com/TED-H-com/bat-agent-connector@REVIEWED_COMMIT'
 batc --help
 ```
 

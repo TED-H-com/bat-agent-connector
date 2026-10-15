@@ -105,7 +105,11 @@ for (const locale of ['en', 'zh-TW']) for (const width of [390, 768, 1440]) {
     await composer.fill(zh ? '請整理這個阻礙，保留尚未確認的預算。' : 'Review this blocker and keep the budget uncertainty explicit.');
     await page.reload(); await expect(composer).not.toHaveValue(''); expect(f.discussion.writes).toHaveLength(0);
     await expect(page.locator('[data-discussion-title]')).toHaveText(draftTitle);
-    await composer.press('Tab'); await page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true}).press('Enter');
+    const sendDraft = page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true});
+    await expect(sendDraft).toBeEnabled();
+    await composer.press('Tab');
+    await sendDraft.focus(); await expect(sendDraft).toBeFocused();
+    await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/discussions\/pmt_[a-f0-9]{32}$/);
     await expect(page.locator('.pm-notes')).toContainText(zh ? '請整理這個阻礙' : 'Review this blocker');
     expect(f.discussion.writes.map((w: any) => w.body.action)).toEqual(['pm.thread.create', 'pm.message.append']);
@@ -292,6 +296,7 @@ test('the complete review path works with the keyboard, including a second propo
   const f = demoFixture({discussions: true}); await mountConversation(page, false, f.dispatch);
   await page.addInitScript(() => { (window as any).pointerActions = 0; document.addEventListener('pointerdown', () => (window as any).pointerActions++); });
   const tabTo = async (locator: any) => {
+    await expect(locator).toBeEnabled();
     for (let step = 0; step < 100; step++) {
       if (await locator.evaluate((node: Element) => node === document.activeElement)) return;
       await page.keyboard.press('Tab');

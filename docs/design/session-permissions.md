@@ -1,6 +1,6 @@
 # Session permissions：逐 frame durable 合約
 
-基底 main `da66c545120c1b5fb2703277ae6c0e180c309c46`；追蹤 [#57](https://github.com/teddashh/bat-agent-connector/issues/57)。
+基底 main `da66c545120c1b5fb2703277ae6c0e180c309c46`；追蹤 [#57](https://github.com/TED-H-com/bat-agent-connector/issues/57)。
 這是[同一產品](../product/realignment-v2.md)的 R01 接續，不是新 scheduler／產品。
 沿用[mutation 盤點](legacy-mutation-audit.md)、[operations](operations-unification.md)、
 [驗收矩陣](../product/acceptance-v2.md) A01/A05/A07/A08/A10 與 T07/T09–T11。

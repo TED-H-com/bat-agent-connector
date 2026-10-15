@@ -170,8 +170,9 @@ async def resolve_source(ops, target, *, ctx=None, snapshot=None, step='source.i
 
 
 def task_binding(value):
-    """The task incarnation is independent of the enclosing controller authority."""
-    return {k: v for k, v in (value or {}).items() if k not in {'controller_authority', 'session_controller'}} or None
+    """Task incarnation is independent of controller and Git execution metadata."""
+    return {k: v for k, v in (value or {}).items()
+            if k not in {'controller_authority', 'session_controller', 'git_execution'}} or None
 
 
 def require_child_authority(ctx, parent):

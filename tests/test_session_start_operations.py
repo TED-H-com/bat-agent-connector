@@ -313,7 +313,9 @@ async def test_real_temporary_git_fixes_commit_and_preserves_source(daemon, mock
     git(repo, 'add', 'file.txt')
     git(repo, 'commit', '-qm', 'initial')
     head = git(repo, 'rev-parse', 'HEAD')
+    from bat_agent_connector import managed_setup
     daemon.fleet.config.host('h1').managed_roots = [str(tmp_path)]
+    managed_setup._activate(daemon, daemon.fleet.config, {})
     mock.ws_doc['workspaces'][0]['folderPath'] = str(repo)
     before = snapshot(repo)
     mock.handlers['git:log'] = lambda p: [{'hash': git(p['cwd'], 'rev-parse', 'HEAD')}]
