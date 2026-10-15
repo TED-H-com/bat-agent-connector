@@ -7,7 +7,7 @@ npm run build:browser
 heavy npm run test:walkthrough
 ```
 
-The script runs English at 1440 × 900 and Traditional Chinese at 390 × 844.
+The script runs English and Traditional Chinese at 1440 × 900 and 390 × 844.
 It serves this checkout's generated dashboard from an actual `TaskDaemon` over
 loopback HTTP. The journal, configuration and Git repositories live in a unique
 disk directory under `~/agent-work/tmp/pytest`, removed after the fixture exits.
@@ -33,7 +33,7 @@ registered actions.
 
 ## Assertions and artifacts
 
-Screenshot names start with `en-1440-` or `zh-TW-390-`.
+Screenshot names start with `en-1440-`, `en-390-`, `zh-TW-1440-` or `zh-TW-390-`.
 
 | Step | User experience and assertion | Screenshot suffix |
 | --- | --- | --- |
@@ -44,16 +44,16 @@ Screenshot names start with `en-1440-` or `zh-TW-390-`.
 | Send | Thread route and central message appear; composer clears | `05-message-sent.png` |
 | Propose | Native analysis names the referral exclusion before review; Review & adopt reveals six rows, the 15-minute criterion and its unchecked exclusion control | `06-proposal.png` |
 | Review | Rationale is entered and Adopt is enabled | `07-review.png` |
-| Adopt | Lose one acknowledgement after admission; Check original request repeats the exact key and envelope. UI receipt checks reach Adopted and link to the new accepted revision | `08-adopted.png` |
-| Resolve review | Secondary action opens a rationale naming the adopted revision; the person edits it before sending | `09-resolution-review.png` |
-| Resolve | Lost acknowledgement recovers the exact original key and full finding; readback shows Reported resolved and Not assessed | `10-issue-resolved.png` |
+| Adopt | UI receipt checks settle to Adopted on their own and link to the new adopted revision | `08-adopted.png` |
+| Resolve review | Primary action below the issue title opens a rationale naming the adopted revision; the person edits it before sending | `09-resolution-review.png` |
+| Resolve | UI receipt checks settle to Reported resolved and Not assessed | `10-issue-resolved.png` |
 | Return | Goal remains, new plan head is visible, blocker count is zero, issue leaves Needs attention and adopted revision appears under Recently decided with its actor | `11-decision-overview.png` |
 | Decision register | Recent decision opens its exact inspector; decision filter includes that same adopted revision | `12-decision-register.png` |
 | Issue register | Issue remains in the register with Reported resolved status | `13-resolved-register.png` |
 
 Before returning to Overview, fixture read-only verification requires exactly
-five browser parent operations, two identical HTTP adoption attempts and two
-identical resolution attempts, one new durable adoption and one finding revision,
+five browser parent operations, one HTTP adoption attempt and one
+resolution attempt, one new durable adoption and one finding revision,
 unchanged stable requirement IDs, no excluded work in
 the accepted plan, a Git HEAD matching the adoption receipt, no execution
 authorization, no task dispatch, no BAT/provider writes and unchanged manual
@@ -62,15 +62,14 @@ status and rationale, all affected IDs, original source identities and the origi
 snapshot. The version advances once, snapshot count stays unchanged and verification
 remains unassessed. The script records all API response statuses and page
 errors. The optional bearer-session probe and unconfigured current maintenance
-observation may return 404; only these exact reads and the deliberately lost
-adoption and resolution acknowledgements are allowed to fail.
+observation may return 404; only these exact reads are allowed to fail.
 Completion waits use the UI's own receipt state, without polling the API from the
 test. The stdin verification reads the journal after that UI proof.
 
-If the child pipeline outlasts automatic bounded checks, the walkthrough uses the
-existing Check original request control again, revealing it in Details when
-necessary. Subsequent checks read the acknowledged original ID; the adoption
-POST still occurs exactly twice with one key and unchanged request.
+Inline conversation proposals keep the Discussion info panel closed at every width,
+and adoption and issue resolution settle through the UI's own receipt checks and
+event-driven refreshes without pressing Escape to dismiss an auto-opened panel or
+clicking Check original request during normal operation.
 Central readback can render Adopted while that original receipt is still being
 checked. If its recovery form remains in Details, the test requires its terminal
 Saved marker before proceeding; a retained disabled control is not a new write.

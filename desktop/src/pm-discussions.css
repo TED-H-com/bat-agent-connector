@@ -140,6 +140,20 @@
 :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(280px, 100%); }
 @media (max-width: 799px) { :root body [data-discussions] .pd-thread-header .ui-context-chip { max-width: min(240px, 100%); } }
 
+.pd-composer-status a, .pd-ask a { white-space: nowrap; }
+[data-proposal-resolution] { margin-top: var(--space-3); }
+[data-issue-resolution] { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+[data-issue-resolution] > form { width: 100%; }
+@media (max-width: 799px) {
+  [data-discussions]:has([data-pm-plan-proposals]:not([hidden])) {
+    height: auto;
+    min-height: calc(100dvh - 144px);
+    overflow: visible;
+  }
+  [data-discussions]:has([data-pm-plan-proposals]:not([hidden])) :is(.pm-discussion, .pd-transcript) {
+    overflow: visible;
+  }
+}
 :root body .pd-panel .ui-tabs > button { padding-inline: var(--space-1); }
 :root body .pd-transcript .ui-empty > p, :root body .pd-panel .ui-empty > p, :root body .pd-thread-rows .ui-empty > p,
 :root body [data-pm-plan-proposals] .ui-empty > p, :root body [data-pm-brief] .ui-empty > p { color: var(--text-3); }

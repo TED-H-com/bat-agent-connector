@@ -39,9 +39,7 @@ async function submit(page:any) {
   await form.getByLabel('Topic',{exact:true}).selectOption('problem');
   await form.getByLabel('Statement or question',{exact:true}).fill('A fixed original input');
   await form.getByRole('button',{name:'Save input',exact:true}).click();
-  await expect(form.getByRole('button',{name:'Check original request',exact:true})).toBeVisible();
   await expect.poll(async()=>(await draft(page))?.value.intent?.operation_id).toMatch(/^op_[0-9a-f]{32}$/);
-  await expect(form.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
   return form;
 }
 
@@ -109,12 +107,14 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
     const f=fixture();await page.clock.install();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
     const form=await submit(page),saved=await draft(page);
+    await expect(form.getByRole('button',{name:'Save input',exact:true})).toBeDisabled();
     // Allow each asynchronous GET to settle before advancing the next backoff.
     const delays=[250,500,1000,1500,2000,3000];
     for(let i=1;i<=6;i++){
       await page.clock.runFor(delays[i-1]);
       await expect.poll(()=>f.state.gets.length).toBe(i);
-      await expect(form.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
+      if (i<6) await expect(form.getByRole('button',{name:'Save input',exact:true})).toBeDisabled();
+      else await expect(form.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
     }
     await page.clock.runFor(30000);
     expect(f.state.gets).toHaveLength(6);
@@ -130,6 +130,7 @@ for(const native of [false,true])test.describe(native?'Native original PM receip
     const f=fixture();f.state.postStatus='uncertain';await page.clock.install();
     await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadTab(page,'inputs');
     const form=await submit(page),saved=await draft(page);
+    await expect(form.getByRole('button',{name:'Check original request',exact:true})).toBeEnabled();
     await page.clock.runFor(30000);
     expect(f.state.gets).toHaveLength(0);expect(f.base.state.writes).toHaveLength(1);
     expect((await draft(page)).value.intent).toEqual(saved.value.intent);

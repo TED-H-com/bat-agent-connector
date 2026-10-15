@@ -24,7 +24,7 @@ for (const locale of ['en', 'zh-TW']) {
     const f = demoFixture({locale, discussions:true}); await mountConversation(page, false, f.dispatch);
     await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
     await page.locator('[data-discussion-ask]').click(); await expect(page.locator('[data-proposal-review]')).toBeEnabled();
-    if (width < 1200) await page.keyboard.press('Escape');
+    await expect(page.locator('[data-discussion-panel]')).toBeHidden();
     await page.locator('[data-proposal-review]').click();
     const answers = page.locator('.pd-questions'), send = answers.getByRole('button',{name:zh ? '傳送回答' : 'Send answers',exact:true});
     await expect(send).toBeEnabled(); await expect(send).toHaveClass(/secondary/);
@@ -62,7 +62,7 @@ for (const locale of ['en', 'zh-TW']) {
       if (input.path.endsWith('/snapshots?limit=20')) return {status:200,data:{workspace_id:f.ids.workspaceId,snapshots:[],next_cursor:null}};
       return f.dispatch(input);
     });
-    const title=zh ? '尚無筆記' : 'No notes yet';
+    const title=zh ? '尚無訊息' : 'No messages yet';
     await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
     await expect(page.locator('[data-discussion-composer]')).toBeEnabled();
     await emptyCopy(page.locator('.pm-notes > .ui-empty'),title,zh ? '先記下問題、一個選項，或待釐清的疑問。' : 'Record the problem, an option, or a question to revisit.');
@@ -88,7 +88,7 @@ for (const locale of ['en', 'zh-TW']) {
       return result;
     });
     await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);await page.locator('[data-discussion-ask]').click();
-    await expect(page.locator('[data-discussion-tab=plan]')).toBeVisible();if(width<1200)await page.keyboard.press('Escape');
+    await expect(page.locator('[data-discussion-panel]')).toBeHidden();
     const card=page.locator('[data-pm-plan-proposals]');
     await emptyCopy(card.locator('.ui-empty'),zh?'需要審閱':'Review needed',zh?'回覆內容需要檢視，目前還不能作為計畫提案。':'The reply needs review before it can become a plan proposal.');
     await expect(card.getByRole('heading')).toHaveCount(1);
