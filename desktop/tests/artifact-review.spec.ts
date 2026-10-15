@@ -129,7 +129,7 @@ for(const native of [false,true]){
  });
  test(`lost capture keeps original credential key after source cleanup (${mode})`,async({page})=>{
   const state=await fixture(page,native,{lostCapture:true}),box=await captureForm(page);await box.getByRole('button',{name:'Save reviewed file',exact:true}).click();await expectErrorDetails(page, 'Reply lost');
-  state.sourceGone=true;state.captureError='FORBIDDEN';await page.reload();await page.getByRole('button',{name:'Check original capture',exact:true}).click();await expect(page.getByText('Capture recovery requires the original credential', {exact:false})).toBeVisible();expect(state.writes[1]).toEqual(state.writes[0]);await expect(page.getByRole('button',{name:'Capture another file'})).toBeDisabled();
+  state.sourceGone=true;state.captureError='FORBIDDEN';await page.reload();await page.getByRole('button',{name:'Check original capture',exact:true}).click();await expect(page.getByText('Restore the original credential with View and Manage access', {exact:false})).toBeVisible();expect(state.writes[1]).toEqual(state.writes[0]);await expect(page.getByRole('button',{name:'Capture another file'})).toBeDisabled();
   state.captureError=null;await page.reload();await page.getByRole('button',{name:'Check original capture',exact:true}).click();await expect(page.locator('[data-artifact-ready]')).toBeVisible();expect(state.writes[2]).toEqual(state.writes[0]);await page.reload();await expect(page.locator('[data-artifact-ready]')).toBeVisible();expect(state.writes).toHaveLength(3);expect(state.errors).toEqual([]);
  });
  test(`approve-only reviewer opens an exact saved revision (${mode})`,async({page})=>{

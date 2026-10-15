@@ -59,9 +59,9 @@ Roadmap 與 Brief 使用同一份固定的需求與完成定義評估。遺失�
 
 第 7 輪已合併項目不再列為未實作；Shell、工作階段狀態、失敗訊息、版本診斷與唯讀路徑已合併。
 審閱中項目（#174、#175、#167）見[進度報告](progress-2026-10-14.md#審閱中與歷史候選)。
-[#141](https://github.com/teddashh/bat-agent-connector/issues/141) 的連線網址首次使用已由 #153 合併，工作階段狀態、診斷與路徑亦已隨 #152、#171、#169 合併；
+[#141](https://github.com/TED-H-com/bat-agent-connector/issues/141) 的連線網址首次使用已由 #153 合併，工作階段狀態、診斷與路徑亦已隨 #152、#171、#169 合併；
 [#142 本機主機設計](../design/local-host.md)的本機 Git 尚未實作；#167 的 Git transport 合約審閱中，本機 Git 仍停用。
-[#143](https://github.com/teddashh/bat-agent-connector/issues/143) 的 PM 重點判讀只有
+[#143](https://github.com/TED-H-com/bat-agent-connector/issues/143) 的 PM 重點判讀只有
 [#144 設計](../design/pm-overview-assessment.md)，未由進度提示取代，待負責人裁決。
 
 完整[採用計畫](pm-v1.2-plan.md)的 W01–W52、A01–A64、M0–M6 保留。
@@ -141,5 +141,5 @@ M5 保留[歷史來源](progress-2026-10-12.md)（M4 已隨 #116 合併至主線
 
 ## M4 原始失敗證據
 
-整合前的 [M4 固定來源紀錄](https://github.com/teddashh/bat-agent-connector/blob/755f126330aded27b4685bdd9be7409d9248df5d/docs/product/pm-v1.2-status.md)保留每次原失敗、查詢量測與各版本結果。
+整合前的 [M4 固定來源紀錄](https://github.com/TED-H-com/bat-agent-connector/blob/755f126330aded27b4685bdd9be7409d9248df5d/docs/product/pm-v1.2-status.md)保留每次原失敗、查詢量測與各版本結果。
 本次更新不提高 deadline、不跳過測試，也不以重跑成功抹去原失敗。

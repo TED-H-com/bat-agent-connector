@@ -61,7 +61,7 @@ for (const locale of ['en-US', 'zh-TW']) {
       await expect(row.locator('a.ui-button')).toHaveText(zh ? '審閱成果' : 'Review result');
       const more = row.getByRole('button', {name: zh ? '更多操作' : 'More actions'});
       await more.focus(); await page.keyboard.press('Enter');
-      await expect(row.getByRole('menuitem', {name: zh ? '工作目錄' : 'Worktree', exact: true})).toBeVisible();
+      await expect(row.getByRole('menuitem', {name: zh ? '工作樹' : 'Worktree', exact: true})).toBeVisible();
       await page.keyboard.press('Escape'); await expect(more).toBeFocused();
       await page.goto('/dashboard/#/work/' + projectId + '/execution/' + bareId);
       const bare = page.locator(`[data-project-work="${bareId}"]`);
@@ -114,7 +114,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     await expect(page.locator('[data-observed-session]')).toHaveCount(0);
     state.resource.branch = null;
     state.events.push({seq: 1, resource_type: 'worktree', resource_id: wt, kind: 'worktree.updated'});
-    await expect(page.getByRole('heading', {level: 1})).toHaveText(zh ? '工作目錄' : 'Worktree', {timeout: 10000});
+    await expect(page.getByRole('heading', {level: 1})).toHaveText(zh ? '工作樹' : 'Worktree', {timeout: 10000});
     expect(await surface(page)).not.toMatch(/undefined|null|None recorded|尚無紀錄/);
     expect(state.posts).toEqual([]);
   });
@@ -137,7 +137,7 @@ for (const locale of ['en-US', 'zh-TW']) {
     const sessions = page.locator('[data-observed-session]');
     await expect(sessions.nth(0).locator('.ui-pill')).toHaveCount(0);
     await expect(sessions.nth(1).locator('.ui-pill')).toHaveCount(0);
-    await expect(sessions.nth(2).locator('.ui-pill')).toHaveText(zh ? '等待中' : 'Waiting');
+    await expect(sessions.nth(2).locator('.ui-pill')).toHaveCount(0);
     const details = page.locator('[data-observed-details]');
     await details.locator(':scope > summary').click();
     await expect(details.getByRole('link', {name: 'PR #11', exact: true})).toBeVisible();

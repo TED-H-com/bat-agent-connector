@@ -415,6 +415,8 @@ class BatClient:
                 check_grant(grant, self.host.name, canonical, params)
                 from .pm_source_lineage import require_frame
                 require_frame()
+                from .host_git import require_execution
+                require_execution(self.host.name)
         return await self._invoke_checked(canonical, params, timeout,
                                           retry_on_disconnect=retry_on_disconnect,
                                           before_send=final_gate, before_frame=before_frame,

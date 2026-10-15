@@ -45,7 +45,7 @@ export const resourceStrings = {
     res_src_error: '{count} needs review', res_src_unknown: '{count} unknown',
   },
   'zh-TW': {
-    wb_agents: 'Agent 資源', res_filter: '篩選工具、模型或角色',
+    wb_agents: '代理資源', res_filter: '篩選工具、模型或角色',
     res_window: '觀測期間',
     res_pause: '暫停更新', res_resume: '繼續更新', res_no_data: '無資料',
     res_source: '來源',

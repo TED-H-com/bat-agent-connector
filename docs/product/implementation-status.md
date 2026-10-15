@@ -43,7 +43,7 @@ Python Connector／Task Service 是唯一中央權威；Web／Tauri 共用 `desk
 
 ### 2026-10-10 Issue #59 候選收斂（PR #81）
 
-這版原始碼包含已整合的產品實作；目前套件以 [`main` 的 desktop workflow](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain)及[同一來源 commit 的檢查](https://github.com/teddashh/bat-agent-connector/actions?query=branch%3Amain)為準。選擇目前公開歷史的成功 run，核對平台 job 與安裝 fixture；仍在建置時不宣稱已通過。歷史 PR artifacts 不作為目前下載來源，也不由此推論已正式發行新安裝包。
+這版原始碼包含已整合的產品實作；目前套件以 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain)及[同一來源 commit 的檢查](https://github.com/TED-H-com/bat-agent-connector/actions?query=branch%3Amain)為準。選擇目前公開歷史的成功 run，核對平台 job 與安裝 fixture；仍在建置時不宣稱已通過。歷史 PR artifacts 不作為目前下載來源，也不由此推論已正式發行新安裝包。
 
 | 項目 | 候選實作與界線 |
 | --- | --- |
@@ -214,35 +214,35 @@ Mac 候選須以自己的完整 head CI、DMG digest、WKWebView screenshots 和
 Developer ID／公證 candidate workflow；待各自 exact-head 結果。正式簽署執行、Mac updater 及 I／L
 仍分開追蹤；Windows Fleet supervisor 不因 Mac 可啟動就宣稱跨平台支援。
 
-後續結果：[#69](https://github.com/teddashh/bat-agent-connector/pull/69) 已合併為
+後續結果：[#69](https://github.com/TED-H-com/bat-agent-connector/pull/69) 已合併為
 `bc5cb21e48ce05f55d320dbe0ec98fbf6114e520`；候選 `99f05ac98bf7acff4078ca302d784cf8569b1fdf`
 在當時合併時已核對 tree 相同；此為歷史比對，不是新套件證據。
-[Python CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37967171572)
+[Python CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37967171572)
 3.10–3.13 各 3187 passed／33 skipped；
-[desktop CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37967171409)
+[desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37967171409)
 591 shared UI、Windows NSIS／Linux deb 與 Apple Silicon／Intel DMG 原生 fixture 通過，
 包含 Mac 隔離 Keychain、安裝／啟動／關窗／Reopen／Quit 及清理證據。
 Mac 驗證包仍為 ad-hoc 簽署；正式 Developer ID／公證、Mac updater、實機／live 驗收尚未完成。
 
 #68 的固定候選 `651b964fe7b7d8164bb6990653e8a14d5f046827` 已通過
-[Python 四版各 3187／33](https://github.com/teddashh/bat-agent-connector/actions/runs/37949144734)
-及 [Windows 真 NSIS 安裝／Linux 實際 deb WebView](https://github.com/teddashh/bat-agent-connector/actions/runs/37949144823)，
+[Python 四版各 3187／33](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37949144734)
+及 [Windows 真 NSIS 安裝／Linux 實際 deb WebView](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37949144823)，
 合併當時已核對 merge 與候選的 tree 相同；此為歷史比對。
 
 ### 2026-10-09 發行門檻收斂
 
 #64／#65／#66 已合併；以下各段保留當時候選的歷史證據。
-[#67](https://github.com/teddashh/bat-agent-connector/pull/67) 再合併為
+[#67](https://github.com/TED-H-com/bat-agent-connector/pull/67) 再合併為
 `c506d38ae7f106a18280c16914abe76b1aecd766`，與已測候選
 `d10ab7eb122740b169aba147415aa1412300a0b0` 的 tree 在合併當時已核對相同
 （歷史比對，非本次重建證據）。Canonical workflow 保持 `2026-10-08.14`。
 GLib 保留 0.18.5 原版本並 backport upstream 的兩行指標修正，來源完整性／真正 dependency graph
 與 optimized iterator regression 成為 gates；未忽略 advisory。
-[#53](https://github.com/teddashh/bat-agent-connector/issues/53) 已關閉，Dependabot alert #1 為 fixed，未 dismissed。
+[#53](https://github.com/TED-H-com/bat-agent-connector/issues/53) 已關閉，Dependabot alert #1 為 fixed，未 dismissed。
 
-固定候選 [Python CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37934974542)
+固定候選 [Python CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37934974542)
 3.10–3.13 各 **3187 passed／33 skipped**；
-[desktop CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37934974673)
+[desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37934974673)
 Windows NSIS／Linux deb、585 shared UI、12 state、每平台 81 app Rust、release verifier、GLib release
 regression 及 Linux 真 packaged WebView／關窗隱藏／single-instance 通過。Windows metadata locale
 failure 已修正並由最終 Windows job 通過，舊失敗保留。這些仍是 unsigned／F／N 證據。
@@ -256,7 +256,7 @@ single-instance、process restart 與 uninstall，保存 screenshots／JSON。�
 
 ### 先前整合證據
 
-最新追蹤 [#59](https://github.com/teddashh/bat-agent-connector/issues/59)。[#61](https://github.com/teddashh/bat-agent-connector/pull/61)
+最新追蹤 [#59](https://github.com/TED-H-com/bat-agent-connector/issues/59)。[#61](https://github.com/TED-H-com/bat-agent-connector/pull/61)
 已合併為 `3cd49b7658aee9828941e3e6d6d0d8cd8d2ce578`；固定候選 `ee1d095b1f07befb86a8c4824d5e20fb77dc0873`
 與 merge 的 tree 在當時已核對相同（歷史比對）。Managed start、task reviewed／automatic cleanup、
 native 選檔／上傳／Save As、成果擷取／獨立審核及 canonical `.8` 已在 main。Project Hub 的 session 整理方向保留：
@@ -272,29 +272,29 @@ cleanup、native files 及獨立 reviewer 的固定 bytes/revision。Local full 
 
 後續主線與候選分開追蹤，不計為 installed 完成：
 
-- [#62](https://github.com/teddashh/bat-agent-connector/pull/62) 已合併為 `aa34f18313a4a3a62fdc32bc11b4e142256614e5`。
+- [#62](https://github.com/TED-H-com/bat-agent-connector/pull/62) 已合併為 `aa34f18313a4a3a62fdc32bc11b4e142256614e5`。
   候選 `e309700ad1c5cff96661f07f0c7ffdee02f72029` 與 merge 的 tree 在當時已核對相同（歷史比對）。
   明確 repository binding、GitHub numeric ID、固定 ref/head 與 fresh managed carrier、published-start UI 及 `.9` 已在 main。
   Exact CI Python 3.10–3.13 各 **2725 passed／33 skipped**，兩平台 desktop／unsigned packaging 通過。
   Local 3.13 full 先有 operation settlement timeout，重跑另有兩項 subprocess deadline failure；沒有宣稱 local full 綠燈。
   原碼 targeted integration 1、subprocess 3 通過；本機高負載下停止重複全套，以四版 exact-head CI 作完整驗證。
-- [#63](https://github.com/teddashh/bat-agent-connector/pull/63) 已合併為 `41261de7a3d2c06c7a7b02dc75cb67e3c61fbdc9`。
+- [#63](https://github.com/TED-H-com/bat-agent-connector/pull/63) 已合併為 `41261de7a3d2c06c7a7b02dc75cb67e3c61fbdc9`。
   候選 `245cad0b6b9899aac77471335154a8d46ea19e43` 與 merge 的 tree 在當時已核對相同（歷史比對）。
   Central relay、fanout planner／fixed-plan dispatch、standalone Claude→Codex failover、omitted-key task controls 與 `.11`
   已在 main。Exact CI Python 3.10–3.13 各 **2888 passed／33 skipped**，Windows／Linux desktop packaging 通過。
   Focused 490 在 3.13／3.10 通過；舊 principal fixture 斷言已修。兩次主動中止的 local full 不計通過，第二次是在 CI 四版通過後停止重複驗證。
-- [#64](https://github.com/teddashh/bat-agent-connector/pull/64) 整合 native Fleet／bootstrap／signed update；來源候選 `472ea843cfcbe0d0be47700e450c01a1d63d16d0`。
+- [#64](https://github.com/TED-H-com/bat-agent-connector/pull/64) 整合 native Fleet／bootstrap／signed update；來源候選 `472ea843cfcbe0d0be47700e450c01a1d63d16d0`。
   真 Windows fixture 先暴露空閒 endpoint 在 100 ms 尚未回 refusal，修為 bounded 3 s refusal＋bind proof。
   接著修正 ownership 掃描與 selection 的短路徑差異、WScript Startup 短路徑辨識，以及並行 discovery fixtures 的時間戳撞名。
   完整 Windows Fleet core gate 已通過，包含真 WScript synthetic links；22 discovery、42 ownership/configuration regressions 與獨立 review 通過。
   另一次 app fixture 在原 10 s PowerShell contract budget 逾時，後續不同條件的 probes 通過不當作原測試通過；失敗及原碼查核／重跑證據保留於 PR。
   原 combined evidence：416 UI、12 state、218 Linux core、78 app Rust／1 fixture-only ignored、release verifier example 1；bootstrap 44 在兩版 Python 通過。
-- [#65](https://github.com/teddashh/bat-agent-connector/pull/65) 整合四個 orchestration 表單、task pause/resume、操作分頁、明確 BAT profile 入口、principal transcript/wait、A03 labels 及中央 verification testimony。
+- [#65](https://github.com/TED-H-com/bat-agent-connector/pull/65) 整合四個 orchestration 表單、task pause/resume、操作分頁、明確 BAT profile 入口、principal transcript/wait、A03 labels 及中央 verification testimony。
   候選 `7b647a95f981575876c4e8b10537eb669e0e3c86` 保留原 actor/key/request 與 receipts。Labels 只改中央 metadata，含人工／unknown／retained 與版本 CAS；verification 是外部證詞，不能授予 trusted task verification。
   Observation 86、labels／verification／principal／lifecycle／canonical 152 在兩版 Python 通過；3 trusted verifier、91 affected UI、actual-central labels／task／orchestration fixtures 通過。
   Full CI 在 `cc48542` 發現 3 個 API remount 重複註冊 failures 與 1 個舊 MCP 工具清單斷言；`4696cd1` 修正後，101 related regressions 在 3.13／3.10 通過並經獨立 review。
   本機 orchestration fixture 曾在一般暫存磁碟遇到 5 s UI deadline，原碼在 `/dev/shm` 通過；沒有放寬 deadline 或計為 local full 通過。
-- [#66](https://github.com/teddashh/bat-agent-connector/pull/66) 是同一產品的最後整合工作線，累加 Tailscale recovery、中央 `worktree.merge` 與 canonical `.14`。
+- [#66](https://github.com/TED-H-com/bat-agent-connector/pull/66) 是同一產品的最後整合工作線，累加 Tailscale recovery、中央 `worktree.merge` 與 canonical `.14`。
   Tailscale 使用固定 Windows vendor paths、bounded sanitized status、原 request receipt、Launcher／Quit／update fences；返回畫面只查狀態，不自動登入或修改網路。
   當時的 Tailscale 實作已獨立 review；9 durable core＋1 synthetic process、3 Linux Tauri IPC、29 final UI、12 state 通過。Windows MSVC isolated compile 是分層證據，實際 Windows matrix 另留 CI。
   Merge 固定來源／目的 Git identity 與全部 consumers，保留雙 carrier reservation、各 effect 的 ACK、未知結果與原 key。支援明確 idle／unloaded／headless／retired managed consumers，拒絕 task-owned／manual／unknown／未決 writer。
@@ -336,7 +336,7 @@ cleanup、native files 及獨立 reviewer 的固定 bytes/revision。Local full 
 
 以下保留 #57 的權限工作紀錄：
 
-追蹤 [#57](https://github.com/teddashh/bat-agent-connector/issues/57)，基底 main `da66c54`（#56）。
+追蹤 [#57](https://github.com/TED-H-com/bat-agent-connector/issues/57)，基底 main `da66c54`（#56）。
 R01 `session.permissions` 接中央 authority，Claude／Codex 每個 setting 保存 intent／receipt，
 保留 task incarnation／control version、confinement 與 host policy；sent error／lost ACK 不以相符
 metadata 當成功證據。共用 UI 只對 positively managed 且 action／write scope 支援的 session 顯示控制，
@@ -351,9 +351,9 @@ Canonical workflow 為 `2026-10-08.6`；最新候選 SHA、exact-head CI、peer 
 候選 `58b8ef69e92a1f506437bb56c2086fc8ac92582e` 已合併為 `da66c545120c1b5fb2703277ae6c0e180c309c46`，
 tree 完全相同。Python 3.10–3.13 各 **2370 passed／33 skipped**；101 UI、8 state、20 Windows／21 Linux Rust、
 六組 actual-central fixtures 與 Windows／Linux unsigned packages 通過。
-收斂證據見 [#55](https://github.com/teddashh/bat-agent-connector/issues/55#issuecomment-6072185401)。
+收斂證據見 [#55](https://github.com/TED-H-com/bat-agent-connector/issues/55#issuecomment-6072185401)。
 
-追蹤 [#55](https://github.com/teddashh/bat-agent-connector/issues/55)，基底 main `1485eff`。
+追蹤 [#55](https://github.com/TED-H-com/bat-agent-connector/issues/55)，基底 main `1485eff`。
 以下三個提交已整合到同一候選工作線；最新整組 CI、合併與 installer pin 證據見該 issue 關聯 PR。
 
 | 包 | 提交與行為 | 這次 fixture／review 證據 |
@@ -372,14 +372,14 @@ Desktop CI 現在也跑六組 actual-central fixtures，保存合成 UI 證據�
 
 - 公開 repo 已合併 #35、#36、#37、#38、#42–#51；產品整合 main 為 `56cc159149873ff0ba2a6a30d54cb4a587d5d636`（#51）。
   #39 importer 關閉且保留 branch，沒有合入。Issue #32 的六項 Delivery findings 已隨 #47 合併並關閉。
-- 固定候選 `3ed2c0bcf17de00cae40eae60dc23f3881121831` 的 [Python CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37857510798)：3.10、3.11、3.12、3.13 **各 2264 passed / 33 skipped**，Ruff、generated skills、secret scan 通過。
-  [Desktop CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37857510691)：Windows NSIS、Linux deb、74 shared UI、8 state tests 通過；Rust Windows 19、Linux 20 tests 通過，Windows 包含真正 system PowerShell 子程序 fixture。
+- 固定候選 `3ed2c0bcf17de00cae40eae60dc23f3881121831` 的 [Python CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37857510798)：3.10、3.11、3.12、3.13 **各 2264 passed / 33 skipped**，Ruff、generated skills、secret scan 通過。
+  [Desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37857510691)：Windows NSIS、Linux deb、74 shared UI、8 state tests 通過；Rust Windows 19、Linux 20 tests 通過，Windows 包含真正 system PowerShell 子程序 fixture。
 - 合併當時已核對產品整合來源與已測候選的 Git tree 完全相同；此為歷史比對，不是重寫後 commit 的新 CI 或套件證據。
   本次收斂文件是後續 docs-only 更新，未更動該 runtime/build/skill source，沒有另宣稱文件 head 跑過一次 full suite。
 - 獨立審查修正了 artifact scalar admission、deployment cursor bounds、interrupt history prefix binding、capture replay/control credential binding、installer YAML 與 concurrent config preservation。
   先前 full/CI failures 均保留；#48/#49/#50 的舊 fixture failures 已由 #51 的 canonical-source/data-step 修正及整組 CI 覆蓋，未把舊紅燈改稱綠燈。
 - #38 早期本機 3.10 full 曾為 1834 passed/33 skipped/1 個 60 秒 settlement timeout；journal 顯示持續進展，原碼單測 2.52 秒重跑通過。後續 exact-head 四版 CI 各 1835/33 通過；不把單測 retry 當 full。
-- 當時新增 [Linux GLib release gate #53](https://github.com/teddashh/bat-agent-connector/issues/53)：registry `glib 0.18.5` 受 [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html) 影響。後續 #67 已 backport upstream 修正並驗證來源／optimized regression，#53 關閉、Dependabot fixed；見上方固定候選證據。
+- 當時新增 [Linux GLib release gate #53](https://github.com/TED-H-com/bat-agent-connector/issues/53)：registry `glib 0.18.5` 受 [RUSTSEC-2024-0429](https://rustsec.org/advisories/RUSTSEC-2024-0429.html) 影響。後續 #67 已 backport upstream 修正並驗證來源／optimized regression，#53 關閉、Dependabot fixed；見上方固定候選證據。
 - GitHub Codex bot 後期額度用盡，後續使用獨立本機 Codex peer review，沒有冒稱新 bot verdict。
   **沒有 live host/provider writes、主機安裝或 Windows installed acceptance；M1/M2/M3 與完整產品交付尚未完成。**
 

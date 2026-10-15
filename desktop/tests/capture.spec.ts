@@ -229,7 +229,7 @@ test('observe-only capture preview remains read-only', async ({page}) => {
   const state = await fixture(page, false, {scopes: ['observe']});
   const box = await form(page);
   await box.getByRole('button', {name: 'Preview source file', exact: true}).click();
-  await expect(box).toContainText('Saving requires manage and observe');
+  await expect(box).toContainText('Saving needs View and Manage access');
   await box.getByRole('checkbox').check();
   await expect(box.getByRole('button', {name: 'Save reviewed file', exact: true})).toBeDisabled();
   expect(state.writes).toEqual([]);

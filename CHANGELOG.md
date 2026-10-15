@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Add the #141 backend Git transport contract: strict explicit host mode,
+  frozen execution bindings, unchanged SSH reader identity and original-key
+  setup recovery. Local Git remains disabled, with fixed readiness reasons;
+  existing SSH hosts and adjacent SSH services retain their mappings.
+
 - PM refresh, Lifecycle, accepted-plan preview and report export failures show one
   localized message with diagnostics in Details. Issue mappings without a title
   read "Untitled issue". Projects and Resources open their creation forms on
@@ -18,6 +23,11 @@
   Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
   provides installation-aware MCP guidance and a read-only PM eligibility check, with
   localized reasons and a return link to the originating discussion.
+
+- In zh-TW, the Overview's adoption time reads 「剛剛採用」 without a stray space,
+  and its Ask PM button reads 「詢問 PM」 as in Discussions. Issues & changes says
+  "None recorded" when no blocking reasons exist, and the owner column keeps a
+  name on one line, ending a longer name with an ellipsis.
 
 - Lazy PM loading keeps its loading status separate from each panel's status
   slot, while revealing settled content and removing its mask together.
@@ -39,6 +49,14 @@
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
+- At phone width, page headers keep icon actions beside the title, and project and
+  work-item rows put the title first with their actions on the right. Sessions says
+  "No sessions yet" before the first session instead of describing filters, and
+  resource rows use the same session labels. Mark read and Save position say why
+  they are unavailable, and a failed message read shows one alert with Retry, with
+  diagnostics in Details. Permission notes use the Connection access names (View,
+  Manage, Start…), and zh-TW uses 代理 and 工作樹 throughout.
+
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
   and never cache loads affected by cycle or budget refusals, including raw metadata.
@@ -54,6 +72,9 @@
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.
+
+- The Windows installed-fixture self-test gives its UIA probe compile and run a 60-second
+  budget, prints which phase is running, and reports the timeout or exit code when it fails.
 
 - Unsigned macOS desktop packaging logs `bundle_dmg.sh` with `--verbose` and retries the same
   build once after detaching only this job's leftover `/Volumes` images.
@@ -571,7 +592,7 @@
 - The cleanup integration test keeps reading the same operation until its status is terminal
   before the existing success checks, so early item receipts no longer fail a still-running cleanup.
 
-- Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
+- Introduced in [PR #81](https://github.com/TED-H-com/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
   Windows uses native file locks and private storage; safe forward upgrades preserve the
@@ -1419,6 +1440,9 @@
 - Issues & changes reads the central register: type counts and the summary appear only when coverage is
   complete, with honest pagination, a compact summary strip, list rows on narrow screens, and a processing
   timeline with Discuss and Propose change.
+
+- The repository moved to the `TED-H-com` organization. Links, the project page
+  (`https://ted-h-com.github.io/bat-agent-connector/`) and the desktop update feed use the new address.
 
 ## 0.2.4 (unreleased)
 

@@ -3,7 +3,7 @@
 下方 commit 引用使用重寫後公開歷史中保留的對應來源；CI 與審查結果仍描述當時的執行，不代表對重寫後 commit 重新驗證。目前驗證及下載方式見[實作狀態](../product/implementation-status.md#目前續作)。
 
 接續 [#56 的交接](2026-10-08-shared-product.md)；本輪追蹤
-[#57](https://github.com/teddashh/bat-agent-connector/issues/57)。基底 main
+[#57](https://github.com/TED-H-com/bat-agent-connector/issues/57)。基底 main
 `da66c545120c1b5fb2703277ae6c0e180c309c46`。兩份計畫仍是同一產品，Tauri 與 browser
 共用 frontend；Python authority、人工資源唯讀、不做 Hub importer 的決策不變。
 候選完整 SHA、最後 exact-head CI、peer review、merge 與 外部安裝版本 以 #57 關聯 PR
@@ -89,6 +89,6 @@ capture、permissions。Merge gate 仍是完整候選 Python 3.10–3.13、Windo
 剩餘 R01 bulk/start/orchestration、R05 B2 managed capture/accept 與跨 host Git、native file/save/download、
 Task Service integration/cleanup、Rust Fleet parity 都留在共用 backlog。Windows installed/WebView/tray/
 credentials、逐 host confinement、同 RC 的 46 項驗收仍缺；Linux production distribution gate
-[#53](https://github.com/teddashh/bat-agent-connector/issues/53) 保留。
+[#53](https://github.com/TED-H-com/bat-agent-connector/issues/53) 保留。
 
 本輪沒有真 host/provider writes 或安裝。共用核心由單一整合者處理，完整本機測試依序執行。

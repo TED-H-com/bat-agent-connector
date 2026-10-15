@@ -175,7 +175,7 @@ var workPathsStrings = {
 		paths_mcp: "Dispatch from an agent (MCP)",
 		paths_setup: "Set up",
 		paths_host_unavailable: "This host is not set up for managed work",
-		paths_start_required: "You need the start permission",
+		paths_start_required: "You need Start access",
 		paths_checkpoint_required: "You need checkpoint permission",
 		paths_first: "Reply in BAT, continue from a checkpoint, or dispatch from an MCP agent",
 		paths_how: "How dispatch works",
@@ -201,7 +201,7 @@ var workPathsStrings = {
 		agents_policy: "Managed Codex configuration is unsupported; follow PM setup for a supported host",
 		agents_installation: "The installation could not be checked; review PM setup and check again",
 		agents_action: "PM analysis is unavailable in this Connector; install a compatible version",
-		agents_scope: "PM analysis needs observe, manage and start permissions; ask the operator",
+		agents_scope: "PM analysis needs View, Manage and Start access; ask the operator",
 		agents_worktree: "BAT PM needs a configured PM worktree; prepare it in workspace settings",
 		agents_binding: "The repository binding changed; review the workspace’s PM worktree",
 		agents_tier: "This BAT host does not allow managed starts; ask the operator to enable them",
@@ -211,9 +211,9 @@ var workPathsStrings = {
 		agents_mcp_limits: "Manual sessions stay read-only; host gates and token scopes apply",
 		agents_operator: "For an operator install, add this config to your MCP client on the Connector host",
 		agents_bundle: "The desktop bundle has no MCP command; follow the operator-install instructions",
-		agents_token: "Ask the Connector operator for a separate token with observe, operate and start scopes",
+		agents_token: "Ask the Connector operator for a separate token with View, Operate and Start access",
 		agents_issue: "On the operator installation, issue a token once and store it privately in place of the placeholder",
-		agents_scopes: "Add manage only for project and work-item changes",
+		agents_scopes: "Add Manage access only for project and work-item changes",
 		agents_copy: "Copy",
 		agents_copied: "Copied",
 		agents_copy_failed: "Copy failed; select and copy the config",
@@ -441,10 +441,10 @@ var overviewStrings = {
 		ov_recent_decisions: "近期決策",
 		ov_accepted: "{total} 項中 {accepted} 項已驗收",
 		ov_requirements: "{n} 項需求",
-		ov_adopted: "{date} 採用",
+		ov_adopted: "{date}採用",
 		ov_acceptance_gap: "已有交付紀錄，尚缺對應本輪接受條件的驗收。",
 		ov_see_unaccepted: "查看待驗收需求",
-		ov_ask_pm: "請 PM 整理",
+		ov_ask_pm: "詢問 PM",
 		ov_attention: "需要關注",
 		ov_milestones: "里程碑",
 		ov_deliveries: "近期交付",
@@ -586,7 +586,7 @@ var scheduleStrings = {
 		sched_blocker: "阻礙與下一步",
 		sched_delivery: "交付",
 		sched_attempts: "執行嘗試",
-		sched_agent: "Agent 未知",
+		sched_agent: "代理未知",
 		sched_unavailable: "無法取得",
 		sched_session: "開啟工作階段",
 		sched_run: "開啟執行紀錄",
@@ -778,9 +778,9 @@ var workViewStrings = {
 		wv_delivery: "交付",
 		wv_details: "詳細資料",
 		wv_owner: "負責人",
-		wv_agent: "Agent",
+		wv_agent: "代理",
 		wv_all_requirements: "所有需求",
-		wv_all_agents: "所有 Agent",
+		wv_all_agents: "所有代理",
 		wv_session: "開啟工作階段",
 		wv_discuss: "討論",
 		wv_no_result: "尚無成果紀錄",
@@ -1052,7 +1052,7 @@ var uiStrings = {
 		ui_schedule: "時程",
 		ui_dependencies: "技術相依",
 		ui_issues: "問題與變更",
-		ui_agents: "Agent 資源",
+		ui_agents: "代理資源",
 		ui_board: "工作看板",
 		ui_project: "專案",
 		sync_actions_paused: "資料更新失敗；取得最新紀錄前暫停操作。",
@@ -2976,7 +2976,7 @@ var rows$1 = {
 	previous: ["Previous report to compare", "要比較的前次報告"],
 	no_previous: ["No comparison selected", "未選取比較報告"],
 	context_missing: ["A readable current policy and release baseline are required.", "需要可讀的目前政策與發布基準。"],
-	write_scope: ["A workspace owner or contributor with observe and manage can record this Review.", "具觀察與管理權限的工作空間負責人或協作者可記錄這份維護審閱。"],
+	write_scope: ["A workspace owner or contributor with View and Manage access can record this Review.", "具檢視與管理權限的工作空間負責人或協作者可記錄這份維護審閱。"],
 	stale: ["The source version changed. Your draft and original request are retained.", "來源版本已改變；保留你的草稿與原請求。"],
 	use_versions: ["Update baseline", "更新基準"],
 	history: ["Report history", "報告歷史"],
@@ -3015,7 +3015,7 @@ var maintenanceReviewStrings = Object.fromEntries(["en", "zh-TW"].map((locale, i
 //#region src/pm-spec-materialization-strings.js
 var rows = {
 	title: ["Save fixed specification artifacts", "保存固定規格產物"],
-	intro: ["Save this engineering package in the owned PM worktree and as an immutable attachment for implementation.", "將這份工程工作包保存至自有 PM worktree，並建立可供實作使用的不可變附件。"],
+	intro: ["Save this engineering package in the owned PM worktree and as an immutable attachment for implementation.", "將這份工程工作包保存至自有 PM 工作樹，並建立可供實作使用的不可變附件。"],
 	select: ["Select an engineering work package above.", "請先在上方選取工程工作包。"],
 	refresh: ["Refresh specification artifacts", "重新讀取規格產物"],
 	create: ["Save fixed specification", "保存固定規格"],
@@ -3027,7 +3027,7 @@ var rows = {
 	empty: ["No completed materialization is saved for this package.", "這份工作包尚無已完成的產物保存紀錄。"],
 	blocked: ["Current scope, work or dependency checks prevent a new materialization.", "目前範圍、工作或相依檢查不允許新保存操作。"],
 	filtered: ["Some original artifact records are hidden by source access. This is not an empty history.", "部分原產物紀錄因來源權限而隱藏，不能視為沒有歷史。"],
-	permissions: ["Saving requires current workspace write membership and observe, manage and start scopes.", "保存需要目前工作區寫入資格，以及 observe、manage 與 start 權限。"],
+	permissions: ["Saving needs workspace write membership and View, Manage and Start access", "保存需要工作區寫入資格，以及檢視、管理與啟動權限"],
 	saved: ["Fixed specification saved", "固定規格已保存"],
 	unassessed: ["The original Git write is verified. Implementation quality and delivery remain unassessed.", "已核對原始 Git 寫入；實作品質與交付仍未評估。"],
 	commit: ["Verified PM commit", "已核對的 PM commit"],
@@ -3298,7 +3298,7 @@ var maintenanceObservationStrings = {
 		pmo_ref_sprint: "Sprint",
 		pmo_ref_bat: "BAT 工作區",
 		pmo_exclusions: "擷取時未計入工作量的來源",
-		pmo_exclusion_boundary: "這些保存的排除原因不授予控制權、不代表品質驗收，也不證明程序已停止。保留 worktree 本身不算進行中的工作。",
+		pmo_exclusion_boundary: "這些保存的排除原因不授予控制權、不代表品質驗收，也不證明程序已停止。保留工作樹本身不算進行中的工作。",
 		pmo_runtime_receipt: "原始執行觀察",
 		pmo_exclusion_checkpoint_is_not_activity: "單獨保存的 checkpoint 不代表活動仍在進行。",
 		pmo_exclusion_failed_attempt_explicitly_deferred: "失敗的嘗試已明確延後處理。",
@@ -3717,7 +3717,7 @@ var dependencyStrings = {
 		dep_legend_declared: "Outline declared",
 		dep_legend_inferred: "Dashed inferred",
 		dep_other_repository: "Other repository",
-		dep_capture_manage: "Capture needs manage access.",
+		dep_capture_manage: "Capture needs Manage access",
 		dep_capture_no_source: "This capture has no repository to read.",
 		dep_capture_not_ready: "This projection is not ready to capture again.",
 		dep_loaded: "Loaded",
@@ -3982,7 +3982,7 @@ var pmPackageHandoffStrings = {
 		ph_blocked: "The package has unresolved checks beyond the implementation-base decision. Review the package details above.",
 		ph_target_changed: "The published code or repository binding differs from the fixed package. Prepare a new package with an explicitly chosen base; this preview cannot rewrite it.",
 		ph_unavailable: "Implementation sources or permissions could not be verified. Displayed source facts were removed; local drafts and original requests remain.",
-		ph_not_allowed: "This handoff needs workspace write membership, permission to view, manage, and start, and managed work to be allowed.",
+		ph_not_allowed: "This handoff needs workspace write membership, View, Manage and Start access, and permission for managed work.",
 		ph_invalid: "The response does not match the selected fixed engineering package.",
 		ph_reading: "Reading the original package, project and published base…",
 		ph_started: "Implementation was started. Verification and delivery remain unassessed.",
@@ -4015,7 +4015,7 @@ var pmPackageHandoffStrings = {
 		ph_boundary: "工作包準備完成不等於已授權執行。這個操作只開始實作，不代表品質驗證、合併或部署完成。",
 		ph_rationale: "為何使用這個實作基底？",
 		ph_prompt: "這次實作的指示",
-		ph_agent: "Agent",
+		ph_agent: "代理",
 		ph_agent_help: "選擇 Claude 或 Codex。送出時會核對能否啟動；選單上的選項不代表目的地已就緒。",
 		ph_options: "工作階段選項",
 		ph_start: "開始實作",
@@ -4353,7 +4353,7 @@ var resourceStrings = {
 		res_src_unknown: "{count} unknown"
 	},
 	"zh-TW": {
-		wb_agents: "Agent 資源",
+		wb_agents: "代理資源",
 		res_filter: "篩選工具、模型或角色",
 		res_window: "觀測期間",
 		res_pause: "暫停更新",
@@ -5308,7 +5308,7 @@ var pmRegisterStrings = {
 		reg_opened: "Opened",
 		reg_resolved: "Resolved",
 		reg_blocking: "Blocking reasons",
-		reg_no_reasons: "No reason fields recorded",
+		reg_no_reasons: "None recorded",
 		reg_no_reason_recorded: "No reason recorded · {n}",
 		reg_col_type: "Type",
 		reg_col_title: "Title",
@@ -5434,7 +5434,7 @@ var pmRegisterStrings = {
 		reg_opened: "新開",
 		reg_resolved: "已解決",
 		reg_blocking: "受阻原因",
-		reg_no_reasons: "沒有記下原因欄位",
+		reg_no_reasons: "尚無紀錄",
 		reg_no_reason_recorded: "沒有記錄原因 · {n}",
 		reg_col_type: "類型",
 		reg_col_title: "標題",
@@ -5739,7 +5739,7 @@ var pmFollowUpStrings = {
 		pm_fu_source_help: "Selections stay fixed. Preparing does not confirm assumptions or verify reported completion.",
 		pm_fu_accepted_required: "Choose a snapshot that contains an explicitly adopted plan.",
 		pm_fu_source_wait: "Select an adopted-plan snapshot and wait for the selected sources to be checked.",
-		pm_fu_read_only: "Preparation requires current workspace write access and manage scope.",
+		pm_fu_read_only: "Preparation needs current workspace write access and Manage access",
 		pm_fu_stale: "Versions changed. Review your saved selections before using the current versions.",
 		pm_fu_use_versions: "Use current versions",
 		pm_fu_actor_changed: "The signed-in actor changed. Reopen this workspace to use that actor’s drafts.",
@@ -5991,7 +5991,7 @@ var followUpAnalysisStrings = {
 		pm_fa_empty: "這份討論準備尚無可讀的評估。",
 		pm_fa_filtered_page: "這頁沒有可讀評估，仍可繼續讀取歷史。",
 		pm_fa_sources: "閱讀引用的討論準備來源",
-		pm_fa_unverified: "這是 代理程式分析，結論尚未驗證；已採用計畫及執行安排維持原狀。",
+		pm_fa_unverified: "這是代理程式分析，結論尚未驗證；已採用計畫及執行安排維持原狀。",
 		pm_fa_none: "這份評估未提出此類項目。",
 		pm_fa_findings: "發現與影響",
 		pm_fa_tradeoffs: "選項與後果",
@@ -6001,7 +6001,7 @@ var followUpAnalysisStrings = {
 		pm_fa_why: "為何現在討論",
 		pm_fa_proposed_owner: "建議負責人，尚未指派",
 		pm_fa_raw_review: "這份回覆未通過結構檢查，請審閱原文；不能當作已通過檢查的評估。",
-		pm_fa_raw: "Agent 原始回覆",
+		pm_fa_raw: "代理原始回覆",
 		pm_fa_provenance: "分析來源與回執",
 		pm_fa_intake: "固定的討論準備",
 		pm_fa_model: "模型",
@@ -6544,7 +6544,7 @@ var pmKanbanStrings = {
 		pm_kanban_manual_help: "Read one linked session’s original single input. This does not send, stop, take control of the session or accept the work.",
 		pm_kanban_manual_ready: "The selected source can be checked. Native identity and current authority are rechecked when the request runs.",
 		pm_kanban_manual_unavailable: "Select an available source from the current work details. An original pending request keeps its fixed source.",
-		pm_kanban_manual_authority: "New observations require observe access and a current workspace writer role. Original receipts remain readable with source access.",
+		pm_kanban_manual_authority: "New observations need View access and a current workspace writer role. Original receipts remain readable with source access.",
 		pm_kanban_manual_original_missing: "Previously selected source is unavailable",
 		pm_kanban_manual_identity: "Authenticated native identity is unavailable or stale.",
 		pm_kanban_manual_multiple: "Only a single original input is supported; multiple inputs remain unproven.",
@@ -7561,8 +7561,8 @@ var pmStrings = {
 		pm_analysis_original: "原始請求",
 		pm_analysis_recover_other: "開始另一個分析前，請先查回原始請求。請選擇：",
 		pm_analysis_bat_preflight: "在所選 BAT 主機使用一個全新的隔離 Codex 工作階段。每次請求都會先檢查執行環境；登入有效性與模型可用性尚未驗證。",
-		pm_analysis_bat_worktree: "請先以預定的 repository 綁定準備討論脈絡，建立此工作區的 PM worktree。",
-		pm_analysis_bat_binding_changed: "已保存的 PM worktree 綁定已變更，請先檢視 repository 選擇再請求分析。",
+		pm_analysis_bat_worktree: "請先以預定的 repository 綁定準備討論脈絡，建立此工作區的 PM 工作樹。",
+		pm_analysis_bat_binding_changed: "已保存的 PM 工作樹綁定已變更，請先檢視 repository 選擇再請求分析。",
 		pm_analysis_bat_readonly: "所選 BAT 主機未開放受管理工作。",
 		pm_analysis_bat_unavailable: "目前無法確認獨立 BAT 分析資格，請重新整理所選工作區狀態。",
 		pm_analysis_selected_binding: "所選主機／工作區／repository：",
@@ -7671,7 +7671,7 @@ var pmStrings = {
 		pm_notes: "討論筆記",
 		pm_note_content: "新增討論筆記",
 		pm_save_note: "儲存筆記",
-		pm_note_help: "儲存到這份討論，不會傳送給 Agent。",
+		pm_note_help: "儲存到這份討論，不會傳送給代理。",
 		pm_manual: "討論筆記 · 目前未連接 AI 參與者",
 		pm_no_notes: "尚無筆記。可以先記下問題、一個選項，或待釐清的疑問。",
 		...discussionStrings["zh-TW"],
@@ -8051,9 +8051,9 @@ var STRINGS = {
 		delivery_worktree_recorded: "Connector 目前保存的關聯；活動狀態以各工作階段的觀察為準。",
 		delivery_worktree_cleanup: "整理資格需要最新預覽。預覽會列出使用中的工作、未交付成果、資源保留與其他阻擋原因。",
 		delivery_merge_read_receipts: "查核已保存回執",
-		delivery_merge_recovery: "Worktree merge 復原",
+		delivery_merge_recovery: "工作樹合併復原",
 		delivery_merge_held: "此操作尚無釋放資源的回執。以下兩個工作目錄依原操作保留；請保留原 operation ID。",
-		delivery_merge_source: "來源 worktree",
+		delivery_merge_source: "來源工作樹",
 		delivery_merge_destination: "目的工作目錄",
 		delivery_merge_ack: "已保存正面 ACK",
 		delivery_merge_no_ack: "尚無正面 ACK 證據",
@@ -8148,7 +8148,7 @@ var STRINGS = {
 		labels_empty: "尚無標籤",
 		labels_save: "儲存標籤",
 		labels_saved: "已儲存這次標籤變更。",
-		labels_scope: "需要 manage 權限才能編輯標籤。",
+		labels_scope: "編輯標籤需要管理權限",
 		labels_unavailable: "無法讀取標籤",
 		labels_unreadable: "尚未讀到可確認的標籤資料，暫時無法儲存。",
 		labels_changed: "標籤已有新版本，原草稿保留。請檢視目前標籤後再準備變更。",
@@ -8225,7 +8225,7 @@ var STRINGS = {
 		task_resume: "恢復派工",
 		task_abort: "同時中斷目前這一輪",
 		task_control_help: "暫停會停止後續派工；目前這一輪預設繼續。恢復後仍須通過原有檢查。",
-		task_control_unavailable: "需先讀取目前執行狀態，並具有 operate 權限及這項操作能力。已結束的執行不能重新派工。",
+		task_control_unavailable: "需要最新執行資料、操作權限及操作支援；已結束的執行無法重新派工",
 		task_control_new: "準備另一筆控制",
 		task_control_fixed: "原請求固定使用控制版本 {version}。結果不明時只查回或重試原請求。",
 		task_control_invalid: "回應與原執行控制請求不符。",
@@ -8250,9 +8250,9 @@ var STRINGS = {
 		orch_items: "執行已檢視項目",
 		orch_failover: "改由 Codex 接續",
 		orch_help_relay: "將你的原文與 Connector 整理的轉交背景送往一個固定的受管工作階段。若它無法接收，這個表單不會另建替代工作階段。",
-		orch_help_planner: "在新 worktree 啟動一個唯讀 Codex 規劃者。讀取回覆後，再另外輸入並逐項檢視要執行的工作。",
-		orch_help_items: "依下列逐項原文建立各自獨立的受管理 worktree。不會自動匯入規劃者回覆，也不會停止規劃者。",
-		orch_help_failover: "由 Codex 接續一個閒置且配額耗盡的受管 Claude 工作階段。Connector 會檢查所有寫入者與任務擁有權；保留來源分頁與 worktree，不提供強制或任務中途切換。",
+		orch_help_planner: "在新工作樹啟動一個唯讀 Codex 規劃者。讀取回覆後，再另外輸入並逐項檢視要執行的工作。",
+		orch_help_items: "依下列逐項原文建立各自獨立的受管理工作樹。不會自動匯入規劃者回覆，也不會停止規劃者。",
+		orch_help_failover: "由 Codex 接續一個閒置且配額耗盡的受管 Claude 工作階段。Connector 會檢查所有寫入者與任務擁有權；保留來源分頁與工作樹，不提供強制或任務中途切換。",
 		orch_preparation: "請檢視這些選定輸入。提交後，Connector 才會準備並記錄固定的轉交背景、計畫或交接內容；此頁不是對話或交接內容的預覽。",
 		orch_session: "固定的受管理工作階段",
 		orch_choose_session: "選擇受管理工作階段",
@@ -8274,7 +8274,7 @@ var STRINGS = {
 		orch_discovery_failed: "目標識別尚未確認。請重新讀取後再提交。",
 		orch_review_relay: "我已檢視這個固定工作階段與原始指示。",
 		orch_review_planner: "我已檢視工作區、原始指示與規劃項目上限。",
-		orch_review_items: "我已檢視工作區、agent 與上述每一項完整原文。",
+		orch_review_items: "我已檢視工作區、代理與上述每一項完整原文。",
 		orch_review_failover: "我已檢視這個固定的 Claude 來源。配額、閒置或共用擁有權檢查未通過時，Connector 會拒絕執行。",
 		orch_apply_relay: "轉交至此工作階段",
 		orch_apply_planner: "啟動規劃者",
@@ -8334,10 +8334,10 @@ var STRINGS = {
 		pub_invalid_result: "操作回應與原版本、工作區或請求不符。",
 		pub_apply: "從此版本開始",
 		pub_new: "準備另一個已發佈版本",
-		pub_isolation: "建立新的受管理 clone、worktree 與工作階段；不更新或接管既有人工工作目錄。",
+		pub_isolation: "建立新的受管理 clone、工作樹與工作階段；不更新或接管既有人工工作目錄。",
 		pub_reviewed: "請確認以下來源與完整提交 SHA：",
 		pub_sha: "固定提交 SHA",
-		pub_unavailable: "需要 observe 與 start 權限，以及 Connector 明確支援此操作。",
+		pub_unavailable: "需要檢視、啟動權限及 Connector 支援",
 		pub_no_bindings: "Connector 尚未設定儲存庫與工作區的明確綁定。",
 		pub_fixed: "保留原提交、目標、指示與操作 key。查回只讀取原操作，不追蹤新的分支 head，也不另外啟動工作階段。",
 		start_title_page: "開始新工作階段",
@@ -8370,7 +8370,7 @@ var STRINGS = {
 		start_prompt_help: "原文會完整保留。留白只啟動工作階段，不會自動產生指示。",
 		start_apply: "開始工作階段",
 		start_new: "準備另一個工作階段",
-		start_unavailable: "需要 observe 與 start 權限，以及 Connector 允許啟動工作階段的主機。",
+		start_unavailable: "需要檢視、啟動權限及允許啟動工作階段的主機",
 		start_invalid_result: "操作回應與原啟動請求不符。",
 		start_unknown: "提交結果尚未確認；原請求與 key 已保留。",
 		start_fixed: "主機、工作區、選項與原文已固定。查回不會重新啟動；結果不明時只能重試同一筆請求。",
@@ -8398,7 +8398,8 @@ var STRINGS = {
 		sessions_workspace_unknown: "工作區未記錄",
 		sessions_workspace_unverified: "未記錄工作區 ID",
 		sessions_scope_missing: "所選工作區目前沒有資料",
-		sessions_no_matches: "目前範圍沒有符合的工作階段。",
+		sessions_empty: "尚無工作階段",
+		sessions_no_matches: "目前範圍沒有符合的工作階段",
 		sessions_more_hint: "還有頁面尚未載入。可載入更多，或調整搜尋與篩選。",
 		sessions_empty_hint: "可調整搜尋、主機或存取方式；未出現在這裡不代表工作已結束。",
 		sessions_showing_exact: "共 {loaded} 個，顯示 {shown} 個",
@@ -8428,13 +8429,13 @@ var STRINGS = {
 		permissions_details: "檢視操作與逐步回執",
 		permissions_help: "選擇要套用的權限。這裡不表示目前實際模式；主機政策與隔離限制仍然適用。",
 		permissions_default_help: "使用一般核准流程，保留需要確認的操作提示。",
-		permissions_allow_help: "略過 agent 的操作核准提示，包括寫入與命令執行。主機仍可拒絕此變更。",
-		permissions_unavailable: "需要最新工作階段資料、operate 權限，以及 Connector 明確允許此操作與主機寫入。",
+		permissions_allow_help: "略過代理的操作核准提示，包括寫入與命令執行。主機仍可拒絕此變更。",
+		permissions_unavailable: "需要最新工作階段資料、操作權限及主機寫入許可",
 		permissions_unknown: "結果尚未確認。原請求已保留。",
 		permissions_fixed: "保留同一筆模式、工作階段與操作。部分完成或結果不明時，請先檢視回執。",
 		permissions_invalid_result: "操作回應與原權限請求不符。",
 		permissions_damaged: "已儲存的請求不完整。請先在操作紀錄確認結果。",
-		permissions_accepted: "BAT 已接受要求的設定；尚未獨立查證執行中的 agent 已套用。",
+		permissions_accepted: "BAT 已接受要求的設定；尚未獨立查證執行中的代理已套用。",
 		permissions_next_turn: "Codex 於下一輪使用這個設定。",
 		permissions_refused: "這筆請求在受理前被拒絕。可明確建立另一筆變更；原請求不會自動重試。",
 		ar_content_download: "下載此版本",
@@ -8467,7 +8468,7 @@ var STRINGS = {
 		ar_accept: "記錄此版本的審閱",
 		ar_check_accept: "查回原審閱提交",
 		ar_accept_help: "請先檢視這份成果，再記錄審閱依據。此回執只對應下列版本，不表示測試通過、任務完成、合併或部署。",
-		ar_approve_scope: "記錄審閱需要 approve 權限；查看附件需要 observe 權限。",
+		ar_approve_scope: "記錄審閱需要核准權限；查看附件需要檢視權限",
 		ar_revision: "固定附件版本",
 		ar_lineage: "Connector 來源與執行證據",
 		ar_check: "查回原操作",
@@ -8477,7 +8478,7 @@ var STRINGS = {
 		ar_no_artifacts: "這一頁尚無可審閱的管理中來源成果。",
 		ar_invalid_result: "回應與原操作、固定版本或 Connector 來源證據不符；原請求與操作識別碼已保留。",
 		ar_storage: "無法保存原操作的復原資料。請先允許此應用程式使用本機儲存空間。",
-		ar_original_credential: "擷取查回需要原始憑證及 manage、observe 權限。請恢復原憑證；原請求與 key 會繼續保留。",
+		ar_original_credential: "請恢復具檢視與管理權限的原憑證；原請求與 key 會保留",
 		ar_original_preview: "原始擷取預覽與來源證據",
 		capture_title: "擷取遠端檔案",
 		capture_host: "來源主機",
@@ -8502,8 +8503,8 @@ var STRINGS = {
 		capture_fixed: "保留原預覽與操作識別；查回不會改取較新的內容。",
 		capture_unknown: "提交結果尚未確認。請查回同一筆擷取；原草稿與操作 key 已保留。",
 		capture_saved: "已保存固定附件版本，可在附件選擇中使用：",
-		capture_scope_observe: "預覽需要 observe 權限。",
-		capture_scope_manage: "保存需要 manage 與 observe 權限，以及 Connector 支援檔案擷取。",
+		capture_scope_observe: "預覽需要檢視權限",
+		capture_scope_manage: "保存需要檢視、管理權限及檔案擷取支援",
 		capture_manual_only: "來源必須提供完整工作階段 ID，且 Connector 已明確觀察到該工作階段是由人員建立。",
 		capture_invalid_preview: "Connector 預覽與選定來源不符。",
 		capture_invalid_result: "無法查證已保存附件的固定版本與擷取來源。",
@@ -8539,7 +8540,7 @@ var STRINGS = {
 		obs_history: "資源歷程",
 		obs_include_closed: "包含已關閉關係",
 		obs_execution: "Execution",
-		obs_worktree: "Worktree",
+		obs_worktree: "工作樹",
 		obs_known_identity: "顯示 Connector 已知的資源 ID；關係與歷程不授予操作權限。",
 		obs_inventory_note: "依穩定 ID 巡覽，保留已載入頁數。列表反映持續變化的觀測，不是隔離快照。",
 		obs_axis_connection: "連線",
@@ -8644,13 +8645,13 @@ var STRINGS = {
 		"cleanup_preview": "預覽整理",
 		"cleanup_apply": "執行已審閱的整理",
 		"cleanup_reviewed": "我已查看這份預覽的資源、保留內容與丟棄選擇。",
-		"cleanup_scope": "執行需要 cleanup 權限。",
+		"cleanup_scope": "執行需要整理權限",
 		"cleanup_counts": "回收 {reclaim} 個資源 · 保留 {retain} 個",
 		"cleanup_expires": "預覽到期時間：{time}（15 分鐘）。",
 		"cleanup_blocked": "所有資源都保留。請查看每項的原因。",
 		"cleanup_commit_kept": "保留 commit",
 		"cleanup_not_delivered": "成果尚未送達。釋放後仍保留 commits 與本機 branch。",
-		"cleanup_release": "釋放這個 worktree；保留尚未送達的 commits 與 branch",
+		"cleanup_release": "釋放這個工作樹；保留尚未送達的 commits 與 branch",
 		"cleanup_discard": "永久丟棄未提交的檔案（需要 cleanup_discard）",
 		"cleanup_plan": "執行計畫",
 		"cleanup_evidence": "ID、證據與送達涵蓋範圍",
@@ -8670,7 +8671,7 @@ var STRINGS = {
 		"cleanup_choice_UNCOMMITTED_CHANGES": "已選擇永久丟棄未提交內容。",
 		"cleanup_choice_RESULTS_NOT_DELIVERED": "已選擇釋放；保留尚未送達的 commits 與 branch。",
 		"cleanup_kind_session": "工作階段",
-		"cleanup_kind_worktree": "Worktree",
+		"cleanup_kind_worktree": "工作樹",
 		"cleanup_kind_local_branch": "本機 branch",
 		"cleanup_kind_clone": "Managed clone",
 		"cleanup_kind_integration_area": "整合區",
@@ -8685,7 +8686,7 @@ var STRINGS = {
 		"cleanup_step_preserve": "Pin commit",
 		"cleanup_step_stop": "停止工作階段",
 		"cleanup_step_discard": "丟棄檔案",
-		"cleanup_step_remove.worktree": "移除 worktree",
+		"cleanup_step_remove.worktree": "移除工作樹",
 		"cleanup_step_remove.branch": "刪除已送達 branch",
 		"cleanup_step_finalize": "保存回執",
 		"cleanup_step_remove.temporary": "移除指定暫存",
@@ -8753,7 +8754,7 @@ var STRINGS = {
 		dep_run: "服務商執行紀錄",
 		dep_attempt: "執行次數",
 		dep_error_code: "錯誤代碼",
-		dep_needs_scope: "需要 deploy 權限。",
+		dep_needs_scope: "需要部署權限",
 		dep_missing_recipe: "此部署設定已移除。",
 		dep_missing_verification: "部署已停用：缺少版本驗證設定。",
 		dep_disabled: "目前未開放部署。",
@@ -8943,11 +8944,11 @@ var STRINGS = {
 		create_edit_request: "編輯新的建立請求",
 		create_invalid_receipt: "回執與原建立請求不符；原請求仍保留。",
 		create_invalid_draft: "無法讀取已存的建立請求。請先從操作紀錄確認結果，避免重複建立。",
-		create_project_help: "上層決定樹狀位置，來源保留衍生關係。Task Service 名稱只建立關聯；建立專案不會啟動 Agent。",
+		create_project_help: "上層決定樹狀位置，來源保留衍生關係。Task Service 名稱只建立關聯；建立專案不會啟動代理。",
 		create_item_help: "工作保留需求原文與驗收條件。步驟初始皆未完成；建立工作不會派工或修改 BAT 工作區。",
 		managed_locations: "資料與工作位置",
 		managed_locations_central: "Connector 將身分、操作紀錄與成果保存在安裝電腦的應用程式資料中。Dashboard 的草稿與閱讀版面設定則保存在目前瀏覽器或桌面用戶端。",
-		managed_locations_work: "程式碼與 Agent 執行位於你選定的 BAT 主機和工作區。設定 Connector 不會搬移這些工作目錄；跨主機程式碼同步使用已綁定的 GitHub 儲存庫與已發布版本。",
+		managed_locations_work: "程式碼與代理執行位於你選定的 BAT 主機和工作區。設定 Connector 不會搬移這些工作目錄；跨主機程式碼同步使用已綁定的 GitHub 儲存庫與已發布版本。",
 		new_project_name: "新專案名稱",
 		add_project: "新增",
 		show_archived: "顯示已封存",
@@ -8997,9 +8998,11 @@ var STRINGS = {
 		archive_with_children: "封存（連同子項目）",
 		needs_decision: "等你決定",
 		no_items: "還沒有工作項目。",
+		project_row_active: "進行 {count}",
+		project_row_review: "審閱 {count}",
 		link_missing: "已找不到",
-		needs_manage_scope: "你的 token 沒有 manage 權限，不能修改專案與工作項目；用 --scope manage 重新發 token。",
-		needs_approve_scope: "你的 token 沒有 approve 權限，不能確認完成；用 --scope approve 重新發 token。",
+		needs_manage_scope: "變更專案與工作項目需要管理權限；請洽管理員",
+		needs_approve_scope: "確認完成需要核准權限；請洽管理員",
 		accept_done: "確認完成",
 		mark_done: "標記完成",
 		keep_working: "還沒完成，繼續",
@@ -9073,8 +9076,12 @@ var STRINGS = {
 		attention_empty: "這一類目前沒有項目。",
 		attention_not_updated: "本次未能更新；若下方有資料，仍是上次讀取的內容。",
 		attention_invalid: "清單回應不完整，請重新讀取。",
-		conversation_mark: "標記畫面中的訊息已讀",
-		conversation_remember: "記住閱讀位置",
+		conversation_mark: "標為已讀",
+		conversation_remember: "儲存位置",
+		conversation_saving: "正在儲存閱讀狀態",
+		conversation_no_unread: "畫面中沒有可標為已讀的訊息",
+		conversation_no_position: "畫面中沒有可儲存位置的訊息",
+		conversation_save_failed: "無法儲存閱讀狀態",
 		conversation_older: "更早的訊息",
 		conversation_unread: "上次觀察：{count} 則未讀",
 		conversation_unread_lower_bound: "{count}+ 則未讀",
@@ -9096,7 +9103,7 @@ var STRINGS = {
 		tree_drag_help: "只在同層移動；也可使用上移／下移按鈕。",
 		message_tool_details: "工具輸入與結果",
 		message_tool_status: "狀態：{status}",
-		message_agent: "訊息 Agent：{agent}",
+		message_agent: "訊息代理：{agent}",
 		message_model: "訊息模型：{model}",
 		message_duration: "訊息耗時：{ms} ms",
 		results_waiting: "等待回覆或權限",
@@ -9130,7 +9137,7 @@ var STRINGS = {
 		results_independent: "子工作成果、交付紀錄和父工作完成狀態分別判定；此檢視不會自動整合或標記完成。",
 		results_invalid: "Connector 傳回的成果來源無效。",
 		skills_title: "專案 Skill 來源與選取",
-		skills_not_applied: "已選取的 Skill 只固定來源版本；尚未套用到 Agent，也未放入 prompt。",
+		skills_not_applied: "已選取的 Skill 只固定來源版本；尚未套用到代理，也未放入 prompt。",
 		skills_refresh: "重新掃描 Skill 來源",
 		skills_reload: "重新載入已存選取",
 		skills_save: "保存 Skill 選取",
@@ -9139,7 +9146,7 @@ var STRINGS = {
 		skills_conflict: "來源或 Connector 保存的選取已變更，草稿已保留；請重新載入已存選取後再修改。",
 		skills_unresolved: "原選取已遺失或內容改變；保留固定版本",
 		skills_version: "檢視固定內容版本",
-		skills_compatibility: "目前可掃描 Claude Skill；Agent 相容性由來源回報，保存不等於執行套用。最多選取 20 項。",
+		skills_compatibility: "目前可掃描 Claude Skill；代理相容性由來源回報，保存不等於執行套用。最多選取 20 項。",
 		skills_catalog_state: "來源未完整驗證：{state}",
 		skills_other_binding: "已存選取來自 {host} / {workspace}。保存目前選取會明確取代該來源。",
 		skills_invalid: "Connector 傳回的 Skill 資料無效。",
@@ -9152,9 +9159,9 @@ var STRINGS = {
 		models_use_initial: "使用初始偏好",
 		models_use_last: "使用上次選擇",
 		models_remember_last: "記為上次選擇",
-		models_initial_agent: "初始 Agent",
+		models_initial_agent: "初始代理",
 		models_initial_model: "初始模型 ID",
-		models_last_agent: "上次選擇的 Agent",
+		models_last_agent: "上次選擇的代理",
 		models_last_model: "上次選擇的模型 ID",
 		models_no_preference: "由主機決定",
 		models_unsaved: "有尚未儲存的偏好。",
@@ -9212,7 +9219,7 @@ var STRINGS = {
 		host: "主機",
 		workspace: "工作區",
 		title: "標題",
-		agent: "Agent",
+		agent: "代理",
 		state: "狀態",
 		activity: "最後活動",
 		observed: "觀測時間",
@@ -9296,7 +9303,7 @@ var STRINGS = {
 		start_agent_work: "開始代理工作",
 		open_new_session: "開啟新工作階段",
 		checkpoint_unavailable: "此主機尚未設定受管工作",
-		needs_start_scope: "這個登入沒有開工權限，請使用具開工權限的憑證。",
+		needs_start_scope: "啟動代理工作需要啟動權限；請洽管理員",
 		confined_note: "工作目錄本身不提供保護。限制取決於啟動選項及帳號證據；個別批准可能允許外部寫入。",
 		confinement_none: "無已證實的執行限制",
 		confinement_prompt_gated: "權限詢問控管",
@@ -9371,10 +9378,10 @@ var STRINGS = {
 		no_messages: "還沒有訊息。",
 		update_pr_results: "更新 PR 成果",
 		update_pr_help: "把選定的成果整合進這個 PR 的 head：一般 push，不會強制覆蓋；不會改動你本機的資料夾。",
-		needs_integrate_scope: "需要 integrate 權限：用 --scope integrate 重新發 token。",
+		needs_integrate_scope: "需要整合權限；請洽管理員",
 		integration_no_host: "這個 repository 的 integrate 主機目前都沒有 SSH alias、managed root 或 write／orchestrate 權限。",
 		kind_checkpoint: "你的 checkpoint",
-		kind_checkpoint_run: "agent 成果",
+		kind_checkpoint_run: "代理成果",
 		kind_branch: "GitHub 分支",
 		previewing: "預覽中…（第一次會建立 managed 整合區，可能需要幾分鐘）",
 		start_integration_conflict: "開始整合（第 {n} 項預計衝突，會停下讓你處理）",
@@ -9400,18 +9407,18 @@ var STRINGS = {
 		add: "加入",
 		add_branch: "加入分支",
 		delivered_to: "已送進 #{n}",
-		agent_results: "agent 成果",
+		agent_results: "代理成果",
 		your_checkpoints: "你的 checkpoint",
 		still_working: "執行中",
 		done: "已完成",
 		none: "沒有",
 		selected_in_order: "已選（依序整合）",
 		integration_done: "PR 已更新：{old} → {new}，加入 {n} 個 commit。你本機的資料夾不會自動更新；要同步請在 BAT 裡 pull。",
-		integration_INTEGRATION_CONFLICT: "有一項衝突。前面的項目已在 Connector 的整合區完成，尚未推送。可以交給 agent 在整合區解衝突，或取消後不含它重新預覽。",
-		integration_RESOLUTION_INCOMPLETE: "衝突還沒解完（還沒 commit）。等 agent 完成 `git commit --no-edit` 後按「重新執行」。",
+		integration_INTEGRATION_CONFLICT: "有一項衝突。前面的項目已在 Connector 的整合區完成，尚未推送。可以交給代理在整合區解衝突，或取消後不含它重新預覽。",
+		integration_RESOLUTION_INCOMPLETE: "衝突還沒解完（還沒 commit）。等代理完成 `git commit --no-edit` 後按「重新執行」。",
 		integration_RESOLUTION_INVALID: "解衝突的結果不符合要求（要剛好一個 merge commit、沒有未提交修改或衝突標記）；修好後按「重新執行」。",
-		integration_waiting_resolver: "等 agent 解完衝突（它還在工作）",
-		hand_to_agent: "交給 agent 解衝突",
+		integration_waiting_resolver: "等代理解完衝突（它還在工作）",
+		hand_to_agent: "交給代理解衝突",
 		handoff_started: "已開始處理衝突的工作階段；提交完成後按「重新執行」。",
 		integration_REMOTE_MOVED: "PR 在整合時有新的推送，沒有覆蓋它，也沒有推送。請取消並以最新版本重新預覽。",
 		integration_PUSH_REJECTED: "GitHub 拒絕這次推送（保護規則或簽章要求）。",
@@ -9786,7 +9793,7 @@ var STRINGS = {
 		labels_empty: "No labels yet",
 		labels_save: "Save labels",
 		labels_saved: "This label change was saved.",
-		labels_scope: "Editing labels requires manage permission.",
+		labels_scope: "Editing labels needs Manage access",
 		labels_unavailable: "Labels unavailable",
 		labels_unreadable: "Confirmed label data is unavailable. Saving is disabled.",
 		labels_changed: "Labels have a newer version. Your draft is preserved; review the current labels before preparing a change.",
@@ -9863,7 +9870,7 @@ var STRINGS = {
 		task_resume: "Resume dispatch",
 		task_abort: "Also interrupt the current turn",
 		task_control_help: "Pause stops future dispatch. The current turn continues unless you choose to interrupt it. Resume still follows the existing checks.",
-		task_control_unavailable: "Requires a current task read, operate scope and this action capability. Finished executions cannot dispatch again.",
+		task_control_unavailable: "Needs current data, Operate access and action support; finished executions cannot dispatch",
 		task_control_new: "Prepare another control",
 		task_control_fixed: "The original request uses control version {version}. An unknown outcome keeps this request and key.",
 		task_control_invalid: "The response does not match the original task control request.",
@@ -9975,7 +9982,7 @@ var STRINGS = {
 		pub_isolation: "Creates a new managed clone, worktree and session. Existing manual working folders stay unchanged.",
 		pub_reviewed: "Review this source and its full commit SHA:",
 		pub_sha: "Fixed commit SHA",
-		pub_unavailable: "Requires observe and start scopes, and explicit Connector support for this action.",
+		pub_unavailable: "Needs View and Start access and Connector support",
 		pub_no_bindings: "No repository and workspace bindings configured in Connector.",
 		pub_fixed: "Keeps the original commit, target, instructions and operation key. Readback only checks that operation; it does not follow a newer branch head or start another session.",
 		start_title_page: "Start a new session",
@@ -10008,7 +10015,7 @@ var STRINGS = {
 		start_prompt_help: "Your original text is preserved. Leave this empty to start without sending instructions.",
 		start_apply: "Start session",
 		start_new: "Prepare another session",
-		start_unavailable: "Requires observe and start scopes, and a host Connector permits for starting sessions.",
+		start_unavailable: "Needs View and Start access and a host that allows session starts",
 		start_invalid_result: "The operation response does not match the original start request.",
 		start_unknown: "Submission is unconfirmed; the original request and key are preserved.",
 		start_fixed: "Host, workspace, options and original text are fixed. Read-back never starts again; an unknown submission can only retry the same request.",
@@ -10047,7 +10054,7 @@ var STRINGS = {
 		ar_accept: "Record review of this revision",
 		ar_check_accept: "Check original review submission",
 		ar_accept_help: "Inspect the result before recording your review. This receipt covers only the fixed revision below; it does not prove passing tests, task completion, merge or deployment.",
-		ar_approve_scope: "Recording review requires approve; reading artifacts requires observe.",
+		ar_approve_scope: "Recording reviews needs Approve access; reading artifacts needs View access",
 		ar_revision: "Fixed artifact revision",
 		ar_lineage: "Connector source and execution evidence",
 		ar_check: "Check original operations",
@@ -10057,7 +10064,7 @@ var STRINGS = {
 		ar_no_artifacts: "No reviewable managed-source results on this page.",
 		ar_invalid_result: "The response does not match the original operation, fixed revision or Connector source proof. The original request and key are retained.",
 		ar_storage: "The original operation recovery data could not be saved. Enable local storage for this application before submitting.",
-		ar_original_credential: "Capture recovery requires the original credential and manage/observe scopes. Restore that credential; the original request and key stay saved.",
+		ar_original_credential: "Restore the original credential with View and Manage access; the saved request and key are kept",
 		ar_original_preview: "Original capture preview and source evidence",
 		sessions_label: "Title",
 		sessions_workspace: "Workspace",
@@ -10078,7 +10085,8 @@ var STRINGS = {
 		sessions_workspace_unknown: "Workspace not recorded",
 		sessions_workspace_unverified: "No recorded workspace ID",
 		sessions_scope_missing: "Selected workspace is not in this view",
-		sessions_no_matches: "No matching sessions in this view.",
+		sessions_empty: "No sessions yet",
+		sessions_no_matches: "No matching sessions in this view",
 		sessions_more_hint: "More pages are available. Load more, or adjust your search and filters.",
 		sessions_empty_hint: "Adjust your search, host or access filter. Absence from this view does not mean work has ended.",
 		sessions_showing_exact: "Showing {shown} of {loaded} sessions",
@@ -10109,7 +10117,7 @@ var STRINGS = {
 		permissions_help: "Choose the permissions to apply. This does not show the current mode; host policy and confinement limits still apply.",
 		permissions_default_help: "Use the normal approval flow, keeping prompts for actions that need confirmation.",
 		permissions_allow_help: "Bypass the agent's approval prompts, including file writes and command execution. The host may still refuse this change.",
-		permissions_unavailable: "Requires current session data, operate scope, and explicit Connector permission for this action and host writes.",
+		permissions_unavailable: "Needs current session data, Operate access and permission for host writes",
 		permissions_unknown: "The result is not yet confirmed. The original request is retained.",
 		permissions_fixed: "The mode, session and operation stay fixed. Check the receipts for partial or unknown results.",
 		permissions_invalid_result: "The operation reply does not match the original permission request.",
@@ -10140,8 +10148,8 @@ var STRINGS = {
 		capture_fixed: "The original preview and operation identity are retained. Read-back does not select newer content.",
 		capture_unknown: "Submission outcome is unknown. Check the same capture; its draft and operation key are retained.",
 		capture_saved: "Saved a fixed attachment revision, available in attachment selection:",
-		capture_scope_observe: "Preview requires observe scope.",
-		capture_scope_manage: "Saving requires manage and observe scopes and Connector capture capability.",
+		capture_scope_observe: "Preview needs View access",
+		capture_scope_manage: "Saving needs View and Manage access and file capture support",
 		capture_manual_only: "The source must be a full session explicitly observed as manually created.",
 		capture_invalid_preview: "Connector preview does not match the selected source.",
 		capture_invalid_result: "Unable to verify the saved attachment revision and capture source.",
@@ -10282,7 +10290,7 @@ var STRINGS = {
 		"cleanup_preview": "Preview cleanup",
 		"cleanup_apply": "Apply reviewed cleanup",
 		"cleanup_reviewed": "I reviewed the resources, retained content and discard choices in this preview.",
-		"cleanup_scope": "Applying needs the cleanup scope.",
+		"cleanup_scope": "Applying needs Cleanup access",
 		"cleanup_counts": "{reclaim} resources to reclaim · {retain} retained",
 		"cleanup_expires": "This preview expires at {time} (15 minutes).",
 		"cleanup_blocked": "All resources are retained. Review the reasons for each item.",
@@ -10391,7 +10399,7 @@ var STRINGS = {
 		dep_run: "Provider run",
 		dep_attempt: "Run attempt",
 		dep_error_code: "Error code",
-		dep_needs_scope: "Requires deploy scope.",
+		dep_needs_scope: "Needs Deploy access",
 		dep_missing_recipe: "This recipe is no longer configured.",
 		dep_missing_verification: "Deploy disabled: add recipe verification.",
 		dep_disabled: "Deployment is unavailable under the current capabilities.",
@@ -10581,6 +10589,8 @@ var STRINGS = {
 		create_edit_request: "Edit a new creation request",
 		create_invalid_receipt: "The receipt does not match the original creation request; that request is retained.",
 		create_invalid_draft: "The saved creation request could not be read. Check operation history before creating a duplicate.",
+		project_row_active: "{count} active",
+		project_row_review: "{count} in review",
 		create_project_help: "Parent sets the tree position; source keeps the derivation link. The Task Service name records a relationship. Creating a project does not start an agent.",
 		create_item_help: "Keep the original request and acceptance criteria with this work. New steps are unchecked; creating a work item does not dispatch work or change a BAT workspace.",
 		managed_locations: "Data and work locations",
@@ -10636,8 +10646,8 @@ var STRINGS = {
 		needs_decision: "your decision",
 		no_items: "No work items yet.",
 		link_missing: "no longer found",
-		needs_manage_scope: "Your token lacks the manage scope, so it cannot change projects or work items; issue one with --scope manage.",
-		needs_approve_scope: "Your token lacks the approve scope, so it cannot accept work as done; issue one with --scope approve.",
+		needs_manage_scope: "Project and work-item changes need Manage access; ask the operator",
+		needs_approve_scope: "Accepting work as done needs Approve access; ask the operator",
 		accept_done: "Accept as done",
 		mark_done: "Mark done",
 		keep_working: "Not done: keep working",
@@ -10711,8 +10721,12 @@ var STRINGS = {
 		attention_empty: "No items in this category.",
 		attention_not_updated: "Could not refresh. Any items below are from the previous read.",
 		attention_invalid: "Incomplete list response; reload to try again.",
-		conversation_mark: "Mark visible messages read",
-		conversation_remember: "Remember reading position",
+		conversation_mark: "Mark read",
+		conversation_remember: "Save position",
+		conversation_saving: "Saving reading state",
+		conversation_no_unread: "No unread messages in view",
+		conversation_no_position: "No message position in view",
+		conversation_save_failed: "Reading state unavailable",
 		conversation_older: "Earlier messages",
 		conversation_unread: "Last observed: {count} unread",
 		conversation_unread_lower_bound: "{count}+ unread",
@@ -10934,7 +10948,7 @@ var STRINGS = {
 		start_agent_work: "Start agent work",
 		open_new_session: "Open the new session",
 		checkpoint_unavailable: "This host is not set up for managed work",
-		needs_start_scope: "Your token lacks the start scope, so it cannot start agent work; issue one with --scope start.",
+		needs_start_scope: "Starting agent work needs Start access; ask the operator",
 		confined_note: "The working directory alone offers no protection. Limits come from start options and account evidence; individual approvals may permit outside writes.",
 		confinement_none: "No proven execution limit",
 		confinement_prompt_gated: "Prompt gated",
@@ -11009,7 +11023,7 @@ var STRINGS = {
 		no_messages: "No messages yet.",
 		update_pr_results: "Update PR results",
 		update_pr_help: "Put the chosen results into this PR's head branch: a normal push, never forced; your local folders are not changed.",
-		needs_integrate_scope: "Needs the integrate scope: issue a token with --scope integrate.",
+		needs_integrate_scope: "Needs Integrate access; ask the operator",
 		integration_no_host: "No integrate host of this repository has an SSH alias, a managed root and the write/orchestrate tiers.",
 		kind_checkpoint: "your checkpoint",
 		kind_checkpoint_run: "agent result",
@@ -11612,7 +11626,10 @@ function statusPill(status) {
 	}, t("ui_status_" + key));
 }
 function pageHeader({ title, mark, pill, meta, actions = [], overflow } = {}) {
-	const actionRow = h$1("div", { class: "ui-header-actions" }, ...actions, overflow);
+	const actionRow = h$1("div", {
+		class: "ui-header-actions",
+		hidden: !actions.length && !overflow
+	}, ...actions, overflow);
 	actionRow.addEventListener("focusin", (event) => {
 		const target = event.target.closest("button, a, select");
 		if (!target || actionRow.scrollWidth <= actionRow.clientWidth) return;
@@ -12080,7 +12097,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 //#endregion
 //#region src/global-screens.js
 function setupGuide() {
-	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
+	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.md";
 }
 function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
 	const article = h("article", {
@@ -12410,7 +12427,7 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 			label: t("agents_token_issue"),
 			body: h("div", {}, h("p", {}, t("agents_issue")), h("pre", {}, h("code", {}, "batc api-token issue --actor mcp-agent --scope observe --scope operate --scope start")), h("p", {}, t("agents_scopes")))
 		})
-	] : [], h("div", { class: "actions" }, h("a", { href: setupGuide() + "#cli-and-agent-access" }, t("agents_mcp_docs")), h("a", { href: "https://github.com/teddashh/bat-agent-connector/blob/main/docs/agent-skills.md" }, t("agents_skill_docs"))));
+	] : [], h("div", { class: "actions" }, h("a", { href: setupGuide() + "#cli-and-agent-access" }, t("agents_mcp_docs")), h("a", { href: "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/agent-skills.md" }, t("agents_skill_docs"))));
 	const root = h("section", {
 		class: "panel settings-agents",
 		"aria-labelledby": heading.id
@@ -43282,7 +43299,7 @@ var observedStrings = {
 	},
 	"zh-TW": {
 		or_execution: "工作執行",
-		or_worktree: "工作目錄",
+		or_worktree: "工作樹",
 		or_work: "工作",
 		or_owner: "負責人",
 		or_ownership: "歸屬類型",
@@ -43339,14 +43356,14 @@ var observedStrings = {
 		or_actor: "執行者",
 		or_project: "專案",
 		or_state: "狀態",
-		or_worktree_id: "工作目錄識別碼",
+		or_worktree_id: "工作樹識別碼",
 		or_owner_id: "負責人識別碼",
 		or_operation_id: "操作",
 		or_task_id: "任務",
 		or_session_id: "工作階段",
 		or_link_operation: "操作",
 		or_link_execution: "執行",
-		or_link_worktree: "工作目錄"
+		or_link_worktree: "工作樹"
 	}
 };
 function observedText(t, key, values = {}) {
@@ -45599,7 +45616,7 @@ function readingSummary(t, reading) {
 		detail: ""
 	};
 }
-function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
+function conversationPanel({ h, t, when, guard, errorBox, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
 		tabindex: "0",
@@ -45693,9 +45710,14 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		latest.hidden = !olderWindow && (pinned || !rows.size);
 		if (memory && initialized) memory.scrollTop = viewport.scrollTop;
 		if (!readingActions) return;
-		mark.disabled = busy || !visible().some((row) => row.reading?.can_mark && row.reading?.unread);
-		remember.disabled = busy || !visible().some((row) => row.reading);
-		older.disabled = busy;
+		const availability = (control, reason) => {
+			control.disabled = Boolean(reason);
+			control.setAttribute("aria-description", reason);
+			control.title = reason;
+		};
+		availability(mark, busy ? t("conversation_saving") : !visible().some((row) => row.reading?.can_mark && row.reading?.unread) ? t("conversation_no_unread") : "");
+		availability(remember, busy ? t("conversation_saving") : !visible().some((row) => row.reading) ? t("conversation_no_position") : "");
+		availability(older, busy ? t("conversation_saving") : "");
 	};
 	const follow = () => {
 		pinned = true;
@@ -45706,12 +45728,16 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 	const run = async (action) => {
 		if (!alive() || busy) return;
 		busy = true;
+		status.replaceChildren();
 		indicator();
 		try {
 			await action();
 			if (alive()) status.textContent = t("conversation_saved");
 		} catch (error) {
-			if (alive()) status.textContent = error.message || String(error);
+			if (alive()) status.replaceChildren(errorBox(error, {
+				summary: t("conversation_save_failed"),
+				within: status
+			}));
 		} finally {
 			busy = false;
 			if (alive()) indicator();
@@ -45975,24 +46001,18 @@ function conversationPanel({ h, t, when, guard, readingActions = null, memory = 
 		initialized = true;
 		indicator();
 	};
-	const fail = ({ title, retry }) => {
+	const fail = ({ error }) => {
 		if (!alive()) return;
-		const action = retry ? h("button", {
-			class: "ui-button secondary ui-sm",
-			type: "button",
-			onclick: retry
-		}, t("ui_retry")) : null;
 		if (!rows.size) {
 			viewport.replaceChildren(h("div", {
 				class: "conversation-state",
 				"data-conversation-state": "error"
-			}, emptyState({
-				icon: "circle-alert",
-				title,
-				action
-			})));
-			caption.textContent = t("message_window_failed");
-		} else caption.replaceChildren(t("message_window_stale"), action ? "\xA0· " : "", action || "");
+			}, error));
+			caption.textContent = "";
+		} else {
+			viewport.prepend(error);
+			caption.textContent = t("message_window_stale");
+		}
 		indicator();
 	};
 	const clear = () => {
@@ -53481,8 +53501,11 @@ function sessionHref(session) {
 function sessionRow$1(h, session) {
 	const observation = session?.observation || {};
 	const title = text(observation.title) || text(session?.title) || t("session_untitled");
-	const fresh = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale && !observation.gone_at && !["gone", "missing"].includes(observation.state?.enumeration) && observation.state?.lifecycle !== "ended";
-	const activity = fresh && observation.pending ? statusPill("asking_you") : fresh && observation.streaming === true ? statusPill("running") : fresh && observation.streaming === false ? statusPill("waiting") : null;
+	const pill = !observation.stale && !observation.fields_stale && !observation.state?.evidence?.activity?.stale && !observation.gone_at && !["gone", "missing"].includes(observation.state?.enumeration) && observation.state?.lifecycle !== "ended" ? sessionPill(observation) : null;
+	const activity = pill ? h("span", {
+		class: `ui-pill tone-${pill.tone === "stale" ? "warn" : pill.tone}`,
+		"data-status": pill.status
+	}, t(pill.key)) : null;
 	return h("div", {
 		class: "or-session",
 		"data-observed-session": ""
@@ -55083,6 +55106,7 @@ async function viewSessions(main) {
 		class: "session-workspaces"
 	});
 	const scopeNote = h("p", { class: "muted" }, t("sessions_scope_note"));
+	const pageNote = h("span", { class: "muted" }, t("sessions_page_note"));
 	const scope = h("details", {
 		class: "panel session-scope",
 		open: matchMedia("(min-width: 901px)").matches
@@ -55107,7 +55131,7 @@ async function viewSessions(main) {
 	}), h("div", { class: "filters session-filters" }, searchField(search), hostSel, accessSel, state.caps?.actions?.some((a) => a.action === "session.approve_pending") ? h("a", { href: "#/approvals" }, t("bulk_title")) : null), status, h("div", { class: "session-layout" }, scope, h("section", {
 		"aria-label": t("sessions_title"),
 		class: "session-results"
-	}, count, list, h("div", { class: "session-pagination" }, more, h("span", { class: "muted" }, t("sessions_page_note"))))));
+	}, count, list, h("div", { class: "session-pagination" }, more, pageNote))));
 	try {
 		const hosts = (await api("GET", "/hosts")).hosts;
 		assertView(connection);
@@ -55217,10 +55241,15 @@ async function viewSessions(main) {
 			visible += sessions.length;
 			return [h("section", { class: "panel session-group" }, h("header", { class: "session-group-heading" }, h("h2", { title: workspaceName(group) }, workspaceName(group)), h("span", { class: "muted" }, group.host), group.name && group.id && labels.get(labelKey(group)) > 1 ? h("code", { class: "muted" }, group.id) : null, group.name && !group.id ? h("span", { class: "muted" }, t("sessions_workspace_unverified")) : null), ...sessions.map(row))];
 		});
+		const filtered = Boolean(search.value.trim() || hostSel.value || accessSel.value || selected);
+		const empty = rows.size === 0 && !cursor;
 		list.replaceChildren(...sections.length ? sections : [emptyState({
-			title: t("sessions_no_matches"),
-			text: t(cursor ? "sessions_more_hint" : "sessions_empty_hint")
+			title: t(empty && !filtered ? "sessions_empty" : "sessions_no_matches"),
+			text: empty && !filtered ? null : t(cursor ? "sessions_more_hint" : "sessions_empty_hint")
 		})]);
+		count.hidden = empty;
+		pageNote.hidden = empty;
+		pathsIntro.hidden = !empty || filtered;
 		scopeNote.textContent = t(cursor ? "sessions_scope_note" : "sessions_scope_exact");
 		count.textContent = t(cursor ? "sessions_showing" : "sessions_showing_exact", {
 			shown: visible,
@@ -55742,7 +55771,7 @@ function sessionErrorBox(e, action = null, options = {}) {
 		class: "session-error",
 		role: "alert",
 		"data-session-error": typeof e?.code === "string" ? e.code : ""
-	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, sessionErrorLine(e)), action ? h("button", {
+	}, h("p", { class: "session-error-line" }, icon("circle-alert", { size: 16 }), h("span", {}, options.summary || sessionErrorLine(e)), action ? h("button", {
 		type: "button",
 		class: "session-error-action",
 		onclick: action.run
@@ -55811,7 +55840,7 @@ async function viewSession(main, host, sid, context = null) {
 		class: "workspace-result",
 		"data-workspace-result": ""
 	});
-	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30;
+	let messageOffset = 0, nextMessageOffset = null, firstMessages = true, messageRequest = 0, messageWindow = 30, messageFailure = null;
 	const readingSupported = state.caps?.features?.session_reading?.version === 1;
 	const saveReading = async (action, params, preconditions = {}) => {
 		const op = await submit(action, {
@@ -55825,6 +55854,7 @@ async function viewSession(main, host, sid, context = null) {
 	const conversation = conversationPanel({
 		h,
 		t,
+		errorBox,
 		when: sessionWhen,
 		guard: () => assertView(connection),
 		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
@@ -56694,6 +56724,7 @@ async function viewSession(main, host, sid, context = null) {
 			nextMessageOffset = read.next_offset;
 			firstMessages = false;
 			paintReadingDetail(readingSupported ? read.reading : null);
+			messageFailure = null;
 			conversation.update(read.messages, readingSupported ? {
 				...read,
 				restore,
@@ -56702,10 +56733,7 @@ async function viewSession(main, host, sid, context = null) {
 			} : { next_offset: read.next_offset });
 		} catch (error) {
 			if (["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error?.code) || request !== messageRequest) throw error;
-			conversation.fail({
-				title: error?.status === 413 ? t("session_err_too_large") : t("message_window_failed"),
-				retry: () => refresh().catch(() => {})
-			});
+			messageFailure = error;
 			throw error;
 		}
 	};
@@ -56811,12 +56839,22 @@ async function viewSession(main, host, sid, context = null) {
 				}
 				readReady = false;
 				updateControls();
+				readError?.remove();
+				const messagesFailed = messageFailure === error;
 				readError = sessionErrorBox(error, {
 					label: t("ui_retry"),
 					run: () => refresh().catch(() => {})
-				}, { within: status });
+				}, {
+					within: messagesFailed ? conversation.box : status,
+					summary: messagesFailed ? t(error?.status === 413 ? "session_err_too_large" : "message_window_failed") : null
+				});
 				readError.error = error;
-				if (!withdrawn) status.replaceChildren(readError);
+				if (!withdrawn) {
+					if (messagesFailed) {
+						status.replaceChildren();
+						conversation.fail({ error: readError });
+					} else status.replaceChildren(readError);
+				}
 				scheduleRetry();
 				throw error;
 			}
@@ -59127,10 +59165,16 @@ async function viewProjects(main) {
 						if (await change(msg, "project.update", { project_id: p.project_id }, { archived: true }, { expected_version: p.version }, `project.archive.${p.project_id}`) || STALE.includes(lastFailure)) render();
 					}
 				}, t("archive"))));
-				const row = indent(h("div", { class: "row tree" }, h("div", { class: "grow" }, h("a", {
+				const rowCounts = counts(p.counts).filter(Boolean);
+				const compactCounts = rowCounts.map((node) => node.dataset.projectCount === "completion" ? `${p.counts.done}/${p.counts.total}` : t(node.dataset.projectCount === "doing" ? "project_row_active" : "project_row_review", { count: node.dataset.projectCount === "doing" ? p.counts.doing : p.counts.awaiting_approval })).join(" · ");
+				rowCounts.forEach((node) => node.classList.add("record-row-count"));
+				const row = indent(h("div", { class: "row tree record-row" }, h("div", { class: "grow" }, h("a", {
 					class: "title",
 					href: `#/project/${p.project_id}`
-				}, p.name), p.description ? h("div", { class: "muted clamp" }, p.description) : null), ...counts(p.counts), may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null), depth);
+				}, p.name), p.description ? h("div", { class: "muted clamp" }, p.description) : null), h("div", { class: "record-row-meta" }, ...rowCounts, h("span", {
+					class: "record-row-summary",
+					title: rowCounts.map((node) => node.textContent).join(" · ")
+				}, compactCounts), may("manage") ? h("span", { class: "tree-actions" }, d.toggle) : null)), depth);
 				if (may("manage")) d.box.prepend(h("div", { class: "actions" }, ...orderButtons(sibs, i, "project_id", run)));
 				if (may("manage")) row.querySelector(".tree-actions").prepend(treeInteractions({
 					h,
@@ -59443,10 +59487,15 @@ async function viewProject(main, pid) {
 				dr.open();
 			}
 			const done = w.steps.filter((s) => s.done).length;
-			const row = indent(h("div", { class: "row tree" }, stateChip(w.completion), h("div", { class: "grow" }, h("a", {
+			const rowState = () => {
+				const pill = stateChip(w.completion);
+				pill.classList.add("record-row-status");
+				return pill;
+			};
+			const row = indent(h("div", { class: "row tree record-row" }, rowState(), h("div", { class: "grow" }, h("a", {
 				class: "title",
 				href: `#/item/${w.work_item_id}`
-			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null), depth);
+			}, w.title), w.derived_from ? h("span", { class: "muted" }, " ⑂") : null), h("div", { class: "record-row-meta" }, rowState(), w.steps.length ? chip(`${done}/${w.steps.length}`) : null, may("manage") && !p.archived ? h("span", { class: "tree-actions" }, dr.toggle) : null)), depth);
 			if (may("manage") && !p.archived) dr.box.prepend(h("div", { class: "actions" }, ...orderButtons(sibs, i, "work_item_id", run)));
 			if (may("manage") && !p.archived) row.querySelector(".tree-actions").prepend(treeInteractions({
 				h,

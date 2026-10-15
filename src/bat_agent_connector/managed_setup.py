@@ -25,12 +25,11 @@ from urllib.parse import urlsplit
 from . import dashboard_sync, platform_files, service
 from ._private_files import read_private
 from .artifact_host import ArtifactHost
-from .checkpoints import SshGitRunner
 from .client import BatClient
-from .config import DEFAULT_BAT_PROFILES_DIR, normalize_fingerprint, parse_config, tomllib
+from .config import DEFAULT_BAT_PROFILES_DIR, git_transport, normalize_fingerprint, parse_config, tomllib
 from .errors import ConfigError, TokenUnavailable
 from .github import GitHubClient
-from .operations import RERUN, TERMINAL, ActionDef, OperationError, Uncertain
+from .operations import RERUN, TERMINAL, ActionDef, NeedsAttention, OperationError, Uncertain
 from .redact import redact, redact_secrets, register_secret
 from .task_verifier import parse_settings
 
@@ -181,6 +180,7 @@ def state(daemon, principal):
     for name, host in daemon.fleet.config.hosts.items():
         client = daemon.fleet._clients.get(name)
         hosts.append({"name": name, "url": host.url, "fingerprint": host.fingerprint,
+            "git": host.git, "git_status": daemon.ops.context["git_runner"].status(name),
             "profile_id": host.profile_id, "writes": host.writes, "orchestrate": host.orchestrate,
             "shared_clone_worktrees": host.shared_clone_worktrees,
             "managed_roots": list(host.managed_roots), "connected": bool(client and client.connected),
@@ -259,11 +259,24 @@ def _candidate(daemon, action, target, params, *, expired=False):
         name = target.get("host")
         if set(target) != {"host"} or not isinstance(name, str) or not HOST.fullmatch(name):
             raise _error("INVALID_TARGET", "Choose a stable logical host name")
-        allowed = {"url", "fingerprint", "profile_id", "secret_ref", "import_profile_id", "writes", "orchestrate", "managed_roots", "ssh_alias", "shared_clone_worktrees"}
+        allowed = {"url", "fingerprint", "profile_id", "secret_ref", "import_profile_id", "writes", "orchestrate", "managed_roots", "ssh_alias", "shared_clone_worktrees", "git", "local_confirmation"}
         if set(params) - allowed:
             raise _error("INVALID_PARAMS", "Only reviewed host connection and permission fields are accepted")
         existing = document.setdefault("hosts", {}).get(name, {})
         host = copy.deepcopy(existing)
+        try:
+            mode = git_transport(params.get("git", host.get("git", "ssh")))
+        except ConfigError:
+            raise _error("HOST_GIT_INVALID", "Host Git transport must be exactly ssh or local") from None
+        if "local_confirmation" in params and type(params["local_confirmation"]) is not bool:
+            raise _error("LOCAL_GIT_CONFIRMATION_REQUIRED", "Local Git requires an explicit same-computer and same-filesystem assertion")
+        if existing and mode != existing.get("git", "ssh"):
+            raise _error("HOST_IDENTITY_CHANGED", "Use a new host name when changing its Git transport", 409)
+        if mode == "local" and not existing and params.get("local_confirmation") is not True:
+            raise _error("LOCAL_GIT_CONFIRMATION_REQUIRED", "Confirm BAT and central share this computer and filesystem")
+        # Preserve old documents byte-for-byte on a no-op when mode was omitted.
+        if "git" in params or mode == "local":
+            host["git"] = mode
         selected = params.get("import_profile_id")
         if selected is not None:
             profiles, _ = _profiles(document)
@@ -369,12 +382,17 @@ def _admit(action):
         if _busy(daemon):
             raise _error("SETUP_BUSY", "Wait for central operations and tasks to settle before changing connections", 409)
         try:
-            _, _, _, before, after = _candidate(daemon, action, target, params)
+            config, document, _, before, after = _candidate(daemon, action, target, params)
         except ConfigError:
             raise _error("INVALID_CONFIGURATION", "Check the selected host trust, roots and connection settings") from None
         if before != pre["config_revision"]:
             raise _error("CONFIGURATION_CHANGED", "Configuration changed; review setup again", 409)
-        return {**dashboard_sync.identity(ops.journal, principal), "before_revision": before, "after_revision": after}
+        binding = {**dashboard_sync.identity(ops.journal, principal), "before_revision": before, "after_revision": after}
+        if action == "setup.host":
+            runner = daemon._git_runner(config, {**daemon.adapter.verifier.settings.ssh_hosts, **_aliases(document)})
+            binding["git_execution"] = {target["host"]: runner.execution_binding(target["host"])}
+            binding["local_confirmation"] = params.get("local_confirmation") is True
+        return binding
     return admit
 
 
@@ -461,7 +479,7 @@ def _verification(document):
     return parse_settings({"verification": {"commands": commands, "timeout_s": timeout}})
 
 
-def _activate(daemon, config, document, revision=None):
+def _activate(daemon, config, document, revision=None, *, runner=None):
     if revision and daemon.ops.context.get("managed_setup_active_revision") == revision:
         return []
     # Prepare all adapters before changing live references; installation publication
@@ -472,7 +490,7 @@ def _activate(daemon, config, document, revision=None):
     if "verification" in document.get("managed_setup", {}):
         verification = _verification(document)
         settings = dataclasses.replace(settings, commands=verification.commands, timeout_s=verification.timeout_s)
-    runner = SshGitRunner(aliases)
+    runner = runner or daemon._git_runner(config, aliases)
     artifact = ArtifactHost(aliases, daemon.ops.context["artifact_host"].timeout_s)
     try:
         github = GitHubClient(config.github) if config.github.token_ref else None
@@ -501,16 +519,26 @@ def _activate(daemon, config, document, revision=None):
     return old
 
 
+def _require_setup_identity(daemon, binding):
+    if (binding.get("principal_id") != daemon.managed_installation["principal_id"]
+            or binding.get("server_id") != dashboard_sync._metadata(daemon.journal)["server_id"]):
+        raise NeedsAttention("SETUP_IDENTITY_CHANGED", "Original setup identity is unavailable")
+    locations = binding.get("git_execution") or {}
+    if any(location["installation_id"] != daemon.managed_installation.get("installation_id")
+           for location in locations.values()):
+        raise NeedsAttention("SETUP_IDENTITY_CHANGED", "Original setup installation is unavailable")
+
+
 async def _run(ctx):
     daemon = ctx.service.context["daemon"]
     root = _installation(daemon)
     binding = ctx.admission_binding or {}
-    if binding.get("principal_id") != daemon.managed_installation["principal_id"]:
-        raise _error("SETUP_IDENTITY_CHANGED", "Original setup identity is unavailable", 409)
+    _require_setup_identity(daemon, binding)
     lock = ctx.service.context.setdefault("managed_setup_lock", asyncio.Lock())
     async with lock:
         path = root / "config" / "hosts.toml"
         async def reconcile(_request):
+            _require_setup_identity(daemon, binding)
             _, _, document, revision = _configuration(daemon)
             if revision == binding["after_revision"]:
                 old = _activate(daemon, parse_config(document, path), document, revision)
@@ -525,10 +553,15 @@ async def _run(ctx):
             config, document, encoded, before, after = _candidate(daemon, ctx.op["action"], ctx.target, ctx.params, expired=True)
             if before != binding["before_revision"] or after != binding["after_revision"]:
                 raise _error("CONFIGURATION_CHANGED", "Setup inputs or configuration changed; review again", 409)
+            runner = daemon._git_runner(config,
+                {**daemon.adapter.verifier.settings.ssh_hosts, **_aliases(document)})
+            if ctx.op["action"] == "setup.host" and binding.get("git_execution") is not None:
+                if binding["git_execution"] != {ctx.target["host"]: runner.execution_binding(ctx.target["host"])}:
+                    raise _error("GIT_EXECUTION_LOCATION_CHANGED", "Original setup execution location changed", 409)
             try:
                 if ctx.op["action"] == "setup.host":
                     proof = await _probe_host(config, ctx.target["host"])
-                    if ctx.params.get("ssh_alias"):
+                    if config.host(ctx.target["host"]).git == "ssh" and ctx.params.get("ssh_alias"):
                         await _probe_ssh(ctx.params["ssh_alias"])
                 elif ctx.op["action"] == "setup.repository":
                     proof = await _probe_repository(config, ctx.target["repository"], ctx.params["host"], ctx.params["workspace_id"])
@@ -542,15 +575,18 @@ async def _run(ctx):
                 raise _error("SETUP_PROBE_FAILED", "Connection or account verification failed; check trust, sign-in and reachability", 409) from None
             ctx.check_cancel()
             # No await between the final guards, publication and activating the parsed config.
+            _require_setup_identity(daemon, binding)
             if _busy(daemon, ctx.operation_id) or _configuration(daemon)[3] != before:
                 raise _error("CONFIGURATION_CHANGED", "Work or configuration changed during verification; review again", 409)
             platform_files.atomic_write(path, encoded)
-            old = _activate(daemon, config, document, after)
+            old = _activate(daemon, config, document, after, runner=runner)
             await asyncio.gather(*(client.close() for client in old), return_exceptions=True)
             return {"configured": True, "revision": after, **proof}
         try:
             return await ctx.step("managed_configuration", apply,
-                request={"before_revision": binding["before_revision"], "after_revision": binding["after_revision"]},
+                request={"before_revision": binding["before_revision"], "after_revision": binding["after_revision"],
+                         **({"git_execution": binding["git_execution"], "local_confirmation": binding["local_confirmation"]}
+                            if "git_execution" in binding else {})},
                 reconcile=reconcile)
         except OSError:
             # Even a failure writing the final journal receipt must retain the original

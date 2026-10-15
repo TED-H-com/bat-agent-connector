@@ -263,7 +263,7 @@ try {
     await readonly.getByTestId('deployment-rollback').first().waitFor();
     assert.ok(await readonly.getByTestId('deployment-rollback').first().isDisabled());
     assert.ok(await readonly.getByTestId('deployment-retry').first().isDisabled());
-    assert.match(await readonly.locator('[data-environment="production"]').innerText(), new RegExp(label(lang, 'Requires deploy scope', '需要 deploy 權限')));
+    assert.match(await readonly.locator('[data-environment="production"]').innerText(), new RegExp(label(lang, 'Needs Deploy access', '需要部署權限')));
     await clean(readonly);
     assert.deepEqual(errors, []);
     await viewer.close();

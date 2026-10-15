@@ -71,4 +71,3 @@ export function sessionPill(session) {
   if (status === "running") return {key: "sessions_pill_running", tone: "info", status};
   return null;
 }
-

@@ -2,7 +2,7 @@
 
 下方 commit 引用使用重寫後公開歷史中保留的對應來源；CI 與審查結果仍描述當時的執行，不代表對重寫後 commit 重新驗證。目前驗證及下載方式見[實作狀態](../product/implementation-status.md#目前續作)。
 
-接續 [前輪整合](2026-10-08-tauri-v2.md)；追蹤 [#55](https://github.com/teddashh/bat-agent-connector/issues/55)。
+接續 [前輪整合](2026-10-08-tauri-v2.md)；追蹤 [#55](https://github.com/TED-H-com/bat-agent-connector/issues/55)。
 產品負責人澄清 v1/v2 是同一產品、不同 UI 設計修訂，共用功能 backlog。Tauri 介面、中央 Python authority、人工唯讀、排除 Hub importer 的既定決策保留。
 最新 exact-head CI、合併與 外部安裝版本 證據在 #55 關聯 PR，不能把以下個別分支結果當整組 full。
 

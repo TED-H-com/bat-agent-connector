@@ -98,6 +98,16 @@ def format_fingerprint(hex64: str) -> str:
     return ":".join(hex64[i : i + 2] for i in range(0, len(hex64), 2))
 
 
+class GitTransportConfigError(ConfigError):
+    code = "HOST_GIT_INVALID"
+
+
+def git_transport(value: object) -> str:
+    if type(value) is not str or value not in ("ssh", "local"):
+        raise GitTransportConfigError("host git must be exactly ssh or local")
+    return value
+
+
 @dataclass
 class HostConfig:
     name: str
@@ -117,6 +127,10 @@ class HostConfig:
     managed_roots: tuple[str, ...] = ()
     shared_clone_worktrees: bool = True
     confinement: dict = field(default_factory=dict)
+    git: str = "ssh"
+
+    def __post_init__(self) -> None:
+        git_transport(self.git)
 
     def __repr__(self) -> str:  # never include token material
         return f"HostConfig(name={self.name!r}, url={self.url!r}, writes={self.writes}, orchestrate={self.orchestrate})"
@@ -685,6 +699,7 @@ def parse_config(data: dict, path: Path | None = None) -> Config:
             managed_roots=managed_roots,
             shared_clone_worktrees=shared,
             confinement=confinement,
+            git=git_transport(h.get("git", "ssh")),
         )
     s = data.get("safety") or {}
     safety = SafetyConfig(

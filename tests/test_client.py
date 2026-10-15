@@ -275,3 +275,52 @@ async def test_frames_never_contain_token_after_auth(mock):
         await c.invoke("workspace:load", {"profileId": "default"})
     non_auth = [f for f in mock.frames if f.get("type") != "auth"]
     assert TOKEN not in json.dumps(non_auth)
+
+
+@pytest.mark.parametrize("reload", [False, True])
+@pytest.mark.parametrize("change", ["git", "installation_id", "server_id"])
+async def test_git_location_is_rechecked_after_connect_before_bat_write(mock, client_send_grant, controller_context, reload, change):
+    from types import SimpleNamespace
+
+    from bat_agent_connector import api_auth, host_git
+    from bat_agent_connector.operations import ActionDef, OperationService
+
+    client = client_for(mock, writes=True)
+    config = SimpleNamespace(hosts={"h1": client.host})
+    ops = OperationService(controller_context[0])
+    identity = {"installation_id": "fixture-install", "server_id": "fixture-server"}
+    ops.context["git_runner"] = host_git.HostGitRunner(config, {"h1": "fixture-bat"}, **identity,
+                                                    current_identity=lambda: dict(identity))
+    async def unused(ctx):
+        raise AssertionError("this test only exercises the final frame gate")
+    ops.register(ActionDef("fixture.frame", "manage", "Fixture frame", unused))
+    operation = ops.create(api_auth.Principal("test-operator", frozenset({"manage"})), action="fixture.frame",
+                           target={"host": "h1"}, idempotency_key="original-frame-key")[0]
+    original_connect = client.connect
+    entered, release = asyncio.Event(), asyncio.Event()
+    async def delayed_connect():
+        entered.set()
+        await release.wait()
+        await original_connect()
+    client.connect = delayed_connect
+    try:
+        with host_git.execution(ops, operation["operation_id"]):
+            send = asyncio.create_task(client.invoke("claude:send-message",
+                {"sessionId": "sess-claude-0001", "prompt": "fixture"}, grant=client_send_grant))
+            await asyncio.wait_for(entered.wait(), 2)
+            if change == "git":
+                client.host.git = "local"
+            else:
+                identity[change] = "different-identity"
+            if reload:
+                ops.context["git_runner"] = host_git.HostGitRunner(config, {"h1": "fixture-bat"}, **identity,
+                                                                current_identity=lambda: dict(identity))
+            release.set()
+            with pytest.raises(host_git.NeedsAttention) as error:
+                await asyncio.wait_for(send, 5)
+            assert error.value.code == "GIT_EXECUTION_LOCATION_CHANGED"
+        assert not any(frame["channel"] == "claude:send-message" for frame in mock.invokes)
+    finally:
+        release.set()
+        await client.close()
+        await ops.drain()

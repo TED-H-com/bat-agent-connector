@@ -2,7 +2,7 @@
 
 版本 1.2\
 更新日期 2026 年 10 月 11 日\
-適用專案 teddashh/bat-agent-connector\
+適用專案 TED-H-com/bat-agent-connector\
 用途 供 使用者 與開發 agents 校正範圍 拆分工作與驗收
 
 本計畫將現有 Better Agent Connector 擴充為以 workspace 為單位的專案管理與交付服務。Tauri client 提供 Fleet、Dashboard、五種 PM 視圖與 agent 討論；workspace 所在 server 保存計畫、工作關聯與操作紀錄。人與 coding agents 保留各自的 BAT、VS Code 或 CLI 使用方式，彼此不接管現有 session。
@@ -101,7 +101,7 @@ Microsoft 的協定正名為 AHP。AHP 與 ACP 是可組合的不同層，不能
 
 現有 pm_providers.py 主要是 experimental Goose PM 的 provider 與 pre-dispatch fallback 設定，不能視為本計畫的 workspace PM 已完成。現有 resource_policy.py 已保護 manual／unknown，但 authorize_session 介面沒有 caller/controller 參數；需要補齊「不同 connector controller 也不能互相控制」的產品契約。現有 work_items 的 completion 還有 awaiting_approval 語意，需有意識改造為證據與政策驅動的進度呈現。
 
-程式依據：[共用前端](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/docs/design/shared-frontend.md)、[TaskDaemon](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/task_daemon.py)、[Journal](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/task_journal.py)、[Resource policy](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/resource_policy.py)、[現有 PM provider](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/pm_providers.py)、[Work items](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/work_items.py)
+程式依據：[共用前端](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/docs/design/shared-frontend.md)、[TaskDaemon](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/task_daemon.py)、[Journal](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/task_journal.py)、[Resource policy](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/resource_policy.py)、[現有 PM provider](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/pm_providers.py)、[Work items](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/work_items.py)
 
 ## 4 系統架構與資料責任
 
@@ -793,7 +793,7 @@ Dashboard 將 token 流量、具價格版本的 API 費用估算、實際帳單�
 
 Multi-AI Chat Desktop 可借用角色、討論階段、保留分歧、snapshot 與 Markdown provenance。Multi-AI Terminal 可借用 planning／review、digest、verification report、event 去重與部分 native adapter。
 
-不把舊 WebView 登入／DOM automation 或整套 MAT server/store 搬成第二核心。MAT 的 interrupt steering 與解析失敗後 degraded advance，必須改成符合本計畫的工作不中斷與變更採用語意。[Chat Desktop](https://github.com/teddashh/multi-ai-chat-desktop/blob/74d16bae3127a6a93f3732425e56c1734ce25572/README.md)、[MAT](https://github.com/teddashh/multi-ai-terminal/blob/97c421ac22f24fbad5d1cbef68dab228cf7abd05/README.md)、[MAT decision](https://github.com/teddashh/multi-ai-terminal/blob/97c421ac22f24fbad5d1cbef68dab228cf7abd05/server/src/orchestrator/decision.ts)
+不把舊 WebView 登入／DOM automation 或整套 MAT server/store 搬成第二核心。MAT 的 interrupt steering 與解析失敗後 degraded advance，必須改成符合本計畫的工作不中斷與變更採用語意。[Chat Desktop](https://github.com/TED-H-com/multi-ai-chat-desktop/blob/74d16bae3127a6a93f3732425e56c1734ce25572/README.md)、[MAT](https://github.com/TED-H-com/multi-ai-terminal/blob/97c421ac22f24fbad5d1cbef68dab228cf7abd05/README.md)、[MAT decision](https://github.com/TED-H-com/multi-ai-terminal/blob/97c421ac22f24fbad5d1cbef68dab228cf7abd05/server/src/orchestrator/decision.ts)
 
 ### 12.8 各模式的討論契約
 
@@ -962,7 +962,7 @@ flowchart TD
 
 - 自動修復使用新的自有 repair worktree；不注入原本人類或其他 controller 的 session。
 
-既有 integration.preview／apply／handoff 已提供可沿用的來源固定、整合區與結果讀回設計。[現有 Integration 契約](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/docs/design/integration.md)
+既有 integration.preview／apply／handoff 已提供可沿用的來源固定、整合區與結果讀回設計。[現有 Integration 契約](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/docs/design/integration.md)
 
 ### 13.4 Merge
 
@@ -986,7 +986,7 @@ GitHub merge 的 expected head SHA 可以防止對已變更的 PR head 沿用舊
 
 沿用現有 deployment engine，調用明確指定的 GitHub Actions workflow 或既有部署流程。Receipt 保存 source revision、environment、workflow/run 與驗證結果。
 
-同一 production environment 使用共同的部署排序機制。舊 run 不應在新版本之後覆蓋環境；自動取消策略不能隨意中斷已進入不可重入階段的部署。Rollback 指向已知可用 artifact 或 revision，保留可追溯操作。[GitHub workflow concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)、[現有 Deployment](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/deployment.py)
+同一 production environment 使用共同的部署排序機制。舊 run 不應在新版本之後覆蓋環境；自動取消策略不能隨意中斷已進入不可重入階段的部署。Rollback 指向已知可用 artifact 或 revision，保留可追溯操作。[GitHub workflow concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)、[現有 Deployment](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/src/bat_agent_connector/deployment.py)
 
 Dashboard 可以提供直接的 merge／deploy 操作，也可啟用條件明確的自動政策。按鈕與 MCP 共用同一服務，畫面顯示實際目標、版本與結果；無需每一步都重新詢問，但不能把舊預覽當成永遠有效。
 
@@ -1154,7 +1154,7 @@ API、MCP 與 UI 使用相同 command service。可讀取同一筆 operation 了
 - project-maintainer：讀發布基準、核對來源涵蓋、整理上游／Issue／PR、去重、按政策建立維護工作與週報；新方向回 Idea／Planning。
 - project-lifecycle：解釋階段與閒置判斷、採用發布後政策、暫停／關閉／重開、處理在途結果；不隱含 GitHub archive 或 session 接管。
 
-每套 skill 都要寫明外部／其他 controller session 唯讀、如何查回不明 operation、如何引用 spec 與 evidence。Hermes／Grokbot 的說明由同一份契約產出，不各自維護相互矛盾的規則。[現有 skills](https://github.com/teddashh/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/docs/agent-skills.md)
+每套 skill 都要寫明外部／其他 controller session 唯讀、如何查回不明 operation、如何引用 spec 與 evidence。Hermes／Grokbot 的說明由同一份契約產出，不各自維護相互矛盾的規則。[現有 skills](https://github.com/TED-H-com/bat-agent-connector/blob/05396b1a5b778de64bbf6df4325daf7462d2dd53/docs/agent-skills.md)
 
 ### 14.4 維護與生命週期的共用契約
 

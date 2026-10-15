@@ -6,7 +6,7 @@ from html import escape
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1] / "site"
-repo = "https://github.com/teddashh/bat-agent-connector"
+repo = "https://github.com/TED-H-com/bat-agent-connector"
 image_sizes = {entry["file"]: entry["image_size"] for entry in json.loads((root / "images/manifest.json").read_text())["images"]}
 
 
@@ -757,13 +757,13 @@ head = f'''<!doctype html>
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="theme-color" content="#eff2f6">
 <title>{title}</title><meta name="description" content="{desc}">
-<link rel="canonical" href="https://teddashh.github.io/bat-agent-connector/">
-<link rel="alternate" hreflang="en" href="https://teddashh.github.io/bat-agent-connector/">
-<link rel="alternate" hreflang="zh-Hant" href="https://teddashh.github.io/bat-agent-connector/?lang=zh-TW">
-<link rel="alternate" hreflang="x-default" href="https://teddashh.github.io/bat-agent-connector/">
+<link rel="canonical" href="https://ted-h-com.github.io/bat-agent-connector/">
+<link rel="alternate" hreflang="en" href="https://ted-h-com.github.io/bat-agent-connector/">
+<link rel="alternate" hreflang="zh-Hant" href="https://ted-h-com.github.io/bat-agent-connector/?lang=zh-TW">
+<link rel="alternate" hreflang="x-default" href="https://ted-h-com.github.io/bat-agent-connector/">
 <meta property="og:type" content="website"><meta property="og:title" content="{title}">
-<meta property="og:description" content="{desc}"><meta property="og:url" content="https://teddashh.github.io/bat-agent-connector/">
-<meta property="og:image" content="https://teddashh.github.io/bat-agent-connector/images/overview-en.png">
+<meta property="og:description" content="{desc}"><meta property="og:url" content="https://ted-h-com.github.io/bat-agent-connector/">
+<meta property="og:image" content="https://ted-h-com.github.io/bat-agent-connector/images/overview-en.png">
 <meta property="og:image:alt" content="Actual shared Dashboard with synthetic demonstration data">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css">
