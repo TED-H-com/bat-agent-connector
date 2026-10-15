@@ -118,7 +118,7 @@ export function workspaceNavigation({h, t, api, guard, onEvents, namespace, erro
   };
   let catalogRows = null;
   const showReadError = error => {
-    const detail = error ? errorBox(error) : h('p', {class: 'muted'}, observedText(t, 'or_projects_unknown'));
+    const detail = error ? errorBox(error, {insideDetails:true}) : h('p', {class: 'muted'}, observedText(t, 'or_projects_unknown'));
     const label = t(pmWorkspace && !globalTree ? 'ui_work_links_unavailable' : 'ui_work_unavailable');
     status.replaceChildren(h('div', {class: 'workspace-read-error', 'data-work-read-error': ''},
       icon('circle-alert', {size: 20}),

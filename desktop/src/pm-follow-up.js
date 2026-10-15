@@ -66,7 +66,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
     ++serial;++sourceSerial;loaded=false;reading=false;head=null;plan=null;metadata=[];next=null;
     view.replaceChildren();choose.replaceChildren();more.hidden=true;clearSources();editor?.update();editorFold.hidden=true;
     if(retired){editor?.box.remove();}
-    status.replaceChildren(errorBox(error),h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>void refresh()},t('pm_fu_retry')));
+    status.replaceChildren(errorBox(error, {within:status}),h('button',{type:'button',class:'ui-button secondary ui-sm',onclick:()=>void refresh()},t('pm_fu_retry')));
   }
   function render(row) {
     view.replaceChildren();if(!row){view.append(emptyState({title:t('pm_fu_empty')}));return;}

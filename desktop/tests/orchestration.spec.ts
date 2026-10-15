@@ -2,6 +2,28 @@ import {test, expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
 import {orchestrationFixture, openOrchestration, chooseTarget, fillOrchestration, operationId, childId} from './orchestration-fixture';
 const primary = (form: any) => form.locator('button.primary');
+for (const locale of ['en-US', 'zh-TW']) for (const width of [1440, 390]) {
+  test(`Connector target and policy wording ${locale} ${width}`, async ({browser}) => {
+    const context = await browser.newContext({locale, colorScheme: 'light', viewport: {width, height: width === 390 ? 844 : 900}});
+    const page = await context.newPage(), state = await orchestrationFixture(page, false);
+    const form = await openOrchestration(page, 'relay'), zh = locale === 'zh-TW';
+    await form.getByRole('combobox', {name: zh ? '主機' : 'Host', exact: true}).selectOption('demo');
+    const target = form.getByRole('combobox', {name: zh ? '固定的受管理工作階段' : 'Exact managed session', exact: true});
+    await expect(target).toBeEnabled();
+    await target.selectOption('managed-exact');
+    await expect(form).toContainText(zh
+      ? '只可選用最新觀察的 Connector 受管工作階段，或 Connector 傳回的固定工作區 ID。Connector 會在產生影響前重新檢查政策。'
+      : 'Only fresh Connector-managed sessions or exact Connector workspace IDs are selectable. Connector rechecks policy before any effect.');
+    await expect(target).toHaveValue('managed-exact');
+    expect(await form.innerText()).not.toMatch(/\bcentral\b|中央/i);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const folder = process.env.POLISH_COPY_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/polish-copy-shots`;
+    await mkdir(folder, {recursive: true});
+    await page.screenshot({path: `${folder}/orchestration-${locale}-${width}.png`, fullPage: true});
+    expect(state.posts).toEqual([]); expect(state.errors).toEqual([]);
+    await context.close();
+  });
+}
 for (const locale of ['en-US', 'zh-TW']) test(`orchestration receipt statuses use shared labels ${locale}`, async ({browser}) => {
   const context = await browser.newContext({locale}), page = await context.newPage();
   const state = await orchestrationFixture(page, false, {status:'needs_attention'});

@@ -208,7 +208,11 @@ Sprints, observations, policy and baselines stay collapsed under their
 labels and do not replace the view. Each Report menu task opens on its own: Versions, Save
 report and Export report focus that task's first control. Export report presents its
 description, format, language and primary download/save action directly, without an
-inner disclosure. A phase change starts on Choose
+inner disclosure. Task focus waits for both the report read and the control's actual
+enabled state, including initial workspace and transport admission. Moving focus or
+closing the task cancels the pending focus handoff. Versions keeps Save hidden;
+saving a quality-evidence report opens the Save task explicitly.
+A phase change starts on Choose
 phase and does not submit a stage until one is chosen. Workspace settings show the
 bound plan's title and requirement text, including older revisions. Display labels are
 revalidated on refresh; revision and requirement ids stay in Details, with Unknown when
@@ -1130,8 +1134,8 @@ Details disclosure. Tailscale guidance belongs with an actual Fleet connection.
 Errors prefer a caller summary, then a known code's translation, then an explicitly
 localized API message or plain client Error message. Unknown server codes and
 programming errors use the generic summary; transport messages use their explicit
-NETWORK_ERROR or TIMEOUT code. Details appears only for additional technical facts,
-without an empty code or repeated summary. Refresh-cycle read-error gates remain
+NETWORK_ERROR or TIMEOUT code. Details contains the diagnostics export action and
+any additional technical facts, without an empty code or repeated summary. Refresh-cycle read-error gates remain
 unchanged.
 `errorBox(error, {summary})` lets a caller supply its own sentence without duplicating
 it. An Evidence work row reuses the rendered diagnostics inside its existing Details,
@@ -1151,3 +1155,20 @@ Meetings uses one plain empty sentence inside its own card: writers without a
 Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
 Its title and Refresh stay on the first row; the read-only reason wraps beneath
 the title when the inspector is narrow instead of being squeezed between them.
+
+## Diagnostics preview
+
+About retains its existing Settings frame and adds one build line and Export
+diagnostics. Error Details reuse the same entry point. The modal uses shared
+surface/type/spacing/overlay tokens, a compact source summary including stale host data, a wrapping,
+scrollable JSON preview and Save / Copy / Close. Native `<dialog>` makes the
+background inert; Tab wraps, Escape closes, and focus returns to the trigger.
+English and zh-TW share behavior. Only loaded session reads and an operation page
+are counted; unavailable sources remain unknown. Withdrawal clears preview facts
+and disables export actions together. See [the diagnostics contract](../docs/design/diagnostics.md).
+
+Diagnostics export stays inside error Details as a ghost action. Error renderers
+pass their destination via `within` (or `insideDetails: true` when constructing a
+detached disclosure) so code, server diagnostics and export reuse existing Details.
+An expanded session error can use up to 32% of viewport height so its sentence,
+diagnostics and export action fit together on phones; longer content still scrolls.

@@ -249,7 +249,7 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
   async function choose(id){const own=++ticket;active=null;rendered='';detail.replaceChildren();content.replaceChildren();candidateFields=[];requirementFields=[];resolution?.withdraw();adopt.update();if(!id)return;
     try{const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
       await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
-    catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));box.hidden=false;}}
+    catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}
   }
   function page(value,append=false){if(value?.workspace_id!==workspaceId||!Array.isArray(value.proposals)||value.proposals.some(row=>row.thread_id!==threadId||typeof row.proposal_id!=='string'))throw fail();
     const next=value.next_cursor;if(next!==null&&next!==undefined&&(!Number.isInteger(next)||next<1||append&&next<=cursor))throw fail();
@@ -265,10 +265,10 @@ export function planProposals({h,t,api,alive,form,input,labelled,caps,workspaceI
       // Re-read original sources even if the document digest is unchanged.
       if(id){const result=checked(await api('GET',endpoint+'/'+encodeURIComponent(id)));alive();if(own!==ticket)return;if(result.proposal_id!==id)throw fail();if(active?.proposal_id!==result.proposal_id)conflict=false;active=result;renderReview();
         await resolution?.refresh(adopted() ? result.adopted_revision_id : null);alive();if(own!==ticket)return;}
-    }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));box.hidden=false;}}
+    }catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}
     finally{if(own===ticket||!visible){loading=false;prepare.update();adopt.update();updateControls();}}
   }
-  async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error));box.hidden=false;}}finally{loading=false;updateControls();}}
+  async function loadMore(){if(cursor===null||loading)return;loading=true;const own=ticket;updateControls();try{const result=await api('GET',`${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=${cursor}&limit=20`);alive();if(own!==ticket)return;page(result,true);}catch(error){if(own===ticket){withdraw();notice.replaceChildren(errorBox(error, {within:notice}));box.hidden=false;}}finally{loading=false;updateControls();}}
   function withdraw(){ticket++;visible=false;active=head=latestId=null;rows=[];cursor=null;rendered='';candidateFields=[];requirementFields=[];picker.replaceChildren(h('option',{value:''},t('pcp_choose')));detail.replaceChildren();content.replaceChildren();notice.replaceChildren();more.hidden=true;reviewButton=null;resolution?.withdraw();prepare?.update();adopt?.update();}
   function composer(textarea){
     ask=actionButton({type:'button',class:'secondary','data-discussion-ask':'',onclick:()=>{

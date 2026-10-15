@@ -68,7 +68,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
     await expect(form.getByLabel('Roadmap name',{exact:true})).toHaveValue('A different owner renamed this');
     await expect(form.getByLabel('Milestone',{exact:true})).toHaveValue('Current agreed work');
     await form.getByLabel('Reason for this change',{exact:true}).fill('Use the currently agreed baseline');
-    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved centrally.');
+    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved in Connector.');
     expect(f.state.writes[0].body.params.title).toBe('A different owner renamed this');
     expect(f.state.writes[0].body.preconditions.expected_roadmap_version).toBe(4);
   });
@@ -83,7 +83,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
     await expect(form.getByLabel('Milestone',{exact:true})).toHaveValue('The submitted original work');
     await expect(form.getByLabel('Milestone',{exact:true})).toBeDisabled();
     await expect(page.locator('[data-pm-milestone]')).toContainText('Later unrelated baseline');
-    await form.getByRole('button',{name:'Check original request',exact:true}).click();await expect(form).toContainText('Saved centrally.');
+    await form.getByRole('button',{name:'Check original request',exact:true}).click();await expect(form).toContainText('Saved in Connector.');
     expect(f.state.writes[1].body).toEqual(original.body);expect(f.state.writes[1].idempotency_key).toBe(original.idempotency_key);
     expect(f.state.ops.size).toBe(1);
   });
@@ -98,7 +98,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
     await expect(work).toBeEnabled();await work.uncheck();await expect(work).toBeDisabled();
     await form.getByRole('checkbox',{name:'Members can sign in',exact:true}).check();await work.check();
     await form.getByLabel('Reason for this change',{exact:true}).fill('Explicitly select matching work and requirements');
-    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved centrally.');
+    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved in Connector.');
     expect(f.state.writes[0].body.params.milestones[0]).toMatchObject({requirement_ids:['login'],work_binding_ids:[oldBinding]});
   });
 
@@ -110,7 +110,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
     const selected=form.getByRole('checkbox',{name:'Members can sign in',exact:true});await selected.uncheck();await selected.check();
     await expect(form.locator(`[data-pm-work-binding="${oldBinding}"]`)).toBeChecked();
     await form.getByLabel('Reason for this change',{exact:true}).fill('Retain the original work association');
-    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved centrally.');
+    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved in Connector.');
     expect(errors).toEqual([]);expect(f.state.writes[0].body.params.milestones[0].work_binding_ids).toEqual([oldBinding]);
   });
 
@@ -120,7 +120,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
     await form.getByText('Associated work',{exact:true}).click();const historical=form.getByRole('checkbox',{name:/Previously selected work association/});
     await historical.uncheck();await historical.check();
     await form.getByLabel('Reason for this change',{exact:true}).fill('Keep the exact earlier association');
-    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved centrally.');
+    await form.getByRole('button',{name:'Adopt scheduling baseline',exact:true}).click();await expect(form).toContainText('Saved in Connector.');
     expect(f.state.writes[0].body.params.milestones[0].work_binding_ids).toEqual([oldBinding]);
   });
 
@@ -142,7 +142,7 @@ for(const native of [false,true])test.describe(native?'native Roadmap recovery a
       sequence:index,workspace_id:workspaceId,kind:'forecast',created_at:stamp+index,baseline_revision_id:bid,document:{milestones:[]}});
     await mountConversation(page,native,f.dispatch);await page.goto(path);await openPmSection(page, 'schedule');const history=page.locator('[data-pm-roadmap-history]');
     await history.locator(':scope > summary').click();await expect(history.locator('details')).toHaveCount(20);
-    const more=history.getByRole('button');f.history.failMore=true;await more.click();await expect(history).toContainText('History page unavailable');
+    const more=history.getByRole('button',{name:'More history',exact:true});f.history.failMore=true;await more.click();await expect(history).toContainText('History page unavailable');
     await expect(more).toBeEnabled();await more.click();await expect(history.locator(':scope > div > details')).toHaveCount(21);
     expect(f.history.pages).toEqual([0,20,20]);
   });

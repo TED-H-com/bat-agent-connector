@@ -40,7 +40,7 @@ function textFor(locale: Locale) {
   const project = demoProject(locale);
   return {
     zh, project, labels: registerLabels(project), rows: registerIds(project),
-    findingName: zh ? 'GitHub Issue #87' : 'GitHub issue #87',
+    findingName: zh ? 'GitHub 議題 #87' : 'GitHub issue #87',
     matching: (n: number) => zh ? `${n} 筆符合` : `${n} matching`,
     title: zh ? '問題與變更' : 'Issues & changes',
     totals: (counts: number[]) => (zh ? ['風險', '問題', '行動', '變更', '決策'] : ['Risk', 'Issue', 'Action', 'Change', 'Decision'])

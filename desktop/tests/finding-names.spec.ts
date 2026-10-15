@@ -11,7 +11,7 @@ function copyFor(locale: 'en' | 'zh-TW') {
   const zh = locale === 'zh-TW';
   return {
     zh,
-    issue: zh ? 'GitHub Issue #87' : 'GitHub issue #87',
+    issue: zh ? 'GitHub 議題 #87' : 'GitHub issue #87',
     pull: 'Dependabot PR #12',
     alert: zh ? '安全性警示：lodash' : 'Security alert: lodash',
     bare: zh ? '安全性警示 #5' : 'Security alert #5',

@@ -51,7 +51,7 @@ test("desktop UI uses IPC without a WebView credential", async ({page}) => {
   await page.goto("/dashboard/");
   await expect(page.getByText("Nothing needs you right now.")).toBeVisible();
   await page.locator("#live").click();
-  await expect(page.getByRole("heading", {name: "Desktop central connection"})).toBeVisible();
+  await expect(page.getByRole("heading", {name: "Desktop Connector connection"})).toBeVisible();
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
   expect(networkCalls).toBe(0);
   expect(await page.evaluate(() => JSON.stringify({...localStorage, ...sessionStorage}))).not.toContain("fixture-token");

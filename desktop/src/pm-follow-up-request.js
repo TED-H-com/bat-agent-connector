@@ -44,7 +44,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
     return {id:[...pending][0]??pointer?.thread_id??(drafts.size===1?[...drafts][0]:''),locked:pending.size===1};
   }
   function clear(){++serial;intake=null;thread=null;capability=null;request?.dispose();request=null;rows=[];next=null;targetLocked=false;body.replaceChildren();status.replaceChildren();}
-  function fail(error){++serial;thread=null;capability=null;request?.dispose();request=null;body.replaceChildren();status.replaceChildren(errorBox(error));onAccessFailure(error);}
+  function fail(error){++serial;thread=null;capability=null;request?.dispose();request=null;body.replaceChildren();status.replaceChildren(errorBox(error, {within:status}));onAccessFailure(error);}
   function navigation(){
     const selected=choices.get(intake.intake_id)||intake.document.thread_ref?.thread_id||'';
     chooser.replaceChildren(h('option',{value:''},t('pm_fa_thread_choose')),...rows.map(row=>h('option',{value:row.thread_id},row.title)));
