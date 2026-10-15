@@ -1169,5 +1169,7 @@ and disables export actions together. See [the diagnostics contract](../docs/des
 Diagnostics export stays inside error Details as a ghost action. Error renderers
 pass their destination via `within` (or `insideDetails: true` when constructing a
 detached disclosure) so code, server diagnostics and export reuse existing Details.
+Accepted-plan preview errors reuse the context panel's disclosure; closing the panel
+hides the sentence, diagnostics and export action together.
 An expanded session error can use up to 32% of viewport height so its sentence,
 diagnostics and export action fit together on phones; longer content still scrolls.

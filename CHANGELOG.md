@@ -10,7 +10,8 @@
   disabled primary action, and Discussions keeps New request with the composer
   actions. Context previews keep their specific stale or invalid reason, version
   conflicts keep the full draft-preservation guidance, and project header chips
-  stay compact on narrow screens.
+  stay compact on narrow screens. Accepted-plan preview diagnostics and their
+  export action reuse the context panel's disclosure.
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 

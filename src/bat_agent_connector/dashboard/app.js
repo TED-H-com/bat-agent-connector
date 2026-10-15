@@ -26875,7 +26875,10 @@ function pmContextBundle({ h, t, api, guard, caps, target, thread, errorBox }) {
 				preview = null;
 				verified = null;
 				details.replaceChildren();
-				status.replaceChildren(errorBox(error, { summary: clientErrors.has(error) ? error.message : t("pm_cb_unavailable") }));
+				status.replaceChildren(errorBox(error, {
+					summary: clientErrors.has(error) ? error.message : t("pm_cb_unavailable"),
+					within: status
+				}));
 			} finally {
 				loading = false;
 				update();

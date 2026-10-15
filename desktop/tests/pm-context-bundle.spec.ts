@@ -4,6 +4,7 @@ import {mkdirSync} from 'node:fs';
 import {mountConversation} from './conversation-fixture';
 import {pmRoute,workspaceId,threadId} from './pm-fixture';
 import {nativeFixture} from './pm-analysis-fixture';
+import {expectClientError, expectErrorDetails, expectNoNestedErrorDetails} from './api-error-assertions.ts';
 function fixture(){
   const f=nativeFixture();f.bat.available=true;
   const state={available:true,partial:false,revision:'1',denied:false,stale:false,invalid:false,reads:0};
@@ -78,22 +79,34 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) for (cons
         : locale === 'en' ? 'The accepted plan or its original sources are unavailable.' : '無法讀取已採用計畫或其原始來源。';
     await expect(box.locator('[data-error-summary]')).toHaveText(sentence);
     await expect(box.locator('[data-api-error]')).toHaveCount(1);
-    if (failure === 'stale' || failure === 'invalid') await expect(box.locator('[data-api-error] details')).toHaveCount(0);
+    const error = box.locator('[data-api-error]');
+    await expect(error.getByText(sentence, {exact: true})).toHaveCount(1);
+    await expectNoNestedErrorDetails(error);
+    await expect(error.locator('details')).toHaveCount(0);
+    if (failure === 'stale' || failure === 'invalid') await expectClientError(box, sentence);
     else {
-      await expect(box.locator('[data-error-details]')).toBeHidden();
-      await box.locator('[data-api-error] summary').click();
-      await expect(box.locator('[data-error-details] code')).toHaveText(failure === 'api' ? 'NOT_FOUND' : 'NETWORK_ERROR');
-      if (failure === 'api') await expect(box.locator('[data-error-details]')).toContainText('Original source unavailable');
-      await box.locator('[data-api-error] summary').click();
+      const code = failure === 'api' ? 'NOT_FOUND' : 'NETWORK_ERROR';
+      await expectErrorDetails(box, failure === 'api' ? 'Original source unavailable' : code, code);
     }
+    const exportAction = error.locator('[data-export-diagnostics]');
+    await expect(exportAction).toBeVisible();
+    await expect(exportAction).toHaveText(locale === 'en' ? 'Export diagnostics' : '匯出診斷資料');
+    // The panel owns the disclosure: its sentence and diagnostics close together.
+    await box.locator(':scope > summary').click();
+    await expect(error.locator('[data-error-summary]')).toBeHidden();
+    await expect(error.locator('[data-error-details]')).toBeHidden();
+    await expect(exportAction).toBeHidden();
+    await box.locator(':scope > summary').click();
+    await expect(error.locator('[data-error-summary]')).toHaveText(sentence);
+    await expect(exportAction).toBeVisible();
     await expect(box.locator('[data-pm-context-preview]')).toBeEmpty();
     await expect(box.locator('input[type=hidden]')).toHaveValue(original);
     await expect(request.locator('textarea')).toHaveValue('Retain this analysis draft');
     await expect(request.locator('button[type=submit]')).toBeDisabled(); expect(f.state.writes).toEqual([]);
-    const folder = process.env.BATC_FIX1_SHOTS;
-    if (folder && failure === 'stale') {
+    const folder = process.env.PM_CONTEXT_ERROR_SCREENSHOTS || (failure === 'stale' ? process.env.BATC_FIX1_SHOTS : undefined);
+    if (folder && (failure === 'stale' || failure === 'api')) {
       mkdirSync(folder, {recursive: true}); await box.locator('[data-api-error]').scrollIntoViewIfNeeded();
-      await page.screenshot({animations: 'disabled', path: `${folder}/context-stale-${locale}-${width}.png`});
+      await page.screenshot({animations: 'disabled', path: `${folder}/context-${failure}-${locale}-${width}.png`});
     }
     expect(errors).toEqual([]); expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   } finally {await context.close();}

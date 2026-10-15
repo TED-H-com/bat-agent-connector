@@ -40,7 +40,7 @@ export function pmContextBundle({h,t,api,guard,caps,target,thread,errorBox}) {
     } catch(error){
       try{guard?.();}catch{return;}
       if(ticket!==generation||caps()?.actor!==actor||request?.locked())return;
-      preview=null;verified=null;details.replaceChildren();status.replaceChildren(errorBox(error,{summary:clientErrors.has(error)?error.message:t('pm_cb_unavailable')}));
+      preview=null;verified=null;details.replaceChildren();status.replaceChildren(errorBox(error,{summary:clientErrors.has(error)?error.message:t('pm_cb_unavailable'),within:status}));
     }
     finally{loading=false;update();request?.update();}
   }},t('pm_cb_preview'));
