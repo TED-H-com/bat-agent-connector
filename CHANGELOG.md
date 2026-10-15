@@ -2,10 +2,40 @@
 
 ## Next release (unreleased)
 
+- PM refresh, Lifecycle, accepted-plan preview and report export failures show one
+  localized message with diagnostics in Details. Issue mappings without a title
+  read "Untitled issue". Projects and Resources open their creation forms on
+  request and keep drafts and original-request recovery; a new project opens its
+  page once its receipt is verified. Refused and terminal PM requests hide their
+  disabled primary action, and Discussions keeps New request with the composer
+  actions. Context previews keep their specific stale or invalid reason, version
+  conflicts keep the full draft-preservation guidance, and project header chips
+  stay compact on narrow screens. Accepted-plan preview diagnostics and their
+  export action reuse the context panel's disclosure.
+  Dependencies keeps its capture action hidden on other views after refresh.
+
 - Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
   Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
   provides installation-aware MCP guidance and a read-only PM eligibility check, with
   localized reasons and a return link to the originating discussion.
+
+- Lazy PM loading keeps its loading status separate from each panel's status
+  slot, while revealing settled content and removing its mask together.
+
+- Issues and Governance retain requirement names on direct opening with one
+  shared accepted-plan read, without loading the Requirements or Board views.
+  Unknown names no longer claim that a saved Governance source is missing.
+- Follow-up preparation and assessment accept the Connector's nested discussion
+  identity while retaining their thread and workspace checks.
+
+- Bind the demo follow-up assessment to its fixed Planning discussion using the backend-supported discussion mode and original version.
+
+- PM workspaces load the selected view and open secondary tools on demand,
+  including on first load and manual Refresh. Hidden event updates wait until
+  opened, while workspace withdrawal and lifecycle admission checks remain intact.
+
+- The member sign-in demo names its human participant `mei.lin` while retaining
+  the existing read-only role, agent names and stable record identities.
 
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 

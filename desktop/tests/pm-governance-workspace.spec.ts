@@ -38,7 +38,16 @@ for(const native of [false,true])test.describe(native?'native governance workspa
     expect(f.governance.state.writes).toHaveLength(0);
   });
   test('a lost finding response reloads its original request without creating a second finding',async({page})=>{
-    const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(route);await openPmSection(page, 'issues');await openAction(page,'record');
+    const f=fixture();
+    let firstRead=true;
+    await mountConversation(page,native,async input=>{
+      // Expose the entry-point race even when the local Connector fixture is fast.
+      if(firstRead&&input.method==='GET'&&new URL(input.path,'http://fixture').pathname.endsWith('/governance')){
+        firstRead=false;await new Promise(resolve=>setTimeout(resolve,250));
+      }
+      return f.dispatch(input);
+    });
+    await page.goto(route);await openPmSection(page, 'issues');await openAction(page,'record');
     const editor=action(page,'record');await editor.getByLabel('Explicit root cause key',{exact:true}).fill('first-release-recovery');
     await editor.getByLabel('Finding title',{exact:true}).fill('Verify recovery before release');
     await editor.getByLabel('What was observed and why it matters',{exact:true}).fill('The selected mail route remains unverified.');

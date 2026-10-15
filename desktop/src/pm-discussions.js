@@ -82,7 +82,6 @@ export function discussionComposer({t, form, analysis, details, draft = false}) 
   const receipt = form.box.querySelector(':scope > .pm-receipt');
   receipt.dataset.discussionReceipt = draft ? 'create' : 'message';
   if (details) details.append(receipt); else status.append(disclosure({label: t('pd_details'), body: receipt}));
-  const recovery = actions.querySelector('button[type=button]'); if (recovery) status.append(recovery);
   if (analysis) {
     actions.append(analysis.querySelector('[data-discussion-ask]'));
     status.append(analysis);

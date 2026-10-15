@@ -70,6 +70,34 @@ async function settle(page: Page, locale: 'en' | 'zh-TW') {
   await expect(page.locator('.ui-page-header').getByRole('button', {name: refresh, exact: true})).toBeEnabled();
 }
 
+for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) test(`capture stays in Dependencies after Overview refreshes ${locale} ${width}`, async ({browser, baseURL}) => {
+  const context = await browser.newContext({baseURL, locale, viewport: {width, height: width === 390 ? 844 : 900}});
+  try {
+    const page = await context.newPage(), harness = mount(page, locale);
+    await mountConversation(page, false, harness.dispatch);
+    await page.goto(demoRoute()); await settle(page, locale);
+    const capture = page.locator('[data-dep-capture]');
+    const refresh = page.locator('.ui-page-header').getByRole('button', {name: locale === 'en' ? 'Refresh' : '重新整理', exact: true});
+    await expect(capture).toBeHidden();
+    for (const visitDependencies of [false, true]) {
+      if (visitDependencies) {
+        await openView(page, 'dependencies'); await settle(page, locale);
+        await expect(capture).toBeVisible(); await expect(capture).toBeDisabled();
+        await openView(page, 'overview'); await settle(page, locale);
+      }
+      await refresh.click(); await settle(page, locale);
+      await expect(capture).toBeHidden();
+      await expect(page.locator('[data-dep-capture-reason]')).toBeHidden();
+    }
+    await shot(page, `capture-scope-overview-${locale}-${width}`);
+    await openView(page, 'dependencies'); await settle(page, locale);
+    await expect(capture).toBeVisible(); await expect(capture).toBeDisabled();
+    await expectNoOverflow(page);
+    await shot(page, `capture-scope-dependencies-${locale}-${width}`);
+    expect(harness.posts).toEqual([]);
+  } finally {await context.close();}
+});
+
 test('filtering to test relations shows what to re-check, and the graph keeps that selection', async ({page}) => {
   test.setTimeout(60_000);
   const locale = 'en' as const;

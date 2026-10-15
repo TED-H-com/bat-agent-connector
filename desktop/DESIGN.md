@@ -16,8 +16,12 @@ Never substitute zero for missing data or count a loaded page as a complete inve
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
+Links from Overview or the Register wait for the destination's first read and
+loading mask to finish before focusing its selected record.
 Events coalesce reads for the visible view and tools mounted in its drawer. Hidden
-sections become stale and stay masked until a fresh read settles when shown. A held
+sections become stale and stay masked until a fresh read settles when shown.
+Loading masks have their own hosts, separate from each panel's status slot. They
+hide content until reveal removes the mask and shows settled content in one turn. A held
 projection read can still be superseded by a newer withdrawal read. PM record events
 follow the same visibility rule; workspace authority and lifecycle admission have
 their own scoped reads even while the Lifecycle drawer is closed. A newer event
@@ -28,6 +32,16 @@ lose the click. Manual Refresh and selected-workspace authority/lifecycle events
 withdraw admission before reading; a policy event in a coalesced page still closes
 the gates. Failed or withdrawn lifecycle reads clear the prior policy, and older
 responses cannot restore it.
+
+The initial workspace snapshot and manual Refresh follow the same visibility rule:
+only the selected view and its open secondary tools read their projections. Unopened
+sections remain stale and load through the existing view/disclosure path. Opening
+toggles share a pending opening read, while event reads still require a post-event
+read before acknowledgment. Shared shell/workspace reads and lifecycle admission
+remain available independently of the selected view. Visible package consumers
+also retain the shared immutable package source across a parent refresh.
+Workspace withdrawal clears
+all modules, including unopened ones, before any later reply can reveal data.
 
 ## Tokens and type
 
@@ -452,7 +466,10 @@ facts. A withdrawn finding chip stays unavailable and shows none of that identit
 A server that omits `finding` keeps Kind · stored label.
 Chips stay on one line with full accessible labels: up to three in the header, then
 +N opens Context; one per list row. The selected row has the table accent inset.
-The composer has one status/actions row with Send and Ask PM kept together. Failed
+The composer has one status/actions row with Send, New request and Ask PM kept
+together in the right-aligned action group. A refused or terminal original hides
+its disabled primary; New request remains available under the existing gates.
+Error summaries, Details and the connection note stay in the status column. Failed
 and pending note explanations stay visible. Search shares the list header with an
 icon-only New discussion button. A list-opened thread returns to Discussions.
 
@@ -1052,6 +1069,19 @@ visible view and restores an open tool with its unsent draft. An Overview relate
 inspector keeps its owning Overview projection subscribed while it is mounted in
 Issues. Closed discussion tools wait for their next visible disclosure.
 
+Visible Register and Governance labels share a requirement-name source. Loaded
+Requirements or Overview names take precedence; otherwise one accepted-plan read
+supplies names without loading either full view. Governance can supply its own
+accepted-plan read. Plan events invalidate the cache, including while Issues is
+hidden. Withdrawal clears names and rejects older replies. Relabeling preserves
+the inspector and authored form fields. A saved requirement with an unknown name
+does not assert that its original source is unavailable. Work labels keep their
+existing loaded-table or fixed-snapshot sources and do not cause another read.
+
+Follow-up preparation and assessment read discussion identity from
+`thread.workspace_id`, matching the Connector envelope. The assessment request
+also retains the fixed thread ID, version and Planning mode checks.
+
 Agents event reads respect Pause updates. A later event can supersede an older
 in-flight source read while updates are running; only explicit Refresh bypasses
 the pause. Parent authorization remains checked while the projection is paused.
@@ -1141,6 +1171,30 @@ Sprint see the Sprint prerequisite, while readers see the empty-record sentence.
 Its title and Refresh stay on the first row; the read-only reason wraps beneath
 the title when the inspector is narrow instead of being squeezed between them.
 
+Workspace refresh and earlier-note failures, Lifecycle and accepted-plan preview
+use one complete localized error sentence with original diagnostics in Details.
+The version-conflict sentence keeps its draft-preservation and refresh guidance.
+Accepted-plan validation keeps its own stale or invalid reason; API and transport
+failures use the unavailable sentence. Export
+source failures belong to the report's parent; withdrawal removes or hides the
+export control without adding a second error. Failed reads never acknowledge an
+event checkpoint.
+
+An issue mapping without a source title or number says Untitled issue / 未命名議題;
+its original mapping identity stays in Details. Projects and Resources Work items
+share a creation disclosure, starting closed behind New project or New work item.
+Cancel sits after Add and Review, before the draft note; it closes the form and
+returns focus without discarding the draft. A pending original request stays open
+for receipt recovery. A verified project creation opens its project page for Quick
+project dispatch. A verified work-item creation refreshes the same list, closes the
+form and returns focus to New work item. Source withdrawal
+hides the form and action together. Project header chips center beside touch-sized
+actions without stretching. Captures disable animations so disclosure chevrons
+show their settled open rotation.
+
+The Dependencies capture action stays in its own view after shared form updates.
+Its visibility combines the active view with the original request's terminal or
+refused state; refreshing Overview cannot reveal it.
 
 ## Read-only paths and agent setup
 
@@ -1184,6 +1238,8 @@ and disables export actions together. See [the diagnostics contract](../docs/des
 Diagnostics export stays inside error Details as a ghost action. Error renderers
 pass their destination via `within` (or `insideDetails: true` when constructing a
 detached disclosure) so code, server diagnostics and export reuse existing Details.
+Accepted-plan preview errors reuse the context panel's disclosure; closing the panel
+hides the sentence, diagnostics and export action together.
 An expanded session error can use up to 32% of viewport height so its sentence,
 diagnostics and export action fit together on phones; longer content still scrolls.
 

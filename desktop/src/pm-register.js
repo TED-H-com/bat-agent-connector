@@ -297,6 +297,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const kind = labelSegment(row?.source?.kind) ? kindLabel(row.source.kind) : '';
     const number = sourceNumber(row);
     if (kind && kind !== t('ui_reason_generic') && number) return t('reg_source_name', {kind, n: number});
+    if (row?.source?.kind === 'issue_mapping') return t('reg_untitled_issue');
     if (kind && kind !== t('ui_reason_generic')) return kind;
     if (TYPES.includes(row?.type)) return t('reg_type_' + row.type);
     return t('ui_status_unknown');
@@ -334,6 +335,19 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const text = name || fallback;
     return h('button', {type: 'button', class: 'reg-chip', title: name || id, 'aria-label': name || `${fallback} ${id}`, onclick, ...attrs},
       h('span', {class: 'reg-chip-label'}, text));
+  }
+  function relabel() {
+    if (!active) return;
+    render();
+    for (const chip of sheet?.querySelectorAll('.reg-chip[data-reg-requirement], .reg-chip[data-reg-work]') || []) {
+      const requirement = chip.hasAttribute('data-reg-requirement'), kind = requirement ? 'requirement' : 'work_item';
+      const id = chip.getAttribute(requirement ? 'data-reg-requirement' : 'data-reg-work'), fallback = t(requirement ? 'reg_requirement' : 'reg_work');
+      const name = labelSegment(nameFor(kind, id));
+      chip.querySelector('.reg-chip-label').textContent = name || fallback;
+      chip.title = name || id; chip.setAttribute('aria-label', name || `${fallback} ${id}`);
+    }
+    const row = rows.find(row => row.row_id === selected);
+    if (sheet && row) sheet.querySelector('h2').textContent = displayTitle(row) || t('reg_type_' + row.type);
   }
   function relatedItems(row) {
     const related = row.related || {};
@@ -527,7 +541,8 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       }),
       h('a', {class: 'ui-button secondary ui-sm', 'data-reg-propose': '', href: discussHref({workspaceId, refs, title: t('reg_change_title', {title}), from: 'issues'})}, t('reg_propose')));
     const fieldKey = {title: 'reg_col_title', status: 'reg_col_status', owner: 'reg_col_owner', due: 'reg_col_due', impact: 'reg_col_impact', priority: 'reg_col_priority', next_step: 'reg_col_next', created_at: 'reg_created', updated_at: 'reg_updated', pull_requests: 'reg_pull_requests'};
-    const detailBits = [];
+    const detailBits = row.source?.kind === 'issue_mapping' && labelSegment(row.source.id)
+      ? [h('p', {}, t('reg_source_id'), locale === 'zh-TW' ? '：' : ': ', h('code', {}, row.source.id))] : [];
     const precise = preciseStatus(row.status);
     if (precise) detailBits.push(h('p', {'data-reg-status-detail': ''}, precise));
     const seenStatuses = new Set([row.status]);
@@ -801,5 +816,6 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     await loadDetail(rowId);
   }
   render();
-  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose, closeSheet, openRef};
+  return {element, refresh, withdraw, rememberScroll, restoreScroll, setActive, dispose, closeSheet, openRef, relabel,
+    requirementIds: () => rows.flatMap(row => [...(row.related?.requirement_ids || []), ...(row.source?.kind === 'requirement' ? [row.source.id] : [])])};
 }
