@@ -461,7 +461,7 @@ function renderDiscussions() {
     adoptMode: 'history'
   }, () => startWork(), () => go('work_main')))) : stepList(state, () => startWork(), () => go('work_main')) : null, state.ownerDecisionRecorded ? message('mei.lin', h('div', {
     ...tid('discussion-decision-banner')
-  }, h('p', {}, t(state.ownerDecisionRecorded)), action('viewOverview', 'discussion-decision-overview', () => go('overview'), 'ghost')), false, {at: FIXED_NOW}) : null)), !state.pmAvailable ? h('div', {
+  }, h('p', {}, t(state.ownerDecisionRecorded === 'decisionAccepted' ? 'discussionAccepted' : 'discussionFollowup')), action('viewOverview', 'discussion-decision-overview', () => go('overview'), 'ghost')), false, {at: FIXED_NOW}) : null)), !state.pmAvailable ? h('div', {
     class: 'proto-diagnostic',
     ...tid('pm-unavailable-diagnostic')
   }, h('strong', {}, t('pmMissing')), h('p', {}, t('pmReason')), h('p', {}, t('pmHere')), h('p', {}, t('draftKept')), action('setupPm', 'fix-pm-available', () => go('pm_settings'))) : null, state.adoptMode === 'idle' || state.composeOpen ? composer({
@@ -608,7 +608,7 @@ function pmSummary() {
   return sectionCard({
     title: t('pmSummary'),
     actions: [pill(t(state.pmAssessment), state.pmAssessment === 'passed' ? 'ok' : 'warn', tid('pm-assessment-pill'))],
-    body: h('div', tid('pm-assessment-card'), h('h3', {}, t('judgment')), h('p', tid('pm-current-judgment'), t('judgment' + suffix)), h('h3', {}, t('recommendation')), h('p', tid('pm-recommendation'), t(state.delivery.deployed ? 'recommendationDeployed' : state.delivery.merged ? 'recommendationMerged' : 'recommendation' + suffix)), h('h3', {}, t('sources')), h('ul', {}, state.delivery.self_reported ? h('li', {}, t('sourceWork')) : null, state.delivery.tests_passed ? h('li', {}, t('sourceTests')) : null, h('li', {}, t(state.delivery.merged ? 'sourceMerged' : state.delivery.pr_open ? 'sourcePr' : 'sourceMissing')), state.delivery.deployed ? h('li', {}, t('sourceDeployed')) : null), state.ownerDecisionRecorded ? h('div', {}, notice(state.ownerDecisionRecorded, 'pm-owner-decision-banner', 'ok'), action('returnThread', 'overview-open-discussion', () => go('discussions'))) : h('div', {
+    body: h('div', tid('pm-assessment-card'), h('h3', {}, t('judgment')), h('p', tid('pm-current-judgment'), t('judgment' + suffix)), h('h3', {}, t('recommendation')), h('p', tid('pm-recommendation'), t(state.delivery.deployed ? 'recommendationDeployed' : state.delivery.merged ? 'recommendationMerged' : state.delivery.accepted ? 'recommendationAccepted' : 'recommendation' + suffix)), h('h3', {}, t('sources')), h('ul', {}, state.delivery.self_reported ? h('li', {}, t('sourceWork')) : null, state.delivery.tests_passed ? h('li', {}, t('sourceTests')) : null, h('li', {}, t(state.delivery.merged ? 'sourceMerged' : state.delivery.pr_open ? 'sourcePr' : 'sourceMissing')), state.delivery.deployed ? h('li', {}, t('sourceDeployed')) : null), state.ownerDecisionRecorded ? h('div', {}, notice(state.ownerDecisionRecorded, 'pm-owner-decision-banner', 'ok'), action('returnThread', 'overview-open-discussion', () => go('discussions'))) : h('div', {
       class: 'proto-actions',
       ...tid('pm-owner-decisions')
     }, action('accept', 'decision-accept-overview', () => {
@@ -629,7 +629,7 @@ function renderOverview() {
     ...tid('view-overview')
   }, header(t('ui_overview'), [action('ui_discuss', 'overview-discuss', () => go('discussions'))], pill(t('ui_phase_development'))), h('div', {
     class: 'proto-status-strip'
-  }, ...[['goal', 'projectGoal'], ['progress', state.delivery.accepted ? 'progressAccepted' : 'progressValue'], ['blockers', 'blockerValue'], ['decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([label, value]) => h('div', {}, h('small', {}, t(label)), h('strong', {}, t(value))))), h('div', {
+  }, ...[['goal', 'projectGoal'], ['progress', state.delivery.accepted ? 'progressAccepted' : 'progressValue'], ['blockers', 'blockerValue'], [state.ownerDecisionRecorded ? 'ov_recent_decisions' : 'decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([label, value]) => h('div', {}, h('small', {}, t(label)), h('strong', {}, t(value))))), h('div', {
     class: 'proto-overview-columns'
   }, h('div', {}, pmSummary(), sectionCard({
     title: t('attention'),
@@ -642,7 +642,7 @@ function renderOverview() {
     body: deliveryBar(state.delivery, null, false)
   }))), h('h2', {}, t('charter')), h('div', {
     class: 'proto-charter'
-  }, ...[['purpose', 'projectGoal'], ['scope', 'scopeCharter'], ['milestones', 'milestone'], ['resources', 'budget'], ['risks', 'risk'], ['decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([title, body]) => sectionCard({
+  }, ...[['purpose', 'projectGoal'], ['scope', 'scopeCharter'], ['milestones', 'milestone'], ['resources', 'budget'], ['risks', 'risk'], [state.ownerDecisionRecorded ? 'ov_recent_decisions' : 'decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([title, body]) => sectionCard({
     title: t(title),
     body: h('p', {}, t(body))
   }))));
@@ -839,6 +839,10 @@ export function renderApp() {
   }
   if (state.activeView === 'discussions' && state.ownerDecisionRecorded && matchMedia('(max-width: 799px)').matches) {
     queueMicrotask(() => document.querySelector('[data-testid=discussion-decision-banner]')?.scrollIntoView({block: 'center'}));
+  }
+  if (state.activeView === 'discussions' && !state.planVisible && state.discussionNotes.length) {
+    const transcript = document.querySelector('.proto-transcript');
+    transcript.scrollTop = transcript.scrollHeight;
   }
   // Fixed-clock, bounded output simulation. No network or runtime calls.
   if (workViews.includes(state.activeView) && state.workState === 'running' && !state.disconnectedDuringStart) streamTimer = setTimeout(() => {

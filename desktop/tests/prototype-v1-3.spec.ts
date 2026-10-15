@@ -160,6 +160,7 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     await simulate(page, 'toggle-pm-unavailable');
     await expect(page.getByTestId('pm-unavailable-diagnostic')).toBeVisible();
     await expect(page.getByTestId('composer-send-pm')).toBeDisabled();
+    await expect(page.getByTestId('saved-note')).toBeInViewport();
     await capture('03-pm-unavailable');
     await page.getByTestId('fix-pm-available').click();
     await page.getByTestId('restore-pm').click();
@@ -235,10 +236,10 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
         await expect(page.getByTestId('next-step-hint')).toHaveText(lang === 'en' ? 'Starts the next turn.' : '送出後開始下一輪。');
       }
       await health(page, lang);
+      if (value === 'waiting_input') await capture('09-work-waiting-input');
       if (all && ['accepted', 'preparing_worktree', 'starting', 'turn_ended'].includes(value)) await shot(page, `18-work-${value}-${lang}-${width}.png`);
     }
     await workState(page, 'waiting_input');
-    await capture('09-work-waiting-input');
     await page.getByTestId('answer-question-keep').click();
     await expect(page.getByTestId('work-question-card')).toHaveCount(0);
     await expect(page.getByTestId('view-work-main')).toHaveAttribute('data-question-answered', 'true');
@@ -296,6 +297,7 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
       name: lang === 'en' ? 'Delivery' : '交付',
       exact: true
     })).toHaveCount(0);
+    await expect(page.getByTestId('pm-recommendation')).toHaveText(lang === 'en' ? 'Review PR #48 for merge.' : '建議審閱 PR #48 是否合併。');
     await capture('12-overview-decision-return');
     await page.getByTestId('overview-open-discussion').click();
     await expect(page.getByTestId('discussion-decision-banner')).toBeInViewport();
