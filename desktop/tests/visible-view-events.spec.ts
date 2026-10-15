@@ -5,7 +5,7 @@ import {demoFixture} from './demo/index.ts';
 
 // Complete event pages coalesce per visible projection. These budgets include
 // the rail, context resolution, and an open inspector's own reads; polling is excluded.
-const budgets: Record<string,number> = {overview:4,discussions:4,requirements:24,board:22,schedule:3,dependencies:4,issues:5,agents:8};
+const budgets: Record<string,number> = {overview:4,discussions:4,requirements:24,board:22,schedule:3,dependencies:4,issues:4,agents:8};
 const allTypes=['pm_workspace','session','pm_governance','task','operation','pm_dependencies','work_item','command','deployment','integration'];
 for(const [view,budget] of Object.entries(budgets)) for(const size of [10,20]) test(`${size} PM and live events refresh only ${view} (budget ${budget})`,async({page},info)=>{
   const f=demoFixture({discussions:true}),reads:{path:string,at:number}[]=[],writes:string[]=[];

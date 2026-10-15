@@ -1041,7 +1041,7 @@ Requirements uses its own table width: below 1100px it hides Milestone and Next 
 
 A successful Session send uses the central operation updated_at in the shared time ticker. A receipt without that timestamp says Sent without fabricating an instant.
 
-The rail refreshes the project catalog only for project, workspace and binding events. Other resource events refresh expanded work and invalidate cached activity counts without refetching the catalog. `visible-view-events.spec.ts` covers both 10- and 20-event PM/live pages: Overview 4, Discussions 4, Requirements 24, Board 22, Schedule 3, Dependencies 4, Issues 5 and Agents 8 GETs, including the rail. A later event page must start another read. Hidden withdrawal is tested with a held forbidden response, before any old card can be painted.
+The rail refreshes the project catalog only for project, workspace and binding events. Other resource events refresh expanded work and invalidate cached activity counts without refetching the catalog. `visible-view-events.spec.ts` covers both 10- and 20-event PM/live pages: Overview 4, Discussions 4, Requirements 24, Board 22, Schedule 3, Dependencies 4, Issues 4 and Agents 8 GETs, including the rail. A later event page must start another read. Hidden withdrawal is tested with a held forbidden response, before any old card can be painted.
 
 A PM event page still revalidates the selected workspace's parent authorization.
 A failed parent read hides every source projection, closes source inspectors, and
