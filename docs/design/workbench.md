@@ -100,7 +100,10 @@ with `workbench.spec.ts`; these show layout and reading behavior, not live execu
 
 Local validation: 167 unit cases; 129 related browser regression cases followed
 by 36 final workbench/demo cases (including six project-selector locale/size
-combinations); two HTTP/IPC checks after the focus-preservation fix. The first
+combinations); two HTTP/IPC checks after the focus-preservation fix, then three
+submission/link-withdrawal cases. The latter verify the existing original-key
+`session.send` request, queue flag, receipt and newer draft through perspective
+changes, and block the old work route after its session link is removed. The first
 focus test assertion expected a non-normalized timestamp; it was corrected to
 the existing ISO timestamp contract. Background updates keep inspector and Live
 keyboard focus. Full Python and exact-commit CI results belong in the PR status.

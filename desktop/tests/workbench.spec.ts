@@ -114,7 +114,35 @@ test('work identity survives linked session names and the result panel opens on 
   await expect(page.locator('.wc-inspector-host > .ui-inspector')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('.wc-inspector-host > .ui-inspector')).toBeHidden();
+  // A work link can disappear while its former session is still accessible.
+  f.data.linkedItem = false;
+  f.data.events.push({seq: 1, resource_type: 'work_item', resource_id: item.work_item_id, kind: 'work_item.updated'});
+  await expect(page.locator('[data-session-withdrawn]')).toBeVisible();
+  await expect(page.locator('#workspace-message-input')).toBeHidden();
+  await expect(page.locator('.workspace-session-heading')).not.toContainText(item.title);
   expect(f.data.posts).toEqual([]);
+});
+
+for (const native of [false, true]) test(`existing next-turn submission stays on the selected work ${native ? 'IPC' : 'HTTP'}`, async ({page}) => {
+  const f = workspaceFixture(); await mountWorkspace(page, native, f);
+  await page.goto('/dashboard/?workbench=1' + workspaceRoute);
+  const draft = page.locator('#workspace-message-input textarea');
+  await draft.fill('Add a retry case after the current turn.');
+  await expect(page.locator('.composer-queue input')).toBeChecked();
+  await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await expect.poll(() => f.data.posts.length).toBe(1);
+  expect(f.data.posts[0].body).toMatchObject({action: 'session.send', target: {host: 'demo', session_id: 'search-results'},
+    params: {text: 'Add a retry case after the current turn.', queue: true}});
+  expect(f.data.posts[0].idempotency_key).toBeTruthy();
+  await expect(draft).toHaveValue('');
+  await expect(page.locator('.session-send-line')).toBeVisible();
+  await draft.fill('A later unsent draft');
+  const views = page.locator('[data-workbench-views]');
+  await views.getByRole('tab', {name: 'Live'}).click();
+  await views.getByRole('tab', {name: 'Work', exact: true}).click();
+  await expect(draft).toHaveValue('A later unsent draft');
+  await expect(page.locator('.session-send-line')).toBeVisible();
+  expect(f.data.posts).toHaveLength(1);
 });
 
 test('background output in another perspective preserves the Work reading position', async ({page}) => {
