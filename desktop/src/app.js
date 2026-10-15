@@ -1,3 +1,5 @@
+import {settingsAgents} from './settings-agents.js';
+import {actionAllowed, mayStartSession, checkpointReason, dispatchExplanation} from './work-paths.js';
 import {buildDiagnostics, clientIdentity, buildLine, errorRing, sessionFacts} from './diagnostics.js';
 import {diagnosticsDialog} from './diagnostics-dialog.js';
 import {dashboardShell} from './shell.js';
@@ -984,8 +986,9 @@ async function viewSessions(main) {
   const scope = h("details", {class: "panel session-scope", open: matchMedia("(min-width: 901px)").matches},
     h("summary", {}, t("sessions_workspaces")), scopeNote, navigation,
     h("a", {class: "session-project-link", href: "#/projects"}, t("sessions_projects")));
-  main.append(h("div", {class: "session-heading"}, pageHeader({title: t("sessions_title")}),
-    state.caps?.actions?.some(a => a.action === "session.start") ? h("a", {href: "#/start"}, t("start_title_page")) : null,
+  const pathsIntro = h("p", {class: "ui-meta", "data-session-paths": "", hidden: true}, t("paths_first"));
+  main.append(h("div", {class: "session-heading"}, pageHeader({title: t("sessions_title"), meta: pathsIntro}),
+    mayStartSession(state.caps) ? h("a", {href: "#/start", class: "ui-button primary"}, t("paths_start")) : null,
     state.caps?.features?.repository_sync?.length ? h("a", {href: "#/published"}, t("pub_title")) : null,
     state.caps?.actions?.some(a => Object.values(orchestrationActions).includes(a.action)) ? h("a", {href: "#/orchestrate/relay"}, t("orch_title")) : null),
     disclosure({label: t("global_details"), body: h("p", {}, t("sessions_intro"))}),
@@ -1083,6 +1086,7 @@ async function viewSessions(main) {
   };
   const read = async (mode, expectedRevision) => {
     if (expectedRevision !== revision) return;
+    if (mode === "reset") pathsIntro.hidden = true;
     const p = new URLSearchParams({limit: "50", order: "id", include_gone: "true"});
     if (hostSel.value) p.set("host", hostSel.value);
     if (accessSel.value) p.set("access", accessSel.value);
@@ -1107,6 +1111,7 @@ async function viewSessions(main) {
       rows.clear();
       for (const [id, session] of observed) {rows.set(id, session); rememberObservation("session", id, {session}, [`host:${session.host}`]);}
       cursor = next; more.hidden = !cursor;
+      pathsIntro.hidden = rows.size !== 0 || Boolean(cursor);
       pages = mode === "more" ? pages + readPages : readPages;
       const focused = document.activeElement;
       const focusedID = list.contains(focused) ? focused.closest("[data-resource-id]")?.dataset.resourceId : null;
@@ -1118,7 +1123,7 @@ async function viewSessions(main) {
       }
       const current = [...list.querySelectorAll("[data-resource-id]")].find(node => node.dataset.resourceId === anchorID);
       if (mode === "refresh" && current && Math.abs(scrollY - before) < 1) scrollBy(0, current.getBoundingClientRect().top - offset);
-    } catch (e) { status.replaceChildren(errorBox(e, {within:status})); }
+    } catch (e) { pathsIntro.hidden = true; status.replaceChildren(errorBox(e, {within:status})); }
     finally {more.disabled = false;}
   };
   const load = async mode => {
@@ -1511,8 +1516,8 @@ async function viewSession(main, host, sid, context = null) {
   const sendReason = h("p", {class: "muted session-send-reason", hidden: true});
   const composerRow = h("div", {class: "composer-row"}, h("label", {class: "composer-queue"}, queue, t("queue_behind")), send);
   const composer = h("div", {hidden: true, id: "workspace-message-input"}, box, composerRow);
-  // Read-only sessions get one plain line instead of a composer card.
-  const readonly = h("p", { class: "muted session-readonly", "data-session-readonly": "", hidden: true });
+  // Manual sessions keep their read-only hook and point to existing reviewed paths.
+  const readonly = h("section", { class: "session-readonly work-paths-card", "data-session-readonly": "", hidden: true });
   let capture, permissions, batHandoff, sourcesPanel;
   const captureSlot = h("div"), permissionsSlot = h("div"), batSlot = h("div"), artifactSlot = h("div");
   const controls = h("div", { class: "panel workspace-composer", hidden: true }, pending, sendReason, composer);
@@ -1828,7 +1833,16 @@ async function viewSession(main, host, sid, context = null) {
     if (capture) capture.hidden = !manualSource;
     syncChanges();
     composer.hidden = !managed; controls.hidden = !managed; readonly.hidden = managed;
-    readonly.textContent = t(row.provenance === "manual" ? "session_readonly_manual" : "session_readonly_unknown");
+    if (row.provenance === "manual") {
+      const reason = checkpointReason(state.caps, host);
+      readonly.replaceChildren(h("h2", {}, t("paths_view_only")), h("p", {}, t("paths_manual")),
+        h("div", {class: "actions"}, ...[
+          reason ? null : button({variant: "secondary", label: t("paths_continue"), onClick: () => {results.open(); cps.open();}}),
+          mayStartSession(state.caps) ? h("a", {class: "ui-button secondary", href: `#/start?host=${encodeURIComponent(host)}`}, t("paths_start")) : null,
+        ].filter(Boolean)),
+        ...[reason ? h("p", {class: "muted", "data-checkpoint-reason": ""}, t(reason), " ", h("a", {href: "#/settings?section=connection"}, t("paths_setup"))) : null].filter(Boolean),
+        h("a", {class: "global-quiet-link", href: "#/settings?section=agents"}, t("paths_mcp")));
+    } else readonly.textContent = t("session_readonly_unknown");
     renderPending(); updateControls();
   };
   const loadObservation = async () => {
@@ -2000,8 +2014,8 @@ async function viewSession(main, host, sid, context = null) {
 // A checkpoint records this session's commit and recent conversation (read-only); continuing starts a new
 // managed session at that commit in a connector clone. The person's session and folder are never written.
 function checkpointPanel(host, sid, {namespace = state.namespace, manual = () => false} = {}) {
-  const can = (state.caps?.features?.checkpoints || []).includes(host);
-  const mayStart = (state.caps?.scopes || []).includes("start"); // continuing starts an agent: its own grant
+  const can = (state.caps?.features?.checkpoints || []).includes(host) && actionAllowed(state.caps, "checkpoint.create");
+  const mayStart = (state.caps?.scopes || []).includes("start") && actionAllowed(state.caps, "checkpoint.continue"); // continuing starts an agent: its own grant
   const list = h("div", {});
   const status = h("div", { class: "muted" });
   // A checkpoint never changes, so its row is built once: a reload on a new event keeps an open form and its draft.
@@ -2102,7 +2116,7 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
     create.disabled = !can || previewFailed;
   } }, t("checkpoint_record"));
   // Recording is a quiet section action; the commit picker opens only when asked for.
-  const recordForm = h("div", {class: "session-checkpoint-record", hidden: true}, h("div", {class: "actions"}, pick), note, h("div", {class: "actions"}, create));
+  const recordForm = h("div", {class: "session-checkpoint-record", hidden: true, tabindex: -1}, h("div", {class: "actions"}, pick), note, h("div", {class: "actions"}, create));
   const action = can ? button({variant: "ghost", size: "sm", label: t("create_checkpoint"), "aria-expanded": "false", onClick: () => {
     recordForm.hidden = !recordForm.hidden; action.setAttribute("aria-expanded", String(!recordForm.hidden));
     if (!recordForm.hidden) pick.focus();
@@ -2111,7 +2125,6 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
   const paintNotes = () => notes.replaceChildren(...[
     h("p", {class: "muted"}, t("checkpoint_help")),
     manual() ? h("p", {class: "muted"}, t("checkpoint_manual_hint")) : null,
-    can ? null : h("p", {class: "muted"}, t("checkpoint_unavailable")),
     can ? null : h("p", {class: "muted"}, h("code", {}, t("checkpoint_unavailable_keys"))),
     mayStart ? null : h("p", {class: "muted"}, t("needs_start_scope")),
     mayStart ? null : h("p", {class: "muted"}, h("code", {}, t("needs_start_scope_key")))].filter(Boolean));
@@ -2119,10 +2132,16 @@ function checkpointPanel(host, sid, {namespace = state.namespace, manual = () =>
   const checkpointWhy = disclosure({label: t("checkpoint_notes"), key: `session-checkpoint:${namespace}:${host}:${sid}`, body: notes});
   checkpointWhy.addEventListener("toggle", () => {if (checkpointWhy.open) paintNotes();});
   const box = h("div", {class: "session-checkpoints"},
-    can ? null : h("p", {class: "muted session-checkpoint-state"}, t("session_checkpoint_unavailable")),
+    can && mayStart ? null : h("p", {class: "muted session-checkpoint-state"}, t(checkpointReason(state.caps, host) || "paths_host_unavailable")),
     recordForm, status, list, checkpointWhy);
   const clear = () => {ticket += 1; rows.clear(); list.replaceChildren(); status.replaceChildren(); preview = null;};
-  return { box, action, clear, load: async () => {const mine = ticket; await loadPreview(mine); if (mine === ticket) await load(mine);} };
+  return { box, action, clear, open: async () => {
+    const mine = ticket;
+    recordForm.hidden = false; action?.setAttribute("aria-expanded", "true");
+    recordForm.scrollIntoView({block: "nearest"});
+    if (pick.hidden) await loadPreview(mine);
+    if (mine === ticket) (pick.hidden ? recordForm : pick).focus();
+  }, load: async () => {const mine = ticket; await loadPreview(mine); if (mine === ticket) await load(mine);} };
 }
 
 async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceRepository) {
@@ -2920,12 +2939,14 @@ async function fleetTailscale(root, guard) {
 }
 function openSettings(main, {exclusive = false, refreshButton} = {}) {
   const memory = viewState(state.namespace || "", "", "settings");
-  const frame = settingsFrame({h, t, exclusive, selected: memory.section || "", onSelect: id => { memory.section = id; }, sections: [
+  const params = new URLSearchParams(location.hash.split("?")[1] || "");
+  const frame = settingsFrame({h, t, exclusive, selected: params.get("section") || memory.section || "", onSelect: id => { memory.section = id; }, sections: [
     {id: "connection", label: t("global_nav_connection")},
     {id: "desktop", label: t("global_nav_desktop"), hidden: true},
     {id: "models", label: t("global_nav_models"), hidden: true},
     {id: "fleet", label: t("global_nav_fleet"), hidden: true},
     {id: "updates", label: t("global_nav_updates"), hidden: true},
+    {id: "agents", label: t("agents_heading")},
     {id: "about", label: t("global_nav_about")},
   ]});
   if (state.token && state.caps) main.append(pageHeader({
@@ -2943,6 +2964,11 @@ function openSettings(main, {exclusive = false, refreshButton} = {}) {
     if(frame.root.isConnected)frame.panel('about').querySelector('[data-build-line]').textContent=buildLine(clientIdentity(diagnosticsClient()),t);
   }).catch(()=>{});
   main.append(frame.root);
+  const connection = {epoch: state.epoch, namespace: state.namespace, generation};
+  const agents = settingsAgents({h, t, api, caps: () => state.caps, guard: () => assertView(connection), from: params.get("from")});
+  frame.panel("agents").append(agents.root);
+  void agents.load();
+  if (params.get("section") === "agents") {agents.heading.scrollIntoView({block: "nearest"}); agents.heading.focus();}
   return frame;
 }
 function viewBrowserSettings(main) {
@@ -4202,12 +4228,12 @@ async function viewApprovals(main) {
 async function viewStart(main) {
   const connection = {epoch: state.epoch, namespace: state.namespace, generation};
   const panel = sessionStartPanel({h, t, api, caps: () => state.caps, guard: () => assertView(connection),
-    submitPreference: submit,
+    submitPreference: submit, initialHost: new URLSearchParams(location.hash.split("?")[1] || "").get("host"),
     ready: () => state.online && !state.nativeBusy, errorBox, opStatus,
     storageKey: `batc.start.${connection.namespace}`});
   main.append(h("a", {href: "#/sessions"}, t("nav_sessions")), pageHeader({title: t("start_title_page")}),
     h("p", {class: "muted"}, t("start_intro")),
-    ...(state.caps?.features?.repository_sync?.length ? [h("p", {}, h("a", {href: "#/published"}, t("pub_title")))] : []), panel.box);
+    ...(state.caps?.features?.repository_sync?.length ? [h("p", {}, h("a", {href: "#/published"}, t("pub_title")))] : []), panel.box, dispatchExplanation({h, t}));
   try {await panel.init();} catch { /* panel retains the original intent and shows the read error */ }
   assertView(connection);
   return onEvents(ev => {if (["operation", "host", "session"].includes(ev.resource_type)) return panel.refresh(true);});
@@ -4269,7 +4295,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
     storageKey: `batc.dispatch.${connection.namespace}.${pid}${repairWid ? "." + repairWid : ""}`,
     attachmentFactory: repairSeed ? null : (prompt, changed) => attachmentDraft(`dispatch.${pid}`, prompt, [], false, changed)});
   main.append(h("a", {href: `#/project/${pid}`}, t("dispatch_back")), pageHeader({title: t("dispatch_title")}),
-    repairSeed ? h("p", {class: "muted"}, t("repair_dispatch_help")) : '', panel.box);
+    repairSeed ? h("p", {class: "muted"}, t("repair_dispatch_help")) : '', panel.box, dispatchExplanation({h, t}));
   try {await panel.init();} catch { /* original intent and project read failure remain visible */ }
   try {assertView(connection);} catch {return;}
   const offOnline = onOnline(() => {try {assertView(connection); panel.update();} catch { /* retired view */ }});

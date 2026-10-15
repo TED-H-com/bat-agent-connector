@@ -102,3 +102,15 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) t
   await page.screenshot({path: `/tmp/bac-start-ui-after/start-${locale}-${width}.png`, fullPage: true});
   expect(state.errors).toEqual([]); expect(state.posts).toEqual([]); await context.close();
 });
+
+test('host route hints preserve a frozen start and its original key', async ({page}) => {
+  const state = await startFixture(page, false, {lost: true});
+  const form = await openStart(page); await chooseWorkspace(page);
+  await start(form).click(); await expect(form).toContainText('Lost start reply');
+  const original = structuredClone(state.posts[0]);
+  await page.goto('/dashboard/#/start?host=other');
+  await expect(form.getByRole('combobox', {name: 'Host', exact: true})).toHaveValue('demo');
+  await form.getByRole('button', {name: 'Retry original request'}).click();
+  await expect(form).toContainText('Start confirmed');
+  expect(state.posts).toEqual([original, original]);
+});
