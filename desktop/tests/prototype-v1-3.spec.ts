@@ -89,7 +89,7 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     const context = await browser.newContext({
       viewport: {
         width,
-        height: width === 390 ? 844 : 900
+        height: width === 390 ? 844 : 949
       },
       locale: lang,
       ...(width === 1440 ? {
@@ -97,7 +97,7 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
           dir: VIDEO,
           size: {
             width: 1440,
-            height: 900
+            height: 949
           }
         }
       } : {})
@@ -114,6 +114,12 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     });
     const all = lang === 'en' && width === 1440 || lang === 'zh-TW' && width === 390;
     const capture = async (name: string, extra = false) => {
+      if (await page.getByTestId('view-discussions').count()) {
+        const texts = await page.locator('.proto-transcript .message-body').allTextContents();
+        expect(new Set(texts).size).toBe(texts.length);
+        await expect(page.getByTestId('discussion-message-text')).toHaveCount(name === '01-idea' ? 0 : 1);
+        if (!['01-idea', '02-note-only'].includes(name)) await expect(page.getByTestId('note-saved-banner')).toHaveCount(0);
+      }
       await health(page, lang);
       if (all || extra) await shot(page, `${name}-${lang}-${width}.png`);
     };
@@ -137,10 +143,20 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
       await page.getByTestId('placeholder-return-discussions').click();
       await expect(page.getByTestId('composer-textarea')).toHaveValue(draft);
     }
+    await expect(page.locator('.proto-composer [role=radio]')).toHaveText(lang === 'en' ? ['Discuss', 'Plan', 'Do'] : ['討論', '規劃', '做事']);
+    await expect(page.getByTestId('suggest-switch-plan')).toHaveText(lang === 'en' ? 'Switch to plan' : '切換至規劃');
+    await expect(page.getByTestId('suggest-switch-do')).toHaveText(lang === 'en' ? 'Switch to do' : '切換至做事');
+    await page.getByTestId('suggest-switch-do').click();
+    await expect(page.getByTestId('suggest-switch-discuss')).toHaveText(lang === 'en' ? 'Switch to discuss' : '切換至討論');
+    await page.getByTestId('suggest-switch-discuss').click();
     await page.getByTestId('composer-save-note').click();
     await expect(page.getByTestId('note-saved-banner')).toBeVisible();
     await expect(page.getByTestId('counter-model-calls')).toHaveAttribute('data-count', '0');
+    await expect(page.getByTestId('composer-textarea')).toHaveValue('');
+    await expect(page.getByTestId('note-kind')).toHaveText(lang === 'en' ? 'Note · not sent to PM' : '筆記・未傳送給 PM');
     await capture('02-note-only');
+    // A failed send keeps a new draft while the saved note stays one unsent record.
+    await page.getByTestId('composer-textarea').fill(draft);
     await simulate(page, 'toggle-pm-unavailable');
     await expect(page.getByTestId('pm-unavailable-diagnostic')).toBeVisible();
     await expect(page.getByTestId('composer-send-pm')).toBeDisabled();
@@ -153,6 +169,7 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '0');
     await page.getByTestId('suggest-switch-plan').click();
     await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '0');
+    await expect(page.getByTestId('suggest-switch-discuss')).toHaveText(lang === 'en' ? 'Switch to discuss' : '切換至討論');
     await page.getByTestId('composer-update-plan').click();
     await capture('04-short-plan');
     await page.getByTestId('plan-adopt-later').click();
@@ -171,9 +188,27 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     await expect(page.getByTestId('scenario-picker')).toHaveValue('running');
     await expect(page.getByTestId('work-area-results')).toHaveCount(0);
     await expect(page.getByTestId('live-stream-output')).toBeVisible();
+    expect(await page.locator('.proto-tools li').evaluateAll(rows => rows.map(row => row.getAttribute('data-tool-state')))).toEqual(['done', 'running']);
+    await expect(page.locator('.proto-tools svg[data-icon="circle-alert"]')).toHaveCount(0);
+    if (width === 1440 && lang === 'en') {
+      const runtime = page.getByTestId('work-area-header').locator('dt').filter({
+        hasText: 'Runtime and model'
+      });
+      expect(await runtime.evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(30);
+    }
     await capture('07-work-running', true);
+    const second = await page.getByTestId('next-step-textarea').inputValue();
+    await simulate(page, 'toggle-queue-failure');
     await page.getByTestId('btn-queue-second-sentence').click();
+    await expect(page.getByTestId('queue-failed')).toBeVisible();
+    await expect(page.getByTestId('next-step-textarea')).toHaveValue(second);
+    await expect(page.getByTestId('queued-second-sentence-receipt')).toHaveCount(0);
+    await simulate(page, 'toggle-queue-failure');
+    await page.getByTestId('btn-queue-second-sentence').click();
+    await expect(page.getByTestId('next-step-textarea')).toHaveValue('');
     const receipt = page.getByTestId('queued-second-sentence-receipt');
+    await expect(receipt).toHaveCount(1);
+    await expect(receipt).toContainText(second);
     await expect(receipt).toHaveAttribute('data-queue-policy', 'after_current');
     await expect(receipt).toHaveAttribute('data-steered', 'false');
     await expect(page.getByTestId('work-queue-box')).toHaveAttribute('data-second-steered', 'false');
@@ -187,6 +222,18 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
       await expect(page.getByTestId('turn-summary')).toHaveCount(['turn_ended', 'awaiting_verification'].includes(value) ? 1 : 0);
       await expect(page.getByTestId('work-area-results')).toHaveCount(value === 'awaiting_verification' ? 1 : 0);
       await expect(page.getByTestId('pm-assessment-card')).toHaveCount(0);
+      await expect(page.getByTestId('interrupt-work')).toHaveCount(value === 'running' ? 1 : 0);
+      if (value !== 'running') await expect(page.getByTestId('product-shell').getByText(lang === 'en' ? 'Sent after the current turn ends.' : '本輪結束後才會送出。', {
+        exact: true
+      })).toHaveCount(0);
+      if (['turn_ended', 'awaiting_verification'].includes(value)) {
+        await expect(page.getByTestId('queued-second-sentence-receipt')).toHaveCount(0);
+        await expect(page.getByTestId('delivered-next-step')).toHaveCount(1);
+        await expect(page.getByTestId('delivered-next-step')).toContainText(second);
+        await expect(page.getByTestId('next-step-textarea')).toHaveValue('');
+        await expect(page.getByTestId('btn-queue-second-sentence')).toBeEnabled();
+        await expect(page.getByTestId('next-step-hint')).toHaveText(lang === 'en' ? 'Starts the next turn.' : '送出後開始下一輪。');
+      }
       await health(page, lang);
       if (all && ['accepted', 'preparing_worktree', 'starting', 'turn_ended'].includes(value)) await shot(page, `18-work-${value}-${lang}-${width}.png`);
     }
@@ -198,6 +245,11 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     await expect(page.getByTestId('scenario-picker')).toHaveValue('awaiting_verification');
     await showResults(page, width);
     await capture('10-work-awaiting-verification', true);
+    if (lang === 'zh-TW') {
+      await expect(page.getByTestId('delivery-state-self_reported').locator('dd')).toHaveText('已有紀錄');
+      await expect(page.getByTestId('delivery-state-pr_open').locator('dd')).toHaveText('尚無紀錄');
+      await expect(page.getByTestId('delivery-state-accepted').locator('dt')).toHaveText('已驗收');
+    }
     const labels = [];
     for (const key of ['self_reported', 'tests_passed', 'pr_open', 'accepted', 'merged', 'deployed']) labels.push(await page.getByTestId(`delivery-state-${key}`).locator('dt').innerText());
     expect(new Set(labels).size).toBe(6);
@@ -220,9 +272,15 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
       await expandBar(page, true);
       await page.getByTestId('assessment-picker').selectOption(assessment);
       await expandBar(page, false);
-      await expect(page.getByTestId('pm-assessment-pill')).toHaveText(
-        lang === 'en' ? {insufficient:'Insufficient evidence', failed:'Failed', passed:'Passed'}[assessment]!
-          : {insufficient:'證據不足', failed:uiStrings['zh-TW'].ui_status_failed, passed:'通過'}[assessment]!);
+      await expect(page.getByTestId('pm-assessment-pill')).toHaveText(lang === 'en' ? {
+        insufficient: 'Insufficient evidence',
+        failed: 'Failed',
+        passed: 'Passed'
+      }[assessment]! : {
+        insufficient: '證據不足',
+        failed: '未通過',
+        passed: '通過'
+      }[assessment]!);
       if (assessment !== 'passed') {
         await expect(page.getByTestId('decision-accept-overview')).toBeDisabled();
         await capture(assessment === 'insufficient' ? '21-pm-insufficient' : '22-pm-failed');
@@ -233,20 +291,41 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     await expect(page.getByTestId('pm-owner-decision-banner')).toBeVisible();
     await expect(page.getByTestId('pm-owner-decisions')).toHaveCount(0);
     await expect(page.getByTestId('delivery-state-accepted')).toHaveAttribute('data-delivery-achieved', 'true');
+    await expect(page.getByTestId('scenario-picker')).toHaveValue('requirement_accepted');
+    await expect(page.getByTestId('view-overview').getByRole('heading', {
+      name: lang === 'en' ? 'Delivery' : '交付',
+      exact: true
+    })).toHaveCount(0);
     await capture('12-overview-decision-return');
-    await simulate(page, 'btn-record-merge');
-    await expect(page.getByTestId('delivery-state-merged')).toHaveAttribute('data-delivery-achieved','true');
-    await expect(page.getByTestId('delivery-state-deployed')).toHaveAttribute('data-delivery-achieved','false');
-    await capture('26-merged');
-    await simulate(page, 'btn-record-deploy');
-    await expect(page.getByTestId('delivery-state-deployed')).toHaveAttribute('data-delivery-achieved','true');
-    await capture('27-deployed');
     await page.getByTestId('overview-open-discussion').click();
     await expect(page.getByTestId('discussion-decision-banner')).toBeInViewport();
+    await expect(page.getByTestId('discussion-decision-banner').locator('xpath=ancestor::article').locator('.message-name')).toHaveText('mei.lin');
+    await expect(page.getByTestId('discussion-decision-banner').locator('xpath=ancestor::article').locator('time')).toHaveAttribute('datetime', '2026-04-12T14:30:00.000Z');
+    await expect(page.getByTestId('discussion-thread-state')).toHaveText(lang === 'en' ? 'Requirement accepted' : '需求已驗收');
+    await expect(page.getByTestId('discussion-list-state')).toHaveText(lang === 'en' ? 'Requirement accepted' : '需求已驗收');
+    await expect(page.getByTestId('work-started-summary')).toBeVisible();
+    await expect(page.getByTestId('compound-step-list')).not.toBeVisible();
     await capture('25-decision-in-discussion');
     await page.getByTestId('discussion-compose').click();
-    await expect(page.getByTestId('composer-textarea')).toHaveValue(draft);
+    await expect(page.getByTestId('composer-textarea')).toHaveValue('');
     await health(page, lang);
+    await page.getByTestId('discussion-decision-overview').click();
+    await simulate(page, 'btn-record-merge');
+    await expect(page.getByTestId('delivery-state-merged')).toHaveAttribute('data-delivery-achieved', 'true');
+    await expect(page.getByTestId('delivery-state-deployed')).toHaveAttribute('data-delivery-achieved', 'false');
+    await expect(page.getByTestId('scenario-picker')).toHaveValue('merged');
+    await expect(page.getByTestId('pm-assessment-card')).toContainText(lang === 'en' ? 'PR #48 · merged' : 'PR #48・已合併');
+    await expect(page.getByTestId('pm-recommendation')).toHaveText(lang === 'en' ? 'Verify the merged fix after deployment.' : '建議部署後確認已合併的修正。');
+    await capture('26-merged');
+    await simulate(page, 'btn-record-deploy');
+    await expect(page.getByTestId('delivery-state-deployed')).toHaveAttribute('data-delivery-achieved', 'true');
+    await expect(page.getByTestId('scenario-picker')).toHaveValue('deployed');
+    await expect(page.getByTestId('pm-assessment-card')).toContainText(lang === 'en' ? 'Sign-in fix · deployment recorded' : '登入修正・已記錄部署');
+    await expect(page.getByTestId('pm-recommendation')).toHaveText(lang === 'en' ? 'Monitor sign-in and failure retries after deployment.' : '建議持續觀察部署後的登入與失敗重試。');
+    await capture('27-deployed');
+    await page.getByTestId('overview-open-discussion').click();
+    await expect(page.getByTestId('discussion-thread-state')).toHaveText(lang === 'en' ? 'Deployed' : '已部署');
+    await expect(page.getByTestId('discussion-list-state')).toHaveText(lang === 'en' ? 'Deployed' : '已部署');
     // Manual work stays read-only; linking is a relation, deriving requires a fixed basis.
     await page.getByTestId('scenario-picker').selectOption('external_readonly');
     const manual = page.getByTestId('view-external-manual');
@@ -264,6 +343,13 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     await expect(page.getByTestId('derive-confirmation')).toContainText('4b91e0c');
     await expect(page.getByTestId('derive-confirmation')).toContainText('scratch.txt');
     await expect(page.getByTestId('derive-confirmation')).toContainText('.env.local');
+    const backdrop = await page.getByTestId('derive-backdrop').boundingBox();
+    expect(backdrop).toEqual({
+      x: 0,
+      y: 0,
+      width,
+      height: width === 390 ? 844 : 949
+    });
     await capture('19-derive-confirmation');
     await page.getByTestId('derive-cancel').click();
     await expect(page.getByTestId('derive-confirmation')).toHaveCount(0);
@@ -292,6 +378,23 @@ for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 390] as 
     await expect(page.getByTestId('hermes-separate-notice')).toBeVisible();
     await expect(page.locator('.ui-page-header h1')).toHaveText(lang === 'en' ? 'Review cookie security' : '檢查 Cookie 安全性');
     await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '3');
+    if (width === 390) await page.getByTestId('nav-drawer-toggle').click();
+    const rail = page.getByTestId('shell-sidebar');
+    for (const item of await rail.locator('button:visible, a:visible').all()) {
+      await item.scrollIntoViewIfNeeded();
+      await expect(item).toBeInViewport();
+      const visible = await item.evaluate(el => {
+        const a = el.getBoundingClientRect(),
+          b = el.closest('aside')!.getBoundingClientRect();
+        return a.top >= b.top - 1 && a.bottom <= b.bottom + 1;
+      });
+      expect(visible).toBe(true);
+    }
+    await rail.evaluate(el => {
+      el.scrollTop = el.scrollHeight;
+    });
+    for (const item of await rail.locator('.workspace-nav-footer a').all()) await expect(item).toBeInViewport();
+    if (width === 390) await page.keyboard.press('Escape');
     await capture('24-separate-work');
     await expect(page.getByTestId('counter-hermes-mutations')).toHaveAttribute('data-count', '0');
     await page.getByTestId('scenario-picker').selectOption('disconnect_recovery');
@@ -348,3 +451,50 @@ test('tablet shell and explicit adopt-and-start', async ({
   await health(page, 'en');
   await shot(page, '20-tablet-adopt-en-768.png');
 });
+const regression = expect.configure({
+  soft: true,
+  timeout: 500
+});
+for (const lang of ['en', 'zh-TW'] as const) {
+  test(`regression queue lifecycle (${lang})`, async ({
+    page
+  }) => {
+    test.setTimeout(90_000);
+    await page.goto(`/prototype/v1.3/?lang=${lang}&scene=running`);
+    const second = lang === 'en' ? 'Add a case that resubmits after a failure.' : '再補一個失敗後重新送出的案例。';
+    await page.getByTestId('btn-queue-second-sentence').click();
+    await regression(page.getByTestId('next-step-textarea')).toHaveValue('');
+    await regression(page.getByTestId('queued-second-sentence-receipt')).toHaveCount(1);
+    await workState(page, 'turn_ended');
+    await regression(page.getByTestId('queued-second-sentence-receipt')).toHaveCount(0);
+    await regression(page.getByTestId('interrupt-work')).toHaveCount(0);
+    await regression(page.getByTestId('product-shell').getByText(lang === 'en' ? 'Sent after the current turn ends.' : '本輪結束後才會送出。', {
+      exact: true
+    })).toHaveCount(0);
+    await regression(page.locator('.proto-work-transcript .message-body').filter({
+      hasText: second
+    })).toHaveCount(1);
+    await regression(page.getByTestId('next-step-textarea')).toHaveValue('');
+    await regression(page.getByTestId('btn-queue-second-sentence')).toBeEnabled();
+  });
+  test(`regression note lifecycle (${lang})`, async ({
+    page
+  }) => {
+    await page.goto(`/prototype/v1.3/?lang=${lang}`);
+    const draft = await page.getByTestId('composer-textarea').inputValue();
+    await page.getByTestId('composer-save-note').click();
+    await regression(page.getByTestId('composer-textarea')).toHaveValue('');
+    await regression(page.getByTestId('saved-note')).toHaveCount(1);
+    await simulate(page, 'toggle-pm-unavailable');
+    await regression(page.getByTestId('note-saved-banner')).toHaveCount(0);
+    await page.getByTestId('fix-pm-available').click();
+    await page.getByTestId('restore-pm').click();
+    await page.getByTestId('composer-textarea').fill(draft);
+    await page.getByTestId('composer-send-pm').click();
+    await regression(page.getByTestId('composer-textarea')).toHaveValue('');
+    await regression(page.getByTestId('note-saved-banner')).toHaveCount(0);
+    await regression(page.locator('.proto-transcript .message-body').filter({
+      hasText: draft
+    })).toHaveCount(1);
+  });
+}
