@@ -51,7 +51,7 @@ function textFor(locale: Locale) {
     incomplete: zh ? '紀錄不完整' : 'Records incomplete',
     unavailable: zh ? '來源無法取得' : 'Source unavailable',
     loadMore: zh ? '載入更多' : 'Load more',
-    noReasons: zh ? '沒有記下原因欄位' : 'No reason fields recorded',
+    noReasons: zh ? '尚無紀錄' : 'None recorded',
     blocked: zh ? '沒有記錄原因 · 1' : 'No reason recorded · 1',
     age: zh ? '1 筆沒有已知時間' : '1 without a known age',
     repair: zh ? '轉成工作' : 'Turn into work',

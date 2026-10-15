@@ -24,6 +24,11 @@
   provides installation-aware MCP guidance and a read-only PM eligibility check, with
   localized reasons and a return link to the originating discussion.
 
+- In zh-TW, the Overview's adoption time reads 「剛剛採用」 without a stray space,
+  and its Ask PM button reads 「詢問 PM」 as in Discussions. Issues & changes says
+  "None recorded" when no blocking reasons exist, and the owner column keeps a
+  name on one line, ending a longer name with an ellipsis.
+
 - Lazy PM loading keeps its loading status separate from each panel's status
   slot, while revealing settled content and removing its mask together.
 

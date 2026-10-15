@@ -1819,7 +1819,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .reg-main .ui-data-table td:nth-child(8), .reg-main .ui-data-table th:nth-child(8) { white-space: normal; }
 .reg-main .ui-data-table td:nth-child(2) { min-width: 9rem; max-width: 18rem; }
 .reg-main .ui-data-table td:nth-child(8) { max-width: 14rem; }
-.reg-owner-cell { display: inline-block; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.reg-owner-cell { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
 .reg-list { display: grid; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
 .reg-list-row { display: grid; gap: 2px; width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
@@ -1899,8 +1899,8 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-shell [data-pm-register] .ui-data-table td[data-column=status] .ui-pill { max-width: 100%; white-space: normal; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=priority],
 .pm-shell [data-pm-register] .ui-data-table th[data-column=impact] { width: 4.5rem; }
-.pm-shell [data-pm-register] .ui-data-table th[data-column=owner],
 .pm-shell [data-pm-register] .ui-data-table th[data-column=due] { width: 6rem; }
+.pm-shell [data-pm-register] .ui-data-table th[data-column=owner] { width: 8.5rem; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=next] { width: 10rem; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=related] { width: 13.5rem; }
 .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=type] { white-space: nowrap; }
