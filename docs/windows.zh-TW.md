@@ -4,7 +4,7 @@
 
 Windows Fleet 是 Tauri 裡的本機連線與啟動層。Python Connector／Task Service 授權並派工，BAT 在選定主機執行工作。候選桌面包包含本機 Python 中央 runtime；加入既有中央（例如 Linux 中央）保留為進階選項。
 
-開啟 [`main` 的 desktop workflow](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain)，選擇目前公開歷史的成功 run。核對來源 commit 與 Windows 安裝 fixture 紀錄，再從成功的 Windows 平台 job 下載 `desktop-Windows-unsigned`；若仍在建置，請等 job 成功。歷史 PR artifact 與早期 release 資產不作為目前下載來源。
+開啟 [`main` 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain)，選擇目前公開歷史的成功 run。核對來源 commit 與 Windows 安裝 fixture 紀錄，再從成功的 Windows 平台 job 下載 `desktop-Windows-unsigned`；若仍在建置，請等 job 成功。歷史 PR artifact 與早期 release 資產不作為目前下載來源。
 
 ## 每一層負責什麼
 
@@ -50,6 +50,6 @@ runtime 或資料後端。
 | 登入啟動與 owner 遷移 | [遷移合約](design/fleet-migration.md) · [Windows ownership](design/fleet-windows.md) |
 | 指定中央服務啟動 | [固定 bootstrap recipe](design/fleet-bootstrap.md) |
 | Credential Manager、系統匣與原生檔案 | [桌面 client](design/desktop.md) · [檔案操作](design/native-files.md) |
-| 驗證安裝包與 installed fixtures | [Desktop CI](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) · [驗收矩陣](product/acceptance-v2.md) |
+| 驗證安裝包與 installed fixtures | [Desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) · [驗收矩陣](product/acceptance-v2.md) |
 
 Windows 套件／WebView fixture、Fleet 原始碼測試與使用者實際 SSH／Tailscale／BAT 環境是不同的證據。驗證紀錄須與套件來源 commit 相符。正式簽章與正式更新通道已排除於本次交付；完整實際環境驗收由使用者負責。排除不等於能力或測試已完成，Mac Dashboard 支援也不表示 Windows Fleet 已移植。

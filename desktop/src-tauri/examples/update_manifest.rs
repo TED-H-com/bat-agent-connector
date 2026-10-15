@@ -49,7 +49,7 @@ fn manifest(
     Ok(json!({
         "version": version,
         "platforms": {"windows-x86_64-nsis": {
-            "url": format!("https://github.com/teddashh/bat-agent-connector/releases/download/v{version}/{}", name.replace(' ', "%20")),
+            "url": format!("https://github.com/TED-H-com/bat-agent-connector/releases/download/v{version}/{}", name.replace(' ', "%20")),
             "signature": signature.trim()
         }},
         "bat_dashboard": {"api_version": 1, "contract_version":"2026-10-08",

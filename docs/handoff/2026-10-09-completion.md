@@ -7,8 +7,8 @@ PR #60 merged as `da8f9bb5729b3575de417db19b87dd7e2a510ca4`. Its reviewed head i
 This adds organized sessions, native Windows credential enrollment, reviewed bulk approval backend,
 managed artifact capture and exact-revision acceptance. It does not complete issue #59 or M1–M3.
 
-- [Python CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37879651946): 3.10–3.13 each 2568 passed/33 skipped, Ruff, generated skills and secret scan passed.
-- [Desktop CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37879651932): 179 shared UI, 12 state, 33 Windows/32 Linux Rust; Windows NSIS/Linux deb unsigned packages and central fixtures passed.
+- [Python CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37879651946): 3.10–3.13 each 2568 passed/33 skipped, Ruff, generated skills and secret scan passed.
+- [Desktop CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37879651932): 179 shared UI, 12 state, 33 Windows/32 Linux Rust; Windows NSIS/Linux deb unsigned packages and central fixtures passed.
 - Local frozen backend `2efe362`: Python 3.13 2568/33 in 1017.37s, Python 3.10 2568/33 in 993.88s. UI-only descendants are covered by exact candidate CI, not retroactively by those local runs.
 
 The owner wants the same product with a Tauri UI and Project Hub's orderly sessions. Work stays on the

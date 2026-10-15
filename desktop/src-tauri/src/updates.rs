@@ -11,7 +11,7 @@ use std::{
 };
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-const FEED: &str = "https://github.com/teddashh/bat-agent-connector/releases/latest/download/dashboard-update.json";
+const FEED: &str = "https://github.com/TED-H-com/bat-agent-connector/releases/latest/download/dashboard-update.json";
 const TARGET: &str = "windows-x86_64-nsis";
 const MAX_DOWNLOAD: usize = 128 * 1024 * 1024;
 const CONTRACT: &str = "2026-10-08";
@@ -137,7 +137,7 @@ fn metadata(update: &Update) -> Result<Candidate, String> {
         || !update
             .download_url
             .path()
-            .starts_with("/teddashh/bat-agent-connector/releases/download/")
+            .starts_with("/TED-H-com/bat-agent-connector/releases/download/")
         || !update.download_url.path().ends_with(".exe")
         || update.download_url.query().is_some()
         || update.download_url.fragment().is_some()
@@ -509,7 +509,7 @@ mod tests {
         let feed = serde_json::json!({
             "version": "2.0.0",
             "platforms": {TARGET: {
-                "url": "https://github.com/teddashh/bat-agent-connector/releases/download/v2.0.0/fixture.exe",
+                "url": "https://github.com/TED-H-com/bat-agent-connector/releases/download/v2.0.0/fixture.exe",
                 "signature": signature
             }},
             "bat_dashboard": {"api_version":1,"contract_version":CONTRACT,

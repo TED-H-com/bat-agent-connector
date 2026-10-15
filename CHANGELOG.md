@@ -539,7 +539,7 @@
 - The cleanup integration test keeps reading the same operation until its status is terminal
   before the existing success checks, so early item receipts no longer fail a still-running cleanup.
 
-- Introduced in [PR #81](https://github.com/teddashh/bat-agent-connector/pull/81):
+- Introduced in [PR #81](https://github.com/TED-H-com/bat-agent-connector/pull/81):
   bundle the matching Python central runtime and prepare private installation data,
   stable personal identity, authenticated browser handoff and installation-owned login startup.
   Windows uses native file locks and private storage; safe forward upgrades preserve the
@@ -1387,6 +1387,9 @@
 - Issues & changes reads the central register: type counts and the summary appear only when coverage is
   complete, with honest pagination, a compact summary strip, list rows on narrow screens, and a processing
   timeline with Discuss and Propose change.
+
+- The repository moved to the `TED-H-com` organization. Links, the project page
+  (`https://ted-h-com.github.io/bat-agent-connector/`) and the desktop update feed use the new address.
 
 ## 0.2.4 (unreleased)
 

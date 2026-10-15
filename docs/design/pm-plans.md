@@ -1,6 +1,6 @@
 # Immutable plans and recoverable adoption
 
-[Issue #91](https://github.com/teddashh/bat-agent-connector/issues/91) implements
+[Issue #91](https://github.com/TED-H-com/bat-agent-connector/issues/91) implements
 the plan revision domain in `pm_plans.py`, following the adopted v1.2 sections
 7.1 and 8.2. The existing workspace journal and OperationService remain the
 authority. Additive idempotent tables do not allocate a migration version.
