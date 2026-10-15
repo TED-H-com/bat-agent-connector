@@ -39,6 +39,7 @@ export const pmRegisterStrings = {
     reg_action_decide: 'Record decision', reg_action_link: 'Link adoption', reg_action_publish: 'Publish issue',
     reg_action_cancel: 'Stop tracking', reg_action_follow: 'Record follow-up', reg_action_open: 'Open action',
     reg_pr: 'PR #{n}', reg_work: 'Work', reg_requirement: 'Requirement',
+    reg_outside_page: 'This record is outside the loaded rows',
   },
   'zh-TW': {
     reg_untitled_issue: '未命名議題',
@@ -80,5 +81,6 @@ export const pmRegisterStrings = {
     reg_action_decide: '記錄決策', reg_action_link: '連結採用', reg_action_publish: '發布議題',
     reg_action_cancel: '停止追蹤', reg_action_follow: '記錄後續', reg_action_open: '開啟動作',
     reg_pr: 'PR #{n}', reg_work: '工作', reg_requirement: '需求',
+    reg_outside_page: '這筆紀錄不在已載入的列表中',
   },
 };

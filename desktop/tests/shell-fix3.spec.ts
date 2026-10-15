@@ -67,7 +67,7 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(panel).toHaveAttribute('role', width >= 1200 ? 'complementary' : 'dialog');
     const region = page.locator(`[data-pm-region=${view}]`);
     const edges = await region.evaluate(node => {
-      const candidates = node.querySelectorAll(':scope > [data-pm-section], .reg-main, .pm-requirements, .pm-requirements-toolbar, .pm-requirements-tables, .pm-requirements > .ui-disclosure, .pm-overview-status, .pm-overview-columns, .pm-overview-charter, .pm-agents-main, .pm-agents-list, [data-resource-quota], .schedule-main, .schedule-toolbar');
+      const candidates = node.querySelectorAll(':scope > [data-pm-section], .reg-main, .reg-toolbar, [data-reg-table], .pm-requirements, .pm-requirements-toolbar, .pm-requirements-tables, .pm-requirements > .ui-disclosure, .pm-overview-status, .pm-overview-columns, .pm-overview-charter, .pm-agents-main, .pm-agents-list, [data-resource-quota], .schedule-main, .schedule-toolbar');
       return [...candidates].filter(child => child.getBoundingClientRect().width > 0 && !child.closest('.ui-inspector')).map(child => {
         const bounds = child.getBoundingClientRect(); return {name: child.className, right: bounds.right};
       });

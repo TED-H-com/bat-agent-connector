@@ -117,11 +117,17 @@ export function workspaceCharter({h, t, api, alive, namespace, workspaceId, perm
       h('span', {class: 'chip'}, t(snapshot.snapshot_id === latestId ? 'wb_saved' : 'wb_historical')),
       h('span', {}, timeLabel(t, 'pm_brief_as_of', {time: stamp(snapshot.as_of)}))),
     h('p', {class: 'pm-charter-plan-ref'}, t('wb_plan'), ': ', document?.title || t('wb_no_plan')));
-    const grid = h('div', {class: 'pm-charter-grid'});
-    for (const key of sections) grid.append(h('section', {'data-charter-section': key}, h('h3', {}, t('wb_' + key)),
+    const grid = h('div', {class: 'pm-charter-grid'}), empty = sections.filter(key => !groups[key].length);
+    for (const key of sections.filter(key => groups[key].length)) grid.append(h('section', {'data-charter-section': key}, h('h3', {}, t('wb_' + key)),
       renderItems(groups[key], key === 'decisions' ? 'wb_no_decisions' : 'wb_unknown'),
       key === 'resources' ? h('p', {class: 'muted'}, t('wb_quota')) : ''));
     report.append(grid);
+    if (empty.length) {
+      const complete = Boolean(document) && !snapshot.visibility?.restricted && !snapshot.visibility?.filtered
+        && !Object.entries(snapshot.coverage || {}).some(([key, value]) => key.endsWith('_truncated') && value);
+      report.append(h('p', {class: 'ui-meta', 'data-charter-empty': ''}, t(complete ? 'ov_no_items' : 'wb_unknown'),
+        ' · ', empty.map(key => t('wb_' + key)).join(' · ')));
+    }
     if (document) report.append(h('details', {'data-charter-plan': ''}, h('summary', {}, t('wb_full_plan')),
       planDocument(h, document.markdown), h('ul', {}, ...(document.requirements || []).map(row => h('li', {}, row.text,
         h('ul', {}, ...(row.acceptance || []).map(item => h('li', {}, item.text)))))),

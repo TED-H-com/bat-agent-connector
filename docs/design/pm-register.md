@@ -187,3 +187,11 @@ repository 全名，不放進 `related.prs`。不把 GitHub issue 的 number 當
 - repair 尚未終態：`pm.maintenance.repair.evidence.record`。
 - issue mapping：`tracking` 給 `pm.issue.cancel`；未 `cancelled` 給 `pm.issue.publish`。
 - 已完成的會議或審查 follow-up：對應的 `follow_up.record`，`required.follow_up_id` 為該項 id。
+
+## 共用前端呈現
+
+從總覽開啟指定紀錄時，詳情與已載入列使用相同身分；成功讀取詳情後，若列表已有
+該列，也同步更新顯示。紀錄不在已載入或篩選後的列表時，詳情以一行提示，不插入
+額外列、不增加已載入筆數。已解決或關閉的紀錄不把原 response 當作目前下一步，
+不更動治理寫入內容。未結案紀錄以「討論」為主要操作；「提議變更」收在更多操作。
+治理、維護修復、維護審閱與後續追蹤只從頁首選單開啟，沿用原表單與查回流程。
