@@ -465,15 +465,18 @@ for (const locale of locales) {
         });
         expect(clipped).toEqual([]);
         if (width >= 1200 || !open) {
-          for (const column of ['type', 'title', 'status', 'next']) {
+          for (const column of ['type', 'title', 'status']) {
             await expect(page.locator(`[data-pm-register] th[data-column=${column}]`)).toBeVisible();
           }
+          const next = page.locator('[data-pm-register] th[data-column=next]');
+          if (width === 1440 && !open) await expect(next).toBeVisible();
+          else await expect(next).toBeHidden();
           const typeCell = page.locator(`[data-row-key="${copy.rows.decision}"] [data-column=type] .reg-type`);
           await expect(typeCell).toContainText(copy.zh ? '決策' : 'Decision');
           expect(await typeCell.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
           const statusCell = page.locator(`[data-row-key="${copy.rows.decision}"] [data-column=status]`);
           await expect(statusCell).toBeVisible();
-          await expect(statusCell).toContainText(copy.zh ? '未解決' : 'Open');
+          await expect(statusCell).toContainText(copy.zh ? '已採用' : 'Adopted');
         }
       }
     }

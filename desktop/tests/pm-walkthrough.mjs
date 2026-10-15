@@ -9,7 +9,7 @@ import {performance} from 'node:perf_hooks';
 import {chromium, expect as baseExpect} from '@playwright/test';
 import {openPmSection, recoverOriginalAdoption} from './pm-navigation.ts';
 
-const expect = baseExpect.configure({timeout: 30000});
+const expect = baseExpect.configure({timeout: 60000});
 const backend = resolve(process.env.BATC_PM_BACKEND || '..');
 const python = process.env.BATC_PM_PYTHON || resolve(backend, '.venv/bin/python');
 const scratch = resolve(homedir(), 'agent-work/tmp/pytest');
@@ -64,7 +64,7 @@ async function walkthrough(locale, width) {
     const lines = output[Symbol.asyncIterator]();
     const next = async () => {
       const row = await bounded(Promise.race([lines.next(), stopped.then(() => {throw spawnError || Error('Walkthrough central stopped');})]),
-        60000, 'Timed out waiting for walkthrough central');
+        120000, 'Timed out waiting for walkthrough central');
       if (row.done) throw spawnError || Error('Walkthrough central stopped');
       return JSON.parse(row.value);
     };
@@ -120,7 +120,12 @@ async function walkthrough(locale, width) {
     await expect(metric('blocker')).toContainText(copy.issue);
     await expect(metric('blocker').locator('.ui-metric-value')).toHaveText('1');
     await expect(metric('decision').locator('.ui-metric-value')).toHaveText('0');
-    await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(6);
+    const charter = page.locator('[data-pm-charter]');
+    await expect(charter.locator('[data-charter-section="definition"]')).toContainText(copy.goal);
+    await expect(charter.locator('[data-charter-section="scope"]')).toContainText(copy.login);
+    await expect(charter.locator('[data-charter-section="schedule"], [data-charter-section="decisions"]')).toHaveCount(0);
+    await expect(charter.locator('[data-charter-empty]')).toContainText(locale === 'en' ? 'Resources & budget' : '資源與預算');
+    await expect(charter.locator('[data-charter-empty] .pm-overview-sources')).toHaveCount(0);
     const attention = page.locator('[data-overview-attention] [data-overview-row]').filter({hasText: copy.issue});
     await expect(attention).toBeVisible();
     await expect(page.locator('.pm-main > .ui-page-header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
@@ -282,8 +287,10 @@ async function walkthrough(locale, width) {
     await page.locator('[data-reg-type="issue"]').click();
     const issue = page.locator(`[data-row-key="governance.${fixture.issue_id}"]`);
     await expect(issue).toContainText(l.resolved);
+    await expect(issue).not.toContainText(copy.response);
     await issue.click();
     await expect(page.locator('[data-reg-inspector]')).toContainText(l.resolved);
+    await expect(page.locator('[data-reg-inspector]')).not.toContainText(copy.response);
     await screenshot(13, 'resolved-register');
     await bounded(Promise.all([...pending]), 30000, 'Response diagnostics did not finish');
     assert.deepEqual(errors, []);

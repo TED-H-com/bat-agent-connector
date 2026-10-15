@@ -533,9 +533,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
     const title = displayTitle(row) || t('reg_discussion');
     const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter(action => labelSegment(action?.action));
     const labels = offered.map(action => t(ACTION_KEYS[action.action] || 'reg_action_open'));
-    const stepText = nextStep(row);
     const open = !['done', 'closed'].includes(groupOf(row.status));
-    const primary = !open && stepText && labels.filter(label => label === stepText).length === 1 ? stepText : '';
     inspectorMenu = menu({button: iconButton({icon: 'more-horizontal', label: t('ui_more'), 'data-reg-overflow': ''}),
       items: [{key: 'propose', label: t('reg_propose'), href: discussHref({workspaceId, refs, title: t('reg_change_title', {title}), from: 'issues'})}]});
     inspectorMenu.querySelector('[data-menu-key=propose]').dataset.regPropose = '';
@@ -544,7 +542,7 @@ export function workspaceRegister({h, t, api, alive, namespace, workspaceId, err
       ...offered.map((action, index) => {
         const key = ACTION_KEYS[action.action];
         if (!key) unknownCodes.push(action.action);
-        return h('button', {type: 'button', class: `ui-button ${labels[index] === primary ? 'primary' : 'secondary'} ui-sm`, 'data-reg-action': action.action,
+        return h('button', {type: 'button', class: 'ui-button secondary ui-sm', 'data-reg-action': action.action,
           onclick: () => onAction(action)}, labels[index]);
       }),
       inspectorMenu);

@@ -1753,6 +1753,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 }
 .pm-agents-source-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-pm-register] { --selected-row: var(--surface-3); }
+.pm-issues-tool:has(> details:not([open])) { display: none; }
 [data-pm-register], .reg-layout, .reg-main { min-width: 0; max-width: 100%; }
 .reg-layout { display: flex; align-items: flex-start; gap: var(--space-4); }
 .reg-main { flex: 1; display: grid; gap: var(--space-3); }

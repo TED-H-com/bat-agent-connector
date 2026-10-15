@@ -94,8 +94,11 @@ for(const locale of ['en','zh-TW']) test(`phase stays fresh across workspace vie
     if(url.pathname.endsWith('/overview')) {overviewReads++;result.data.lifecycle.stage=stage;}
     return result;
   });
-  await page.goto(demoRoute()); await expect(page.locator('[data-overview-row]').first()).toBeVisible();
+  await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/issues`);
+  await expect(page.locator('[data-reg-table] [data-row-key]').first()).toBeVisible();
   const phase=page.locator('.pm-main > .ui-page-header .ui-title-row > .ui-pill').first();
+  await expect(phase).toBeHidden();expect(overviewReads).toBe(0);
+  await openPmSection(page,'overview'); await expect(page.locator('[data-overview-row]').first()).toBeVisible();
   for(const view of ['issues','discussions']) {await openPmSection(page,view);await expect(phase).toHaveText(locale==='en'?'Development':'開發');}
   stage='planning';cursor=1;
   await expect(phase).toBeHidden();expect(overviewReads).toBe(1);

@@ -849,7 +849,8 @@ A 403 or 404 on the list drops the rows, counts and inspector together. A 403 or
 Governance, repairs, review and follow-up keep their original durable forms and
 read/withdrawal behavior. They remain hidden until the header overflow opens the
 selected disclosure, rather than showing four closed boxes under the table.
-Closing a disclosure hides its box again; record actions retain the same forms. Header actions and capture hints
+Closing a disclosure hides its box again; record actions open the same forms and
+wait for their first read before selecting the record and focusing its fields. Header actions and capture hints
 belong to their active view; an empty overflow is hidden.
 
 ## Agents

@@ -383,7 +383,7 @@ export function workspaceOverview(options) {
     commitParts([
       {key: 'status', value: [projection.plan, projection.progress, projection.attention_counts, projection.attention, projection.next_milestone, projection.unknown,
         projection.recent_decisions, projection.recent_decisions_count, projection.recent_decisions_complete, projection.recent_decisions_truncated,
-        projection.recent_deliveries.length > 0], render: () => statusStrip(projection)},
+        projection.attention_truncated, projection.recent_deliveries.length > 0], render: () => statusStrip(projection)},
       {key: 'columns', value: [projection.milestones, projection.recent_deliveries, projection.milestones_truncated, projection.recent_deliveries_complete, projection.coverage, projection.unknown], render: () => {
         const columns = parts.get('columns')?.node;
         if (columns) {columns.querySelector('.pm-overview-side').replaceWith(sidebar(projection)); return columns;}

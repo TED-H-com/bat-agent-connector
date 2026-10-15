@@ -19013,6 +19013,7 @@ function workspaceOverview(options) {
 					projection.recent_decisions_count,
 					projection.recent_decisions_complete,
 					projection.recent_decisions_truncated,
+					projection.attention_truncated,
 					projection.recent_deliveries.length > 0
 				],
 				render: () => statusStrip(projection)
@@ -26405,9 +26406,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const title = displayTitle(row) || t("reg_discussion");
 		const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter((action) => labelSegment(action?.action));
 		const labels = offered.map((action) => t(ACTION_KEYS[action.action] || "reg_action_open"));
-		const stepText = nextStep(row);
 		const open = !["done", "closed"].includes(groupOf(row.status));
-		const primary = !open && stepText && labels.filter((label) => label === stepText).length === 1 ? stepText : "";
 		inspectorMenu = menu({
 			button: iconButton({
 				icon: "more-horizontal",
@@ -26438,7 +26437,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			if (!ACTION_KEYS[action.action]) unknownCodes.push(action.action);
 			return h("button", {
 				type: "button",
-				class: `ui-button ${labels[index] === primary ? "primary" : "secondary"} ui-sm`,
+				class: "ui-button secondary ui-sm",
 				"data-reg-action": action.action,
 				onclick: () => onAction(action)
 			}, labels[index]);
@@ -41238,14 +41237,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	const openIssueTool = (section) => {
 		if (matchMedia("(max-width: 1199px)").matches) register?.closeSheet?.(true);
-		const card = body.querySelector(`[data-pm-section="${section}"]`);
-		const fold = card?.querySelector(":scope > details");
+		const fold = body.querySelector(`[data-pm-section="${section}"]`)?.querySelector(":scope > details");
 		if (!(fold instanceof HTMLDetailsElement)) return;
 		for (const tool of issueTools) {
 			const other = body.querySelector(`[data-pm-section="${tool.section}"] > details`);
 			if (other && other !== fold) other.open = false;
 		}
-		card.hidden = false;
 		fold.open = true;
 		refreshStaleVisible();
 		queueMicrotask(() => {
@@ -41392,12 +41389,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		card.dataset.pmSection = label;
 		node.classList.add("pm-secondary-content");
 		if (register && issueTools.some((tool) => tool.section === label)) {
-			card.hidden = true;
+			card.classList.add("pm-issues-tool");
 			details.open = false;
-			details.addEventListener("toggle", () => {
-				card.hidden = !details.open;
-				if (details.open && loaded) refreshStaleVisible();
-			});
 		}
 		return card;
 	}

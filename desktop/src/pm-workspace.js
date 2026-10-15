@@ -762,7 +762,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       const other = body.querySelector(`[data-pm-section="${tool.section}"] > details`);
       if (other && other !== fold) other.open = false;
     }
-    card.hidden = false; fold.open = true;
+    fold.open = true;
     void refreshStaleVisible();
     queueMicrotask(() => {fold.querySelector('summary')?.focus(); fold.scrollIntoView({block: 'nearest'});});
   };
@@ -831,13 +831,9 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       details.addEventListener('toggle', () => {if (details.open && !details.closest('[data-discussion-tab]')?.hidden && loaded) void refreshSection(section);});
     }
     card.dataset.pmSection = label; node.classList.add('pm-secondary-content');
-    // Issue tools are mounted only from More actions, with their original forms.
+    // Closed issue tools have no visible card; their original forms stay mounted.
     if (register && issueTools.some(tool => tool.section === label)) {
-      card.hidden = true; details.open = false;
-      details.addEventListener('toggle', () => {
-        card.hidden = !details.open;
-        if (details.open && loaded) void refreshStaleVisible();
-      });
+      card.classList.add('pm-issues-tool'); details.open = false;
     }
     return card;
   }

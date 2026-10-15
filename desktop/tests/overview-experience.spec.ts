@@ -281,16 +281,18 @@ for (const locale of ['en', 'zh-TW']) test(`charter empty states require readabl
   f.state.planPatch = clearStatements;
   f.state.data.attention = f.state.data.attention.filter((row: any) => row.kind !== 'decision'); f.state.data.attention_counts.decision = 0;
   await boot(page, f); const cards = root(page).locator('[data-charter-empty]'), empty = locale === 'en' ? 'None recorded' : '尚無紀錄';
-  // A missing record time inside Sources does not change complete card coverage.
+  await expect(cards).toHaveCount(1);
+  await expect(cards.locator('details')).toHaveCount(0);
+  // Empty domains share one line without empty source disclosures.
   for (const card of await cards.all()) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toHaveCount(0);}
   f.state.data.attention_counts.decision = null;
   f.state.data.unknown = [{field: 'attention_counts.decision', reason: 'source_unavailable'}];
   await refresh(page); const decisions = metric(page, 'decision');
-  await expect(decisions.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(decisions).not.toContainText(empty);
+  await expect(decisions.locator('.ui-metric-value [data-status=unknown]')).toBeVisible(); await expect(decisions.locator('.ui-metric-value')).not.toContainText(empty);
   const decision = overview(demoProject(locale)).attention.find(row => row.kind === 'decision')!;
   f.state.data.attention.push(decision); await refresh(page);
   await expect(decisions).toContainText(decision.title); await expect(decisions.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible();
-  await expect(decisions).not.toContainText(empty);
+  await expect(decisions.locator('.ui-metric-value')).not.toContainText(empty);
   delete f.state.data.coverage.sources.plan;
   await refresh(page);
   for (const card of (await cards.all()).slice(0, 5)) {await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(card).not.toContainText(empty);}
@@ -300,6 +302,7 @@ for (const locale of ['en', 'zh-TW']) test(`charter empty states require readabl
     snapshot.visibility.restricted = restricted; snapshot.visibility.filtered = filtered;
   };
   await report(page, f.ids.snap1);
+  await expect(cards).toHaveCount(1);
   for (const card of await cards.all()) {
     await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(card).not.toContainText(empty);
     await expect(card).toContainText(locale === 'en' ? 'Restricted sources' : '來源受限');
@@ -718,10 +721,12 @@ test('decisions card distinguishes unknown, missing and truncated items', async 
   const f = fixture(); f.state.data.attention = f.state.data.attention.filter((row: any) => row.kind !== 'decision');
   f.state.data.attention_counts.decision = null; await boot(page, f);
   const card = metric(page, 'decision');
-  await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText('None recorded');
+  await expect(card.locator('.ui-metric-value [data-status=unknown]')).toBeVisible(); await expect(card.locator('.ui-metric-value')).not.toContainText('None recorded');
   f.state.data.attention_counts.decision = 3; f.state.data.attention_truncated = true; await refresh(page);
   await expect(card.locator('[data-status=partial]')).toBeVisible();
   await expect(card.getByRole('link', {name: '+3 more', exact: true})).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/issues`);
+  f.state.data.attention_truncated = false; await refresh(page);
+  await expect(card.locator('[data-status=partial]')).toHaveCount(0);
   expect(f.state.writes).toEqual([]);
 });
 
