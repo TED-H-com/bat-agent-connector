@@ -3,15 +3,21 @@
 ## Next release (unreleased)
 
 - PM refresh, Lifecycle, accepted-plan preview and report export failures show one
-  localized message with diagnostics in Details. Untitled issue mappings get a
-  calm name, and Resources opens work-item creation on request while preserving
-  drafts and original-request recovery. Projects uses the same collapsed creation
-  form and opens the new project's page after its receipt is verified. Cancel stays
-  beside Add, before the draft note. Refused and terminal PM requests hide their
-  disabled primary; Discussions keeps New request with its right-aligned actions.
-  Context previews keep their specific stale
-  or invalid reason; version conflicts retain the full draft-preservation guidance.
-  Project header chips stay compact on narrow screens.
+  localized message with diagnostics in Details. Issue mappings without a title
+  read "Untitled issue". Projects and Resources open their creation forms on
+  request and keep drafts and original-request recovery; a new project opens its
+  page once its receipt is verified. Refused and terminal PM requests hide their
+  disabled primary action, and Discussions keeps New request with the composer
+  actions. Context previews keep their specific stale or invalid reason, version
+  conflicts keep the full draft-preservation guidance, and project header chips
+  stay compact on narrow screens.
+
+- Pull requests select the Python matrix and no/Linux/all native builds from their
+  merge diff. Existing desktop path filters remain; workflows triggered on `main`
+  keep full coverage. Every selected Python version retains all five pytest shards
+  and the exact-partition check; each workflow summary explains its selection.
+  Frontend TypeScript test helpers are allowlisted, with a guard preventing native
+  build steps or their relative imports from depending on them.
 
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
