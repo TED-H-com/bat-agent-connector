@@ -14,7 +14,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 **Web 與 Tauri 桌面版共用介面及 Python 後端。** 你照常在 [Better Agent Terminal（BAT）](https://github.com/tony1223/better-agent-terminal) 開發；Windows Fleet 管理本機連線與啟動，Connector 則讓 Dashboard、CLI、MCP 使用同一份專案歷史、權限和操作紀錄。
 
-> **開發預覽。** 截圖來自已合併的 `main` `ab960ed2`（2026 年 10 月 14 日，包含 #161）。
+> **開發預覽。** 截圖來自已合併的 `main` `d66f032d`（2026 年 10 月 15 日，包含 #181）。
 > 這裡呈現的內容都尚未安裝或實機驗收。
 > [進度報告](docs/product/progress-2026-10-14.md)分開列出分支、合併、安裝與實機驗收狀態。
 > 下載時請核對套件的精確來源；截圖與 CI 不能代替原生或實機驗收。
