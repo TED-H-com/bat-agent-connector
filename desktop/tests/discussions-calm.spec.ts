@@ -90,7 +90,7 @@ for (const locale of ['en', 'zh-TW']) {
     const setup = page.getByRole('link', {name: zh ? '設定 PM' : 'Set up PM'});
     await expect(setup).toHaveAttribute('href', '#/settings?section=agents&from=' + encodeURIComponent(route));
     await page.locator('[data-discussion-composer]').fill(zh ? '保留這則訊息。' : 'Keep this note.');
-    await page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true}).click();
+    await page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}).click();
     const note = page.locator('.pm-note').last(); await expect(note).toContainText(zh ? '已儲存' : 'Saved');
     await expect(page.locator('[data-discussion-working]')).toHaveCount(0);
     if (zh) expect(await page.locator('[data-discussions]').innerText()).not.toContain('Agent');
@@ -110,7 +110,7 @@ for (const locale of ['en', 'zh-TW']) {
     await expect(chip).toHaveText(title); await chip.click();
     await expect(page.getByRole('tab', {name: zh ? '脈絡' : 'Context', exact: true})).toBeFocused();
     await page.keyboard.press('Escape'); await expect(chip).toBeFocused();
-    await page.locator('[data-discussion-composer]').fill('Keep this source name'); await page.getByRole('button', {name: zh ? '傳送' : 'Send', exact: true}).click();
+    await page.locator('[data-discussion-composer]').fill('Keep this source name'); await page.getByRole('button', {name: zh ? '只存筆記' : 'Save note only', exact: true}).click();
     await expect(page).toHaveURL(/discussions\/pmt_/);
     expect(f.discussion.writes[0].body.params.context).toBeUndefined();
     await expect.poll(() => f.discussion.writes.map((w: any) => w.body.action)).toEqual(['pm.thread.create', 'pm.message.append']); await context.close();
@@ -230,7 +230,7 @@ test('a message receipt remains visible with Context closed', async ({page}) => 
     return result;
   });
   await page.goto(`/dashboard/#/pm/${f.ids.workspaceId}/discussions/${f.ids.threadIdea}`);
-  await page.locator('[data-discussion-composer]').fill('Keep this original note'); await page.getByRole('button', {name: 'Send', exact: true}).click();
+  await page.locator('[data-discussion-composer]').fill('Keep this original note'); await page.getByRole('button', {name: 'Save note only', exact: true}).click();
   await expect(page.getByRole('button', {name: 'Check original request', exact: true})).toBeEnabled();
   await page.reload(); await expect(page.locator('[data-discussion-panel]')).toBeHidden();
   await page.getByRole('button', {name: 'Check original request', exact: true}).click();

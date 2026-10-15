@@ -64,6 +64,28 @@ def client_for(mock, **kw):
     return BatClient(cfg.host("h1"), device_id="dev-test")
 
 
+async def test_mock_awaits_delayed_handler_without_blocking_other_connections(mock):
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def delayed(_):
+        entered.set()
+        await release.wait()
+        return "fixture-branch"
+
+    mock.handlers["git:branch"] = delayed
+    async with client_for(mock) as first, client_for(mock) as second:
+        pending = asyncio.create_task(first.invoke("git:branch", {"cwd": "/fixture"}))
+        try:
+            await asyncio.wait_for(entered.wait(), 2)
+            assert not pending.done()
+            assert await second.invoke("app:get-version", {}) == "9.9.9"
+            release.set()
+            assert await pending == "fixture-branch"
+        finally:
+            release.set()
+            await asyncio.gather(pending, return_exceptions=True)
+
+
 async def test_auth_v2_and_ping(mock):
     async with client_for(mock) as c:
         assert c.auth_info["protocol"] == "bat-remote/v2"

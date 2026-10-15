@@ -76,7 +76,7 @@ try {
   await page.getByLabel('Discussion title', {exact:true}).fill('Choose a first improvement');
   await page.getByRole('button', {name:'Save',exact:true}).click();
   await page.locator('[data-discussion-composer]').fill('Keep the first action visible; retain a guided tour as an alternative.');
-  await page.getByRole('button', {name:'Send', exact:true}).click();
+  await page.getByRole('button', {name:'Save note only', exact:true}).click();
   await expect(page).toHaveURL(/#\/pm\/ws_[a-f0-9]{32}\/discussions\/pmt_[a-f0-9]{32}$/);
   const [workspaceId, , threadId] = page.url().split('/').slice(-3);
   const read = async () => {

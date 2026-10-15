@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Existing discussions offer Send to PM for ordinary native or BAT PM analysis,
+  Save note only for a stored note, and Make a plan for an explicit proposal.
+  Saved PM requests and replies appear together in the transcript. Recovery
+  checks the original request and preserves any newer composer draft.
+
 - The project website links to an interactive demo built from the shared Dashboard
   source. Its eight project views, work inspectors and session history use synthetic
   read-only data with no backend connection. The separate v1.3 workflow preview links
@@ -30,8 +35,8 @@
   one Details. Adopt and Resolve issue keep their own label while Connector
   confirms them and then settle by themselves. Check original request appears
   only when confirmation stops without a result or after a reload. A settling
-  adoption no longer shows Out of date or Ask PM again. A new discussion says
-  that the first message reaches the PM when one is set up. The current plan
+  adoption no longer shows Out of date or Ask PM again. A new discussion explains
+  that its first note is saved before asking the PM. The current plan
   revision reads Adopted. After adoption, Resolve issue is the primary action
   under the issue's title, and Cancel keeps its draft. Original-request recovery
   retains its saved receipt after completion and hides the finished Adopt control.

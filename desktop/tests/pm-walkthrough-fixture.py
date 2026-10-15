@@ -92,6 +92,15 @@ def envelope(copy, message_ref):
         "removed_requirement_ids": [], "questions": []}
 
 
+class DiskMockBat(MockBat):
+    """Disk Git reads must not stall the central HTTP service's event loop."""
+
+    def dispatch(self, channel, params):
+        if channel in {"git:log", "git:branch"}:
+            return asyncio.to_thread(super().dispatch, channel, params)
+        return super().dispatch(channel, params)
+
+
 async def seed(daemon, owner, copy):
     ops = daemon.ops
 
@@ -192,7 +201,7 @@ async def serve(commands):
         git(root, "clone", "--bare", "--no-hardlinks", str(human), str(remote))
         (human / "hello.txt").write_text("unpublished human edit\n")
         before, remote_before = snapshot(human), git(remote, "for-each-ref")
-        mock, gh = MockBat(), FakeGitHub()
+        mock, gh = DiskMockBat(), FakeGitHub()
         await mock.start()
         gh.start()
 
@@ -222,11 +231,18 @@ async def serve(commands):
             snapshot_count = daemon.ops.db.execute("SELECT count(*) FROM pm_document_snapshots").fetchone()[0]
             settings = {}
             instances = []
+            ordinary_prompts = []
 
             def reply_protocol(prompt, client_id):
-                frozen = json.loads(prompt.split("\n\n", 1)[1])["context"]
-                message_ref = "message." + frozen["messages"][-1]["message_id"]
-                settings["raw_reply"] = json.dumps(envelope(seeded["copy"], message_ref), ensure_ascii=False)
+                payload = json.loads(prompt.split("\n\n", 1)[1])
+                frozen = payload["context"]
+                if prompt.startswith("Act as this workspace's professional project manager"):
+                    ordinary_prompts.append(payload)
+                    settings["raw_reply"] = seeded["copy"]["summary"] + " " + payload["purpose"]
+                else:
+                    message_ref = "message." + next(message["message_id"] for message in reversed(frozen["messages"])
+                        if message["role"] == "user")
+                    settings["raw_reply"] = json.dumps(envelope(seeded["copy"], message_ref), ensure_ascii=False)
                 events = protocol(prompt, client_id)
                 events[2]["params"]["item"]["text"] = settings["raw_reply"]
                 events[-1]["params"]["turn"]["items"][-1]["text"] = settings["raw_reply"]
@@ -265,7 +281,8 @@ async def serve(commands):
                     if row[0] not in seed_ids]
                 browser_ops = [op for op in created if op["idempotency_key"] in request_keys]
                 assert sorted(op["action"] for op in browser_ops) == sorted([
-                    "pm.thread.create", "pm.message.append", "pm.conversation.propose", "pm.conversation.adopt", "pm.governance.revise"])
+                    "pm.thread.create", "pm.message.append", "pm.run.analyze", "pm.run.analyze",
+                    "pm.conversation.propose", "pm.conversation.adopt", "pm.governance.revise"])
                 assert all(op["actor"] == owner.actor and op["status"] == "succeeded" for op in browser_ops)
                 assert {row["key"] for row in requests} == {op["idempotency_key"] for op in browser_ops}
                 for row in requests:
@@ -307,7 +324,17 @@ async def serve(commands):
                 assert snapshot(human) == before and git(remote, "for-each-ref") == remote_before
                 assert not bat_writes(mock) and all(method == "GET" for method, _, _ in gh.requests)
                 assert ops.db.execute("SELECT count(*) FROM tasks").fetchone()[0] == 0
-                assert len(instances) == 1 and instances[0].sends == 1 and instances[0].closed
+                assert len(instances) == 3 and all(instance.sends == 1 and instance.closed for instance in instances)
+                analyses = [op for op in browser_ops if op["action"] == "pm.run.analyze"]
+                assert len(ordinary_prompts) == len(analyses) == 2
+                assert {payload["purpose"] for payload in ordinary_prompts} == {op["params"]["purpose"] for op in analyses}
+                assert len({op["target"]["thread_id"] for op in analyses}) == 1
+                assert any(message["role"] == "assistant" for message in ordinary_prompts[1]["context"]["messages"])
+                for op in analyses:
+                    run = pm_runs.get(ops.db, op["result"]["run_id"])
+                    assert run["purpose"] == op["params"]["purpose"]
+                    assert run["adapter"] == "codex-native-linux" and run["state"] == "completed"
+                    assert op["result"]["execution_authorized"] is False
                 print(json.dumps({"verified": True, "browser_operations": len(browser_ops),
                     "adoptions": 1, "resolutions": 1, "head": head, "tasks": 0, "bat_writes": 0}), flush=True)
         finally:
