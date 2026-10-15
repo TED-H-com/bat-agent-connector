@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+import uuid
 
 import pytest
 
@@ -1122,4 +1123,444 @@ def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(
         "SELECT * FROM work_attempts WHERE start_operation_id=?", (op_admin2["operation_id"],)
     ).fetchone()
     assert attempt2["predecessor_attempt_id"] == "att_" + op_admin["operation_id"][3:]
+
+
+# ---------------------------------------------------------------------------
+# Step 4 fixtures and execution tests (real disk Git + FakeGitHub + mock BAT)
+# ---------------------------------------------------------------------------
+
+from bat_agent_connector.errors import InvokeTimeout  # noqa: E402
+from tests.operation_helpers import settle_operations  # noqa: E402
+from tests.test_checkpoints import bat_writes, git, snapshot  # noqa: E402
+from tests.test_pm_package_handoff import dispatch_runner  # noqa: E402
+from tests.test_pm_package_handoff import pm as handoff_pm_fixture  # noqa: E402
+from tests.test_pm_package_handoff import ready as handoff_ready_fixture  # noqa: E402
+from tests.test_pm_package_handoff import world as handoff_world_fixture  # noqa: E402
+from tests.test_pm_plan_operations import OWNER as PLAN_OWNER  # noqa: E402
+from tests.test_pm_work_packages import action as pkg_action  # noqa: E402
+from tests.test_repository_sync import REQUEST as REPO_REQUEST  # noqa: E402
+
+world = handoff_world_fixture
+pm = handoff_pm_fixture
+ready = handoff_ready_fixture
+
+STARTER_OWNER = Principal(PLAN_OWNER.actor, frozenset({"observe", "manage", "start", "operate"}))
+
+
+@pytest.fixture
+async def start_ready(ready, monkeypatch):
+    from bat_agent_connector import api_auth, pm_source_lineage
+
+    w = ready
+    dispatch_runner(w)
+    ops = w["d"].ops
+    pm_work_start.install(ops)
+    api_auth.issue(ops.db, PLAN_OWNER.actor, ["observe", "manage", "start", "operate"])
+    monkeypatch.setattr(pm_source_lineage, "DERIVED_ACTIONS", pm_source_lineage.DERIVED_ACTIONS | {"work.start"})
+    return w
+
+
+async def _start_envelope(
+    w,
+    *,
+    work_item_id: str | None = None,
+    instruction: str = "Implement credential validation and tests.",
+    requirement_ids: list[str] | None = None,
+    delivery: str = "pull_request",
+    agent: str = "claude",
+    model: str | None = None,
+    source_sha: str | None = None,
+    key: str | None = None,
+) -> dict:
+    from bat_agent_connector import pm_evidence, pm_plans, pm_work_packages, repository_sync, work_items
+
+    ops = w["d"].ops
+    wid = w["workspace_id"]
+    wi_id = work_item_id or w["target"]["work_item_id"]
+    work = work_items._get_item(ops.db, wi_id)
+    project = work_items._get_project(ops.db, work["project_id"])
+    binding = pm_evidence._binding(ops.db, wid, wi_id)
+    plan = pm_plans.accepted_plan(ops, STARTER_OWNER, wid)["plan"]
+    pv = await repository_sync.source_preview(ops, REPO_REQUEST)
+    code_target = {**pv["target"], "source_ref": pv["source_ref"]}
+    preconditions = {
+        "expected_work_item_fingerprint": work_items.fingerprint(work),
+        "expected_work_version": work["version"],
+        "expected_binding_id": binding["binding_id"] if binding else None,
+        "expected_scope_revision": plan["adoption"]["scope_revision"],
+        "expected_previous_package_id": pm_work_packages._latest(ops.db, wid, wi_id),
+        "expected_project_version": project["version"],
+        "repository_id": pv["repository_id"],
+        "binding_digest": pv["binding_digest"],
+        "expected_source_sha": source_sha or pv["source_sha"],
+    }
+    params: dict = {
+        "instruction": instruction,
+        "agent": agent,
+        "delivery": delivery,
+        "code_target": code_target,
+    }
+    if requirement_ids is not None:
+        params["requirement_ids"] = requirement_ids
+    elif binding is None:
+        params["requirement_ids"] = ["member.login"]
+    if model is not None:
+        params["model"] = model
+    return {
+        "action": "work.start",
+        "target": {"workspace_id": wid, "work_item_id": wi_id},
+        "params": params,
+        "preconditions": preconditions,
+        "idempotency_key": key or uuid.uuid4().hex,
+    }
+
+
+async def _advance_start(ops, op_id: str, rounds: int = 6) -> dict:
+    for _ in range(rounds):
+        ops.db.execute(
+            "UPDATE operations SET next_run_at=0 WHERE operation_id=? AND status IN ('waiting_external','waiting_checks')",
+            (op_id,),
+        )
+        await settle_operations(ops)
+        cur = ops.get(op_id)
+        if cur["status"] in {"succeeded", "failed", "cancelled", "needs_attention"}:
+            break
+    cur = ops.get(op_id)
+    assert cur["error_code"] != "INTERNAL", [(s["name"], s["error"]) for s in cur["steps"] if s["error"]]
+    return cur
+
+
+async def test_work_start_unbound_and_idea_stage_compose_and_dispatch_session(start_ready, mock):
+    from bat_agent_connector import pm_lifecycle_gates, pm_package_handoff, work_items
+
+    w = start_ready
+    ops = w["d"].ops
+    wid = w["workspace_id"]
+
+    # Create a fresh unbound Work item in the bound project.
+    base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
+    unbound_wi = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {
+                "title": "Unbound login slice",
+                "goal": "Authenticate members",
+                "acceptance": "Valid credentials pass, invalid fail",
+            },
+        )
+    )["work_item_id"]
+
+    # Put workspace into 'idea' stage to verify explicit work.start succeeds without mutating stage.
+    with ops.journal.tx():
+        ops.db.execute(
+            "INSERT OR REPLACE INTO pm_lifecycle_heads VALUES(?, 'idea', 2, 1, 'pmlt_idea', ?, 'explicit')",
+            (wid, time.time()),
+        )
+
+    # Verify manual/foreign sessions already present in ws-1 ("sess-claude-0001", "sess-codex-0002") are untouched.
+    manual_ids = {t["id"] for t in mock.ws_doc["terminals"] if t["workspaceId"] == "ws-1"}
+    assert "sess-claude-0001" in manual_ids
+    human_before = snapshot(w["human"])
+
+    env = await _start_envelope(w, work_item_id=unbound_wi, key="start-unbound-1")
+    parent, fresh = ops.create(STARTER_OWNER, **env)
+    assert fresh is True
+    assert parent["result"]["stage"] == "preparing"
+
+    done = await _advance_start(ops, parent["operation_id"])
+    assert done["status"] == "succeeded", done
+    res = done["result"]
+    assert res["stage"] == "started"
+    assert res["attempt_id"] == "att_" + parent["operation_id"][3:]
+    assert res["package_reused"] is False
+    assert res["composition_profile"] == "work_start_thin_v1"
+    assert res["binding_id"].startswith("pmwb_")
+    assert res["package_id"].startswith("pmwp_")
+    assert res["children"]["bind"] is not None
+    assert res["children"]["package"] is not None
+    assert res["children"]["handoff"] is not None
+    assert res["execution_operation_id"] == res["children"]["handoff"]
+    assert res["session"]["host"] == "h1"
+    assert isinstance(res["session"]["session_id"], str) and res["session"]["session_id"]
+    assert res["session"]["session_id"] not in manual_ids
+    assert res["existing_sessions"] == "continue_under_original_authority"
+
+    # Idea stage is preserved unchanged.
+    assert pm_lifecycle_gates.head(ops.db, wid)["stage"] == "idea"
+
+    # Human checkout and manual sessions are untouched.
+    assert snapshot(w["human"]) == human_before
+    for inv in mock.invokes:
+        assert inv["params"].get("sessionId") not in manual_ids
+
+    # Prompt sent to the new managed session contains the complete canonical handoff contract.
+    handoff_op = ops.get(res["children"]["handoff"])
+    saved_contract = pm_package_handoff.binding(handoff_op)["contract"]
+    send_inv = next(inv["params"] for inv in mock.invokes if inv["channel"] == "claude:send-message")
+    assert pm_package_handoff.canonical(saved_contract) in send_inv["prompt"]
+    assert git(handoff_op["result"]["worktree_path"], "rev-parse", "HEAD") == w["sha"]
+
+    # Replay with the same idempotency_key returns the same operation with zero extra BAT writes.
+    replay, fresh_replay = ops.create(STARTER_OWNER, **env)
+    assert fresh_replay is False
+    assert replay["operation_id"] == parent["operation_id"]
+    assert mock.channels().count("claude:start-session") == 1
+    assert mock.channels().count("claude:send-message") == 1
+
+
+async def test_failed_handoff_preserves_package_and_retry_reuses_it(start_ready, mock, monkeypatch):
+    from bat_agent_connector import pm_work_packages, repository_sync
+
+    w = start_ready
+    ops = w["d"].ops
+    wid = w["workspace_id"]
+    wi_id = w["target"]["work_item_id"]
+
+    # Fail the first handoff during source.resolve (after package creation succeeds, before any BAT session is started).
+    orig_folder = mock.ws_doc["workspaces"][0]["folderPath"]
+    env1 = await _start_envelope(w, key="start-fail-handoff-1")
+    orig_source_preview = repository_sync.source_preview
+    preview_calls = 0
+
+    async def move_after_package_preview(*args, **kwargs):
+        nonlocal preview_calls
+        res = await orig_source_preview(*args, **kwargs)
+        preview_calls += 1
+        if preview_calls == 1:
+            mock.ws_doc["workspaces"][0]["folderPath"] = orig_folder + "-temporarily-moved"
+        return res
+
+    monkeypatch.setattr(repository_sync, "source_preview", move_after_package_preview)
+    op1, _ = ops.create(STARTER_OWNER, **env1)
+    done1 = await _advance_start(ops, op1["operation_id"])
+    assert done1["status"] == "needs_attention", done1
+    assert done1["error_code"] == "REPOSITORY_BINDING_CHANGED"
+    res1 = done1["result"]
+    assert res1["stage"] == "start_failed"
+    assert res1["package_reused"] is False
+    created_pkg_id = res1["package_id"]
+    assert isinstance(created_pkg_id, str) and created_pkg_id.startswith("pmwp_")
+    assert res1["session"] is None
+    assert not bat_writes(mock)
+    assert pm_work_packages._latest(ops.db, wid, wi_id) == created_pkg_id
+
+    # Restore workspace folder and mark first attempt failed so a fresh start attempt can be submitted.
+    mock.ws_doc["workspaces"][0]["folderPath"] = orig_folder
+    ops._transition(op1["operation_id"], "failed", error_code="REPOSITORY_BINDING_CHANGED", reason="Binding moved")
+
+    # Second start with same inputs and updated expected_previous_package_id reuses the package.
+    env2 = await _start_envelope(w, key="start-retry-reuse-2")
+    assert env2["preconditions"]["expected_previous_package_id"] == created_pkg_id
+    op2, _ = ops.create(STARTER_OWNER, **env2)
+    assert op2["result"]["stage"] == "package_prepared"
+    done2 = await _advance_start(ops, op2["operation_id"])
+    assert done2["status"] == "succeeded", done2
+    res2 = done2["result"]
+    assert res2["stage"] == "started"
+    assert res2["package_reused"] is True
+    assert res2["package_id"] == created_pkg_id
+    assert res2["children"]["bind"] is None
+    assert res2["children"]["package"] is None
+    assert res2["children"]["handoff"] is not None
+    assert res2["session"]["session_id"]
+
+    # Only 1 package was ever created for this Work item.
+    pkg_count = ops.db.execute(
+        "SELECT COUNT(*) FROM pm_work_packages WHERE workspace_id=? AND work_item_id=?",
+        (wid, wi_id),
+    ).fetchone()[0]
+    assert pkg_count == 1
+
+
+@pytest.mark.parametrize("move_point", ["before_package", "before_handoff"])
+async def test_published_head_move_requires_re_review_and_new_start_creates_package_revision(
+    start_ready, mock, move_point
+):
+    from bat_agent_connector import pm_work_packages
+
+    w = start_ready
+    ops = w["d"].ops
+    wid = w["workspace_id"]
+
+    env1 = await _start_envelope(w, key=f"start-move-{move_point}-1")
+
+    # Prepare a second commit in a separate clone and push to remote.git.
+    code = w["human"].parent / f"new-code-{move_point}"
+    git(w["human"].parent, "clone", "-q", str(w["remote"]), str(code))
+    git(code, "config", "user.name", "fixture")
+    git(code, "config", "user.email", "fixture@example.invalid")
+    (code / "hello.txt").write_text(f"moved head {move_point}\n")
+    git(code, "add", ".")
+    git(code, "commit", "-qm", f"Move head {move_point}")
+    git(code, "push", "-q", "origin", "main")
+    new_sha = git(code, "rev-parse", "HEAD")
+
+    if move_point == "before_package":
+        w["state"]["sha"] = new_sha
+        op1, _ = ops.create(STARTER_OWNER, **env1)
+        done1 = await _advance_start(ops, op1["operation_id"])
+        assert done1["status"] == "needs_attention", done1
+        assert done1["error_code"] == "PM_PACKAGE_CODE_SOURCE_CHANGED"
+        assert "review again" in done1["status_reason"].lower()
+        assert done1["result"]["stage"] == "start_failed"
+        assert not bat_writes(mock)
+        return
+
+    # move_point == "before_handoff": let package creation succeed at old SHA, then move GitHub SHA before handoff resolve.
+    w["runner"].before["fetch"] = lambda _: w["state"].__setitem__("sha", new_sha)
+    op1, _ = ops.create(STARTER_OWNER, **env1)
+    done1 = await _advance_start(ops, op1["operation_id"])
+    assert done1["status"] == "needs_attention", done1
+    assert done1["error_code"] == "REPOSITORY_REF_CHANGED"
+    assert "review again" in done1["status_reason"].lower()
+    assert done1["result"]["stage"] == "start_failed"
+    first_pkg_id = done1["result"]["package_id"]
+    assert isinstance(first_pkg_id, str) and first_pkg_id.startswith("pmwp_")
+    assert not bat_writes(mock)
+
+    # Transition op1 to terminal failed so the user can start again with the reviewed new SHA.
+    ops._transition(op1["operation_id"], "failed", error_code="REPOSITORY_REF_CHANGED", reason=done1["status_reason"])
+    env2 = await _start_envelope(w, source_sha=new_sha, key="start-move-before_handoff-2")
+    assert env2["preconditions"]["expected_previous_package_id"] == first_pkg_id
+    op2, _ = ops.create(STARTER_OWNER, **env2)
+    done2 = await _advance_start(ops, op2["operation_id"])
+    assert done2["status"] == "succeeded", done2
+    res2 = done2["result"]
+    assert res2["stage"] == "started"
+    assert res2["package_reused"] is False
+    second_pkg_id = res2["package_id"]
+    assert second_pkg_id != first_pkg_id
+
+    # Verify the new package links previous_package_id to first_pkg_id and first_pkg_id is untouched.
+    pkg1 = pm_work_packages.get_package(ops, STARTER_OWNER, wid, first_pkg_id)["package"]
+    pkg2 = pm_work_packages.get_package(ops, STARTER_OWNER, wid, second_pkg_id)["package"]
+    assert pkg1["document"]["code_source"]["source_sha"] == w["sha"]
+    assert pkg2["document"]["code_source"]["source_sha"] == new_sha
+    assert pkg2["previous_package_id"] == first_pkg_id
+
+
+@pytest.mark.parametrize("channel", ["claude:start-session", "claude:send-message"])
+async def test_lost_ack_marks_start_unknown_and_reconciles_without_second_send(start_ready, mock, monkeypatch, channel):
+    w = start_ready
+    ops = w["d"].ops
+    client = w["d"].fleet.client("h1")
+    invoke, lost = client.invoke, False
+
+    async def lose_once(name, *args, **kwargs):
+        nonlocal lost
+        value = await invoke(name, *args, **kwargs)
+        if name == channel and not lost:
+            lost = True
+            raise InvokeTimeout(f"Simulated lost ACK on {channel}")
+        return value
+
+    monkeypatch.setattr(client, "invoke", lose_once)
+    env = await _start_envelope(w, key=f"start-lost-ack-{channel}")
+    parent, _ = ops.create(STARTER_OWNER, **env)
+
+    # Advance until handoff hits the lost ACK and becomes uncertain.
+    for _ in range(4):
+        ops.db.execute(
+            "UPDATE operations SET next_run_at=0 WHERE operation_id=? AND status IN ('waiting_external','waiting_checks')",
+            (parent["operation_id"],),
+        )
+        await settle_operations(ops)
+        cur_parent = ops.get(parent["operation_id"])
+        if cur_parent["result"] and cur_parent["result"].get("stage") == "start_unknown":
+            break
+
+    cur_parent = ops.get(parent["operation_id"])
+    assert cur_parent["status"] == "waiting_external"
+    assert cur_parent["result"]["stage"] == "start_unknown"
+    handoff_id = cur_parent["result"]["children"]["handoff"]
+    assert handoff_id is not None
+
+    # Now let the uncertain handoff child reconcile by reading back the sent effect, then wake the parent.
+    for _ in range(5):
+        ops.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (handoff_id,))
+        ops.db.execute("UPDATE operations SET next_run_at=0 WHERE operation_id=?", (parent["operation_id"],))
+        await settle_operations(ops)
+        done = ops.get(parent["operation_id"])
+        if done["status"] == "succeeded":
+            break
+
+    done = ops.get(parent["operation_id"])
+    assert done["status"] == "succeeded", done
+    assert done["result"]["stage"] == "started"
+    assert done["result"]["session"]["session_id"]
+    assert mock.channels().count("claude:start-session") == 1
+    assert mock.channels().count("claude:send-message") == 1
+
+
+async def test_restart_mid_chain_and_parent_cancellation_preserve_child_authority(start_ready, mock):
+    from bat_agent_connector import work_items
+
+    w = start_ready
+    ops = w["d"].ops
+
+    # 1. Restart mid-chain: execute only the first parent tick (admitting bind child) and bind child completion,
+    # then create a brand-new OperationService on the same journal and finish without duplicating children.
+    base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
+    wi_restart = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Restart mid-chain slice", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    env_restart = await _start_envelope(w, work_item_id=wi_restart, key="start-restart-mid")
+    op_restart, _ = ops.create(STARTER_OWNER, **env_restart)
+    await ops._execute(op_restart["operation_id"])
+    mid = ops.get(op_restart["operation_id"])
+    assert mid["status"] == "waiting_external"
+    bind_id = mid["result"]["children"]["bind"]
+    assert bind_id is not None
+    assert mid["result"]["children"]["package"] is None
+    await ops._execute(bind_id)
+    assert ops.get(bind_id)["status"] == "succeeded"
+
+    # Instantiate a second OperationService over the same journal (simulating daemon restart).
+    ops2 = OperationService(ops.journal, actions=list(ops.actions.values()))
+    ops2.context.update(ops.context)
+    pm_work_start.install(ops2)
+    done_restart = await _advance_start(ops2, op_restart["operation_id"])
+    assert done_restart["status"] == "succeeded", done_restart
+    assert done_restart["result"]["children"]["bind"] == bind_id
+    assert (
+        ops.db.execute(
+            "SELECT COUNT(*) FROM pm_work_start_children WHERE parent_id=?", (op_restart["operation_id"],)
+        ).fetchone()[0]
+        == 3
+    )
+
+    # 2. Cancelling parent after bind child is created stops new child creation while bind child still finishes.
+    wi_cancel = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Cancelled slice", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    env_cancel = await _start_envelope(w, work_item_id=wi_cancel, key="start-cancel-before-package")
+    op_cancel, _ = ops.create(STARTER_OWNER, **env_cancel)
+    await ops._execute(op_cancel["operation_id"])
+    cancel_bind_id = ops.get(op_cancel["operation_id"])["result"]["children"]["bind"]
+    assert cancel_bind_id is not None
+    cancelled = ops.cancel(STARTER_OWNER, op_cancel["operation_id"])
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["result"]["existing_sessions"] == "continue_under_original_authority"
+    # Already-admitted bind child continues and finishes under its own operation, while no package/handoff child is created.
+    await settle_operations(ops)
+    assert ops.get(cancel_bind_id)["status"] == "succeeded"
+    assert (
+        ops.db.execute(
+            "SELECT COUNT(*) FROM pm_work_start_children WHERE parent_id=?", (op_cancel["operation_id"],)
+        ).fetchone()[0]
+        == 1
+    )
+
 
