@@ -81,7 +81,7 @@ export function orchestrationPanel({h, t, api, caps, guard, ready, errorBox, opS
   const label = (key, input) => h('label', {}, t(key), input);
   const inputs = {host, selection, message, queue, agent, maximum};
   function fill() {host.value = saved.host; selection.value = saved.selection; message.value = saved.message; queue.checked = saved.queue; agent.value = saved.agent; maximum.value = saved.max_items;}
-  const showError = error => {if (current()) status.replaceChildren(errorBox(error));};
+  const showError = error => {if (current()) status.replaceChildren(errorBox(error, {within:status}));};
   function renderSelection() {
     const id = row => sessionMode(mode) ? row.session_id : row.workspace_id;
     selection.replaceChildren(h('option', {value: ''}, t(sessionMode(mode) ? 'orch_choose_session' : 'start_choose_workspace')),

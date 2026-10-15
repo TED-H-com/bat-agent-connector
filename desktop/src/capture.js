@@ -57,7 +57,7 @@ export function capturePanel({h, t, api, caps, guard, onEvents, errorBox, storag
     !/[\x00-\x1f\x7f-\x9f/\\]/.test(input.session_id) && input.relative_path &&
     new TextEncoder().encode(input.relative_path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(input.relative_path) &&
     input.relative_path.split("/").every(part => part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
-  const showError = error => {if (currentView()) notice.replaceChildren(errorBox(error));};
+  const showError = error => {if (currentView()) notice.replaceChildren(errorBox(error, {within:notice}));};
   const preview = h("button", {class: "secondary", onclick: async () => {
     const input = current(); guard();
     if (busy || saved.intent || !mayPreview() || !validInput(input)) return;

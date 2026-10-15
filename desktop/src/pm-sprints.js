@@ -73,7 +73,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
   }
   function unavailable(error) {
     loaded = false; update(); view.replaceChildren(); choose.replaceChildren(); editors.hidden = true; toolbar.hidden = true;
-    status.replaceChildren(h('div', {class: 'pm-tool-head'}, h('div', {class: 'pm-tool-note'}, errorBox(error)), refreshButton));
+    status.replaceChildren(h('div', {class: 'pm-tool-head'}, h('div', {class: 'pm-tool-note'}, errorBox(error, {within:status})), refreshButton));
   }
   const rationale = () => input('pm_sprint_reason', {multiline: true, max: 4000});
   const row = (label, contents) => h('section', {class: 'pm-brief-row'}, h('h3', {}, t(label)), h('div', {class: 'pm-brief-values'}, contents));

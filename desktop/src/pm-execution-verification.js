@@ -41,7 +41,7 @@ export function workspaceExecutionVerification({h,t,api,alive,workspaceId,worksp
         preconditions:()=>({handoff_contract_digest:fields.handoff_contract_digest.value}),permitted:admissible,recoverPermitted:writer,label:'pmq_verify_run',onSaved,
         onStateChange:()=>{rebase.hidden=matches();rebase.disabled=!writer()||!!editor?.locked();},extra:h('div',{},h('p',{class:'muted'},t('pmq_verify_effect')),h('div',{class:'actions'},rebase))});
       holder.replaceChildren(editor.box);editor.update();
-    }catch(err){if(valid(ticket)){clear();status.replaceChildren(errorBox(err));if([401,403,404].includes(err.status))onUnavailable(err);}}
+    }catch(err){if(valid(ticket)){clear();status.replaceChildren(errorBox(err, {within:status}));if([401,403,404].includes(err.status))onUnavailable(err);}}
   }
   async function setSources(rows){
     generation++;clear();sources=rows;picker.replaceChildren(h('option',{value:''},t('pmq_choose')),...rows.map(row=>h('option',{value:row.operation_id},optionLabel(row))));

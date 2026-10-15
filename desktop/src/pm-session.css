@@ -149,6 +149,7 @@ main.session-view > .session-workspace { flex: 1 1 auto; min-height: 0; align-it
 .session-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .session-workspace .session-status:empty { display: none; }
 .session-workspace .session-status { flex: none; max-height: 20dvh; overflow: auto; }
+.session-workspace .session-status:has(details[open]) { max-height: 32dvh; }
 .session-error-line { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); color: var(--bad); margin: var(--space-2) 0; }
 .session-error-action { border: 0; background: transparent; color: inherit; padding: 0; font: inherit; text-decoration: underline; cursor: pointer; }
 .session-error { padding: var(--space-2); background: var(--bad-soft); border-radius: var(--r-sm); }

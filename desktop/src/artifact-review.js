@@ -84,7 +84,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   const currentView = () => {try {guard(); return !disposed;} catch {return false;}};
   const persist = (required = false) => {guard(); try {localStorage.setItem(storageKey, JSON.stringify(saved)); return true;}
     catch {if (required) throw new Error(t('ar_storage')); return false;} };
-  const showError = error => {if (currentView()) notice.replaceChildren(errorBox(error));};
+  const showError = error => {if (currentView()) notice.replaceChildren(errorBox(error, {within:notice}));};
   const supported = () => caps()?.artifacts?.capture?.managed_single_file === true;
   const scope = name => caps()?.scopes?.includes(name);
   const allowed = name => caps()?.actions?.some(a => a.action === name && a.allowed === true);
@@ -230,7 +230,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
     h('div', {class: 'capture-fields'}, h('label', {}, t('ar_execution'), choice), h('label', {}, t('capture_path'), path)), custom,
     h('div', {class: 'actions'}, reload, moreExecutions, preview), evidence,
     h('label', {class: 'capture-choice'}, reviewed, t('capture_review')), h('div', {class: 'actions'}, capture, reset));
-  const moreArtifacts = h('button', {class: 'secondary', hidden: true, onclick: () => loadCatalog(true).catch(e => catalogNotice.replaceChildren(errorBox(e)))}, t('more'));
+  const moreArtifacts = h('button', {class: 'secondary', hidden: true, onclick: () => loadCatalog(true).catch(e => catalogNotice.replaceChildren(errorBox(e, {within:catalogNotice})))}, t('more'));
   const catalogPanel = h('section', {class: 'panel'}, h('h2', {}, t('ar_catalog')), catalog, catalogNotice, h('div', {class: 'actions'}, moreArtifacts));
   container.append(pageHeader({title: t('ar_title')}), disclosure({label: t('global_details'), body: h('p', {}, t('ar_help'))}), capturePanel, reviewPanel,
     h('div', {class: 'actions'}, check), outcome, notice, catalogPanel);
@@ -370,7 +370,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
       if (!rows.size) catalog.append(h('p', {class: 'muted'}, t('ar_no_artifacts')));
     })(); moreArtifacts.disabled = true;
     try {await catalogReading;}
-    catch (error) {if (currentView()) catalogNotice.replaceChildren(errorBox(error)); throw error;}
+    catch (error) {if (currentView()) catalogNotice.replaceChildren(errorBox(error, {within:catalogNotice})); throw error;}
     finally {catalogReading = null; moreArtifacts.disabled = false;}
   }
   async function refresh(fresh = false) {
@@ -403,7 +403,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   const initial = [];
   if (!saved.capture) initial.push(loadSource());
   if (saved.capture?.operation_id || saved.accept?.operation_id || context.kind === 'artifact') initial.push(refresh());
-  initial.push(loadCatalog().catch(error => {if (currentView()) catalogNotice.replaceChildren(errorBox(error));}));
+  initial.push(loadCatalog().catch(error => {if (currentView()) catalogNotice.replaceChildren(errorBox(error, {within:catalogNotice}));}));
   const results = await Promise.allSettled(initial);
   for (const result of results) if (result.status === 'rejected') {readFailed = true; showError(result.reason);}
   // An accepted capture may outlive its source. Restore display evidence without a live source read.

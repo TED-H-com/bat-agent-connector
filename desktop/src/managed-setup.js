@@ -107,7 +107,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
         // An accidentally pasted credential URL must never enter a draft.
         saved[name] = name === 'url' && /[?@#]/.test(node.value) ? '' : node.value;
         if (["url", "fingerprint", "profile_id"].includes(name)) {saved.import_profile_id = ""; profile.value = "";}
-        try {persist();} catch (error) {message.replaceChildren(errorBox(error));}
+        try {persist();} catch (error) {message.replaceChildren(errorBox(error, {within:message}));}
       }
       unsaved.hidden = false;
       if (!composing.has(name)) fieldError(name, null);
@@ -286,7 +286,7 @@ export function managedSetupPanel({h, t, api, guard, namespace, errorBox, refres
     if (!only && Object.keys(faults).length) focusField(names.find(name => faults[name]));
     return !Object.keys(faults).length;
   }
-  function showError(error, options) {if (alive()) {message.replaceChildren(errorBox(error, options)); update();}}
+  function showError(error, options) {if (alive()) {message.replaceChildren(errorBox(error, {...options, within:message})); update();}}
   function update() {
     if (!alive()) return;
     const locked = busy || !snapshot || !readReady || !!saved.intent || snapshot.busy;
