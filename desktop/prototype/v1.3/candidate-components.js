@@ -54,6 +54,7 @@ export function composer({
   onIntent,
   onInput,
   onSend,
+  onPlan,
   onNote
 }) {
   const intent = state.composerIntent;
@@ -66,7 +67,7 @@ export function composer({
     class: "proto-composer",
     "data-testid": "intent-composer",
     "data-active-intent": intent
-  }, segmented({
+  }, details(segmented({
     label: t("intent"),
     value: intent,
     options: ["discuss", "plan", "do"].map(value => ({
@@ -74,19 +75,19 @@ export function composer({
       label: t(value)
     })),
     onChange: onIntent
-  }), h("textarea", {
+  }), "messageOptions"), h("textarea", {
     rows: 3,
     "aria-label": t("messageLabel"),
     placeholder: t("messagePlaceholder"),
     "data-testid": "composer-textarea",
     oninput: e => onInput(e.target.value)
-  }, state.composerDraft), intent === "discuss" && (state.composerDraft.trim() || state.pmReplied) ? h("div", {
+  }, state.composerDraft), intent === "discuss" && state.pmReplied && !state.planVisible ? h("div", {
     class: "proto-suggestion",
     "data-testid": "intent-suggestion-banner"
-  }, t("suggestion"), action("toPlan", "suggest-switch-plan", () => onIntent("plan"), "ghost"), action("toDo", "suggest-switch-do", () => onIntent("do"), "ghost")) : intent !== "discuss" ? action("toDiscuss", "suggest-switch-discuss", () => onIntent("discuss"), "ghost") : null, state.noteSavedBanner ? notice("noteSaved", "note-saved-banner", "ok") : null, h("div", {
+  }, t("suggestion"), action("makePlan", "suggest-switch-plan", onPlan, "ghost", {disabled: !state.pmAvailable})) : intent !== "discuss" ? action("toDiscuss", "suggest-switch-discuss", () => onIntent("discuss"), "ghost") : null, state.noteSavedBanner ? notice("noteSaved", "note-saved-banner", "ok") : null, h("div", {
     class: "proto-actions"
   }, intent === "discuss" ? action("saveNote", "composer-save-note", onNote) : null, action(keys[intent][0], keys[intent][1], onSend, "primary", {
-    disabled: intent === "discuss" && !state.pmAvailable
+    disabled: intent !== "do" && !state.pmAvailable
   })));
 }
 export function planCard(state, adoptLater, adoptStart) {

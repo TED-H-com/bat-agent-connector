@@ -156,9 +156,10 @@ async function discussionToQueue({page, lang, width, all, capture}: Flow) {
     await expect(page.getByTestId('composer-textarea')).toHaveValue(draft);
   }
   await expect(page.locator('.proto-composer [role=radio]')).toHaveText(lang === 'en' ? ['Discuss', 'Plan', 'Do'] : ['討論', '規劃', '做事']);
-  await expect(page.getByTestId('suggest-switch-plan')).toHaveText(lang === 'en' ? 'Switch to plan' : '切換至規劃');
-  await expect(page.getByTestId('suggest-switch-do')).toHaveText(lang === 'en' ? 'Switch to do' : '切換至做事');
-  await page.getByTestId('suggest-switch-do').click();
+  await expect(page.getByTestId('intent-suggestion-banner')).toHaveCount(0);
+  await expect(page.locator('.proto-composer [role=radio]').first()).toBeHidden();
+  await page.getByText(lang === 'en' ? 'Message options' : '訊息選項', {exact: true}).click();
+  await page.getByRole('radio', {name: lang === 'en' ? 'Do' : '做事', exact: true}).click();
   await expect(page.getByTestId('suggest-switch-discuss')).toHaveText(lang === 'en' ? 'Switch to discuss' : '切換至討論');
   await page.getByTestId('suggest-switch-discuss').click();
   await page.getByTestId('composer-save-note').click();
@@ -182,8 +183,8 @@ async function discussionToQueue({page, lang, width, all, capture}: Flow) {
   await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '0');
   await page.getByTestId('suggest-switch-plan').click();
   await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '0');
-  await expect(page.getByTestId('suggest-switch-discuss')).toHaveText(lang === 'en' ? 'Switch to discuss' : '切換至討論');
-  await page.getByTestId('composer-update-plan').click();
+  await expect(page.getByTestId('intent-composer')).toHaveAttribute('data-active-intent', 'discuss');
+  await expect(page.getByTestId('short-plan-card')).toBeVisible();
   await capture('04-short-plan');
   await page.getByTestId('plan-adopt-later').click();
   await expect(page.getByTestId('plan-adopted-later-notice')).toBeVisible();
@@ -197,7 +198,7 @@ async function discussionToQueue({page, lang, width, all, capture}: Flow) {
   for (let i = 1; i <= 8; i++) await expect(page.getByTestId(`adopt-step-s${i}`)).toHaveAttribute('data-step-status', 'done');
   await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '1');
   await capture('06-adopt-and-start', true);
-  await page.getByTestId('adopt-open-work-page').click();
+  await expect(page.getByTestId('view-work-main')).toBeVisible();
   await expect(page.getByTestId('scenario-picker')).toHaveValue('running');
   await expect(page.getByTestId('work-area-results')).toHaveCount(0);
   await expect(page.getByTestId('live-stream-output')).toBeVisible();
@@ -238,7 +239,8 @@ async function workToDelivery({page, lang, width, all, capture}: Flow) {
     await expect(page.getByTestId('work-question-card')).toHaveCount(value === 'waiting_input' ? 1 : 0);
     await expect(page.getByTestId('turn-summary')).toHaveCount(['turn_ended', 'awaiting_verification'].includes(value) ? 1 : 0);
     await expect(page.getByTestId('work-area-results')).toHaveCount(value === 'awaiting_verification' ? 1 : 0);
-    await expect(page.getByTestId('pm-assessment-card')).toHaveCount(0);
+    await expect(page.getByTestId('pm-assessment-card')).toHaveCount(value === 'awaiting_verification' ? 1 : 0);
+    await expect(page.getByTestId('pm-assessment-card')).not.toBeVisible();
     await expect(page.getByTestId('interrupt-work')).toHaveCount(value === 'running' ? 1 : 0);
     if (value !== 'running') await expect(page.getByTestId('product-shell').getByText(lang === 'en' ? 'Sent after the current turn ends.' : '本輪結束後才會送出。', {
       exact: true
@@ -283,6 +285,9 @@ async function workToDelivery({page, lang, width, all, capture}: Flow) {
   await expect(page.getByTestId('delivery-state-accepted')).toHaveAttribute('data-delivery-achieved', 'false');
   await capture('11-work-pr-and-pm-backfill');
   await page.getByTestId('review-pm-summary').click();
+  await expect(page.getByTestId('view-work-main')).toBeVisible();
+  await expect(page.getByTestId('pm-current-judgment')).toBeVisible();
+  await page.getByTestId('assessment-open-overview').click();
   await expect(page.getByTestId('view-overview')).toBeVisible();
   await expect(page.getByTestId('pm-current-judgment')).toBeVisible();
   await expect(page.getByTestId('pm-assessment-card').getByRole('heading', {name: lang === 'en' ? 'Sources' : '來源', exact: true})).toBeVisible();
@@ -510,11 +515,87 @@ test('tablet shell and explicit adopt-and-start', async ({
     width: 768,
     height: 900
   });
+  await page.clock.install();
   await page.goto('/prototype/v1.3/?lang=en&scene=planned');
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
   await page.getByTestId('plan-adopt-start').click();
+  await expect(page.getByTestId('view-work-main')).toBeVisible();
+  await expect(page.getByTestId('scenario-picker')).toHaveValue('preparing_worktree');
+  await expect(page.getByTestId('compound-step-list')).not.toBeVisible();
+  await page.clock.runFor(350);
+  await expect(page.getByTestId('scenario-picker')).toHaveValue('starting');
+  await page.clock.runFor(350);
+  await expect(page.getByTestId('live-stream-output')).toBeVisible();
   await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '1');
   await health(page, 'en');
   await shot(page, '20-tablet-adopt-en-768.png');
+});
+
+for (const lang of ['en', 'zh-TW'] as const) for (const width of [1440, 768, 390]) for (const origin of ['work', 'discussion']) {
+  test(`one PM decision from ${origin} stays in context (${lang} @ ${width})`, async ({browser}) => {
+    await walk(browser, lang, width, async ({page, capture}) => {
+      await page.goto(`/prototype/v1.3/?lang=${lang}&scene=awaiting_verification`);
+      await showResults(page, width);
+      await page.getByTestId('btn-create-pr').click();
+      const identity = await page.getByTestId('pm-assessment-card').getAttribute('data-assessment-id');
+      if (origin === 'discussion') {
+        if (width < 1200) await page.keyboard.press('Escape');
+        await page.getByTestId('work-return-discussion').click();
+        if (width < 1200) await page.getByTestId('inspector-drawer-toggle').click();
+        await page.getByTestId('context-inspector').getByRole('tab', {name: lang === 'en' ? 'PM summary' : 'PM 摘要', exact: true}).click();
+      } else await page.getByTestId('review-pm-summary').click();
+      await expect(page.getByTestId('pm-assessment-card')).toHaveAttribute('data-assessment-id', identity!);
+      await expect(page.getByTestId('pm-current-judgment')).toBeVisible();
+      await page.getByTestId('decision-accept-overview').scrollIntoViewIfNeeded();
+      if (origin === 'work' && width === 1440) await expect(page.getByTestId('turn-summary')).toBeInViewport();
+      if (width < 1200) await expect(page.getByTestId(origin === 'work' ? 'results-inspector' : 'context-inspector').locator(':scope > header')).toBeInViewport();
+      await page.getByTestId('decision-accept-overview').click();
+      await expect(page.getByTestId(origin === 'work' ? 'view-work-main' : 'view-discussions')).toBeVisible();
+      await expect(page.getByTestId('pm-owner-decision-banner')).toBeVisible();
+      await expect(page.getByTestId('pm-owner-decisions')).toHaveCount(0);
+      await capture(`26-${origin}-decision`, true);
+      await page.getByTestId('assessment-open-overview').click();
+      await expect(page.getByTestId('pm-assessment-card')).toHaveAttribute('data-assessment-id', identity!);
+      await expect(page.getByTestId('pm-owner-decision-banner')).toBeVisible();
+      await expect(page.getByTestId('pm-owner-decisions')).toHaveCount(0);
+      await expect(page.getByTestId('delivery-state-accepted')).toHaveAttribute('data-delivery-achieved', 'true');
+      await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '1');
+      await health(page, lang);
+    });
+  });
+}
+
+test('opening preparing work preserves the discussion draft and adopted plan', async ({page}) => {
+  await page.clock.install();
+  await page.goto('/prototype/v1.3/?lang=en&scene=planned');
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await page.getByTestId('composer-textarea').fill('Keep the password field after a failure.');
+  await page.getByTestId('plan-adopt-start').click();
+  await expect(page.getByTestId('view-work-main')).toBeVisible();
+  await expect(page.getByTestId('work-pre-output')).toBeVisible();
+  await expect(page.getByTestId('live-stream-output')).toHaveCount(0);
+  await page.getByTestId('work-return-discussion').click();
+  await page.getByTestId('discussion-compose').click();
+  await expect(page.getByTestId('composer-textarea')).toHaveValue('Keep the password field after a failure.');
+  await page.getByTestId('work-started-summary').getByText('Plan', {exact: true}).click();
+  await expect(page.getByTestId('short-plan-card')).toContainText('Sign-in button and its regression tests.');
+  await page.getByTestId('adopt-open-work-page').click();
+  await page.clock.runFor(700);
+  await expect(page.getByTestId('live-stream-output')).toBeVisible();
+  await expect(page.getByTestId('counter-start-requests')).toHaveAttribute('data-count', '1');
+  await expect(page.getByTestId('counter-duplicate-starts')).toHaveAttribute('data-count', '0');
+});
+
+test('discussion context remains available after reviewing a result and starting another turn', async ({page}) => {
+  await page.setViewportSize({width: 1440, height: 949});
+  await page.goto('/prototype/v1.3/?lang=en&scene=awaiting_verification');
+  await page.getByTestId('work-return-discussion').click();
+  await page.getByTestId('context-inspector').getByRole('tab', {name: 'PM summary', exact: true}).click();
+  await expect(page.getByTestId('pm-current-judgment')).toBeVisible();
+  await workState(page, 'running');
+  await page.getByTestId('work-return-discussion').click();
+  await expect(page.getByTestId('context-inspector').getByRole('tab', {name: 'Context', exact: true})).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-info-tab="context"]')).toBeVisible();
 });
 const regression = expect.configure({
   soft: true,
