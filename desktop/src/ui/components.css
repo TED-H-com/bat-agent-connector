@@ -61,6 +61,7 @@
 .ui-inline-error > [data-error-summary] { grid-column: 2; min-width: 0; }
 .ui-inline-error > .ui-button { grid-column: 3; justify-self: end; flex-shrink: 0; }
 .ui-inline-error > .ui-disclosure { grid-column: 1 / -1; width: 100%; color: var(--text); }
+[data-error-details] { overflow-wrap: anywhere; word-break: break-word; }
 .ui-context-chip { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 24px; padding: 0 8px; background: var(--surface-2); border-radius: var(--r-pill); font-size: var(--fs-small); }
 .ui-context-chip .ui-icon-button { height: 24px; min-height: 24px; width: 24px; min-width: 24px; }
 .ui-agent-mark { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--surface-3); font-size: var(--fs-caption); font-weight: 500; }

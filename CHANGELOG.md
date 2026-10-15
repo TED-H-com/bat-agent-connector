@@ -67,7 +67,13 @@
   Frontend TypeScript test helpers are allowlisted, with a guard preventing native
   build steps or their relative imports from depending on them.
 
-- Operations list, operation inspector, model preferences, project skills, and result sources display localized summaries with server diagnostics in closed Details disclosures. Compact status controls (composer shortcut, artifact preview, and maintenance repair policy rules) display localized short summaries without Details disclosures, with composer shortcut indicating browser storage failure. In inline errors, the Retry button remains on the summary line preceding the full-width Details disclosure, preventing raw error text and bare error codes in both locales.
+- Errors no longer show raw server text or bare codes in either language. Inline
+  errors, the Operations list and its inspector, Settings → Model preferences and
+  Project skill sources, result sources, the session reading actions and an
+  unreadable delivery source show a localized sentence with the code in a closed
+  Details. The composer shortcut, artifact preview and repair-policy rule show a
+  short sentence without Details. Inline errors keep Retry beside the sentence,
+  with Details below it.
 
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal

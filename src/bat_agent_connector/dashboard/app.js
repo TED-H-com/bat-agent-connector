@@ -45616,7 +45616,7 @@ function readingSummary(t, reading) {
 		detail: ""
 	};
 }
-function conversationPanel({ h, t, when, guard, errorBox, readingActions = null, memory = null }) {
+function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
 		tabindex: "0",
@@ -45638,7 +45638,7 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 		hidden: true,
 		onclick: () => {
 			if (olderWindow && readingActions) {
-				run(() => readingActions.latest());
+				run(() => readingActions.latest(), t("message_window_failed"), false);
 				return;
 			}
 			follow();
@@ -45659,7 +45659,7 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 				message_id: row.id,
 				revision: row.reading.revision
 			}));
-			if (messages.length) run(() => readingActions.mark(messages));
+			if (messages.length) run(() => readingActions.mark(messages), t("conversation_save_failed"), true);
 		}
 	}, t("conversation_mark"));
 	const remember = h("button", {
@@ -45671,14 +45671,14 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 				message_id: row.id,
 				revision: row.reading.revision,
 				offset: Math.round(row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)
-			}, reading?.position?.version || 0));
+			}, reading?.position?.version || 0), t("conversation_save_failed"), true);
 		}
 	}, t("conversation_remember"));
 	const older = h("button", {
 		class: "conversation-earlier",
 		type: "button",
 		hidden: true,
-		onclick: () => run(() => readingActions.older())
+		onclick: () => run(() => readingActions.older(), t("message_window_failed"), false)
 	}, t("message_load_earlier"));
 	const caption = h("p", { class: "muted conversation-window" });
 	const captionRow = h("div", { class: "conversation-caption" }, caption);
@@ -45725,19 +45725,23 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 		viewport.scrollTop = viewport.scrollHeight;
 		indicator();
 	};
-	const run = async (action) => {
+	const run = async (action, summary = t("conversation_save_failed"), isSave = true) => {
 		if (!alive() || busy) return;
 		busy = true;
 		status.replaceChildren();
 		indicator();
 		try {
 			await action();
-			if (alive()) status.textContent = t("conversation_saved");
+			if (alive() && isSave) status.textContent = t("conversation_saved");
 		} catch (error) {
-			if (alive()) status.replaceChildren(errorBox(error, {
-				summary: t("conversation_save_failed"),
-				within: status
-			}));
+			if (alive()) {
+				const presentation = errorPresentation(error, t, { summary });
+				const details = errorDetails(presentation);
+				status.replaceChildren(h("div", { "data-api-error": "" }, h("span", {
+					"data-error-summary": "",
+					class: "error"
+				}, presentation.summary), details || ""));
+			}
 		} finally {
 			busy = false;
 			if (alive()) indicator();
@@ -55854,7 +55858,6 @@ async function viewSession(main, host, sid, context = null) {
 	const conversation = conversationPanel({
 		h,
 		t,
-		errorBox,
 		when: sessionWhen,
 		guard: () => assertView(connection),
 		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
@@ -57913,9 +57916,10 @@ function integrationPanel(pr, reloadCard, source = null) {
 					session.pending && runtimeStale(session) ? chip(t("sessions_stale"), "stale") : null,
 					h("p", { class: "muted" }, t("delivery_result_unverified")),
 					h("p", { class: "muted" }, session.observed_at ? timeLabel(t, "delivery_observed_at", { time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at) }) : t("delivery_unobserved")),
-					r.unavailable ? h("p", { class: "note" }, t("delivery_source_unavailable"), " ", h("code", {}, r.unavailable.code)) : null,
+					r.unavailable ? h("p", { class: "note" }, t("delivery_source_unavailable")) : null,
+					r.unavailable ? errorDetails(typeof r.unavailable === "object" ? r.unavailable : { code: String(r.unavailable) }) : null,
 					...delivered(r)
-				];
+				].filter(Boolean);
 			};
 			const results = source ? c.selected && c.selected.kind === source.kind && c.selected.id === source.id && c.selected.host === source.host ? [c.selected] : [] : c.agent_results;
 			pickList.replaceChildren(h("h3", {}, t("agent_results")), ...results.length ? results.map((r) => row(r.kind || "checkpoint_run", r.id, r.branch || r.id, evidence(r), r.eligible !== false)) : [h("p", { class: "muted" }, t("none"))], h("h3", {}, t("your_checkpoints")), ...c.checkpoints.length ? c.checkpoints.map((r) => row("checkpoint", r.id, `${r.branch || "?"} @ ${r.commit_sha.slice(0, 10)}`, [r.note ? h("span", { class: "muted" }, r.note.slice(0, 60)) : null, ...delivered(r)])) : [h("p", { class: "muted" }, t("none"))], h("div", { class: "actions" }, branch, h("button", {

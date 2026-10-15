@@ -2,13 +2,35 @@ import {test, expect} from '@playwright/test';
 
 const serverMsg = 'Requested entity not found on remote BAT host';
 
-for (const {locale, summaryText, shortGenericText, storageFailedText, refreshRetainText} of [
+for (const {
+  locale,
+  summaryText,
+  shortGenericText,
+  storageFailedText,
+  refreshRetainText,
+  deliveryUnavailableText,
+  readingSaveFailedText,
+  messagesUnavailableText,
+  repoLabel,
+  prNumLabel,
+  loadPrBtn,
+  markReadBtn,
+  loadEarlierBtn,
+} of [
   {
     locale: 'en-US',
     summaryText: 'This record is unavailable. Refresh the view.',
     shortGenericText: 'This request could not be completed.',
     storageFailedText: 'This setting could not be saved in this browser.',
     refreshRetainText: 'Not refreshed; retaining the last observation.',
+    deliveryUnavailableText: 'An eligible result source could not be confirmed.',
+    readingSaveFailedText: 'Reading state unavailable',
+    messagesUnavailableText: 'Messages unavailable',
+    repoLabel: 'Repository or GitHub PR URL',
+    prNumLabel: 'PR number',
+    loadPrBtn: 'Load PR',
+    markReadBtn: 'Mark read',
+    loadEarlierBtn: 'Load earlier',
   },
   {
     locale: 'zh-TW',
@@ -16,6 +38,14 @@ for (const {locale, summaryText, shortGenericText, storageFailedText, refreshRet
     shortGenericText: '無法完成此要求。',
     storageFailedText: '無法在這個瀏覽器儲存這項設定。',
     refreshRetainText: '這次未能更新；保留上次觀察。',
+    deliveryUnavailableText: '目前無法確認可整合的成果來源。',
+    readingSaveFailedText: '無法儲存閱讀狀態',
+    messagesUnavailableText: '無法載入訊息',
+    repoLabel: '儲存庫或 GitHub PR 網址',
+    prNumLabel: 'PR 編號',
+    loadPrBtn: '讀取 PR',
+    markReadBtn: '標為已讀',
+    loadEarlierBtn: '載入更早',
   },
 ]) {
   const width = locale === 'zh-TW' ? 390 : 1440;
@@ -476,6 +506,298 @@ for (const {locale, summaryText, shortGenericText, storageFailedText, refreshRet
       await details.locator('summary').click();
       await expect(details.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
       await expect(details.locator('[data-error-details] p')).toHaveText(serverMsg);
+    });
+
+    test(`site7: delivery source unavailable shows localized note with details (${locale})`, async ({page}) => {
+      await page.addInitScript(() => sessionStorage.setItem('batc.dashboard.token', 'fixture-token'));
+      await page.route('**/api/v1/**', async route => {
+        const url = new URL(route.request().url());
+        const path = url.pathname.replace('/api/v1', '');
+        if (path === '/capabilities' || path === '/bootstrap') {
+          return route.fulfill({status: 200, json: {
+            actor: 'integrator', scopes: ['observe', 'operate', 'integrate'],
+            capabilities: {
+              actor: 'integrator', scopes: ['observe', 'operate', 'integrate'],
+              repositories: [{repository: 'example/project'}],
+              features: {execution_delivery: {version: 1}},
+              actions: [{action: 'integration.handoff', allowed: true}],
+            },
+            repositories: [{repository: 'example/project'}],
+            features: {execution_delivery: {version: 1}},
+            actions: [{action: 'integration.handoff', allowed: true}],
+            sync: {version: 1, server_id: 'srv', principal_id: 'p1', checkpoint: {cursor: 0, token: 't'}},
+          }});
+        }
+        if (path.startsWith('/repositories/example/project/pulls/24')) {
+          return route.fulfill({status: 200, json: {
+            pull_request: {
+              repository: 'example/project',
+              pull_number: 24,
+              title: 'Example Pull Request',
+              head_ref: 'feat-branch',
+              head_sha: '1'.repeat(40),
+              base_ref: 'main',
+              base_sha: '2'.repeat(40),
+              state: 'open',
+              mergeable_state: 'clean',
+              checks: {},
+              recipes: [],
+              merge: {methods: ['merge'], allowed: false},
+              metadata_update: {allowed: false},
+              integration: {
+                allowed: true,
+                hosts: ['demo'],
+              },
+              merge_preview: {
+                preview_id: 'mpv_' + 'a'.repeat(32),
+                digest: 'fixture',
+                method: 'merge',
+                target: {head_sha: '1'.repeat(40), base_sha: '2'.repeat(40)},
+                commits: [],
+                affected_prs: [],
+                blocking: [],
+                warnings: [],
+              },
+            },
+          }});
+        }
+        if (path.startsWith('/integrations/candidates')) {
+          return route.fulfill({status: 200, json: {
+            agent_results: [{
+              id: 'exec_source_1',
+              kind: 'checkpoint_run',
+              branch: 'agent-patch',
+              eligible: false,
+              unavailable: {
+                code: 'WORKTREE_UNAVAILABLE',
+                message: serverMsg,
+              },
+              delivered_to: [],
+            }],
+            checkpoints: [],
+          }});
+        }
+        return route.fulfill({status: 200, json: {}});
+      });
+
+      await page.goto('/dashboard/#/delivery');
+      const repoInput = page.getByRole('textbox', {name: repoLabel});
+      await expect(repoInput).toHaveValue('example/project');
+      const prInput = page.getByRole('textbox', {name: prNumLabel, exact: true});
+      await prInput.fill('24');
+      const loadBtn = page.getByRole('button', {name: loadPrBtn, exact: true});
+      await loadBtn.click();
+
+      const deliveryRow = page.locator('[data-delivery-source="exec_source_1"]');
+      await expect(deliveryRow).toBeVisible();
+
+      // Note sentence
+      await expect(deliveryRow.locator('p.note')).toHaveText(deliveryUnavailableText);
+
+      // Details closed
+      const details = deliveryRow.locator('details.ui-disclosure');
+      await expect(details).toHaveCount(1);
+      await expect(details).not.toHaveAttribute('open', '');
+
+      // At 390 width, assert no horizontal overflow
+      await page.setViewportSize({width: 390, height: 900});
+      const overflow = await page.evaluate(() => {
+        const row = document.querySelector('[data-delivery-source="exec_source_1"]') as HTMLElement | null;
+        return {
+          docScroll: document.documentElement.scrollWidth,
+          docClient: document.documentElement.clientWidth,
+          rowScroll: row ? row.scrollWidth : 0,
+          rowClient: row ? row.clientWidth : 0,
+        };
+      });
+      expect(overflow.docScroll).toBeLessThanOrEqual(overflow.docClient);
+      expect(overflow.rowScroll).toBeLessThanOrEqual(overflow.rowClient);
+
+      // Outside details, in zh-TW no English server text or code
+      if (locale === 'zh-TW') {
+        const outsideText = await deliveryRow.evaluate(node => {
+          const clone = node.cloneNode(true) as HTMLElement;
+          clone.querySelectorAll('details').forEach(d => d.remove());
+          return clone.textContent || '';
+        });
+        expect(outsideText).not.toContain(serverMsg);
+        expect(outsideText).not.toContain('WORKTREE_UNAVAILABLE');
+      }
+
+      // Expand details
+      await details.locator('summary').click();
+      await expect(deliveryRow.locator('[data-error-details] code')).toHaveText('WORKTREE_UNAVAILABLE');
+      await expect(deliveryRow.locator('[data-error-details] p')).toHaveText(serverMsg);
+    });
+
+    test(`site8: session reading action error during refresh retains connection and shows details (${locale})`, async ({page}) => {
+      let eventCursor = 0;
+      let lastAfterSeen = 0;
+      let shouldHoldSessionRefresh = false;
+      let sessionRefreshHeld = false;
+      let releaseRefresh: () => void = () => {};
+      const refreshGate = new Promise<void>(r => { releaseRefresh = r; });
+      let failMarkRead = false;
+      let failOlder = false;
+
+      const messages = Array.from({length: 35}, (_, i) => ({
+        id: `msg-${i}`,
+        role: i % 2 === 0 ? 'user' : 'assistant',
+        ts: '2026-10-10T12:00:00Z',
+        text: `Message content ${i}.`,
+      }));
+
+      await page.addInitScript(() => sessionStorage.setItem('batc.dashboard.token', 'fixture-token'));
+      await page.route('**/api/v1/**', async route => {
+        const url = new URL(route.request().url());
+        const path = url.pathname.replace('/api/v1', '');
+        if (path === '/capabilities' || path === '/bootstrap') {
+          return route.fulfill({status: 200, json: {
+            actor: 'tester', scopes: ['observe', 'operate'],
+            capabilities: {
+              actor: 'tester', scopes: ['observe', 'operate'],
+              hosts: [{host: 'demo', writes: true, orchestrate: true}],
+              actions: [
+                {action: 'session.read', allowed: true},
+                {action: 'session.position', allowed: true},
+              ],
+              features: {session_reading: {version: 1}},
+            },
+            hosts: [{host: 'demo', writes: true, orchestrate: true}],
+            actions: [
+              {action: 'session.read', allowed: true},
+              {action: 'session.position', allowed: true},
+            ],
+            features: {session_reading: {version: 1}},
+            sync: {version: 1, server_id: 'srv', principal_id: 'p1', checkpoint: {cursor: 0, token: 't0'}},
+          }});
+        }
+        if (path.startsWith('/events')) {
+          const after = Number(url.searchParams.get('after') || 0);
+          lastAfterSeen = after;
+          if (after < eventCursor) {
+            return route.fulfill({status: 200, json: {
+              events: [{seq: eventCursor, resource_type: 'session', resource_id: 'demo/session-1', kind: 'session.updated'}],
+              next_cursor: eventCursor,
+              head_cursor: eventCursor,
+              has_more: false,
+              sync: {checkpoint: {cursor: eventCursor, token: `t${eventCursor}`}},
+            }});
+          }
+          return route.fulfill({status: 200, json: {
+            events: [],
+            next_cursor: after,
+            head_cursor: eventCursor,
+            has_more: false,
+            sync: {checkpoint: {cursor: after, token: `t${after}`}},
+          }});
+        }
+        if (path === '/sessions/demo/session-1') {
+          if (shouldHoldSessionRefresh) {
+            sessionRefreshHeld = true;
+            await refreshGate;
+          }
+          return route.fulfill({status: 200, json: {
+            session: {
+              host: 'demo', session_id: 'session-1', title: 'Review reading action errors',
+              workspace: 'Dashboard', agent_kind: 'codex', api_access: 'managed', provenance: 'connector_managed',
+            },
+          }});
+        }
+        if (path === '/sessions/demo/session-1/messages') {
+          const offset = Number(url.searchParams.get('offset') || 0);
+          if (offset > 0 && failOlder) {
+            return route.fulfill({status: 500, json: {error: {code: 'NOT_FOUND', message: serverMsg}}});
+          }
+          const end = messages.length - offset;
+          const slice = messages.slice(Math.max(0, end - 30), end);
+          return route.fulfill({status: 200, json: {
+            messages: slice.map(m => ({
+              ...m,
+              reading: {revision: `rev_${m.id}`, unread: true, can_mark: true},
+            })),
+            offset,
+            next_offset: end > 30 ? offset + 30 : null,
+            reading: {
+              unread_count: messages.length,
+              known_count: messages.length,
+              complete: true,
+              observed_at: Date.now() / 1000,
+            },
+          }});
+        }
+        if (path === '/operations' && route.request().method() === 'POST') {
+          if (failMarkRead) {
+            return route.fulfill({status: 500, json: {error: {code: 'NOT_FOUND', message: serverMsg}}});
+          }
+          return route.fulfill({status: 200, json: {operation: {operation_id: 'op_test', status: 'succeeded'}}});
+        }
+        return route.fulfill({status: 200, json: {}});
+      });
+
+      await page.goto('/dashboard/#/session/demo/session-1');
+      const mark = page.getByRole('button', {name: markReadBtn, exact: true});
+      await mark.scrollIntoViewIfNeeded();
+      await expect(mark).toBeEnabled();
+
+      // Step 1: hold an event-triggered session refresh open
+      shouldHoldSessionRefresh = true;
+      eventCursor = 1;
+      await expect.poll(() => sessionRefreshHeld, {timeout: 10000}).toBe(true);
+
+      // Step 2: make Mark read fail with NOT_FOUND and an English server message
+      failMarkRead = true;
+      await mark.click();
+
+      // Assert summary and closed details appear in status line
+      const statusLine = page.locator('.conversation-toolbar [data-api-error]');
+      await expect(statusLine).toBeVisible();
+      await expect(statusLine.locator('[data-error-summary]')).toHaveText(readingSaveFailedText);
+
+      const markDetails = statusLine.locator('details.ui-disclosure');
+      await expect(markDetails).toHaveCount(1);
+      await expect(markDetails).not.toHaveAttribute('open', '');
+
+      // In zh-TW, no English server text appears outside Details
+      if (locale === 'zh-TW') {
+        const outsideText = await statusLine.evaluate(node => {
+          const clone = node.cloneNode(true) as HTMLElement;
+          clone.querySelectorAll('details').forEach(d => d.remove());
+          return clone.textContent || '';
+        });
+        expect(outsideText).not.toContain(serverMsg);
+        expect(outsideText).not.toContain('NOT_FOUND');
+      }
+
+      // Step 3: release the refresh
+      releaseRefresh();
+
+      // Assert event cursor still advances, and the connection is not shown as failing
+      await expect.poll(() => lastAfterSeen, {timeout: 10000}).toBe(1);
+      const live = page.locator('#live');
+      await expect(live).toHaveAttribute('data-connection', 'connected');
+      await expect(live).not.toHaveClass(/down|offline|reconnecting/);
+
+      // Expand details and check diagnostics
+      await markDetails.locator('summary').click({force: true});
+      await expect(statusLine.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
+      await expect(statusLine.locator('[data-error-details] p')).toHaveText(serverMsg);
+
+      // Failed "Load earlier" shows the message-read sentence and does not say anything about saving
+      failOlder = true;
+      const older = page.getByRole('button', {name: loadEarlierBtn, exact: true});
+      await older.scrollIntoViewIfNeeded();
+      await older.click({force: true});
+
+      await expect(statusLine.locator('[data-error-summary]')).toHaveText(messagesUnavailableText);
+      const olderSummaryText = await statusLine.locator('[data-error-summary]').innerText();
+      expect(olderSummaryText.toLowerCase()).not.toContain('save');
+      expect(olderSummaryText).not.toContain('儲存');
+      const olderDetails = statusLine.locator('details.ui-disclosure');
+      await expect(olderDetails).not.toHaveAttribute('open', '');
+      await olderDetails.locator('summary').click({force: true});
+      await expect(olderDetails.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
+      await expect(olderDetails.locator('[data-error-details] p')).toHaveText(serverMsg);
     });
   });
 }
