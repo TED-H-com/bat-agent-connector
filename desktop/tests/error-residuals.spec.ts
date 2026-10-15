@@ -1,4 +1,5 @@
 import {test, expect} from '@playwright/test';
+import {STRINGS} from '../src/i18n.js';
 
 const serverMsg = 'Requested entity not found on remote BAT host';
 
@@ -632,7 +633,9 @@ for (const {
 
     test(`site8: session reading action error during refresh retains connection and shows details (${locale})`, async ({page}) => {
       let eventCursor = 0;
-      let lastAfterSeen = 0;
+      let session1RequestsAfterEvent1 = 0;
+      let released = false;
+      const afterValuesAfterRelease: number[] = [];
       let shouldHoldSessionRefresh = false;
       let sessionRefreshHeld = false;
       let releaseRefresh: () => void = () => {};
@@ -674,7 +677,9 @@ for (const {
         }
         if (path.startsWith('/events')) {
           const after = Number(url.searchParams.get('after') || 0);
-          lastAfterSeen = after;
+          if (released) {
+            afterValuesAfterRelease.push(after);
+          }
           if (after < eventCursor) {
             return route.fulfill({status: 200, json: {
               events: [{seq: eventCursor, resource_type: 'session', resource_id: 'demo/session-1', kind: 'session.updated'}],
@@ -693,6 +698,9 @@ for (const {
           }});
         }
         if (path === '/sessions/demo/session-1') {
+          if (route.request().method() === 'GET' && eventCursor === 1) {
+            session1RequestsAfterEvent1++;
+          }
           if (shouldHoldSessionRefresh) {
             sessionRefreshHeld = true;
             await refreshGate;
@@ -745,6 +753,22 @@ for (const {
       eventCursor = 1;
       await expect.poll(() => sessionRefreshHeld, {timeout: 10000}).toBe(true);
 
+      // Check 3 setup: Before clicking Mark read, install a MutationObserver in the page on #live that records every title and data-connection value
+      await page.evaluate(() => {
+        const live = document.getElementById('live')!;
+        const records: {title: string | null; connection: string | null}[] = [
+          {title: live.title || live.getAttribute('title'), connection: live.getAttribute('data-connection') || live.dataset.connection || null},
+        ];
+        (window as any).__liveMutations = records;
+        const observer = new MutationObserver(() => {
+          records.push({
+            title: live.title || live.getAttribute('title'),
+            connection: live.getAttribute('data-connection') || live.dataset.connection || null,
+          });
+        });
+        observer.observe(live, {attributes: true, attributeFilter: ['title', 'data-connection']});
+      });
+
       // Step 2: make Mark read fail with NOT_FOUND and an English server message
       failMarkRead = true;
       await mark.click();
@@ -770,13 +794,17 @@ for (const {
       }
 
       // Step 3: release the refresh
+      released = true;
       releaseRefresh();
 
-      // Assert event cursor still advances, and the connection is not shown as failing
-      await expect.poll(() => lastAfterSeen, {timeout: 10000}).toBe(1);
-      const live = page.locator('#live');
-      await expect(live).toHaveAttribute('data-connection', 'connected');
-      await expect(live).not.toHaveClass(/down|offline|reconnecting/);
+      // 1. No replay of the cursor. Record the after value of every /events request made after releaseRefresh().
+      // Wait until one arrives with after=1. Then assert that no request after the release used after=0.
+      await expect.poll(() => afterValuesAfterRelease.includes(1), {timeout: 10000}).toBe(true);
+      expect(afterValuesAfterRelease).not.toContain(0);
+
+      // 2. No second refresh for the same event. Count the GET /sessions/demo/session-1 requests made after you set eventCursor = 1.
+      // Assert there is exactly one: the held request. A replay would make a second.
+      expect(session1RequestsAfterEvent1).toBe(1);
 
       // Expand details and check diagnostics
       await markDetails.locator('summary').click({force: true});
@@ -798,6 +826,17 @@ for (const {
       await olderDetails.locator('summary').click({force: true});
       await expect(olderDetails.locator('[data-error-details] code')).toHaveText('NOT_FOUND');
       await expect(olderDetails.locator('[data-error-details] p')).toHaveText(serverMsg);
+
+      // 3. Actions never pause. Assert:
+      // - no recorded title equals the locale's sync_actions_paused text (read it from desktop/src/i18n.js; do not hard-code a guess);
+      // - every recorded data-connection is connected.
+      const mutations = await page.evaluate(() => (window as any).__liveMutations as {title: string | null; connection: string | null}[]);
+      expect(mutations.length).toBeGreaterThan(0);
+      const syncActionsPausedText = STRINGS[locale.startsWith('zh') ? 'zh-TW' : 'en'].sync_actions_paused;
+      expect(mutations.map(m => m.title)).not.toContain(syncActionsPausedText);
+      for (const m of mutations) {
+        expect(m.connection).toBe('connected');
+      }
     });
   });
 }
