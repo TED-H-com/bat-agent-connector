@@ -1,7 +1,8 @@
 import {timeStamp} from './ui/stamps.js';
 import {renderMessage} from "./message-format.js";
-import {agentMark, disclosure, emptyState, statusPill} from "./ui/components.js";
+import {agentMark, disclosure, emptyState, statusPill, errorDetails} from "./ui/components.js";
 import {icon} from "./ui/icons.js";
+import {errorPresentation} from "./error-presentation.js";
 
 // Durations read as seconds or minutes, never raw milliseconds.
 export function messageDuration(t, ms) {
@@ -39,12 +40,12 @@ export function readingSummary(t, reading) {
 }
 
 // Scrolling never marks messages read. Personal receipts require an explicit action.
-export function conversationPanel({h, t, when, guard, errorBox, readingActions = null, memory = null}) {
+export function conversationPanel({h, t, when, guard, readingActions = null, memory = null}) {
   const viewport = h("div", {class: "conversation-scroll", tabindex: "0", role: "region", "aria-label": t("messages")});
   const status = h("span", {class: "muted", role: "status"}), fallback = h("div", {class: "conversation-copy"});
   const notice = h("p", {class: "muted", role: "status", hidden: true}, t("message_anchor_missing"));
   const latest = h("button", {class: "mini conversation-jump", type: "button", hidden: true, onclick: () => {
-    if (olderWindow && readingActions) {run(() => readingActions.latest()); return;}
+    if (olderWindow && readingActions) {run(() => readingActions.latest(), t("message_window_failed"), false); return;}
     follow(); notice.hidden = true;
     // The button hides itself; keep the keyboard in the transcript instead of dropping to the page.
     viewport.focus({preventScroll: true});
@@ -53,15 +54,15 @@ export function conversationPanel({h, t, when, guard, errorBox, readingActions =
   const mark = h("button", {class: "mini", type: "button", onclick: () => {
     const messages = visible().filter(row => row.reading?.can_mark && row.reading?.unread)
       .map(row => ({message_id: row.id, revision: row.reading.revision}));
-    if (messages.length) run(() => readingActions.mark(messages));
+    if (messages.length) run(() => readingActions.mark(messages), t("conversation_save_failed"), true);
   }}, t("conversation_mark"));
   const remember = h("button", {class: "mini", type: "button", onclick: () => {
     const row = visible().find(row => row.reading);
     if (row?.reading) run(() => readingActions.remember({message_id: row.id, revision: row.reading.revision,
-      offset: Math.round(row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)}, reading?.position?.version || 0));
+      offset: Math.round(row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)}, reading?.position?.version || 0), t("conversation_save_failed"), true);
   }}, t("conversation_remember"));
   const older = h("button", {class: "conversation-earlier", type: "button", hidden: true,
-    onclick: () => run(() => readingActions.older())}, t("message_load_earlier"));
+    onclick: () => run(() => readingActions.older(), t("message_window_failed"), false)}, t("message_load_earlier"));
   const caption = h("p", {class: "muted conversation-window"});
   const captionRow = h("div", {class: "conversation-caption"}, caption);
   const readingBar = readingActions ? h("div", {class: "actions"}, progress, mark, remember) : null;
@@ -97,12 +98,27 @@ export function conversationPanel({h, t, when, guard, errorBox, readingActions =
     availability(older, busy ? t("conversation_saving") : "");
   };
   const follow = () => {pinned = true; unseen = 0; viewport.scrollTop = viewport.scrollHeight; indicator();};
-  const run = async action => {
+  const run = async (action, summary = t("conversation_save_failed"), isSave = true) => {
     if (!alive() || busy) return;
     busy = true; status.replaceChildren(); indicator();
-    try {await action(); if (alive()) status.textContent = t("conversation_saved");}
-    catch (error) {if (alive()) status.replaceChildren(errorBox(error, {summary: t("conversation_save_failed"), within: status}));}
-    finally {busy = false; if (alive()) indicator();}
+    try {
+      await action();
+      if (alive() && isSave) status.textContent = t("conversation_saved");
+    } catch (error) {
+      if (alive()) {
+        const presentation = errorPresentation(error, t, {summary});
+        const details = errorDetails(presentation);
+        status.replaceChildren(
+          h("div", {'data-api-error': ''},
+            h("span", {'data-error-summary': '', class: 'error'}, presentation.summary),
+            details || ''
+          )
+        );
+      }
+    } finally {
+      busy = false;
+      if (alive()) indicator();
+    }
   };
   const onScroll = () => {if (initialized && !resizing) pinned = atBottom(); indicator();};
   viewport.addEventListener("scroll", onScroll, {passive: true});

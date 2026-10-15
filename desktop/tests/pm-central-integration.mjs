@@ -329,7 +329,8 @@ try {
   assert.deepEqual(history.transitions.map(row=>row.to_stage),['paused','closed','development']);
   // Live Overview reports the missing adopted baseline without manufacturing progress.
   await page.goto(origin + '/dashboard/#/pm/' + workspaceId + '/overview');
-  await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(6);
+  await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(0);
+  await expect(page.locator('[data-pm-charter] [data-charter-empty]')).toContainText('Unknown');
   await expect(page.locator('[data-overview-metric=progress]')).toContainText('—Unknown');
   await expect(page.locator('[data-overview-metric=progress]')).toContainText('No adopted plan');
   child.stdin.write(JSON.stringify({action:'connect_usage',workspace_id:workspaceId})+'\n');

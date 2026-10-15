@@ -130,7 +130,12 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await expect(metric('blocker')).toContainText(copy.issue);
     await expect(metric('blocker').locator('.ui-metric-value')).toHaveText('1');
     await expect(metric('decision').locator('.ui-metric-value')).toHaveText('0');
-    await expect(page.locator('[data-pm-charter] [data-charter-section]')).toHaveCount(6);
+    const charter = page.locator('[data-pm-charter]');
+    await expect(charter.locator('[data-charter-section="definition"]')).toContainText(copy.goal);
+    await expect(charter.locator('[data-charter-section="scope"]')).toContainText(copy.login);
+    await expect(charter.locator('[data-charter-section="schedule"], [data-charter-section="decisions"]')).toHaveCount(0);
+    await expect(charter.locator('[data-charter-empty]')).toContainText(locale === 'en' ? 'Resources & budget' : '資源與預算');
+    await expect(charter.locator('[data-charter-empty] .pm-overview-sources')).toHaveCount(0);
     const attention = page.locator('[data-overview-attention] [data-overview-row]').filter({hasText: copy.issue});
     await expect(attention).toBeVisible();
     await expect(page.locator('.pm-main > .ui-page-header').getByRole('button', {name: /^(Refresh|重新整理)$/})).toBeEnabled();
@@ -328,8 +333,10 @@ async function walkthrough(locale, width, {lostAcknowledgement = false} = {}) {
     await selectRegisterType('issue');
     const issue = page.locator(`[data-row-key="governance.${fixture.issue_id}"]`);
     await expect(issue).toContainText(l.resolved);
+    await expect(issue).not.toContainText(copy.response);
     await issue.click();
     await expect(page.locator('[data-reg-inspector]')).toContainText(l.resolved);
+    await expect(page.locator('[data-reg-inspector]')).not.toContainText(copy.response);
     await screenshot(13, 'resolved-register');
     await bounded(Promise.all([...pending]), 30000, 'Response diagnostics did not finish');
     assert.deepEqual(errors, []);

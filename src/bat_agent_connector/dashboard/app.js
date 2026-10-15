@@ -5388,7 +5388,8 @@ var pmRegisterStrings = {
 		reg_action_open: "Open action",
 		reg_pr: "PR #{n}",
 		reg_work: "Work",
-		reg_requirement: "Requirement"
+		reg_requirement: "Requirement",
+		reg_outside_page: "This record is outside the loaded rows"
 	},
 	"zh-TW": {
 		reg_untitled_issue: "未命名議題",
@@ -5514,7 +5515,8 @@ var pmRegisterStrings = {
 		reg_action_open: "開啟動作",
 		reg_pr: "PR #{n}",
 		reg_work: "工作",
-		reg_requirement: "需求"
+		reg_requirement: "需求",
+		reg_outside_page: "這筆紀錄不在已載入的列表中"
 	}
 };
 //#endregion
@@ -7868,6 +7870,7 @@ var STRINGS = {
 		setup_retained_request: "原設定請求仍保留。請先查回這筆請求，再進行其他變更。",
 		setup_view_sessions: "查看工作階段",
 		error_generic: "無法完成此要求，請查看詳細資料。",
+		error_generic_short: "無法完成此要求。",
 		desktop_status_error: "無法使用本機 Connector 連線，請檢查設定。",
 		error_code_ARTIFACT_TOO_LARGE: "檔案過大，請選擇較小的檔案。",
 		connection_actor: "帳號識別碼",
@@ -9099,6 +9102,7 @@ var STRINGS = {
 		composer_shortcut_enter: "Enter",
 		composer_shortcut_button: "只用按鈕",
 		composer_newline: "Shift + Enter 換行；選字時不送出。",
+		composer_shortcut_storage_failed: "無法在這個瀏覽器儲存這項設定。",
 		tree_drag: "拖曳排序：{name}",
 		tree_drag_help: "只在同層移動；也可使用上移／下移按鈕。",
 		message_tool_details: "工具輸入與結果",
@@ -9510,6 +9514,7 @@ var STRINGS = {
 		setup_retained_request: "The original request is kept. Check it before making another change.",
 		setup_view_sessions: "View sessions",
 		error_generic: "This request could not be completed. Check Details.",
+		error_generic_short: "This request could not be completed.",
 		desktop_status_error: "The local Connector connection is unavailable. Check its settings.",
 		error_code_ARTIFACT_TOO_LARGE: "This file is too large. Choose a smaller file.",
 		connection_actor: "Actor ID",
@@ -10742,6 +10747,7 @@ var STRINGS = {
 		composer_shortcut_enter: "Enter",
 		composer_shortcut_button: "Button only",
 		composer_newline: "Shift + Enter adds a line; composition never sends.",
+		composer_shortcut_storage_failed: "This setting could not be saved in this browser.",
 		tree_drag: "Drag to reorder: {name}",
 		tree_drag_help: "Move within these siblings, or use the Move up / Move down buttons.",
 		message_tool_details: "Tool input and result",
@@ -11420,6 +11426,29 @@ function icon(name, { label, size = 16 } = {}) {
 	return svg;
 }
 //#endregion
+//#region src/error-presentation.js
+var ApiError = class extends Error {
+	constructor(status, code, message, { localized = false } = {}) {
+		super(message || code);
+		this.status = status;
+		this.code = code;
+		this.localized = localized;
+	}
+};
+function errorPresentation(error, t, { summary, fallback } = {}) {
+	const code = error?.code || "";
+	const message = error?.message || String(error);
+	const key = `error_code_${code}`;
+	const known = code && t(key) !== key;
+	const client = error?.localized === true || !code && error?.constructor === Error;
+	const text = summary ?? (known ? t(key) : client ? message : t(fallback || "error_generic"));
+	return {
+		summary: text,
+		code: code === text ? "" : code,
+		message: message === text ? "" : message
+	};
+}
+//#endregion
 //#region src/ui/components.js
 var sequence = 0;
 var uid = () => `ui-${++sequence}`;
@@ -11671,16 +11700,31 @@ function disclosure({ label, body, open = false, key, element }) {
 	});
 	return root;
 }
+function errorDetails(presentation) {
+	if (!presentation) return null;
+	const diagnostics = [presentation.code ? h$1("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h$1("p", {}, presentation.message) : null].filter(Boolean);
+	return diagnostics.length ? disclosure({
+		label: t("global_details"),
+		body: h$1("div", { "data-error-details": "" }, ...diagnostics)
+	}) : null;
+}
 function inlineError({ error, retry }) {
+	let summary = error?.message || String(error);
+	let details = null;
+	if (error instanceof Error) {
+		const presentation = errorPresentation(error, t);
+		summary = presentation.summary;
+		details = errorDetails(presentation);
+	}
 	return h$1("div", {
 		class: "ui-inline-error",
 		role: "alert"
-	}, icon("circle-alert"), h$1("span", {}, error?.message || String(error)), retry ? button({
+	}, icon("circle-alert"), h$1("span", { "data-error-summary": "" }, summary), retry ? button({
 		size: "sm",
 		variant: "ghost",
 		label: t("ui_retry"),
 		onClick: retry
-	}) : null);
+	}) : null, details);
 }
 function contextChip({ icon, text, onRemove }) {
 	return h$1("span", {
@@ -17988,9 +18032,16 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		}
 		const document = snapshot.baseline?.document, groups = charterSections(snapshot);
 		report.append(h("div", { class: "pm-charter-meta" }, h("strong", {}, snapshot.title), h("span", {}, t("wb_snapshot", { number: snapshot.sequence })), h("span", { class: "chip" }, t(snapshot.snapshot_id === latestId ? "wb_saved" : "wb_historical")), h("span", {}, timeLabel(t, "pm_brief_as_of", { time: stamp(snapshot.as_of) }))), h("p", { class: "pm-charter-plan-ref" }, t("wb_plan"), ": ", document?.title || t("wb_no_plan")));
-		const grid = h("div", { class: "pm-charter-grid" });
-		for (const key of sections) grid.append(h("section", { "data-charter-section": key }, h("h3", {}, t("wb_" + key)), renderItems(groups[key], key === "decisions" ? "wb_no_decisions" : "wb_unknown"), key === "resources" ? h("p", { class: "muted" }, t("wb_quota")) : ""));
+		const grid = h("div", { class: "pm-charter-grid" }), empty = sections.filter((key) => !groups[key].length);
+		for (const key of sections.filter((key) => groups[key].length)) grid.append(h("section", { "data-charter-section": key }, h("h3", {}, t("wb_" + key)), renderItems(groups[key], key === "decisions" ? "wb_no_decisions" : "wb_unknown"), key === "resources" ? h("p", { class: "muted" }, t("wb_quota")) : ""));
 		report.append(grid);
+		if (empty.length) {
+			const complete = Boolean(document) && !snapshot.visibility?.restricted && !snapshot.visibility?.filtered && !Object.entries(snapshot.coverage || {}).some(([key, value]) => key.endsWith("_truncated") && value);
+			report.append(h("p", {
+				class: "ui-meta",
+				"data-charter-empty": ""
+			}, t(complete ? "ov_no_items" : "wb_unknown"), " · ", empty.map((key) => t("wb_" + key)).join(" · ")));
+		}
 		if (document) report.append(h("details", { "data-charter-plan": "" }, h("summary", {}, t("wb_full_plan")), planDocument(h, document.markdown), h("ul", {}, ...(document.requirements || []).map((row) => h("li", {}, row.text, h("ul", {}, ...(row.acceptance || []).map((item) => h("li", {}, item.text)))))), h("code", { class: "pm-source" }, snapshot.baseline.document_revision)));
 		report.append(h("details", { class: "pm-charter-trace" }, h("summary", {}, t("wb_sources")), h("pre", { class: "pm-brief-proof" }, JSON.stringify({
 			snapshot_id: snapshot.snapshot_id,
@@ -18264,13 +18315,6 @@ var classes = [
 	"blocked",
 	"not_started"
 ];
-var tones = [
-	"ok",
-	"review",
-	"info",
-	"bad",
-	"neutral"
-];
 var phaseNames = [
 	"idea",
 	"planning",
@@ -18450,7 +18494,7 @@ function workspaceOverview(options) {
 		}, h("span", {}, date(row.baseline_date), !changed ? late : null), changed ? h("span", {}, " → ", date(row.forecast_date), late) : null);
 	}
 	function statusStrip(data, fixed = false) {
-		const p = data?.progress, complete = p && classes.every((key) => Number.isSafeInteger(p[key]));
+		const p = data?.progress, complete = p && p.complete === true && Number.isSafeInteger(p.requirements) && classes.every((key) => Number.isSafeInteger(p[key]));
 		const acceptanceGap = !fixed && complete && p.complete === true && Number.isSafeInteger(p.requirements) && p.accepted < p.requirements && data.recent_deliveries?.length > 0;
 		const progressTitle = acceptanceGap ? `${t("ov_progress")} · ${t("ov_accepted", {
 			accepted: p.accepted,
@@ -18464,7 +18508,7 @@ function workspaceOverview(options) {
 		}, {
 			"data-overview-ask-progress": "",
 			"data-overview-link": "status:progress:discuss",
-			class: "ui-button ghost ui-sm"
+			class: "ui-button secondary ui-sm"
 		}) : null;
 		if (askProgress) askProgress.textContent = t("ov_ask_pm");
 		const goalReason = (data?.unknown || []).find((row) => row.field === "plan.goal")?.reason;
@@ -18483,15 +18527,18 @@ function workspaceOverview(options) {
 				total: p.requirements
 			}) : t("ov_requirements", { n: p.requirements }),
 			context: h("div", {}, fixed && p ? h("div", {}, t("ov_requirements", { n: p.requirements })) : p && !complete ? statusPill("partial") : null, !p && (data?.unknown || []).some((row) => row.reason === "no_adopted_plan") ? h("a", { href: `#/pm/${encodeURIComponent(workspaceId)}/discussions` }, reasonLabel(t, "no_adopted_plan")) : null, acceptanceGap ? h("div", { "data-overview-acceptance-gap": "" }, h("p", { class: "pm-overview-acceptance-gap" }, t("ov_acceptance_gap")), h("div", { class: "pm-overview-progress-actions" }, h("a", {
-				class: "ui-button ghost ui-sm",
+				class: "ui-button secondary ui-sm",
 				href: `#/pm/${encodeURIComponent(workspaceId)}/requirements`,
 				"data-overview-unaccepted": "",
 				"data-overview-link": "status:progress:requirements"
 			}, t("ov_see_unaccepted")), askProgress)) : null, next ? h("div", { class: "pm-overview-next" }, next.title, h("div", {}, date(next.forecast_date || next.baseline_date), next.delta_days > 0 ? h("span", { class: "pm-overview-late" }, t("ov_delta", { n: next.delta_days })) : null)) : null),
-			bar: complete ? classes.map((key, i) => ({
-				tone: tones[i],
-				value: p[key]
-			})) : null
+			bar: complete ? [{
+				tone: "ok",
+				value: p.accepted
+			}, {
+				tone: "neutral",
+				value: p.requirements - p.accepted
+			}] : null
 		});
 		progress.dataset.overviewMetric = "progress";
 		if (complete) {
@@ -18511,7 +18558,10 @@ function workspaceOverview(options) {
 				context: h("div", {}, kind === "decision" && first ? h("div", {
 					class: "pm-overview-decision-row",
 					"data-overview-open-decision": first.key
-				}, itemLink(first, "status"), discuss(first, "status")) : itemLink(first, "status"), kind === "decision" && !fixed ? recentDecisions(data) : null)
+				}, itemLink(first, "status"), discuss(first, "status")) : itemLink(first, "status"), kind === "decision" && !fixed ? recentDecisions(data) : null, kind === "decision" && data?.attention_truncated ? statusPill("partial") : null, kind === "decision" && data?.attention_counts?.decision > (data?.attention || []).filter((row) => row.kind === "decision").length ? h("a", {
+					class: "ui-button secondary ui-sm",
+					href: `#/pm/${encodeURIComponent(workspaceId)}/issues`
+				}, t("ov_more", { n: data.attention_counts.decision - (data?.attention || []).filter((row) => row.kind === "decision").length })) : null)
 			});
 			node.dataset.overviewMetric = kind;
 			return node;
@@ -18600,13 +18650,10 @@ function workspaceOverview(options) {
 			const node = h("div", {
 				class: "pm-overview-attention-row",
 				"data-overview-row": row.key
-			}, link, h("div", { class: "pm-overview-attention-meta" }, h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · ")), h("span", { class: "pm-overview-attention-actions" }, severity ? h("span", {
+			}, link, h("div", { class: "pm-overview-attention-meta" }, h("span", { class: "pm-overview-context" }, [label, contextText(row)].filter(Boolean).join(" · "), elapsed === null ? null : h("span", {}, " · ", h("span", { "data-overview-age": "" }, elapsed))), h("span", { class: "pm-overview-attention-actions" }, severity ? h("span", {
 				class: `ui-pill tone-${severity.tone}`,
 				"data-finding-severity": severity.severity
-			}, severity.label) : null, elapsed === null ? null : h("span", {
-				class: "ui-meta",
-				"data-overview-age": ""
-			}, elapsed), discuss(row))));
+			}, severity.label) : null, discuss(row))));
 			cached?.node.remove();
 			attentionNodes.set(row.key, {
 				signature: rowSignature,
@@ -18701,9 +18748,14 @@ function workspaceOverview(options) {
 	}
 	function charter(source) {
 		const groups = charterSections(source), document = source?.baseline?.document;
-		const grid = h("div", { class: "pm-overview-charter-grid" });
-		for (const key of domains) {
+		const grid = h("div", { class: "pm-overview-charter-grid" }), empty = [];
+		const shownDomains = mode === "live" ? domains.filter((key) => !["schedule", "decisions"].includes(key)) : domains;
+		for (const key of shownDomains) {
 			const rows = groups[key], expanded = preference.expanded?.includes(key);
+			if (!rows.length) {
+				empty.push(key);
+				continue;
+			}
 			const list = h("ul", { class: "pm-overview-bullets" }, ...rows.map((row, i) => h("li", { hidden: i >= 3 && !expanded }, row.text, [
 				"agent_assumption",
 				"unresolved",
@@ -18725,20 +18777,9 @@ function workspaceOverview(options) {
 			sources.querySelector("summary").setAttribute("aria-label", `${t("ov_sources")} · ${t("wb_" + key)}`);
 			sources.querySelector("summary").title = t("ov_sources");
 			sources.querySelector("summary").dataset.overviewLink = `charter:${key}:sources`;
-			const decisions = key === "decisions" && Object.hasOwn(source, "decision_count");
-			const count = source?.decision_count;
-			const complete = decisions ? count === 0 && !source.attention_truncated : Boolean(document) && (Object.hasOwn(source, "plan_complete") ? source.plan_complete : !savedPartial());
 			const card = sectionCard({
 				title: t("wb_" + key),
-				body: h("div", {}, rows.length ? list : decisions && count > 0 ? null : emptyField(source, decisions ? "attention_counts.decision" : "plan", complete, decisions ? [
-					"governance",
-					"plan_candidate",
-					"proposals",
-					"lifecycle_inflight"
-				] : ["plan"]), decisions && rows.length && count === null ? statusPill("unknown") : null, decisions && source.attention_truncated ? statusPill("partial") : null, decisions && count > rows.length ? h("a", {
-					class: "ui-button ghost ui-sm",
-					href: `#/pm/${encodeURIComponent(workspaceId)}/issues`
-				}, t("ov_more", { n: count - rows.length })) : null, sources)
+				body: h("div", {}, list, sources)
 			});
 			card.dataset.charterSection = key;
 			if (rows.length > 3) {
@@ -18768,13 +18809,16 @@ function workspaceOverview(options) {
 			"data-pm-charter": "",
 			class: "pm-overview-charter"
 		}, h("header", { class: "pm-overview-charter-heading" }, h("h2", {}, t("ov_charter")), button({
-			variant: "ghost",
+			variant: "secondary",
 			label: t("ov_plan"),
 			disabled: !document,
 			"data-charter-plan": "",
 			"data-overview-link": "charter:plan",
 			onClick: () => fullPlan(document)
-		})), grid);
+		})), grid, empty.length ? h("p", {
+			class: "ui-meta",
+			"data-charter-empty": ""
+		}, emptyField(source, "plan", Boolean(document) && (Object.hasOwn(source, "plan_complete") ? source.plan_complete : !savedPartial()), ["plan"]), " · ", empty.map((key) => t("wb_" + key)).join(" · ")) : null);
 	}
 	function details(data, fixed) {
 		const knownSources = [
@@ -19038,6 +19082,7 @@ function workspaceOverview(options) {
 					projection.recent_decisions_count,
 					projection.recent_decisions_complete,
 					projection.recent_decisions_truncated,
+					projection.attention_truncated,
 					projection.recent_deliveries.length > 0
 				],
 				render: () => statusStrip(projection)
@@ -19152,6 +19197,7 @@ function workspaceOverview(options) {
 		reportTools,
 		refresh,
 		refreshProjection: () => mode === "live" ? refreshLive() : void 0,
+		phase: () => mode === "live" ? projection?.lifecycle?.stage : null,
 		withdraw,
 		prepareReports,
 		openRelated,
@@ -25720,6 +25766,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	let typeValue = TYPES.includes(preference.type) ? preference.type : "";
 	let ageValue = Object.hasOwn(AGE_KEYS, preference.age) ? preference.age : "";
 	let weekValue = /^\d{4}-\d{2}-\d{2}$/.test(preference.week || "") ? preference.week : "";
+	let inspectorMenu = null;
 	let debounce = null, sheet = null, retainSheet = false, opening = false;
 	const statusLine = h("div", {
 		class: "reg-status",
@@ -25856,6 +25903,9 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 	}
 	function dash(value) {
 		return labelSegment(value) || "—";
+	}
+	function nextStep(row) {
+		return ["done", "closed"].includes(groupOf(row.status)) ? "" : labelSegment(row.next_step);
 	}
 	function readFilters() {
 		preference.type = typeValue;
@@ -26248,7 +26298,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				"aria-selected": current ? "true" : null,
 				tabindex: current || !hasSelection && index === 0 ? 0 : -1,
 				onclick: () => openRow(row)
-			}, h("span", { class: "reg-list-title" }, dash(displayTitle(row))), listMeta(row), labelSegment(row.next_step) ? h("span", { class: "reg-list-next" }, row.next_step) : null);
+			}, h("span", { class: "reg-list-title" }, dash(displayTitle(row))), listMeta(row), nextStep(row) ? h("span", { class: "reg-list-next" }, row.next_step) : null);
 			button.addEventListener("keydown", (event) => {
 				if (event.target !== button) return;
 				if (![
@@ -26338,7 +26388,10 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				key: "owner",
 				secondary: true,
 				label: t("reg_col_owner"),
-				render: (row) => h("span", { class: "reg-owner-cell" }, dash(row.owner))
+				render: (row) => h("span", {
+					class: "reg-owner-cell",
+					title: labelSegment(row.owner)
+				}, dash(row.owner))
 			},
 			{
 				key: "due",
@@ -26349,7 +26402,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			{
 				key: "next",
 				label: t("reg_col_next"),
-				render: (row) => h("span", { class: "reg-clamp" }, dash(row.next_step))
+				render: (row) => h("span", { class: "reg-clamp" }, dash(nextStep(row)))
 			},
 			{
 				key: "related",
@@ -26467,6 +26520,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		return label ? h("span", {}, label) : null;
 	}
 	function detailNodes(record) {
+		inspectorMenu?.dispose();
 		const row = record.row;
 		const unknownCodes = [];
 		const pairs = [
@@ -26477,7 +26531,7 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			[t("reg_col_owner"), dash(row.owner)],
 			[t("reg_col_due"), day(row.due) || "—"],
 			[t("reg_col_status"), statusNode(row.status)],
-			[t("reg_col_next"), dash(row.next_step)],
+			[t("reg_col_next"), dash(nextStep(row))],
 			[t("reg_col_related"), relatedChips(row)]
 		];
 		const identity = acceptedFinding(row.finding);
@@ -26504,31 +26558,42 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		const title = displayTitle(row) || t("reg_discussion");
 		const offered = (Array.isArray(row.available_actions) ? row.available_actions : []).filter((action) => labelSegment(action?.action));
 		const labels = offered.map((action) => t(ACTION_KEYS[action.action] || "reg_action_open"));
-		const stepText = labelSegment(row.next_step);
-		const primary = stepText && labels.filter((label) => label === stepText).length === 1 ? stepText : "";
+		const open = !["done", "closed"].includes(groupOf(row.status));
+		inspectorMenu = menu({
+			button: iconButton({
+				icon: "more-horizontal",
+				label: t("ui_more"),
+				"data-reg-overflow": ""
+			}),
+			items: [{
+				key: "propose",
+				label: t("reg_propose"),
+				href: discussHref({
+					workspaceId,
+					refs,
+					title: t("reg_change_title", { title }),
+					from: "issues"
+				})
+			}]
+		});
+		inspectorMenu.querySelector("[data-menu-key=propose]").dataset.regPropose = "";
 		const links = h("div", { class: "reg-actions" }, discussLink({
 			workspaceId,
 			refs,
 			title,
 			from: "issues"
-		}, { "data-reg-discuss": "" }), ...offered.map((action, index) => {
+		}, {
+			"data-reg-discuss": "",
+			class: `ui-button ${open ? "primary" : "secondary"} ui-sm`
+		}), ...offered.map((action, index) => {
 			if (!ACTION_KEYS[action.action]) unknownCodes.push(action.action);
 			return h("button", {
 				type: "button",
-				class: `ui-button ${labels[index] === primary ? "primary" : "secondary"} ui-sm`,
+				class: "ui-button secondary ui-sm",
 				"data-reg-action": action.action,
 				onclick: () => onAction(action)
 			}, labels[index]);
-		}), h("a", {
-			class: "ui-button secondary ui-sm",
-			"data-reg-propose": "",
-			href: discussHref({
-				workspaceId,
-				refs,
-				title: t("reg_change_title", { title }),
-				from: "issues"
-			})
-		}, t("reg_propose")));
+		}), inspectorMenu);
 		const fieldKey = {
 			title: "reg_col_title",
 			status: "reg_col_status",
@@ -26581,11 +26646,15 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			seenCodes.add(String(code));
 			detailBits.push(h("p", { class: "mono" }, String(code)));
 		}
-		return [h("div", { class: "reg-sheet-main" }, facts, head, timeline, detailBits.length ? disclosure({
+		const extra = detailBits.length ? disclosure({
 			label: t("reg_details"),
 			key: `reg-details:${workspaceId}:${row.row_id}`,
 			body: h("div", { class: "reg-detail-body" }, ...detailBits)
-		}) : null), links];
+		}) : null;
+		return [h("div", { class: "reg-sheet-main" }, !visibleRows().some((item) => item.row_id === row.row_id) ? h("p", {
+			class: "ui-meta",
+			"data-reg-outside-page": ""
+		}, t("reg_outside_page")) : null, facts, head, timeline, extra), links];
 	}
 	function focusSelectedRow() {
 		const row = selected ? tableHost.querySelector(`[data-row-key="${CSS.escape(selected)}"]`) : null;
@@ -26601,6 +26670,8 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 				title,
 				onClose: () => {
 					sheet = null;
+					inspectorMenu?.dispose();
+					inspectorMenu = null;
 					if (!retainSheet && !opening) preference.inspector = false;
 					queueMicrotask(() => {
 						if (!opening && !sheet && active) focusSelectedRow();
@@ -26743,6 +26814,11 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 			alive();
 			if (!active || ticket !== detailSerial || listTicket !== serial || !preference.inspector || selected !== rowId) return;
 			if (!paint) return;
+			const index = rows.findIndex((row) => row.row_id === rowId);
+			if (index >= 0) {
+				rows[index] = data.row;
+				render();
+			}
 			paintInspector(data);
 		} catch (error) {
 			try {
@@ -26895,13 +26971,14 @@ function workspaceRegister({ h, t, api, alive, namespace, workspaceId, errorBox,
 		if (!isContextRef(ref)) return;
 		const rowId = `${ref.kind}.${ref.id}`;
 		if (!ROW_ID.test(rowId) || !active) return;
+		const query = String(pageQuery());
 		await refresh();
 		try {
 			alive();
 		} catch {
 			return;
 		}
-		if (!active || unavailable || failed) return;
+		if (!active || unavailable || failed || query !== String(pageQuery())) return;
 		selected = rowId;
 		preference.selected = rowId;
 		preference.inspector = true;
@@ -37510,7 +37587,7 @@ function maintenanceRepairPolicyControls({ h, t, input, labelled, available, ciA
 			status.textContent = t("pmr_rule_added");
 			changed();
 		} catch (error) {
-			if (ticket === epoch && visible) status.textContent = error.message;
+			if (ticket === epoch && visible) status.textContent = errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 		} finally {
 			busy = false;
 			update();
@@ -40565,7 +40642,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	let lastList = [], lastThreadList = null;
 	function publishContext() {
-		const stage = workspace ? lifecycle?.phase?.() : null;
+		const stage = workspace ? lifecycle ? lifecycle.phase() : !staleSections.has(brief) ? brief?.phase?.() : null : null;
 		phasePill.hidden = ![
 			"idea",
 			"planning",
@@ -41348,16 +41425,18 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	}
 	const openIssueTool = (section) => {
 		if (matchMedia("(max-width: 1199px)").matches) register?.closeSheet?.(true);
-		const fold = body.querySelector(`[data-pm-section="${section}"] > details`);
-		if (fold instanceof HTMLDetailsElement) {
-			fold.open = true;
-			queueMicrotask(() => {
-				fold.querySelector("summary")?.focus();
-				fold.scrollIntoView({ block: "nearest" });
-			});
-			return;
+		const fold = body.querySelector(`[data-pm-section="${section}"]`)?.querySelector(":scope > details");
+		if (!(fold instanceof HTMLDetailsElement)) return;
+		for (const tool of issueTools) {
+			const other = body.querySelector(`[data-pm-section="${tool.section}"] > details`);
+			if (other && other !== fold) other.open = false;
 		}
-		body.querySelector(`[data-pm-section="${section}"]`)?.scrollIntoView({ block: "nearest" });
+		fold.open = true;
+		refreshStaleVisible();
+		queueMicrotask(() => {
+			fold.querySelector("summary")?.focus();
+			fold.scrollIntoView({ block: "nearest" });
+		});
 	};
 	const overflow = menu({
 		button: iconButton({
@@ -41497,6 +41576,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		}
 		card.dataset.pmSection = label;
 		node.classList.add("pm-secondary-content");
+		if (register && issueTools.some((tool) => tool.section === label)) {
+			card.classList.add("pm-issues-tool");
+			details.open = false;
+		}
 		return card;
 	}
 	const groups = [];
@@ -44680,29 +44763,6 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 		}
 	};
 }
-//#endregion
-//#region src/error-presentation.js
-var ApiError = class extends Error {
-	constructor(status, code, message, { localized = false } = {}) {
-		super(message || code);
-		this.status = status;
-		this.code = code;
-		this.localized = localized;
-	}
-};
-function errorPresentation(error, t, { summary } = {}) {
-	const code = error?.code || "";
-	const message = error?.message || String(error);
-	const key = `error_code_${code}`;
-	const known = code && t(key) !== key;
-	const client = error?.localized === true || !code && error?.constructor === Error;
-	const text = summary ?? (known ? t(key) : client ? message : t("error_generic"));
-	return {
-		summary: text,
-		code: code === text ? "" : code,
-		message: message === text ? "" : message
-	};
-}
 var KEY_SIDEBAR_WIDTH = "batc.sidebar.width";
 var KEY_MOBILE_INFO_COLLAPSED = "batc.mobile.info_collapsed";
 var KEY_MOBILE_COMPOSER_COLLAPSED = "batc.mobile.composer_collapsed";
@@ -45731,7 +45791,7 @@ function readingSummary(t, reading) {
 		detail: ""
 	};
 }
-function conversationPanel({ h, t, when, guard, errorBox, readingActions = null, memory = null }) {
+function conversationPanel({ h, t, when, guard, readingActions = null, memory = null }) {
 	const viewport = h("div", {
 		class: "conversation-scroll",
 		tabindex: "0",
@@ -45753,7 +45813,7 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 		hidden: true,
 		onclick: () => {
 			if (olderWindow && readingActions) {
-				run(() => readingActions.latest());
+				run(() => readingActions.latest(), t("message_window_failed"), false);
 				return;
 			}
 			follow();
@@ -45774,7 +45834,7 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 				message_id: row.id,
 				revision: row.reading.revision
 			}));
-			if (messages.length) run(() => readingActions.mark(messages));
+			if (messages.length) run(() => readingActions.mark(messages), t("conversation_save_failed"), true);
 		}
 	}, t("conversation_mark"));
 	const remember = h("button", {
@@ -45786,14 +45846,14 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 				message_id: row.id,
 				revision: row.reading.revision,
 				offset: Math.round(row.node.getBoundingClientRect().top - viewport.getBoundingClientRect().top)
-			}, reading?.position?.version || 0));
+			}, reading?.position?.version || 0), t("conversation_save_failed"), true);
 		}
 	}, t("conversation_remember"));
 	const older = h("button", {
 		class: "conversation-earlier",
 		type: "button",
 		hidden: true,
-		onclick: () => run(() => readingActions.older())
+		onclick: () => run(() => readingActions.older(), t("message_window_failed"), false)
 	}, t("message_load_earlier"));
 	const caption = h("p", { class: "muted conversation-window" });
 	const captionRow = h("div", { class: "conversation-caption" }, caption);
@@ -45840,19 +45900,23 @@ function conversationPanel({ h, t, when, guard, errorBox, readingActions = null,
 		viewport.scrollTop = viewport.scrollHeight;
 		indicator();
 	};
-	const run = async (action) => {
+	const run = async (action, summary = t("conversation_save_failed"), isSave = true) => {
 		if (!alive() || busy) return;
 		busy = true;
 		status.replaceChildren();
 		indicator();
 		try {
 			await action();
-			if (alive()) status.textContent = t("conversation_saved");
+			if (alive() && isSave) status.textContent = t("conversation_saved");
 		} catch (error) {
-			if (alive()) status.replaceChildren(errorBox(error, {
-				summary: t("conversation_save_failed"),
-				within: status
-			}));
+			if (alive()) {
+				const presentation = errorPresentation(error, t, { summary });
+				const details = errorDetails(presentation);
+				status.replaceChildren(h("div", { "data-api-error": "" }, h("span", {
+					"data-error-summary": "",
+					class: "error"
+				}, presentation.summary), details || ""));
+			}
 		} finally {
 			busy = false;
 			if (alive()) indicator();
@@ -46196,7 +46260,7 @@ function composerShortcut({ h, t, input, button, storageKey, guard }) {
 			status.textContent = "";
 		} catch (error) {
 			select.value = mode;
-			status.textContent = error.message || String(error);
+			status.textContent = t("composer_shortcut_storage_failed");
 		}
 	});
 	const start = () => {
@@ -46392,7 +46456,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 				if (op.status !== "succeeded") throw Error(op.status_reason || t("models_pending"));
 				await refresh(true);
 			} catch (error) {
-				note.textContent = error.message || String(error);
+				note.textContent = errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 			} finally {
 				busy = false;
 				update();
@@ -46446,7 +46510,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 				if (request === serial) {
 					doc = null;
 					list.replaceChildren();
-					note.textContent = error.message || String(error);
+					note.textContent = errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 					update();
 				}
 			} catch {}
@@ -46476,8 +46540,16 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 	const status = h("p", {
 		class: "muted",
 		role: "status"
-	}), evidence = h("div"), usage = h("div"), rows = h("div"), form = h("div", { class: "capture-fields" });
+	}), statusDetails = h("div"), evidence = h("div"), usage = h("div"), rows = h("div"), form = h("div", { class: "capture-fields" });
 	const inputs = {};
+	const showError = (error) => {
+		const presentation = errorPresentation(error, t);
+		status.textContent = presentation.summary;
+		statusDetails.replaceChildren(errorDetails(presentation) || "");
+	};
+	const clearError = () => {
+		statusDetails.replaceChildren();
+	};
 	const persist = () => {
 		guard();
 		if (loadedHost) drafts[loadedHost] = {
@@ -46497,8 +46569,9 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		try {
 			persist();
 			status.textContent = t("models_unsaved");
+			clearError();
 		} catch (error) {
-			status.textContent = error.message || String(error);
+			showError(error);
 		}
 		update();
 	};
@@ -46531,10 +46604,11 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 			try {
 				persist();
 				status.textContent = t("models_unsaved");
+				clearError();
 				renderRows();
 				update();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		}
 	}, t("models_reset_display"));
@@ -46552,7 +46626,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				draft = null;
 				load(true);
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		}
 	}, t("models_reload_saved"));
@@ -46578,6 +46652,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 					delete drafts[loadedHost];
 					localStorage.setItem(storageKey, JSON.stringify(drafts));
 					status.textContent = t("models_saved");
+					clearError();
 					await load(false);
 				} else {
 					if (["failed", "cancelled"].includes(op.status)) {
@@ -46585,6 +46660,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 						persist();
 					}
 					status.textContent = op.status_reason || t("models_pending");
+					clearError();
 				}
 			} catch (error) {
 				try {
@@ -46593,7 +46669,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 						intent = null;
 						persist();
 					}
-					status.textContent = error.message || String(error);
+					showError(error);
 				} catch {}
 			} finally {
 				busy = false;
@@ -46604,7 +46680,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 	const box = h("details", {
 		class: "panel model-preferences",
 		"data-model-preferences": ""
-	}, h("summary", {}, t("models_title")), h("p", { class: "muted" }, t("models_personal", { actor: caps()?.actor || "" })), h("div", { class: "capture-fields" }, h("label", {}, t("models_host"), host), h("label", {}, t("models_catalog_agent"), catalogAgent)), h("div", { class: "actions" }, refresh), status, evidence, form, rows, h("div", { class: "actions" }, save, reset, discard), h("h2", {}, t("models_usage")), usage);
+	}, h("summary", {}, t("models_title")), h("p", { class: "muted" }, t("models_personal", { actor: caps()?.actor || "" })), h("div", { class: "capture-fields" }, h("label", {}, t("models_host"), host), h("label", {}, t("models_catalog_agent"), catalogAgent)), h("div", { class: "actions" }, refresh), status, statusDetails, evidence, form, rows, h("div", { class: "actions" }, save, reset, discard), h("h2", {}, t("models_usage")), usage);
 	function update() {
 		const locked = busy || Boolean(intent), coherent = doc?.host === host.value;
 		for (const input of Object.values(inputs)) input.disabled = locked || !draft || !coherent;
@@ -46631,10 +46707,11 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 			try {
 				persist();
 				status.textContent = t("models_unsaved");
+				clearError();
 				renderRows();
 				update();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		};
 		rows.replaceChildren(h("h2", {}, t("models_display")), h("p", { class: "muted" }, t("models_display_help")), ...models.map((model, i) => {
@@ -46723,6 +46800,7 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 			].filter(Boolean));
 			if (draft.revision !== next.model_preferences.revision) status.textContent = t("models_conflict");
 			else if (!equal$7(draft.params, copyPreferences(next.model_preferences))) status.textContent = t("models_unsaved");
+			clearError();
 			renderRows();
 			showUsage(next.usage);
 			update();
@@ -46731,7 +46809,9 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					const presentation = errorPresentation(error, t);
+					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
+					statusDetails.replaceChildren(errorDetails(presentation) || "");
 				}
 			} catch {}
 		}
@@ -46776,7 +46856,15 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 	const status = h("p", {
 		class: "muted",
 		role: "status"
-	}), source = h("div"), list = h("div");
+	}), statusDetails = h("div"), source = h("div"), list = h("div");
+	const showError = (error) => {
+		const presentation = errorPresentation(error, t);
+		status.textContent = presentation.summary;
+		statusDetails.replaceChildren(errorDetails(presentation) || "");
+	};
+	const clearError = () => {
+		statusDetails.replaceChildren();
+	};
 	const persist = () => {
 		guard();
 		localStorage.setItem(storageKey, JSON.stringify(saved));
@@ -46806,7 +46894,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 				draft = null;
 				load(true);
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		}
 	}, t("skills_reload"));
@@ -46846,6 +46934,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 					saved = next;
 					draft = null;
 					status.textContent = t("skills_saved");
+					clearError();
 					await load();
 				} else {
 					if (["failed", "cancelled"].includes(op.status)) {
@@ -46853,6 +46942,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 						persist();
 					}
 					status.textContent = op.status_reason || t("models_pending");
+					clearError();
 				}
 			} catch (error) {
 				try {
@@ -46865,7 +46955,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 						draft.intent = null;
 						persist();
 					}
-					status.textContent = error.message || String(error);
+					showError(error);
 				} catch {}
 			} finally {
 				busy = false;
@@ -46876,7 +46966,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 	const box = h("details", {
 		class: "panel project-skills",
 		"data-project-skills": ""
-	}, h("summary", {}, t("skills_title")), h("p", { class: "note" }, t("skills_not_applied")), h("div", { class: "capture-fields" }, h("label", {}, t("host"), host), h("label", {}, t("start_workspace"), workspace)), h("div", { class: "actions" }, refresh), status, source, list, h("div", { class: "actions" }, save, discard));
+	}, h("summary", {}, t("skills_title")), h("p", { class: "note" }, t("skills_not_applied")), h("div", { class: "capture-fields" }, h("label", {}, t("host"), host), h("label", {}, t("start_workspace"), workspace)), h("div", { class: "actions" }, refresh), status, statusDetails, source, list, h("div", { class: "actions" }, save, discard));
 	function update() {
 		const locked = busy || Boolean(draft?.intent), valid = coherent();
 		host.disabled = locked;
@@ -46909,9 +46999,10 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			try {
 				persist();
 				status.textContent = t("skills_unsaved");
+				clearError();
 				render();
 			} catch (error) {
-				status.textContent = error.message || String(error);
+				showError(error);
 			}
 		};
 		const unresolved = draft.selected.filter((ref) => !catalog.skills.some((skill) => same$1(ref, skill) && skill.available));
@@ -46959,13 +47050,16 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			if (draft.intent && !record$3(draft.intent)) draft.intent = null;
 			saved.drafts[draftKey] = draft;
 			if (draft.revision !== next.selection.revision || draft.digest !== next.catalog.catalog_digest) status.textContent = t("skills_conflict");
+			clearError();
 			render();
 		} catch (error) {
 			try {
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					const presentation = errorPresentation(error, t);
+					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
+					statusDetails.replaceChildren(errorDetails(presentation) || "");
 				}
 			} catch {}
 		}
@@ -46986,12 +47080,13 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 			discoveredHost = selectedHost;
 			discoveryReady = true;
 			if (next.has_more) status.textContent = t("start_truncated");
+			clearError();
 			update();
 			await load(force);
 		} catch (error) {
 			try {
 				guard();
-				if (request === discovery) status.textContent = error.message || String(error);
+				if (request === discovery) showError(error);
 			} catch {}
 		}
 	}
@@ -47043,7 +47138,7 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
 		class: "muted",
 		role: "status"
-	}), body = h("div");
+	}), statusDetails = h("div"), body = h("div");
 	const refresh = iconButton({
 		icon: "refresh-cw",
 		label: t("results_refresh"),
@@ -47060,7 +47155,7 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 	const box = h("section", {
 		class: "result-sources panel",
 		"data-result-sources": ""
-	}, warning, h("details", {}, h("summary", {}, t("results_title")), status, h("div", { class: "actions" }, refresh), body, more));
+	}, warning, h("details", {}, h("summary", {}, t("results_title")), status, statusDetails, h("div", { class: "actions" }, refresh), body, more));
 	function renderSource(item, own = false) {
 		const content = h("div", {}, h("p", { class: "muted" }, t("results_completion", { state: t(`wi_state_${item.completion.display_state}`) })));
 		if (!item.links.length && !item.result_artifacts.length) content.append(emptyState({ title: t("results_empty") }));
@@ -47107,6 +47202,7 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 			source: doc.source,
 			time: date(doc.read_at)
 		}));
+		statusDetails.replaceChildren();
 		more.hidden = !doc.children_next_cursor;
 	}
 	function load(after = "") {
@@ -47132,7 +47228,9 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 				guard();
 				if (request === serial) {
 					errorBox?.(error);
-					status.textContent = `${t("models_not_refreshed")} ${error.message || error}`;
+					const presentation = errorPresentation(error, t);
+					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
+					statusDetails.replaceChildren(errorDetails(presentation) || "");
 				}
 			} catch {}
 		} finally {
@@ -50225,7 +50323,12 @@ function operationList({ h, t, api, guard, statuses, namespace }) {
 					paint();
 				}
 				failed = true;
-				status.replaceChildren(h("p", { class: "error" }, error.message));
+				const presentation = errorPresentation(error, t);
+				const details = errorDetails(presentation);
+				status.replaceChildren(h("p", {
+					class: "error",
+					"data-error-summary": ""
+				}, presentation.summary), ...details ? [details] : []);
 			}
 			throw error;
 		}).finally(() => {
@@ -52587,7 +52690,7 @@ function artifactContent({ h, t, api, guard, getArtifact, canRead, validArtifact
 	const fail = (error) => {
 		try {
 			guard();
-			if (!disposed) status.textContent = error.message === "PREVIEW_UNSUPPORTED" ? t("ar_content_preview_limit") : error.message;
+			if (!disposed) status.textContent = error.message === "PREVIEW_UNSUPPORTED" ? t("ar_content_preview_limit") : errorPresentation(error, t, { fallback: "error_generic_short" }).summary;
 		} catch {}
 	};
 	const close = () => {
@@ -55930,7 +56033,6 @@ async function viewSession(main, host, sid, context = null) {
 	const conversation = conversationPanel({
 		h,
 		t,
-		errorBox,
 		when: sessionWhen,
 		guard: () => assertView(connection),
 		memory: viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`),
@@ -57989,9 +58091,10 @@ function integrationPanel(pr, reloadCard, source = null) {
 					session.pending && runtimeStale(session) ? chip(t("sessions_stale"), "stale") : null,
 					h("p", { class: "muted" }, t("delivery_result_unverified")),
 					h("p", { class: "muted" }, session.observed_at ? timeLabel(t, "delivery_observed_at", { time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at) }) : t("delivery_unobserved")),
-					r.unavailable ? h("p", { class: "note" }, t("delivery_source_unavailable"), " ", h("code", {}, r.unavailable.code)) : null,
+					r.unavailable ? h("p", { class: "note" }, t("delivery_source_unavailable")) : null,
+					r.unavailable ? errorDetails(typeof r.unavailable === "object" ? r.unavailable : { code: String(r.unavailable) }) : null,
 					...delivered(r)
-				];
+				].filter(Boolean);
 			};
 			const results = source ? c.selected && c.selected.kind === source.kind && c.selected.id === source.id && c.selected.host === source.host ? [c.selected] : [] : c.agent_results;
 			pickList.replaceChildren(h("h3", {}, t("agent_results")), ...results.length ? results.map((r) => row(r.kind || "checkpoint_run", r.id, r.branch || r.id, evidence(r), r.eligible !== false)) : [h("p", { class: "muted" }, t("none"))], h("h3", {}, t("your_checkpoints")), ...c.checkpoints.length ? c.checkpoints.map((r) => row("checkpoint", r.id, `${r.branch || "?"} @ ${r.commit_sha.slice(0, 10)}`, [r.note ? h("span", { class: "muted" }, r.note.slice(0, 60)) : null, ...delivered(r)])) : [h("p", { class: "muted" }, t("none"))], h("div", { class: "actions" }, branch, h("button", {

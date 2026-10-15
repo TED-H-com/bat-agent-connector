@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "desktop/prototype/**"
       - "scripts/*product_site*"
       - "README*.md"
       - "docs/getting-started*.md"
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - "site/**"
+      - "desktop/prototype/**"
       - "scripts/*product_site*"
       - "README*.md"
       - "docs/getting-started*.md"
@@ -54,6 +56,39 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+      - name: Build and validate the unindexed prototype
+        working-directory: desktop
+        run: |
+          npm run build:prototype
+          python3 - <<'PY'
+          from html.parser import HTMLParser
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+
+          class PrototypeBuild(HTMLParser):
+              noindex = False
+
+              def handle_starttag(self, tag, attributes):
+                  attrs = dict(attributes)
+                  if tag == "meta" and attrs.get("name", "").lower() == "robots":
+                      self.noindex |= "noindex" in attrs.get("content", "").lower().replace(",", " ").split()
+                  urls = [attrs[key] for key in ("src", "poster", "data") if key in attrs]
+                  if tag == "link" and "href" in attrs:
+                      urls.append(attrs["href"])
+                  if "srcset" in attrs:
+                      urls.extend(entry.strip().split()[0] for entry in attrs["srcset"].split(",") if entry.strip())
+                  for url in urls:
+                      if not url or url.startswith(("/", "\\")) or urlsplit(url).scheme or urlsplit(url).netloc:
+                          raise ValueError(f"Asset URL must be relative: {url}")
+
+
+          check = PrototypeBuild()
+          check.feed(Path("dist-prototype/v1.3/index.html").read_text())
+          if not check.noindex:
+              raise ValueError("Prototype must include a robots noindex meta tag")
+          print("Prototype build: noindex and relative asset URLs verified")
+          PY
       - name: Responsive bilingual browser checks
         env:
           SITE_SCREENSHOT_DIR: ${{ runner.temp }}/product-site-evidence
@@ -87,6 +122,23 @@ jobs:
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.21.0"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Build the unindexed prototype
+        working-directory: desktop
+        run: |
+          npm ci
+          npm run build:prototype
+
+      - name: Stage the prototype without site navigation links
+        run: |
+          mkdir -p site/prototype/v1.3
+          cp -R desktop/dist-prototype/v1.3/. site/prototype/v1.3/
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

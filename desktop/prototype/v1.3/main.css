@@ -1,0 +1,158 @@
+@import '../../src/ui/tokens.css';
+@import '../../src/ui/components.css';
+@import '../../src/app.css';
+@import '../../src/shell.css';
+@import '../../src/pm-overview.css';
+@import '../../src/pm-workbench.css';
+@import '../../src/pm-session.css';
+
+/* Product markup/classes above are shared unchanged. These rules only size the fixture host
+   and the candidate v1.3 surfaces; the prototype controls are outside the product region. */
+.proto-bar { background: var(--surface-2); border-bottom: 1px dashed var(--warn); padding: var(--space-1) var(--space-4); color: var(--text-2); font-size: var(--fs-caption); }
+.proto-bar-row { display: flex; align-items: center; gap: var(--space-3); min-height: 40px; }
+.proto-bar-row > strong { color: var(--warn); white-space: nowrap; }
+.proto-bar-row > .ui-icon-button { margin-left: auto; }
+.proto-bar-extra { padding-block: var(--space-2); }
+.proto-bar-extra > p { margin: 0 0 var(--space-2); }
+.proto-select { display: inline-flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.proto-select select { max-width: 240px; min-width: 0; }
+.proto-counters, .proto-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.proto-counters { margin-top: var(--space-2); gap: var(--space-4); }
+.proto-bar .proto-actions { margin-bottom: var(--space-2); }
+.proto-actions > .ui-button { flex: none; }
+body.has-workspace #workspace { min-height: calc(100dvh - 98px); position: relative; }
+body.has-workspace main { max-width: 1600px; min-width: 0; }
+body.has-workspace .workspace-nav { display: flex; flex-direction: column; }
+.proto-work-link { width: 100%; border: 0; background: transparent; color: var(--text-2); text-align: left; display: flex; align-items: center; border-radius: var(--r-sm); cursor: pointer; }
+.proto-work-link[aria-current=page] { color: var(--accent); background: var(--accent-soft); }
+.proto-work-link .workspace-tree-label { flex: 1; }
+.proto-view { min-width: 0; }
+.proto-view > .ui-page-header { margin-bottom: var(--space-4); }
+.proto-discussions { display: grid; grid-template-columns: 240px minmax(0, 1fr) 300px; height: calc(100dvh - 200px); min-height: 600px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.proto-thread-list { padding: var(--space-3); border-right: 1px solid var(--line); min-width: 0; }
+.proto-thread-list .ui-search-field { margin-bottom: var(--space-3); }
+.proto-thread { width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--line); padding: var(--space-4) var(--space-3); text-align: left; cursor: pointer; color: var(--text); }
+.proto-thread strong, .proto-thread small { display: block; }
+.proto-thread small { color: var(--text-3); margin-top: var(--space-2); }
+.proto-thread.selected { background: var(--accent-soft); box-shadow: inset 2px 0 var(--accent); }
+.proto-thread-detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.proto-thread-heading { padding: var(--space-4); display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); border-bottom: 1px solid var(--line); }
+.proto-thread-heading > strong { width: 100%; }
+.proto-transcript { padding: var(--space-4); flex: 1; min-height: 0; overflow-y: auto; }
+.session-workspace .conversation-scroll { overflow: visible; }
+
+.proto-composer { padding: var(--space-4); border-top: 1px solid var(--line); background: var(--surface); }
+.proto-composer textarea, .proto-work-composer textarea { width: 100%; resize: vertical; font: inherit; margin-block: var(--space-2); min-height: 72px; }
+.proto-composer > .proto-actions { justify-content: flex-end; }
+.proto-suggestion { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); color: var(--text-3); font-size: var(--fs-caption); margin-bottom: var(--space-2); }
+.proto-facts { display: grid; gap: var(--space-3); margin-block: var(--space-4); }
+.proto-facts > div { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: var(--space-3); }
+.proto-facts dt { color: var(--text-3); font-size: var(--fs-small); }
+.proto-facts dd { margin: 0; overflow-wrap: break-word; }
+.proto-notice { padding: var(--space-3); background: var(--info-soft); color: var(--info); border-radius: var(--r-sm); font-size: var(--fs-small); }
+.proto-notice.tone-ok { color: var(--ok); background: var(--ok-soft); }
+.proto-diagnostic, .proto-question { padding: var(--space-4); background: var(--warn-soft); color: var(--text); border: 1px solid var(--line); border-radius: var(--r-md); margin: var(--space-3) 0; }
+.proto-diagnostic > p, .proto-question > p { margin-block: var(--space-2); }
+.proto-steps { padding-left: var(--space-5); }
+.proto-steps li { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-small); }
+.proto-steps li > div { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
+.proto-steps .ui-pill { margin-top: var(--space-1); }
+.proto-steps details { margin: 0; font-size: var(--fs-caption); }
+.proto-work-header { border-bottom: 1px solid var(--line); margin-bottom: var(--space-4); }
+.proto-work-header .proto-facts { grid-template-columns: repeat(2,minmax(0,1fr)); column-gap: var(--space-6); }
+.proto-work-header .proto-facts > div:first-child, .proto-work-header .proto-facts > div:last-child { grid-column: 1 / -1; }
+.proto-session-grid { display: grid; min-height: calc(100dvh - 390px); }
+.proto-session-grid.has-results { grid-template-columns: minmax(0,1fr) 400px; gap: var(--space-4); }
+.proto-work-main { display: flex; flex-direction: column; min-width: 0; }
+.proto-work-transcript { flex: 1; min-height: 220px; }
+.proto-work-composer { border-top: 1px solid var(--line); padding-block: var(--space-3); }
+.proto-queue-row { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); }
+.proto-queue-row small { color: var(--text-3); }
+.proto-tools { padding-left: 0; list-style: none; }
+.proto-tools li { display: flex; gap: var(--space-2); color: var(--text-2); padding: var(--space-2) 0; }
+.proto-tools .ui-icon { flex: none; }
+.proto-work-transcript pre { padding: var(--space-3); border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); white-space: pre-wrap; }
+.proto-delivery { margin: var(--space-3) 0; }
+.proto-delivery > div { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--line); font-size: var(--fs-small); }
+.proto-delivery dd { margin: 0; flex: none; }
+.proto-readonly-reason { margin-top: auto; color: var(--text-2); font-size: var(--fs-small); padding-top: var(--space-4); }
+.proto-manual-actions { align-items: flex-start; flex-direction: column; }
+.proto-status-strip { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--space-4); gap: var(--space-4); }
+.proto-status-strip > div { display: flex; flex-direction: column; gap: var(--space-2); border-right: 1px solid var(--line); padding-right: var(--space-3); }
+.proto-status-strip > div:last-child { border: 0; }
+.proto-status-strip small { color: var(--text-3); }
+.proto-overview-columns { display: grid; grid-template-columns: minmax(0,2fr) minmax(0,1fr); gap: var(--space-4); }
+.proto-charter { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-3); }
+.proto-charter .ui-section-card { margin: 0; }
+.proto-view h3 { font-size: var(--fs-section); margin: var(--space-4) 0 var(--space-2); }
+.proto-view p { overflow-wrap: break-word; }
+.proto-view pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.proto-dialog { border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); color: var(--text); padding: var(--space-6); max-width: min(480px,calc(100vw - 32px)); box-shadow: var(--shadow-overlay); }
+.proto-dialog::backdrop { background: var(--scrim); }
+.proto-diff-file { margin: var(--space-3) 0; min-width: 0; }
+.proto-diff-file__header { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: space-between; padding-block: var(--space-2); }
+.proto-diff-table { overflow-x: auto; border: 1px solid var(--line); }
+.proto-diff-line { display: grid; grid-template-columns: 24px 24px 12px minmax(180px,1fr); font: var(--fs-caption)/1.6 var(--font-mono); }
+.proto-diff-line--add { background: var(--ok-soft); }
+.proto-diff-line--del { background: var(--bad-soft); }
+.proto-diff-line__code { white-space: pre-wrap; overflow-wrap: anywhere; }
+.proto-diff-line__num { color: var(--text-3); }
+@media (min-width:1200px) {
+  body.has-workspace .proto-inspector { position: static; top: auto; bottom: auto; width: auto; max-height: none; z-index: auto; box-shadow: none; }
+  .proto-discussions .proto-inspector { width: 300px; }
+  .proto-inspector .ui-inspector-body { overflow: visible; }
+}
+@media (max-width:1399px) and (min-width:1200px) { .proto-discussions { grid-template-columns: 200px minmax(0,1fr) 300px; } }
+@media (max-width:1199px) { .proto-discussions { grid-template-columns: 240px minmax(0,1fr); } .proto-session-grid.has-results { grid-template-columns: minmax(0,1fr); } }
+@media (max-width:999px) {
+  body.has-workspace .workspace-nav { display: none; }
+  body.workspace-nav-open .workspace-nav { display: flex; }
+  .proto-charter { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .proto-overview-columns { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width:799px) {
+  .proto-bar { padding-inline: var(--space-2); }
+  .proto-bar-row { gap: var(--space-2); }
+  .proto-bar-row > strong { font-size: var(--fs-caption); }
+  .proto-bar-row .proto-select { flex: 1; }
+  .proto-bar-row .proto-select > span { display: none; }
+  .proto-bar-row select { width: 100%; max-width: 100%; }
+  .proto-bar .ui-icon-button { flex: none; }
+  .proto-discussions { display: block; min-height: calc(100dvh - 220px); }
+  .proto-thread-list { display: none; }
+  .proto-transcript { padding: var(--space-3); }
+  .proto-composer { padding: var(--space-3); }
+  .proto-composer textarea, .proto-work-composer textarea { font-size: var(--fs-input-mobile); }
+  .proto-status-strip, .proto-charter, .proto-work-header .proto-facts { grid-template-columns: minmax(0,1fr); }
+  .proto-status-strip > div { border: 0; }
+  .proto-facts > div { grid-template-columns: 96px minmax(0,1fr); }
+  .proto-bar-extra .proto-select { flex-wrap: wrap; }
+}
+/* The public event wrapper must not change the product message grid. */
+.session-workspace .conversation-scroll .proto-message { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: var(--space-1) var(--space-2); border: 0; background: transparent; padding: var(--space-3) 0; white-space: normal; font-size: var(--fs-read); }
+.session-workspace .conversation-scroll .proto-message.proto-pm-message { padding: var(--space-4); background: var(--accent-soft); border: 1px solid var(--line); }
+@media (min-width:1000px) { .shell-top-actions > .shell-pending { display: none; } }
+.pm-project-views button[aria-current=page] { background: var(--accent-soft); color: var(--accent); }
+/* The transcript owns its scroll. Product max-height aliases must not let a long
+   plan paint underneath the pinned composer. */
+.proto-transcript .conversation-scroll { max-height: none; height: auto; }
+@media (max-width:799px) { .proto-discussions { height: auto; } .proto-thread-detail { overflow: visible; } .proto-transcript { overflow: visible; } }
+
+.proto-thread-heading > .proto-notice { flex-basis: 100%; margin: 0; }
+/* The rail scrolls as one column, including the footer, just like the product. */
+body.has-workspace .workspace-nav { min-height: 0; }
+body.has-workspace .workspace-nav > * { flex-shrink: 0; }
+@media (min-width: 1000px) {
+  body.has-workspace .workspace-nav { top: 98px; height: calc(100dvh - 98px); }
+}
+.proto-work-header .proto-facts > div { grid-template-columns: 144px minmax(0, 1fr); }
+.proto-work-header .proto-facts > div:nth-child(4) { grid-column: 1 / -1; }
+.proto-started-line { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; padding-block: var(--space-3); border-block: 1px solid var(--line); }
+.proto-started-line > details[open] { flex-basis: 100%; }
+.proto-tools .ui-pill { margin-left: auto; }
+/* A fixed document overlay also dims page content beyond the native top-layer box. */
+.proto-dialog-backdrop { position: fixed; inset: 0; background: var(--scrim); z-index: 100; }
+.proto-dialog::backdrop { background: transparent; }
+@media (max-width: 799px) {
+  .proto-work-header .proto-facts > div { grid-template-columns: 104px minmax(0, 1fr); }
+}

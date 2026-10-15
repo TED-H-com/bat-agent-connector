@@ -119,3 +119,6 @@
 .pm-overview-attention-main { grid-row: 1; grid-column: 1; align-self: center; }
 .pm-overview-attention-actions { grid-row: 1; grid-column: 2; margin-left: 0; }
 .pm-overview-context { grid-row: 2; grid-column: 1 / -1; margin-left: calc(20px + var(--space-3)); }
+
+.pm-overview-context [data-overview-age] { white-space: nowrap; }
+[data-charter-empty] { margin: var(--space-3) 0 0; }

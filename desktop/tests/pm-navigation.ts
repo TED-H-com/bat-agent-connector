@@ -17,6 +17,12 @@ export async function openPmSection(page: Page, view: string, section?: string) 
     else await page.keyboard.press('Escape');
     return;
   }
+  if (section && view === 'issues' && await page.locator('[data-pm-register]').count()) {
+    const keys: Record<string, string> = {ui_governance:'governance', ui_repairs:'repairs', ui_maintenance_review:'review', ui_follow_up:'follow'};
+    await page.locator('[data-pm-overflow]').click();
+    await page.locator(`[data-menu-key="${keys[section]}"]:visible`).click();
+    return;
+  }
   if (section) {
     const details = page.locator(`[data-pm-section="${section}"] > details`);
     if (await details.count() && !await details.evaluate(node => (node as HTMLDetailsElement).open)) await details.locator(':scope > summary').click();
@@ -46,6 +52,10 @@ export async function expectPmWithdrawn(page: Page, view: string, selector: stri
   if (section && await page.locator(`[data-pm-view-tools="${view}"]`).count()) {
     await page.locator(`[data-pm-view-tools="${view}"]`).click();
     await page.locator(`[data-menu-key="${section}"]:visible`).click();
+  } else if (section && view === 'issues' && await page.locator('[data-pm-register]').count()) {
+    const keys: Record<string, string> = {ui_governance:'governance', ui_repairs:'repairs', ui_maintenance_review:'review', ui_follow_up:'follow'};
+    await page.locator('[data-pm-overflow]').click();
+    await page.locator(`[data-menu-key="${keys[section]}"]:visible`).click();
   } else if (section) {
     const fold = page.locator(`[data-pm-section="${section}"] > details`);
     if (!await fold.evaluate(node => (node as HTMLDetailsElement).open)) await fold.locator(':scope > summary').click();

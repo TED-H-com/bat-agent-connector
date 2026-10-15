@@ -4,7 +4,7 @@ import {buildDiagnostics, clientIdentity, buildLine, errorRing, sessionFacts} fr
 import {diagnosticsDialog} from './diagnostics-dialog.js';
 import {dashboardShell} from './shell.js';
 import {lastWorkspace, lastProjectView} from './pm-workbench.js';
-import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button, sectionCard} from './ui/components.js';
+import {searchField, disclosure, emptyState, iconButton, pageHeader, segmented, statusPill, agentMark, inspector, menu, button, sectionCard, errorDetails} from './ui/components.js';
 import {icon} from './ui/icons.js';
 import {cliName} from './pm-agents-trend.js';
 import {actionLabel, formatTime, operationMeta, operationStatusKey, operationStatusLabel, reasonText, workStatusKey} from './global-labels.js';
@@ -1441,7 +1441,7 @@ async function viewSession(main, host, sid, context = null) {
     if (op.status !== "succeeded") throw new Error(op.status_reason || t("conversation_pending"));
   };
   const scrollMemory = viewState(connection.namespace, sessionWorkspace || host, `session:${sid}`);
-  const conversation = conversationPanel({h, t, errorBox, when: sessionWhen, guard: () => assertView(connection), memory: scrollMemory, readingActions: readingSupported ? {
+  const conversation = conversationPanel({h, t, when: sessionWhen, guard: () => assertView(connection), memory: scrollMemory, readingActions: readingSupported ? {
     mark: messages => saveReading("session.read", {messages}),
     remember: (position, version) => saveReading("session.position", position, {expected_version: version}),
     older: () => loadMessages(nextMessageOffset, false),
@@ -2684,8 +2684,9 @@ function integrationPanel(pr, reloadCard, source = null) {
           h("p", {class: "muted"}, t("delivery_result_unverified")),
           h("p", {class: "muted"}, session.observed_at
             ? timeLabel(t, "delivery_observed_at", {time: when(typeof session.observed_at === "number" ? epoch(session.observed_at) : session.observed_at)}) : t("delivery_unobserved")),
-          r.unavailable ? h("p", {class: "note"}, t("delivery_source_unavailable"), " ", h("code", {}, r.unavailable.code)) : null,
-          ...delivered(r)];
+          r.unavailable ? h("p", {class: "note"}, t("delivery_source_unavailable")) : null,
+          r.unavailable ? errorDetails(typeof r.unavailable === "object" ? r.unavailable : {code: String(r.unavailable)}) : null,
+          ...delivered(r)].filter(Boolean);
       };
       const results = source ? c.selected && c.selected.kind === source.kind && c.selected.id === source.id && c.selected.host === source.host
         ? [c.selected] : [] : c.agent_results;

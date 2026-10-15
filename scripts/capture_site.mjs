@@ -12,8 +12,8 @@ import {DEMO_NOW} from '../desktop/tests/demo/project.ts';
 import {mountConversation} from '../desktop/tests/conversation-fixture.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-// Merged main through #161. Documentation-only commits may recapture this tree.
-const source = 'ab960ed23f734944470b982bd2f66b0c30300151';
+// Merged main through #181. Documentation-only commits may recapture this tree.
+const source = 'd66f032d342562322479c5087c6982d662d11a01';
 const output = path.join(root, 'site/images');
 const review = process.env.CAPTURE_REVIEW_DIR;
 const fixtureClock = new Date(DEMO_NOW).toISOString();
@@ -173,7 +173,7 @@ async function prepare(page, scenario, locale) {
     await page.evaluate(hash => {location.hash = hash;}, new URL(origin + demoRoute('manual')).hash);
     await expect(page.locator('.shell-crumb-workspace')).toContainText(fixture.copy.name);
     await expect(page.locator('.shell-workspace-switch')).toContainText(fixture.copy.name);
-    await expect(page.locator('[data-session-readonly]')).toContainText(zh ? '這是有人在 BAT 開啟的工作階段' : 'Started in BAT by a person');
+    await expect(page.locator('[data-session-readonly]')).toContainText(zh ? '僅供檢視' : 'View only');
     await expect(page.locator('#main')).toContainText(fixture.copy.manualNote);
     await expect(page.locator('#workspace-message-input')).toBeHidden();
     await expect(page.getByRole('button', {name: zh ? '送出' : 'Send', exact: true})).toHaveCount(0);

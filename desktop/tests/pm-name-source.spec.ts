@@ -70,14 +70,15 @@ for (const locale of ['en', 'zh-TW']) {
     try {
       const plan = await f.originalDispatch({path: f.root + '/plans/accepted'}), name = plan.data.plan.document.requirements.find((row: any) => row.id === f.ids.requirements.email).text;
       await boot(page, f);
-      const chip = page.locator(`[data-reg-table] [data-reg-requirement="${f.ids.requirements.email}"]`);
+      // Related facts move to the inspector when the table prioritizes titles.
+      await page.locator('[data-reg-table] [data-row-key]').first().click();
+      const chip = page.locator(`[data-reg-inspector] [data-reg-requirement="${f.ids.requirements.email}"]`);
       await expect(chip).toHaveAccessibleName(name); await expect(chip).toHaveText(name);
       // The eager baseline also used a generic Work chip before either work view loaded.
-      await expect(page.locator('[data-reg-table] [data-reg-work]').first()).toHaveText(locale === 'en' ? 'Work' : '工作');
+      await expect(page.locator('[data-reg-inspector] [data-reg-work]').first()).toHaveText(locale === 'en' ? 'Work' : '工作');
       expect(f.count('/plans/accepted')).toBe(1); expect(f.count('/kanban')).toBe(0); expect(f.count('/overview')).toBe(0);
       expect(f.reads.some(path => path.endsWith('/deliveries'))).toBe(false);
       await shot(page, `register-${locale}-1440`);
-      await page.locator('[data-reg-table] [data-row-key]').first().click();
       await expect(page.locator(`[data-reg-inspector] [data-reg-requirement="${f.ids.requirements.email}"]`)).toHaveText(name);
       expect(f.writes).toEqual([]);
     } finally {await context.close();}

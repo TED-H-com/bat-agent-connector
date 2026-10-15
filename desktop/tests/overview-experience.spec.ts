@@ -109,8 +109,9 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) test(`emp
   f.state.data.plan = null; f.state.data.coverage.sources.plan.complete = false;
   f.state.data.unknown = [{field: 'plan', reason: 'source_unavailable'}];
   await refresh(page);
-  for (const key of ['definition', 'scope', 'schedule', 'resources', 'risks']) {
-    const card = root(page).locator(`[data-charter-section="${key}"]`);
+  for (const key of ['definition', 'scope', 'resources', 'risks']) {
+    const card = root(page).locator('[data-charter-empty]');
+    await expect(card).toContainText(locale === 'en' ? {definition:'Purpose & success',scope:'Scope & deliverables',resources:'Resources & budget',risks:'Risks & dependencies'}[key]! : {definition:'目的與成功條件',scope:'範圍與交付',resources:'資源與預算',risks:'風險與相依'}[key]!);
     await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible();
     await expect(card).toContainText(locale === 'en' ? 'Source unavailable' : '無法取得來源'); await expect(card).not.toContainText(empty);
   }
@@ -279,17 +280,19 @@ for (const locale of ['en', 'zh-TW']) test(`charter empty states require readabl
   const clearStatements = (plan: any) => {for (const section of Object.values(plan.document.sections) as any[]) section.statements = [];};
   f.state.planPatch = clearStatements;
   f.state.data.attention = f.state.data.attention.filter((row: any) => row.kind !== 'decision'); f.state.data.attention_counts.decision = 0;
-  await boot(page, f); const cards = root(page).locator('[data-charter-section]'), empty = locale === 'en' ? 'None recorded' : '尚無紀錄';
-  // A missing record time inside Sources does not change complete card coverage.
+  await boot(page, f); const cards = root(page).locator('[data-charter-empty]'), empty = locale === 'en' ? 'None recorded' : '尚無紀錄';
+  await expect(cards).toHaveCount(1);
+  await expect(cards.locator('details')).toHaveCount(0);
+  // Empty domains share one line without empty source disclosures.
   for (const card of await cards.all()) {await expect(card).toContainText(empty); await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toHaveCount(0);}
   f.state.data.attention_counts.decision = null;
   f.state.data.unknown = [{field: 'attention_counts.decision', reason: 'source_unavailable'}];
-  await refresh(page); const decisions = root(page).locator('[data-charter-section=decisions]');
-  await expect(decisions.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(decisions).not.toContainText(empty);
+  await refresh(page); const decisions = metric(page, 'decision');
+  await expect(decisions.locator('.ui-metric-value [data-status=unknown]')).toBeVisible(); await expect(decisions.locator('.ui-metric-value')).not.toContainText(empty);
   const decision = overview(demoProject(locale)).attention.find(row => row.kind === 'decision')!;
   f.state.data.attention.push(decision); await refresh(page);
   await expect(decisions).toContainText(decision.title); await expect(decisions.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible();
-  await expect(decisions).not.toContainText(empty);
+  await expect(decisions.locator('.ui-metric-value')).not.toContainText(empty);
   delete f.state.data.coverage.sources.plan;
   await refresh(page);
   for (const card of (await cards.all()).slice(0, 5)) {await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(card).not.toContainText(empty);}
@@ -299,6 +302,7 @@ for (const locale of ['en', 'zh-TW']) test(`charter empty states require readabl
     snapshot.visibility.restricted = restricted; snapshot.visibility.filtered = filtered;
   };
   await report(page, f.ids.snap1);
+  await expect(cards).toHaveCount(1);
   for (const card of await cards.all()) {
     await expect(card.locator('[data-status=unknown]:not([data-readable-sources] *)')).toBeVisible(); await expect(card).not.toContainText(empty);
     await expect(card).toContainText(locale === 'en' ? 'Restricted sources' : '來源受限');
@@ -314,7 +318,7 @@ for (const locale of ['en', 'zh-TW']) test(`charter empty states require readabl
 });
 
 for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
-  test(`progress leaves not-started track empty at true proportions ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}, testInfo) => {
+  test(`progress track measures accepted requirements ${locale} ${native ? 'native' : 'web'}`, async ({browser, baseURL}, testInfo) => {
     const context = await browser.newContext({baseURL, locale, colorScheme,
       viewport: {width: locale === 'en' ? 1440 : 390, height: 900}});
     const page = await context.newPage(), f = fixture(locale); await boot(page, f, native);
@@ -325,23 +329,23 @@ for (const locale of ['en', 'zh-TW']) for (const native of [false, true]) {
       share: child.getBoundingClientRect().width / node.getBoundingClientRect().width,
     })));
     const mixed = await segments();
-    for (const [index, share] of [3 / 8, 1 / 8, 2 / 8, 1 / 8, 1 / 8].entries()) expect(mixed[index].share).toBeCloseTo(share, 2);
-    expect(mixed[4].color).toBe('rgba(0, 0, 0, 0)');
-    expect(new Set(mixed.slice(0, 4).map(row => row.color)).size).toBe(4);
-    expect(mixed.slice(0, 4).every(row => row.color !== 'rgba(0, 0, 0, 0)')).toBe(true);
-    f.state.data.progress = {requirements: 2, accepted: 0, in_review: 0, in_progress: 0, blocked: 0, not_started: 2};
+    for (const [index, share] of [3 / 8, 5 / 8].entries()) expect(mixed[index].share).toBeCloseTo(share, 2);
+    expect(mixed[1].color).toBe('rgba(0, 0, 0, 0)');
+    expect(mixed[0].color).not.toBe(mixed[1].color);
+    expect(mixed.slice(0, 1).every(row => row.color !== 'rgba(0, 0, 0, 0)')).toBe(true);
+    f.state.data.progress = {requirements: 2, accepted: 0, in_review: 0, in_progress: 0, blocked: 0, not_started: 2, complete: true};
     await refresh(page); await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '0 of 2 accepted' : '2 項中 0 項已驗收');
     const empty = await segments();
-    expect(empty.slice(0, 4).every(row => row.share === 0)).toBe(true);
-    expect(empty[4]).toEqual({share: 1, color: 'rgba(0, 0, 0, 0)'});
+    expect(empty.slice(0, 1).every(row => row.share === 0)).toBe(true);
+    expect(empty[1]).toEqual({share: 1, color: 'rgba(0, 0, 0, 0)'});
     expect(await bar.evaluate(node => getComputedStyle(node).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
     const dir = process.env.TMPDIR ? `${process.env.TMPDIR}/overview-polish` : testInfo.outputPath('overview-polish'); mkdirSync(dir, {recursive: true});
     await page.screenshot({path: `${dir}/${locale}-${native ? 'native' : 'web'}-${colorScheme}-empty.png`, fullPage: true, animations: 'disabled'});
     f.state.data.progress = {...f.state.data.progress, requirements: 4, in_progress: 1, blocked: 1};
     await refresh(page); await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '0 of 4 accepted' : '4 項中 0 項已驗收');
     const started = await segments();
-    expect(started[2].share).toBeCloseTo(.25, 2); expect(started[3].share).toBeCloseTo(.25, 2); expect(started[4].share).toBeCloseTo(.5, 2);
-    expect(started[2].color).toBe(mixed[2].color); expect(started[3].color).toBe(mixed[3].color);
+    expect(started[0].share).toBe(0); expect(started[1].share).toBe(1);
+    expect(started[1].color).toBe(mixed[1].color);
     expect(f.state.writes).toEqual([]); await context.close();
   });
 
@@ -438,7 +442,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 768, 390]) test
   await expect(metric(page, 'decision').locator('.ui-metric-value')).toHaveText('2');
   await expect(metric(page, 'progress')).toContainText(locale === 'en' ? '+3d' : '+3 天');
   await expect(page.locator('[data-overview-meta]')).not.toContainText('v3');
-  await expect(root(page).locator('[data-charter-section]')).toHaveCount(6);
+  await expect(root(page).locator('[data-charter-section]')).toHaveCount(4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (width < 800) {
     const discuss = page.locator('[data-overview-discuss]');
@@ -716,11 +720,13 @@ for (const restriction of ['restricted', 'filtered', 'work_truncated']) test(`sa
 test('decisions card distinguishes unknown, missing and truncated items', async ({page}) => {
   const f = fixture(); f.state.data.attention = f.state.data.attention.filter((row: any) => row.kind !== 'decision');
   f.state.data.attention_counts.decision = null; await boot(page, f);
-  const card = root(page).locator('[data-charter-section=decisions]');
-  await expect(card.locator('[data-status=unknown]')).toBeVisible(); await expect(card).not.toContainText('None recorded');
+  const card = metric(page, 'decision');
+  await expect(card.locator('.ui-metric-value [data-status=unknown]')).toBeVisible(); await expect(card.locator('.ui-metric-value')).not.toContainText('None recorded');
   f.state.data.attention_counts.decision = 3; f.state.data.attention_truncated = true; await refresh(page);
   await expect(card.locator('[data-status=partial]')).toBeVisible();
   await expect(card.getByRole('link', {name: '+3 more', exact: true})).toHaveAttribute('href', `#/pm/${f.ids.workspaceId}/issues`);
+  f.state.data.attention_truncated = false; await refresh(page);
+  await expect(card.locator('[data-status=partial]')).toHaveCount(0);
   expect(f.state.writes).toEqual([]);
 });
 
@@ -821,7 +827,7 @@ test('390px navigation selects visible requirement and work after an earlier vis
 
 for (const view of ['requirements', 'dependencies']) test(`Overview restores scroll after ${view}`, async ({page}) => {
   await page.setViewportSize({width: 390, height: 844}); const f = fixture(); await boot(page, f);
-  await root(page).locator('[data-charter-section=decisions]').scrollIntoViewIfNeeded();
+  await root(page).locator('[data-charter-section=risks]').scrollIntoViewIfNeeded();
   const before = await page.evaluate(() => scrollY); expect(before).toBeGreaterThan(500);
   await openPmSection(page, view); await openPmSection(page, 'overview');
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(before); expect(f.state.writes).toEqual([]);
