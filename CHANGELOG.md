@@ -49,6 +49,8 @@
   Frontend TypeScript test helpers are allowlisted, with a guard preventing native
   build steps or their relative imports from depending on them.
 
+- Operations list, operation inspector, model preferences, project skills, composer shortcut and artifact preview failures show localized summaries with diagnostics in closed Details disclosures, preventing raw error text in both locales.
+
 - PM background updates no longer disable a pressed Save button and lose a plan
   revision submission. Explicit refreshes, lifecycle changes and source withdrawal
   still close admission gates, with late-response protection preserved.

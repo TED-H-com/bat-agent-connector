@@ -114,7 +114,7 @@ Icons come from `ui/icons.js`: locally vendored Lucide SVG geometry, 24×24 view
 | `emptyState` | `{icon,title,text,action}`; one short sentence and next action |
 | `skeleton` | Number of static rows, with an accessible loading state |
 | `disclosure` | `{label,body,open,key}`; bounded in-memory open-state preference; namespace the key |
-| `inlineError` | `{error,retry}`; adjacent error and recovery action |
+| `inlineError` | `{error,retry}`; adjacent error and recovery action; Error instances show a localized summary with code and server diagnostics in Details, plain strings stay unchanged |
 | `contextChip` | `{icon,text,onRemove}`; optional named removal control |
 | `agentMark` | CLI name; local initials for Codex, Claude, Grok, Gemini, BAT, PM |
 | `menu` | `{button,items:[{label,icon,href,onSelect,disabled,key}]}`; arrows, Escape, outside click, focus return; dispose on unmount |
