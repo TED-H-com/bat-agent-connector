@@ -156,7 +156,7 @@ test('marking the displayed version read preserves an open work-item draft', asy
   await title.fill('My unsaved draft');
   fixture.data.items[0].version = 2;
   await page.getByRole('button', {name: 'Mark this version read'}).click();
-  await expect(page.locator('.reading-state')).toContainText('Central has a newer version.');
+  await expect(page.locator('.reading-state')).toContainText('Connector has a newer version.');
   await expect(page.getByRole('button', {name: 'Mark this version read'})).toBeDisabled();
   await expect(title).toHaveValue('My unsaved draft');
   await expect(title).toBeVisible();

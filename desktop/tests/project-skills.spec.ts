@@ -37,7 +37,7 @@ for (const native of [false, true]) test(`skills pin exact source, preserve unre
   await expect(panel).toContainText('They are not applied to an agent'); await expect(panel).toContainText('fixed version retained');
   await panel.getByRole('checkbox', {name: 'Review changes', exact: true}).check();
   f.state.changed = true; await panel.getByRole('button', {name: 'Rescan skill sources', exact: true}).click();
-  await expect(panel).toContainText('source or central selection changed'); await expect(panel.getByRole('checkbox')).toBeChecked();
+  await expect(panel).toContainText('source or saved selection in Connector changed'); await expect(panel.getByRole('checkbox')).toBeChecked();
   // A stale response cannot authorize a new selection, and a fresh reload remains explicit.
   f.state.stale = true; await panel.getByRole('button', {name: 'Rescan skill sources', exact: true}).click();
   await expect(panel.getByRole('button', {name: 'Save skill selection', exact: true})).toBeDisabled();
