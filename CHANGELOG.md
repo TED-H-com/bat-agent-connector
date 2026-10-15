@@ -23,6 +23,17 @@
   export action reuse the context panel's disclosure.
   Dependencies keeps its capture action hidden on other views after refresh.
 
+- Reviewing a PM proposal stays in the conversation: Discussion info no longer
+  opens over it, Review & adopt brings the review into view, and the proposal has
+  one Details. Adopt and Resolve issue keep their own label while Connector
+  confirms them and then settle by themselves. Check original request appears
+  only when confirmation stops without a result or after a reload. A settling
+  adoption no longer shows Out of date or Ask PM again. A new discussion says
+  that the first message reaches the PM when one is set up. The current plan
+  revision reads Adopted. After adoption, Resolve issue is the primary action
+  under the issue's title, and Cancel keeps its draft. Original-request recovery
+  retains its saved receipt after completion and hides the finished Adopt control.
+
 - Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
   Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
   provides installation-aware MCP guidance and a read-only PM eligibility check, with

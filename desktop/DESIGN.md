@@ -233,7 +233,10 @@ gates, including forms rebuilt when a stale hidden view is reopened. Discarded f
 receive no further registry updates or state callbacks. A gate that
 closes during submission or receipt checking shows an inline unavailable status;
 the draft, original request and recovery key remain intact. Submit controls follow
-the shared transport send gate. An unknown admission waits for sending to resume
+the shared transport send gate. While a newly submitted request is in its bounded
+automatic receipt check, the button keeps its action label and stays disabled;
+Check original request appears only when automatic checking stops without a terminal
+result or on reload. An unknown admission waits for sending to resume
 before an explicit retry with its original key; an acknowledged operation ID
 remains recoverable by GET without another POST. Reconnection never reposts an
 unknown admission automatically.
@@ -355,10 +358,11 @@ Completed decisions use past-event ages: just now / 剛剛 below one minute, the
 waiting ages, with <1m / 不到 1 分鐘 below a minute. Live projection refreshes
 update both kinds of cached ages without replacing their rows.
 
-An adopted discussion with an open sourced issue offers one secondary Resolve
-issue action to its assigned writer or explicit workspace owner, with the action's
+An adopted discussion with an open sourced issue offers one primary Resolve
+issue action below the issue's title to its assigned writer or explicit workspace owner, with the action's
 observe/manage scopes. The durable form prefills an editable rationale naming the
-fixed adopted plan title and revision number. It preserves the original finding,
+fixed adopted plan title and revision number, with a Cancel action that collapses
+the form and restores Resolve issue while retaining the draft. It preserves the original finding,
 affected IDs, sources and version precondition; it creates no snapshot. Original-key
 recovery settles the receipt before rereading the finding and Overview. Reported
 resolved remains Not assessed; adoption alone never resolves an issue.
@@ -441,9 +445,9 @@ pinned below the scrolling transcript. Below 800px, the list route shows only th
 list; a thread or `/discussions/new` replaces it, and Back returns to the list.
 At 800px and wider the list and detail remain side by side. The Discussion info panel (Context / Inputs / Plan) starts closed
 for a plain thread at every width. One bound context chip or the Context icon opens it
-and returns focus on close. A new reviewable proposal or original proposal recovery
-opens Plan; an original input request opens Inputs. Explicit open/close and tab choices
-last for that thread in the page session, until a new proposal arrives. A closed panel
+and returns focus on close. A non-inline reviewable proposal or original proposal recovery
+opens Plan; inline conversation proposals keep the panel closed so review stays in the conversation. An original input request opens Inputs. Explicit open/close and tab choices
+last for that thread in the page session, until a new non-inline proposal arrives. A closed panel
 leaves at least 760px for the transcript at 1440px; message bodies wrap at 72ch. Below
 1200px the panel opens in the shared drawer; below 800px it becomes a sheet with
 Escape and focus return. A quiet origin link sits above the text title; its pencil
@@ -500,13 +504,19 @@ Opening or reloading an unsent draft performs no write. Thread origins retain th
 to a report restores both its ID and Overview's saved mode. Source views retain their own
 preference state.
 
-Without an analysis composer, notes show Saved and one sentence explains that the
-PM will not reply. Set up PM opens Settings with the current discussion return route.
+In an unsent draft when a PM adapter is available, one quiet line explains to send
+the first message to ask the PM; without an analysis composer or adapter, notes show
+Saved and one sentence explains that the PM will not reply. Set up PM opens Settings
+with the current discussion return route and stays on one line.
 A proposal-free thread shows no Proposed update card. Collapsed proposals show the
 title, summary, impact pills and the named exclusions, followed by Review & adopt
 and Ask follow-up; editable scope and questions
 open in the adoption panel. Review & adopt is primary until it opens, then Adopt is
-primary and Send remains secondary. Source rows use human labels and shared times;
+primary and Send remains secondary. Opening Review & adopt scrolls the review panel
+into view and focuses the first candidate checkbox, with one shared Details disclosure
+at the bottom of the proposal card. At 800px and wider the transcript scrolls inside its
+pane; below 800px a thread with a proposal switches to page scrolling so the proposal
+review and composer share one document scroller. Source rows use human labels and shared times;
 full source identities are copyable in Details, without JSON blocks.
 
 Structured analysis stays on the existing capability-checked native/BAT proposal
@@ -516,7 +526,7 @@ messages. Only central `adoptable` / `adoptable_reason` determine proposal fresh
 client does not compare source IDs or thread versions. Renaming alone leaves an
 adoptable proposal intact. Known reasons use shared short labels; future reasons
 and central VERSION_CONFLICT show Out of date and Ask PM again while retaining
-review drafts. An adopted proposal uses the central adopted reason and revision ID
+review drafts, suppressed while an adoption or issue resolution is still in flight. An adopted proposal uses the central adopted reason and revision ID
 to show Adopted and open the accepted revision in Plan, without another adoption or
 Ask PM again action. Raw reason codes stay in Details.
 Successful receipt recovery refreshes this same central adopted view; a local
@@ -542,7 +552,7 @@ Thread disclosures have connection/principal/workspace/thread keys and keep the
 reader’s choices across live reads and Refresh. A pending original request opens
 Inputs once when the thread is first shown, including its drawer/sheet after reload, and later
 reads never re-expand a reader-closed disclosure.
-The Plan tab lists revision rows with centrally read Accepted / Draft / Historical
+The Plan tab lists revision rows with centrally read Adopted / Draft / Historical
 pills and a Compare action; revision detail reads wait until Plan opens. Meetings reads only while its Meeting disclosure is open or on its own events. The Brief uses the same borderless presentation as these sibling sections;
 explanatory planning copy is inside Details.
 

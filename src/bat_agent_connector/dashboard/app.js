@@ -4039,7 +4039,7 @@ var pmPackageHandoffStrings = {
 //#region src/pm-discussions-strings.js
 var discussionStrings = {
 	en: {
-		pd_notes_empty: "No notes yet",
+		pd_notes_empty: "No messages yet",
 		pd_notes_empty_help: "Record the problem, an option, or a question to revisit.",
 		pd_search_empty_help: "Try another title or context name.",
 		pd_no_context_help: "Open a discussion from a project record to add context.",
@@ -4091,6 +4091,7 @@ var discussionStrings = {
 		pd_unavailable: "Unavailable",
 		pd_bound_label: "Originally: {label}",
 		pd_not_connected: "Messages are saved. The PM is not connected and will not reply.",
+		pd_draft_ready: "Send the first message to ask the PM",
 		pd_setup: "Set up PM",
 		pd_working: "PM is working",
 		pd_proposed: "Proposed update",
@@ -4140,7 +4141,7 @@ var discussionStrings = {
 		pm_mode_follow_up: "Follow-up"
 	},
 	"zh-TW": {
-		pd_notes_empty: "尚無筆記",
+		pd_notes_empty: "尚無訊息",
 		pd_notes_empty_help: "先記下問題、一個選項，或待釐清的疑問。",
 		pd_search_empty_help: "試試其他標題或脈絡名稱。",
 		pd_no_context_help: "從專案紀錄開啟討論，即可帶入脈絡。",
@@ -4192,6 +4193,7 @@ var discussionStrings = {
 		pd_unavailable: "無法取得",
 		pd_bound_label: "建立討論時：{label}",
 		pd_not_connected: "訊息會儲存；PM 尚未連線，不會回覆。",
+		pd_draft_ready: "傳送第一則訊息後即可詢問 PM",
 		pd_setup: "設定 PM",
 		pd_working: "PM 處理中",
 		pd_proposed: "建議更新",
@@ -14773,7 +14775,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 	};
 }
 var discussionSettingsHref = () => "#/settings?section=agents&from=" + encodeURIComponent(location.hash);
-function discussionComposer({ t, form, analysis, details, draft = false }) {
+function discussionComposer({ t, form, analysis, details, draft = false, pmReady = false }) {
 	const actions = form.box.querySelector(":scope > .actions");
 	const status = h$1("div", { class: "pd-composer-status" }, form.box.querySelector(":scope > [role=status]"));
 	const receipt = form.box.querySelector(":scope > .pm-receipt");
@@ -14786,7 +14788,14 @@ function discussionComposer({ t, form, analysis, details, draft = false }) {
 	if (analysis) {
 		actions.append(analysis.querySelector("[data-discussion-ask]"));
 		status.append(analysis);
-	} else status.append(h$1("p", { class: "muted" }, h$1("span", {}, t("pd_not_connected")), " ", h$1("a", { href: discussionSettingsHref() }, t("pd_setup"))));
+	} else if (draft && pmReady) status.append(h$1("p", {
+		class: "muted",
+		"data-discussion-draft-ready": ""
+	}, t("pd_draft_ready")));
+	else status.append(h$1("p", {
+		class: "muted",
+		"data-discussion-pm-unavailable": ""
+	}, h$1("span", {}, t("pd_not_connected")), " ", h$1("a", { href: discussionSettingsHref() }, t("pd_setup"))));
 	form.box.append(h$1("div", { class: "pd-composer-row" }, status, actions));
 	if (details) form.box.append(details);
 	return h$1("div", { class: "pd-composer" }, form.box);
@@ -14951,13 +14960,14 @@ function discussionPanel({ t, namespace, workspaceId, threadId = "new", panes, o
 		open(key, options) {
 			open(key, options);
 		},
-		sync({ proposalId = null, pending = false, inputs = false } = {}) {
-			const arrived = proposalId && state.proposalId !== proposalId;
+		sync({ proposalId = null, pending = false, inputs = false, inline = false } = {}) {
+			const plan = !inline && (pending || Boolean(proposalId));
+			const arrived = !inline && proposalId && state.proposalId !== proposalId;
 			if (arrived) {
 				state.proposalId = proposalId;
 				state.explicit = false;
 			}
-			if (arrived || !state.explicit && (pending || inputs || proposalId)) open(inputs && !pending && !proposalId ? "inputs" : "plan", { explicit: false });
+			if (arrived || !state.explicit && (plan || inputs)) open(inputs && !plan ? "inputs" : "plan", { explicit: false });
 			else if (!overlay && state.open) open(state.tab, { explicit: false });
 		},
 		close() {
@@ -17591,7 +17601,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 			class: "pd-revision-detail",
 			hidden: true
 		});
-		const pill = h("span", {}, statusPill(summary.revision_id === head.accepted_revision_id ? "accepted" : "unknown"));
+		const pill = h("span", {}, statusPill(summary.revision_id === head.accepted_revision_id ? "adopted" : "unknown"));
 		const open = button({
 			variant: "ghost",
 			label: t("pm_revision_number", { number: summary.sequence }),
@@ -17629,7 +17639,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				if (!item.isConnected) return;
 				const plan = data.plan;
 				if (plan?.workspace_id !== workspaceId || plan?.revision_id !== summary.revision_id) throw Error(t("pm_scope_mismatch"));
-				pill.replaceChildren(statusPill(plan.is_current_accepted ? "accepted" : plan.status === "adopted" ? "historical" : plan.status === "draft" ? "draft" : "unknown"));
+				pill.replaceChildren(statusPill(plan.is_current_accepted ? "adopted" : plan.status === "adopted" ? "historical" : plan.status === "draft" ? "draft" : "unknown"));
 				const document = plan.document, source = h("div", { class: "pm-plan-domains" });
 				for (const [domain, section] of Object.entries(document.sections || {})) source.append(h("details", {}, h("summary", {}, discussionLabel(t, "pm_slot_", domain)), ...(section.statements || []).map((statement) => h("p", {}, h("span", { class: "chip" }, discussionLabel(t, "pm_status_", statement.status)), " ", statement.value, h("small", { class: "muted pm-source" }, [
 					statement.source_ref?.ref || statement.source_ref?.message_id,
@@ -22221,7 +22231,7 @@ var findingFields = [
 	"alternatives",
 	"disambiguation"
 ];
-function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitted, form, input, labelled, errorBox, refreshParent }) {
+function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitted, form, input, labelled, errorBox, refreshParent, onStateChange }) {
 	const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	const box = h("div", { "data-proposal-resolution": "" }), entries = new Map();
 	let serial = 0, current = null, workspace = null, enabled = false;
@@ -22249,7 +22259,8 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 	function makeEntry(value, plan) {
 		const id = value.record.record_id, entry = {
 			value,
-			editor: null
+			editor: null,
+			cancel: null
 		};
 		const finding = h("input", {
 			type: "hidden",
@@ -22262,7 +22273,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			multiline: true,
 			max: 4e3
 		});
-		const extra = h("div", {}, h("strong", { "data-issue-resolve-title": "" }, value.revision.document.title), finding, labelled("pcp_resolve_rationale", rationale));
+		const extra = h("div", {}, finding, labelled("pcp_resolve_rationale", rationale));
 		entry.editor = form({
 			action: ACTION$1,
 			target: {
@@ -22285,7 +22296,10 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			onStateChange: () => {
 				if (!entry.node?.isConnected || !authorized(entry)) return;
 				if (!entry.editor.locked() && entry.value.revision.document.status === "reported_resolved") showResolved(entry);
-				else controls(entry);
+				else {
+					controls(entry);
+					onStateChange?.();
+				}
 			},
 			onSaved: async (result) => {
 				if (result?.workspace_id !== workspaceId || result.record_id !== id) throw Error(t("pm_scope_mismatch"));
@@ -22295,21 +22309,35 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 				await refreshParent?.();
 			}
 		});
+		entry.cancel = h("button", {
+			type: "button",
+			class: "ui-button secondary",
+			"data-issue-resolve-cancel": "",
+			onclick: () => {
+				if (entry.editor.locked()) return;
+				entry.editor.box.hidden = true;
+				controls(entry);
+				onStateChange?.();
+			}
+		}, t("pd_cancel"));
+		entry.editor.box.querySelector(".actions").append(entry.cancel);
 		const defaultRationale = t("pcp_resolve_default", {
 			title: plan.document.title,
 			number: plan.sequence
 		});
 		if (!entry.editor.locked() && !rationale.value) entry.editor.set("rationale", defaultRationale);
 		entry.editor.box.hidden = !entry.editor.locked() && rationale.value === defaultRationale;
+		entry.title = h("strong", { "data-issue-resolve-title": "" }, value.revision.document.title);
 		entry.launch = h("button", {
 			type: "button",
-			class: "ui-button secondary ui-sm",
+			class: "ui-button primary ui-sm",
 			"data-issue-resolve-open": "",
 			onclick: () => {
 				if (!authorized(entry) || !open(entry)) return;
 				entry.editor.box.hidden = false;
-				entry.launch.hidden = true;
+				controls(entry);
 				rationale.focus();
+				onStateChange?.();
 			}
 		}, t("pcp_resolve_issue"));
 		entry.review = h("button", {
@@ -22330,29 +22358,36 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			class: "muted",
 			hidden: true
 		}, t("pm_gov_stale"));
-		entry.node = h("section", { "data-issue-resolution": id }, entry.launch, entry.warning, entry.review, entry.editor.box);
+		entry.node = h("section", { "data-issue-resolution": id }, entry.title, entry.launch, entry.warning, entry.review, entry.editor.box);
 		return entry;
 	}
 	function showResolved(entry) {
 		box.replaceChildren(h("p", { "data-issue-resolved": entry.value.record.record_id }, t("reg_status_reported_resolved"), " · ", statusPill("not_assessed")));
+		onStateChange?.();
 	}
 	function controls(entry) {
+		if (entry.value) entry.title.textContent = entry.value.revision.document.title;
 		entry.warning.hidden = fresh(entry) || entry.editor.locked();
 		entry.review.hidden = entry.warning.hidden;
 		if (entry.editor.locked()) entry.editor.box.hidden = false;
 		entry.launch.hidden = !entry.editor.box.hidden;
+		if (entry.cancel) entry.cancel.disabled = entry.editor.locked();
 	}
 	function render() {
 		for (const entry of entries.values()) entry.editor.update();
 		const entry = [...entries.values()].find((row) => authorized(row) && row.editor.locked()) || [...entries.values()].find((row) => authorized(row) && open(row)) || [...entries.values()].find((row) => authorized(row) && row.value?.revision.document.status === "reported_resolved");
 		box.replaceChildren();
-		if (!entry) return;
+		if (!entry) {
+			onStateChange?.();
+			return;
+		}
 		if (!open(entry) && !entry.editor.locked()) {
 			showResolved(entry);
 			return;
 		}
 		controls(entry);
 		box.append(entry.node);
+		onStateChange?.();
 	}
 	async function refresh(revision) {
 		current = revision;
@@ -22364,6 +22399,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			entry.value = null;
 			entry.editor.update();
 		}
+		onStateChange?.();
 		const refs = (thread()?.thread.context || []).filter((ref) => ref.kind === "governance" && ref.available !== false && /^pmgov_[0-9a-f]{32}$/.test(ref.id));
 		if (!scope() || !/^pmrev_[0-9a-f]{32}$/.test(revision || "") || !refs.length) return;
 		try {
@@ -22405,6 +22441,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			workspace = null;
 			box.replaceChildren();
 			if (![403, 404].includes(error.status)) box.append(errorBox(error, { within: box }));
+			onStateChange?.();
 		}
 	}
 	function withdraw() {
@@ -22416,11 +22453,24 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			entry.value = null;
 			entry.editor.update();
 		}
+		onStateChange?.();
 	}
 	return {
 		box,
 		refresh,
 		withdraw,
+		actionable: () => enabled && [...entries.values()].some((row) => row.node?.isConnected && authorized(row) && (open(row) || row.editor.locked())),
+		locked: () => enabled && [...entries.values()].some((row) => row.node?.isConnected && authorized(row) && row.editor.locked() && !row.editor.replaceable()),
+		recheck() {
+			for (const entry of entries.values()) if ([
+				"accepted",
+				"queued",
+				"pending",
+				"running",
+				"waiting_external",
+				"waiting_checks"
+			].includes(entry.editor.operation()?.status)) entry.editor.recheck();
+		},
 		dispose() {
 			withdraw();
 			for (const entry of entries.values()) entry.editor.dispose();
@@ -22481,7 +22531,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		workspace_id: workspaceId,
 		thread_id: threadId
 	};
-	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, ready = false, prepare, adopt, preferredId = null, latestId = null;
+	let head = null, capability = null, rows = [], cursor = null, active = null, ticket = 0, loading = false, refreshAgain = false, queuedPreferred = null, inFlight = null, ready = false, prepare, adopt, preferredId = null, latestId = null;
 	let candidateFields = [], requirementFields = [], rendered = "", visible = false, conflict = false, composerNode = null, ask = null, connection = null, working = null, clock = null, adoptedId = null, reviewOpen = false, reviewButton = null, adapterInitialized = false;
 	const enabled = () => caps()?.features?.pm_workspaces?.conversation_proposals?.version === 1;
 	const writing = () => visible && enabled() && permitted(false) && thread()?.capabilities?.write === true && caps()?.scopes?.includes("manage");
@@ -22572,6 +22622,13 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		multiline: true,
 		max: 4e3
 	});
+	rationale.addEventListener("focus", () => {
+		const transcript = box.closest(".pd-transcript");
+		if (transcript && getComputedStyle(transcript).overflowY !== "visible") {
+			const pane = transcript.getBoundingClientRect(), bottom = adopt.box.getBoundingClientRect().bottom;
+			if (bottom > pane.bottom) transcript.scrollTop += bottom - pane.bottom + 8;
+		}
+	});
 	adopt = form({
 		action: ADOPT,
 		target,
@@ -22613,10 +22670,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		onStateChange: () => {
 			if (ready) updateControls();
 		},
-		extra: h("div", { "data-proposal-adopt-panel": "" }, review, content, labelled("pcp_rationale", rationale), disclosure({
-			label: t("pd_details"),
-			body: note("pcp_review_help")
-		}))
+		extra: h("div", { "data-proposal-adopt-panel": "" }, review, content, labelled("pcp_rationale", rationale))
 	});
 	const resolution = conversation ? issueResolution({
 		h,
@@ -22631,7 +22685,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		input,
 		labelled,
 		errorBox,
-		refreshParent
+		refreshParent,
+		onStateChange: () => {
+			if (ready) updateControls();
+		}
 	}) : null;
 	const more = actionButton({
 		type: "button",
@@ -22735,10 +22792,12 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			const pending = prepare.locked() || adopt.locked();
 			box.hidden = !active && !pending && !notice.querySelector(".error, [role=alert]");
 			pendingPill.hidden = !pending || Boolean(active);
+			if (adopted() && !adopt.locked()) adopt.box.querySelector("button[type=submit]").hidden = true;
 			onActivity({
 				proposalId: fresh() ? active?.proposal_id : null,
 				pending,
-				reviewable: fresh()
+				reviewable: fresh() || Boolean(resolution?.actionable?.()),
+				inline: true
 			});
 			if (reviewButton) {
 				reviewButton.classList.toggle("primary", !reviewOpen);
@@ -22753,7 +22812,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		runtime.update(prepare);
 		if (composerNode) {
 			ask.disabled = !prepare.canSubmit();
-			ask.textContent = t(prepare.locked() ? "pm_check_original" : "pd_ask");
+			ask.textContent = t(prepare.locked() && !prepare.initialChecking?.() ? "pm_check_original" : "pd_ask");
 			connection.hidden = runtime.eligible();
 			ask.hidden = !runtime.eligible() && !prepare.locked();
 			discussionFeedback({
@@ -22768,9 +22827,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		if (active && active.validation.status === "format_valid") {
 			const rawReason = content.querySelector("[data-proposal-adoptable-reason]");
 			if (rawReason) rawReason.textContent = active.adoptable_reason || "";
+			const settling = adopt.locked() && !adopt.replaceable() && !conflict || Boolean(resolution?.locked?.() && !resolution?.replaceable?.());
 			const reasons = content.querySelector("[data-proposal-reason]");
 			if (reasons) {
-				const reason = capability?.plan_adoption_available === false ? "pm_plan_worktree_required" : !deciding() ? "pcp_readonly" : !fresh() ? conversation ? "pd_stale" : "pcp_stale" : reviewIssue(original()?.review);
+				const reason = settling ? null : capability?.plan_adoption_available === false ? "pm_plan_worktree_required" : !deciding() ? "pcp_readonly" : !fresh() ? conversation ? "pd_stale" : "pcp_stale" : reviewIssue(original()?.review);
 				reasons.textContent = reason ? t(reason) : "";
 				if (reason === "pd_stale" && !conflict) {
 					const label = proposalReasonLabel(t, active.adoptable_reason);
@@ -22784,7 +22844,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 				}
 				const retry = detail.querySelector("[data-proposal-again]");
 				if (retry) {
-					retry.hidden = fresh() || adopted();
+					retry.hidden = fresh() || adopted() || settling;
 					retry.disabled = !prepare.canSubmit();
 				}
 			}
@@ -22928,7 +22988,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			}, pill, h("span", {}, candidate.text)));
 		}
 		const before = h("details", {}, h("summary", {}, t("pcp_before")), accepted ? h("div", {}, h("strong", {}, accepted.title || ""), h("p", { class: "pm-note-text" }, accepted.markdown || ""), h("ul", {}, ...(accepted.requirements || []).map((row) => h("li", {}, row.id, " · ", row.text))), h("small", { class: "pm-source" }, t("pcp_baseline"), " · ", p.context.plan_head.accepted_revision_id)) : note("pcp_first"));
-		const technical = h("details", { "data-proposal-details": "" }, h("summary", {}, t("pd_details")), labelled("pcp_name", title), h("code", { class: "mono" }, p.proposal_id), h("code", {
+		const technical = h("details", { "data-proposal-details": "" }, h("summary", {}, t("pd_details")), note("pcp_review_help"), labelled("pcp_name", title), h("code", { class: "mono" }, p.proposal_id), h("code", {
 			class: "mono",
 			"data-proposal-adoptable-reason": ""
 		}, p.adoptable_reason || ""), before);
@@ -23117,7 +23177,10 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		if (conversation) {
 			technical.append(raw);
 			content.append(technical);
-		} else content.append(raw);
+		} else content.append(raw, disclosure({
+			label: t("pd_details"),
+			body: note("pcp_review_help")
+		}));
 		adopt.box.firstElementChild.hidden = false;
 		if (conversation) {
 			adopt.box.hidden = !reviewOpen;
@@ -23131,8 +23194,15 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 					adopt.box.hidden = !reviewOpen;
 					updateControls();
 					if (reviewOpen) {
-						content.scrollIntoView({ block: "nearest" });
-						content.querySelector("input[type=checkbox]")?.focus();
+						const heading = content.querySelector("h4") || detail.querySelector("h4") || box, transcript = box.closest(".pd-transcript");
+						if (transcript && getComputedStyle(transcript).overflowY !== "visible") {
+							const pane = transcript.getBoundingClientRect(), top = heading.getBoundingClientRect().top;
+							if (top < pane.top || adopt.box.getBoundingClientRect().bottom > pane.bottom) transcript.scrollTop += top - pane.top - 12;
+						} else {
+							const topbar = document.querySelector(".ui-topbar")?.getBoundingClientRect().bottom || 0, rect = heading.getBoundingClientRect();
+							if (rect.top < topbar || adopt.box.getBoundingClientRect().bottom > innerHeight) window.scrollBy(0, rect.top - topbar - 12);
+						}
+						content.querySelector("input[type=checkbox]")?.focus({ preventScroll: true });
 					}
 				}
 			});
@@ -23203,51 +23273,62 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 			box.hidden = true;
 			return;
 		}
-		if (loading) return;
-		loading = true;
-		const own = ++ticket;
-		updateControls();
-		try {
-			const [list, plans] = await Promise.all([api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`), api("GET", base + "/plans?limit=1")]);
-			alive();
-			if (own !== ticket) return;
-			if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
-			head = plans.head;
-			visible = true;
-			box.hidden = false;
-			page(list);
-			const newest = rows.at(-1)?.proposal_id, newArrival = conversation && latestId && newest !== latestId;
-			latestId = newest;
-			const id = preferred || preferredId || (adopt.locked() ? original()?.proposal_id : null) || (newArrival ? newest : null) || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? newest : null);
-			if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, t("pd_proposed")));
-			picker.value = id || "";
-			preferredId = null;
-			if (id) {
-				const result = checked(await api("GET", endpoint + "/" + encodeURIComponent(id)));
-				alive();
-				if (own !== ticket) return;
-				if (result.proposal_id !== id) throw fail();
-				if (active?.proposal_id !== result.proposal_id) conflict = false;
-				active = result;
-				renderReview();
-				await resolution?.refresh(adopted() ? result.adopted_revision_id : null);
-				alive();
-				if (own !== ticket) return;
-			}
-		} catch (error) {
-			if (own === ticket) {
-				withdraw();
-				notice.replaceChildren(errorBox(error, { within: notice }));
-				box.hidden = false;
-			}
-		} finally {
-			if (own === ticket || !visible) {
-				loading = false;
-				prepare.update();
-				adopt.update();
-				updateControls();
-			}
+		if (preferred) queuedPreferred = preferred;
+		if (loading) {
+			refreshAgain = true;
+			return inFlight;
 		}
+		loading = true;
+		inFlight = (async () => {
+			do {
+				refreshAgain = false;
+				const nextPreferred = queuedPreferred;
+				queuedPreferred = null;
+				const own = ++ticket;
+				updateControls();
+				try {
+					const [list, plans] = await Promise.all([api("GET", `${endpoint}?thread_id=${encodeURIComponent(threadId)}&after=0&limit=20`), api("GET", base + "/plans?limit=1")]);
+					alive();
+					if (own !== ticket) return;
+					if (plans.workspace_id !== workspaceId || !record$4(plans.head)) throw fail();
+					head = plans.head;
+					visible = true;
+					box.hidden = false;
+					page(list);
+					const newest = rows.at(-1)?.proposal_id, newArrival = conversation && latestId && newest !== latestId;
+					latestId = newest;
+					const id = nextPreferred || preferredId || (adopt.locked() ? original()?.proposal_id : null) || (newArrival ? newest : null) || original()?.proposal_id || active?.proposal_id || picker.value || (conversation ? newest : null);
+					if (id && !rows.some((row) => row.proposal_id === id)) picker.append(h("option", { value: id }, t("pd_proposed")));
+					picker.value = id || "";
+					preferredId = null;
+					if (id) {
+						const result = checked(await api("GET", endpoint + "/" + encodeURIComponent(id)));
+						alive();
+						if (own !== ticket) return;
+						if (result.proposal_id !== id) throw fail();
+						if (active?.proposal_id !== result.proposal_id) conflict = false;
+						active = result;
+						renderReview();
+						await resolution?.refresh(adopted() ? result.adopted_revision_id : null);
+						alive();
+						if (own !== ticket) return;
+					}
+				} catch (error) {
+					if (own === ticket) {
+						withdraw();
+						notice.replaceChildren(errorBox(error, { within: notice }));
+						box.hidden = false;
+					}
+				}
+			} while (refreshAgain && visible && enabled());
+		})().finally(() => {
+			loading = false;
+			inFlight = null;
+			prepare.update();
+			adopt.update();
+			updateControls();
+		});
+		return inFlight;
 	}
 	async function loadMore() {
 		if (cursor === null || loading) return;
@@ -23272,6 +23353,8 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 	}
 	function withdraw() {
 		ticket++;
+		refreshAgain = false;
+		queuedPreferred = null;
 		visible = false;
 		active = head = latestId = null;
 		rows = [];
@@ -23326,7 +23409,18 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		composer,
 		refresh,
 		withdraw,
-		recheck: () => prepare.recheck(),
+		recheck: () => {
+			prepare.recheck();
+			if ([
+				"accepted",
+				"queued",
+				"pending",
+				"running",
+				"waiting_external",
+				"waiting_checks"
+			].includes(adopt.operation()?.status)) adopt.recheck();
+			resolution?.recheck();
+		},
 		update(value = {}) {
 			if (value.capabilities) {
 				capability = value.capabilities;
@@ -39858,7 +39952,18 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		version: 1,
 		values: {}
 	}, damaged = false, busy = false, operation = null;
-	const receiptDelays = [
+	const receiptDelays = action === "pm.conversation.adopt" ? [
+		250,
+		500,
+		1e3,
+		1500,
+		2e3,
+		3e3,
+		3e3,
+		3e3,
+		3e3,
+		3e3
+	] : [
 		250,
 		500,
 		1e3,
@@ -39866,7 +39971,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		2e3,
 		3e3
 	];
-	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false;
+	let receiptTimer = null, receiptAttempt = 0, receiptPolling = true, disposed = false, stagedHere = false, initialChecking = false;
 	const stopTimer = () => {
 		clearTimeout(receiptTimer);
 		receiptTimer = null;
@@ -39939,6 +40044,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				};
 				persist();
 				operation = null;
+				initialChecking = false;
 				status.replaceChildren();
 				receipt.replaceChildren();
 				update();
@@ -39981,17 +40087,19 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 	}
 	function update() {
 		if (disposed || !form.isConnected) return;
+		pollReceipt();
+		if (!busy && receiptTimer === null) initialChecking = false;
+		const autoChecking = initialChecking && (busy || receiptTimer !== null);
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
 		for (const input of Object.values(fields)) {
 			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
 			if (readOnlyWhenUnavailable) input.readOnly = locked;
 		}
-		button.disabled = busy || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		button.disabled = busy || autoChecking || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
 		button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
-		button.textContent = t(saved.intent ? "pm_check_original" : label);
+		button.textContent = t(saved.intent && !autoChecking ? "pm_check_original" : label);
 		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
-		pollReceipt();
 		onStateChange();
 	}
 	async function run(automatic = false) {
@@ -40010,6 +40118,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		}
 		let firstAttempt = stagedHere;
 		stagedHere = false;
+		if (firstAttempt) initialChecking = true;
 		try {
 			guard();
 			busy = true;
@@ -40028,6 +40137,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				};
 				persist();
 				firstAttempt = true;
+				initialChecking = true;
 				operation = null;
 				receipt.replaceChildren();
 			}
@@ -40132,9 +40242,17 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		submit: run,
 		edit: () => reset.click(),
 		replaceable: () => terminal() || Boolean(saved.intent?.initialAdmissionRefused),
-		canSubmit: () => !disposed && !busy && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused,
+		canSubmit: () => !disposed && !busy && !(initialChecking && receiptTimer !== null) && !damaged && allowed() && sendReady() && !terminal() && !saved.intent?.initialAdmissionRefused,
 		operation: () => operation,
 		locked: () => busy || damaged || Boolean(saved.intent),
+		initialChecking: () => initialChecking && (busy || receiptTimer !== null),
+		stopAutoCheck: () => {
+			if (initialChecking) {
+				initialChecking = false;
+				stopTimer();
+				update();
+			}
+		},
 		stage: () => {
 			if (disposed || busy || saved.intent || damaged) return false;
 			guard();
@@ -40160,14 +40278,23 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		},
 		checking: () => busy || receiptTimer !== null,
 		recheck: () => {
-			if (disposed || busy || !saved.intent?.operation_id || !allowed()) return;
+			if (disposed || !saved.intent?.operation_id || !allowed()) return;
+			if (operation && ![
+				"accepted",
+				"queued",
+				"pending",
+				"running",
+				"waiting_external",
+				"waiting_checks"
+			].includes(operation.status)) return;
 			receiptAttempt = 0;
 			receiptPolling = true;
-			run(true);
+			if (!busy) run(true);
 		},
 		dispose: () => {
 			disposed = true;
 			receiptPolling = false;
+			initialChecking = false;
 			stopTimer();
 			unsubscribe();
 			onConnectionChange(false);
@@ -40448,7 +40575,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		icon: "refresh-cw",
 		label: t("pm_refresh"),
 		"data-pm-refresh": "",
-		onClick: () => void load()
+		onClick: () => {
+			for (const value of forms) value.stopAutoCheck?.();
+			load();
+		}
 	});
 	const phasePill = h("span", {
 		class: "ui-pill tone-neutral",
@@ -41895,10 +42025,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				extra: threadTitle
 			});
 			renameForm.box.querySelector(".pm-receipt").dataset.discussionReceipt = "rename";
-			const threadDetails = h("details", {
-				"data-discussion-details": "",
-				open: true
-			}, h("summary", {}, t("pd_details")), renameForm.box.querySelector(".pm-receipt"));
+			const threadDetails = h("details", { "data-discussion-details": "" }, h("summary", {}, t("pd_details")), renameForm.box.querySelector(".pm-receipt"));
 			titleView = discussionTitle({
 				t,
 				field: threadTitle,
@@ -42724,6 +42851,13 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						value: name.value,
 						local: true
 					}) : null;
+					if (threadId === "new" && (caps()?.features?.pm_workspaces?.plan_drafting || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)) {
+						workspaceCaps = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/capabilities`);
+						alive();
+						if (ticket !== sequence) return;
+						pmCapabilities = workspaceCaps;
+					}
+					const pmReady = Boolean(threadId === "new" && (workspaceCaps?.structured_analysis?.version === 1 ? (workspaceCaps.structured_analysis.actions?.["pm.conversation.propose"]?.adapters || []).some((row) => ["codex-native-linux", "bat-pm-linux-v1"].includes(row.adapter) && row.action_registered === true && row.authorized === true && row.eligible_for_preflight === true) : workspaceCaps?.native_analysis?.authorized !== false && workspaceCaps?.native_analysis?.eligible_for_preflight === true || workspaceCaps?.bat_analysis?.authorized !== false && workspaceCaps?.bat_analysis?.eligible_for_preflight === true));
 					const contextDraft = h("section", { "data-discussion-tab": "context" }, ...discussionContext(t, draftRefs || launch.refs, { title: launch.title }));
 					const draftPanel = discussionPanel({
 						t,
@@ -42741,7 +42875,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					})), discussionComposer({
 						t,
 						form: create,
-						draft: true
+						draft: true,
+						pmReady
 					})), draftPanel.home));
 				}
 			}

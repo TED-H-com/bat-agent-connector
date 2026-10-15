@@ -13,6 +13,7 @@ let theme = 'light',
   barExpanded = false,
   cleanups = [],
   currentInspector = null,
+  startTimer = null,
   streamTimer = null,
   previousPanelOpen = false,
   previousPanelView = null;
@@ -42,6 +43,7 @@ const workIdentity = () => state.activeView === 'work_derived' ? C.derivedIdenti
   operationId: C.operationId
 };
 function startSeparate(view) {
+  clearTimeout(startTimer);
   if (!state.additionalWorks.includes(view)) {
     state.additionalWorks.push(view);
     state.startRequestsSent++;
@@ -60,6 +62,7 @@ const deliveryScene = () => state.delivery.deployed ? 'deployed' : state.deliver
 const threadState = () => state.workStarted ? deliveryScene() : state.planAdoptedLater ? 'planned' : 'idea';
 const scene = () => state.activeView === 'work_hermes' ? 'hermes' : state.activeView === 'work_manual' ? 'external_readonly' : ['maintenance', 'work_maint'].includes(state.activeView) ? 'maintenance' : workViews.includes(state.activeView) && state.disconnectedDuringStart ? 'disconnect_recovery' : workViews.includes(state.activeView) ? deliveryScene() : state.workStarted && state.planVisible && state.adoptMode === 'completed' ? deliveryScene() : state.planVisible ? 'planned' : 'idea';
 function switchScene(value) {
+  clearTimeout(startTimer);
   const postDelivery = ['requirement_accepted', 'merged', 'deployed'].includes(value);
   state = createScenarioState(postDelivery ? 'awaiting_verification' : value, locale);
   if (postDelivery) {
@@ -91,31 +94,46 @@ function setLanguage(next) {
   if (state.nextStepDraft === second) state.nextStepDraft = C.secondSentence[locale];
   renderApp();
 }
-function startWork(open = false) {
+function startWork() {
+  if (state.workStarted && state.adoptMode !== 'partial_failure') return go('work_main');
   state.planVisible = true;
-  state.adoptMode = 'completed';
-  state.adoptSteps = state.adoptSteps.map(step => ({
+  state.adoptMode = 'starting';
+  state.adoptSteps = state.adoptSteps.map((step, i) => ({
     ...step,
-    status: 'done'
+    status: i < 4 ? 'done' : 'pending'
   }));
-  if (!state.workStarted) {
-    state.workStarted = true;
-    state.startRequestsSent++;
-  }
-  state.workState = 'running';
-  if (open) state.activeView = 'work_main';
-  renderApp();
+  if (!state.workStarted) state.startRequestsSent++;
+  state.workStarted = true;
+  state.workOpened = true;
+  state.workState = 'preparing_worktree';
+  go('work_main');
+  // Fixture events only. Moving to another view never submits another start.
+  startTimer = setTimeout(() => {
+    state.workState = 'starting';
+    state.adoptSteps[4].status = 'done';
+    renderApp();
+    startTimer = setTimeout(() => {
+      state.workState = 'running';
+      state.adoptMode = 'completed';
+      state.adoptSteps.forEach(step => {step.status = 'done';});
+      renderApp();
+    }, 350);
+  }, 350);
 }
 function partialStart() {
+  clearTimeout(startTimer);
   state.planVisible = true;
   state.adoptMode = 'partial_failure';
+  state.workState = 'accepted';
+  state.workOpened = true;
   state.adoptSteps = state.adoptSteps.map((step, i) => ({
     ...step,
     status: i < 3 ? 'done' : i === 3 ? 'failed' : 'pending'
   }));
-  go('discussions');
+  go('work_main');
 }
 function setWorkState(next) {
+  clearTimeout(startTimer);
   state.workStarted = true;
   if (['turn_ended', 'awaiting_verification'].includes(next) && state.queuedMessage) {
     state.deliveredMessages.push(state.queuedMessage);
@@ -131,6 +149,7 @@ function setWorkState(next) {
   go('work_main');
 }
 function disconnect() {
+  clearTimeout(startTimer);
   if (!state.workStarted) {
     state.workStarted = true;
     state.startRequestsSent++;
@@ -259,7 +278,7 @@ function sidebar() {
     }]
   });
   cleanups.push(() => switcher.dispose());
-  const workRows = [state.workStarted ? ['work_main', t('workTitle')] : null, ...state.additionalWorks.map(view => [view, t(view === 'work_derived' ? 'derivedTitle' : 'separateTitle')]), ['work_manual', t('manualTitle')], state.hermesVisible ? ['work_hermes', t('hermesTitle')] : null, state.maintenanceFixStarted ? ['work_maint', t('maintenanceTitle')] : null].filter(Boolean);
+  const workRows = [state.workStarted || state.adoptMode === 'partial_failure' ? ['work_main', t('workTitle')] : null, ...state.additionalWorks.map(view => [view, t(view === 'work_derived' ? 'derivedTitle' : 'separateTitle')]), ['work_manual', t('manualTitle')], state.hermesVisible ? ['work_hermes', t('hermesTitle')] : null, state.maintenanceFixStarted ? ['work_maint', t('maintenanceTitle')] : null].filter(Boolean);
   const search = h('input', {
     type: 'search',
     placeholder: t('ui_search'),
@@ -351,25 +370,31 @@ const inspectorToggle = key => iconButton({
   onClick: () => currentInspector?.open()
 });
 function discussionPanel() {
+  const showAssessment = state.workState === 'awaiting_verification';
+  const active = state.discussionTab === 'pmSummary' && !showAssessment ? 'context' : state.discussionTab || 'context';
   const body = h('div', {}, tabs({
     label: t('discussionInfo'),
-    value: 'context',
-    options: ['context', 'inputs', 'planTab'].map(value => ({
+    value: active,
+    options: ['context', 'inputs', 'planTab', ...(showAssessment ? ['pmSummary'] : [])].map(value => ({
       value,
       label: t(value)
     })),
     onChange: value => {
+      state.discussionTab = value;
       for (const el of body.querySelectorAll('[data-info-tab]')) el.hidden = el.dataset.infoTab !== value;
     }
   }), h('div', {
-    'data-info-tab': 'context'
+    'data-info-tab': 'context',
+    hidden: active !== 'context'
   }, facts([['requirement', t('requirementName')], ['server', C.serverId]]), details(h('code', {}, C.discussionId))), h('div', {
     'data-info-tab': 'inputs',
-    hidden: true
+    hidden: active !== 'inputs'
   }, h('p', {}, C.firstSentence[locale])), h('div', {
     'data-info-tab': 'planTab',
-    hidden: true
-  }, h('p', {}, t('planVersion')), details(h('code', {}, C.planRevision))));
+    hidden: active !== 'planTab'
+  }, h('p', {}, t('planVersion')), details(h('code', {}, C.planRevision))), showAssessment ? h('div', {
+    'data-info-tab': 'pmSummary', hidden: active !== 'pmSummary'
+  }, pmSummary()) : null);
   return panel('discussionInfo', body);
 }
 function openDiscussionComposer() {
@@ -385,10 +410,12 @@ function renderDiscussions() {
     state.pmReplied = true;
     state.modelCalls++;
     state.composerDraft = '';
+    state.composerIntent = 'discuss';
     renderApp();
   };
   const send = () => {
     state.noteSavedBanner = false;
+    if (state.composerIntent !== 'do' && !state.pmAvailable) return renderApp();
     if (state.composerIntent === 'plan') {
       if (!state.composerDraft.trim() && !state.pmReplied) return;
       state.planVisible = true;
@@ -412,11 +439,12 @@ function renderDiscussions() {
         queueSecond();
       } else {
         state.composerDraft = '';
-        startWork(true);
+        startWork();
       }
       return;
     }
     state.composerDraft = '';
+    state.composerIntent = 'discuss';
     renderApp();
   };
   return h('div', {
@@ -453,13 +481,13 @@ function renderDiscussions() {
   })), state.pmReplied ? message('PM', t('pmReply'), true) : null, state.planVisible && state.adoptMode === 'idle' ? planCard(state, () => {
     state.planAdoptedLater = true;
     renderApp();
-  }, () => startWork()) : null, state.adoptMode !== 'idle' ? state.workOpened && state.adoptMode === 'completed' ? h('div', {
+  }, () => startWork()) : null, state.adoptMode !== 'idle' ? h('div', {
     class: 'proto-started-line',
     ...tid('work-started-summary')
-  }, h('span', {}, t('workReady')), action('openWork', 'adopt-open-work-page', () => go('work_main'), 'ghost'), details(stepList({
+  }, h('span', {}, t(state.adoptMode === 'completed' ? 'workReady' : state.adoptMode === 'partial_failure' ? 'partialTitle' : 'startingText')), action('openWork', 'adopt-open-work-page', () => go('work_main'), 'ghost'), details(planCard({...state, adoptMode: 'history'}), 'planTab'), details(stepList({
     ...state,
     adoptMode: 'history'
-  }, () => startWork(), () => go('work_main')))) : stepList(state, () => startWork(), () => go('work_main')) : null, state.ownerDecisionRecorded ? message('mei.lin', h('div', {
+  }, () => startWork(), () => go('work_main')))) : null, state.ownerDecisionRecorded ? message('mei.lin', h('div', {
     ...tid('discussion-decision-banner')
   }, h('p', {}, t(state.ownerDecisionRecorded === 'decisionAccepted' ? 'discussionAccepted' : 'discussionFollowup')), action('viewOverview', 'discussion-decision-overview', () => go('overview'), 'ghost')), false, {at: FIXED_NOW}) : null)), !state.pmAvailable ? h('div', {
     class: 'proto-diagnostic',
@@ -487,6 +515,10 @@ function renderDiscussions() {
       state.composerDraft = '';
       state.noteSavedBanner = true;
       renderApp();
+    },
+    onPlan: () => {
+      state.composerIntent = 'plan';
+      send();
     }
   }) : null), discussionPanel()));
 }
@@ -494,6 +526,7 @@ function advanced() {
   const identity = workIdentity();
   const node = details(h('div', {}, facts([['ui_work', identity.workId], ['attempt', identity.attemptId], ['ui_session', identity.sessionId], ['preparing_worktree', identity.worktreeId], ['operationKey', identity.operationKey], ['planVersion', C.planRevision]]), h('pre', tid('advanced-raw-events'), `operation: ${identity.operationId}\noperation_key: ${identity.operationKey}${state.secondSentenceQueued ? "\nqueue_receipt: msg_q_02\nsteered: false" : ""}`)), 'advanced');
   node.dataset.testid = 'work-area-advanced';
+  if (state.activeView === 'work_main' && state.adoptMode !== 'idle') node.append(stepList({...state, adoptMode: 'history'}));
   node.open = state.advancedExpanded;
   node.addEventListener('toggle', () => {
     if (node.isConnected) state.advancedExpanded = node.open;
@@ -517,15 +550,20 @@ function queueSecond() {
   renderApp();
 }
 function resultsPanel() {
+  const review = details(pmSummary(), 'reviewPm');
+  review.open = state.pmReviewOpen;
+  review.querySelector('summary').dataset.testid = 'review-pm-summary';
+  review.addEventListener('toggle', () => {if (review.isConnected) state.pmReviewOpen = review.open;});
   return panel('results', h('div', tid('work-area-results'), details(h('ul', {}, ...DIFF_HUNKS.map(item => h('li', {}, h('code', {}, item.file)))), 'files'), details(unifiedDiffView({
     hunks: DIFF_HUNKS
   }), 'diff'), details(h('div', {}, h('code', {}, 'pytest -q tests/auth/test_sign_in_double_submit.py'), h('p', {}, t('testsSummary'))), 'tests'), deliveryBar(state.delivery, () => {
     state.delivery.pr_open = true;
     state.pmAssessment = 'passed';
     renderApp();
-  }), h('p', {}, t(state.delivery.accepted ? 'verificationAccepted' : 'verificationOpen')), action('reviewPm', 'review-pm-summary', () => go('overview'), state.delivery.pr_open ? 'primary' : 'secondary')), 'results-inspector');
+  }), h('p', {}, t(state.delivery.accepted ? 'verificationAccepted' : 'verificationOpen')), review), 'results-inspector');
 }
 function renderWork() {
+  const partial = state.adoptMode === 'partial_failure';
   const unknown = state.disconnectedDuringStart,
     running = state.workState === 'running' && !unknown,
     waiting = state.workState === 'waiting_input' && !unknown,
@@ -564,7 +602,7 @@ function renderWork() {
     class: 'proto-view proto-session-view',
     ...tid('view-work-main'),
     'data-question-answered': String(state.questionAnswered)
-  }, header(workTitle(), results ? [inspectorToggle('results')] : [], pill(t(unknown ? 'disconnected' : deliveryScene()), unknown ? 'warn' : 'info')), h('section', {
+  }, header(workTitle(), [action('returnThread', 'work-return-discussion', () => go('discussions'), 'ghost'), ...(results ? [inspectorToggle('results')] : [])], pill(t(unknown ? 'disconnected' : partial ? 'ui_status_needs_you' : deliveryScene()), unknown || partial ? 'warn' : 'info')), h('section', {
     class: 'proto-work-header',
     ...tid('work-area-header')
   }, facts([['goal', workCopy('goalValue')], ['controller', t('controllerPerson')], ['host', C.hostId], ['runtime', `${t('profile')} · ${t('model')}`], ['nextStep', t(nextKey)]])), h('div', {
@@ -574,7 +612,10 @@ function renderWork() {
     ...tid('work-area-main')
   }, h('div', {
     class: 'session-workspace proto-work-transcript'
-  }, h('div', {
+  }, partial ? h('div', {class: 'proto-diagnostic', ...tid('partial-adopt-diagnostic')},
+    h('strong', {}, t('partialTitle')), h('p', {}, t('partialReason')),
+    h('p', {}, t('partialRecovery')), h('p', {}, t('draftKept')),
+    action('continueSteps', 'continue-unfinished-step', startWork, 'primary')) : null, h('div', {
     class: 'conversation-scroll'
   }, !unknown && state.deliveredMessages.length ? message('mei.lin', C.firstSentence[locale]) : null, !unknown ? state.deliveredMessages.map(body => message('mei.lin', body, false, tid('delivered-next-step'))) : null, unknown ? h('div', {
     class: 'proto-diagnostic',
@@ -584,7 +625,7 @@ function renderWork() {
     state.reconciledAfterDisconnect = true;
     state.workState = 'running';
     renderApp();
-  }, 'primary')) : null, state.reconciledAfterDisconnect ? notice('reconciled', 'reconciled-notice', 'ok') : null, !unknown && ['accepted', 'preparing_worktree', 'starting'].includes(state.workState) ? notice({
+  }, 'primary')) : null, state.reconciledAfterDisconnect ? notice('reconciled', 'reconciled-notice', 'ok') : null, !unknown && !partial && ['accepted', 'preparing_worktree', 'starting'].includes(state.workState) ? notice({
     accepted: 'requestAccepted',
     preparing_worktree: 'preparing',
     starting: 'startingText'
@@ -608,7 +649,7 @@ function pmSummary() {
   return sectionCard({
     title: t('pmSummary'),
     actions: [pill(t(state.pmAssessment), state.pmAssessment === 'passed' ? 'ok' : 'warn', tid('pm-assessment-pill'))],
-    body: h('div', tid('pm-assessment-card'), h('h3', {}, t('judgment')), h('p', tid('pm-current-judgment'), t('judgment' + suffix)), h('h3', {}, t('recommendation')), h('p', tid('pm-recommendation'), t(state.delivery.deployed ? 'recommendationDeployed' : state.delivery.merged ? 'recommendationMerged' : state.delivery.accepted ? 'recommendationAccepted' : 'recommendation' + suffix)), h('h3', {}, t('sources')), h('ul', {}, state.delivery.self_reported ? h('li', {}, t('sourceWork')) : null, state.delivery.tests_passed ? h('li', {}, t('sourceTests')) : null, h('li', {}, t(state.delivery.merged ? 'sourceMerged' : state.delivery.pr_open ? 'sourcePr' : 'sourceMissing')), state.delivery.deployed ? h('li', {}, t('sourceDeployed')) : null), state.ownerDecisionRecorded ? h('div', {}, notice(state.ownerDecisionRecorded, 'pm-owner-decision-banner', 'ok'), action('returnThread', 'overview-open-discussion', () => go('discussions'))) : h('div', {
+    body: h('div', {...tid('pm-assessment-card'), 'data-assessment-id': C.planRevision + ':sign-in-result'}, facts([['requirement', t('requirementName')], ['doneConditions', t('doneValue')]]), state.activeView !== 'overview' ? action('viewOverview', 'assessment-open-overview', () => go('overview'), 'ghost') : null, h('h3', {}, t('judgment')), h('p', tid('pm-current-judgment'), t('judgment' + suffix)), h('h3', {}, t('recommendation')), h('p', tid('pm-recommendation'), t(state.delivery.deployed ? 'recommendationDeployed' : state.delivery.merged ? 'recommendationMerged' : state.delivery.accepted ? 'recommendationAccepted' : 'recommendation' + suffix)), h('h3', {}, t('sources')), h('ul', {}, state.delivery.self_reported ? h('li', {}, t('sourceWork')) : null, state.delivery.tests_passed ? h('li', {}, t('sourceTests')) : null, h('li', {}, t(state.delivery.merged ? 'sourceMerged' : state.delivery.pr_open ? 'sourcePr' : 'sourceMissing')), state.delivery.deployed ? h('li', {}, t('sourceDeployed')) : null), state.ownerDecisionRecorded ? h('div', {}, notice(state.ownerDecisionRecorded, 'pm-owner-decision-banner', 'ok'), action('returnThread', 'overview-open-discussion', () => go('discussions'))) : h('div', {
       class: 'proto-actions',
       ...tid('pm-owner-decisions')
     }, action('accept', 'decision-accept-overview', () => {

@@ -6,7 +6,7 @@ const findingFields = ['title', 'description', 'owner_actor', 'affected_requirem
 
 // Resolution revises the original sourced finding. It neither rebases its
 // snapshot nor establishes requirement acceptance.
-export function issueResolution({h, t, api, alive, caps, workspaceId, thread, permitted, form, input, labelled, errorBox, refreshParent}) {
+export function issueResolution({h, t, api, alive, caps, workspaceId, thread, permitted, form, input, labelled, errorBox, refreshParent, onStateChange}) {
   const base = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
   const box = h('div', {'data-proposal-resolution': ''}), entries = new Map();
   let serial = 0, current = null, workspace = null, enabled = false;
@@ -32,11 +32,10 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
       proposed_revision_id: document.proposed_revision?.revision_id ?? null, status: 'reported_resolved'};
   }
   function makeEntry(value, plan) {
-    const id = value.record.record_id, entry = {value, editor: null};
+    const id = value.record.record_id, entry = {value, editor: null, cancel: null};
     const finding = h('input', {type: 'hidden', value: JSON.stringify({version: value.record.version, params: params(value.revision.document)})});
     const rationale = input('pcp_resolve_rationale', {multiline: true, max: 4000});
-    const extra = h('div', {}, h('strong', {'data-issue-resolve-title': ''}, value.revision.document.title), finding,
-      labelled('pcp_resolve_rationale', rationale));
+    const extra = h('div', {}, finding, labelled('pcp_resolve_rationale', rationale));
     entry.editor = form({action: ACTION, target: {workspace_id: workspaceId, record_id: id}, fields: {finding, rationale},
       params: values => ({...JSON.parse(values.finding).params, rationale: values.rationale}),
       preconditions: () => ({expected_version: baseline(entry).version}),
@@ -45,7 +44,7 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
       onStateChange: () => {
         if (!entry.node?.isConnected || !authorized(entry)) return;
         if (!entry.editor.locked() && entry.value.revision.document.status === 'reported_resolved') showResolved(entry);
-        else controls(entry);
+        else {controls(entry); onStateChange?.();}
       },
       onSaved: async result => {
         if (result?.workspace_id !== workspaceId || result.record_id !== id) throw Error(t('pm_scope_mismatch'));
@@ -53,13 +52,19 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
         await api('GET', base + '/overview'); alive();
         await refreshParent?.();
       }});
+    entry.cancel = h('button', {type: 'button', class: 'ui-button secondary', 'data-issue-resolve-cancel': '', onclick: () => {
+      if (entry.editor.locked()) return;
+      entry.editor.box.hidden = true; controls(entry); onStateChange?.();
+    }}, t('pd_cancel'));
+    entry.editor.box.querySelector('.actions').append(entry.cancel);
     const defaultRationale = t('pcp_resolve_default', {title: plan.document.title, number: plan.sequence});
     if (!entry.editor.locked() && !rationale.value) entry.editor.set('rationale', defaultRationale);
     // The prefilled draft is not an instruction to send a resolution.
     entry.editor.box.hidden = !entry.editor.locked() && rationale.value === defaultRationale;
-    entry.launch = h('button', {type: 'button', class: 'ui-button secondary ui-sm', 'data-issue-resolve-open': '', onclick: () => {
+    entry.title = h('strong', {'data-issue-resolve-title': ''}, value.revision.document.title);
+    entry.launch = h('button', {type: 'button', class: 'ui-button primary ui-sm', 'data-issue-resolve-open': '', onclick: () => {
       if (!authorized(entry) || !open(entry)) return;
-      entry.editor.box.hidden = false; entry.launch.hidden = true; rationale.focus();
+      entry.editor.box.hidden = false; controls(entry); rationale.focus(); onStateChange?.();
     }}, t('pcp_resolve_issue'));
     entry.review = h('button', {type: 'button', class: 'ui-button secondary ui-sm', hidden: true, onclick: () => {
       if (!authorized(entry) || entry.editor.locked()) return;
@@ -67,17 +72,20 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
       entry.editor.update(); render();
     }}, t('pm_gov_review_fresh'));
     entry.warning = h('p', {class: 'muted', hidden: true}, t('pm_gov_stale'));
-    entry.node = h('section', {'data-issue-resolution': id}, entry.launch, entry.warning, entry.review, entry.editor.box);
+    entry.node = h('section', {'data-issue-resolution': id}, entry.title, entry.launch, entry.warning, entry.review, entry.editor.box);
     return entry;
   }
   function showResolved(entry) {
     box.replaceChildren(h('p', {'data-issue-resolved': entry.value.record.record_id}, t('reg_status_reported_resolved'), ' · ', statusPill('not_assessed')));
+    onStateChange?.();
   }
   function controls(entry) {
+    if (entry.value) entry.title.textContent = entry.value.revision.document.title;
     entry.warning.hidden = fresh(entry) || entry.editor.locked();
     entry.review.hidden = entry.warning.hidden;
     if (entry.editor.locked()) entry.editor.box.hidden = false;
     entry.launch.hidden = !entry.editor.box.hidden;
+    if (entry.cancel) entry.cancel.disabled = entry.editor.locked();
   }
   function render() {
     for (const entry of entries.values()) entry.editor.update();
@@ -85,19 +93,21 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
       || [...entries.values()].find(row => authorized(row) && open(row))
       || [...entries.values()].find(row => authorized(row) && row.value?.revision.document.status === 'reported_resolved');
     box.replaceChildren();
-    if (!entry) return;
+    if (!entry) {onStateChange?.(); return;}
     if (!open(entry) && !entry.editor.locked()) {
       showResolved(entry);
       return;
     }
     controls(entry);
     box.append(entry.node);
+    onStateChange?.();
   }
   async function refresh(revision) {
     current = revision;
     const ticket = ++serial;
     enabled = false; workspace = null; box.replaceChildren();
     for (const entry of entries.values()) {entry.value = null; entry.editor.update();}
+    onStateChange?.();
     const refs = (thread()?.thread.context || []).filter(ref => ref.kind === 'governance' && ref.available !== false && /^pmgov_[0-9a-f]{32}$/.test(ref.id));
     if (!scope() || !/^pmrev_[0-9a-f]{32}$/.test(revision || '') || !refs.length) return;
     try {
@@ -121,11 +131,17 @@ export function issueResolution({h, t, api, alive, caps, workspaceId, thread, pe
       try {alive(); if (ticket !== serial) return;} catch {return;}
       enabled = false; workspace = null; box.replaceChildren();
       if (![403, 404].includes(error.status)) box.append(errorBox(error, {within:box}));
+      onStateChange?.();
     }
   }
   function withdraw() {
     serial++; enabled = false; workspace = null; box.replaceChildren();
     for (const entry of entries.values()) {entry.value = null; entry.editor.update();}
+    onStateChange?.();
   }
-  return {box, refresh, withdraw, dispose() {withdraw(); for (const entry of entries.values()) entry.editor.dispose(); entries.clear();}};
+  return {box, refresh, withdraw,
+    actionable: () => enabled && [...entries.values()].some(row => row.node?.isConnected && authorized(row) && (open(row) || row.editor.locked())),
+    locked: () => enabled && [...entries.values()].some(row => row.node?.isConnected && authorized(row) && row.editor.locked() && !row.editor.replaceable()),
+    recheck() {for (const entry of entries.values()) if (['accepted', 'queued', 'pending', 'running', 'waiting_external', 'waiting_checks'].includes(entry.editor.operation()?.status)) entry.editor.recheck();},
+    dispose() {withdraw(); for (const entry of entries.values()) entry.editor.dispose(); entries.clear();}};
 }
