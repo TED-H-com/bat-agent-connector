@@ -272,3 +272,32 @@ for (const route of previewLayoutRoutes) {
     }
   }
 }
+
+for (const lang of ['en', 'zh-TW']) {
+  for (const width of [390, 320]) {
+    test(`workbench preview work header more button stays on title row ${lang} ${width}`, async ({page}) => {
+      await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), lang);
+      await page.setViewportSize({width, height: 844});
+      await mountWorkspace(page, false, workspaceFixture(lang));
+      await page.goto('/dashboard/?workbench=1' + workspaceRoute);
+      await expect(page.locator('.ui-page-header h1')).toBeVisible();
+
+      // No page-wide horizontal scroll
+      const scrollWidth = await page.evaluate(() => document.scrollingElement?.scrollWidth ?? document.documentElement.scrollWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(width);
+
+      // The more ("⋯") button's vertical centre lies within the h1 row's vertical span
+      const h1 = page.locator('.ui-page-header h1');
+      const more = page.locator('.ui-page-header .ui-header-actions .ui-icon-button');
+      await expect(more).toBeVisible();
+
+      const h1Box = (await h1.boundingBox())!;
+      const moreBox = (await more.boundingBox())!;
+      const moreCenterY = moreBox.y + moreBox.height / 2;
+
+      expect(moreCenterY).toBeGreaterThanOrEqual(h1Box.y);
+      expect(moreCenterY).toBeLessThanOrEqual(h1Box.y + h1Box.height);
+    });
+  }
+}
+
