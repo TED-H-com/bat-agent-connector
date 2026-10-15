@@ -27,7 +27,7 @@ export const overviewStrings = {
     ov_live: '即時', ov_goal: '目標', ov_progress: '進度', ov_blockers: '阻礙', ov_decisions: '待決事項',
     ov_recent_decisions: '近期決策',
     ov_accepted: '{total} 項中 {accepted} 項已驗收', ov_requirements: '{n} 項需求', ov_adopted: '{date}採用',
-    ov_acceptance_gap: '已有交付紀錄，尚缺對應本輪接受條件的驗收。', ov_see_unaccepted: '查看待驗收需求', ov_ask_pm: '請 PM 整理',
+    ov_acceptance_gap: '已有交付紀錄，尚缺對應本輪接受條件的驗收。', ov_see_unaccepted: '查看待驗收需求', ov_ask_pm: '詢問 PM',
     ov_attention: '需要關注', ov_milestones: '里程碑', ov_deliveries: '近期交付', ov_deliveries_loaded: '近期交付（已載入）',
     ov_discuss: '討論', ov_empty: '目前沒有需要你處理的事項。', ov_incomplete: '已載入事項無待辦 · 來源不完整',
     ov_showing: '顯示 {n} 筆', ov_view_all: '在問題與變更查看全部', ov_no_items: '尚無紀錄',

@@ -444,7 +444,7 @@ var overviewStrings = {
 		ov_adopted: "{date}採用",
 		ov_acceptance_gap: "已有交付紀錄，尚缺對應本輪接受條件的驗收。",
 		ov_see_unaccepted: "查看待驗收需求",
-		ov_ask_pm: "請 PM 整理",
+		ov_ask_pm: "詢問 PM",
 		ov_attention: "需要關注",
 		ov_milestones: "里程碑",
 		ov_deliveries: "近期交付",
