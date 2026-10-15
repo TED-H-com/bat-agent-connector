@@ -20,7 +20,7 @@ async function readableGrids(content: Locator) {
     expect(await content.locator(selector).evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length), selector).toBe(columns);
   }
   const cards = content.locator('.pm-overview-charter-grid > section');
-  await expect(cards).toHaveCount(6);
+  await expect(cards).toHaveCount(4);
   for (const card of await cards.all()) {
     const bounds = (await card.boundingBox())!;
     expect(bounds.width).toBeGreaterThan(240);

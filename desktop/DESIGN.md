@@ -198,7 +198,7 @@ binding resolution explicitly says some linked projects are unavailable; a clear
 | Requirements | RTM; quality reviews and execution verification, evidence, specs, work packages (including deliveries), handoff and issue publication |
 | Schedule | Roadmap baseline/forecast/observation; sprints |
 | Dependencies | Maintenance policy, checks, workload and release baselines |
-| Issues & changes | Register of risks, issues, actions, changes and decisions when `pm_register` is available; otherwise governance stays primary. Repairs, review, follow-ups and governance remain collapsed disclosures |
+| Issues & changes | Register of risks, issues, actions, changes and decisions when `pm_register` is available; otherwise governance stays primary. Repairs, review, follow-ups and governance open only from the header overflow |
 | Agents | Resource observations; AHP |
 | Board | Kanban; work batches |
 
@@ -312,13 +312,15 @@ without rebuilding workspace sections. ACK waits for a post-event read, and an o
 held read cannot block a newer withdrawal.
 
 Overview defaults to the central `pm_overview` live projection. The shared header
-shows the plan title, adoption date, live/report mode and visible lifecycle stage;
+keeps the latest fresh phase read across workspace views, preferring Lifecycle
+when available. Invalidated or failed sources remove the phase until a fresh read;
+a direct link without a phase read shows none. It shows the plan title, adoption date, live/report mode and visible lifecycle stage;
 the plan journal sequence is never displayed as a version. Four equal status
 columns answer goal, accepted requirements, blockers and open decisions. The live
 Goal card shows only the goal or its existing unknown/unconfirmed state; the header
 supplies plan title and adoption date. Saved reports retain their fixed baseline
-provenance. Not-started requirements leave empty progress track in both themes;
-accepted, review, in-progress and blocked shares keep their true proportions. Null remains a
+provenance. The progress track measures accepted requirements only: accepted is green and every
+unaccepted requirement leaves empty track in both themes. Classification counts remain in Details. Null remains a
 dash, incomplete classification keeps only its known denominator with Partial, and
 complete coverage describes the scan rather than project completion. Unknown
 reasons share the localized reason map; omitted lifecycle operations appear only
@@ -328,16 +330,16 @@ states separate.
 When a complete progress read has unaccepted requirements and at least one loaded
 delivery, a quiet line explains that this round's acceptance evidence is still
 missing. See unaccepted opens Requirements (there is currently no acceptance
-filter); Ask PM generates a progress title and carries the current plan context.
+filter); both card actions use the secondary variant. Ask PM generates a progress title and carries the current plan context.
 Unknown, partial, fully accepted and delivery-empty reads omit the line. Delivery
 is not described as failed. Context chips retain the central plan label; the
 current context contract has no separate Progress identity.
 
 Empty milestone and delivery lists say None recorded / 尚無紀錄 only with complete
 roadmap or recent-delivery coverage, including any delivery output-reference limit.
-Otherwise they show Unknown and the recorded localized reason. Empty charter cards
-require a readable complete plan (or an unrestricted complete saved report); open
-decisions require a complete known zero.
+Otherwise they show Unknown and the recorded localized reason. Empty Charter domains
+share one muted line naming them, without empty Sources disclosures. That line says
+None recorded only with a readable complete plan or unrestricted complete saved report.
 Missing coverage never establishes absence.
 
 The Open decisions card (待決事項) retains the central pending count and adds Recently decided:
@@ -390,12 +392,15 @@ heading; requirement and work links reveal their selection on narrow screens. Re
 work open the existing requirements selection; governance opens its existing Issues
 selection. Milestone links select the Schedule projection row only when its milestone and baseline
 revision match. Attention without a governance record opens its exact central context
-in an Issues inspector; no new management record is inferred. The charter follows the live adopted document in six compact cards,
-with three bullets before expansion and a labeled Sources disclosure on each card.
+in an Issues inspector; no new management record is inferred. The Charter follows
+the adopted document, with three bullets before expansion and Sources only for
+nonempty domains. Live Overview keeps milestone and pending-decision summaries in
+their existing cards above; fixed reports retain those snapshot domains in Charter.
 Report controls use the same report terminology and shared disclosure chevrons;
-the saved history arrows remain together. Attention rows keep Discuss beside the title at every width. Details lists localized source coverage, with raw JSON
+the saved history arrows remain together. Attention rows keep Discuss beside the title at every width; age follows type and
+context in the metadata line rather than occupying an action column. Details lists localized source coverage, with raw JSON
 behind a separate Raw coverage disclosure.
-Full plan uses the shared inspector and restores focus on Escape. Overview grids
+Full plan uses a secondary button and the shared inspector and restores focus on Escape. Overview grids
 respond to the content column through a named container, including beside a docked
 reader. Below 1100px of content, the main regions stack and the charter has two
 columns; below 540px all grids stack in reading order. Milestone calendar dates
@@ -752,7 +757,7 @@ When `features.pm_register.version` is 1, the view reads `GET /pm/workspaces/{id
 and `GET …/register/{row_id}`. Type counts appear in the header only when
 `coverage.complete` is true and no type filter is set. A type filter with complete
 coverage says how many records match. Otherwise the header meta is the number of
-rows shown. An empty blocking-reason list says that no reason field was recorded.
+rows shown. An empty blocking-reason list says None recorded / 尚無紀錄.
 The summary is one 120px strip of three blocks. At 800px and below it collapses
 into a Trends disclosure directly under the toolbar, closed until opened, and the
 rows become a list (title, one meta line, next step) instead of the wide table.
@@ -771,9 +776,16 @@ or a return keeps the selection and leaves the sheet closed until the row is
 opened again, and a return moves focus to that row. A detail read in that case
 still drops the row when it is gone, without opening the sheet. Leaving the view cancels register reads that are
 still in flight and closes the inspector.
+An Overview reference opens the exact authorized record. If it lies outside the
+loaded or filtered rows, its inspector says so in one line. No row is inserted,
+and loaded counts and server totals remain unchanged. A successful detail read
+updates the matching table row when one is loaded.
 Search and owner accept at most 200 characters.
 
-The table keeps type, title, status and next step. Related, impact, due, owner and
+The table gives title flexible space before lower-priority facts. Typical owner
+names fit on one line at 1440px, with ellipsis and a full-value tooltip for longer
+values. With a docked inspector, next step moves into the inspector once the table
+is below 800px, preserving room for the title. The table keeps type, title and status. Related, impact, due, owner and
 priority drop in that order as the table gets narrower, so the type word stays whole.
 Source stays in the inspector facts. A maintenance
 finding with no title is named from its structured `finding` when the server sends
@@ -787,8 +799,7 @@ the GHSA ID in Details. Absent identity facts are not filled in as “Not record
 `finding.*` unknowns stay out of that list. When the row is named from `finding`,
 Details also leaves out the missing-title line; a fallback name still lists it.
 A neutral type basis says the record has no type of its own, so the register
-lists it as an issue. Long owner text
-ellipsizes. Related requirement and work chips use a loaded name when one is known.
+lists it as an issue. Long owner text ellipsizes. Related requirement and work chips use a loaded name when one is known.
 Filters are one toolbar: type, status group, exact owner, age and title search, with
 accessible names and no visible field labels. Status choices are Open, In progress,
 Blocked, Waiting, In review, Done, Closed, Draft and Other. Every recorded status
@@ -824,7 +835,10 @@ for processing”, distinct from the inspected-result word “Accepted”. An
 unrecognised status uses Other in the table, and the raw code
 is only in Details. A row with no title is named from its source: a finding keeps
 its finding name, and any other record uses a known name, then its kind and number,
-then its kind. It does not use “Not recorded” as the title. Discuss and Propose change use the shared discussion link. A
+then its kind. It does not use “Not recorded” as the title. Open records use Discuss as their single primary action; Propose change stays in
+the inspector overflow and retains its existing discussion context. Resolved and
+closed records hide their recorded response as a current Next step in both list
+and inspector; the underlying governance record is unchanged. A
 finding binds the finding ref on its action when that object is a context ref.
 Requirement and work links open the Requirements selection. Below 1200px, a row
 action closes the sheet, keeps the selection, and moves focus to the form. Those
@@ -832,8 +846,11 @@ actions navigate with the view URL.
 
 A 403 or 404 on the list drops the rows, counts and inspector together. A 403 or
 404 on one row drops that row and clears the counts until the list is read again.
-Governance, repairs, review and follow-up keep their durable forms in collapsed
-disclosures, opened from the header overflow. Header actions and capture hints
+Governance, repairs, review and follow-up keep their original durable forms and
+read/withdrawal behavior. They remain hidden until the header overflow opens the
+selected disclosure, rather than showing four closed boxes under the table.
+Closing a disclosure hides its box again; record actions open the same forms and
+wait for their first read before selecting the record and focusing its fields. Header actions and capture hints
 belong to their active view; an empty overflow is hidden.
 
 ## Agents

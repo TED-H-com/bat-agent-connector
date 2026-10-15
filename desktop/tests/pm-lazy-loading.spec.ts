@@ -65,7 +65,10 @@ for (const section of ['ui_governance', 'ui_repairs', 'ui_follow_up', 'ui_meetin
     await expect.poll(() => f.reads.slice(before).sort()).toEqual(paths);
     await settled(f); expect(f.reads.slice(before).sort()).toEqual(paths);
     const summary = page.locator(`[data-pm-section="${section}"] > details > summary`);
-    await summary.click(); await summary.click(); await settled(f);
+    await summary.click();
+    if (view === 'issues') await openPmSection(page, view, section);
+    else await summary.click();
+    await settled(f);
     expect(f.reads.slice(before).sort()).toEqual(paths); expect(f.writes).toEqual([]);
   });
 }

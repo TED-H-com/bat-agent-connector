@@ -1785,6 +1785,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 }
 .pm-agents-source-id { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 [data-pm-register] { --selected-row: var(--surface-3); }
+.pm-issues-tool:has(> details:not([open])) { display: none; }
 [data-pm-register], .reg-layout, .reg-main { min-width: 0; max-width: 100%; }
 .reg-layout { display: flex; align-items: flex-start; gap: var(--space-4); }
 .reg-main { flex: 1; display: grid; gap: var(--space-3); }
@@ -1849,7 +1850,7 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .reg-main .ui-data-table th, .reg-main .ui-data-table td { white-space: nowrap; vertical-align: middle; }
 .reg-main .ui-data-table td:nth-child(2), .reg-main .ui-data-table th:nth-child(2),
 .reg-main .ui-data-table td:nth-child(8), .reg-main .ui-data-table th:nth-child(8) { white-space: normal; }
-.reg-main .ui-data-table td:nth-child(2) { min-width: 9rem; max-width: 18rem; }
+.reg-main .ui-data-table td:nth-child(2) { min-width: 12rem; }
 .reg-main .ui-data-table td:nth-child(8) { max-width: 14rem; }
 .reg-owner-cell { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
@@ -1932,18 +1933,18 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 .pm-shell [data-pm-register] .ui-data-table th[data-column=priority],
 .pm-shell [data-pm-register] .ui-data-table th[data-column=impact] { width: 4.5rem; }
 .pm-shell [data-pm-register] .ui-data-table th[data-column=due] { width: 6rem; }
-.pm-shell [data-pm-register] .ui-data-table th[data-column=owner] { width: 8.5rem; }
-.pm-shell [data-pm-register] .ui-data-table th[data-column=next] { width: 10rem; }
-.pm-shell [data-pm-register] .ui-data-table th[data-column=related] { width: 13.5rem; }
+.pm-shell [data-pm-register] .ui-data-table th[data-column=owner] { width: 11rem; }
+.pm-shell [data-pm-register] .ui-data-table th[data-column=next] { width: 8rem; }
+.pm-shell [data-pm-register] .ui-data-table th[data-column=related] { width: 10rem; }
 .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=type] { white-space: nowrap; }
 .pm-shell [data-pm-register] .reg-type { max-width: 100%; }
-@container ui-table (max-width: 980px) {
+@container ui-table (max-width: 1200px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=related] { display: none; }
 }
-@container ui-table (max-width: 860px) {
+@container ui-table (max-width: 1120px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=impact] { display: none; }
 }
-@container ui-table (max-width: 760px) {
+@container ui-table (max-width: 1000px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=due] { display: none; }
 }
 @container ui-table (max-width: 680px) {
@@ -1952,6 +1953,13 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 @container ui-table (max-width: 560px) {
   .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=priority] { display: none; }
 }
+
+/* A docked inspector leaves title and status first; all facts remain in its body. */
+@container ui-table (max-width: 800px) {
+  .pm-shell [data-pm-register] .ui-data-table :is(th, td)[data-column=next] { display: none; }
+}
+
+.reg-actions .ui-menu-panel { top: auto; bottom: calc(100% + var(--space-1)); right: 0; }
 /* Shared shell. Views keep their content; navigation lives in one persistent rail. */
 .top { height: 48px; min-height: 48px; flex-wrap: nowrap; padding: 0 var(--space-4); gap: var(--space-4); z-index: 30; background: var(--surface); }
 .brand { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-body); font-weight: 600; flex: none; }
@@ -2250,6 +2258,9 @@ body.pm-mode #main { padding: 0; }
 .pm-overview-attention-main { grid-row: 1; grid-column: 1; align-self: center; }
 .pm-overview-attention-actions { grid-row: 1; grid-column: 2; margin-left: 0; }
 .pm-overview-context { grid-row: 2; grid-column: 1 / -1; margin-left: calc(20px + var(--space-3)); }
+
+.pm-overview-context [data-overview-age] { white-space: nowrap; }
+[data-charter-empty] { margin: var(--space-3) 0 0; }
 /* Discussions owns this layout; shared controls retain the design-system tokens. */
 [data-discussions] { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 0; min-width: 0; height: calc(100dvh - 144px); min-height: 480px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); overflow: hidden; }
 [data-discussions] .pm-workspace-list { display: flex; flex-direction: column; gap: var(--space-2); overflow: auto; padding: var(--space-3); border-right: 1px solid var(--line); min-width: 0; }

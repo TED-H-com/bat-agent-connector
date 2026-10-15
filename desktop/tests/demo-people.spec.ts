@@ -27,7 +27,7 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 390]) {
       for (const view of ['issues', 'overview', 'discussions']) {
         await openPmSection(page, view);
         if (view === 'overview') {
-          await expect(page.locator('.pm-overview-charter-grid > section')).toHaveCount(6);
+          await expect(page.locator('.pm-overview-charter-grid > section')).toHaveCount(4);
           await screenshot(page, `overview-${locale}-${width}`);
         }
         if (view === 'discussions') {

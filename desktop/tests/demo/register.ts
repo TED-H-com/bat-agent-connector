@@ -23,7 +23,7 @@ export function demoFindings(project: DemoProject) {
   };
 }
 function riskId() {
-  return hexId('pmgov_', 1, 32);
+  return hexId('pmgov_', 4, 32);
 }
 function followId() {
   return hexId('pmfu_', 1, 32);
@@ -33,7 +33,7 @@ function labels(project: DemoProject) {
   const zh = project.locale === 'zh-TW';
   return {
     finding: zh ? '過時的相依套件' : 'Outdated dependency',
-    risk: zh ? 'SMTP 寄信速率' : 'SMTP rate limit',
+    risk: project.copy.smtp,
     action: zh ? '確認鎖定的後續' : 'Confirm the lockout follow-up',
     reason: zh ? '預算尚未確認' : 'Budget is not confirmed',
     impact: zh ? '上線' : 'Launch',
@@ -91,15 +91,22 @@ function rowsFor(project: DemoProject) {
         finding_ref: {observation_id: ids.findingRef.observation_id, document_digest: ids.findingRef.document_digest, finding_id: findings.issue.id},
       }}, {action: 'pm.maintenance.repair.evidence.record', target: {workspace_id: project.ids.workspaceId, repair_id: hexId('pmrp_', 1, 32)}, required: {}}],
       unknowns: {owner: 'not_recorded'}, finding: findings.issue.finding}),
-    row(project, {row_id: ids.decision, type: 'decision', basis: 'explicit', title: project.copy.decisions.budget, status: 'open', owner: project.ids.actor,
+    row(project, {row_id: ids.decision, type: 'decision', basis: 'explicit', title: project.copy.planTitle, status: 'adopted', owner: project.ids.actor,
       due: '2026-10-20T12:00:00.000+00:00', created_at: iso(project.now, -1), source: {kind: 'plan_revision', id: project.ids.planV3}}),
     row(project, {row_id: ids.change, type: 'change', basis: 'explicit', title: project.copy.proposalTitle, status: 'proposed', owner: project.ids.actor,
       created_at: iso(project.now, -12), source: {kind: 'proposal', id: project.ids.proposalId}}),
     row(project, {row_id: ids.mapping, type: 'issue', basis: 'explicit', title: null, status: 'tracking', owner: null,
       source: {kind: 'issue_mapping', id: project.ids.issueMapping}, unknowns: {title: 'not_recorded', owner: 'not_recorded'}}),
-    row(project, {row_id: ids.risk, type: 'risk', basis: 'explicit', title: text.risk, status: 'blocked', owner: project.ids.actor,
+    row(project, {row_id: ids.risk, type: 'risk', basis: 'explicit', title: project.copy.smtp, status: 'blocked', owner: project.ids.actor,
       created_at: iso(project.now, -40), source: {kind: 'governance', id: riskId()},
       actions: [{action: 'pm.governance.revise', target: {workspace_id: project.ids.workspaceId, record_id: riskId()}, required: {}}]}),
+    ...[
+      {n: 1, title: project.copy.blocker, type: 'issue', requirements: [project.ids.requirements.audit]},
+      {n: 2, title: project.copy.decisions.budget, type: 'change', requirements: []},
+      {n: 3, title: project.copy.decisions.lockout, type: 'change', requirements: []},
+    ].map(spec => row(project, {row_id: `governance.${hexId('pmgov_', spec.n, 32)}`, type: spec.type, basis: 'explicit',
+      title: spec.title, status: 'open', owner: project.ids.actor, requirements: spec.requirements,
+      created_at: iso(project.now, -5 + spec.n), source: {kind: 'governance', id: hexId('pmgov_', spec.n, 32)}})),
     row(project, {row_id: ids.action, type: 'action', basis: 'explicit', title: text.action, status: 'in_progress', owner: project.ids.actor,
       created_at: iso(project.now, -100), source: {kind: 'follow_up', id: followId()}}),
     row(project, {...observed, row_id: ids.pull, created_at: iso(project.now, -15), source: {kind: 'finding', id: findings.pull.id}, finding: findings.pull.finding, unknowns: {title: 'not_recorded'}}),
