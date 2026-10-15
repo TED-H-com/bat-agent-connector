@@ -109,7 +109,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`worklo
     await expect(exclusions).toContainText(locale==='en'?'A verified ended session is retained as history.':'已驗證結束的工作階段保留為歷史。');
     await expect(box).toContainText('fixture-bat/manual-retained');await expect(exclusions).not.toContainText('fixture-bat/manual-retained');
     await expect(exclusions.locator('a')).toHaveAttribute('href',`#/op/${runtimeReceipt}`);
-    await expect(exclusions).toContainText(locale==='en'?'A retained worktree alone is not active work.':'保留 worktree 本身不算進行中的工作。');
+    await expect(exclusions).toContainText(locale==='en'?'A retained worktree alone is not active work.':'保留工作樹本身不算進行中的工作。');
     const hidden=box.locator('li').filter({hasText:'source_not_visible'});await expect(hidden).not.toContainText('fixture-bat');
     expect(f.state.writes).toEqual([]);expect(f.parent.base.state.writes).toEqual([]);
   }finally{await context.close();}

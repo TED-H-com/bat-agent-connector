@@ -14,7 +14,7 @@ from urllib.parse import unquote, urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
 PREFIX = "/bat-agent-connector/"
-REPO = "https://github.com/teddashh/bat-agent-connector/blob/main/"
+REPO = "https://github.com/TED-H-com/bat-agent-connector/blob/main/"
 LOCKFILE = "desktop/package-lock.json"
 LOCKFILE_DIGEST = "without_root_version"
 # capture_site.mjs requires these paths to equal the pinned commit and reads its tooling from the checkout.

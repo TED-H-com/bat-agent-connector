@@ -2,7 +2,7 @@
 
 **Understand the project. Discuss the problem. Decide with the PM.**
 
-**English** · [繁體中文](README.zh-TW.md) · [Website](https://teddashh.github.io/bat-agent-connector/) · [Install and start](docs/getting-started.md) · [Progress](docs/product/progress-2026-10-14.md)
+**English** · [繁體中文](README.zh-TW.md) · [Website](https://ted-h-com.github.io/bat-agent-connector/) · [Install and start](docs/getting-started.md) · [Progress](docs/product/progress-2026-10-14.md)
 
 Better Agent Dashboard keeps project state, PM discussions and decisions in one workspace.
 Start with the live Overview, open a problem's original record, and discuss it with the PM without rebuilding the context.
@@ -65,7 +65,7 @@ Policy-bounded delivery and maintenance remain available through the project's s
 
 ## Install and connect
 
-Use the [desktop workflow on main](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain). Choose a successful platform job, match its source commit and validation records, then download that run's artifact. GitHub may require sign-in, and artifacts expire. These are validation packages, not a stable signed update channel.
+Use the [desktop workflow on main](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain). Choose a successful platform job, match its source commit and validation records, then download that run's artifact. GitHub may require sign-in, and artifacts expire. These are validation packages, not a stable signed update channel.
 
 | Entry | Package / local features | Boundary |
 | --- | --- | --- |

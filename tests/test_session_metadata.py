@@ -130,6 +130,7 @@ async def test_manual_unknown_removed_host_overlay_refresh_and_api(mock, tmp_pat
         frames = len(mock.invokes)
         assert before["provenance"] == "manual"
         op, _ = create(d.ops, target={"host":"h1", "session_id":sid})
+        assert "git_execution" not in (op["external_refs"].get("admission_binding") or {})
         await settle_operations(d.ops)
         assert d.ops.get(op["operation_id"])["status"] == "succeeded"
         assert len(mock.invokes) == frames  # not even a policy/meta read
@@ -141,6 +142,7 @@ async def test_manual_unknown_removed_host_overlay_refresh_and_api(mock, tmp_pat
             d.journal.api_event("session", "removed/unknown-full", "session.observed", {"host":"removed","session_id":"unknown-full"})
         frames = len(mock.invokes)
         op, _ = create(d.ops, target={"host":"removed","session_id":"unknown-full"}, key="removed")
+        assert "git_execution" not in (op["external_refs"].get("admission_binding") or {})
         await settle_operations(d.ops)
         assert d.ops.get(op["operation_id"])["status"] == "succeeded" and len(mock.invokes) == frames
         port = server.sockets[0].getsockname()[1]

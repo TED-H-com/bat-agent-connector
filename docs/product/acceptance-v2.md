@@ -34,19 +34,19 @@ Tauri 第二版計畫 §24，保留 **A01–A10、B01–B05、C01–C07、D01–
 
 | 代號／候選 | 固定證據來源 | 此快照狀態與限制 |
 | --- | --- | --- |
-| M：#35、#36、#37 與既有核心 | [main `305cb6e`](https://github.com/teddashh/bat-agent-connector/tree/305cb6e0115a0fcc7f068855f3b9c8f015b2b924)：policy、operation/task gates、confinement、observation、checkpoints、integration | #37 已合併；head `5098575` 四個 Python CI jobs 綠，本機 3.13/3.10 各 1619 passed/33 skipped。逐 host runtime／installed/live 尚缺。 |
-| C：[#38](https://github.com/teddashh/bat-agent-connector/pull/38) cleanup | [`ec56cd5`](https://github.com/teddashh/bat-agent-connector/tree/ec56cd5c1ee7afaf145fc2af67e0528cf122959c)：`cleanup.py`、`cleanup_host.py`、`test_cleanup*.py` | 已合併 `98931f7`；四個 Python CI jobs 各 1835 passed/33 skipped。保留較早本機 3.10 的 settlement deadline failure 與原碼重跑紀錄；不以 retry 取代 full。Task-owned cleanup 未交付。 |
-| S：[#43](https://github.com/teddashh/bat-agent-connector/pull/43) skills | [`428eb14`](https://github.com/teddashh/bat-agent-connector/tree/428eb14077eabd7e82d8cae7eb61cfbc570ce99e)：canonical workflow `.3`、generator、principal-only MCP | 該 head 四個 Python CI jobs 各 1851 passed/33 skipped，已合併；installer 已改 pin 最終整合候選 `.4`，未實際安裝。 |
-| U：[#44](https://github.com/teddashh/bat-agent-connector/pull/44) desktop foundation | [`f393bc8`](https://github.com/teddashh/bat-agent-connector/tree/f393bc8f6cf066c0c535c5ce8b11956d4868a090)：shared frontend、Rust bridge/main、capabilities、desktop design | 已合併；該 head 四個 Python jobs 各 1878/33，packaging 通過；保留 Linux WebKit N 證據。Windows install/tray/跨登入尚缺。 |
-| F：[#45](https://github.com/teddashh/bat-agent-connector/pull/45) Fleet desktop | [`00dd54b`](https://github.com/teddashh/bat-agent-connector/tree/00dd54b841b0e61f186148df8a740082c21f4fab)：`fleet.rs`、`fleet.spec.ts` | 已合併；該 head 四個 Python jobs 各 1878/33、Windows 固定 PS subprocess/packaging 通過，候選整組另列。Rust supervisor parity、installed Kit 合驗尚缺。 |
-| A：[#46](https://github.com/teddashh/bat-agent-connector/pull/46) artifacts Part A | [`5c788b0`](https://github.com/teddashh/bat-agent-connector/tree/5c788b03ee41a69cfeb6d2411dc1b0035421c310)：store/host、exact replica cleanup、binary upload bridge | 已合併；該 head 四個 Python jobs 各 1982/33，admission/fixture 修正與 peer 證據已含。跨 host Git、完整 native file/save/download 尚缺。 |
-| D：[#47](https://github.com/teddashh/bat-agent-connector/pull/47) Delivery Part B | [`2d1a7b4`](https://github.com/teddashh/bat-agent-connector/tree/2d1a7b47c0fa496947c5a23bfd03fe20f562931f)：deployment/store/verifier、owner/scope/history、shared UI | `dc886e0` CI 兩項舊 fixture 假設已修（canonical UI source、latest data step）；14 受影響 tests 兩版本通過。該 head full CI 四版各 2141/33，已合併且 issue #32 關閉；無真 deployed version 證據。 |
-| O：[#48](https://github.com/teddashh/bat-agent-connector/pull/48) R04 UI | [`c18cc77`](https://github.com/teddashh/bat-agent-connector/tree/c18cc77312f2257f8510c4e2df44443fd197e124)：observation UI、pending/linked events、`desktop/tests/observation*` | 經 #51 合併；browser/native IPC mock/真中央加 MockBat 的 F 證據，最終整組 CI 綠；不是 M1。 |
-| I：[#49](https://github.com/teddashh/bat-agent-connector/pull/49) R01 interrupt | [`f66655a`](https://github.com/teddashh/bat-agent-connector/tree/f66655a8c59c5d9b6be8a50fde3c2d335ff7cacf)：legacy interrupt adapter、`test_interrupt_operations.py` | 經 #51 合併；focused/peer 及最終整組 CI 綠。只是 Part B 第一片，其他 legacy mutations 尚未統一。 |
-| B1：[#50](https://github.com/teddashh/bat-agent-connector/pull/50) manual single-file capture | [`b8a23ee`](https://github.com/teddashh/bat-agent-connector/tree/b8a23eedabe6de838767f7ddcc20bb38d59c8854)：`artifact_capture*.py`、capture/interrupt/principal tests | 經 #51 合併；139 focused tests 各 Python 版本、38 seam checks 及最終整組 CI 通過。同 credential/雙 scope replay/control 已審；UI/native preview allowlist、B2/C 尚缺。 |
+| M：#35、#36、#37 與既有核心 | [main `305cb6e`](https://github.com/TED-H-com/bat-agent-connector/tree/305cb6e0115a0fcc7f068855f3b9c8f015b2b924)：policy、operation/task gates、confinement、observation、checkpoints、integration | #37 已合併；head `5098575` 四個 Python CI jobs 綠，本機 3.13/3.10 各 1619 passed/33 skipped。逐 host runtime／installed/live 尚缺。 |
+| C：[#38](https://github.com/TED-H-com/bat-agent-connector/pull/38) cleanup | [`ec56cd5`](https://github.com/TED-H-com/bat-agent-connector/tree/ec56cd5c1ee7afaf145fc2af67e0528cf122959c)：`cleanup.py`、`cleanup_host.py`、`test_cleanup*.py` | 已合併 `98931f7`；四個 Python CI jobs 各 1835 passed/33 skipped。保留較早本機 3.10 的 settlement deadline failure 與原碼重跑紀錄；不以 retry 取代 full。Task-owned cleanup 未交付。 |
+| S：[#43](https://github.com/TED-H-com/bat-agent-connector/pull/43) skills | [`428eb14`](https://github.com/TED-H-com/bat-agent-connector/tree/428eb14077eabd7e82d8cae7eb61cfbc570ce99e)：canonical workflow `.3`、generator、principal-only MCP | 該 head 四個 Python CI jobs 各 1851 passed/33 skipped，已合併；installer 已改 pin 最終整合候選 `.4`，未實際安裝。 |
+| U：[#44](https://github.com/TED-H-com/bat-agent-connector/pull/44) desktop foundation | [`f393bc8`](https://github.com/TED-H-com/bat-agent-connector/tree/f393bc8f6cf066c0c535c5ce8b11956d4868a090)：shared frontend、Rust bridge/main、capabilities、desktop design | 已合併；該 head 四個 Python jobs 各 1878/33，packaging 通過；保留 Linux WebKit N 證據。Windows install/tray/跨登入尚缺。 |
+| F：[#45](https://github.com/TED-H-com/bat-agent-connector/pull/45) Fleet desktop | [`00dd54b`](https://github.com/TED-H-com/bat-agent-connector/tree/00dd54b841b0e61f186148df8a740082c21f4fab)：`fleet.rs`、`fleet.spec.ts` | 已合併；該 head 四個 Python jobs 各 1878/33、Windows 固定 PS subprocess/packaging 通過，候選整組另列。Rust supervisor parity、installed Kit 合驗尚缺。 |
+| A：[#46](https://github.com/TED-H-com/bat-agent-connector/pull/46) artifacts Part A | [`5c788b0`](https://github.com/TED-H-com/bat-agent-connector/tree/5c788b03ee41a69cfeb6d2411dc1b0035421c310)：store/host、exact replica cleanup、binary upload bridge | 已合併；該 head 四個 Python jobs 各 1982/33，admission/fixture 修正與 peer 證據已含。跨 host Git、完整 native file/save/download 尚缺。 |
+| D：[#47](https://github.com/TED-H-com/bat-agent-connector/pull/47) Delivery Part B | [`2d1a7b4`](https://github.com/TED-H-com/bat-agent-connector/tree/2d1a7b47c0fa496947c5a23bfd03fe20f562931f)：deployment/store/verifier、owner/scope/history、shared UI | `dc886e0` CI 兩項舊 fixture 假設已修（canonical UI source、latest data step）；14 受影響 tests 兩版本通過。該 head full CI 四版各 2141/33，已合併且 issue #32 關閉；無真 deployed version 證據。 |
+| O：[#48](https://github.com/TED-H-com/bat-agent-connector/pull/48) R04 UI | [`c18cc77`](https://github.com/TED-H-com/bat-agent-connector/tree/c18cc77312f2257f8510c4e2df44443fd197e124)：observation UI、pending/linked events、`desktop/tests/observation*` | 經 #51 合併；browser/native IPC mock/真中央加 MockBat 的 F 證據，最終整組 CI 綠；不是 M1。 |
+| I：[#49](https://github.com/TED-H-com/bat-agent-connector/pull/49) R01 interrupt | [`f66655a`](https://github.com/TED-H-com/bat-agent-connector/tree/f66655a8c59c5d9b6be8a50fde3c2d335ff7cacf)：legacy interrupt adapter、`test_interrupt_operations.py` | 經 #51 合併；focused/peer 及最終整組 CI 綠。只是 Part B 第一片，其他 legacy mutations 尚未統一。 |
+| B1：[#50](https://github.com/TED-H-com/bat-agent-connector/pull/50) manual single-file capture | [`b8a23ee`](https://github.com/TED-H-com/bat-agent-connector/tree/b8a23eedabe6de838767f7ddcc20bb38d59c8854)：`artifact_capture*.py`、capture/interrupt/principal tests | 經 #51 合併；139 focused tests 各 Python 版本、38 seam checks 及最終整組 CI 通過。同 credential/雙 scope replay/control 已審；UI/native preview allowlist、B2/C 尚缺。 |
 
-整合候選 `3ed2c0bcf17de00cae40eae60dc23f3881121831` 已經 #51 合併。其 [Python 3.10–3.13 full CI](https://github.com/teddashh/bat-agent-connector/actions/runs/37857510798) 各 2264 passed/33 skipped；
-[Windows NSIS/Linux deb、74 UI、8 state、Rust checks](https://github.com/teddashh/bat-agent-connector/actions/runs/37857510691) 皆通過。
+整合候選 `3ed2c0bcf17de00cae40eae60dc23f3881121831` 已經 #51 合併。其 [Python 3.10–3.13 full CI](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37857510798) 各 2264 passed/33 skipped；
+[Windows NSIS/Linux deb、74 UI、8 state、Rust checks](https://github.com/TED-H-com/bat-agent-connector/actions/runs/37857510691) 皆通過。
 Canonical workflow 是 `2026-10-08.4`；S 列 `.3` 僅描述獨立 PR 的歷史 head。
 產品整合 commit `56cc159` 與已測候選 Git tree 完全相同；本次 docs-only 收斂更新未改 runtime/build/skills。
 先前 439 focused、5 真中央 fixtures 與獨立審查仍保留其證據層級；沒有升格為 I/L。
@@ -54,13 +54,13 @@ Canonical workflow 是 `2026-10-08.4`；S 列 `.3` 僅描述獨立 PR 的歷史 
 
 ## 共用產品續作證據
 
-[#55](https://github.com/teddashh/bat-agent-connector/issues/55) 的關聯 PR 保存本輪 exact-head CI、review、合併與 pin。
+[#55](https://github.com/TED-H-com/bat-agent-connector/issues/55) 的關聯 PR 保存本輪 exact-head CI、review、合併與 pin。
 `041d907` 補 A01/A05/A07 的 send/continue/answer 全入口 fixture；`d776434` 補 B1 UI/native preview allowlist、
 reload/lost reply 與真中央唯讀 bytes/index/refs fixture；`2b2f4d5` 關閉 A01/E01/E02 的 unsafe legacy removal。
 [目前實作狀態](implementation-status.md#目前續作) 保留 focused 失敗／修正／重跑與完整 UI 結果。
 這些是 F／N 子集，沒有把 46 項改成 I／L 通過；歷史表格的「尚缺」描述各列固定 commit 的快照。
 
-[#59](https://github.com/teddashh/bat-agent-connector/issues/59) 的候選工作線另加入 Windows 原生憑證
+[#59](https://github.com/TED-H-com/bat-agent-connector/issues/59) 的候選工作線另加入 Windows 原生憑證
 註冊／保存、固定 bulk approval、managed artifact capture／accept，以及共用 session 清單整理。
 來源、peer findings／修正及分層測試見目前實作狀態；未把 branch 的能力或 isolated fixtures 當作
 已合併、installed 或 live。以上保留該批候選的歷史狀態；目前能力與整合條件以下列增量為準。
@@ -157,7 +157,7 @@ reload/lost reply 與真中央唯讀 bytes/index/refs fixture；`2b2f4d5` 關閉
 | T09 Client 更新／睡眠／crash／切網路 | U `desktop/tests/recovery.spec.ts`／`account-switch.spec.ts`／`dashboard.spec.ts` 的 lost reply/drafts；M durable operations。 | 真 Windows suspend/network/crash 與安裝更新；原 ID 查回、中央 task 不停。#64 已有簽章與 signed-version 驗證、durable installer intent；正式 keys/feed 與真安裝仍未提供。 |
 | T10 Tailscale 未登入、中央停止、固定 bootstrap | U/F 顯示連線／配置失敗，native 不自動建中央 journal。 | #64/#66 實作 native credentials、固定 ensure bootstrap、Tailscale bounded status 與明確開啟 vendor tray app；登入由 vendor UI 完成。待 installed 登入／返回／recipe 驗收，有限恢復、零第二 owner／空 journal。 |
 | T11 帳號／backend 切換與 scope 隔離 | U `test_dashboard_sync.py` T11、`desktop/tests/account-switch.spec.ts`；F local DTO 不含中央 token；S principal-only；#59 候選 `credentials.rs`／`native-credentials.spec.ts` 增加 Windows vault 與身分驗證。 | Windows 原生對話框／Credential Manager 真保存、切換／重啟隔離與 Fleet observe 身分待驗；Linux 尚用 native-memory adapter。 |
-| T12 Canonical desktop/browser、build/update/signature | U `desktop/src`＋`build:all`／`check:browser`、locked dependencies；S generator/version checks；F packaging CI。#67 修正 GLib，source/pin 與 optimized regression 已通過，[#53](https://github.com/teddashh/bat-agent-connector/issues/53) 已關閉。 | 正式簽章、installed updater 相容／回退、release feed 及固定版本 readback；unsigned packages 與 disposable Windows 安裝 fixture 均不是正式發行或使用者實機驗收。 |
+| T12 Canonical desktop/browser、build/update/signature | U `desktop/src`＋`build:all`／`check:browser`、locked dependencies；S generator/version checks；F packaging CI。#67 修正 GLib，source/pin 與 optimized regression 已通過，[#53](https://github.com/TED-H-com/bat-agent-connector/issues/53) 已關閉。 | 正式簽章、installed updater 相容／回退、release feed 及固定版本 readback；unsigned packages 與 disposable Windows 安裝 fixture 均不是正式發行或使用者實機驗收。 |
 
 ## 同一候選版本的可重現驗收
 

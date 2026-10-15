@@ -79,7 +79,7 @@ export const workViewStrings = {
     wv_work: '工作', wv_requirement: '需求', wv_pr: 'PR', wv_acceptance: '驗收', wv_deploy: '部署', wv_next_blocker: '待解阻礙',
     wv_no_milestone: '未指定里程碑', wv_unassigned: '未指派（{n}）', wv_criteria: '驗收條件', wv_attempts: '可見的 {n} 次嘗試',
     wv_served: '對應需求', wv_status_owner: '狀態與負責人', wv_result: '最新成果', wv_blocker: '阻礙與下一步', wv_delivery: '交付', wv_details: '詳細資料',
-    wv_owner: '負責人', wv_agent: 'Agent', wv_all_requirements: '所有需求', wv_all_agents: '所有 Agent', wv_session: '開啟工作階段', wv_discuss: '討論',
+    wv_owner: '負責人', wv_agent: '代理', wv_all_requirements: '所有需求', wv_all_agents: '所有代理', wv_session: '開啟工作階段', wv_discuss: '討論',
     wv_no_result: '尚無成果紀錄', wv_no_delivery: '尚無交付紀錄', wv_start_end: '開始 – 結束', wv_unknown_times: '尚無開始與結束時間紀錄',
     wv_merge: '合併', wv_ci: 'CI', wv_next: '下一步', wv_no_requirement: '未指定需求', wv_phase_unknown: '尚無階段紀錄',
     wv_task_blocked: '連結的任務受阻', wv_reason_unknown: '尚無阻礙原因紀錄', wv_blocker_unknown: '阻礙狀態未知', wv_work_details: '開啟工作詳情',

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from bat_agent_connector import api_auth, dashboard_sync, work_item_reads, work_items
+from bat_agent_connector import api_auth, dashboard_sync, host_git, work_item_reads, work_items
 from bat_agent_connector.operations import OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
 from tests import test_work_items as fixtures
@@ -33,8 +33,13 @@ async def test_read_is_personal_and_never_approves_or_changes_the_item(daemon):
     assert before["completion"]["pending"]
     assert read(daemon, wid)["reading"]["unread"]
     first = mark(daemon, wid, before["version"])
+    assert isinstance(daemon.ops.context["git_runner"], host_git.HostGitRunner)
+    assert "git_execution" not in first["external_refs"]["admission_binding"]
     await settle_operations(daemon.ops)
     assert daemon.ops.get(first["operation_id"])["status"] == "succeeded"
+    replayed, created = daemon.ops.create(READER, action="work_item.read", target={"work_item_id": wid}, params={},
+                                          preconditions={"expected_version": before["version"]}, idempotency_key="read")
+    assert not created and replayed["operation_id"] == first["operation_id"] and replayed["status"] == "succeeded"
     assert not read(daemon, wid)["reading"]["unread"]
     assert get(daemon, wid) == before  # includes approval fingerprint, version, updated_at and pending
     assert read(daemon, wid, PERSON)["reading"]["unread"]

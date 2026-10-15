@@ -7,6 +7,14 @@ Earlier UI/engine decisions remain foundations; do not reduce PM to session
 summaries or treat the first implementation increment as the full plan.
 Read [PM implementation status](docs/product/pm-v1.2-status.md) for remaining work.
 
+The [v1.3 closed-loop plan](docs/product/v1.3-closed-loop-plan.md) revises that
+direction for direct work in the Dashboard, cross-CLI session results and one API/MCP
+path for people and agents. Unrevised v1.2 lifecycle, retention and safety requirements
+still apply. Start from its [agent handoff](docs/product/v1.3-agent-handoff.md):
+E00 (baseline, reuse map and a clickable flow built from the shared components) and the
+owner's R0 confirmation of that interaction come before E01–E11 implementation.
+Report against E00–E11, R0–R5 and A01–A40; they do not replace open v1.2 items.
+
 Read [the shared product decisions](docs/product/realignment-v2.md),
 [implementation status](docs/product/implementation-status.md), and the applicable
 `docs/design/` contract before changing behavior. The owner clarified that the two

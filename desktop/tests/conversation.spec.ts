@@ -86,7 +86,7 @@ for (const native of [false,true]) {
     await expect.poll(()=>saved(page)).toEqual(checkpoint(1));
     await expect(page.getByText('Your previous reading position is outside the messages currently loaded.')).toBeVisible();
     data.fail=true; data.cursor++;
-    await expect(page.locator('[data-session-error=UNAVAILABLE]')).toContainText('Server error');
+    await expect(page.locator('[data-session-error=UNAVAILABLE]')).toContainText('Messages unavailable');
     await expect(page.locator('[data-session-error=UNAVAILABLE] details')).toContainText('UNAVAILABLE');
     expect(await saved(page)).toEqual(checkpoint(1)); await expect(page.locator('.msg')).toHaveCount(9);
     data.fail=false; await expect.poll(()=>saved(page),{timeout:10000}).toEqual(checkpoint(2));

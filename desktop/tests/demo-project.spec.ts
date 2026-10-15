@@ -38,7 +38,7 @@ async function expectNoJunk(page: Page) {
 
 const viewTitle = {
   en: {overview: 'Overview', discussions: 'Discussions', requirements: 'Requirements', schedule: 'Schedule', dependencies: 'Dependencies', issues: 'Issues & changes', agents: 'Agents', board: 'Board'},
-  'zh-TW': {overview: '專案總覽', discussions: '討論', requirements: '需求', schedule: '時程', dependencies: '技術相依', issues: '問題與變更', agents: 'Agent 資源', board: '工作看板'},
+  'zh-TW': {overview: '專案總覽', discussions: '討論', requirements: '需求', schedule: '時程', dependencies: '技術相依', issues: '問題與變更', agents: '代理資源', board: '工作看板'},
 } as const;
 
 type DemoLocale = keyof typeof viewTitle;

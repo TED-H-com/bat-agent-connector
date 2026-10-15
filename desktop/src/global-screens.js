@@ -4,8 +4,8 @@ import {iconButton} from './ui/components.js';
 export function setupGuide() {
   const zh = (typeof navigator !== 'undefined' ? navigator.language || '' : '').toLowerCase().startsWith('zh');
   return zh
-    ? 'https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md'
-    : 'https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md';
+    ? 'https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md'
+    : 'https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.md';
 }
 
 export function inboxRow({h, key, title, href, meta, pill, action, detailsLabel, onOpen}) {

@@ -256,7 +256,7 @@ for (const locale of ['en-US', 'zh-TW']) for (const width of [390, 768, 1440]) t
   const context = await browser.newContext({locale, viewport: {width, height: width === 390 ? 844 : 900}});
   const page = await context.newPage(); const state = await permissionFixture(page, false);
   const form = await openPermissions(page); await form.getByRole('combobox').selectOption('allow_all');
-  await expect(form).toContainText(locale === 'en-US' ? 'Bypass the agent' : '略過 agent');
+  await expect(form).toContainText(locale === 'en-US' ? 'Bypass the agent' : '略過代理');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await mkdir('/tmp/bac-permissions-after', {recursive: true});
   await page.screenshot({path: `/tmp/bac-permissions-after/session-${locale}-${width}.png`, fullPage: true});

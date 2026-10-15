@@ -67,11 +67,11 @@ for (const locale of ['en', 'zh-TW']) for (const width of [1440, 1000, 768, 390]
   }
   const out = process.env.BATC_WORK_VIEW_SCREENSHOTS || `${process.env.TMPDIR || '/tmp'}/shots`; await mkdir(out, {recursive: true});
   await page.screenshot({path: `${out}/board-${locale}-${width}.png`, fullPage: true});
-  await expect(board.getByLabel('Agent', {exact: true}).locator('option[value="codex"]')).toHaveText('Codex');
-  await board.getByLabel('Agent', {exact: true}).selectOption('codex');
+  await expect(board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).locator('option[value="codex"]')).toHaveText('Codex');
+  await board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).selectOption('codex');
   await expect(board.locator('[data-pm-kanban-work]:visible')).toHaveCount(1);
   await expect(board.locator(`[data-pm-kanban-work="${ids.work.email}"]`)).toBeVisible();
-  await board.getByLabel('Agent', {exact: true}).selectOption('');
+  await board.getByLabel(locale === 'en' ? 'Agent' : '代理', {exact: true}).selectOption('');
   const requirement = board.getByLabel(locale === 'en' ? 'Requirement' : '需求', {exact: true});
   await requirement.selectOption(ids.requirements.email); await expect(board.locator('[data-pm-kanban-work]:visible')).toHaveCount(1);
   await requirement.selectOption('');

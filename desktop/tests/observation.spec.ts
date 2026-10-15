@@ -108,7 +108,7 @@ for (const native of [false, true]) {
     });
     await page.goto("/dashboard/#/session/demo/session-1");
     const error = page.locator('[data-session-error=UNAVAILABLE]');
-    await expect(error.locator('.session-error-line')).toContainText('Server error');
+    await expect(error.locator('.session-error-line')).toContainText('Messages unavailable');
     await expect(error.locator('details')).toContainText('Messages temporarily unavailable');
     const composer = page.locator("textarea").first(), answer = page.getByRole("textbox", {name: "Which branch?"});
     await composer.fill("Initial read failure must retain these instructions");

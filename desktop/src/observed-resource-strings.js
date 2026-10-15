@@ -71,7 +71,7 @@ export const observedStrings = {
   },
   'zh-TW': {
     or_execution: '工作執行',
-    or_worktree: '工作目錄',
+    or_worktree: '工作樹',
     or_work: '工作',
     or_owner: '負責人',
     or_ownership: '歸屬類型',
@@ -128,14 +128,14 @@ export const observedStrings = {
     or_actor: '執行者',
     or_project: '專案',
     or_state: '狀態',
-    or_worktree_id: '工作目錄識別碼',
+    or_worktree_id: '工作樹識別碼',
     or_owner_id: '負責人識別碼',
     or_operation_id: '操作',
     or_task_id: '任務',
     or_session_id: '工作階段',
     or_link_operation: '操作',
     or_link_execution: '執行',
-    or_link_worktree: '工作目錄',
+    or_link_worktree: '工作樹',
   },
 };
 

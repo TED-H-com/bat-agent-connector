@@ -221,7 +221,7 @@ test('agents copy is Traditional Chinese', async ({browser, baseURL}) => {
   await boot(page, fixture.dispatch);
   await openAgents(page, 1280);
   const agents = page.locator('[data-pm-resources]');
-  await expect(page.getByRole('heading', {level: 1})).toHaveText('Agent 資源');
+  await expect(page.getByRole('heading', {level: 1})).toHaveText('代理資源');
   await expect(page.locator('[data-resource-meta]')).toContainText('更新');
   await expect(page.locator('[data-resource-meta] [data-tz]')).toHaveText('Asia/Taipei');
   await expect(agents).toContainText('無資料');

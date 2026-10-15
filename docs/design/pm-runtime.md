@@ -1,6 +1,6 @@
 # Bounded BAT PM runtime evidence
 
-Issue [#88](https://github.com/teddashh/bat-agent-connector/issues/88) introduces
+Issue [#88](https://github.com/TED-H-com/bat-agent-connector/issues/88) introduces
 the read-only `claude:sync-session` channel and `pm_runtime.py`. The PM operation
 service, workspace membership and durable writer record remain responsible for
 admission. This module neither creates sessions nor dispatches coding tasks.
