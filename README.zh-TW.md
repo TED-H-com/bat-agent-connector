@@ -2,7 +2,7 @@
 
 **看懂專案、找到問題，與 PM 完成一次決策。**
 
-[English](README.md) · **繁體中文** · [網站](https://teddashh.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-14.md)
+[English](README.md) · **繁體中文** · [網站](https://ted-h-com.github.io/bat-agent-connector/?lang=zh-TW) · [安裝與開始使用](docs/getting-started.zh-TW.md) · [進度報告](docs/product/progress-2026-10-14.md)
 
 Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作空間。
 先看即時總覽，找到問題，再從原紀錄直接與 PM 討論，不必重新整理脈絡。
@@ -65,7 +65,7 @@ Better Agent Dashboard 把專案狀況、PM 討論與決策放在同一個工作
 
 ## 安裝與連線
 
-從 [main 的 desktop workflow](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 選成功的平台 job，核對來源 commit 與驗證紀錄後，下載該 run 的 artifact。GitHub 可能要求登入，artifact 也會到期；這些是驗證套件，尚非穩定的簽章更新通道。
+從 [main 的 desktop workflow](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) 選成功的平台 job，核對來源 commit 與驗證紀錄後，下載該 run 的 artifact。GitHub 可能要求登入，artifact 也會到期；這些是驗證套件，尚非穩定的簽章更新通道。
 
 | 入口 | 套件／本機能力 | 界線 |
 | --- | --- | --- |

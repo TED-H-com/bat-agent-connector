@@ -15,7 +15,7 @@ The port retains Fleet Kit compatibility for existing installations. Public sour
 private configuration, real host identities, credentials and pins are excluded. New
 installations can use the [public Rust setup](../../docs/design/fleet-configuration.md).
 
-For a packaged Windows client, use the [desktop workflow on `main`](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain).
+For a packaged Windows client, use the [desktop workflow on `main`](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain).
 Choose a successful run from the current public history and match its source commit,
 Windows package job and installed-fixture records before downloading
 `desktop-Windows-unsigned`. The [public templates](../fleet.example/README.md) supply a

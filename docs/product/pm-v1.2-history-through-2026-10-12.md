@@ -12,20 +12,20 @@
 #98–#112 已合併。下列是接續候選的固定證據；後面的分批紀錄保留當時範圍，
 不以舊批次的「待做」覆蓋本節，也不把候選能力當成主線已交付。
 
-- [#113](https://github.com/teddashh/bat-agent-connector/pull/113) `de30795`：成果評估、
+- [#113](https://github.com/TED-H-com/bat-agent-connector/pull/113) `de30795`：成果評估、
   依賴解鎖、自然對話採用與維護修復整合。精確來源的 desktop 五個 jobs 已通過，
   Linux 共享 UI 1,873 項通過／3 項跳過；Python 3.12／3.13 完整 CI 各 5,523 項通過、
   51 項跳過，3.10／3.11 仍在執行，尚未合併。
-- [#114](https://github.com/teddashh/bat-agent-connector/pull/114) `50dbb7e`：AHP 唯讀
+- [#114](https://github.com/TED-H-com/bat-agent-connector/pull/114) `50dbb7e`：AHP 唯讀
   觀察與 core 0.2.4 → 0.2.5 實包升級。先前 `fca7dae` 四平台升級 fixture 均通過；
   Windows 安裝 fixture 的首個 HTTP 讀取逾時後，清理錯誤蓋過原始失敗。
   新版只修測試的有界重試及失敗保存；精確 `50dbb7e` 的 desktop 五個 jobs 全部通過，
   Linux 共享 UI 1,911 項通過／3 項跳過，四平台實包升級的原始回執與下載雜湊已核對。
   完整後端 CI 仍在執行。
-- BAT owner fork [#3](https://github.com/teddashh/better-agent-terminal/pull/3) 已合併至
+- BAT owner fork [#3](https://github.com/TED-H-com/better-agent-terminal/pull/3) 已合併至
   `737f6fb`，內容與通過 CI 的 `4be316e` 相同。固定 Linux server 套件的 59 個 payload
   檔案、來源及雜湊已核對，實包啟動／認證／重啟／清理 fixture 通過。安裝方式見
-  [固定版本部署說明](https://github.com/teddashh/better-agent-terminal/blob/737f6fb256716e190f34795dc27d6341ba0bc345/docs/pm-server-candidate.md)。
+  [固定版本部署說明](https://github.com/TED-H-com/better-agent-terminal/blob/737f6fb256716e190f34795dc27d6341ba0bc345/docs/pm-server-candidate.md)。
 - 接續分支已整合 BAT 計畫提案及 Follow-up 分析；沿用原操作、固定來源與既有採用流程，
   可按操作明確選 native 或 BAT。UI `4126fbb` 的 98 項與 Node 34 項通過；
   後端 `2286575` 的 11 個受影響模組在 Python 3.12／3.10 各 265 項通過。
@@ -44,7 +44,7 @@ M4 的同一 workspace、同一份 ID 紀錄完整流程正在串接。一般工
 
 ## 第一批：workspace、Idea 與 Planning 草稿
 
-追蹤 [#84](https://github.com/teddashh/bat-agent-connector/issues/84)，基底 `05396b1a`。
+追蹤 [#84](https://github.com/TED-H-com/bat-agent-connector/issues/84)，基底 `05396b1a`。
 本批提供 server 身分下的獨立 PM workspace、角色、可恢復討論、資訊來源與確認歷史，
 以既有 operations 接入 Web／Tauri、API 與 MCP。選定輸入形成固定 Planning 草稿，
 未選構想仍保留；沒有自動採用、派工、發布或 LLM 回覆。
@@ -61,7 +61,7 @@ M4 的同一 workspace、同一份 ID 紀錄完整流程正在串接。一般工
 
 ## 第二批：原控制者與可恢復操作
 
-追蹤 [#87](https://github.com/teddashh/bat-agent-connector/issues/87)，接續第一批。
+追蹤 [#87](https://github.com/TED-H-com/bat-agent-connector/issues/87)，接續第一批。
 已認證的 server／actor 決定穩定 controller；新 session、背景 task 與 command 保存原始 authority。
 受理與最後執行點核對 controller 和建立時的 incarnation，涵蓋 API／MCP／CLI、背景派工、
 failover、fanout、relay、permissions、worktree merge 與 reviewed cleanup。
@@ -77,7 +77,7 @@ Dashboard inventory 與帶 token 的 CLI／MCP policy 顯示目前 caller 的操
 
 ## 工作與剩餘範圍
 
-第三批追蹤 [#88](https://github.com/teddashh/bat-agent-connector/issues/88)：已實作固定討論脈絡、
+第三批追蹤 [#88](https://github.com/TED-H-com/bat-agent-connector/issues/88)：已實作固定討論脈絡、
 workspace writer generation、PM 自有 controller、來源／原生回覆紀錄，以及設定綁定下的
 固定 commit 工作目錄與不可覆寫草稿。API／MCP／Web／Tauri 共用 `pm.run.prepare`；
 畫面可查回原始討論版本，保存脈絡不會產生 AI 回覆或採用計畫。
@@ -89,7 +89,7 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 相應 BAT producer 已合併至 owner fork，尚未安裝。長期工作 adapter 接續與 W09／#88
 的剩餘範圍仍待完成，與使用者自行處理的真人實機驗收分開。
 
-第四批追蹤 [#91](https://github.com/teddashh/bat-agent-connector/issues/91)：專業計畫以固定來源、
+第四批追蹤 [#91](https://github.com/TED-H-com/bat-agent-connector/issues/91)：專業計畫以固定來源、
 八個管理領域、需求與接受條件保存不可變版本，未決事項仍維持未決。Planning 期間可明確
 修訂選定來源；這不回寫較早的草稿、規格或已採用計畫。
 
@@ -98,8 +98,8 @@ BAT 原生回覆的完成判定使用原始 event epoch／seq、turn／SDK sessi
 保留 unknown，不假稱只是成果回填。Git 已保存但採用未完成，仍保留先前正式版本。
 Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與採用操作，API／MCP 使用相同契約。
 
-第一、二、三批已合併於 #86、#90、[#92](https://github.com/teddashh/bat-agent-connector/pull/92)。
-第四批計畫採用 [#93](https://github.com/teddashh/bat-agent-connector/pull/93)、工作證據 [#95](https://github.com/teddashh/bat-agent-connector/pull/95)、Project Brief [#96](https://github.com/teddashh/bat-agent-connector/pull/96) 與原生分析 [#97](https://github.com/teddashh/bat-agent-connector/pull/97) 已合併。未安裝到使用者環境，也未宣稱完成真人實測或 M4。
+第一、二、三批已合併於 #86、#90、[#92](https://github.com/TED-H-com/bat-agent-connector/pull/92)。
+第四批計畫採用 [#93](https://github.com/TED-H-com/bat-agent-connector/pull/93)、工作證據 [#95](https://github.com/TED-H-com/bat-agent-connector/pull/95)、Project Brief [#96](https://github.com/TED-H-com/bat-agent-connector/pull/96) 與原生分析 [#97](https://github.com/TED-H-com/bat-agent-connector/pull/97) 已合併。未安裝到使用者環境，也未宣稱完成真人實測或 M4。
 
 下表的「本批」是這次的實作範圍；測試／審查以 PR 證據為準。未完成部分保留在原編號下，
 不以新增一張畫面或資料表當作完整 PM 能力完成。
@@ -171,7 +171,7 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 
 整合候選已加入自然討論的帶來源提案、整組 owner 審閱、既有採用子操作與 PM 自有 Git 保存，保留排除項目及明確需求刪除。會員案例已接通這條採用流程，再以實際磁碟 Git／驗證器及合成 BAT／provider 執行登入、忘記密碼與維護 Review；與提案回歸合跑的 14 項 Python 3.12 檢查通過。測試通過仍須原需求的正式評估才可解鎖依賴。BAT 原 PM carrier／重啟接續的固定來源 `99d8378` 在 Python 3.12／3.10 各通過 331 項；包含原回合完成後僅回收本地 registry 容量，不傳送停止訊號。
 
-固定已採用文件已接入原生與 BAT 的單次分析，可預覽精確 Git／採用收據、整份檔案及明列省略的涵蓋範圍。原來源撤權會隱藏討論與衍生提案、計畫、Follow-up、diff、工作包及快照，但不阻止已保存副作用的原收據查回。[整合 PR #113](https://github.com/teddashh/bat-agent-connector/pull/113) 保存本批最終來源、完整檢查及合併狀態。
+固定已採用文件已接入原生與 BAT 的單次分析，可預覽精確 Git／採用收據、整份檔案及明列省略的涵蓋範圍。原來源撤權會隱藏討論與衍生提案、計畫、Follow-up、diff、工作包及快照，但不阻止已保存副作用的原收據查回。[整合 PR #113](https://github.com/TED-H-com/bat-agent-connector/pull/113) 保存本批最終來源、完整檢查及合併狀態。
 
 早期整合的完整 Python 3.10／3.11／3.12／3.13 CI 各有 5,494 項通過、11 項失敗、42 項跳過。後續修正未評估成果事件的成員權限缺口、維護 fixture 在注入異常前就完成原回合的時序，以及已採用 PR 發布路徑的舊架構斷言。維護回歸 `9dc2c046` 在 Python 3.12／3.10 各 41 項通過；事件／Sprint／品質／發布回歸 `04758b2d` 各 56 項通過。這些分段結果不代替最終整合全套。
 
@@ -179,11 +179,11 @@ Web／Tauri 在同一討論畫面提供版本、來源、工作目錄準備與�
 
 M4 尚未完成：這批整合仍待完整回歸及精確來源 CI／合併；BAT 修改未安裝，真人硬體驗收仍由使用者負責。M5／M6 及原 W01–W52 範圍保持不變。
 
-2026-10-12 00:24 UTC 更新：BAT owner fork 的 [#1](https://github.com/teddashh/better-agent-terminal/pull/1)
+2026-10-12 00:24 UTC 更新：BAT owner fork 的 [#1](https://github.com/TED-H-com/better-agent-terminal/pull/1)
 已合併 44 個 upstream 前置提交至 `7ff2124a`；專用 PM runtime、原輸入 epoch 與 queued-input
-防護由 [#2](https://github.com/teddashh/better-agent-terminal/pull/2) 合併至 `dcc33d8a`。
+防護由 [#2](https://github.com/TED-H-com/better-agent-terminal/pull/2) 合併至 `dcc33d8a`。
 兩個 merge tree 分別等於測試來源 `b7419892` 與 `ff486a87`。
-[精確來源 CI](https://github.com/teddashh/better-agent-terminal/actions/runs/38187417986)
+[精確來源 CI](https://github.com/TED-H-com/better-agent-terminal/actions/runs/38187417986)
 的 baseline／feature Rust 分別 540／561 項通過，各有 1 項原有 ignored；feature 包含
 16 項專用 PM 與 86 項一般 Codex 測試。兩者的 TypeScript、build、13 組 sidecar script、
 headless check 與 inotify／bubblewrap 探針通過。先前本機 inotify 耗盡導致的監看 fixture
@@ -227,7 +227,7 @@ W22 的 create-own、W23 的一般 coding adapter、W24 的持久 adapter 切換
 
 ## 工作證據與分析 adapter
 
-[#94](https://github.com/teddashh/bat-agent-connector/issues/94) 接入既有 Connector project／work，
+[#94](https://github.com/TED-H-com/bat-agent-connector/issues/94) 接入既有 Connector project／work，
 保存原工作版本、已採用計畫引用及需求 ID。證據由中央 journal 收集，不接受 caller 提供的
 完成內容；工作回報、驗證、PR 合併與部署保持各自的來源與時間。讀取時重新檢查來源可見性。
 Web／Tauri 在討論旁提供明確連結與快照查閱，不依 repo 名稱自動推測歸屬。
@@ -377,7 +377,7 @@ API／MCP 可建立新版本，原工作、session、attempt、規格與先前�
 
 ## 固定工程包交接與原來源權限
 
-[#110](https://github.com/teddashh/bat-agent-connector/pull/110) 的 [W19／W38 交接](../design/pm-package-handoff.md) 沿用既有
+[#110](https://github.com/TED-H-com/bat-agent-connector/pull/110) 的 [W19／W38 交接](../design/pm-package-handoff.md) 沿用既有
 `repository.continue`。同一明確操作選定完整 package、已發布程式基底、原工作與目標；
 規格和程式 commit 分開保存，不因兩者不同而宣稱不相容，也不額外要求 owner 重複批准。
 完整需求、接受條件、設計與驗證安排必須符合既有首則訊息上限；超限整份拒絕，不截短規格。
@@ -390,7 +390,7 @@ artifact、operation 與事件保留同一來源權限；撤權後不能透過�
 
 ## 發布基準與維護準備
 
-[#109](https://github.com/teddashh/bat-agent-connector/pull/109) 提供已發布成果的
+[#109](https://github.com/TED-H-com/bat-agent-connector/pull/109) 提供已發布成果的
 [基準登錄](../design/pm-release-baselines.md)。GitHub Release 必須查實原 release、tag、
 repository 與 commit；部署來源必須有原本的產品版本驗證 receipt。
 未查 registry、功能接受條件或目前 production 狀態時仍明示未查，不以成功 workflow 代替。

@@ -4,7 +4,7 @@
 
 ## Choose the matching candidate package
 
-This source version includes a bundled local central and guided desktop setup. Open the [desktop workflow on `main`](https://github.com/teddashh/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and choose a successful run from the current public history. Match the artifact’s source commit, platform job and installed-fixture records. If that commit is still building, wait for its platform job to succeed. Historical PR artifacts and earlier release assets are not the current download source.
+This source version includes a bundled local central and guided desktop setup. Open the [desktop workflow on `main`](https://github.com/TED-H-com/bat-agent-connector/actions/workflows/desktop.yml?query=branch%3Amain) and choose a successful run from the current public history. Match the artifact’s source commit, platform job and installed-fixture records. If that commit is still building, wait for its platform job to succeed. Historical PR artifacts and earlier release assets are not the current download source.
 
 | Platform | Artifact | Package |
 | --- | --- | --- |
@@ -233,7 +233,7 @@ Do not use a BAT remote token in the Dashboard API login field.
 Install with `uv` on the central host. Until a formal release is selected, pin a reviewed commit instead of silently following changing `main`. Replace `REVIEWED_COMMIT` with the reviewed source commit matching your chosen desktop / service deployment:
 
 ```bash
-uv tool install 'git+https://github.com/teddashh/bat-agent-connector@REVIEWED_COMMIT'
+uv tool install 'git+https://github.com/TED-H-com/bat-agent-connector@REVIEWED_COMMIT'
 batc --help
 ```
 

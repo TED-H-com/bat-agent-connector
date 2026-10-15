@@ -12038,7 +12038,7 @@ function dataTable({ columns, rows, rowKey, selected, onSelect = () => {}, expan
 //#endregion
 //#region src/global-screens.js
 function setupGuide() {
-	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/teddashh/bat-agent-connector/blob/main/docs/getting-started.md";
+	return (typeof navigator !== "undefined" ? navigator.language || "" : "").toLowerCase().startsWith("zh") ? "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.zh-TW.md" : "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/getting-started.md";
 }
 function inboxRow({ h, key, title, href, meta, pill, action, detailsLabel, onOpen }) {
 	const article = h("article", {
@@ -12368,7 +12368,7 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 			label: t("agents_token_issue"),
 			body: h("div", {}, h("p", {}, t("agents_issue")), h("pre", {}, h("code", {}, "batc api-token issue --actor mcp-agent --scope observe --scope operate --scope start")), h("p", {}, t("agents_scopes")))
 		})
-	] : [], h("div", { class: "actions" }, h("a", { href: setupGuide() + "#cli-and-agent-access" }, t("agents_mcp_docs")), h("a", { href: "https://github.com/teddashh/bat-agent-connector/blob/main/docs/agent-skills.md" }, t("agents_skill_docs"))));
+	] : [], h("div", { class: "actions" }, h("a", { href: setupGuide() + "#cli-and-agent-access" }, t("agents_mcp_docs")), h("a", { href: "https://github.com/TED-H-com/bat-agent-connector/blob/main/docs/agent-skills.md" }, t("agents_skill_docs"))));
 	const root = h("section", {
 		class: "panel settings-agents",
 		"aria-labelledby": heading.id
