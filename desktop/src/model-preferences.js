@@ -1,4 +1,4 @@
-import {iconButton} from './ui/components.js';
+import {iconButton, errorDetails} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {errorPresentation} from './error-presentation.js';
 // Catalogs and subscription observations come only from the selected BAT host.
@@ -43,7 +43,7 @@ export function modelChoice({h, t, api, caps, guard, host, agent, model, submit 
         {last_agent: agent.value, last_model: model.value || null}, {expected_revision: doc.model_preferences.revision}, `${storageKey}.last-model`);
       guard(); if (op.status !== 'succeeded') throw Error(op.status_reason || t('models_pending'));
       await refresh(true);
-    } catch (error) {note.textContent = errorPresentation(error, t).summary;} finally {busy = false; update();}
+    } catch (error) {note.textContent = errorPresentation(error, t, {fallback: 'error_generic_short'}).summary;} finally {busy = false; update();}
   }}, t('models_remember_last'));
   const box = h('div', {class: 'model-choice', hidden: true}, list, current, note, h('div', {class: 'actions'}, initial, last, remember));
   function update() {
@@ -70,7 +70,7 @@ export function modelChoice({h, t, api, caps, guard, host, agent, model, submit 
         : doc.model_catalog.status !== 'available' ? t('models_catalog_unavailable', {reason: doc.model_catalog.reason || doc.model_catalog.status})
         : t(doc.model_catalog.stale ? 'models_catalog_stale' : 'models_catalog_ready', {host: selectedHost, count: list.childElementCount});
       update();
-    } catch (error) {try {guard(); if (request === serial) {doc = null; list.replaceChildren(); note.textContent = errorPresentation(error, t).summary; update();}} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === serial) {doc = null; list.replaceChildren(); note.textContent = errorPresentation(error, t, {fallback: 'error_generic_short'}).summary; update();}} catch { /* retired */ }}
   }
   agent.addEventListener('change', () => refresh());
   model.addEventListener('input', () => {update(); if (doc && model.value && !doc.model_catalog.models?.some(value => value.id === model.value)) note.textContent = t('models_unknown_current', {model: model.value});});
@@ -85,8 +85,14 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     ...(caps()?.hosts || []).map(value => h('option', {value: value.host}, value.host)));
   if (caps()?.hosts?.length === 1) host.value = caps().hosts[0].host;
   const catalogAgent = h('select', {'aria-label': t('models_catalog_agent')}, h('option', {value: 'claude'}, 'Claude'), h('option', {value: 'codex'}, 'Codex'));
-  const status = h('p', {class: 'muted', role: 'status'}), evidence = h('div'), usage = h('div'), rows = h('div'), form = h('div', {class: 'capture-fields'});
+  const status = h('p', {class: 'muted', role: 'status'}), statusDetails = h('div'), evidence = h('div'), usage = h('div'), rows = h('div'), form = h('div', {class: 'capture-fields'});
   const inputs = {};
+  const showError = error => {
+    const presentation = errorPresentation(error, t);
+    status.textContent = presentation.summary;
+    statusDetails.replaceChildren(errorDetails(presentation) || '');
+  };
+  const clearError = () => {statusDetails.replaceChildren();};
   const persist = () => {
     guard(); if (loadedHost) drafts[loadedHost] = {draft, intent};
     localStorage.setItem(storageKey, JSON.stringify(drafts));
@@ -94,7 +100,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
   const modified = () => {
     if (!draft || intent || busy || doc?.host !== host.value) return;
     for (const key of ['initial_agent', 'initial_model', 'last_agent', 'last_model']) draft.params[key] = inputs[key].value || null;
-    try {persist(); status.textContent = t('models_unsaved');} catch (error) {status.textContent = errorPresentation(error, t).summary;}
+    try {persist(); status.textContent = t('models_unsaved'); clearError();} catch (error) {showError(error);}
     update();
   };
   for (const role of ['initial', 'last']) {
@@ -109,14 +115,14 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
   const reset = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (!draft || busy || intent || doc?.host !== host.value) return;
     draft.params.hidden = []; draft.params.order = [];
-    try {persist(); status.textContent = t('models_unsaved'); renderRows(); update();} catch (error) {status.textContent = errorPresentation(error, t).summary;}
+    try {persist(); status.textContent = t('models_unsaved'); clearError(); renderRows(); update();} catch (error) {showError(error);}
   }}, t('models_reset_display'));
   const discard = h('button', {class: 'secondary', type: 'button', onclick: () => {
     if (busy || intent || doc?.host !== host.value) return;
     try {
       guard(); const next = {...drafts}; delete next[loadedHost]; localStorage.setItem(storageKey, JSON.stringify(next));
       drafts = next; draft = null; load(true);
-    } catch (error) {status.textContent = errorPresentation(error, t).summary;}
+    } catch (error) {showError(error);}
   }}, t('models_reload_saved'));
   const save = h('button', {class: 'primary', type: 'button', onclick: async () => {
     if (busy || !draft || !doc || doc.host !== host.value) return;
@@ -128,20 +134,20 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
       guard();
       if (op.status === 'succeeded') {
         intent = null; draft = null; delete drafts[loadedHost]; localStorage.setItem(storageKey, JSON.stringify(drafts));
-        status.textContent = t('models_saved'); await load(false);
+        status.textContent = t('models_saved'); clearError(); await load(false);
       } else {
         if (['failed', 'cancelled'].includes(op.status)) {intent = null; persist();}
-        status.textContent = op.status_reason || t('models_pending');
+        status.textContent = op.status_reason || t('models_pending'); clearError();
       }
     } catch (error) {
       try {guard(); if (error.code === 'VERSION_CONFLICT' && error.status === 409) {intent = null; persist();}
-        status.textContent = errorPresentation(error, t).summary;} catch { /* retired */ }
+        showError(error);} catch { /* retired */ }
     } finally {busy = false; update();}
   }}, t('save'));
   const box = h('details', {class: 'panel model-preferences', 'data-model-preferences': ''}, h('summary', {}, t('models_title')),
     h('p', {class: 'muted'}, t('models_personal', {actor: caps()?.actor || ''})),
     h('div', {class: 'capture-fields'}, h('label', {}, t('models_host'), host), h('label', {}, t('models_catalog_agent'), catalogAgent)),
-    h('div', {class: 'actions'}, refresh), status, evidence, form, rows,
+    h('div', {class: 'actions'}, refresh), status, statusDetails, evidence, form, rows,
     h('div', {class: 'actions'}, save, reset, discard), h('h2', {}, t('models_usage')), usage);
   function update() {
     const locked = busy || Boolean(intent), coherent = doc?.host === host.value;
@@ -161,7 +167,7 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
     const models = [...catalog.models].sort((a, b) => (order.get(modelKey(a)) ?? 9999) - (order.get(modelKey(b)) ?? 9999));
     const change = action => {
       if (busy || intent || doc?.host !== host.value) return;
-      action(); try {persist(); status.textContent = t('models_unsaved'); renderRows(); update();} catch (error) {status.textContent = errorPresentation(error, t).summary;}
+      action(); try {persist(); status.textContent = t('models_unsaved'); clearError(); renderRows(); update();} catch (error) {showError(error);}
     };
     rows.replaceChildren(h('h2', {}, t('models_display')),
       h('p', {class: 'muted'}, t('models_display_help')),
@@ -218,8 +224,14 @@ export function modelPreferencesPanel({h, t, api, caps, guard, submit, storageKe
         ...(next.unknown_models || []).map(model => h('p', {class: 'note'}, t('models_unknown_current', {model: `${model.agent}:${model.id}`})))].filter(Boolean));
       if (draft.revision !== next.model_preferences.revision) status.textContent = t('models_conflict');
       else if (!equal(draft.params, copyPreferences(next.model_preferences))) status.textContent = t('models_unsaved');
+      clearError();
       renderRows(); showUsage(next.usage); update();
-    } catch (error) {try {guard(); if (request === serial) {errorBox?.(error); status.textContent = `${t('models_not_refreshed')} ${errorPresentation(error, t).summary}`;}} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === serial) {
+      errorBox?.(error);
+      const presentation = errorPresentation(error, t);
+      status.textContent = `${t('models_not_refreshed')} ${presentation.summary}`;
+      statusDetails.replaceChildren(errorDetails(presentation) || '');
+    }} catch { /* retired */ }}
   }
   host.addEventListener('change', () => load()); catalogAgent.addEventListener('change', () => load());
   box.addEventListener('toggle', () => {if (box.open && !doc) load();});

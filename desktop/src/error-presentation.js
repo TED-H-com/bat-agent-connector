@@ -5,12 +5,12 @@ export class ApiError extends Error {
     super(message || code); this.status = status; this.code = code; this.localized = localized;
   }
 }
-export function errorPresentation(error, t, {summary} = {}) {
+export function errorPresentation(error, t, {summary, fallback} = {}) {
   const code = error?.code || '';
   const message = error?.message || String(error);
   const key = `error_code_${code}`;
   const known = code && t(key) !== key;
   const client = error?.localized === true || (!code && error?.constructor === Error);
-  const text = summary ?? (known ? t(key) : client ? message : t('error_generic'));
+  const text = summary ?? (known ? t(key) : client ? message : t(fallback || 'error_generic'));
   return {summary: text, code: code === text ? '' : code, message: message === text ? '' : message};
 }

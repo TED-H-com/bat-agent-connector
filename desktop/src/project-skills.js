@@ -1,4 +1,4 @@
-import {iconButton} from './ui/components.js';
+import {iconButton, errorDetails} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
 import {errorPresentation} from './error-presentation.js';
 const digest = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -15,7 +15,13 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
   if (![...host.options].some(option => option.value === saved.host)) saved.host = '';
   host.value = saved.host;
   const workspace = h('select', {'aria-label': t('start_workspace')}, h('option', {value: ''}, t('start_choose_workspace')));
-  const status = h('p', {class: 'muted', role: 'status'}), source = h('div'), list = h('div');
+  const status = h('p', {class: 'muted', role: 'status'}), statusDetails = h('div'), source = h('div'), list = h('div');
+  const showError = error => {
+    const presentation = errorPresentation(error, t);
+    status.textContent = presentation.summary;
+    statusDetails.replaceChildren(errorDetails(presentation) || '');
+  };
+  const clearError = () => {statusDetails.replaceChildren();};
   const persist = () => {guard(); localStorage.setItem(storageKey, JSON.stringify(saved));};
   const coherent = () => doc && doc.host === saved.host && doc.workspace_id === saved.workspace;
   const refresh = iconButton({icon:'refresh-cw', label:t('skills_refresh'), ...{class: 'secondary', type: 'button', onclick: () => discover(true)}});
@@ -23,7 +29,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
     if (busy || draft?.intent || !coherent()) return;
     try {guard(); const next = {...saved, drafts: {...saved.drafts}}; delete next.drafts[key(saved.host, saved.workspace)];
       localStorage.setItem(storageKey, JSON.stringify(next)); saved = next; draft = null; load(true);
-    } catch (error) {status.textContent = errorPresentation(error, t).summary;}
+    } catch (error) {showError(error);}
   }}, t('skills_reload'));
   const save = h('button', {class: 'primary', type: 'button', onclick: async () => {
     if (busy || !draft || !coherent()) return;
@@ -39,20 +45,20 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
       if (op.status === 'succeeded') {
         const next = {...saved, drafts: {...saved.drafts}}; delete next.drafts[key(saved.host, saved.workspace)];
         localStorage.setItem(storageKey, JSON.stringify(next)); saved = next; draft = null;
-        status.textContent = t('skills_saved'); await load();
+        status.textContent = t('skills_saved'); clearError(); await load();
       } else {
         if (['failed', 'cancelled'].includes(op.status)) {draft.intent = null; persist();}
-        status.textContent = op.status_reason || t('models_pending');
+        status.textContent = op.status_reason || t('models_pending'); clearError();
       }
     } catch (error) {
       try {guard(); if (error.status === 409 && ['VERSION_CONFLICT', 'SKILL_CATALOG_CHANGED', 'SKILL_SOURCE_CHANGED'].includes(error.code)) {draft.intent = null; persist();}
-        status.textContent = errorPresentation(error, t).summary;} catch { /* retired */ }
+        showError(error);} catch { /* retired */ }
     } finally {busy = false; update();}
   }}, t('skills_save'));
   const box = h('details', {class: 'panel project-skills', 'data-project-skills': ''}, h('summary', {}, t('skills_title')),
     h('p', {class: 'note'}, t('skills_not_applied')), h('div', {class: 'capture-fields'},
       h('label', {}, t('host'), host), h('label', {}, t('start_workspace'), workspace)),
-    h('div', {class: 'actions'}, refresh), status, source, list, h('div', {class: 'actions'}, save, discard));
+    h('div', {class: 'actions'}, refresh), status, statusDetails, source, list, h('div', {class: 'actions'}, save, discard));
   function update() {
     const locked = busy || Boolean(draft?.intent), valid = coherent();
     host.disabled = locked; workspace.disabled = locked || !discoveryReady; refresh.disabled = busy || !saved.host;
@@ -71,7 +77,7 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
     if (doc.selection.selected.length && (doc.selection.host !== doc.host || doc.selection.workspace_id !== doc.workspace_id)) source.append(h('p', {class: 'note warn'}, t('skills_other_binding', {host: doc.selection.host, workspace: doc.selection.workspace_id})));
     const change = fn => {
       if (busy || draft.intent || !coherent()) return;
-      fn(); try {persist(); status.textContent = t('skills_unsaved'); render();} catch (error) {status.textContent = errorPresentation(error, t).summary;}
+      fn(); try {persist(); status.textContent = t('skills_unsaved'); clearError(); render();} catch (error) {showError(error);}
     };
     const unresolved = draft.selected.filter(ref => !catalog.skills.some(skill => same(ref, skill) && skill.available));
     list.replaceChildren(...unresolved.map(ref => h('div', {class: 'row'}, h('div', {class: 'grow'},
@@ -105,8 +111,14 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
       if (draft.intent && !record(draft.intent)) draft.intent = null;
       saved.drafts[draftKey] = draft;
       if (draft.revision !== next.selection.revision || draft.digest !== next.catalog.catalog_digest) status.textContent = t('skills_conflict');
+      clearError();
       render();
-    } catch (error) {try {guard(); if (request === serial) {errorBox?.(error); status.textContent = `${t('models_not_refreshed')} ${errorPresentation(error, t).summary}`;}} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === serial) {
+      errorBox?.(error);
+      const presentation = errorPresentation(error, t);
+      status.textContent = `${t('models_not_refreshed')} ${presentation.summary}`;
+      statusDetails.replaceChildren(errorDetails(presentation) || '');
+    }} catch { /* retired */ }}
   }
   async function discover(force = false) {
     if (!saved.host) return;
@@ -120,8 +132,9 @@ export function projectSkillsPanel({h, t, api, caps, guard, submit, projectId, s
       if (saved.workspace && !next.workspaces.some(value => value.workspace_id === saved.workspace)) workspace.append(h('option', {value: saved.workspace}, `${saved.workspace} · ${t('skills_workspace_missing')}`));
       workspace.value = saved.workspace; discoveredHost = selectedHost; discoveryReady = true;
       if (next.has_more) status.textContent = t('start_truncated');
+      clearError();
       update(); await load(force);
-    } catch (error) {try {guard(); if (request === discovery) status.textContent = errorPresentation(error, t).summary;} catch { /* retired */ }}
+    } catch (error) {try {guard(); if (request === discovery) showError(error);} catch { /* retired */ }}
   }
   host.addEventListener('change', () => {if (busy || draft?.intent) return; saved.host = host.value; saved.workspace = ''; doc = draft = null; serial++; source.replaceChildren(); list.replaceChildren(); workspace.replaceChildren(); try {persist();} catch {} discover();});
   workspace.addEventListener('change', () => {if (busy || draft?.intent) return; saved.workspace = workspace.value; doc = draft = null; serial++; try {persist();} catch {} load();});

@@ -33,7 +33,7 @@ export function maintenanceRepairPolicyControls({h,t,input,labelled,available,ci
         commit_sha:release.document.commit_sha,release_version:structuredClone(release.document.release_version)},handoff:structuredClone(source.handoff),
         verification:{kind:'fixed_revision_verification',profile:'observed_runner_v1',command_digest:digest}});
       fields.repair_rules.value=JSON.stringify(rules);fields.repair_rules_set.value='1';status.textContent=t('pmr_rule_added');changed();
-    }catch(error){if(ticket===epoch&&visible)status.textContent=errorPresentation(error, t).summary;}finally{busy=false;update();}
+    }catch(error){if(ticket===epoch&&visible)status.textContent=errorPresentation(error, t, {fallback: 'error_generic_short'}).summary;}finally{busy=false;update();}
   }
   function update(show=visible){visible=show;rows.replaceChildren();element.hidden=!available()&&!fields.repair_rules_set.value&&!fields.repair_ci.value;
     add.disabled=!visible||!editable()||busy||!available()||!selected();fields.repair_ci.disabled=!visible||!editable()||!ciAvailable();
