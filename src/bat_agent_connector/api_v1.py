@@ -245,6 +245,8 @@ class ApiV1:
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-sources/deployments", self.pm_release_baseline_deployments, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/release-baseline-preview", self.pm_release_baseline_preview, "observe"),
             ("POST", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/start-preview", self.pm_work_start_preview, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/attempts", self.pm_work_attempts, "observe"),
+            ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work-attempts/(?P<attempt_id>att_[0-9a-f]{32})", self.pm_work_attempt, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/work/(?P<work_item_id>wi_[0-9a-f]{20})/deliveries", self.pm_work_deliveries, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-reviews", self.pm_maintenance_reviews, "observe"),
             ("GET", r"/api/v1/pm/workspaces/(?P<workspace_id>ws_[0-9a-f]{32})/maintenance-reviews/current", self.pm_maintenance_review_current, "observe"),
@@ -535,7 +537,7 @@ class ApiV1:
                       self.pm_release_baselines, self.pm_release_baseline_current, self.pm_release_baseline,
                       self.pm_release_baseline_sources, self.pm_release_baseline_releases,
                       self.pm_release_baseline_deployments, self.pm_release_baseline_preview,
-                      self.pm_work_start_preview,
+                      self.pm_work_start_preview, self.pm_work_attempts, self.pm_work_attempt,
                       self.pm_spec_sources, self.pm_spec_source_capabilities}:
                 # Empty or repeated selectors cannot silently become defaults.
                 query = parse_qs(parts.query, keep_blank_values=True)
@@ -707,7 +709,7 @@ class ApiV1:
         integer_fields = {"limit", "max_chars", "before_message", "before_input", "journal_cursor", "history_limit"}
         if method in {"pm_plans_list", "pm_projects_list", "pm_work_list", "pm_evidence_list", "pm_snapshots_list", "pm_roadmap_revisions_list", "pm_sprint_artifact_revisions_list", "pm_sprints_list", "pm_sprint_history_list", "pm_kanban_get", "pm_meetings_list", "pm_meeting_history_list", "pm_governance_list", "pm_governance_history_list", "pm_follow_up_list", "pm_follow_up_assessments_list", "pm_work_packages_list", "pm_issue_mappings_list", "pm_release_baselines_list", "pm_maintenance_policies_list", "pm_workload_snapshots_list"}:
             integer_fields.add("after")
-        wide_cursor = method in {"pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
+        wide_cursor = method in {"pm_dependencies_revisions_list", "pm_conversation_proposals_list", "pm_maintenance_repairs_list", "pm_quality_reviews_list", "pm_work_quality_get", "pm_work_deliveries_list", "pm_work_batches_list", "pm_work_attempts_list", "pm_spec_materializations_list", "pm_lifecycle_transitions_list", "pm_lifecycle_inflight_list",
                                  "pm_workload_snapshots_list", "pm_ahp_observations_list", "pm_github_observations_list", "pm_maintenance_checks_list", "pm_maintenance_reviews_list", "pm_maintenance_review_events_list"}
         if wide_cursor:
             integer_fields.add("after")
@@ -856,6 +858,12 @@ class ApiV1:
         from . import pm_work_start
         self._exact_query(query, set())
         return 200, await pm_work_start.preview(self.daemon.ops, principal, workspace_id, work_item_id, body)
+
+    async def pm_work_attempts(self, principal, query, workspace_id, work_item_id, **_):
+        return self._pm_read(principal, "pm_work_attempts_list", query, workspace_id=workspace_id, work_item_id=work_item_id)
+
+    async def pm_work_attempt(self, principal, query, workspace_id, attempt_id, **_):
+        return self._pm_read(principal, "pm_work_attempt_get", query, workspace_id=workspace_id, attempt_id=attempt_id)
 
     async def pm_work_deliveries(self, principal, query, workspace_id, work_item_id, **_):
         return self._pm_read(principal, "pm_work_deliveries_list", query, workspace_id=workspace_id, work_item_id=work_item_id)
@@ -1117,13 +1125,14 @@ class ApiV1:
             worktree_merge_operations,
         )
         gh_cfg = self.daemon.ops.context["github_config"]
-        from . import pr_publication
+        from . import pm_work_start, pr_publication
         actions = [{"action": a.name, "scope": a.scope, "summary": a.summary, "allowed": principal.allows(a.scope)
                                and a.name not in {pm_execution_runtime.ACTION, pm_maintenance_repair_runtime.ACTION}
                                and (a.name != "delivery.merge_and_deploy" or principal.allows("deploy"))
                                and (a.name != "session.failover" or principal.allows("operate"))
                                and (a.name != pm_execution_verification.ACTION or all(principal.allows(s) for s in pm_execution_verification.REQUIRED))
                                and (a.name != pr_publication.ACTION or all(principal.allows(s) for s in pr_publication.REQUIRED))
+                               and (a.name != pm_work_start.ACTION or all(principal.allows(s) for s in pm_work_start.REQUIRED_SCOPES))
                                and (a.name != "pm.maintenance.repair" or principal.allows("observe") and principal.allows("manage"))
                                and (a.name not in {"pm.maintenance.repair.evidence.record", *pm_quality_reviews.ACTIONS} or principal.allows("observe"))
                                and (a.name not in {"pm.spec.materialize", "pm.work_batch.start", "pm.work_batch.evidence.record"}
@@ -1195,6 +1204,7 @@ class ApiV1:
                                                     "engineering_delivery": {"contract": "pm-engineering-delivery/v1", "read_only": True},
                                                     "spec_materialization": pm_spec_materialization.capabilities(),
                                                     "work_batches": pm_work_batches.capabilities(self.daemon.ops),
+                                                    "work_start": pm_work_start.capabilities(self.daemon.ops),
                                                     "workload": pm_workload.capabilities(),
                                                     "work_package_prepare": "pm.work_package.create" in self.daemon.ops.actions,
                                                     "issue_mapping": all(action in self.daemon.ops.actions for action in ("pm.issue.publish", "pm.issue.cancel")),

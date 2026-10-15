@@ -1920,3 +1920,210 @@ async def test_work_start_preview_candidates_default_branch_zero_writes_and_star
     assert op2["result"]["package_id"] == created_pkg_id
     assert op2["result"]["stage"] == "package_prepared"
 
+
+# ---------------------------------------------------------------------------
+# Step 7 tests: pm_work_attempts_list, pm_work_attempt_get, and capability
+# ---------------------------------------------------------------------------
+
+
+async def test_work_attempts_list_get_visibility_and_capabilities(world, mock):
+    from bat_agent_connector import mcp_server, pm_reads
+    from tests.test_api_v1 import http, token
+
+    w = world
+    ops = w["d"].ops
+    pm_work_start.install(ops)
+
+    now = time.time()
+    srv = pm_workspace.server_id(ops.db)
+    wid = "ws_" + "c" * 32
+    with ops.journal.tx():
+        ops.db.execute(
+            "INSERT INTO pm_workspaces VALUES(?,?,?,?,1,?,?,?,?)",
+            (wid, srv, "Attempts WS", '["o/r"]', OWNER.actor, now, now, "op_" + "0" * 32),
+        )
+        ops.db.execute(
+            "INSERT INTO pm_workspace_members VALUES(?,?,?,?,?,?)",
+            (wid, OWNER.actor, "owner", pm_workspace.controller_for(ops.db, OWNER), now, now),
+        )
+    seeded = _seed_plan_and_work(ops, wid)
+    wi_id = seeded["work_item_id"]
+
+    outsider_tok = token(w["d"], "outsider-att", "observe", "manage", "start")
+    member_tok = token(w["d"], OWNER.actor, "observe", "manage", "start", "operate")
+    no_manage_tok = token(w["d"], "no-manage-user", "observe", "start")
+    no_start_tok = token(w["d"], "no-start-user", "observe", "manage")
+
+    # 1. Start attempt 1: compose package, execute package child, then cancel before handoff.
+    pv1 = await pm_work_start.preview(ops, OWNER, wid, wi_id, {"instruction": "Attempt 1 instruction."})
+    op1, _ = ops.create(
+        OWNER,
+        action="work.start",
+        target={"workspace_id": wid, "work_item_id": wi_id},
+        params={
+            "instruction": "Attempt 1 instruction.",
+            "agent": "claude",
+            "delivery": "pull_request",
+            "code_target": pv1["code_target"],
+        },
+        preconditions=pv1["preconditions"],
+        idempotency_key="att-test-1",
+    )
+    att1_id = op1["result"]["attempt_id"]
+    await ops._execute(op1["operation_id"])
+    pkg_child_id = ops.get(op1["operation_id"])["result"]["children"]["package"]
+    await ops._execute(pkg_child_id)
+    pkg_id = ops.get(pkg_child_id)["result"]["package_id"]
+    ops.cancel(OWNER, op1["operation_id"])
+
+    # 2. Start attempt 2: reuse package, admit handoff child, and simulate handoff completion with session.
+    pv2 = await pm_work_start.preview(ops, OWNER, wid, wi_id, {"instruction": "Attempt 2 instruction."})
+    op2, _ = ops.create(
+        OWNER,
+        action="work.start",
+        target={"workspace_id": wid, "work_item_id": wi_id},
+        params={
+            "instruction": "Attempt 2 instruction.",
+            "agent": "claude",
+            "delivery": "pull_request",
+            "code_target": pv2["code_target"],
+        },
+        preconditions=pv2["preconditions"],
+        idempotency_key="att-test-2",
+    )
+    att2_id = op2["result"]["attempt_id"]
+    assert att2_id != att1_id
+    assert op2["result"]["predecessor_attempt_id"] == att1_id
+
+    # First parent tick on reuse path admits the handoff child and records execution_operation_id on work_attempts.
+    await ops._execute(op2["operation_id"])
+    handoff_id = ops.get(op2["operation_id"])["result"]["children"]["handoff"]
+    assert handoff_id is not None
+    # Mark handoff child succeeded with a session result and wake parent to complete attempt 2 cleanly without git I/O.
+    handoff_res = {
+        "host": "h1",
+        "workspace_id": "ws-1",
+        "repository": "o/r",
+        "session_id": "s-att-2",
+        "worktree_path": "/wt/s-att-2",
+        "branch": "bat/s-att-2",
+        "source_ref": "refs/heads/main",
+        "source_sha": w["sha"],
+    }
+    ops._transition(handoff_id, "running")
+    ops._transition(handoff_id, "succeeded", result=handoff_res)
+    await ops._execute(op2["operation_id"])
+    done2 = ops.get(op2["operation_id"])
+    assert done2["status"] == "succeeded", done2
+    assert done2["result"]["stage"] == "started"
+    assert done2["result"]["session"] == {"host": "h1", "session_id": "s-att-2"}
+
+    # 3. Verify pm_work_attempts_list & pm_work_attempt_get via HTTP, RPC, and pm_reads.
+    st_list, http_list = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work/{wi_id}/attempts",
+        tok=member_tok,
+    )
+    assert st_list == 200, http_list
+    assert http_list["workspace_id"] == wid
+    assert http_list["work_item_id"] == wi_id
+    assert [a["attempt_id"] for a in http_list["attempts"]] == [att1_id, att2_id]
+
+    a1, a2 = http_list["attempts"]
+    # Attempt 1: cancelled before handoff -> execution_operation_id is None, session is None, predecessor is None.
+    assert a1["start_operation_id"] == op1["operation_id"]
+    assert a1["package_id"] == pkg_id
+    assert a1["package_reused"] is False
+    assert a1["execution_operation_id"] is None
+    assert a1["session"] is None
+    assert a1["predecessor_attempt_id"] is None
+    assert a1["status"] == "cancelled"
+    assert a1["stage"] == "cancelled"
+    assert a1["children"] == {"bind": None, "package": pkg_child_id, "handoff": None}
+
+    # Attempt 2: reused package, linked predecessor_attempt_id, reached handoff and session.
+    assert a2["start_operation_id"] == op2["operation_id"]
+    assert a2["package_id"] == pkg_id
+    assert a2["package_reused"] is True
+    assert a2["execution_operation_id"] == handoff_id
+    assert a2["session"] == {"host": "h1", "session_id": "s-att-2"}
+    assert a2["predecessor_attempt_id"] == att1_id
+    assert a2["status"] == "succeeded"
+    assert a2["stage"] == "started"
+    assert a2["children"] == {"bind": None, "package": None, "handoff": handoff_id}
+    assert a2["execution_operation"]["operation_id"] == handoff_id
+
+    # Pagination cursor on attempts list.
+    st_page1, page1 = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work/{wi_id}/attempts?limit=1",
+        tok=member_tok,
+    )
+    assert st_page1 == 200
+    assert [a["attempt_id"] for a in page1["attempts"]] == [att1_id]
+    assert page1["next_cursor"] == a1["seq"]
+    st_page2, page2 = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work/{wi_id}/attempts?after={page1['next_cursor']}&limit=1",
+        tok=member_tok,
+    )
+    assert st_page2 == 200
+    assert [a["attempt_id"] for a in page2["attempts"]] == [att2_id]
+
+    # Single attempt read via HTTP and RPC.
+    st_get, http_get = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{att2_id}",
+        tok=member_tok,
+    )
+    assert st_get == 200, http_get
+    assert http_get["attempt"] == a2
+
+    rpc_list = await w["d"]._call_api_bound(
+        "pm_work_attempts_list", {"workspace_id": wid, "work_item_id": wi_id}, OWNER
+    )
+    assert rpc_list == http_list
+    rpc_get = await w["d"]._call_api_bound(
+        "pm_work_attempt_get", {"workspace_id": wid, "attempt_id": att1_id}, OWNER
+    )
+    assert rpc_get["attempt"] == a1
+    assert pm_reads.read(ops, OWNER, "pm_work_attempt_get", {"workspace_id": wid, "attempt_id": att2_id}) == http_get
+
+    # 4. Non-member gets 404 on parent operation, attempts list, and single attempt get; member sees all.
+    for path in (
+        f"/api/v1/operations/{op2['operation_id']}",
+        f"/api/v1/pm/workspaces/{wid}/work/{wi_id}/attempts",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{att2_id}",
+    ):
+        st_404, body_404 = await http(w["port"], "GET", path, tok=outsider_tok)
+        assert st_404 == 404, (path, st_404, body_404)
+        assert body_404["error"]["code"] == "NOT_FOUND"
+        st_200, _ = await http(w["port"], "GET", path, tok=member_tok)
+        assert st_200 == 200, path
+
+    # 5. Capabilities advertise features.pm_workspaces.work_start and gate work.start action on observe+manage+start.
+    st_cap, cap_member = await http(w["port"], "GET", "/api/v1/capabilities", tok=member_tok)
+    assert st_cap == 200
+    ws_cap = cap_member["features"]["pm_workspaces"]["work_start"]
+    assert ws_cap["supported"] is True
+    assert ws_cap["action"] == "work.start"
+    assert ws_cap["required_scopes"] == ["manage", "observe", "start"]
+    assert ws_cap["reads"] == ["pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get"]
+    assert "pm_work_start_preview" in mcp_server.READ_TOOLS
+    assert "pm_work_attempts_list" in mcp_server.READ_TOOLS
+    assert "pm_work_attempt_get" in mcp_server.READ_TOOLS
+
+    act_member = next(a for a in cap_member["actions"] if a["action"] == "work.start")
+    assert act_member["allowed"] is True
+
+    _, cap_no_manage = await http(w["port"], "GET", "/api/v1/capabilities", tok=no_manage_tok)
+    assert next(a for a in cap_no_manage["actions"] if a["action"] == "work.start")["allowed"] is False
+
+    _, cap_no_start = await http(w["port"], "GET", "/api/v1/capabilities", tok=no_start_tok)
+    assert next(a for a in cap_no_start["actions"] if a["action"] == "work.start")["allowed"] is False
+
+

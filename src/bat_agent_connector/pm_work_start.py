@@ -271,6 +271,7 @@ def admit_operation(db, operation_id: str, action: str, target: dict, binding: d
     pkg_plan = intent.get("package_plan") if isinstance(intent.get("package_plan"), dict) else {}
     initial_result = {
         "attempt_id": attempt_id,
+        "predecessor_attempt_id": predecessor,
         "workspace_id": wid,
         "work_item_id": work_item_id,
         "project_id": intent.get("project_id"),
@@ -1323,8 +1324,10 @@ def _build_state(
         or intent["package_plan"].get("package_id")
     )
     resolved_session = session or _child_session(handoff_child)
+    prev_res = parent.get("result") if isinstance(parent.get("result"), dict) else {}
     return {
         "attempt_id": "att_" + parent["operation_id"][3:],
+        "predecessor_attempt_id": prev_res.get("predecessor_attempt_id"),
         "workspace_id": intent["workspace_id"],
         "work_item_id": intent["work_item_id"],
         "project_id": intent["project_id"],
@@ -1775,4 +1778,196 @@ async def preview(
             "preconditions": preconditions,
             "observed_at": time.time(),
         }
+
+
+def capabilities(ops=None) -> dict:
+    avail = True if ops is None else ACTION in ops.actions
+    return {
+        "version": 1,
+        "supported": avail,
+        "available": avail,
+        "action": ACTION,
+        "preview_read": PREVIEW,
+        "attempts_reads": [ATTEMPTS_LIST, ATTEMPT_GET],
+        "reads": [PREVIEW, ATTEMPTS_LIST, ATTEMPT_GET],
+        "mcp_tools": [PREVIEW, ATTEMPTS_LIST, ATTEMPT_GET],
+        "routes": {
+            "preview": "/api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/start-preview",
+            "attempts_list": "/api/v1/pm/workspaces/{workspace_id}/work/{work_item_id}/attempts",
+            "attempt_get": "/api/v1/pm/workspaces/{workspace_id}/work-attempts/{attempt_id}",
+        },
+        "composition_profile": COMPOSITION_PROFILE,
+        "required_scopes": sorted(REQUIRED_SCOPES),
+        "child_actions": ["pm.work.bind", "pm.work_package.create", "repository.continue"],
+        "delivery_goals": sorted(DELIVERY_GOALS),
+        "agents": sorted(AGENTS),
+        "existing_sessions": "continue_under_original_authority",
+    }
+
+
+def _attempt_view(ops, row: dict) -> dict:
+    op_id = row["start_operation_id"] or row["origin_id"]
+    parent = _op(ops.db, op_id)
+    intent = _intent(parent)
+    children = _children(ops, parent)
+    bind_child = children.get("bind")
+    pkg_child = children.get("package")
+    handoff_child = children.get("handoff")
+    res = parent.get("result") if isinstance(parent.get("result"), dict) else {}
+
+    binding_id = res.get("binding_id")
+    if binding_id is None:
+        if bind_child and bind_child.get("status") == "succeeded" and isinstance(bind_child.get("result"), dict):
+            binding_id = bind_child["result"].get("binding_id")
+        elif not intent.get("bind_needed"):
+            binding_id = intent.get("expected_binding_id")
+
+    package_id = res.get("package_id")
+    if package_id is None:
+        if pkg_child and pkg_child.get("status") == "succeeded" and isinstance(pkg_child.get("result"), dict):
+            package_id = pkg_child["result"].get("package_id")
+        else:
+            package_id = intent["package_plan"].get("package_id")
+
+    session = res.get("session") or _child_session(handoff_child)
+    execution_operation_id = res.get("execution_operation_id")
+    if execution_operation_id is None and handoff_child is not None:
+        execution_operation_id = handoff_child["operation_id"]
+
+    if parent["status"] == "cancelled":
+        stage = "cancelled"
+    elif isinstance(res.get("stage"), str):
+        stage = res["stage"]
+    elif parent["status"] == "succeeded":
+        stage = "started"
+    elif parent["status"] in {"failed", "needs_attention"}:
+        stage = "start_failed"
+    elif handoff_child is not None:
+        stage = "start_unknown" if _uncertain(ops, handoff_child) else "starting"
+    elif package_id is not None:
+        stage = "package_prepared"
+    else:
+        stage = "preparing"
+
+    return {
+        "sequence": row["sequence"],
+        "seq": row["sequence"],
+        "attempt_id": row["attempt_id"],
+        "workspace_id": row["workspace_id"],
+        "work_item_id": row["work_item_id"],
+        "project_id": intent.get("project_id"),
+        "origin_kind": row["origin_kind"],
+        "origin_id": row["origin_id"],
+        "start_operation_id": row["start_operation_id"],
+        "predecessor_attempt_id": row["predecessor_attempt_id"],
+        "admission_digest": row["admission_digest"],
+        "created_at": row["created_at"],
+        "status": parent["status"],
+        "operation_status": parent["status"],
+        "error_code": parent.get("error_code"),
+        "status_reason": parent.get("status_reason"),
+        "stage": stage,
+        "composition_profile": res.get("composition_profile") or intent["package_plan"].get("composition_profile"),
+        "binding_id": binding_id,
+        "package_id": package_id,
+        "package_reused": bool(res.get("package_reused", intent["package_plan"].get("package_reused"))),
+        "code_source": res.get("code_source") or intent.get("code_source"),
+        "delivery": res.get("delivery") or intent.get("delivery"),
+        "children": {
+            "bind": bind_child["operation_id"] if bind_child else None,
+            "package": pkg_child["operation_id"] if pkg_child else None,
+            "handoff": handoff_child["operation_id"] if handoff_child else None,
+        },
+        "execution_operation_id": execution_operation_id,
+        "execution_operation": handoff_child,
+        "session": session,
+        "existing_sessions": "continue_under_original_authority",
+    }
+
+
+@snapshots._snapshot_read
+def get_attempt(ops, principal: Principal, workspace_id: str, attempt_id: str) -> dict:
+    if not principal.allows("observe"):
+        raise _bad("FORBIDDEN", "Observing work attempts requires observe scope", 403)
+    pm_workspace.require_member(ops.db, principal, workspace_id, write=False)
+    if not isinstance(attempt_id, str) or not ATTEMPT_ID.fullmatch(attempt_id):
+        raise _bad("INVALID_PARAMS", "attempt_id must be a valid att_ identifier", 422)
+    if not installed(ops.db):
+        raise _bad("NOT_FOUND", "Work attempt not found", 404)
+    row = ops.db.execute(
+        "SELECT * FROM work_attempts WHERE workspace_id=? AND attempt_id=?",
+        (workspace_id, attempt_id),
+    ).fetchone()
+    if row is None:
+        raise _bad("NOT_FOUND", "Work attempt not found", 404)
+    op_id = row["start_operation_id"] or row["origin_id"]
+    if not operation_visible(ops.db, principal, {"operation_id": op_id}):
+        raise _bad("NOT_FOUND", "Work attempt not found", 404)
+    view = _attempt_view(ops, dict(row))
+    for child_id in view["children"].values():
+        if child_id is not None:
+            pm_source_lineage.require(ops.db, principal, "operation", child_id)
+    return {"workspace_id": workspace_id, "attempt": view}
+
+
+@snapshots._snapshot_read
+def list_attempts(
+    ops,
+    principal: Principal,
+    workspace_id: str,
+    work_item_id: str,
+    *,
+    after: int = 0,
+    limit: int = 50,
+) -> dict:
+    if not principal.allows("observe"):
+        raise _bad("FORBIDDEN", "Observing work attempts requires observe scope", 403)
+    pm_workspace.require_member(ops.db, principal, workspace_id, write=False)
+    if not isinstance(work_item_id, str) or not work_items.WORK_ITEM_ID.fullmatch(work_item_id):
+        raise _bad("INVALID_PARAMS", "work_item_id must identify a Connector work item", 422)
+    if type(after) is not int or not 0 <= after < 2**63 or type(limit) is not int or not 1 <= limit <= 100:
+        raise _bad("INVALID_PARAMS", "Use a signed 64-bit cursor and limit 1-100", 422)
+    pm_source_lineage.require(ops.db, principal, "work_item", work_item_id)
+    work_items._get_item(ops.db, work_item_id, active=True)
+    result = {
+        "workspace_id": workspace_id,
+        "work_item_id": work_item_id,
+        "attempts": [],
+        "next_cursor": None,
+        "visibility_filtered": False,
+    }
+    if not installed(ops.db):
+        return result
+    rows = ops.db.execute(
+        """SELECT * FROM work_attempts
+        WHERE workspace_id=? AND work_item_id=? AND sequence>?
+        ORDER BY sequence ASC LIMIT ?""",
+        (workspace_id, work_item_id, after, limit + 1),
+    ).fetchall()
+    scanned = after
+    for row in rows[:limit]:
+        row_dict = dict(row)
+        op_id = row_dict["start_operation_id"] or row_dict["origin_id"]
+        if not operation_visible(ops.db, principal, {"operation_id": op_id}):
+            result["visibility_filtered"] = True
+            scanned = row_dict["sequence"]
+            continue
+        item = _attempt_view(ops, row_dict)
+        child_visible = True
+        for child_id in item["children"].values():
+            if child_id is not None:
+                try:
+                    pm_source_lineage.require(ops.db, principal, "operation", child_id)
+                except OperationError:
+                    child_visible = False
+                    break
+        if not child_visible:
+            result["visibility_filtered"] = True
+            scanned = row_dict["sequence"]
+            continue
+        result["attempts"].append(item)
+        scanned = row_dict["sequence"]
+    result["next_cursor"] = scanned if len(rows) > limit else None
+    return result
+
 
