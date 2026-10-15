@@ -73,8 +73,8 @@ release_note = (
     '<div class="release-note">'
     + bi("Development preview", "開發預覽", "strong")
     + bi(
-        "Screenshots pin merged main at ab960ed23f734944470b982bd2f66b0c30300151, through #161 on October 14, 2026. They show the merged discussion, register, Board and evidence-view updates. This refresh provides no installation or live acceptance evidence. Match the package to its source before installing.",
-        "截圖固定於已合併主線的 ab960ed23f734944470b982bd2f66b0c30300151，包含 2026 年 10 月 14 日的 #161。展示已合併的討論、登記表、工作看板及證據檢視更新。本次沒有安裝或實機驗收證據；安裝前請核對套件來源。",
+        "Screenshots pin merged main at d66f032d342562322479c5087c6982d662d11a01, through #181 on October 15, 2026. They show quiet session status, on-demand PM views, read-only work paths, single-line owner columns and updated localization. This refresh provides no installation or live acceptance evidence. Match the package to its source before installing.",
+        "截圖固定於已合併主線的 d66f032d342562322479c5087c6982d662d11a01，包含 2026 年 10 月 15 日的 #181。展示靜態工作階段狀態、隨選載入 PM 視圖、唯讀工作路徑、單行負責人欄位與繁體中文在地化更新。本次沒有安裝或實機驗收證據；安裝前請核對套件來源。",
     )
     + link("#status", "Current scope", "目前範圍")
     + "</div>"
@@ -593,8 +593,8 @@ for label, lz, en, zh in [
     (
         "Merged workspace",
         "已合併工作台",
-        "Merged main at ab960ed2 includes the October 14 discussion, register/Board, governance/meeting/follow-up, maintenance, work-tool, Overview/report/Requirements and first-run updates. Worktree/execution details, stable requirement rows and release-preview focus are merged. Installation and live acceptance remain separate.",
-        "已合併主線 ab960ed2 包含 10 月 14 日的討論、登記表／看板、治理／會議／追蹤、維護、工程工具、總覽／報告／需求與首次設定更新。獨立工作目錄／執行詳情、穩定需求列及發布預覽焦點修正已合併；安裝與實機驗收另列。",
+        "Merged main at d66f032d includes quiet session status (#152), shell focus (#155), single-message PM failure presentation (#162, #175), M4 lifecycle evidence (#116), Settings diagnostics export (#171), read-only session work paths (#169), on-demand PM views (#174), TED-H-com links (#177), Git transport contract (#167), and UI polish (#172, #179, #180). Installation and live acceptance remain separate.",
+        "已合併主線 d66f032d 包含靜態工作階段狀態（#152）、工作空間聚焦（#155）、單一 PM 錯誤訊息（#162、#175）、M4 生命週期證據（#116）、設定診斷匯出（#171）、唯讀工作階段路徑（#169）、隨選載入 PM 視圖（#174）、TED-H-com 連結（#177）、Git 傳輸合約（#167）與介面修整（#172、#179、#180）。安裝與實機驗收另列。",
     ),
     (
         "Still ahead",

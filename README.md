@@ -14,7 +14,7 @@ Review the proposed update and explicitly adopt it; requirements, work and deliv
 
 The **Web and Tauri desktop apps share one interface and one Python backend**. You keep using [Better Agent Terminal (BAT)](https://github.com/tony1223/better-agent-terminal) for your own coding. Windows Fleet manages local connections and startup. Connector keeps project history, permissions and operations consistent across the Dashboard, CLI and MCP.
 
-> **Development preview.** The screenshots come from merged `main` at `ab960ed2` (October 14, 2026, through #161).
+> **Development preview.** The screenshots come from merged `main` at `d66f032d` (October 15, 2026, through #181).
 > Nothing shown here is installed or live-tested.
 > The [progress report](docs/product/progress-2026-10-14.md) separates branch, merged, installed and live-tested status.
 > Match a successful package to its exact source; screenshots and CI do not establish native or live acceptance.

@@ -11,8 +11,8 @@ problem, discuss it with the PM and review a decision in the same context.
 It retains Windows Fleet, central authority, platform differences and installation guidance.
 
 The redesigned views and sixteen screenshots are a **development preview from merged main**
-pinned to `ab960ed23f734944470b982bd2f66b0c30300151`.
-This pin includes the ten UI updates through #161 on October 14, 2026.
+pinned to `d66f032d342562322479c5087c6982d662d11a01`.
+This pin includes merged updates through #181 on October 15, 2026: quiet session status and explained history (#152), shell focus (#155), single-message failure presentation and meetings guidance (#162, #175), M4 lifecycle evidence (#116), Settings diagnostics export (#171), read-only session work paths and agent setup (#169), on-demand PM views (#174), TED-H-com repository links (#177), Git transport contract (#167), and UI polish across phone headers, single-line owner columns and zh-TW localization (#172, #179, #180).
 It includes the first-run connection URL flow; repository binding and verification
 are optional collapsed steps. This refresh provides no installation or live evidence.
 CI and browser screenshots do not establish native or live acceptance.
