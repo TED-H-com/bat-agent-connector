@@ -53,7 +53,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
     if (morePlans.disabled || planAfter === null) return;
     morePlans.disabled = true;
     try {const page = await api('GET', `${endpoint}/plans?after=${encodeURIComponent(planAfter)}&limit=100`); alive(); if (box.isConnected) update(page);}
-    catch (error) {if (box.isConnected) status.replaceChildren(errorBox(error));}
+    catch (error) {if (box.isConnected) status.replaceChildren(errorBox(error, {within:status}));}
     finally {morePlans.disabled = false;}
   }
   function showBindings(page) {
@@ -78,7 +78,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
       const after = reset ? null : bindingAfter;
       const page = valid(await api('GET', `${endpoint}/work?limit=100${after === null ? '' : '&after=' + encodeURIComponent(after)}`));
       alive(); if (box.isConnected) showBindings(page);
-    } catch (error) {if (box.isConnected) {bindingStatus.replaceChildren(errorBox(error)); loadBindings.hidden = false;}}
+    } catch (error) {if (box.isConnected) {bindingStatus.replaceChildren(errorBox(error, {within:bindingStatus})); loadBindings.hidden = false;}}
     finally {bindingBusy = false; loadBindings.disabled = false;}
   }
   function source(input) {
@@ -166,7 +166,7 @@ export function planComparison({h, t, api, alive, workspaceId, errorBox}) {
           || fixedCursor !== null && value.context.journal_cursor !== fixedCursor) throw Error(text('pm_diff_invalid'));
       render(value); cursor = value.context.journal_cursor;
       status.replaceChildren(h('p', {class: 'muted'}, text('pm_diff_fixed')));
-    } catch (error) {if (box.isConnected && ticket === request) {result.replaceChildren(); status.replaceChildren(errorBox(error, {summary: text('pm_diff_failure')}));}}
+    } catch (error) {if (box.isConnected && ticket === request) {result.replaceChildren(); status.replaceChildren(errorBox(error, {summary: text('pm_diff_failure'), within:status}));}}
     finally {if (ticket === request) {busy = false; controls();}}
   }
   options();

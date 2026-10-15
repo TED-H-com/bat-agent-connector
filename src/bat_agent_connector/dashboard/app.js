@@ -281,6 +281,84 @@ var workPathsStrings = {
 	}
 };
 //#endregion
+//#region src/diagnostics-strings.js
+var diagnosticsStrings = {
+	en: {
+		diag_export: "Export diagnostics",
+		diag_title: "Diagnostics",
+		diag_save: "Save",
+		diag_copy: "Copy",
+		diag_close: "Close",
+		diag_unknown: "unknown",
+		diag_connector_build: "Connector {version} ({commit})",
+		diag_desktop_build: "Desktop {version} ({commit})",
+		diag_privacy: "Redacted preview. Saving and copying stay on this device.",
+		diag_counts: "{errors} · {operations}",
+		diag_errors_one: "1 recent error",
+		diag_errors_many: "{count} recent errors",
+		diag_operations_one: "1 failed or uncertain operation",
+		diag_operations_many: "{count} failed or uncertain operations",
+		diag_operations_unavailable: "Operations not available",
+		diag_hosts_unavailable: "Hosts not available",
+		diag_sample: "Session counts cover client reads only. Operation counts cover the loaded page.",
+		diag_unavailable: "Not available",
+		diag_loading: "Preparing preview…",
+		diag_json: "Full JSON",
+		diag_copied: "Copied",
+		diag_copy_failed: "Copy failed. Select the JSON to copy it.",
+		diag_download_started: "Download started",
+		diag_saved: "Saved",
+		diag_save_failed: "Save could not be confirmed. Check the destination before saving again.",
+		diag_withdrawn: "Source access changed. Close and reopen diagnostics for a fresh preview.",
+		diag_too_large: "This preview exceeds the 256 KB save limit.",
+		diag_connected: "Connected",
+		diag_disconnected: "Disconnected",
+		diag_reconnecting: "Reconnecting",
+		diag_never_connected: "Never connected",
+		diag_stale: "Stale",
+		diag_reachable: "Reachable",
+		diag_unreachable: "Unreachable",
+		diag_state_unknown: "Unknown"
+	},
+	"zh-TW": {
+		diag_export: "匯出診斷資料",
+		diag_title: "診斷資料",
+		diag_save: "儲存",
+		diag_copy: "複製",
+		diag_close: "關閉",
+		diag_unknown: "未知",
+		diag_connector_build: "Connector {version}（{commit}）",
+		diag_desktop_build: "桌面版 {version}（{commit}）",
+		diag_privacy: "預覽已去識別化。儲存與複製都只在這台裝置上進行。",
+		diag_counts: "{errors} · {operations}",
+		diag_errors_one: "最近 1 筆錯誤",
+		diag_errors_many: "最近 {count} 筆錯誤",
+		diag_operations_one: "1 筆失敗或結果未確認的操作",
+		diag_operations_many: "{count} 筆失敗或結果未確認的操作",
+		diag_operations_unavailable: "無法取得操作資料",
+		diag_hosts_unavailable: "無法取得主機資料",
+		diag_sample: "工作階段僅計算介面已讀取的資料；操作僅計算已載入的頁面。",
+		diag_unavailable: "無法取得",
+		diag_loading: "正在準備預覽…",
+		diag_json: "完整 JSON",
+		diag_copied: "已複製",
+		diag_copy_failed: "複製失敗，請選取 JSON 後手動複製。",
+		diag_download_started: "已開始下載",
+		diag_saved: "已儲存",
+		diag_save_failed: "無法確認是否已儲存，請先檢查目的地再重新儲存。",
+		diag_withdrawn: "來源存取權已變更，請關閉後重新開啟診斷資料。",
+		diag_too_large: "此預覽超過 256 KB 的儲存上限。",
+		diag_connected: "已連線",
+		diag_disconnected: "已中斷",
+		diag_reconnecting: "重新連線中",
+		diag_never_connected: "尚未連線",
+		diag_stale: "資料已過期",
+		diag_reachable: "可連線",
+		diag_unreachable: "無法連線",
+		diag_state_unknown: "未知"
+	}
+};
+//#endregion
 //#region src/pm-overview-strings.js
 var overviewStrings = {
 	en: {
@@ -7606,6 +7684,7 @@ var instructionReceiptStrings = {
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
+		...diagnosticsStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...uiStrings["zh-TW"],
 		...overviewStrings["zh-TW"],
@@ -9239,6 +9318,7 @@ var STRINGS = {
 		integration_PUSH_UNPROVEN: "PR 分支在舊的 head，但組合後的 commit 已在 GitHub 上：之前的推送可能落地後被改回。不會再推一次；請看一下 PR，再取消並重新預覽。"
 	},
 	en: {
+		...diagnosticsStrings.en,
 		...pmStrings.en,
 		...uiStrings.en,
 		...overviewStrings.en,
@@ -12188,6 +12268,401 @@ function settingsAgents({ h, t, api, caps, guard, from }) {
 	};
 }
 //#endregion
+//#region src/diagnostics.js
+var code = (value) => typeof value === "string" && /^[A-Z][A-Z0-9_]{0,79}$/.test(value) ? value : null;
+var reason = (value) => typeof value === "string" && /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value : null;
+var version$2 = (value) => typeof value === "string" && value === value.trim() && /^\d+(?:\.\d+){1,3}(?:-(?:alpha|beta|rc|dev)\.?\d{0,4})?$/i.test(value) ? value : null;
+var commit = (value) => typeof value === "string" && [40, 64].includes(value.length) && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(value) ? value : null;
+var action = (value) => typeof value === "string" && /^(?:session|checkpoint|integration|artifact|repository|project|work_item|task|delivery|deployment|setup|pm)[._][a-z_.]+$/.test(value) ? value : null;
+var protocols = ["bat-remote/v2", "bat-remote/legacy-v1"];
+var contractVersion = (value) => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+var bool = (value) => typeof value === "boolean" ? value : null;
+var operationId$3 = (value) => typeof value === "string" && /^op_[0-9a-f]{32}$/.test(value) ? value : null;
+var time = (value) => {
+	if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value < 253402300800) return new Date(value * 1e3).toISOString();
+	return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
+};
+var select = (value, values) => values.includes(value) ? value : null;
+var routeWords = new Set("v1 hosts sessions projects work-items tasks operations capabilities bootstrap events managed setup secrets observation status pending attention reading permissions labels checkpoints checkpoint-preview instructions artifacts uploads content delivery receipts discovery pm workspaces plans threads messages snapshots brief-export resources roadmap dependencies registers governance".split(" "));
+var resourceNames = {
+	hosts: "host",
+	projects: "project",
+	"work-items": "work_item",
+	tasks: "task",
+	operations: "operation",
+	workspaces: "workspace",
+	threads: "thread",
+	snapshots: "snapshot",
+	artifacts: "artifact",
+	uploads: "operation",
+	checkpoints: "checkpoint"
+};
+function pathTemplate(path) {
+	const parts = String(path).replace(/^\/api(?=\/v1)/, "").split(/[?#]/)[0].split("/").filter(Boolean);
+	if (parts[0] !== "v1") parts.unshift("v1");
+	return "/" + parts.map((part, i) => {
+		const si = parts.indexOf("sessions");
+		if (si >= 0 && i === si + 1) return parts[si - 2] === "hosts" ? ":session" : ":host";
+		if (si >= 0 && i === si + 2 && parts[si - 2] !== "hosts") return ":session";
+		if (resourceNames[parts[i - 1]]) return ":" + resourceNames[parts[i - 1]];
+		return routeWords.has(part) ? part : ":id";
+	}).join("/");
+}
+function failedCall({ at, method, path, status, code: errorCode, admissionRefused, operation }) {
+	return {
+		at: time(at),
+		method: select(method, [
+			"GET",
+			"POST",
+			"PUT",
+			"PATCH",
+			"DELETE",
+			"HEAD"
+		]) || "GET",
+		path_template: pathTemplate(path),
+		status: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+		code: code(errorCode) || (status >= 100 ? "HTTP_ERROR" : "NETWORK_ERROR"),
+		admission_refused: admissionRefused === true,
+		operation_id: operationId$3(operation?.operation_id)
+	};
+}
+function errorRing(limit = 50) {
+	const entries = [];
+	return {
+		record(input) {
+			entries.push(failedCall(input));
+			entries.splice(0, Math.max(0, entries.length - Math.min(50, limit)));
+		},
+		entries: () => entries.map((entry) => ({ ...entry })),
+		clear() {
+			entries.length = 0;
+		}
+	};
+}
+function clientIdentity({ caps, appBuild, desktop = false, os = "unknown", locale = "en", width = 0 }) {
+	return {
+		app_version: desktop ? version$2(appBuild?.version) : version$2(caps?.build?.version ?? caps?.connector),
+		app_commit: desktop ? commit(appBuild?.commit) : commit(caps?.build?.commit),
+		connector_version: version$2(caps?.build?.version ?? caps?.connector),
+		connector_commit: commit(caps?.build?.commit),
+		connector_source: select(caps?.build?.source, [
+			"vcs",
+			"package",
+			"bundled"
+		]),
+		api_version: Number.isInteger(caps?.api_version) ? caps.api_version : null,
+		contract_version: contractVersion(caps?.contract_version),
+		platform: desktop ? "desktop" : "browser",
+		os_family: select(os, [
+			"windows",
+			"macos",
+			"linux"
+		]) || "unknown",
+		locale: locale === "zh-TW" ? "zh-TW" : "en",
+		viewport_class: width > 0 ? width < 800 ? "small" : width < 1200 ? "medium" : "large" : "unknown"
+	};
+}
+function buildLine(client, t) {
+	const unknown = t("diag_unknown");
+	const connector = t("diag_connector_build", {
+		version: client.connector_version || unknown,
+		commit: client.connector_commit?.slice(0, 7) || unknown
+	});
+	return client.platform === "desktop" ? t("diag_desktop_build", {
+		version: client.app_version || unknown,
+		commit: client.app_commit?.slice(0, 7) || unknown
+	}) + " · " + connector : connector;
+}
+var APP = "io.betteragent.dashboard";
+function logLocations(os, managed) {
+	const root = managed ? {
+		linux: `~/.local/share/${APP}/central`,
+		macos: `~/Library/Application Support/${APP}/central`,
+		windows: `%LOCALAPPDATA%\\${APP}\\central`
+	}[os] : {
+		linux: "~/.local/state/bat-agent-connector",
+		macos: "~/.local/state/bat-agent-connector",
+		windows: "~\\.local\\state\\bat-agent-connector"
+	}[os];
+	return {
+		state_database: root ? root + (os === "windows" ? "\\" : "/") + (managed ? os === "windows" ? "state\\" : "state/" : "") + "tasks.sqlite3" : null,
+		runtime_stderr: managed ? "not_persisted_by_desktop" : "external_service_configuration",
+		location: "default_template_only"
+	};
+}
+var databaseTemplates = (managed) => Object.fromEntries([
+	"linux",
+	"macos",
+	"windows"
+].map((os) => [os, logLocations(os, managed).state_database]));
+function scrubDiagnostics(text) {
+	const safeLogs = new Set([
+		"linux",
+		"macos",
+		"windows"
+	].flatMap((os) => [false, true].map((managed) => logLocations(os, managed).state_database)));
+	return JSON.stringify(JSON.parse(text, (_key, input) => {
+		if (typeof input !== "string") return input;
+		let value = input;
+		try {
+			value = decodeURIComponent(value);
+		} catch {}
+		if (/^\/v1(?:\/(?:[a-z-]+|:[a-z_]+))*$/.test(value) && value.split("/").filter(Boolean).every((x) => x.startsWith(":") || routeWords.has(x)) || safeLogs.has(value) || time(value) || contractVersion(value) || protocols.includes(value)) return value;
+		value = value.replace(/(?:authorization\s*:\s*(?:basic|bearer)\s+\S+|bearer\s+\S+|batc_[\w-]+|gh[pousr]_[\w-]+|github_pat_[\w-]+|sk-[\w-]+|(?:token|secret|password|passwd|api[_-]?key|fp)\s*[=:]\s*\S+)/gi, "[redacted]").replace(/SHA256:[^\s"',;]+/gi, "[redacted]").replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"<>]+/gi, "[redacted]").replace(/\b[\w.+-]+@[\w.-]+\b/gi, "[redacted]").replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|dev|app|internal|local|lan|corp|example|invalid)\b(?::\d+)?(?:[/?#]\S*)?/gi, "[redacted]").replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, "[redacted]").replace(/(?:\b(?:[a-f0-9]{1,4}:){2,}[a-f0-9:]+\b|\[?[a-f0-9]*::[a-f0-9:]*\]?)/gi, "[redacted]").replace(/(?:[a-z]:[\\/]|\\\\|~(?:[\w.-]+)?[\\/]|\/)[^\r\n]*/gi, "[redacted]");
+		return code(value) || reason(value) || version$2(value) || commit(value) || operationId$3(value) || action(value) || /^host-[1-9]\d*$/.test(value) || ["batc.diagnostics.v1", "zh-TW"].includes(value) ? value : "[redacted]";
+	}));
+}
+function sessionFacts(session) {
+	return {
+		loaded: bool(session.loaded),
+		streaming: bool(session.streaming),
+		unknown_activity: ![true, false].includes(session.streaming),
+		stale: session.stale === true || session.fields_stale === true ? true : bool(session.stale ?? session.fields_stale),
+		pending: session.pending !== void 0 ? session.pending != null : bool(session.pending_interaction),
+		history_reasons: Array.isArray(session.reading?.incomplete_reasons) ? [...new Set(session.reading.incomplete_reasons.map(reason).filter(Boolean))] : null
+	};
+}
+function buildDiagnostics(input) {
+	const hosts = Array.isArray(input.hosts) ? [...input.hosts].sort((a, b) => String(a.host).localeCompare(String(b.host), "en")) : [];
+	const flags = (source, keys) => Object.fromEntries(keys.map((key) => [key, bool(source?.[key])]));
+	const sessions = Array.isArray(input.sessions) ? input.sessions.map(sessionFacts) : null;
+	const count = (key) => sessions?.length === 0 ? 0 : sessions?.some((s) => typeof s[key] === "boolean") ? sessions.filter((s) => s[key] === true).length : null;
+	const history = sessions?.some((s) => s.history_reasons !== null) ? Object.create(null) : null;
+	if (history) for (const session of sessions) for (const why of session.history_reasons || []) history[why] = (history[why] || 0) + 1;
+	const sources = Object.fromEntries([
+		"capabilities",
+		"hosts",
+		"operations",
+		"managed_setup",
+		"observation"
+	].map((key) => [key, select(input.sources?.[key], ["available", "not_available"]) || "not_available"]));
+	const bundle = {
+		schema: "batc.diagnostics.v1",
+		exported_at: time(input.exportedAt),
+		client: clientIdentity(input),
+		sources,
+		hosts: hosts.map((host, i) => {
+			const policy = input.caps?.hosts?.find((h) => h.host === host.host) || {};
+			const policyFlags = flags(host.policy || policy, [
+				"enabled",
+				"writes",
+				"orchestrate",
+				"shared_clone_worktrees",
+				"managed_roots_configured",
+				"ssh_configured",
+				"checkpoint_available"
+			]);
+			if (policyFlags.managed_roots_configured === null && Array.isArray(policy.managed_roots)) policyFlags.managed_roots_configured = policy.managed_roots.length > 0;
+			const setupHost = Array.isArray(input.setup?.hosts) ? input.setup.hosts.find((item) => item.name === host.host) : null;
+			if (policyFlags.ssh_configured === null && setupHost && (typeof setupHost.ssh_alias === "string" || setupHost.ssh_alias === null)) policyFlags.ssh_configured = Boolean(setupHost.ssh_alias);
+			const discovery = Array.isArray(host.discovery) && policy.profile_id != null ? host.discovery.find((scan) => scan.profile_id === policy.profile_id) : null;
+			return {
+				alias: `host-${i + 1}`,
+				connection_state: select(host.connection_state, [
+					"connected",
+					"disconnected",
+					"reconnecting",
+					"never_connected",
+					"stale"
+				]) || (host.reachable === true ? "reachable" : host.reachable === false ? "unreachable" : "unknown"),
+				stale: bool(host.stale),
+				stale_reason: reason(host.stale_reason),
+				last_error_code: code(host.last_error?.code ?? discovery?.error_code),
+				bat: {
+					status: select(host.bat?.status, [
+						"ready",
+						"unavailable",
+						"unknown"
+					]),
+					version: version$2(host.bat?.version ?? host.server_version),
+					protocol: select(host.bat?.protocol, protocols),
+					capabilities: flags(host.bat?.capabilities ?? discovery?.authority?.capabilities, [
+						"claude",
+						"codex",
+						"terminal",
+						"git"
+					])
+				},
+				coverage: {
+					basis: "configured_profile_enumeration",
+					complete: bool(discovery?.complete_enumeration),
+					reasons: Array.isArray(discovery?.outside_scan) ? [...new Set(discovery.outside_scan.map((item) => reason(item.reason)).filter(Boolean))] : null
+				},
+				policy: policyFlags
+			};
+		}),
+		sessions: {
+			basis: "client_loaded_reads",
+			sampled: sessions?.length ?? null,
+			loaded: count("loaded"),
+			streaming: count("streaming"),
+			unknown_activity: count("unknown_activity"),
+			stale: count("stale"),
+			pending: count("pending"),
+			history_reasons: history,
+			unreported: Object.fromEntries([
+				"loaded",
+				"streaming",
+				"stale",
+				"pending"
+			].map((key) => [key, sessions ? sessions.filter((s) => s[key] === null).length : null]))
+		},
+		operations: Array.isArray(input.operations) ? input.operations.filter((op) => ["failed", "uncertain"].includes(op.status)).slice(0, 50).map((op) => ({
+			id: operationId$3(op.operation_id),
+			action: action(op.action),
+			status: op.status,
+			error_code: code(op.error_code ?? op.error?.code),
+			created_at: time(op.created_at),
+			updated_at: time(op.updated_at)
+		})) : null,
+		coverage: {
+			complete: bool(input.observation?.coverage?.complete),
+			reasons: Array.isArray(input.observation?.coverage?.reasons) ? input.observation.coverage.reasons.map(reason).filter(Boolean) : null
+		},
+		operations_basis: "loaded_page",
+		recent_errors: (input.recentErrors || []).slice(-50).map((e) => failedCall({
+			at: e.at,
+			method: e.method,
+			path: e.path_template,
+			status: e.status,
+			code: e.code,
+			admissionRefused: e.admission_refused,
+			operation: { operation_id: e.operation_id }
+		})),
+		log_locations: {
+			basis: "default_templates_only",
+			state_database: {
+				managed_desktop: databaseTemplates(true),
+				standalone: databaseTemplates(false)
+			},
+			runtime_stderr: {
+				managed_desktop: "not_persisted_by_desktop",
+				standalone: "external_service_configuration"
+			}
+		}
+	};
+	return JSON.parse(scrubDiagnostics(JSON.stringify(bundle)));
+}
+//#endregion
+//#region src/diagnostics-dialog.js
+function diagnosticsDialog({ h, t, load, save, onClose }) {
+	const origin = document.activeElement;
+	const summary = h("div", { "data-diagnostics-summary": "" });
+	const pre = h("pre", {
+		class: "diagnostics-json",
+		tabindex: 0,
+		"aria-label": t("diag_json"),
+		"data-diagnostics-json": ""
+	});
+	const status = h("p", {
+		class: "muted",
+		role: "status"
+	}, t("diag_loading"));
+	let content = "", filename = "", serial = 0;
+	const close = () => {
+		serial++;
+		dialog.close();
+		dialog.remove();
+		onClose();
+		if (origin?.isConnected) origin.focus();
+	};
+	const saved = button({
+		variant: "primary",
+		label: t("diag_save"),
+		disabled: true,
+		onClick: async () => {
+			const current = serial;
+			saved.disabled = true;
+			try {
+				const result = await save(content, filename);
+				if (current === serial && result) status.textContent = t(result === true ? "diag_download_started" : "diag_saved");
+			} catch {
+				if (current === serial) status.textContent = t("diag_save_failed");
+			} finally {
+				if (current === serial) saved.disabled = false;
+			}
+		}
+	});
+	const copy = button({
+		label: t("diag_copy"),
+		disabled: true,
+		onClick: async () => {
+			const current = serial;
+			try {
+				await navigator.clipboard.writeText(content);
+				if (current === serial) status.textContent = t("diag_copied");
+			} catch {
+				if (current === serial) {
+					status.textContent = t("diag_copy_failed");
+					pre.focus();
+				}
+			}
+		}
+	});
+	const closing = button({
+		label: t("diag_close"),
+		onClick: close
+	});
+	const dialog = h("dialog", {
+		class: "diagnostics-dialog",
+		"aria-labelledby": "diagnostics-title",
+		"data-diagnostics-dialog": ""
+	}, h("h2", { id: "diagnostics-title" }, t("diag_title")), h("p", { class: "muted" }, t("diag_privacy")), summary, pre, status, h("div", { class: "actions" }, saved, copy, closing));
+	dialog.addEventListener("cancel", (event) => {
+		event.preventDefault();
+		close();
+	});
+	dialog.addEventListener("keydown", (event) => {
+		if (event.key !== "Tab") return;
+		const nodes = [
+			pre,
+			saved,
+			copy,
+			closing
+		].filter((node) => !node.disabled && !node.hidden), first = nodes[0], last = nodes.at(-1);
+		if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+			event.preventDefault();
+			last.focus();
+		} else if (!event.shiftKey && document.activeElement === last) {
+			event.preventDefault();
+			first.focus();
+		}
+	});
+	document.body.append(dialog);
+	dialog.showModal();
+	closing.focus();
+	const withdraw = (force = false) => {
+		if (!content && !force) return;
+		serial++;
+		content = "";
+		summary.replaceChildren();
+		pre.textContent = "";
+		saved.disabled = copy.disabled = true;
+		status.textContent = t("diag_withdrawn");
+	};
+	const current = serial;
+	load().then((bundle) => {
+		if (current !== serial || !dialog.isConnected) return;
+		content = JSON.stringify(bundle, null, 2) + "\n";
+		filename = "batc-diagnostics-" + bundle.exported_at.slice(0, 10).replaceAll("-", "") + "-" + bundle.exported_at.slice(11, 16).replace(":", "") + ".json";
+		summary.append(h("div", {}, h("p", {}, buildLine(bundle.client, t)), bundle.sources.hosts === "not_available" ? h("p", {}, t("diag_hosts_unavailable")) : null, ...bundle.hosts.map((host) => h("p", {}, `${host.alias} · ${t("diag_" + (host.connection_state === "unknown" ? "state_unknown" : host.connection_state))}${host.stale === true && host.connection_state !== "stale" ? " · " + t("diag_stale") : ""}`)), h("p", {}, t("diag_counts", {
+			errors: t(bundle.recent_errors.length === 1 ? "diag_errors_one" : "diag_errors_many", { count: bundle.recent_errors.length }),
+			operations: bundle.operations === null ? t("diag_operations_unavailable") : t(bundle.operations.length === 1 ? "diag_operations_one" : "diag_operations_many", { count: bundle.operations.length })
+		})), h("p", { class: "muted" }, t("diag_sample"))));
+		pre.textContent = content;
+		const tooLarge = new TextEncoder().encode(content).length > 262144;
+		saved.disabled = tooLarge;
+		copy.disabled = false;
+		status.textContent = tooLarge ? t("diag_too_large") : "";
+	}).catch(() => {
+		if (current === serial) withdraw(true);
+	});
+	return {
+		close,
+		withdraw
+	};
+}
+//#endregion
 //#region src/pm-workbench.js
 var selections = new Map();
 var workspaces = new Map();
@@ -13380,7 +13855,7 @@ function fixedQualityPicker({ h, t, api, alive, workspaceId, workItemId, readSel
 				].some((key) => assessment?.[key] !== selected[key]) || constraints.binding_id && context.work_ref.binding_id !== constraints.binding_id || constraints.dod_revision_id && context.dod_ref?.revision_id !== constraints.dod_revision_id) throw Error(t("pq_changed"));
 				write(selected);
 			} catch (error) {
-				if (element.isConnected) status.replaceChildren(errorBox(error));
+				if (element.isConnected) status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				pending = false;
 				update();
@@ -15660,7 +16135,7 @@ function workspaceResources({ h, t, api, alive, namespace, workspaceId, errorBox
 				return;
 			}
 			withdraw({ keepSerial: true });
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			follow = false;
 		} finally {
 			if (ticket !== serial) return;
@@ -15820,7 +16295,7 @@ async function connectorUploadArtifact(operationId, bytes, browserToken) {
 		data: await res.json().catch(() => ({}))
 	};
 }
-var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
+var nativeDesktop, nativeFileSupport, nativeBriefExportSupport, browserSessionToken, browserCsrf, nativeDiagnosticsSave, nativeFilesStatus, nativeFilesPick, nativeFilesUpload, nativeFilesDropTarget, nativeFilesControl, nativeFilesSave, nativeBriefSave, nativeFilesPreview, nativeConnect, managedControl, nativeDisconnect, nativeEnroll, nativeReloadConfiguration, nativeSetupConfiguration, nativeForgetCredential, openExternal, fleetAvailability, fleetBootstrap, tailscaleControl, fleetControl, fleetRequest, updateRequest;
 var init_transport = __esmMin((() => {
 	init_core();
 	nativeDesktop = isTauri();
@@ -15828,6 +16303,7 @@ var init_transport = __esmMin((() => {
 	nativeBriefExportSupport = false;
 	browserSessionToken = "managed-browser-session";
 	browserCsrf = null;
+	nativeDiagnosticsSave = (input) => invoke("native_diagnostics_save", { input });
 	nativeFilesStatus = () => invoke("native_files_status");
 	nativeFilesPick = (draftId) => invoke("native_files_pick", { draftId });
 	nativeFilesUpload = (handleId) => invoke("native_files_upload", { handleId });
@@ -15899,7 +16375,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 		note.textContent = t(nativeDesktop && !nativeBriefExportSupport ? "pm_export_native_unavailable" : "pm_export_help");
 		if (pendingReceipt && caps()?.actor === actor) {
 			if (pendingReceipt.error) {
-				status.replaceChildren(errorBox(pendingReceipt.error));
+				status.replaceChildren(errorBox(pendingReceipt.error, { within: status }));
 				return;
 			}
 			const value = pendingReceipt.receipt;
@@ -15987,7 +16463,7 @@ function briefExport({ h, t, api, alive, workspaceId, caps, snapshot, readable, 
 			}
 			if (identity() !== expected) return;
 			onUnavailable(rendered);
-			status.replaceChildren(errorBox(rendered));
+			status.replaceChildren(errorBox(rendered, { within: status }));
 		} finally {
 			busy = false;
 			update();
@@ -16105,7 +16581,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 	}
 	function unavailable(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	const stamp = (value) => timeStamp(value, { empty: t("pm_evidence_time_unknown") });
 	const check = (data) => {
@@ -16525,7 +17001,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 			alive();
 			if (box.isConnected) update(page);
 		} catch (error) {
-			if (box.isConnected) status.replaceChildren(errorBox(error));
+			if (box.isConnected) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			morePlans.disabled = false;
 		}
@@ -16569,7 +17045,7 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 			if (box.isConnected) showBindings(page);
 		} catch (error) {
 			if (box.isConnected) {
-				bindingStatus.replaceChildren(errorBox(error));
+				bindingStatus.replaceChildren(errorBox(error, { within: bindingStatus }));
 				loadBindings.hidden = false;
 			}
 		} finally {
@@ -16656,7 +17132,10 @@ function planComparison({ h, t, api, alive, workspaceId, errorBox }) {
 		} catch (error) {
 			if (box.isConnected && ticket === request) {
 				result.replaceChildren();
-				status.replaceChildren(errorBox(error, { summary: text("pm_diff_failure") }));
+				status.replaceChildren(errorBox(error, {
+					summary: text("pm_diff_failure"),
+					within: status
+				}));
 			}
 		} finally {
 			if (ticket === request) {
@@ -17025,7 +17504,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 				if (item.isConnected) {
 					if ([403, 404].includes(error.status)) item.remove();
 					else {
-						detail.replaceChildren(errorBox(error));
+						detail.replaceChildren(errorBox(error, { within: detail }));
 						pill.replaceChildren(statusPill("unknown"));
 					}
 				}
@@ -17062,7 +17541,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						more.remove();
 						renderRows(next, true);
 					} catch (error) {
-						if (more.isConnected) more.after(errorBox(error));
+						if (more.isConnected) more.after(errorBox(error, { within: more }));
 					} finally {
 						busy = false;
 						more.disabled = false;
@@ -17110,7 +17589,7 @@ function planRevisions({ h, t, api, alive, workspaceId, threadId, thread, form, 
 						try {
 							await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);
 						} catch (error) {
-							if (details.isConnected) details.append(errorBox(error));
+							if (details.isConnected) details.append(errorBox(error, { within: details }));
 						}
 					}
 				}, t("pd_copy"))));
@@ -17262,7 +17741,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 		readable: canRead,
 		onUnavailable: (error) => {
 			withdraw();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			onChange(null, "error", error);
 		},
 		errorBox
@@ -17383,7 +17862,7 @@ function workspaceCharter({ h, t, api, alive, namespace, workspaceId, permitted,
 			return;
 		}
 		withdraw();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 		onChange(null, "error", error);
 	}
 	function acceptHistory(data, after, append = false) {
@@ -18464,7 +18943,7 @@ function workspaceOverview(options) {
 			signature = "";
 			closeReader();
 			render();
-			status.replaceChildren(options.errorBox(error));
+			status.replaceChildren(options.errorBox(error, { within: status }));
 		}
 	}
 	async function refresh() {
@@ -19422,7 +19901,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 					withdraw();
 					statusBox.replaceChildren(readError(error, () => {
 						refresh();
-					}));
+					}, statusBox));
 					return;
 				}
 				impact = {
@@ -19558,7 +20037,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 		else if (impact.error) affected.append(readError(impact.error, () => {
 			impactKey = "";
 			syncImpact();
-		}));
+		}, affected));
 		else {
 			const reasons = [];
 			for (const code of [
@@ -20038,8 +20517,8 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			}
 		}
 	}
-	function readError(error, retry) {
-		return h("div", {}, errorBox(error), button({
+	function readError(error, retry, within) {
+		return h("div", {}, errorBox(error, { within }), button({
 			size: "sm",
 			variant: "ghost",
 			label: t("ui_retry"),
@@ -20085,7 +20564,7 @@ function workspaceDependencies({ h, t, api, alive, namespace, workspaceId, permi
 			else clearData();
 			statusBox.replaceChildren(readError(error, () => {
 				refresh();
-			}));
+			}, statusBox));
 		}
 	}
 	function clearData() {
@@ -21372,7 +21851,10 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 			if (valid(ticket)) {
 				item.catalog = null;
 				item.catalogBox.replaceChildren();
-				status.replaceChildren(errorBox(error, { summary: t("ahp_selection_unavailable") }));
+				status.replaceChildren(errorBox(error, {
+					summary: t("ahp_selection_unavailable"),
+					within: status
+				}));
 				for (const f of item.forms) f.update();
 			}
 		}
@@ -21407,7 +21889,10 @@ function workspaceAhpObserver({ h, t, api, alive, caps, namespace, workspaceId, 
 		withdraw();
 		adapterFields.hidden = true;
 		historyDetails.hidden = true;
-		status.append(errorBox(error, { summary: t("ahp_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("ahp_unavailable"),
+			within: status
+		}));
 	}
 	async function refresh() {
 		const prior = selected;
@@ -21716,7 +22201,7 @@ function issueResolution({ h, t, api, alive, caps, workspaceId, thread, permitte
 			enabled = false;
 			workspace = null;
 			box.replaceChildren();
-			if (![403, 404].includes(error.status)) box.append(errorBox(error));
+			if (![403, 404].includes(error.status)) box.append(errorBox(error, { within: box }));
 		}
 	}
 	function withdraw() {
@@ -22489,7 +22974,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		}
@@ -22549,7 +23034,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		} finally {
@@ -22574,7 +23059,7 @@ function planProposals({ h, t, api, alive, form, input, labelled, caps, workspac
 		} catch (error) {
 			if (own === ticket) {
 				withdraw();
-				notice.replaceChildren(errorBox(error));
+				notice.replaceChildren(errorBox(error, { within: notice }));
 				box.hidden = false;
 			}
 		} finally {
@@ -22814,7 +23299,10 @@ function workspaceWorkDeliveries({ h, t, api, alive, workspaceId, errorBox }) {
 			cursor = null;
 			facts.replaceChildren();
 			status.replaceChildren();
-			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error, { summary: t("wd_unavailable") })), refreshButton);
+			head.replaceChildren(h("div", { class: "pm-tool-note" }, errorBox(error, {
+				summary: t("wd_unavailable"),
+				within: head
+			})), refreshButton);
 		} finally {
 			if (ticket === sequence) {
 				busy = false;
@@ -22968,7 +23456,10 @@ function workspaceSpecMaterialization({ h, t, api, alive, workspaceId, workspace
 	}
 	function fail(error) {
 		clear();
-		status.replaceChildren(errorBox(error, { summary: t(error.message?.startsWith("PM_SPEC_") ? "psm_invalid" : "psm_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t(error.message?.startsWith("PM_SPEC_") ? "psm_invalid" : "psm_unavailable"),
+			within: status
+		}));
 		if ([
 			401,
 			403,
@@ -23414,7 +23905,10 @@ function workspaceWorkBatches({ h, t, api, alive, workspaceId, workspace, caps, 
 		facts.hidden = true;
 		proofView.hidden = true;
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, { summary: t(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? "pmb_invalid" : "pmb_unavailable") })), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(err, {
+			summary: t(err.code === "PM_REQUIREMENT_QUALITY_INVALID" ? "pmb_invalid" : "pmb_unavailable"),
+			within: status
+		})), refreshButton));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -24106,7 +24600,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 		detail.replaceChildren();
 		editors.hidden = true;
 		update();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	async function currentWorkspace() {
 		const value = await api("GET", endpoint);
@@ -24492,7 +24986,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					proof = candidate;
 					proofStatus.replaceChildren(text(value.plan.document?.title || candidate), text(value.plan.document_digest), note("pm_gov_direction_only"));
 				} catch (error) {
-					if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error));
+					if (editor.box.isConnected) proofStatus.replaceChildren(errorBox(error, { within: proofStatus }));
 				} finally {
 					update();
 				}
@@ -24587,7 +25081,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					try {
 						await currentWorkspace();
 						if (ticket !== sourceTicket || !editor.box.isConnected) return;
-						sourceStatus.replaceChildren(errorBox(error));
+						sourceStatus.replaceChildren(errorBox(error, { within: sourceStatus }));
 						update();
 					} catch (failure) {
 						if (ticket === sourceTicket && editor.box.isConnected) unavailable(failure);
@@ -24668,7 +25162,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 					proof = value;
 					receipt.replaceChildren(note("pm_gov_adoption_historical"), id(operation.target.revision_id), h("a", { href: `#/op/${value}` }, t("pm_operation")));
 				} catch (error) {
-					if (editor.box.isConnected) receipt.replaceChildren(errorBox(error));
+					if (editor.box.isConnected) receipt.replaceChildren(errorBox(error, { within: receipt }));
 				} finally {
 					update();
 				}
@@ -24790,7 +25284,7 @@ function workspaceGovernance({ h, t, api, alive, namespace, workspaceId, workspa
 				current = null;
 				fixed = null;
 				force = true;
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 			const next = JSON.stringify([
 				selectedId,
@@ -26319,7 +26813,10 @@ function workspacePackageHandoff({ h, t, api, alive, workspaceId, workspace, cap
 		facts.replaceChildren();
 		outcome.replaceChildren();
 		const mismatch = error.message?.startsWith("PM_SPEC_") || error.code === "PM_REQUIREMENT_QUALITY_INVALID";
-		status.replaceChildren(errorBox(error, error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t(mismatch ? "ph_invalid" : "ph_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			...error.code === "PM_HANDOFF_BLOCKED" ? {} : { summary: t(mismatch ? "ph_invalid" : "ph_unavailable") },
+			within: status
+		}));
 		update();
 	}
 	function bindEditor(row) {
@@ -27273,7 +27770,7 @@ function workspaceLifecycle({ h, t, api, alive, workspaceId, caps, permitted, fo
 		status.replaceChildren(emptyState({
 			title: t("pm_lifecycle_unavailable"),
 			text: h("span", { class: "muted" }, t("pm_lifecycle_unknown"))
-		}), errorBox(error));
+		}), errorBox(error, { within: status }));
 	}
 	async function refresh({ event = false } = {}) {
 		if (!event || !ready || !current) {
@@ -27664,7 +28161,10 @@ function workspaceIssueMappings({ h, t, api, alive, workspaceId, permitted, form
 		}
 		packageRow = null;
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("pmi_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pmi_unavailable"),
+			within: status
+		}));
 		refreshButton.disabled = false;
 	}
 	async function selectMapping(mid) {
@@ -27843,7 +28343,7 @@ function specSources({ h, t, api, alive, workspaceId, errorBox }) {
 			clear();
 			caps = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (ticket === refreshId) {
 				checking = false;
@@ -27883,7 +28383,7 @@ function specSources({ h, t, api, alive, workspaceId, errorBox }) {
 			clear();
 			caps = null;
 			facts.replaceChildren();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			reading = false;
 			controls();
@@ -27952,7 +28452,7 @@ function followUpAssessments({ h, t, api, alive, workspaceId, caps, errorBox, on
 		list.replaceChildren();
 		detail.replaceChildren();
 		more.hidden = true;
-		status.replaceChildren([t("pm_fa_mismatch"), t("pm_fa_read_failed")].includes(error.message) ? inlineError({ error: error.message }) : errorBox(error));
+		status.replaceChildren([t("pm_fa_mismatch"), t("pm_fa_read_failed")].includes(error.message) ? inlineError({ error: error.message }) : errorBox(error, { within: status }));
 		onAccessFailure(error);
 	}
 	function valid(row) {
@@ -28223,7 +28723,7 @@ function followUpAnalysisRequest({ h, t, api, alive, workspaceId, caps, namespac
 		request?.dispose();
 		request = null;
 		body.replaceChildren();
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 		onAccessFailure(error);
 	}
 	function navigation() {
@@ -28564,7 +29064,7 @@ function workspaceFollowUp({ h, t, api, alive, workspaceId, permitted, form, inp
 		editor?.update();
 		editorFold.hidden = true;
 		if (retired) editor?.box.remove();
-		status.replaceChildren(errorBox(error), h("button", {
+		status.replaceChildren(errorBox(error, { within: status }), h("button", {
 			type: "button",
 			class: "ui-button secondary ui-sm",
 			onclick: () => void refresh()
@@ -29211,7 +29711,10 @@ function workspaceWorkPackages({ h, t, api, alive, workspaceId, errorBox, pageSi
 		onSelection(null);
 		picker.replaceChildren();
 		head.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, { summary: t("wp_unavailable") })), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, {
+			summary: t("wp_unavailable"),
+			within: status
+		})), refreshButton));
 	}
 	async function select(id) {
 		if (busy || !idPattern.test(id)) return;
@@ -29454,7 +29957,7 @@ function workspaceSprints({ h, t, api, alive, workspaceId, workspace, permitted,
 		choose.replaceChildren();
 		editors.hidden = true;
 		toolbar.hidden = true;
-		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error)), refreshButton));
+		status.replaceChildren(h("div", { class: "pm-tool-head" }, h("div", { class: "pm-tool-note" }, errorBox(error, { within: status })), refreshButton));
 	}
 	const rationale = () => input("pm_sprint_reason", {
 		multiline: true,
@@ -30317,7 +30820,7 @@ function workspaceExecutionVerification({ h, t, api, alive, workspaceId, workspa
 		} catch (err) {
 			if (valid(ticket)) {
 				clear();
-				status.replaceChildren(errorBox(err));
+				status.replaceChildren(errorBox(err, { within: status }));
 				if ([
 					401,
 					403,
@@ -30451,7 +30954,10 @@ function workspaceQualityReviews({ h, t, api, alive, workspaceId, workspace, cap
 		clear();
 		purge();
 		workChoice.replaceChildren();
-		status.replaceChildren(errorBox(err, { summary: t("pmq_unavailable") }));
+		status.replaceChildren(errorBox(err, {
+			summary: t("pmq_unavailable"),
+			within: status
+		}));
 	}
 	const request = async (...args) => {
 		const ticket = serial;
@@ -31920,7 +32426,7 @@ function workspaceMeetings({ h, t, api, alive, namespace, workspaceId, workspace
 		view.replaceChildren();
 		choose.replaceChildren();
 		editors.hidden = true;
-		status.replaceChildren(errorBox(error));
+		status.replaceChildren(errorBox(error, { within: status }));
 	}
 	function localForm(config) {
 		const expected = JSON.stringify({
@@ -34058,7 +34564,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 						const doc = value.revision.document;
 						content.replaceChildren(h("p", {}, doc.rationale || t("pm_roadmap_quality_unknown")), h("pre", { class: "pm-brief-proof" }, JSON.stringify(value.revision, null, 2)));
 					} catch (error) {
-						content.replaceChildren(errorBox(error));
+						content.replaceChildren(errorBox(error, { within: content }));
 						fetched = false;
 					}
 				});
@@ -34078,7 +34584,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 			}
 			return true;
 		} catch (error) {
-			if (history.isConnected) historyBody.append(errorBox(error));
+			if (history.isConnected) historyBody.append(errorBox(error, { within: historyBody }));
 			return false;
 		} finally {
 			historyBusy = false;
@@ -34196,7 +34702,7 @@ function workspaceRoadmap({ h, t, api, alive, workspaceId, permitted, form, inpu
 				view.replaceChildren();
 				historyBody.replaceChildren();
 				historyLoaded = false;
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				baselineForm.update();
 				forecast.update();
 				observe.update();
@@ -34749,7 +35255,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (n === ticket && !dead) {
 				thread = null;
 				body.replaceChildren();
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		} finally {
 			reading = false;
@@ -34775,7 +35281,7 @@ function reviewCandidateToIdea({ h, t, api, alive, workspaceId, caps, can, form,
 			if (n === ticket && !dead) {
 				thread = null;
 				request?.update();
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		} finally {
 			reading = false;
@@ -35057,7 +35563,10 @@ function workspaceMaintenanceReview({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("pmrv_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pmrv_unavailable"),
+			within: status
+		}));
 		paintHeading();
 	}
 	function localForm(config) {
@@ -36309,7 +36818,10 @@ function workspaceMaintenanceRepairs({ h, t, api, alive, workspaceId, workspace,
 	}
 	function failure(error) {
 		withdraw();
-		status.append(errorBox(error, { summary: t("pmr_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("pmr_unavailable"),
+			within: status
+		}));
 	}
 	async function refresh() {
 		withdraw();
@@ -36772,7 +37284,10 @@ function maintenanceChecks({ h, t, api, alive, workspaceId, workspace, caps, per
 	}
 	function failure(error) {
 		withdraw();
-		status.append(errorBox(error, { summary: t("pmc_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("pmc_unavailable"),
+			within: status
+		}));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? cursor : 0;
@@ -37072,7 +37587,10 @@ function maintenanceObservations({ h, t, api, alive, workspaceId, workspace, cap
 	}
 	function failure(error) {
 		withdraw();
-		status.append(errorBox(error, { summary: t("pmo_unavailable") }));
+		status.append(errorBox(error, {
+			summary: t("pmo_unavailable"),
+			within: status
+		}));
 	}
 	async function refresh() {
 		withdraw();
@@ -37667,7 +38185,10 @@ function workspaceMaintenancePolicy({ h, t, api, alive, workspaceId, workspace, 
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("pmp_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("pmp_unavailable"),
+			within: status
+		}));
 	}
 	async function readHistory(append) {
 		const ticket = epoch, after = append ? historyCursor : 0;
@@ -37916,7 +38437,10 @@ function workspaceReleaseBaselines({ h, t, api, alive, workspaceId, workspace, c
 	}
 	function failure(error) {
 		withdraw();
-		status.replaceChildren(errorBox(error, { summary: t("prb_unavailable") }));
+		status.replaceChildren(errorBox(error, {
+			summary: t("prb_unavailable"),
+			within: status
+		}));
 	}
 	const editorApi = async (...args) => {
 		const ticket = epoch;
@@ -38392,7 +38916,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 						body.replaceChildren(h("dl", { class: "pm-evidence-fields" }, ...brief.flatMap((key) => [h("dt", {}, t("pm_evidence_field_" + key)), h("dd", {}, ["state", "status"].includes(key) ? stateText(fact[key]) : String(fact[key]))])), h("details", { class: "pm-evidence-original" }, h("summary", {}, t("pm_evidence_original")), h("dl", { class: "pm-evidence-fields" }, ...Object.entries(fact).flatMap(([key, value]) => [h("dt", {}, key), h("dd", {}, value === null ? t("pm_evidence_unknown") : typeof value === "object" ? JSON.stringify(value) : String(value))]))), h("small", { class: "muted" }, timeLabel(t, "pm_evidence_saved_at", { time: sourceTime(detail.evidence.captured_at) })));
 						fetched = true;
 					} catch (error) {
-						if (row.isConnected) body.replaceChildren(errorBox(error));
+						if (row.isConnected) body.replaceChildren(errorBox(error, { within: body }));
 					} finally {
 						busy = false;
 					}
@@ -38406,10 +38930,10 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 		const binding = workBindings.find((row) => row.work_item_id === item.work_item_id);
 		const detail = h("div"), row = h("details", { "data-pm-work": item.work_item_id }, h("summary", {}, item.title, h("small", { class: "muted" }, " · " + t(binding ? "pm_evidence_associated" : "pm_evidence_unassociated"))), detail);
 		const planReadError = (error) => {
-			const failure = errorBox(error, { summary: t("pm_evidence_plan_unread") });
-			const diagnostics = failure.querySelector("[data-error-details]");
-			if (diagnostics) diagnostics.closest(".ui-disclosure")?.replaceWith(diagnostics);
-			return failure;
+			return errorBox(error, {
+				summary: t("pm_evidence_plan_unread"),
+				within: detail
+			});
 		};
 		let opened = false;
 		row.addEventListener("toggle", async () => {
@@ -38590,7 +39114,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 			try {
 				await loadEvidence(item, holder);
 			} catch (error) {
-				if (holder.isConnected) holder.replaceChildren(errorBox(error));
+				if (holder.isConnected) holder.replaceChildren(errorBox(error, { within: holder }));
 			}
 		});
 		return row;
@@ -38647,7 +39171,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				status.replaceChildren(emptyState({
 					title: t("pm_evidence_unavailable"),
 					text: h("span", { class: "muted" }, t("pm_evidence_unavailable_help"))
-				}), errorBox(error));
+				}), errorBox(error, { within: status }));
 			}
 		}
 	}
@@ -38694,6 +39218,7 @@ function workspaceEvidence({ h, t, api, alive, namespace, workspaceId, workspace
 				workBindings = [];
 				choose.replaceChildren(h("option", { value: "" }, t("pm_evidence_choose")));
 				projectField.hidden = true;
+				errorBox(error);
 				status.replaceChildren(emptyState({
 					title: t("pm_evidence_unavailable"),
 					text: h("span", { class: "muted" }, unavailableReason(error))
@@ -38751,7 +39276,7 @@ function pmWorktreeChoice({ h, t, api, alive, input, labelled, capability, scope
 				}));
 				renderProof();
 			} catch (error) {
-				if (ticket === sequence) proof.replaceChildren(errorBox(error));
+				if (ticket === sequence) proof.replaceChildren(errorBox(error, { within: proof }));
 			} finally {
 				if (ticket === sequence) {
 					reading = false;
@@ -38898,7 +39423,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	for (const [name, input] of Object.entries(fields)) {
@@ -38946,7 +39471,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 				receipt.replaceChildren();
 				update();
 			} catch (error) {
-				if (!retired(error)) status.replaceChildren(errorBox(error));
+				if (!retired(error)) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("pm_edit_request"));
@@ -39099,7 +39624,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 					} catch {}
 				}
 				const handled = onError(error);
-				if (!handled) status.replaceChildren(errorBox(error));
+				if (!handled) status.replaceChildren(errorBox(error, { within: status }));
 				if (error.code === "VERSION_CONFLICT" && !handled) status.append(h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
@@ -41329,7 +41854,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				} catch (error) {
 					if (!item.isConnected || retired(error)) return;
 					if ([403, 404].includes(error.status)) item.remove();
-					else detail.replaceChildren(errorBox(error));
+					else detail.replaceChildren(errorBox(error, { within: detail }));
 				}
 			})();
 			let fetched = false, pending = false;
@@ -41352,7 +41877,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 					if (context.coverage?.omitted_message_ids?.length || context.coverage?.omitted_input_ids?.length || context.coverage?.messages_truncated || context.coverage?.inputs_truncated) detail.append(h("p", { class: "muted" }, t("pm_partial")));
 					fetched = true;
 				} catch (error) {
-					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error));
+					if (!retired(error) && item.isConnected) detail.replaceChildren(errorBox(error, { within: detail }));
 				} finally {
 					pending = false;
 				}
@@ -41377,7 +41902,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						renderPackages(next, true);
 					} catch (error) {
 						if (!retired(error)) {
-							status.replaceChildren(errorBox(error));
+							status.replaceChildren(errorBox(error, { within: status }));
 							more.disabled = false;
 						}
 					}
@@ -41414,7 +41939,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				proposalReview?.withdraw();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -41775,7 +42300,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				for (const section of sourceSections()) section.hidden = true;
 				updateForms();
-				status.replaceChildren(errorBox(error), h("p", { class: "muted" }, t("pm_stale")));
+				status.replaceChildren(errorBox(error, { within: status }), h("p", { class: "muted" }, t("pm_stale")));
 			}
 		} finally {
 			if (ticket === sequence) {
@@ -41871,7 +42396,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			discussionTools?.close();
 			publishContext();
 			updateForms();
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
 		}
 	}
@@ -41946,7 +42471,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				publishContext();
 				updateForms();
 			}
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
 		}
 	}
@@ -42472,7 +42997,7 @@ function workspaceNavigation({ h, t, api, guard, onEvents, namespace, errorBox, 
 	};
 	let catalogRows = null;
 	const showReadError = (error) => {
-		const detail = error ? errorBox(error) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
+		const detail = error ? errorBox(error, { insideDetails: true }) : h("p", { class: "muted" }, observedText(t, "or_projects_unknown"));
 		const label = t(pmWorkspace && !globalTree ? "ui_work_links_unavailable" : "ui_work_unavailable");
 		status.replaceChildren(h("div", {
 			class: "workspace-read-error",
@@ -42872,7 +43397,7 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 				try {
 					persist();
 				} catch (error) {
-					message.replaceChildren(errorBox(error));
+					message.replaceChildren(errorBox(error, { within: message }));
 				}
 			}
 			unsaved.hidden = false;
@@ -43215,7 +43740,10 @@ function managedSetupPanel({ h, t, api, guard, namespace, errorBox, refreshButto
 	}
 	function showError(error, options) {
 		if (alive()) {
-			message.replaceChildren(errorBox(error, options));
+			message.replaceChildren(errorBox(error, {
+				...options,
+				within: message
+			}));
 			update();
 		}
 	}
@@ -44255,7 +44783,7 @@ function sessionLabelsPanel({ h, t, api, caps, guard, target, storageKey, errorB
 	const tags = h("div", { class: "actions session-label-tags" }), message = h("div", { role: "status" }), result = h("div"), restriction = h("p", { class: "muted" });
 	const error = (e) => {
 		if (live()) {
-			message.replaceChildren(errorBox(e));
+			message.replaceChildren(errorBox(e, { within: message }));
 			update();
 		}
 	};
@@ -46142,7 +46670,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			try {
 				show(await (controller.snapshot().intent ? controller.check() : controller.create(document)));
 			} catch (error) {
-				if (alive()) status.replaceChildren(errorBox(error));
+				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				busy = false;
 				if (alive()) update();
@@ -46165,7 +46693,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				outcome.replaceChildren();
 				read();
 			} catch (error) {
-				if (alive()) status.replaceChildren(errorBox(error));
+				if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	}, t("repair_review_new"));
@@ -46229,7 +46757,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 				links(doc.existing);
 			}
 		} catch (error) {
-			if (alive() && mine === serial) status.replaceChildren(errorBox(error));
+			if (alive() && mine === serial) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (alive() && mine === serial) update();
 		}
@@ -46254,7 +46782,7 @@ function repairPanel({ h, t, api, caps, guard, namespace, source, errorBox, opSt
 			update();
 			if (controller.snapshot().intent?.operation_id) show(await controller.check());
 		} catch (error) {
-			if (alive()) status.replaceChildren(errorBox(error));
+			if (alive()) status.replaceChildren(errorBox(error, { within: status }));
 		} finally {
 			if (alive()) update();
 		}
@@ -46309,7 +46837,7 @@ function repairWorkItemPanel({ h, t, api, guard, projectId, workItemId, originOp
 					box.replaceChildren();
 					box.hidden = true;
 				} else {
-					box.replaceChildren(errorBox(error));
+					box.replaceChildren(errorBox(error, { within: box }));
 					box.hidden = false;
 				}
 			}
@@ -46471,7 +46999,7 @@ function instructionReceiptPanel({ h, t, when, api, guard, host, sessionId, erro
 			status.replaceChildren();
 			more.hidden = !value.can_load_more;
 		} catch (error) {
-			if (alive()) status.replaceChildren(h("p", { class: "muted" }, t("instruction_stale")), errorBox(error));
+			if (alive()) status.replaceChildren(h("p", { class: "muted" }, t("instruction_stale")), errorBox(error, { within: status }));
 		} finally {
 			if (alive()) reload.disabled = more.disabled = false;
 		}
@@ -46559,7 +47087,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		try {
 			persist();
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	const field = (name, label, multiline = false, max = 2e4) => {
@@ -46668,7 +47196,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 					saved.intent.initialAdmissionRefused = true;
 					persist();
 				}
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			} catch {}
 		} finally {
 			busy = false;
@@ -46702,7 +47230,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 				status.replaceChildren();
 				update();
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			}
 		}
 	});
@@ -48262,7 +48790,7 @@ function capturePanel({ h, t, api, caps, guard, onEvents, errorBox, storageKey, 
 	};
 	const validInput = (input) => input.host && input.session_id.length >= 6 && input.session_id.length <= 256 && !/[\x00-\x1f\x7f-\x9f/\\]/.test(input.session_id) && input.relative_path && new TextEncoder().encode(input.relative_path).length <= 4096 && !/[\\\x00-\x1f\x7f-\x9f]/.test(input.relative_path) && input.relative_path.split("/").every((part) => part && part !== "." && part !== ".." && part.toLowerCase() !== ".git");
 	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error));
+		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
 	};
 	const preview = h("button", {
 		class: "secondary",
@@ -48572,7 +49100,7 @@ function taskControlsPanel({ h, t, api, caps, guard, ready, task, taskId, storag
 	const message = h("div", { role: "status" }), result = h("div", { "data-task-result": "" }), restriction = h("p", { class: "muted" });
 	const showError = (error) => {
 		if (live()) {
-			message.replaceChildren(errorBox(error));
+			message.replaceChildren(errorBox(error, { within: message }));
 			update();
 		}
 	};
@@ -49130,7 +49658,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 							intent.refused = error.code;
 							persist();
 						}
-						message.replaceChildren(errorBox(error));
+						message.replaceChildren(errorBox(error, { within: message }));
 					}
 				} finally {
 					busy = false;
@@ -49199,7 +49727,7 @@ function permissionsPanel({ h, t, api, caps, guard, errorBox, opStatus, storageK
 	function showError(error) {
 		if (current()) {
 			readFailed = true;
-			message.replaceChildren(errorBox(error));
+			message.replaceChildren(errorBox(error, { within: message }));
 			update();
 		}
 	}
@@ -49347,7 +49875,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 				status.replaceChildren();
 				renderPreview();
 			} catch (e) {
-				if (current()) status.replaceChildren(errorBox(e));
+				if (current()) status.replaceChildren(errorBox(e, { within: status }));
 			} finally {
 				busy = false;
 				if (current()) update();
@@ -49401,7 +49929,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 			try {
 				persist(true);
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				update();
 				return;
 			}
@@ -49419,7 +49947,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 							intent.refused = e.code;
 							persist();
 						}
-						status.replaceChildren(errorBox(e));
+						status.replaceChildren(errorBox(e, { within: status }));
 					}
 				} finally {
 					busy = false;
@@ -49563,7 +50091,7 @@ function approvalsPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, sto
 		} catch (e) {
 			if (current()) {
 				readFailed = true;
-				status.replaceChildren(errorBox(e));
+				status.replaceChildren(errorBox(e, { within: status }));
 				update();
 			}
 			throw e;
@@ -49701,7 +50229,7 @@ function sessionStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatus, 
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	};
 	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e));
+		if (current()) status.replaceChildren(errorBox(e, { within: status }));
 	};
 	function renderWorkspaces() {
 		workspace.replaceChildren(h("option", { value: "" }, t("start_choose_workspace")), ...workspaces.map((w) => h("option", { value: w.workspace_id }, `${w.name || w.workspace_id} · ${w.workspace_id}`)));
@@ -50341,7 +50869,7 @@ function orchestrationPanel({ h, t, api, caps, guard, ready, errorBox, opStatus,
 		maximum.value = saved.max_items;
 	}
 	const showError = (error) => {
-		if (current()) status.replaceChildren(errorBox(error));
+		if (current()) status.replaceChildren(errorBox(error, { within: status }));
 	};
 	function renderSelection() {
 		const id = (row) => sessionMode(mode) ? row.session_id : row.workspace_id;
@@ -50917,7 +51445,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		for (const [k, el] of Object.entries(inputs)) el.value = saved[k];
 	}
 	const showError = (e) => {
-		if (current()) status.replaceChildren(errorBox(e));
+		if (current()) status.replaceChildren(errorBox(e, { within: status }));
 	};
 	const selected = () => ({
 		target: saved.target,
@@ -51235,7 +51763,7 @@ function repositoryStartPanel({ h, t, api, caps, guard, ready, errorBox, opStatu
 		} catch (e) {
 			if (current()) {
 				projectFailed = true;
-				projectStatus.replaceChildren(errorBox(e));
+				projectStatus.replaceChildren(errorBox(e, { within: projectStatus }));
 				update();
 			}
 			throw e;
@@ -51677,7 +52205,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		}
 	};
 	const showError = (error) => {
-		if (currentView()) notice.replaceChildren(errorBox(error));
+		if (currentView()) notice.replaceChildren(errorBox(error, { within: notice }));
 	};
 	const supported = () => caps()?.artifacts?.capture?.managed_single_file === true;
 	const scope = (name) => caps()?.scopes?.includes(name);
@@ -51991,7 +52519,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	const moreArtifacts = h("button", {
 		class: "secondary",
 		hidden: true,
-		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e)))
+		onclick: () => loadCatalog(true).catch((e) => catalogNotice.replaceChildren(errorBox(e, { within: catalogNotice })))
 	}, t("more"));
 	const catalogPanel = h("section", { class: "panel" }, h("h2", {}, t("ar_catalog")), catalog, catalogNotice, h("div", { class: "actions" }, moreArtifacts));
 	container.append(pageHeader({ title: t("ar_title") }), disclosure({
@@ -52181,7 +52709,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 		try {
 			await catalogReading;
 		} catch (error) {
-			if (currentView()) catalogNotice.replaceChildren(errorBox(error));
+			if (currentView()) catalogNotice.replaceChildren(errorBox(error, { within: catalogNotice }));
 			throw error;
 		} finally {
 			catalogReading = null;
@@ -52241,7 +52769,7 @@ async function mountArtifactReview({ main, h, t, api, caps, guard, onEvents, err
 	if (!saved.capture) initial.push(loadSource());
 	if (saved.capture?.operation_id || saved.accept?.operation_id || context.kind === "artifact") initial.push(refresh());
 	initial.push(loadCatalog().catch((error) => {
-		if (currentView()) catalogNotice.replaceChildren(errorBox(error));
+		if (currentView()) catalogNotice.replaceChildren(errorBox(error, { within: catalogNotice }));
 	}));
 	const results = await Promise.allSettled(initial);
 	for (const result of results) if (result.status === "rejected") {
@@ -52591,7 +53119,104 @@ var state = {
 	connectionNotice: null,
 	refreshCycle: null
 };
+var recentErrors = errorRing();
+var diagnosticSessions = new Map();
+var diagnosticSessionsRead = false;
+var diagnosticRevision = 0;
+var diagnosticsPreview = null;
+var desktopBuild = null;
+function withdrawDiagnostics() {
+	diagnosticRevision++;
+	diagnosticSessions.clear();
+	diagnosticSessionsRead = false;
+	diagnosticsPreview?.withdraw();
+}
+function diagnosticsClient(caps = state.caps) {
+	const platform = navigator.platform || navigator.userAgent;
+	return {
+		caps,
+		appBuild: desktopBuild,
+		desktop: nativeDesktop,
+		os: /win/i.test(platform) ? "windows" : /mac/i.test(platform) ? "macos" : /linux/i.test(platform) ? "linux" : "unknown",
+		locale,
+		width: innerWidth
+	};
+}
+async function openDiagnostics() {
+	if (diagnosticsPreview) return;
+	const epoch = state.epoch;
+	diagnosticsPreview = diagnosticsDialog({
+		h,
+		t,
+		onClose: () => {
+			diagnosticsPreview = null;
+		},
+		load: async () => {
+			if (nativeDesktop && !desktopBuild) try {
+				desktopBuild = (await nativeStatus()).app_build;
+			} catch {}
+			let caps = null;
+			try {
+				caps = await api("GET", "/capabilities");
+			} catch {}
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (!caps?.scopes?.includes("observe")) withdrawDiagnostics();
+			const revision = diagnosticRevision;
+			const read = async (path, scope) => {
+				if (!caps?.scopes?.includes(scope)) return null;
+				try {
+					const data = await api("GET", path);
+					return revision === diagnosticRevision ? data : null;
+				} catch {
+					return null;
+				}
+			};
+			let [hosts, operations, setup] = await Promise.all([
+				read("/hosts", "observe"),
+				read("/operations?limit=50", "observe"),
+				caps?.managed_installation ? read("/managed/setup", "manage") : null
+			]);
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (revision !== diagnosticRevision) hosts = operations = setup = null;
+			return buildDiagnostics({
+				...diagnosticsClient(caps),
+				exportedAt: new Date().toISOString(),
+				hosts: hosts?.hosts,
+				operations: operations?.operations,
+				setup,
+				sessions: hosts && caps?.scopes?.includes("observe") && diagnosticSessionsRead ? [...diagnosticSessions.values()] : null,
+				recentErrors: recentErrors.entries(),
+				sources: {
+					capabilities: caps ? "available" : "not_available",
+					hosts: hosts ? "available" : "not_available",
+					operations: operations ? "available" : "not_available",
+					managed_setup: setup ? "available" : "not_available"
+				}
+			});
+		},
+		save: async (content, filename) => {
+			if (epoch !== state.epoch) throw Error("Connection changed");
+			if (nativeDesktop) return nativeDiagnosticsSave({
+				content,
+				filename,
+				locale
+			});
+			const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+			const link = h("a", {
+				href: url,
+				download: filename
+			});
+			document.body.append(link);
+			link.click();
+			link.remove();
+			setTimeout(() => URL.revokeObjectURL(url), 1e3);
+			return true;
+		}
+	});
+}
 async function activate(caps, endpoint = location.origin, reset = false) {
+	withdrawDiagnostics();
+	recentErrors.clear();
 	state.epoch++;
 	state.observations = new Map();
 	state.connectionError = null;
@@ -52631,6 +53256,8 @@ function saveCursor() {
 }
 function disconnect() {
 	if (state.token === "managed-browser-session") forgetBrowserSession()?.catch(() => {});
+	withdrawDiagnostics();
+	recentErrors.clear();
 	state.epoch++;
 	clearToken();
 	state.token = null;
@@ -52670,7 +53297,7 @@ function h(tag, attrs = {}, ...children) {
 		try {
 			await openExternal(attrs.href);
 		} catch (error) {
-			document.getElementById("main").prepend(errorBox(error));
+			document.getElementById("main").prepend(errorBox(error, { within: document.getElementById("main") }));
 		}
 	});
 	return el;
@@ -52750,6 +53377,59 @@ function dropKey(scope, namespace) {
 	} catch {}
 }
 async function api(method, path, body, key, collectReceipt) {
+	const revision = diagnosticRevision, epoch = state.epoch;
+	try {
+		const data = await apiRequest(method, path, body, key, collectReceipt);
+		if (epoch === state.epoch && revision === diagnosticRevision && method === "GET" && /^\/sessions(?:[/?]|$)/.test(path)) {
+			const previous = new Map(diagnosticSessions);
+			if (Array.isArray(data.sessions)) {
+				if (!new URLSearchParams(path.split("?")[1] || "").has("cursor")) diagnosticSessions.clear();
+				diagnosticSessionsRead = true;
+			} else if (data.session) diagnosticSessionsRead = true;
+			for (const session of data.sessions || (data.session ? [data.session] : [])) {
+				const facts = sessionFacts(session), id = `${session.host}/${session.session_id}`;
+				const history = facts.history_reasons ?? previous.get(id)?.reading?.incomplete_reasons ?? null;
+				diagnosticSessions.set(id, {
+					loaded: facts.loaded,
+					streaming: facts.streaming,
+					stale: facts.stale,
+					pending: facts.pending === true ? {} : facts.pending === false ? null : void 0,
+					reading: { incomplete_reasons: history }
+				});
+			}
+			const messages = path.match(/^\/sessions\/([^/?]+)\/([^/?]+)\/messages(?:[/?]|$)/);
+			if (messages) {
+				const id = messages.slice(1).map(decodeURIComponent).join("/");
+				const history = sessionFacts({ reading: data.reading }).history_reasons;
+				diagnosticSessions.set(id, {
+					...diagnosticSessions.get(id),
+					reading: { incomplete_reasons: history }
+				});
+				diagnosticSessionsRead = true;
+			}
+		}
+		return data;
+	} catch (error) {
+		if (epoch === state.epoch) {
+			recentErrors.record({
+				at: new Date().toISOString(),
+				method,
+				path,
+				status: error.status,
+				code: error.code,
+				admissionRefused: error.admissionRefused,
+				operation: error.operation
+			});
+			if ([
+				401,
+				403,
+				404
+			].includes(error.status)) withdrawDiagnostics();
+		}
+		throw error;
+	}
+}
+async function apiRequest(method, path, body, key, collectReceipt) {
 	if (!state.token) throw new ApiError(401, "UNAUTHORIZED", t("need_token"), { localized: true });
 	if (method === "POST" && (state.nativeBusy || !state.online || !state.viewReady)) throw new ApiError(0, "CENTRAL_OFFLINE", t("offline_actions_paused"), { localized: true });
 	const epoch = state.epoch;
@@ -52766,21 +53446,27 @@ async function api(method, path, body, key, collectReceipt) {
 		const error = new ApiError(status, data.error?.code, data.error?.message);
 		error.admissionRefused = data.error?.admission_refused === true;
 		error.reason = data.error?.reason;
+		error.operation = data.operation ?? data.error?.operation;
 		throw error;
 	}
 	return data;
 }
-function errorBox(e, { summary } = {}) {
+function errorBox(e, { summary, within, insideDetails = false } = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
 	const presentation = errorPresentation(e, t, { summary });
-	const diagnostics = [presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean);
+	const body = h("div", { "data-error-details": "" }, ...[presentation.code ? h("code", {}, presentation.code) : null, presentation.message && presentation.message !== presentation.code ? h("p", {}, presentation.message) : null].filter(Boolean), button({
+		variant: "ghost",
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}));
 	return h("div", { "data-api-error": "" }, h("p", {
 		class: "error",
 		"data-error-summary": ""
-	}, presentation.summary), diagnostics.length ? disclosure({
+	}, presentation.summary), insideDetails || within?.closest?.("details") ? body : disclosure({
 		label: t("global_details"),
-		body: h("div", { "data-error-details": "" }, ...diagnostics)
-	}) : null);
+		body
+	}));
 }
 async function submit(action, target, params, preconditions, scope) {
 	const connection = {
@@ -53160,11 +53846,11 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		fill(status);
 		const limit = Math.min(state.caps?.artifacts?.limits?.max_file_bytes || 16777216, nativeDesktop ? 16777216 : Number.MAX_SAFE_INTEGER);
 		if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-			fill(status, errorBox(new Error(t("attachment_unsupported_image"))));
+			fill(status, errorBox(new Error(t("attachment_unsupported_image")), { within: status }));
 			return;
 		}
 		if (file.size > limit) {
-			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`)));
+			fill(status, errorBox(new ApiError(413, "ARTIFACT_TOO_LARGE", `Limit: ${limit}`), { within: status }));
 			return;
 		}
 		let name = file.name;
@@ -53209,7 +53895,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		if (!imageCandidates.length) return;
 		e.preventDefault();
 		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused"))));
+			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
 			return;
 		}
 		for (const file of imageCandidates) handleIncomingFile(file);
@@ -53235,7 +53921,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 		if (nativeFiles || !e.dataTransfer?.files?.length) return;
 		e.preventDefault();
 		if (!supported || !may("manage") || nativeFiles && !nativeUploadAllowed || !state.online || !state.viewReady) {
-			fill(status, errorBox(new Error(t("offline_actions_paused"))));
+			fill(status, errorBox(new Error(t("offline_actions_paused")), { within: status }));
 			return;
 		}
 		for (const file of e.dataTransfer.files) handleIncomingFile(file);
@@ -53275,7 +53961,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 				persist();
 				render();
 			} catch (e) {
-				if (connection.epoch === state.epoch) fill(status, errorBox(e));
+				if (connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 			} finally {
 				pendingSelections--;
 				changed();
@@ -53291,7 +53977,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			try {
 				await loadCatalog(catalogCursor);
 			} catch (e) {
-				if (box.isConnected) fill(status, errorBox(e));
+				if (box.isConnected) fill(status, errorBox(e, { within: status }));
 			} finally {
 				more.disabled = false;
 			}
@@ -53401,7 +54087,7 @@ function attachmentDraft(scope, text, initial = [], roles = false, onChange = ()
 			if (ev.resource_id === saved.submission?.operation_id || saved.attachments.some((a) => a.operation_id === ev.resource_id)) return refresh();
 		});
 		queueMicrotask(() => settleRefreshes([loadCatalog(), refresh()]).catch((e) => {
-			if (box.isConnected && connection.epoch === state.epoch) fill(status, errorBox(e));
+			if (box.isConnected && connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 		}));
 	}
 	const bindFields = (fields) => {
@@ -53830,7 +54516,7 @@ async function viewSessions(main) {
 		assertView(connection);
 		for (const x of hosts) hostSel.append(h("option", { value: x.host }, x.host));
 	} catch (e) {
-		status.replaceChildren(errorBox(e));
+		status.replaceChildren(errorBox(e, { within: status }));
 		return;
 	}
 	hostSel.value = q.get("host") || "";
@@ -53995,7 +54681,7 @@ async function viewSessions(main) {
 			if (mode === "refresh" && current && Math.abs(scrollY - before) < 1) scrollBy(0, current.getBoundingClientRect().top - offset);
 		} catch (e) {
 			pathsIntro.hidden = true;
-			status.replaceChildren(errorBox(e));
+			status.replaceChildren(errorBox(e, { within: status }));
 		} finally {
 			more.disabled = false;
 		}
@@ -54193,7 +54879,7 @@ function observationPanels(type, id, path, plain = false) {
 				].flat());
 				status.replaceChildren();
 			} catch (error) {
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 			} finally {
 				busy = false;
 				refresh.disabled = more.disabled = false;
@@ -54293,7 +54979,7 @@ async function viewTask(main, id) {
 					404,
 					410
 				].includes(error?.status)) place(head, "replaceChildren");
-				status.replaceChildren(errorBox(error));
+				status.replaceChildren(errorBox(error, { within: status }));
 				clearTimeout(retry);
 				retry = setTimeout(() => load().catch(() => {}), 3e3);
 			}
@@ -54358,7 +55044,7 @@ async function viewObservedResource(main, type, id) {
 				404,
 				410
 			].includes(error?.status)) place(head, "replaceChildren");
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 	};
 	await load();
@@ -54404,7 +55090,7 @@ async function viewHostDiscovery(main, host) {
 			assertView(connection);
 			head.replaceChildren(discoveryEvidence(data.scopes));
 		} catch (error) {
-			head.append(errorBox(error));
+			head.append(errorBox(error, { within: head }));
 		}
 	};
 	await load();
@@ -54435,19 +55121,25 @@ function sessionErrorLine(e) {
 	if (e?.status === 0 && e?.code === "CENTRAL_OFFLINE") return t("offline_actions_paused");
 	return t("session_err_unknown");
 }
-function sessionErrorDetails(e) {
+function sessionErrorDetails(e, { within, insideDetails = false } = {}) {
 	const code = typeof e?.code === "string" ? e.code : "";
 	const detail = [
 		code,
 		e?.status ? `HTTP ${e.status}` : "",
 		e?.message && e.message !== code ? e.message : ""
 	].filter(Boolean).join(" · ");
-	return detail ? disclosure({
+	const body = h("div", {}, detail ? h("p", { class: "muted" }, h("code", {}, detail)) : null, button({
+		variant: "ghost",
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}));
+	return insideDetails || within?.closest?.("details") ? body : disclosure({
 		label: t("session_error_details"),
-		body: h("p", { class: "muted" }, h("code", {}, detail))
-	}) : null;
+		body
+	});
 }
-function sessionErrorBox(e, action = null) {
+function sessionErrorBox(e, action = null, options = {}) {
 	if (state.refreshCycle) state.refreshCycle.error ||= e;
 	return h("div", {
 		class: "session-error",
@@ -54457,7 +55149,7 @@ function sessionErrorBox(e, action = null) {
 		type: "button",
 		class: "session-error-action",
 		onclick: action.run
-	}, action.label) : null), sessionErrorDetails(e));
+	}, action.label) : null), sessionErrorDetails(e, options));
 }
 function sessionPullHref(target) {
 	try {
@@ -54636,7 +55328,7 @@ async function viewSession(main, host, sid, context = null) {
 					mobileLayout?.updateDraft();
 				}
 			} catch (e) {
-				status.replaceChildren(sessionErrorBox(e, sendRecovery(e)));
+				status.replaceChildren(sessionErrorBox(e, sendRecovery(e), { within: status }));
 			} finally {
 				sending = false;
 				send.disabled = !allowed("session.send");
@@ -54662,7 +55354,7 @@ async function viewSession(main, host, sid, context = null) {
 				status.replaceChildren(sessionErrorBox(e, e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => stop.click()
-				}));
+				}, { within: status }));
 			}
 		}
 	});
@@ -55096,7 +55788,7 @@ async function viewSession(main, host, sid, context = null) {
 				} : e?.status === 403 ? accessRecovery() : [404, 410].includes(e?.status) ? goneRecovery() : {
 					label: t("ui_retry"),
 					run: () => answer(params)
-				}));
+				}, { within: status }));
 			}
 		};
 		const actions = h("div", { class: "actions session-asking-actions" });
@@ -55482,7 +56174,7 @@ async function viewSession(main, host, sid, context = null) {
 		withdrawnSlot.replaceChildren(h("div", { "data-session-withdrawn": kind }, emptyState({
 			icon: "circle-alert",
 			title: t(kind === "forbidden" ? "session_withdrawn_forbidden" : "session_withdrawn_gone"),
-			action: h("div", {}, backLink(), sessionErrorDetails(error))
+			action: h("div", {}, backLink(), sessionErrorDetails(error, { within: withdrawnSlot }))
 		})));
 	};
 	const reinstate = () => {
@@ -55525,7 +56217,7 @@ async function viewSession(main, host, sid, context = null) {
 				readError = sessionErrorBox(error, {
 					label: t("ui_retry"),
 					run: () => refresh().catch(() => {})
-				});
+				}, { within: status });
 				readError.error = error;
 				if (!withdrawn) status.replaceChildren(readError);
 				scheduleRetry();
@@ -55622,7 +56314,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					out.replaceChildren(sessionErrorBox(e, {
 						label: t("ui_retry"),
 						run: () => go.click()
-					}));
+					}, { within: out }));
 				}
 				go.disabled = false;
 			}
@@ -55652,7 +56344,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 					fill(out, sessionErrorBox(e, {
 						label: t("ui_retry"),
 						run: () => load().catch(() => {})
-					}));
+					}, { within: out }));
 				}
 			}
 		}, t("continue_from_checkpoint"));
@@ -55671,7 +56363,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			if (mine === ticket) list.replaceChildren(sessionErrorBox(e, {
 				label: t("ui_retry"),
 				run: () => load().catch(() => {})
-			}));
+			}, { within: list }));
 		}
 	};
 	const pick = h("select", {
@@ -55705,7 +56397,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 			status.replaceChildren(sessionErrorBox(error, {
 				label: t("ui_retry"),
 				run: () => loadPreview().catch(() => {})
-			}));
+			}, { within: status }));
 		}
 	};
 	const create = h("button", {
@@ -55734,7 +56426,7 @@ function checkpointPanel(host, sid, { namespace = state.namespace, manual = () =
 				status.replaceChildren(sessionErrorBox(e, {
 					label: t("ui_retry"),
 					run: () => load().catch(() => {})
-				}));
+				}, { within: status }));
 			}
 			create.disabled = !can || previewFailed;
 		}
@@ -55928,7 +56620,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 					const receipt = op.result?.merge || op.result || op.external_refs?.merge_receipt;
 					fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), receipt?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: receipt.other_commits_count })) : null);
 				} catch (e) {
-					fill(status, errorBox(e));
+					fill(status, errorBox(e, { within: status }));
 				}
 			};
 			const blocked = pr.state !== "open" || pr.draft || pr.merged || pv.blocking.length > 0 || scopeChanged;
@@ -55963,7 +56655,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 								}
 							}, `merge_deploy.${pv.preview_id}.${r.name}`);
 						} catch (e) {
-							fill(status, errorBox(e));
+							fill(status, errorBox(e, { within: status }));
 						}
 					}
 				}, t("merge_and_deploy_to", { env: r.environment })));
@@ -55976,7 +56668,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 							const op = await submit("deployment.start", { recipe: r.name }, { source_sha: pr.merge_commit_sha }, deploymentPreview.preconditions, `deploy.${r.name}.${pr.merge_commit_sha}`);
 							fill(status, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 						} catch (e) {
-							fill(status, errorBox(e));
+							fill(status, errorBox(e, { within: status }));
 						}
 					}
 				}, t("deploy_to", { env: r.environment })));
@@ -55994,7 +56686,7 @@ async function viewDelivery(main, sourceHost, sourceKind, sourceId, sourceReposi
 				rel: "noopener"
 			}, `#${pr.pull_number} ${pr.title || ""}`)), h("dl", { class: "kv" }, h("dt", {}, t("head")), h("dd", {}, h("code", {}, `${pr.head_ref} @ ${pr.head_sha}`)), h("dt", {}, t("base")), h("dd", {}, h("code", {}, `${pr.base_ref} @ ${pr.base_sha}`)), h("dt", {}, t("mergeable")), h("dd", {}, `${pr.state}${pr.draft ? " · draft" : ""} · ${pr.mergeable_state || "?"}`), h("dt", {}, t("checks")), h("dd", {}, t("checks_summary", pr.checks)), pr.merged ? [h("dt", {}, t("merged_sha")), h("dd", {}, h("code", {}, pr.merge_commit_sha))] : null), metadataDrawer(pr, load), scopeChanged ? h("p", { class: "note warn" }, t("merge_scope_reload")) : null, h("h2", {}, t("merge_scope")), h("label", {}, t("merge_method"), " ", method), h("p", { class: "muted" }, t("merge_preview_fixed"), " ", h("code", {}, pv.preview_id)), commitList, affected.length ? h("div", {}, ...affected) : h("p", { class: "muted" }, t("scope_single_pr")), ...pv.blocking.map((b) => h("p", { class: "note warn" }, h("code", {}, b.code), " · ", b.message)), ...pv.warnings.map((w) => h("p", { class: "muted" }, w)), h("div", { class: "actions" }, ...buttons), status, flash instanceof Node ? flash : null, pr.integration?.allowed ? integrationPanel(pr, load, source) : null);
 		} catch (e) {
-			if (!holdCard()) fill(card, errorBox(e));
+			if (!holdCard()) fill(card, errorBox(e, { within: card }));
 		}
 	};
 	reload = async (fromEvent = true) => {
@@ -56071,7 +56763,7 @@ function deploymentReceipt(dep) {
 			];
 			fill(body, h("dl", { class: "kv" }, ...values.filter(([, v]) => v !== null && v !== void 0 && v !== "").flatMap(([label, value]) => [h("dt", {}, label), h("dd", {}, value)])), op.status_reason ? h("p", {}, op.status_reason) : null, ...(op.steps || []).map((s) => h("div", { class: "row" }, h("code", {}, s.name), h("span", {}, operationStatusLabel(s.status)))));
 		} catch (e) {
-			fill(body, errorBox(e));
+			fill(body, errorBox(e, { within: body }));
 			read = false;
 		}
 	});
@@ -56131,7 +56823,7 @@ function deploymentIntent(dep, kind, reload) {
 					fill(out, h("p", {}, opStatus(op), " · ", h("a", { href: `#/op/${op.operation_id}` }, t("dep_open_operation"))), deploymentReceipt({ operation_id: op.operation_id }));
 				}
 			} catch (e) {
-				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e)]));
+				fill(out, h("p", { class: "error" }, t("dep_refused")), heldDetails(t("dep_operation_details"), [errorBox(e, { insideDetails: true })]));
 				if ([
 					"DEPLOY_PREVIEW_REQUIRED",
 					"ENVIRONMENT_CHANGED",
@@ -56156,7 +56848,7 @@ function deploymentIntent(dep, kind, reload) {
 			fill(previewBox, deploymentPreviewSummary(preview), preview.readiness?.ready ? null : h("p", { class: "note warn" }, t("dep_missing_verification")));
 			confirm.disabled = busy || accepted || !preview.readiness?.ready;
 		} catch (e) {
-			fill(previewBox, errorBox(e));
+			fill(previewBox, errorBox(e, { within: previewBox }));
 		}
 	}
 	fill(d.box, h("h3", {}, t(kind === "rollback" ? "dep_rollback_review" : "dep_retry_review")), deploymentIdentity(dep.identity), h("p", {}, `${dep.repository} · ${dep.environment}`), kind === "rollback" ? deploymentLimits(dep.rollback?.not_undone) : h("p", { class: "muted" }, t("dep_retry_only")), previewBox, out, h("div", { class: "actions" }, confirm, h("button", {
@@ -56293,7 +56985,7 @@ function environmentCard(group) {
 				fill(card, h("div", { class: "deployment-card-heading" }, h("h2", {}, group[0].environment), needs ? chip(t("dep_attention"), "warn") : null), h("p", { class: "muted" }, group[0].repository, " · ", t("dep_generation", { generation: env.desired_generation })), needs ? h("p", { class: "note warn" }, t(env.attention === "ENVIRONMENT_VERSION_DRIFT" ? "dep_drift" : "dep_attention_help")) : null, h("div", { class: "deployment-versions" }, h("div", {}, h("h3", {}, t("dep_desired")), deploymentRecord(env.desired, env, load, true)), h("div", {}, h("h3", {}, t("dep_observed")), deploymentIdentity(observed), h("p", { class: "muted" }, timeLabel(t, "dep_observed_at", { time: deploymentTime(observed?.observed_at || env.current?.evidence?.runtime?.checked_at) })), env.current?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(env.current.evidence.runtime)) : null)), h("div", { class: "deployment-last-verified" }, h("h3", {}, t("dep_last_verified")), deploymentIdentity(verified?.identity), h("p", { class: "muted" }, timeLabel(t, "dep_verified_at", { time: deploymentTime(verified?.evidence?.runtime?.checked_at) })), verified?.evidence?.runtime?.summary ? h("p", { class: "muted" }, runtimeSummary(verified.evidence.runtime)) : null, verified ? deploymentReceipt(verified) : null), h("h3", {}, t("dep_history")), h("div", { "data-testid": "deployment-history" }, ...history.items.length ? history.items.map((dep) => deploymentRecord(dep, env, load)) : [h("p", { class: "muted" }, t("dep_no_history"))]), !history.items.length && group.every((r) => !r.rollback?.supported) ? h("p", { class: "muted" }, t("dep_ROLLBACK_UNSUPPORTED")) : null, h("div", { class: "actions deployment-pagination" }, previous, h("span", { class: "muted" }, t("dep_page", { page: page + 1 })), more));
 			} catch (e) {
 				if (["CONNECTION_CHANGED", "VIEW_CHANGED"].includes(e.code)) return;
-				const failure = errorBox(e);
+				const failure = errorBox(e, { within: card });
 				if (!holdRender(fromEvent, opens) && !editing) fill(card, failure);
 			}
 		})();
@@ -56350,7 +57042,7 @@ function metadataDrawer(pr, reload) {
 				fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id), op.error_code ? chip(op.error_code, "bad") : null, contents, h("p", { class: "muted" }, t("metadata_result_help")));
 				idleReload = () => reload();
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 				save.disabled = false;
 			}
 		}
@@ -56469,7 +57161,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 			doc = op.result;
 			renderPreview();
 		} catch (e) {
-			if (mine === generation) previewBox.replaceChildren(errorBox(e));
+			if (mine === generation) previewBox.replaceChildren(errorBox(e, { within: previewBox }));
 		}
 	};
 	const changed = debounce(() => {
@@ -56506,7 +57198,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 					};
 					follow((await api("POST", "/operations?wait=3", req, "integrate." + doc.preview_id)).operation);
 				} catch (e) {
-					status.replaceChildren(errorBox(e));
+					status.replaceChildren(errorBox(e, { within: status }));
 					go.disabled = false;
 				}
 			}
@@ -56535,7 +57227,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 					try {
 						follow((await api("POST", `/operations/${op.operation_id}/resume`, {})).operation);
 					} catch (e) {
-						status.append(errorBox(e));
+						status.append(errorBox(e, { within: status }));
 					}
 				},
 				cancel: async () => {
@@ -56599,7 +57291,7 @@ function integrationPanel(pr, reloadCard, source = null) {
 				}
 			}, t("add_branch"))));
 		} catch (e) {
-			pickList.replaceChildren(errorBox(e));
+			pickList.replaceChildren(errorBox(e, { within: pickList }));
 		}
 	})();
 	box.append(pickList, h("h3", {}, t("selected_in_order")), order, previewBox, status);
@@ -56624,7 +57316,7 @@ function repairControl(op) {
 					const o = await submit("integration.handoff", { operation_id: op.operation_id }, { agent: agent.value }, {}, `handoff.${op.operation_id}`);
 					out.append(h("p", {}, opStatus(o), " ", t("handoff_started"), " ", h("a", { href: `#/op/${o.operation_id}` }, o.operation_id)));
 				} catch (e) {
-					out.append(errorBox(e));
+					out.append(errorBox(e, { within: out }));
 				}
 				go.disabled = false;
 			}
@@ -56773,7 +57465,7 @@ async function viewOperation(main, id) {
 						const o = await submit("deployment.start", { recipe: op.target.recipe }, { source_sha: refs.merged_sha }, preview.preconditions, `deploy.${op.target.recipe}.${refs.merged_sha}`);
 						location.hash = `#/op/${o.operation_id}`;
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("retry_deploy")) : null;
@@ -56786,7 +57478,7 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/resume`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t(op.action === "worktree.merge" ? "delivery_merge_read_receipts" : "resume")) : null;
@@ -56805,7 +57497,7 @@ async function viewOperation(main, id) {
 						await submit("checkpoint.continue.revalidate", { operation_id: id }, { observed_source_head_sha: seen }, { expected_input_manifest_digest: refs.input_manifest_digest }, `revalidate.${id}.${seen}`);
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("confirm_source")) : null;
@@ -56826,7 +57518,7 @@ async function viewOperation(main, id) {
 						await api("POST", `/operations/${id}/cancel`, {});
 						render();
 					} catch (e) {
-						panel.append(errorBox(e));
+						panel.append(errorBox(e, { within: panel }));
 					}
 				}
 			}, t("cancel")) : null;
@@ -56844,7 +57536,7 @@ async function viewOperation(main, id) {
 				result: op.result
 			}, null, 2))) : null, ...materialized.length ? [h("h2", {}, t("materializations")), ...materialized.map((m) => h("div", { class: "row" }, h("div", { class: "grow" }, `${m.artifact_id} · r${m.revision}`, h("div", { class: "muted" }, m.managed_path)), chip(t(`material_${m.state}`), m.state === "verified" ? "ok" : "")))] : [], ...cleanupReceipts?.length ? [h("h2", {}, t("cleanup_open_receipts")), ...cleanupReceipts.map((r) => h("details", { class: "row-details" }, h("summary", {}, r.resource_id, " · ", t("cleanup_receipt_" + r.status)), h("pre", { class: "pre" }, JSON.stringify(r, null, 2))))] : [], ...op.action === "integration.apply" ? [repairControl(op)] : [], (op.result?.merge || op.result || refs.merge_receipt)?.base_moved ? h("p", { class: "note warn" }, t("merged_newer_base", { count: (op.result?.merge || op.result || refs.merge_receipt).other_commits_count })) : null, refs.write_acknowledged && refs.verification_pending ? h("p", { class: "note warn" }, t("metadata_pending")) : null, h("h2", {}, t("steps")), ...op.steps.map((s) => h("div", { class: "row" }, h("div", { class: "grow" }, s.name), h("span", { class: `status-${s.status}` }, operationStatusLabel(s.status)), s.error ? chip(s.error.code || t("error"), "bad") : null)), h("div", { class: "actions" }, opened, ["artifact.capture.managed", "artifact.accept"].includes(op.action) && op.status === "succeeded" && /^art_[0-9a-f]{32}$/.test(op.result?.artifact_id) && Number.isSafeInteger(op.result?.revision) && op.result.revision > 0 ? h("a", { href: `#/artifact-review/artifact/${op.result.artifact_id}/${op.result.revision}` }, t("ar_review_title")) : null, state.caps?.artifacts?.capture?.managed_single_file && managedCaptureExecution(op) ? h("a", { href: `#/artifact-review/operation/${op.operation_id}` }, t("ar_open")) : null, confirmSource, resume, retry, cancel));
 		} catch (e) {
-			fill(panel, errorBox(e));
+			fill(panel, errorBox(e, { within: panel }));
 		}
 	};
 	await render();
@@ -56984,7 +57676,15 @@ function openSettings(main, { exclusive = false, refreshButton } = {}) {
 			onClick: () => route()
 		})]
 	}));
-	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("a", { href: setupGuide() }, t("global_setup_guide"))));
+	frame.panel("about").append(h("section", { class: "panel" }, h("h2", {}, t("global_nav_about")), h("p", {}, t("global_product")), h("p", { "data-build-line": "" }, buildLine(clientIdentity(diagnosticsClient()), t)), h("div", { class: "actions" }, button({
+		label: t("diag_export"),
+		onClick: openDiagnostics,
+		"data-export-diagnostics": ""
+	}), h("a", { href: setupGuide() }, t("global_setup_guide")))));
+	if (nativeDesktop) nativeStatus().then((status) => {
+		desktopBuild = status.app_build;
+		if (frame.root.isConnected) frame.panel("about").querySelector("[data-build-line]").textContent = buildLine(clientIdentity(diagnosticsClient()), t);
+	}).catch(() => {});
 	main.append(frame.root);
 	const connection = {
 		epoch: state.epoch,
@@ -57035,7 +57735,7 @@ function viewBrowserSignedOut(main) {
 	const info = h("div", { class: "global-connect-status" });
 	const showConnectError = (error) => {
 		info.setAttribute("role", "alert");
-		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error));
+		info.replaceChildren(error?.status === 401 ? h("p", { class: "error" }, t("global_token_rejected")) : errorBox(error, { within: info }));
 	};
 	if (state.connectionError) showConnectError(state.connectionError);
 	const root = firstRunCard({
@@ -57142,7 +57842,7 @@ async function viewManagedSettings(main) {
 					guard();
 					status.replaceChildren();
 				} catch (error) {
-					if (connection.generation === generation) status.replaceChildren(errorBox(error));
+					if (connection.generation === generation) status.replaceChildren(errorBox(error, { within: status }));
 				} finally {
 					open.disabled = false;
 				}
@@ -57155,7 +57855,7 @@ async function viewManagedSettings(main) {
 			login.checked = !!state.login_enabled;
 			login.disabled = false;
 		} catch (error) {
-			status.replaceChildren(errorBox(error));
+			status.replaceChildren(errorBox(error, { within: status }));
 		}
 		login.addEventListener("change", async () => {
 			const wanted = login.checked;
@@ -57171,7 +57871,7 @@ async function viewManagedSettings(main) {
 			} catch (error) {
 				if (connection.generation === generation) {
 					login.checked = !wanted;
-					status.replaceChildren(errorBox(error));
+					status.replaceChildren(errorBox(error, { within: status }));
 				}
 			} finally {
 				login.disabled = false;
@@ -57226,7 +57926,7 @@ async function viewManagedSettings(main) {
 				frame.show("desktop");
 			}
 		} catch (error) {
-			if (connection.generation === generation) status.append(errorBox(error));
+			if (connection.generation === generation) status.append(errorBox(error, { within: status }));
 		}
 		disposeFleet = await mountFleet(fleetRoot, {
 			h,
@@ -57363,7 +58063,7 @@ async function viewNativeSettings(main) {
 		technicalDetails.replaceChildren();
 		if (state.caps) technicalDetails.append(connectionIdentity());
 		if (state.connectionNotice) info.append(h("p", {}, state.connectionNotice));
-		if (state.connectionError) info.append(errorBox(state.connectionError));
+		if (state.connectionError) info.append(errorBox(state.connectionError, { within: info }));
 		if (state.nativeBusy) info.append(h("p", {}, t("desktop_connecting")));
 	};
 	showInfo();
@@ -57440,7 +58140,10 @@ async function viewNativeSettings(main) {
 		if (status.configuration_file) technicalDetails.append(h("dt", {}, t("desktop_configuration_file")), h("dd", {}, status.configuration_file));
 		if (status.credential_source) row("desktop_credential_source", t("desktop_source_" + status.credential_source));
 		if (state.caps) details.append(h("dt", {}, t("connection_access")), connectionAccess());
-		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), { summary: t("desktop_status_error") }));
+		if (status.error && (!status.configuration_setup || status.configuration_source === "managed")) info.append(errorBox(new Error(status.error), {
+			summary: t("desktop_status_error"),
+			within: info
+		}));
 		else if (!status.credential_available && !status.configuration_setup) info.append(h("p", {}, t("desktop_credential_missing")));
 		platform.textContent = status.enrollment_supported === true ? t("desktop_enrollment_help") : status.enrollment_supported === false ? t("desktop_enrollment_unsupported") : "";
 		connect.disabled = state.nativeBusy || !!status.error || !status.credential_available;
@@ -57455,7 +58158,7 @@ async function viewNativeSettings(main) {
 		saved.hidden = !status.credential_saved;
 		forget.disabled = state.nativeBusy || !status.credential_saved;
 	} catch (error) {
-		if (mine === generation) info.append(errorBox(error));
+		if (mine === generation) info.append(errorBox(error, { within: info }));
 	}
 	if (mine !== generation) return;
 	if (disposeUpdates) frame.show("updates");
@@ -57527,7 +58230,7 @@ async function change(out, action, target, params, pre, scope) {
 		else fill(out, opStatus(op), " ", h("a", { href: `#/op/${op.operation_id}` }, op.operation_id));
 	} catch (e) {
 		lastFailure = e.code || "ERROR";
-		fill(out, e.status === 403 ? errorBox(e) : problem(e.code, e.message));
+		fill(out, e.status === 403 ? errorBox(e, { within: out }) : problem(e.code, e.message));
 	}
 	return null;
 }
@@ -58243,7 +58946,7 @@ async function viewWorkItem(main, wid) {
 				archiveLocks.clear();
 			}
 		} catch (error) {
-			fill(notice, errorBox(error));
+			fill(notice, errorBox(error, { within: notice }));
 			throw error;
 		}
 	};
@@ -58292,7 +58995,7 @@ async function viewWorkItem(main, wid) {
 						assertView(connection);
 						await render(true);
 					} catch (error) {
-						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error));
+						if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) fill(notice, errorBox(error, { within: notice }));
 					} finally {
 						if (mark.isConnected) mark.disabled = !canRead || progress.read_version >= w.version;
 					}
@@ -58313,7 +59016,7 @@ async function viewWorkItem(main, wid) {
 		try {
 			data = await api("GET", `/work-items/${wid}`);
 		} catch (e) {
-			fill(panel, errorBox(e));
+			fill(panel, errorBox(e, { within: panel }));
 			return;
 		}
 		if (!panel.isConnected) return;
@@ -58407,7 +59110,7 @@ async function viewWorkItem(main, wid) {
 					requireMutable();
 					op = await attachment.perform("work_item.update", { work_item_id: wid }, params, pre, `wi.edit.${wid}`);
 				} catch (e) {
-					fill(notice, errorBox(e));
+					fill(notice, errorBox(e, { within: notice }));
 					if (STALE.includes(e.code)) {
 						draft = params;
 						render();
@@ -58560,7 +59263,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
 					expected_work_item_fingerprint: w.completion.fingerprint
 				} : {}, `continue.${checkpointId}`);
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 				go.disabled = false;
 				return;
 			}
@@ -58589,7 +59292,7 @@ function continueFrom(w, checkpointId, notice, children = []) {
 			if (state.caps?.artifacts && !expectedHead) try {
 				expectedHead = (await api("GET", `/checkpoints/${checkpointId}?live=true`)).source.head;
 			} catch (e) {
-				fill(out, errorBox(e));
+				fill(out, errorBox(e, { within: out }));
 			}
 		}
 	}, t("start_from_checkpoint")), d.box);
@@ -58824,7 +59527,7 @@ async function viewCleanup(main, section, ident) {
 		} catch (e) {
 			assertView(connection);
 			readFailed = true;
-			fill(status, errorBox(e), h("a", { href: `#/op/${intent.operation_id}` }, t("cleanup_open_receipts")));
+			fill(status, errorBox(e, { within: status }), h("a", { href: `#/op/${intent.operation_id}` }, t("cleanup_open_receipts")));
 			throw e;
 		} finally {
 			operationRead = null;
@@ -58905,7 +59608,7 @@ async function viewCleanup(main, section, ident) {
 					intent.refused = e.code;
 					persist(intentKey, intent);
 				}
-				fill(status, errorBox(e), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
+				fill(status, errorBox(e, { within: status }), h("p", {}, t(intent?.refused ? "cleanup_repreview" : "cleanup_retry_same")));
 			} finally {
 				busy = false;
 				finish();
@@ -58953,7 +59656,7 @@ async function viewCleanup(main, section, ident) {
 				renderPreview();
 				fill(status);
 			} catch (e) {
-				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e));
+				if (revision === previewRevision && connection.epoch === state.epoch) fill(status, errorBox(e, { within: status }));
 			} finally {
 				previewButton.disabled = false;
 			}
@@ -59003,7 +59706,7 @@ async function viewCleanup(main, section, ident) {
 				}
 			}, t("more")));
 		} catch (e) {
-			fill(historyOut, errorBox(e));
+			fill(historyOut, errorBox(e, { within: historyOut }));
 		}
 	}
 	async function loadRetained(cursor = "") {
@@ -59022,7 +59725,7 @@ async function viewCleanup(main, section, ident) {
 				}
 			}, t("more")));
 		} catch (e) {
-			fill(retainedOut, errorBox(e));
+			fill(retainedOut, errorBox(e, { within: retainedOut }));
 		}
 	}
 	main.append(pageHeader({
@@ -59045,7 +59748,7 @@ async function viewCleanup(main, section, ident) {
 			const data = await api("GET", `/cleanup-tombstones/${encodeURIComponent(ident)}`);
 			main.append(h("a", { href: "#/cleanup" }, t("nav_cleanup")), resourceRow(data.tombstone), h("h2", {}, t("cleanup_open_receipts")), h("pre", { class: "panel pre" }, JSON.stringify(data.receipts, null, 2)));
 		} catch (e) {
-			main.append(errorBox(e));
+			main.append(errorBox(e, { within: main }));
 		}
 		return;
 	}
@@ -59238,7 +59941,7 @@ async function viewProjectDispatch(main, pid, repairWid = null) {
 		}
 		repairSeed = repairDispatchSeed(record);
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 		return;
 	}
 	const panel = repositoryStartPanel({
@@ -59332,7 +60035,7 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
 		data = await api("GET", `/work-items/${encodeURIComponent(wid)}`);
 		assertView(connection);
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 		return;
 	}
 	const sessions = new Map();
@@ -59345,7 +60048,7 @@ async function viewLinkedWorkItem(main, wid, host, sid) {
 	if (!sessions.size) return viewWorkItem(main, wid);
 	const selected = host && sid ? sessions.get(JSON.stringify([host, sid])) : sessions.values().next().value;
 	if (!selected) {
-		main.append(errorBox(new Error(t("workspace_work_missing"))));
+		main.append(errorBox(new Error(t("workspace_work_missing")), { within: main }));
 		return;
 	}
 	main.classList.add("session-view");
@@ -59395,7 +60098,7 @@ async function viewProjectWork(main, pid, kind, id) {
 		if (item.host && item.session_id) return viewSession(main, item.host, item.session_id, { project: data.project });
 		main.append(pageHeader({ title: item.title || item.action || item.id }), deliveryWork(item, data.project.repositories));
 	} catch (error) {
-		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error));
+		if (!["VIEW_CHANGED", "CONNECTION_CHANGED"].includes(error.code)) main.append(errorBox(error, { within: main }));
 	}
 }
 async function viewPmWorkspace(main, workspaceId, viewOrThread, thread) {
@@ -59502,6 +60205,7 @@ function mountWorkspace(name) {
 var teardown = null;
 var generation = 0;
 async function route() {
+	diagnosticsPreview?.close();
 	let [nextName, nextWorkspace, nextView, nextThread] = (location.hash.split("?")[0].replace(/^#\//, "") || "home").split("/").map(decodeURIComponent);
 	if (nextName === "pm") {
 		if (nextView?.startsWith("pmt_")) {

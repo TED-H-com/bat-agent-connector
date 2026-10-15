@@ -4,6 +4,7 @@ mod bridge;
 mod brief_files;
 mod credentials;
 mod desktop_preferences;
+mod diagnostics_files;
 mod files;
 mod fleet;
 mod fleet_bootstrap;
@@ -515,6 +516,44 @@ async fn native_brief_save(
         .map(Some)
 }
 #[tauri::command]
+async fn native_diagnostics_save(
+    window: WebviewWindow,
+    state: State<'_, NativeFiles>,
+    input: diagnostics_files::Input,
+) -> Result<Option<diagnostics_files::Receipt>, String> {
+    local_main(&window)?;
+    input.validate()?;
+    let files = state.get()?;
+    let _dialog = files
+        .dialog
+        .try_lock()
+        .map_err(|_| "DIAGNOSTICS_DIALOG_BUSY")?;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_title(if input.locale == "zh-TW" {
+            "儲存診斷資料"
+        } else {
+            "Save diagnostics"
+        })
+        .set_file_name(&input.filename)
+        .add_filter("JSON", &["json"])
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let Some(path) = rx.await.map_err(|_| "DIAGNOSTICS_SAVE_INTERRUPTED")? else {
+        return Ok(None);
+    };
+    let path = path
+        .into_path()
+        .map_err(|_| "DIAGNOSTICS_DESTINATION_INVALID")?;
+    input
+        .save(files::Destination::from_selection(&path)?)
+        .map(Some)
+}
+#[tauri::command]
 async fn native_files_control(
     window: WebviewWindow,
     state: State<'_, NativeFiles>,
@@ -859,6 +898,7 @@ fn main() {
             native_files_upload,
             native_files_save,
             native_brief_save,
+            native_diagnostics_save,
             native_files_control,
             native_files_preview,
             native_status,

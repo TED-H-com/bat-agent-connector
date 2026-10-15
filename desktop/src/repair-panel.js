@@ -13,13 +13,13 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
     if (!alive() || busy || !allowed()) return;
     busy = true; update();
     try {show(await (controller.snapshot().intent ? controller.check() : controller.create(document)));}
-    catch(error) {if(alive()) status.replaceChildren(errorBox(error));}
+    catch(error) {if(alive()) status.replaceChildren(errorBox(error, {within:status}));}
     finally {busy=false;if(alive()) update();}
   }},t('repair_create'));
   const next = h('button',{class:'secondary',type:'button',hidden:true,onclick:()=>{
     if (!alive() || busy || !['succeeded','failed','cancelled'].includes(controller.snapshot().operation?.status)) return;
     try {localStorage.removeItem(key); initializeController(); outcome.replaceChildren(); read();}
-    catch(error) {if(alive()) status.replaceChildren(errorBox(error));}
+    catch(error) {if(alive()) status.replaceChildren(errorBox(error, {within:status}));}
   }},t('repair_review_new'));
   const box = h('details',{class:'panel', 'data-repair-panel':''}, h('summary',{},t('repair_title')),
     h('p',{class:'muted'},t('repair_help')),h('label',{},t('repair_project'),project),
@@ -67,7 +67,7 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
       evidence.replaceChildren(h('p',{},t('repair_fixed_evidence'),' ',h('code',{},doc.evidence_digest)),
         h('details',{},h('summary',{},t('repair_evidence_details')),h('pre',{class:'pre'},JSON.stringify(doc.evidence,null,2))));
       if(!controller.snapshot().intent) {outcome.replaceChildren();links(doc.existing);}
-    } catch(error) {if(alive()&&mine===serial)status.replaceChildren(errorBox(error));}
+    } catch(error) {if(alive()&&mine===serial)status.replaceChildren(errorBox(error, {within:status}));}
     finally{if(alive()&&mine===serial)update();}
   }
   async function init() {
@@ -85,7 +85,7 @@ export function repairPanel({h, t, api, caps, guard, namespace, source, errorBox
       if(selected)project.value=selected;
       update();
       if(controller.snapshot().intent?.operation_id)show(await controller.check());
-    }catch(error){if(alive())status.replaceChildren(errorBox(error));}
+    }catch(error){if(alive())status.replaceChildren(errorBox(error, {within:status}));}
     finally{if(alive())update();}
   }
   project.addEventListener('change',()=>read());
@@ -123,7 +123,7 @@ export function repairWorkItemPanel({h, t, api, guard, projectId, workItemId, or
       } catch (error) {
         if (!alive()) return;
         if (error.status === 404 && error.code === 'REPAIR_NOT_FOUND') {repairOrigin = false; box.replaceChildren(); box.hidden = true;}
-        else {box.replaceChildren(errorBox(error)); box.hidden = false;}
+        else {box.replaceChildren(errorBox(error, {within:box})); box.hidden = false;}
       }
     });
     refreshQueue = work;

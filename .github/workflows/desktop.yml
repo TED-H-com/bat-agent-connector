@@ -7,6 +7,9 @@ on:
     branches: [main]
     paths: ["desktop/**", "src/**", "tests/manual/**", "scripts/check_glib_backport.py", "tests/test_release_dependencies.py", "pyproject.toml", "uv.lock", ".github/workflows/desktop*.yml"]
 
+env:
+  BATC_BUILD_COMMIT: ${{ inputs.source_sha || github.sha }}
+
 permissions:
   contents: read
 

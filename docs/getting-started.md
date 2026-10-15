@@ -402,3 +402,43 @@ This serves MCP at `http://127.0.0.1:8765/mcp`; it is not the Web Dashboard addr
 | Fleet does not start | For a new installation, use the [public Rust configuration](design/fleet-configuration.md), then check selected connections, prerequisites and ownership. An omitted backend retains PowerShell compatibility; existing owners require reviewed migration. |
 
 Real Fleet/account/deployment acceptance is performed by the user. The [46-item acceptance reference](product/acceptance-v2.md) remains useful for that work; it is excluded from the agent's completion checklist, not reported as already passed.
+
+## Diagnostics
+
+Open **Settings → About → Export diagnostics**, or use the same action in an
+error's **Details**. Review the summary and JSON, then Save or Copy. Nothing is
+uploaded by the app. The file contains build versions/commits, anonymous host
+states, capability/policy booleans, counts from client-read sessions, up to 50
+failed API calls (route templates), and the loaded page of failed/uncertain
+operations. Missing sources and versions remain unknown. History reason counts
+appear only when the Connector supplies `reading.incomplete_reasons`.
+
+The export never includes tokens, secret references, certificate fingerprints,
+hostnames/endpoints/SSH aliases, user paths, session/thread titles or messages,
+prompts/drafts, repository/remote/branch names, actor IDs or email addresses.
+Only named fields are selected, followed by a serialized-text scrubber. Inspect
+the preview before sharing the saved file yourself.
+
+Desktop state normally lives under the following templates (custom locations
+may differ):
+
+| OS | State database |
+| --- | --- |
+| Linux | `~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3` |
+| macOS | `~/Library/Application Support/io.betteragent.dashboard/central/state/tasks.sqlite3` |
+| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\central\state\tasks.sqlite3` |
+
+`config/hosts.toml` and `installation.json` are inside the same `central` directory.
+These are state/configuration files, not exported logs. The desktop does **not**
+persist Connector stdout/stderr; startup error lines stay in memory. For a
+standalone CLI service, stdout/stderr go to its launching terminal/service manager;
+the configured journal location is not inferred by diagnostics. Default journal
+templates follow `config.state_dir()`: `~/.local/state/bat-agent-connector/tasks.sqlite3`
+on Linux/macOS and `~\.local\state\bat-agent-connector\tasks.sqlite3` on Windows,
+unless `BATC_STATE_DIR` or `XDG_STATE_HOME` is configured.
+
+About shows the Connector version and installed Git commit, or `unknown` for a
+plain package/editable checkout without Git-install provenance. A desktop bundle
+also shows its native app version/commit. Packaging records both commits; local
+native builds without `BATC_BUILD_COMMIT` show `unknown`. Browser assets use the
+serving Connector's identity and do not embed the checkout's HEAD.

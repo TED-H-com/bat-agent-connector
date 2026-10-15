@@ -131,7 +131,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
         fetched = true;
       } catch (error) {if (item.isConnected) {
         if ([403, 404].includes(error.status)) item.remove();
-        else {detail.replaceChildren(errorBox(error)); pill.replaceChildren(statusPill('unknown'));}
+        else {detail.replaceChildren(errorBox(error, {within:detail})); pill.replaceChildren(statusPill('unknown'));}
       }}
       finally {pending = false;}
     }
@@ -155,7 +155,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
           if (next.workspace_id !== workspaceId) throw Error(t('pm_scope_mismatch'));
           if (!more.isConnected) return;
           more.remove(); renderRows(next, true);
-        } catch (error) {if (more.isConnected) more.after(errorBox(error));}
+        } catch (error) {if (more.isConnected) more.after(errorBox(error, {within:more}));}
         finally {busy = false; more.disabled = false;}
       }}, t('pm_plan_more'));
       rows.append(more);
@@ -174,7 +174,7 @@ export function planRevisions({h, t, api, alive, workspaceId, threadId, thread, 
       signature = nextSignature;
       current.replaceChildren(h('p', {}, h('strong', {}, accepted.plan ? accepted.plan.document.title : t('pm_plan_none_accepted'))));
       if (accepted.plan) current.append(h('p', {class: 'muted'}, t('pm_revision_number', {number: accepted.plan.sequence}), ' · ', t('pm_plan_accepted')));
-      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: async event => {const details = event.currentTarget.parentElement; try {await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);} catch (error) {if (details.isConnected) details.append(errorBox(error));}}}, t('pd_copy'))));
+      if (accepted.plan?.adoption?.commit_sha) current.append(h('details', {}, h('summary', {}, t('pd_details')), h('code', {}, accepted.plan.adoption.commit_sha), h('button', {type: 'button', class: 'secondary', onclick: async event => {const details = event.currentTarget.parentElement; try {await navigator.clipboard.writeText(accepted.plan.adoption.commit_sha);} catch (error) {if (details.isConnected) details.append(errorBox(error, {within:details}));}}}, t('pd_copy'))));
       renderRows(page);
     }
     editor.update();

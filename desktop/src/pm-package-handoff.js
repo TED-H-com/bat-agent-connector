@@ -89,7 +89,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
   function withdraw(){serial++;reading=false;broken=false;active=null;prepared=null;qualityCatalog=[];for(const value of editors.values())value.qualityBox?.replaceChildren();facts.replaceChildren();status.replaceChildren();outcome.replaceChildren();editorView.replaceChildren();editor=null;useReview.hidden=true;update();}
   function fail(error){const auth=[401,403,404].includes(error.status);if(auth){withdraw();onSourceFailure();broken=true;}prepared=null;facts.replaceChildren();outcome.replaceChildren();
     const mismatch=error.message?.startsWith('PM_SPEC_')||error.code==='PM_REQUIREMENT_QUALITY_INVALID';
-    status.replaceChildren(errorBox(error,error.code==='PM_HANDOFF_BLOCKED'?{}:{summary:t(mismatch?'ph_invalid':'ph_unavailable')}));update();}
+    status.replaceChildren(errorBox(error,{...error.code==='PM_HANDOFF_BLOCKED'?{}:{summary:t(mismatch?'ph_invalid':'ph_unavailable')}, within:status}));update();}
   function bindEditor(row){
     if(!editors.has(row.package_id)){
       const quality=h('input',{type:'hidden',value:'{}'});quality.dataset.pmDefault='{}';

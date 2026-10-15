@@ -85,7 +85,7 @@ export function maintenanceChecks({h,t,api,alive,workspaceId,workspace,caps,perm
     context.hidden=Boolean(schedule?.blocked_reason&&context.textContent===blocker(schedule.blocked_reason));editor.update();
   }
   function withdraw(){epoch++;ready=false;policy=null;baseline=null;lifecycle=null;schedule=null;historyLoaded=false;cursor=null;filtered=false;facts.replaceChildren();history.replaceChildren();status.replaceChildren();context.replaceChildren();update();}
-  function failure(error){withdraw();status.append(errorBox(error,{summary:t('pmc_unavailable')}));}
+  function failure(error){withdraw();status.append(errorBox(error,{summary:t('pmc_unavailable'), within:status}));}
   async function readHistory(append){
     const ticket=epoch,after=append?cursor:0;
     try{

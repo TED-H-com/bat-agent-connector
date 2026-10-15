@@ -204,6 +204,8 @@ pub struct NativeStatus {
     pub updates: bool,
     pub file_transfers: bool,
     pub brief_exports: bool,
+    pub diagnostics_save: bool,
+    pub app_build: crate::diagnostics_files::AppBuild,
     pub endpoint: Option<String>,
     pub expected_actor: Option<String>,
     pub error: Option<String>,
@@ -378,6 +380,8 @@ impl Bridge {
             updates: true,
             file_transfers: true,
             brief_exports: true,
+            diagnostics_save: true,
+            app_build: crate::diagnostics_files::app_build(),
             endpoint: config.map(|c| c.endpoint.clone()),
             expected_actor: config.map(|c| c.expected_actor.clone()),
             error: state

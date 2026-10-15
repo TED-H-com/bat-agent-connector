@@ -56,7 +56,7 @@ export function sessionStartPanel({h, t, api, caps, guard, ready, errorBox, opSt
   const inputs = {host, workspace, agent, model, title, prompt};
   const models = modelChoice({h, t, api, caps, guard, host: () => saved.host, agent, model, submit: submitPreference, storageKey});
   const fill = () => {for (const [k, el] of Object.entries(inputs)) el.value = saved[k];};
-  const showError = e => {if (current()) status.replaceChildren(errorBox(e));};
+  const showError = e => {if (current()) status.replaceChildren(errorBox(e, {within:status}));};
   function renderWorkspaces() {
     workspace.replaceChildren(h("option", {value: ""}, t("start_choose_workspace")), ...workspaces.map(w =>
       h("option", {value: w.workspace_id}, `${w.name || w.workspace_id} · ${w.workspace_id}`)));

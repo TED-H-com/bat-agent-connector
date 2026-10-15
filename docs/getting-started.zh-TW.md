@@ -355,3 +355,39 @@ MCP 位址是 `http://127.0.0.1:8765/mcp`，不是 Dashboard 網址。Durable �
 | Fleet 沒有啟動 | 新安裝使用[公開 Rust 設定](design/fleet-configuration.md)，再核對所選連線、前置條件及 ownership。未指定 backend 時沿用 PowerShell；既有 owner 需經預覽後遷移。 |
 
 真實 Fleet、帳號與部署驗收由使用者執行。[46 項驗收參考](product/acceptance-v2.md)供這項工作使用，不列入 Agent 完成清單，也不宣稱已經通過。
+
+## 診斷資料
+
+開啟 **設定 → 關於 → 匯出診斷資料**，或使用錯誤訊息「詳細資料」內的相同按鈕。
+先檢查摘要與 JSON，再儲存或複製；程式不會上傳資料。檔案包含版本與 commit、
+匿名主機狀態、能力與政策開關、介面已讀取的工作階段計數、最近最多 50 筆 API
+失敗紀錄（以路徑範本表示），以及已載入頁面內失敗或結果未確認的操作。
+無法取得的來源與版本保留未知；Connector 有提供 `reading.incomplete_reasons`
+時，才會列出歷史紀錄不完整的原因計數。
+
+檔案不包含金鑰、機密參照、憑證指紋、主機名稱／連線位址／SSH 別名、使用者路徑、
+工作階段與討論標題、訊息、提示詞、草稿、儲存庫／遠端網址／分支名稱、操作者 ID
+或電子郵件。程式先挑選明確允許的欄位，再對序列化文字進行第二次去識別化。
+請檢查預覽，再自行分享儲存的檔案。
+
+桌面版狀態資料庫的預設位置如下；自訂位置可能不同：
+
+| 作業系統 | 狀態資料庫 |
+| --- | --- |
+| Linux | `~/.local/share/io.betteragent.dashboard/central/state/tasks.sqlite3` |
+| macOS | `~/Library/Application Support/io.betteragent.dashboard/central/state/tasks.sqlite3` |
+| Windows | `%LOCALAPPDATA%\io.betteragent.dashboard\central\state\tasks.sqlite3` |
+
+`config/hosts.toml` 與 `installation.json` 也在相同的 `central` 目錄。
+這些是狀態與設定檔，不是匯出的日誌。桌面版目前**不會將 Connector 的標準輸出與
+錯誤輸出寫入日誌檔**；啟動錯誤只保留在記憶體。獨立 CLI 服務的輸出由啟動它的
+終端機或服務管理工具接收。診斷資料不會猜測自訂資料庫位置；依目前
+`config.state_dir()`，Linux／macOS 預設為
+`~/.local/state/bat-agent-connector/tasks.sqlite3`，Windows 為
+`~\.local\state\bat-agent-connector\tasks.sqlite3`；設定 `BATC_STATE_DIR`
+或 `XDG_STATE_HOME` 時，位置會不同。
+
+「關於」顯示 Connector 版本與 Git 安裝來源的 commit；一般套件或沒有 Git 安裝
+來源資訊的開發目錄會顯示「未知」。桌面安裝包另顯示桌面程式版本與 commit；
+打包時記錄兩者。本機原生建置若未設定 `BATC_BUILD_COMMIT`，commit 顯示「未知」。
+瀏覽器使用提供網頁的 Connector 版本資訊，不把開發目錄的 HEAD 寫入網頁產物。
