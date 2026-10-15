@@ -32,6 +32,17 @@ def install(ops):
         for verb in ("UPDATE", "DELETE"):
             ops.db.execute(f"CREATE TRIGGER IF NOT EXISTS pm_conversation_children_{verb.lower()}_immutable "
                 f"BEFORE {verb} ON pm_conversation_children BEGIN SELECT RAISE(ABORT,'Proposal child is immutable'); END")
+        # The immutable relation, not caller-supplied refs, identifies the parent.
+        # Persist its wakeup with the child's outcome so restart cannot lose it.
+        ops.db.execute("""CREATE TRIGGER IF NOT EXISTS pm_conversation_child_settled
+            AFTER UPDATE OF status ON operations
+            WHEN NEW.status != OLD.status AND NEW.status IN ('succeeded','failed','cancelled','needs_attention')
+            BEGIN
+                UPDATE operations SET next_run_at=0
+                WHERE action='pm.conversation.adopt' AND status='waiting_external'
+                    AND operation_id=(SELECT parent_id FROM pm_conversation_children
+                        WHERE operation_id=NEW.operation_id);
+            END""")
     if proposals.ADOPT not in ops.actions:
         ops.register(ActionDef(proposals.ADOPT, "manage", "Adopt one complete owner-reviewed conversation update",
             _run, _admit, ("workspace_id", "thread_id"), authorize_existing=_authorize_existing))

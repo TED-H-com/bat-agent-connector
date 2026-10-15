@@ -64,6 +64,16 @@ key. Included rows populate the existing eight-domain plan and requirements;
 excluded rows remain attributed candidates with typed review disposition. A
 later PM context therefore retains the explicit exclusion and its rationale.
 
+When an original child succeeds, fails, is cancelled or needs attention, an
+idempotent SQLite trigger makes its waiting adoption parent due in the same
+transaction. The operation scheduler wakes after that transaction commits. The
+next attempt rereads the original child and runs the existing gates; notification
+does not imply success or authorize another effect. Paused or terminal parents
+are not resumed. The existing one-second poll remains a fallback for pending or
+uncertain children; completed children no longer impose that delay on every step.
+The immutable child relation and persisted due time survive a service restart;
+no new key, table or data migration is involved.
+
 Every new child, local mutation and final host frame checks the original owner,
 current credential/controller, original source visibility, lifecycle epoch,
 whole review digest, owned Git binding and expected thread/plan progression.

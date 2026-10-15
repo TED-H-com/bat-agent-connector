@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Conversation adoption advances as each original child operation finishes,
+  removing the fixed one-second pause between completed steps. Child failures
+  still stop the adoption; recovery keeps the original requests and receipts.
+
 - Add the #141 backend Git transport contract: strict explicit host mode,
   frozen execution bindings, unchanged SSH reader identity and original-key
   setup recovery. Local Git remains disabled, with fixed readiness reasons;
