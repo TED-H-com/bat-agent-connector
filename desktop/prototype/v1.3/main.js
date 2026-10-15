@@ -629,7 +629,7 @@ function renderOverview() {
     ...tid('view-overview')
   }, header(t('ui_overview'), [action('ui_discuss', 'overview-discuss', () => go('discussions'))], pill(t('ui_phase_development'))), h('div', {
     class: 'proto-status-strip'
-  }, ...[['goal', 'projectGoal'], ['progress', state.delivery.accepted ? 'progressAccepted' : 'progressValue'], ['blockers', 'blockerValue'], [state.ownerDecisionRecorded ? 'ov_recent_decisions' : 'decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([label, value]) => h('div', {}, h('small', {}, t(label)), h('strong', {}, t(value))))), h('div', {
+  }, ...[['goal', 'projectGoal'], ['progress', state.delivery.accepted ? 'progressAccepted' : 'progressValue'], ['blockers', 'blockerValue'], ['decisions', 'decisionValue']].map(([label, value]) => h('div', label === 'decisions' ? tid('overview-open-decisions-strip') : {}, h('small', {}, t(label)), h('strong', {}, t(value))))), h('div', {
     class: 'proto-overview-columns'
   }, h('div', {}, pmSummary(), sectionCard({
     title: t('attention'),
@@ -642,9 +642,9 @@ function renderOverview() {
     body: deliveryBar(state.delivery, null, false)
   }))), h('h2', {}, t('charter')), h('div', {
     class: 'proto-charter'
-  }, ...[['purpose', 'projectGoal'], ['scope', 'scopeCharter'], ['milestones', 'milestone'], ['resources', 'budget'], ['risks', 'risk'], [state.ownerDecisionRecorded ? 'ov_recent_decisions' : 'decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([title, body]) => sectionCard({
+  }, ...[['purpose', 'projectGoal'], ['scope', 'scopeCharter'], ['milestones', 'milestone'], ['resources', 'budget'], ['risks', 'risk'], ['decisions', 'decisionValue']].map(([title, body]) => sectionCard({
     title: t(title),
-    body: h('p', {}, t(body))
+    body: h('p', title === 'decisions' ? tid('overview-open-decisions-charter') : {}, t(body))
   }))));
 }
 function renderManual() {
