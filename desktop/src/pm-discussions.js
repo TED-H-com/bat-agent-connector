@@ -76,7 +76,7 @@ export function discussionTitle({t, field, form, value, local = false}) {
 }
 
 export const discussionSettingsHref = () => '#/settings?section=agents&from=' + encodeURIComponent(location.hash);
-export function discussionComposer({t, form, analysis, details, draft = false, pmReady = false}) {
+export function discussionComposer({t, form, analysis, reply, details, draft = false, pmReady = false}) {
   const actions = form.box.querySelector(':scope > .actions');
   const status = h('div', {class: 'pd-composer-status'}, form.box.querySelector(':scope > [role=status]'));
   const receipt = form.box.querySelector(':scope > .pm-receipt');
@@ -86,7 +86,12 @@ export function discussionComposer({t, form, analysis, details, draft = false, p
     actions.append(analysis.querySelector('[data-discussion-ask]'));
     status.append(analysis);
   } else if (draft && pmReady) status.append(h('p', {class: 'muted', 'data-discussion-draft-ready': ''}, t('pd_draft_ready')));
-  else status.append(h('p', {class: 'muted', 'data-discussion-pm-unavailable': ''}, h('span', {}, t('pd_not_connected')), ' ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
+  else if (!reply) status.append(h('p', {class: 'muted', 'data-discussion-pm-unavailable': ''}, h('span', {}, t('pd_not_connected')), ' ', h('a', {href: discussionSettingsHref()}, t('pd_setup'))));
+  if (reply) {
+    actions.querySelector('button[type=submit]').classList.replace('primary', 'secondary');
+    actions.prepend(reply.querySelector('[data-discussion-reply]'));
+    status.prepend(reply);
+  }
   form.box.append(h('div', {class: 'pd-composer-row'}, status, actions));
   if (details) form.box.append(details);
   return h('div', {class: 'pd-composer'}, form.box);

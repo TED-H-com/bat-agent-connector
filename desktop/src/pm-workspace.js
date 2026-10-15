@@ -44,7 +44,7 @@ import {workspaceReleaseBaselines} from './pm-release-baselines.js';
 import {workspaceEvidence} from './pm-evidence.js';
 import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
-import {nativeRunState, pmDiscussionMessage, pmNativeAnalysis} from './pm-native-analysis.js';
+import {nativeRunState, pmDiscussionMessage, pmDiscussionRequest, pmNativeAnalysis} from './pm-native-analysis.js';
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
@@ -474,6 +474,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       phase: phasePill.hidden ? null : phasePill.textContent,
       threadCount: lastThreadList?.threads?.length ?? null, threadMore: Boolean(lastThreadList?.next_cursor)});
   }
+  let replyRuns = [], replyPartial = false;
   let mountedThread = null, notes = null, facts = null, draft = null, noteForm = null, factForm = null, planForm = null, planningRevisionForm = null,
     sourceSelect = null, slotSelect = null, permissions = null, coverage = null, threadTitle = null, mode = null, factSignature = '', earlier = null, historyCursor = null, historyExpanded = false,
     packages = null, packageSignature = '', revisions = null, pmCapabilities = null, worktreeChoice = null, nativeAnalysis = null, proposalReview = null, discussionHint = null;
@@ -1042,9 +1043,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     if(source.kind==='maintenance_review_candidate')return t('pmrv_idea_original')+' · '+source.event_id;
     return [source.ref, source.revision, source.path].filter(Boolean).join(' · ');
   };
-  function renderThread(data) {
+  function renderThread(data, runs) {
     const thread = data.thread;
-    if (mountedThread !== thread.thread_id) {noteCache.clear(); historyExpanded = false;}
+    if (mountedThread !== thread.thread_id) {noteCache.clear(); historyExpanded = false; replyRuns = []; replyPartial = false;}
+    if (runs !== undefined) {
+      if (runs && (runs.workspace_id !== workspaceId || runs.runs?.some(run => run.workspace_id !== workspaceId || run.thread_id !== thread.thread_id))) throw Error(t('pm_scope_mismatch'));
+      replyRuns = (runs?.runs || []).filter(run => ['codex-native-linux', 'bat-pm-linux-v1'].includes(run.adapter));
+      replyPartial = Boolean(runs?.next_cursor || runs?.coverage?.visibility_filtered);
+    }
     for (const note of data.messages || []) noteCache.set(note.message_id, note);
     if (!historyExpanded) historyCursor = data.next_message_cursor;
     data = {...data, messages: [...noteCache.values()].sort((a, b) => a.sequence - b.sequence)};
@@ -1096,8 +1102,10 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
             queueMicrotask(() => {try {alive();} catch {return;} revisions?.open(id);});
           },
           onActivity: activity => {
+            nativeAnalysis?.setPrimary(!activity.reviewable);
             const send = noteForm.box.querySelector('button[type=submit]');
-            send.classList.toggle('primary', !activity.reviewable); send.classList.toggle('secondary', activity.reviewable);
+            const primary = !nativeAnalysis && !activity.reviewable;
+            send.classList.toggle('primary', primary); send.classList.toggle('secondary', !primary);
             discussionTools?.sync({...activity, inputs: planForm?.locked() || factForm?.locked() || planningRevisionForm?.locked()});
           },
           onFollowUp: () => text.focus(), onAnswer: value => {if (!value || noteForm.locked()) return; noteForm.set('content', [text.value, value].filter(Boolean).join('\n\n')); void noteForm.submit();}});
@@ -1191,7 +1199,14 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         }});
       column.querySelector('.pd-header-main').append(discussionTools.trigger);
       const composer = discussionComposer({t, form: noteForm, details: threadDetails,
-        analysis: proposalReview?.composer(text) || nativeAnalysis?.composer(text)});
+        analysis: proposalReview?.composer(text, {connectionNotice: !nativeAnalysis}),
+        reply: nativeAnalysis?.composer(text, purpose => {
+          if (!noteForm.locked() && noteForm.values().content.trim() === purpose) noteForm.set('content', '');
+        }, () => {
+          discussionTools.open('context');
+          nativeAnalysis.box.closest('details').open = true;
+          queueMicrotask(() => nativeAnalysis.box.querySelector('form:not([hidden]) [role=status] summary, form:not([hidden]) button[type=submit]:not([hidden])')?.focus());
+        })});
       column.append(composer);
       content.append(h('div', {class: 'pm-thread-layout'}, column, discussionTools.home));
       // Open recovery once per thread mount/reload. Later reads preserve the
@@ -1213,15 +1228,22 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
     discussionHint.textContent = '';
     const transcript = notes.closest('.pd-transcript');
     const bottom = transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight < 32, scroll = transcript.scrollTop;
-    notes.replaceChildren(...(data.messages || []).map(message => {
+    const entries = (data.messages || []).map(message => ({message}));
+    for (const run of [...replyRuns].sort((a, b) => a.created_at - b.created_at)) {
+      let index = entries.findIndex(entry => entry.message?.provenance?.run_id === run.run_id);
+      if (index < 0) index = entries.findIndex(entry => (entry.message?.created_at ?? entry.run?.created_at) > run.created_at);
+      entries.splice(index < 0 ? entries.length : index, 0, {run});
+    }
+    notes.replaceChildren(...entries.map(({message, run}) => {
+      if (run) return pmDiscussionRequest({h, t, run});
       const row = pmDiscussionMessage({h, t, message, time, timestamp});
       if (message.role === 'user') row.querySelector('.pm-note-stamp').append(h('span', {class: 'ui-meta', 'data-discussion-saved': ''}, t('pd_saved')));
       return row;
     }));
-    if (!data.messages?.length) notes.append(emptyState({title:t('pd_notes_empty'),text:t('pd_notes_empty_help')}));
+    if (!entries.length) notes.append(emptyState({title:t('pd_notes_empty'),text:t('pd_notes_empty_help')}));
     transcript.scrollTop = bottom ? transcript.scrollHeight : scroll;
     earlier.hidden = !historyCursor; earlier.disabled = false;
-    coverage.textContent = Object.values(data.coverage || {}).some(Boolean) ? t('pm_partial') : '';
+    coverage.textContent = replyPartial || Object.values(data.coverage || {}).some(Boolean) ? t('pm_partial') : '';
     permissions.textContent = !data.capabilities?.write ? t('pm_readonly') : !data.capabilities?.decide ? t('pm_owner_decides') : '';
     if (planningRevisionForm && data.draft && !planningRevisionForm.values().draftId && !planningRevisionForm.locked()) {
       planningRevisionForm.set('draftId', data.draft.draft_id);
@@ -1419,7 +1441,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
         [detail, threadList, data, runs, plans, accepted, workspaceCaps, draftRefs] = await Promise.all([api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}`),
           api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads`),
           threadId && threadId !== 'new' ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}`) : Promise.resolve(null),
-          threadId && threadId !== 'new' && caps()?.features?.pm_workspaces?.context_packages
+          threadId && threadId !== 'new' && (caps()?.features?.pm_workspaces?.context_packages || caps()?.features?.pm_workspaces?.native_analysis || caps()?.features?.pm_workspaces?.bat_analysis)
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/runs?thread_id=${encodeURIComponent(threadId)}&limit=20`) : Promise.resolve(null),
           threadId && threadId !== 'new' && caps()?.features?.pm_workspaces?.plan_drafting
             ? api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/plans?limit=20`) : Promise.resolve(null),
@@ -1455,7 +1477,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       filterThreads(); workspaceList.scrollTop = scroll;
       workspaceList.querySelector('[data-discussion-more]')?.remove();
       if (threadList?.next_cursor) workspaceList.append(h('button', {type: 'button', class: 'secondary', 'data-discussion-more': '', onclick: () => {threadPages++; void load();}}, t('pm_more_threads')));
-      if (data) renderThread(data);
+      if (data) renderThread(data, runs);
       else if (!content.querySelector('.pm-thread-layout')) {
         if (!workspace) content.append(emptyState({icon:'message-square',title:t('pm_start_title'),text:t('pm_start_help')}));
         else {

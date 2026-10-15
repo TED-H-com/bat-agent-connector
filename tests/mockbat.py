@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import inspect
 import json
 import ssl
 from collections.abc import Callable
@@ -223,6 +224,8 @@ class MockBat:
                     )
                 try:
                     res = self.dispatch(f["channel"], f.get("params") or {})
+                    if inspect.isawaitable(res):
+                        res = await res
                     await ws.send(json.dumps({"type": "invoke-result", "id": f["id"], "result": res}))
                 except Exception as e:  # noqa: BLE001
                     await ws.send(json.dumps({"type": "invoke-error", "id": f["id"], "error": str(e)}))

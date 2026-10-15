@@ -7,6 +7,28 @@ dispatch coding work, operate Git, or supply a second operation queue. The
 workspace command service remains responsible for authorization, frozen context,
 writer admission, durable receipts, reply import and recovery.
 
+## Discussion composer
+
+An existing discussion offers **Send to PM** for ordinary analysis and **Save
+note only** for `pm.message.append`. **Make a plan**, when advertised, retains
+`pm.conversation.propose`; sending an ordinary request does not adopt a plan or
+start coding. The analysis adapter and context options remain in Context.
+
+Send to PM reuses `pm.run.analyze` or `pm.run.bat.analyze`, the current thread
+version, preflight eligibility and the existing durable form. The request is the
+central run's `purpose`, limited to 4,000 characters. The transcript shows that
+saved request beside its imported reply, using the run and operation identities.
+It does not invent an additional user message or source reference. The bounded
+run list retains the server's partial-history indication and visibility checks.
+Each analysis still consumes the existing frozen context; this UI does not add a
+persistent model session or change which sources a later analysis receives.
+
+An uncertain response retains the original request key and receipt. Completing
+that request clears the composer only when it still contains the original text;
+a newer draft survives recovery. A new discussion first saves its initial note
+through the existing create-and-append flow, then offers Send to PM. Starting a
+new discussion and asking the PM in one compound action remains follow-up work.
+
 ## Supported boundary
 
 The initial contract is `codex-pm-linux-v1`, for Linux, bubblewrap and exactly

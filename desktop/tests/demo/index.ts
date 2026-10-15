@@ -120,6 +120,7 @@ function workspaceRoutes(project: DemoProject, url: URL, rest: string) {
   if (registerRow) return registerDetail(project, segment(registerRow[1]));
   const maintenance = registerMaintenanceRoutes(project, rest);
   if (maintenance) return maintenance;
+  if (rest === '/runs') return ok({workspace_id: project.ids.workspaceId, runs: [], next_cursor: null});
   if (rest === '/threads') return ok(threadList(project, url));
   const thread = rest.match(/^\/threads\/([^/]+)$/);
   if (thread) {
