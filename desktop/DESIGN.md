@@ -1210,7 +1210,8 @@ and Retry inside the transcript; original diagnostics and export remain in Detai
 The existing formatted session detail timestamp already avoids duplicate ISO text.
 
 Setup and permission guidance uses the Connection access labels (View / 檢視,
-Manage / 管理, Start / 啟動, Operate / 操作, Approve / 核准). Protocol scopes stay
+Manage / 管理, Start / 啟動, Operate / 操作, Approve / 核准, Cleanup / 整理,
+Deploy / 部署, Integrate / 整合). Protocol scopes stay
 unchanged in API data, CLI arguments and technical Details. zh-TW UI uses 代理 and
 工作樹 consistently, including PM and MCP workers. BAT, Connector, Codex, Claude,
 Git, GitHub, MCP and Task Service remain product or protocol names. JSON keys,

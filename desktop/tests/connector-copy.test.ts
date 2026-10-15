@@ -36,7 +36,8 @@ for (const locale of ['en', 'zh-TW'] as const) {
   test(`permission guidance reuses readable Connection labels in ${locale}`, () => {
     const copy = STRINGS[locale];
     for (const [key, scopes] of Object.entries({capture_scope_observe: ['observe'], capture_scope_manage: ['observe', 'manage'],
-      agents_scope: ['observe', 'manage', 'start'], agents_token: ['observe', 'operate', 'start'], ar_approve_scope: ['approve', 'observe']})) {
+      agents_scope: ['observe', 'manage', 'start'], agents_token: ['observe', 'operate', 'start'], ar_approve_scope: ['approve', 'observe'],
+      task_control_unavailable: ['operate'], cleanup_scope: ['cleanup'], dep_needs_scope: ['deploy'], needs_integrate_scope: ['integrate'], needs_start_scope: ['start']})) {
       for (const scope of scopes) assert.ok(copy[key].includes(copy['connection_scope_' + scope]), key + ' / ' + scope);
       assert.doesNotMatch(copy[key], /\b(?:observe|manage|start|operate|approve)\b(?! access)/, key);
     }
@@ -45,7 +46,7 @@ for (const locale of ['en', 'zh-TW'] as const) {
 test('Traditional Chinese uses one agent and worktree vocabulary', () => {
   for (const [key, value] of Object.entries(STRINGS['zh-TW'])) {
     assert.doesNotMatch(value.replace(/\{\w+\}/g, ''), /\b(?:agents?|worktrees?)\b/i, key);
-    if (key !== 'needs_start_scope_key') assert.doesNotMatch(value.replace(/\{\w+\}/g, ''), /\b(?:observe|start|manage|admin)\b/, key);
+    if (key !== 'needs_start_scope_key') assert.doesNotMatch(value.replace(/\{\w+\}/g, ''), /\b(?:observe|start|manage|admin)\b|\b(?:operate|approve|cleanup|deploy|integrate)\b\s*權限/, key);
   }
 });
 
