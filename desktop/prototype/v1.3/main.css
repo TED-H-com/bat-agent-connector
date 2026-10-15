@@ -139,3 +139,20 @@ body.has-workspace .workspace-nav { display: flex; flex-direction: column; }
 @media (max-width:799px) { .proto-discussions { height: auto; } .proto-thread-detail { overflow: visible; } .proto-transcript { overflow: visible; } }
 
 .proto-thread-heading > .proto-notice { flex-basis: 100%; margin: 0; }
+/* The rail scrolls as one column, including the footer, just like the product. */
+body.has-workspace .workspace-nav { min-height: 0; }
+body.has-workspace .workspace-nav > * { flex-shrink: 0; }
+@media (min-width: 1000px) {
+  body.has-workspace .workspace-nav { top: 98px; height: calc(100dvh - 98px); }
+}
+.proto-work-header .proto-facts > div { grid-template-columns: 144px minmax(0, 1fr); }
+.proto-work-header .proto-facts > div:nth-child(4) { grid-column: 1 / -1; }
+.proto-started-line { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; padding-block: var(--space-3); border-block: 1px solid var(--line); }
+.proto-started-line > details[open] { flex-basis: 100%; }
+.proto-tools .ui-pill { margin-left: auto; }
+/* A fixed document overlay also dims page content beyond the native top-layer box. */
+.proto-dialog-backdrop { position: fixed; inset: 0; background: var(--scrim); z-index: 100; }
+.proto-dialog::backdrop { background: transparent; }
+@media (max-width: 799px) {
+  .proto-work-header .proto-facts > div { grid-template-columns: 104px minmax(0, 1fr); }
+}

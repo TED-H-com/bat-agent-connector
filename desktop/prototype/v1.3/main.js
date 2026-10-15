@@ -1,12 +1,12 @@
 import './main.css';
 import { h, place } from '../../src/ui/dom.js';
-import { pageHeader, sectionCard, iconButton, inspector, tabs, searchField, menu, trapFocus } from '../../src/ui/components.js';
+import { pageHeader, sectionCard, iconButton, inspector, tabs, searchField, menu, trapFocus, statusPill } from '../../src/ui/components.js';
 import { icon } from '../../src/ui/icons.js';
 import { projectViewIds, viewIcons } from '../../src/pm-workbench.js';
 import { locale, setLocale, t } from './proto-i18n.js';
-import { GOLDEN_CONSTANTS as C, WORK_LIFECYCLE_ORDER, DIFF_HUNKS, createScenarioState } from './golden-data.js';
+import { GOLDEN_CONSTANTS as C, FIXED_NOW, WORK_LIFECYCLE_ORDER, DIFF_HUNKS, createScenarioState } from './golden-data.js';
 import { pill, action, notice, details, facts, message, composer, planCard, stepList, deliveryBar, unifiedDiffView } from './candidate-components.js';
-const scenes = ['idea', 'planned', ...WORK_LIFECYCLE_ORDER, 'external_readonly', 'hermes', 'disconnect_recovery', 'maintenance'];
+const scenes = ['idea', 'planned', ...WORK_LIFECYCLE_ORDER, 'external_readonly', 'hermes', 'disconnect_recovery', 'maintenance', 'requirement_accepted', 'merged', 'deployed'];
 const queryScene = new URLSearchParams(location.search).get('scene');
 let state = createScenarioState(scenes.includes(queryScene) ? queryScene : 'idea', locale);
 let theme = 'light',
@@ -25,7 +25,9 @@ const tid = id => ({
 });
 const workViews = ['work_main', 'work_derived', 'work_separate'];
 const go = view => {
+  state.noteSavedBanner = false;
   state.activeView = view;
+  if (workViews.includes(view)) state.workOpened = true;
   renderApp();
   window.scrollTo(0, 0);
 };
@@ -46,15 +48,31 @@ function startSeparate(view) {
   }
   state.workState = 'running';
   state.secondSentenceQueued = false;
+  state.queuedMessage = null;
+  state.deliveredMessages = [];
   state.nextStepDraft = '';
   state.disconnectedDuringStart = false;
   state.reconciledAfterDisconnect = false;
   state.advancedExpanded = false;
   go(view);
 }
-const scene = () => state.activeView === 'work_hermes' ? 'hermes' : state.activeView === 'work_manual' ? 'external_readonly' : ['maintenance', 'work_maint'].includes(state.activeView) ? 'maintenance' : workViews.includes(state.activeView) && state.disconnectedDuringStart ? 'disconnect_recovery' : workViews.includes(state.activeView) ? state.workState : state.workStarted && state.planVisible && state.adoptMode === 'completed' ? state.workState : state.planVisible ? 'planned' : 'idea';
+const deliveryScene = () => state.delivery.deployed ? 'deployed' : state.delivery.merged ? 'merged' : state.delivery.accepted ? 'requirement_accepted' : state.workState;
+const threadState = () => state.workStarted ? deliveryScene() : state.planAdoptedLater ? 'planned' : 'idea';
+const scene = () => state.activeView === 'work_hermes' ? 'hermes' : state.activeView === 'work_manual' ? 'external_readonly' : ['maintenance', 'work_maint'].includes(state.activeView) ? 'maintenance' : workViews.includes(state.activeView) && state.disconnectedDuringStart ? 'disconnect_recovery' : workViews.includes(state.activeView) ? deliveryScene() : state.workStarted && state.planVisible && state.adoptMode === 'completed' ? deliveryScene() : state.planVisible ? 'planned' : 'idea';
 function switchScene(value) {
-  state = createScenarioState(value, locale);
+  const postDelivery = ['requirement_accepted', 'merged', 'deployed'].includes(value);
+  state = createScenarioState(postDelivery ? 'awaiting_verification' : value, locale);
+  if (postDelivery) {
+    Object.assign(state.delivery, {
+      pr_open: true,
+      accepted: true,
+      merged: value !== 'requirement_accepted',
+      deployed: value === 'deployed'
+    });
+    state.pmAssessment = 'passed';
+    state.ownerDecisionRecorded = 'decisionAccepted';
+    state.activeView = 'overview';
+  }
   if (value === 'hermes') {
     state.hermesVisible = true;
     state.activeView = 'work_hermes';
@@ -64,6 +82,10 @@ function switchScene(value) {
 function setLanguage(next) {
   const first = C.firstSentence[locale],
     second = C.secondSentence[locale];
+  const translate = text => text === first ? C.firstSentence[next] : text === second ? C.secondSentence[next] : text;
+  state.discussionNotes.forEach(note => { note.body = translate(note.body); });
+  state.queuedMessage = translate(state.queuedMessage);
+  state.deliveredMessages = state.deliveredMessages.map(translate);
   setLocale(next);
   if (state.composerDraft === first) state.composerDraft = C.firstSentence[locale];
   if (state.nextStepDraft === second) state.nextStepDraft = C.secondSentence[locale];
@@ -95,6 +117,13 @@ function partialStart() {
 }
 function setWorkState(next) {
   state.workStarted = true;
+  if (['turn_ended', 'awaiting_verification'].includes(next) && state.queuedMessage) {
+    state.deliveredMessages.push(state.queuedMessage);
+    state.queuedMessage = null;
+    state.secondSentenceQueued = false;
+    state.nextStepDraft = '';
+  }
+  state.turnInterrupted = false;
   state.workState = next;
   state.disconnectedDuringStart = false;
   state.delivery.self_reported = ['turn_ended', 'awaiting_verification'].includes(next);
@@ -150,8 +179,12 @@ function renderBar() {
     state.composerDraft = C.secondSentence[locale];
     renderApp();
   }), action('pmUnavailableSim', 'toggle-pm-unavailable', () => {
+    state.noteSavedBanner = false;
     state.pmAvailable = !state.pmAvailable;
     go('discussions');
+  }), action('queueFailureSim', 'toggle-queue-failure', () => {
+    state.queueAvailable = !state.queueAvailable;
+    renderApp();
   }), action('partialSim', 'plan-simulate-partial', partialStart), action('disconnectSim', 'simulate-disconnect', disconnect), action('hermesSim', 'proto-trigger-hermes', () => {
     state.hermesVisible = true;
     go('work_hermes');
@@ -345,27 +378,45 @@ function openDiscussionComposer() {
   document.querySelector('[data-testid="composer-textarea"]').focus();
 }
 function renderDiscussions() {
+  const sendNote = note => {
+    state.noteSavedBanner = false;
+    if (!state.pmAvailable) return renderApp();
+    note.sent = true;
+    state.pmReplied = true;
+    state.modelCalls++;
+    state.composerDraft = '';
+    renderApp();
+  };
   const send = () => {
-    if (!state.composerDraft.trim()) return;
-    if (state.composerIntent === 'discuss') {
+    state.noteSavedBanner = false;
+    if (state.composerIntent === 'plan') {
+      if (!state.composerDraft.trim() && !state.pmReplied) return;
+      state.planVisible = true;
+      state.modelCalls++;
+    } else if (state.composerIntent === 'discuss') {
+      if (!state.composerDraft.trim() || !state.pmAvailable) return renderApp();
+      const saved = state.discussionNotes.find(note => !note.sent && note.body === state.composerDraft);
+      if (saved) return sendNote(saved);
       state.discussionNotes.push({
-        body: state.composerDraft
+        body: state.composerDraft,
+        sent: true
       });
       state.pmReplied = true;
       state.modelCalls++;
-    }
-    if (state.composerIntent === 'plan') {
-      state.planVisible = true;
-      state.modelCalls++;
-    }
-    if (state.composerIntent === 'do') {
+    } else {
+      if (!state.composerDraft.trim()) return;
       if (state.workStarted) {
         state.nextStepDraft = state.composerDraft;
-        state.secondSentenceQueued = true;
-        go('work_main');
-      } else startWork(true);
+        state.composerDraft = '';
+        state.activeView = 'work_main';
+        queueSecond();
+      } else {
+        state.composerDraft = '';
+        startWork(true);
+      }
       return;
     }
+    state.composerDraft = '';
     renderApp();
   };
   return h('div', {
@@ -378,38 +429,62 @@ function renderDiscussions() {
   }, searchField(h('input', {
     placeholder: t('ui_search'),
     'aria-label': t('ui_search')
-  })), ...['idea', 'planVersion', 'threadTitle'].map((key, i) => h('button', {
-    class: `proto-thread ${i === 2 ? 'selected' : ''}`,
+  })), h('button', {
+    class: 'proto-thread selected',
     onclick: openDiscussionComposer
-  }, h('strong', {}, t(key)), h('small', {}, t(i === 1 ? 'planned' : i === 2 && state.workStarted ? state.workState : i === 2 && state.planAdoptedLater ? 'planned' : 'idea'))))), h('div', {
+  }, h('strong', {}, t('threadTitle')), h('small', {
+    ...tid('discussion-list-state')
+  }, t(threadState())))), h('div', {
     class: 'proto-thread-detail'
   }, h('header', {
     class: 'proto-thread-heading'
-  }, h('strong', {}, t('threadTitle')), pill(t(state.workStarted ? state.workState : state.planAdoptedLater ? 'planned' : 'idea')), state.workStarted ? action('openWork', 'discussion-open-work', () => go('work_main'), 'ghost') : null, state.adoptMode !== 'idle' ? action('messageLabel', 'discussion-compose', openDiscussionComposer, 'ghost') : null, state.ownerDecisionRecorded ? notice(state.ownerDecisionRecorded, 'discussion-decision-banner', 'ok') : null), h('div', {
+  }, h('strong', {}, t('threadTitle')), pill(t(threadState()), 'neutral', tid('discussion-thread-state')), state.workStarted ? action('openWork', 'discussion-open-work', () => go('work_main'), 'ghost') : null, state.adoptMode !== 'idle' ? action('messageLabel', 'discussion-compose', openDiscussionComposer, 'ghost') : null), h('div', {
     class: 'proto-transcript session-workspace'
   }, h('div', {
     class: 'conversation-scroll'
-  }, message('mei.lin', t('threadFirst')), message('PM', t('threadReply'), true), ...state.discussionNotes.map(note => message('mei.lin', note.body)), state.pmReplied ? message('PM', t('pmReply'), true) : null, state.planVisible && state.adoptMode === 'idle' ? planCard(state, () => {
+  }, message('mei.lin', t('threadFirst')), message('PM', t('threadReply'), true), ...state.discussionNotes.map(note => message('mei.lin', h('div', {}, h('p', {
+    ...tid('discussion-message-text')
+  }, note.body), note.note ? h('small', {
+    ...tid('note-kind')
+  }, t(note.sent ? 'noteSent' : 'noteUnsent')) : null, !note.sent ? action('sendPm', 'send-saved-note', () => sendNote(note), 'ghost', {
+    disabled: !state.pmAvailable
+  }) : null), false, {
+    ...tid(note.note ? 'saved-note' : 'discussion-message')
+  })), state.pmReplied ? message('PM', t('pmReply'), true) : null, state.planVisible && state.adoptMode === 'idle' ? planCard(state, () => {
     state.planAdoptedLater = true;
     renderApp();
-  }, () => startWork()) : null, state.adoptMode !== 'idle' ? stepList(state, () => startWork(), () => go('work_main')) : null)), !state.pmAvailable ? h('div', {
+  }, () => startWork()) : null, state.adoptMode !== 'idle' ? state.workOpened && state.adoptMode === 'completed' ? h('div', {
+    class: 'proto-started-line',
+    ...tid('work-started-summary')
+  }, h('span', {}, t('workReady')), action('openWork', 'adopt-open-work-page', () => go('work_main'), 'ghost'), details(stepList({
+    ...state,
+    adoptMode: 'history'
+  }, () => startWork(), () => go('work_main')))) : stepList(state, () => startWork(), () => go('work_main')) : null, state.ownerDecisionRecorded ? message('mei.lin', h('div', {
+    ...tid('discussion-decision-banner')
+  }, h('p', {}, t(state.ownerDecisionRecorded)), action('viewOverview', 'discussion-decision-overview', () => go('overview'), 'ghost')), false, {at: FIXED_NOW}) : null)), !state.pmAvailable ? h('div', {
     class: 'proto-diagnostic',
     ...tid('pm-unavailable-diagnostic')
   }, h('strong', {}, t('pmMissing')), h('p', {}, t('pmReason')), h('p', {}, t('pmHere')), h('p', {}, t('draftKept')), action('setupPm', 'fix-pm-available', () => go('pm_settings'))) : null, state.adoptMode === 'idle' || state.composeOpen ? composer({
     state,
     onIntent: value => {
+      state.noteSavedBanner = false;
       state.composerIntent = value;
       renderApp();
     },
     onInput: value => {
       state.composerDraft = value;
+      state.noteSavedBanner = false;
+      document.querySelector('[data-testid=note-saved-banner]')?.remove();
     },
     onSend: send,
     onNote: () => {
       if (!state.composerDraft.trim()) return;
       state.discussionNotes.push({
-        body: state.composerDraft
+        body: state.composerDraft,
+        note: true,
+        sent: false
       });
+      state.composerDraft = '';
       state.noteSavedBanner = true;
       renderApp();
     }
@@ -426,9 +501,19 @@ function advanced() {
   return node;
 }
 function queueSecond() {
-  if (!state.nextStepDraft.trim() || state.secondSentenceQueued) return;
-  state.secondSentenceQueued = true;
+  if (!state.nextStepDraft.trim()) return;
+  state.queueFailed = !state.queueAvailable;
+  if (state.queueFailed) return renderApp();
   state.secondSentenceSteered = false;
+  if (['running', 'waiting_input'].includes(state.workState)) {
+    if (state.secondSentenceQueued) return;
+    state.queuedMessage = state.nextStepDraft;
+    state.secondSentenceQueued = true;
+  } else {
+    state.deliveredMessages.push(state.nextStepDraft);
+    state.workState = 'running';
+  }
+  state.nextStepDraft = '';
   renderApp();
 }
 function resultsPanel() {
@@ -438,7 +523,7 @@ function resultsPanel() {
     state.delivery.pr_open = true;
     state.pmAssessment = 'passed';
     renderApp();
-  }), h('p', {}, t('verificationOpen')), action('reviewPm', 'review-pm-summary', () => go('overview'), state.delivery.pr_open ? 'primary' : 'secondary')), 'results-inspector');
+  }), h('p', {}, t(state.delivery.accepted ? 'verificationAccepted' : 'verificationOpen')), action('reviewPm', 'review-pm-summary', () => go('overview'), state.delivery.pr_open ? 'primary' : 'secondary')), 'results-inspector');
 }
 function renderWork() {
   const unknown = state.disconnectedDuringStart,
@@ -446,7 +531,7 @@ function renderWork() {
     waiting = state.workState === 'waiting_input' && !unknown,
     ended = state.workState === 'turn_ended' && !unknown,
     results = state.workState === 'awaiting_verification' && !unknown;
-  const nextKey = unknown || ['accepted', 'preparing_worktree', 'starting'].includes(state.workState) ? 'nextStarting' : waiting ? 'nextWaiting' : results ? state.delivery.pr_open ? 'nextReviewPm' : 'nextVerify' : ended ? 'nextEnded' : 'nextRunning';
+  const nextKey = state.delivery.deployed ? 'nextDeployed' : state.delivery.merged ? 'nextMerged' : state.delivery.accepted ? 'nextAccepted' : unknown || ['accepted', 'preparing_worktree', 'starting'].includes(state.workState) ? 'nextStarting' : waiting ? 'nextWaiting' : results ? state.delivery.pr_open ? 'nextReviewPm' : 'nextVerify' : ended ? 'nextEnded' : 'nextRunning';
   const queue = h('section', {
     class: 'proto-work-composer',
     ...tid('work-queue-box'),
@@ -455,7 +540,7 @@ function renderWork() {
     ...tid('queued-second-sentence-receipt'),
     'data-queue-policy': 'after_current',
     'data-steered': 'false'
-  }, notice('queueSaved'), h('p', {}, state.nextStepDraft), details(h('code', {}, 'msg_q_02'))) : null, h('textarea', {
+  }, notice('queueSaved'), h('p', {}, state.queuedMessage), details(h('code', {}, 'msg_q_02'))) : null, h('textarea', {
     rows: 2,
     'aria-label': t('sendNext'),
     placeholder: t('nextPlaceholder'),
@@ -463,24 +548,26 @@ function renderWork() {
     oninput: e => {
       state.nextStepDraft = e.target.value;
     }
-  }, state.nextStepDraft), h('div', {
+  }, state.nextStepDraft), state.queueFailed ? notice('queueFailed', 'queue-failed') : null, h('div', {
     class: 'proto-queue-row'
-  }, h('small', {}, t('queueHint')), h('div', {
+  }, h('small', {
+    ...tid('next-step-hint')
+  }, t(running ? 'queueHint' : waiting ? 'waitingHint' : 'nextReadyHint')), h('div', {
     class: 'proto-actions'
-  }, action('interrupt', 'interrupt-work', () => {
+  }, running ? action('interrupt', 'interrupt-work', () => {
     state.turnInterrupted = true;
     renderApp();
-  }, 'danger'), action('sendNext', 'btn-queue-second-sentence', queueSecond, 'primary', {
+  }, 'danger') : null, action('sendNext', 'btn-queue-second-sentence', queueSecond, 'primary', {
     disabled: state.secondSentenceQueued
   }))), state.turnInterrupted ? notice('interrupted', 'interruption-feedback') : null);
   return h('div', {
     class: 'proto-view proto-session-view',
     ...tid('view-work-main'),
     'data-question-answered': String(state.questionAnswered)
-  }, header(workTitle(), results ? [inspectorToggle('results')] : [], pill(t(unknown ? 'disconnected' : state.workState), unknown ? 'warn' : 'info')), h('section', {
+  }, header(workTitle(), results ? [inspectorToggle('results')] : [], pill(t(unknown ? 'disconnected' : deliveryScene()), unknown ? 'warn' : 'info')), h('section', {
     class: 'proto-work-header',
     ...tid('work-area-header')
-  }, facts([['goal', workCopy('goalValue')], ['controller', t('controllerPerson')], ['runtime', `${t('profile')} · ${t('model')}`], ['host', C.hostId], ['nextStep', t(nextKey)]])), h('div', {
+  }, facts([['goal', workCopy('goalValue')], ['controller', t('controllerPerson')], ['host', C.hostId], ['runtime', `${t('profile')} · ${t('model')}`], ['nextStep', t(nextKey)]])), h('div', {
     class: `proto-session-grid ${results ? 'has-results' : ''}`
   }, h('div', {
     class: 'proto-work-main',
@@ -489,7 +576,7 @@ function renderWork() {
     class: 'session-workspace proto-work-transcript'
   }, h('div', {
     class: 'conversation-scroll'
-  }, unknown ? h('div', {
+  }, !unknown && state.deliveredMessages.length ? message('mei.lin', C.firstSentence[locale]) : null, !unknown ? state.deliveredMessages.map(body => message('mei.lin', body, false, tid('delivered-next-step'))) : null, unknown ? h('div', {
     class: 'proto-diagnostic',
     ...tid('disconnect-diagnostic')
   }, h('strong', {}, t('disconnected')), h('p', {}, t('disconnectKnown')), h('p', {}, t('disconnectCheck')), h('p', {}, t('draftKept')), action('reconnect', 'reconnect-reconcile', () => {
@@ -501,9 +588,13 @@ function renderWork() {
     accepted: 'requestAccepted',
     preparing_worktree: 'preparing',
     starting: 'startingText'
-  }[state.workState], 'work-pre-output') : null, running ? h('div', tid('live-stream-output'), message('mei.lin', state.activeView === 'work_main' ? C.firstSentence[locale] : workCopy('request')), message('Claude', workCopy('liveReply'), true), h('h3', {}, t('tools')), h('ul', {
+  }[state.workState], 'work-pre-output') : null, running ? h('div', tid('live-stream-output'), !state.deliveredMessages.length ? message('mei.lin', state.activeView === 'work_main' ? C.firstSentence[locale] : workCopy('request')) : null, message('Claude', workCopy('liveReply'), true), h('h3', {}, t('tools')), h('ul', {
     class: 'proto-tools'
-  }, h('li', {}, icon('file-text'), workCopy('toolRead')), h('li', {}, icon('check'), workCopy('toolEdit'))), h('h3', {}, t('liveOutput')), h('pre', tid('stream-console'), workCopy('stream1'))) : null, waiting ? h('div', {
+  }, h('li', {
+    'data-tool-state': 'done'
+  }, icon('check'), workCopy('toolRead'), statusPill('done')), h('li', {
+    'data-tool-state': 'running'
+  }, icon('wrench'), workCopy('toolEdit'), statusPill('running'))), h('h3', {}, t('liveOutput')), h('pre', tid('stream-console'), workCopy('stream1'))) : null, waiting ? h('div', {
     class: 'proto-question',
     ...tid('work-question-card'),
     'data-question-answered': 'false'
@@ -517,7 +608,7 @@ function pmSummary() {
   return sectionCard({
     title: t('pmSummary'),
     actions: [pill(t(state.pmAssessment), state.pmAssessment === 'passed' ? 'ok' : 'warn', tid('pm-assessment-pill'))],
-    body: h('div', tid('pm-assessment-card'), h('h3', {}, t('judgment')), h('p', tid('pm-current-judgment'), t('judgment' + suffix)), h('h3', {}, t('recommendation')), h('p', tid('pm-recommendation'), t('recommendation' + suffix)), h('h3', {}, t('sources')), h('ul', {}, state.delivery.self_reported ? h('li', {}, t('sourceWork')) : null, state.delivery.tests_passed ? h('li', {}, t('sourceTests')) : null, h('li', {}, t(state.delivery.pr_open ? 'sourcePr' : 'sourceMissing'))), state.ownerDecisionRecorded ? h('div', {}, notice(state.ownerDecisionRecorded, 'pm-owner-decision-banner', 'ok'), action('returnThread', 'overview-open-discussion', () => go('discussions'))) : h('div', {
+    body: h('div', tid('pm-assessment-card'), h('h3', {}, t('judgment')), h('p', tid('pm-current-judgment'), t('judgment' + suffix)), h('h3', {}, t('recommendation')), h('p', tid('pm-recommendation'), t(state.delivery.deployed ? 'recommendationDeployed' : state.delivery.merged ? 'recommendationMerged' : 'recommendation' + suffix)), h('h3', {}, t('sources')), h('ul', {}, state.delivery.self_reported ? h('li', {}, t('sourceWork')) : null, state.delivery.tests_passed ? h('li', {}, t('sourceTests')) : null, h('li', {}, t(state.delivery.merged ? 'sourceMerged' : state.delivery.pr_open ? 'sourcePr' : 'sourceMissing')), state.delivery.deployed ? h('li', {}, t('sourceDeployed')) : null), state.ownerDecisionRecorded ? h('div', {}, notice(state.ownerDecisionRecorded, 'pm-owner-decision-banner', 'ok'), action('returnThread', 'overview-open-discussion', () => go('discussions'))) : h('div', {
       class: 'proto-actions',
       ...tid('pm-owner-decisions')
     }, action('accept', 'decision-accept-overview', () => {
@@ -538,7 +629,7 @@ function renderOverview() {
     ...tid('view-overview')
   }, header(t('ui_overview'), [action('ui_discuss', 'overview-discuss', () => go('discussions'))], pill(t('ui_phase_development'))), h('div', {
     class: 'proto-status-strip'
-  }, ...[['goal', 'projectGoal'], ['progress', state.delivery.accepted ? 'progressAccepted' : 'progressValue'], ['blockers', 'blockerValue'], ['decisions', 'decisionValue']].map(([label, value]) => h('div', {}, h('small', {}, t(label)), h('strong', {}, t(value))))), h('div', {
+  }, ...[['goal', 'projectGoal'], ['progress', state.delivery.accepted ? 'progressAccepted' : 'progressValue'], ['blockers', 'blockerValue'], ['decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([label, value]) => h('div', {}, h('small', {}, t(label)), h('strong', {}, t(value))))), h('div', {
     class: 'proto-overview-columns'
   }, h('div', {}, pmSummary(), sectionCard({
     title: t('attention'),
@@ -548,10 +639,10 @@ function renderOverview() {
     body: h('p', {}, t('milestone'))
   }), sectionCard({
     title: t('deliveries'),
-    body: deliveryBar(state.delivery)
+    body: deliveryBar(state.delivery, null, false)
   }))), h('h2', {}, t('charter')), h('div', {
     class: 'proto-charter'
-  }, ...[['purpose', 'projectGoal'], ['scope', 'scopeCharter'], ['milestones', 'milestone'], ['resources', 'budget'], ['risks', 'risk'], ['decisions', 'decisionValue']].map(([title, body]) => sectionCard({
+  }, ...[['purpose', 'projectGoal'], ['scope', 'scopeCharter'], ['milestones', 'milestone'], ['resources', 'budget'], ['risks', 'risk'], ['decisions', state.ownerDecisionRecorded || 'decisionValue']].map(([title, body]) => sectionCard({
     title: t(title),
     body: h('p', {}, t(body))
   }))));
@@ -561,6 +652,7 @@ function renderManual() {
     const dialog = h('dialog', {
       class: 'proto-dialog',
       'aria-label': t('deriveTitle'),
+      'aria-modal': 'true',
       ...tid('derive-confirmation')
     }, h('h2', {}, t('deriveTitle')), h('p', {}, t('deriveBasis')), h('p', {}, t('deriveExcluded')), h('div', {
       class: 'proto-actions'
@@ -573,6 +665,13 @@ function renderManual() {
     }, 'primary')));
     document.querySelector('[data-testid="product-shell"]').append(dialog);
     dialog.showModal();
+    const backdrop = h('div', {
+      class: 'proto-dialog-backdrop',
+      ...tid('derive-backdrop'),
+      'aria-hidden': 'true'
+    });
+    document.body.append(backdrop);
+    dialog.addEventListener('close', () => backdrop.remove());
     dialog.addEventListener('close', () => dialog.remove());
   };
   return h('div', {
@@ -738,6 +837,9 @@ export function renderApp() {
     const steps = transcript.querySelector('[data-testid=compound-step-list]')?.closest('.ui-section-card');
     transcript.scrollTop = steps ? steps.getBoundingClientRect().top - transcript.getBoundingClientRect().top + transcript.scrollTop : transcript.scrollHeight;
   }
+  if (state.activeView === 'discussions' && state.ownerDecisionRecorded && matchMedia('(max-width: 799px)').matches) {
+    queueMicrotask(() => document.querySelector('[data-testid=discussion-decision-banner]')?.scrollIntoView({block: 'center'}));
+  }
   // Fixed-clock, bounded output simulation. No network or runtime calls.
   if (workViews.includes(state.activeView) && state.workState === 'running' && !state.disconnectedDuringStart) streamTimer = setTimeout(() => {
     const el = document.querySelector('[data-testid="stream-console"]');
@@ -751,4 +853,5 @@ document.addEventListener('keydown', event => {
     closeDrawer();
   } else trapFocus(document.getElementById('workspace-sidebar'), event);
 });
-renderApp();
+if (['requirement_accepted', 'merged', 'deployed'].includes(queryScene)) switchScene(queryScene);
+else renderApp();

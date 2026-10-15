@@ -259,6 +259,11 @@ export function createScenarioState(scenario = "idea", currentLocale = "en") {
     questionAnswered: false,
     nextStepDraft: secondSentence,
     secondSentenceQueued: false,
+    queuedMessage: null,
+    deliveredMessages: [],
+    queueAvailable: true,
+    queueFailed: false,
+    workOpened: false,
     secondSentenceSteered: false,
     turnInterrupted: false,
     resultsExpanded: {
@@ -332,6 +337,8 @@ export function createScenarioState(scenario = "idea", currentLocale = "en") {
     base.workStarted = true;
     base.workState = "waiting_input";
     base.secondSentenceQueued = true;
+    base.queuedMessage = secondSentence;
+    base.nextStepDraft = "";
     base.startRequestsSent = 1;
     base.modelCalls = 2;
   } else if (scenario === "awaiting_verification") {
@@ -347,6 +354,8 @@ export function createScenarioState(scenario = "idea", currentLocale = "en") {
     base.workState = "awaiting_verification";
     base.questionAnswered = true;
     base.secondSentenceQueued = true;
+    base.queuedMessage = secondSentence;
+    base.nextStepDraft = "";
     base.startRequestsSent = 1;
     base.modelCalls = 3;
     base.delivery.self_reported = true;
@@ -383,6 +392,20 @@ export function createScenarioState(scenario = "idea", currentLocale = "en") {
       merged: true,
       deployed: true
     };
+  }
+  if (["turn_ended", "awaiting_verification"].includes(scenario)) {
+    base.deliveredMessages = [secondSentence];
+    base.queuedMessage = null;
+    base.secondSentenceQueued = false;
+    base.nextStepDraft = "";
+  }
+  if (base.planVisible) {
+    base.discussionNotes = [{
+      body: firstSentence,
+      sent: true
+    }];
+    base.composerDraft = "";
+    base.pmReplied = true;
   }
   return base;
 }

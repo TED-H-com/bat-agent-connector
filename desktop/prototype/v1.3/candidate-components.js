@@ -27,9 +27,10 @@ export const details = (body, label = "details") => disclosure({
 export const facts = rows => h("dl", {
   class: "proto-facts"
 }, ...rows.map(([key, value]) => h("div", {}, h("dt", {}, t(key)), h("dd", {}, value))));
-export function message(author, body, pm = false) {
+export function message(author, body, pm = false, {at = FIXED_NOW - 3 * 60000, ...attrs} = {}) {
   return h("article", {
-    class: `msg proto-message ${pm ? "proto-pm-message" : "user"}`
+    class: `msg proto-message ${pm ? "proto-pm-message" : "user"}`,
+    ...attrs
   }, ["PM", "Claude", "BAT"].includes(author) ? agentMark(author) : h("span", {
     class: "ui-agent-mark",
     "aria-hidden": "true"
@@ -41,7 +42,7 @@ export function message(author, body, pm = false) {
     class: "message-name"
   }, author), h("span", {
     class: "message-time"
-  }, timeStamp(FIXED_NOW - 3 * 60000, {
+  }, timeStamp(at, {
     milliseconds: true,
     now: FIXED_NOW
   })))), h("div", {
@@ -79,10 +80,10 @@ export function composer({
     placeholder: t("messagePlaceholder"),
     "data-testid": "composer-textarea",
     oninput: e => onInput(e.target.value)
-  }, state.composerDraft), intent === "discuss" && state.composerDraft.trim() ? h("div", {
+  }, state.composerDraft), intent === "discuss" && (state.composerDraft.trim() || state.pmReplied) ? h("div", {
     class: "proto-suggestion",
     "data-testid": "intent-suggestion-banner"
-  }, t("suggestion"), action("toPlan", "suggest-switch-plan", () => onIntent("plan"), "ghost"), action("toDo", "suggest-switch-do", () => onIntent("do"), "ghost")) : null, state.noteSavedBanner ? notice("noteSaved", "note-saved-banner", "ok") : null, h("div", {
+  }, t("suggestion"), action("toPlan", "suggest-switch-plan", () => onIntent("plan"), "ghost"), action("toDo", "suggest-switch-do", () => onIntent("do"), "ghost")) : intent !== "discuss" ? action("toDiscuss", "suggest-switch-discuss", () => onIntent("discuss"), "ghost") : null, state.noteSavedBanner ? notice("noteSaved", "note-saved-banner", "ok") : null, h("div", {
     class: "proto-actions"
   }, intent === "discuss" ? action("saveNote", "composer-save-note", onNote) : null, action(keys[intent][0], keys[intent][1], onSend, "primary", {
     disabled: intent === "discuss" && !state.pmAvailable
@@ -119,10 +120,10 @@ export function stepList(state, resume, openWork) {
     }, step.status === "done" ? t(`s${i + 1}`) : t(step.status === "failed" ? "pausedStep" : `s${i + 1}Pending`)), details(h("code", {}, ids[i]))), pill(t(step.status === "done" ? "ui_status_done" : step.status === "failed" ? "ui_status_needs_you" : "ui_status_not_started"), step.status === "done" ? "ok" : "neutral")))), state.adoptMode === "completed" ? action("openWork", "adopt-open-work-page", openWork, "primary") : null)
   });
 }
-export function deliveryBar(delivery, createPr) {
+export function deliveryBar(delivery, createPr, heading = true) {
   return h("div", {
     "data-testid": "delivery-progression-bar"
-  }, h("h3", {}, t("delivery")), h("dl", {
+  }, heading ? h("h3", {}, t("delivery")) : null, h("dl", {
     class: "proto-delivery"
   }, ...DELIVERY_STATES_ORDER.map(key => h("div", {
     "data-testid": `delivery-state-${key}`,
