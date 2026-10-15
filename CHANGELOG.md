@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Manual sessions show the BAT reply, reviewed checkpoint and MCP dispatch paths.
+  Start and dispatch explain managed work in a collapsed disclosure. Settings → Agents
+  provides installation-aware MCP guidance and a read-only PM eligibility check, with
+  localized reasons and a return link to the originating discussion.
+
 - Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:

@@ -60,6 +60,8 @@ h1 { font-size: var(--fs-title); font-weight: 600; line-height: 1.3; letter-spac
 h2, h3 { font-size: var(--fs-section); font-weight: 600; line-height: 1.35; }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Reading targets retain programmatic focus without resembling form controls. */
+:is(h1, h2, h3, h4, h5, h6)[tabindex="-1"]:focus { outline: none; }
 .mono, code { font-family: var(--font-mono); font-size: var(--fs-mono); overflow-wrap: anywhere; }
 .tabular, .numeric { font-variant-numeric: tabular-nums; }
 .numeric { text-align: right; }

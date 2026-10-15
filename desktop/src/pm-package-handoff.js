@@ -1,3 +1,4 @@
+import {dispatchExplanation} from './work-paths.js';
 import {place} from './ui/dom.js';
 import {button, disclosure, sectionCard} from './ui/components.js';
 import {joinLabel} from './label-text.js';
@@ -21,7 +22,7 @@ export function workspacePackageHandoff({h,t,api,alive,workspaceId,workspace,cap
   const controls=h('details',{'data-pm-package-handoff-controls':''},h('summary',{},t('ph_title')),
     sectionCard({body:h('div',{},head,availabilityNotice,review,status,facts,useReview,editorView,outcome,
       disclosure({label:t('ph_details'),body:h('div',{},h('p',{class:'muted'},t('ph_intro')),h('p',{class:'muted'},t('ph_boundary')),h('p',{class:'muted'},t('ph_agent_help')))}))}));
-  const element=h('section',{class:'pm-packages','data-pm-package-handoff':''},controls);
+  const element=h('section',{class:'pm-packages','data-pm-package-handoff':''},controls,dispatchExplanation({h,t}));
   const available=()=>{const cap=caps()?.features?.pm_workspaces?.package_handoff;return cap?.available===true&&cap.action==='repository.continue'&&cap.contract===contract&&cap.code_basis_required===true&&['bounded_full_prompt','bounded_full_prompt_or_fixed_spec_artifact'].includes(cap.source_materialization);};
   const writer=()=>permitted(false)&&['owner','contributor'].includes(workspace()?.membership?.role)&&['observe','manage','start'].every(scope=>caps()?.scopes?.includes(scope))
     &&caps()?.actions?.some(row=>row.action==='repository.continue'&&row.allowed);

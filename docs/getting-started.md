@@ -71,6 +71,17 @@ Enable **Start when I sign in** for this installation's login startup. Closing W
 
 Configuration changes wait while operations/tasks are active. If a reply is lost, use **Check request** and the **Setup operation** link in **Details**; do not submit a new request to guess the outcome. Expired credentials, invalid ownership or failed startup are recovery states, not reasons to create another database.
 
+<a id="pm-agent-setup"></a>
+
+## PM agent setup
+
+Open **Settings → Agents** to check the Connector host's PM installation. **Check again**
+only reads eligibility; it does not launch a model or read sign-in contents. **Ready**
+means eligible for per-run checks, not a verified model execution. Coming from a discussion
+also checks that workspace's existing BAT analysis configuration and permissions. Without
+workspace context, only the local installation can be checked. Follow the runtime
+prerequisites below to resolve an unavailable result. Manual sessions stay read-only.
+
 ## Try one PM workflow
 
 Use a central and client built from the same reviewed PM candidate. Availability
@@ -309,7 +320,32 @@ In Dashboard, create a project and explicitly choose its configured repository. 
 
 Read the integration preview before adding results to a PR. Merge and deployment require their own configuration and scopes; deployment additionally needs a recipe with actual source-version / health verification. [Delivery setup](design/delivery.md).
 
+<a id="cli-and-agent-access"></a>
+
 ## CLI and agent access
+
+**Settings → Agents** offers a copyable dispatch config for an operator installation
+(`uv tool install`), with a placeholder instead of a real token. The bundled desktop app
+ships only its managed service launcher; it does not put `bat-agent-connector-mcp` or
+`batc` on PATH. For that installation, follow the operator setup above on the intended
+Connector host before configuring an MCP client. Do not copy the desktop's personal token.
+
+The operator issues a separate token from the same service's configured journal:
+
+```bash
+batc api-token issue --actor mcp-agent --scope observe --scope operate --scope start
+```
+
+Store the printed token privately as the MCP process's `BATC_API_TOKEN`. Grant `manage`
+only when project or work-item changes are needed. Keep `--principal-only`; host gates,
+scopes and managed-resource ownership still apply. Use `BATC_TASK_URL` when the intended
+Task Service is not at the default endpoint.
+
+Manual sessions offer three paths: reply in BAT; review and capture a fixed checkpoint,
+then continue in a new managed session; or let a scoped MCP agent drive managed work.
+The checkpoint path keeps the person's session and checkout read-only. The Start and
+dispatch forms explain the worktree, BAT session and tracked evidence in **How dispatch works**.
+
 
 The CLI offers the same observation and operation records:
 

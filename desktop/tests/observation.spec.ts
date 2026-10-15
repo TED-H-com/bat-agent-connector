@@ -315,5 +315,6 @@ for (const native of [false, true]) test(`failed first read never invents manual
   await expect(page.locator('[data-session-readonly]')).toHaveText('Control is unconfirmed, so it is read-only here.');
   await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeHidden();
   provenance = 'manual'; await page.reload();
-  await expect(page.locator('[data-session-readonly]')).toHaveText("Started in BAT by a person, so it's read-only here.");
+  await expect(page.locator('[data-session-readonly]').getByRole('heading')).toHaveText('View only');
+  await expect(page.getByRole('button', {name: 'Send', exact: true})).toBeHidden();
 });

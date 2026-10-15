@@ -709,6 +709,19 @@ body.workspace-resizing, body.workspace-resizing * { cursor: col-resize !importa
 [data-pm-source-pending] { visibility: hidden; position: relative; }
 [data-pm-source-pending] > [data-pm-source-loading] { visibility: visible; position: absolute; inset: 0; }
 
+/* Work paths reuse the conversation lane and Settings surfaces. */
+.work-paths-card { padding: var(--space-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.work-paths-card h2 { margin: 0; font-size: var(--fs-section); }
+.work-paths-card p { margin: var(--space-2) 0; }
+.work-paths-card .actions { margin: var(--space-3) 0; }
+.settings-agent-group { padding-top: var(--space-4); margin-top: var(--space-4); border-top: 1px solid var(--line); }
+.settings-agent-group h3 { margin: 0; font-size: var(--fs-section); }
+.settings-agent-group pre { margin: var(--space-3) 0; padding: var(--space-4); background: var(--surface-2);
+  border-radius: var(--r-md); font-family: var(--font-mono); font-size: var(--fs-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.settings-agents { max-width: var(--reading-width); }
+.work-paths-steps { padding-left: var(--space-6); color: var(--text-2); }
+.work-paths-steps li + li { margin-top: var(--space-2); }
+.settings-agent-heading { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 /* Diagnostics uses the existing overlay, type and spacing tokens. */
 .diagnostics-dialog { box-sizing: border-box; width: min(760px, calc(100vw - var(--space-8))); max-height: calc(100dvh - var(--space-8)); overflow: auto; margin: auto; padding: var(--space-6); color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow-overlay); }
 .diagnostics-dialog::backdrop { background: var(--scrim); }
