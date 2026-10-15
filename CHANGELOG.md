@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Lazy PM loading keeps its loading status separate from each panel's status
+  slot, while revealing settled content and removing its mask together.
+
 - Issues and Governance retain requirement names on direct opening with one
   shared accepted-plan read, without loading the Requirements or Board views.
   Unknown names no longer claim that a saved Governance source is missing.

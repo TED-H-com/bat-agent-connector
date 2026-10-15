@@ -19,7 +19,9 @@ late responses cannot restore them. View changes do not start another event read
 Links from Overview or the Register wait for the destination's first read and
 loading mask to finish before focusing its selected record.
 Events coalesce reads for the visible view and tools mounted in its drawer. Hidden
-sections become stale and stay masked until a fresh read settles when shown. A held
+sections become stale and stay masked until a fresh read settles when shown.
+Loading masks have their own hosts, separate from each panel's status slot. They
+hide content until reveal removes the mask and shows settled content in one turn. A held
 projection read can still be superseded by a newer withdrawal read. PM record events
 follow the same visibility rule; workspace authority and lifecycle admission have
 their own scoped reads even while the Lifecycle drawer is closed. A newer event

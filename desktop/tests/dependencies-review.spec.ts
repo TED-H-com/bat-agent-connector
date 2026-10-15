@@ -58,6 +58,44 @@ async function mount(page: Page, options: {locale?: 'en' | 'zh-TW', manage?: boo
   };
 }
 
+for (const locale of ['en', 'zh-TW'] as const) test.describe(`loading ${locale}`, () => {
+test.use({locale, viewport: {width: 1440, height: 900}});
+test(`loading has its own status until dependency history settles ${locale}`, async ({page}) => {
+  const fixture = demoFixture({locale});
+  let release!: () => void, held = false;
+  const history = new Promise<void>(resolve => {release = resolve;});
+  await mountConversation(page, false, async input => {
+    if (new URL(input.path, 'http://fixture').pathname.endsWith('/dependencies/revisions')) {held = true; await history;}
+    return fixture.dispatch(input);
+  });
+  await page.goto(demoRoute());
+  await page.locator('[data-pm-view="dependencies"]').click();
+  await expect.poll(() => held).toBe(true);
+  const panel = page.locator('[data-dep-view]');
+  const shot = async (state: string) => {
+    const directory = process.env.BATC_PM_LOADING_SHOTS;
+    if (!directory) return;
+    mkdirSync(directory, {recursive: true});
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({width, height: width === 390 ? 844 : 900});
+      await page.screenshot({path: `${directory}/dependencies-${locale}-${width}-${state}.png`, fullPage: true, animations: 'disabled'});
+    }
+  };
+  try {
+    // The panel owns one direct status region; its loading mask has a separate host.
+    await expect(panel.locator(':scope > [role=status]')).toHaveCount(1);
+    await expect(panel.getByRole('status')).toHaveCount(1);
+    await expect(panel.locator('[data-pm-source-loading]')).toBeVisible();
+    await expect(panel.locator('.dep-toolbar')).toBeHidden();
+    await shot('loading');
+  } finally {release();}
+  await expect(panel.locator('.dep-toolbar')).toBeVisible();
+  await expect(panel.locator('[data-pm-source-loading]')).toHaveCount(0);
+  await expect(panel.locator(':scope > [role=status]')).toBeEmpty();
+  await shot('loaded');
+});
+});
+
 test('BLOCKER-2: graph activation, Escape and live reads retain logical focus', async ({page}) => {
   await page.setViewportSize({width: 1440, height: 900});
   const harness = await mount(page);

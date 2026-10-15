@@ -40896,8 +40896,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		maskedSources.delete(section);
 		const node = sectionNode(section);
 		if (!node) return;
-		const placeholder = skeleton(3);
-		placeholder.dataset.pmSourceLoading = "";
+		const placeholder = h("div", { "data-pm-source-loading": "" }, skeleton(3));
 		node.dataset.pmSourcePending = "";
 		node.prepend(placeholder);
 		if (section.meta) section.meta.dataset.pmSourcePending = "";
