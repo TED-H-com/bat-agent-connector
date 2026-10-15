@@ -1,9 +1,9 @@
 export const maintenanceCheckStrings={
   en:{
-    pmc_title:'Maintenance checks',pmc_refresh:'Refresh maintenance checks',pmc_intro:'The central checks GitHub, then captures current workload within the adopted limits. Each result describes that observation only.',
+    pmc_title:'Maintenance checks',pmc_refresh:'Refresh maintenance checks',pmc_intro:'Connector checks GitHub, then captures current workload within the adopted limits. Each result describes that observation only.',
     pmc_runtime_available:'Enabled policies schedule bounded checks in Development or Maintain. Repairs and automatic stage changes remain unavailable.',
-    pmc_check:'Check once',pmc_schedule:'Server schedule',pmc_next:'Next due',pmc_last_success:'Last complete observation',pmc_no_success:'None recorded',pmc_scheduled:'The central will check when due, subject to current access and limits.',
-    pmc_overdue:'Due now. The central admits only the latest due window.',pmc_no_schedule:'Adopt a readable policy to see its schedule.',pmc_hidden:'The latest record is outside your current source access.',
+    pmc_check:'Check once',pmc_schedule:'Connector schedule',pmc_next:'Next due',pmc_last_success:'Last complete observation',pmc_no_success:'None recorded',pmc_scheduled:'Connector will check when due, subject to current access and limits.',
+    pmc_overdue:'Due now · Connector admits only the latest due window',pmc_no_schedule:'Adopt a readable policy to see its schedule.',pmc_hidden:'The latest record is outside your current source access.',
     pmc_skipped:'Earlier windows not run',pmc_coalesced:'Only the latest due window is checked. Earlier windows have no observation coverage.',pmc_window:'Original scheduled operation',pmc_due:'Scheduled for',pmc_admitted:'Admitted at',
     pmc_latest:'Latest check',pmc_no_run:'No maintenance check has reserved a run yet.',pmc_pending:'Waiting for the original check to settle',pmc_complete:'Observation coverage complete',pmc_incomplete:'Observation coverage incomplete',pmc_stopped:'Check stopped before its next step',
     pmc_started:'Started at',pmc_finished:'Finished at',pmc_deadline:'Run deadline',pmc_reserved:'Run capacity remains reserved.',pmc_released:'Concurrent capacity released; this run still counts toward the period limit.',
@@ -18,10 +18,10 @@ export const maintenanceCheckStrings={
     pmc_unavailable:'Check sources could not be verified. Original requests are kept; refresh to check access.',pmc_invalid:'The check response does not match this workspace or its original versions.',pmc_unknown_time:'Time unproven',
   },
   'zh-TW':{
-    pmc_title:'維護檢查',pmc_refresh:'重新讀取維護檢查',pmc_intro:'中央依採用的上限讀取 GitHub，再保存目前工作量。每份結果只代表該次觀察。',
+    pmc_title:'維護檢查',pmc_refresh:'重新讀取維護檢查',pmc_intro:'Connector 依採用的上限讀取 GitHub，再保存目前工作量。每份結果只代表該次觀察。',
     pmc_runtime_available:'啟用的政策會在開發或維護階段排程執行有界檢查。目前尚不支援自動修復或自動變更專案階段。',
-    pmc_check:'檢查一次',pmc_schedule:'中央排程',pmc_next:'下次到期時間',pmc_last_success:'上次完整觀察',pmc_no_success:'尚無紀錄',pmc_scheduled:'中央會在到期時依目前權限與額度進行檢查。',
-    pmc_overdue:'已到期，中央只會採用最新一期。',pmc_no_schedule:'採用可讀取的政策後，即可查看排程。',pmc_hidden:'最新紀錄的原始來源不在你目前的讀取權限內。',
+    pmc_check:'檢查一次',pmc_schedule:'Connector 排程',pmc_next:'下次到期時間',pmc_last_success:'上次完整觀察',pmc_no_success:'尚無紀錄',pmc_scheduled:'Connector 會在到期時依目前權限與額度進行檢查。',
+    pmc_overdue:'已到期，Connector 只會採用最新一期。',pmc_no_schedule:'採用可讀取的政策後，即可查看排程。',pmc_hidden:'最新紀錄的原始來源不在你目前的讀取權限內。',
     pmc_skipped:'未執行的較早期數',pmc_coalesced:'只檢查最新到期的一期；較早各期沒有觀察涵蓋。',pmc_window:'原排程操作',pmc_due:'原定時間',pmc_admitted:'受理時間',
     pmc_latest:'最近一次檢查',pmc_no_run:'尚無維護檢查保留執行額度。',pmc_pending:'等待原檢查完成核對',pmc_complete:'本次觀察範圍已完整涵蓋',pmc_incomplete:'本次觀察涵蓋不完整',pmc_stopped:'檢查已在下一步前停止',
     pmc_started:'開始時間',pmc_finished:'完成時間',pmc_deadline:'單次截止時間',pmc_reserved:'仍保留本次執行額度。',pmc_released:'已釋放同時執行額度；本次仍計入週期次數上限。',

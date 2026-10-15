@@ -87,7 +87,7 @@ for (const native of [false, true]) for (const refresh of ["messages", "preview"
       await expect(page.getByRole("button", {name: "Send", exact: true})).toBeDisabled();
     } else {
       await page.getByRole("button", {name: "Send", exact: true}).click();
-      await expect(page.locator('[data-session-error=CENTRAL_OFFLINE] .session-error-line')).toContainText('Central offline');
+      await expect(page.locator('[data-session-error=CENTRAL_OFFLINE] .session-error-line')).toContainText('Connector offline');
       await expect(page.locator('[data-session-error=CENTRAL_OFFLINE] details')).toContainText('CENTRAL_OFFLINE');
     }
     expect(writes).toHaveLength(1);

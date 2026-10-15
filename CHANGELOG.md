@@ -2,9 +2,7 @@
 
 ## Next release (unreleased)
 
-- Report tasks focus their own control after both its read and permission gates
-  settle. Delayed Save admission preserves focus unless the user navigates away
-  or closes the task. The quality-evidence recovery test now opens Save explicitly.
+- Report task focus waits for its read and permission gates, and cancels when focus moves or the task closes.
 
 - Reconcile M4 completed PM reads with main's private maintenance-repair memo:
   preserve one validation per repair frame, isolate nested guards and recalls,
