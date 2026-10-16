@@ -126,15 +126,17 @@ function createLegacyFixture(locale = 'en') {
 }
 
 async function closeAnyOpenDialog(page: Page) {
-  const inspectorBack = page.locator('.ui-inspector-back, button[aria-label="Back"], button:has-text("Back")').first();
+  const inspectorBack = page.locator('.ui-inspector-back');
+  // Optional probe: check if an inspector back button is visible to close it
   if (await inspectorBack.isVisible().catch(() => false)) {
-    await inspectorBack.evaluate((el: HTMLElement) => el.click()).catch(() => {});
-    await page.waitForTimeout(50);
+    await inspectorBack.click();
+    await expect(inspectorBack).toBeHidden();
   }
   const dialog = page.locator('dialog[open]');
+  // Optional probe: check if an HTML5 dialog is open to close it
   if (await dialog.isVisible().catch(() => false)) {
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(50);
+    await expect(dialog).toBeHidden();
   }
 }
 
@@ -142,22 +144,23 @@ async function ensureDrawerOpen(page: Page, width: number) {
   if (width < 1000) {
     await closeAnyOpenDialog(page);
     const toggle = page.locator('#workspace-menu');
-    if (await toggle.isVisible().catch(() => false)) {
-      const expanded = await toggle.getAttribute('aria-expanded');
-      if (expanded !== 'true') {
-        await toggle.click();
-        await page.waitForTimeout(100);
-      }
+    await expect(toggle).toBeVisible();
+    const expanded = await toggle.getAttribute('aria-expanded');
+    if (expanded !== 'true') {
+      await toggle.click();
+      await expect(page.locator('aside#workspace-sidebar')).toBeVisible();
     }
   }
 }
 
 async function ensureDrawerClosed(page: Page, width: number) {
   if (width < 1000) {
-    const isModal = await page.locator('aside#workspace-sidebar[aria-modal="true"]').isVisible().catch(() => false);
+    const modalSidebar = page.locator('aside#workspace-sidebar[aria-modal="true"]');
+    // Optional probe: check if mobile drawer is currently in modal state
+    const isModal = await modalSidebar.isVisible().catch(() => false);
     if (isModal) {
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(50);
+      await expect(modalSidebar).toBeHidden();
     }
   }
 }
@@ -166,73 +169,129 @@ async function ensureDrawerClosed(page: Page, width: number) {
 // UX-A05: Legacy deep links (preview mode, EN and zh-TW, 1440 and 390)
 // --------------------------------------------------------------------------
 
-const legacyRoutes = [
+interface LegacyRouteConfig {
+  id: string;
+  url: string;
+  dailyEntry: string;
+  h1: {en: string; 'zh-TW': string};
+  objectSelector?: string;
+  objectText?: string | {en: string; 'zh-TW': string};
+  contentSelector?: string;
+  scroller: string;
+  otherEntry: string;
+}
+
+const legacyRoutes: LegacyRouteConfig[] = [
   {
     id: 'session',
     url: `/dashboard/?workbench=1${workspaceRoute}`,
     dailyEntry: 'work',
-    targets: ['Improve empty search results', '改善搜尋的空結果提示', 'Search results', '改善文件搜尋', '搜尋', 'search-results', workspaceOperation],
+    h1: {
+      en: 'Improve empty search results',
+      'zh-TW': '改善搜尋的空結果提示',
+    },
+    objectSelector: '#main',
+    objectText: workspaceOperation,
+    scroller: '.conversation-scroll',
     otherEntry: 'today',
   },
   {
     id: 'operation',
     url: `/dashboard/?workbench=1#/op/${workspaceOperation}`,
     dailyEntry: '', // unmapped
-    targets: [workspaceOperation, 'repository.continue'],
+    h1: {
+      en: 'Continue from published version',
+      'zh-TW': '從已發布版本繼續',
+    },
+    objectSelector: '#main dl code',
+    objectText: 'repository.continue',
+    scroller: 'document',
     otherEntry: 'today',
   },
   {
     id: 'overview',
     url: `/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/overview`,
     dailyEntry: 'projects',
-    targets: ['Library refresh', 'Overview', '專案總覽', fixtureWorkspaceId, 'Recovery progress'],
+    h1: {
+      en: 'Overview',
+      'zh-TW': '專案總覽',
+    },
+    scroller: 'document',
     otherEntry: 'work',
   },
   {
     id: 'discussions',
     url: `/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/discussions`,
     dailyEntry: 'projects',
-    targets: ['A clearer first visit', fixtureWorkspaceId, 'Discussions', '討論'],
+    h1: {
+      en: 'Discussions',
+      'zh-TW': '討論',
+    },
+    scroller: '.pm-workspace-list',
     otherEntry: 'work',
   },
   {
     id: 'thread',
     url: `/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/discussions/${fixtureThreadId}`,
     dailyEntry: 'projects',
-    targets: ['A clearer first visit', fixtureThreadId],
+    h1: {
+      en: 'Discussions',
+      'zh-TW': '討論',
+    },
+    objectSelector: '#main .pd-heading',
+    objectText: 'A clearer first visit',
+    scroller: '.pd-transcript',
     otherEntry: 'work',
   },
   {
     id: 'requirements',
     url: `/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/requirements`,
     dailyEntry: 'projects',
-    targets: ['Requirements', '需求', 'membership.login', 'Members can sign in', '會員可以登入'],
+    h1: {
+      en: 'Requirements',
+      'zh-TW': '需求',
+    },
+    contentSelector: '[data-rtm-requirement]',
+    scroller: 'document',
     otherEntry: 'work',
   },
   {
     id: 'board',
     url: `/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/board`,
     dailyEntry: 'work',
-    targets: ['Member login', '會員登入', 'Board', '工作看板', fixtureWorkspaceId],
+    h1: {
+      en: 'Board',
+      'zh-TW': '工作看板',
+    },
+    contentSelector: '.pm-kanban-card',
+    scroller: 'document',
     otherEntry: 'projects',
   },
   {
     id: 'delivery',
     url: `/dashboard/?workbench=1#/delivery`,
     dailyEntry: '', // unmapped
-    targets: ['Delivery', '成果與 GitHub'],
+    h1: {
+      en: 'Delivery',
+      'zh-TW': '成果與 GitHub',
+    },
+    scroller: 'document',
     otherEntry: 'today',
   },
   {
     id: 'artifacts',
     url: `/dashboard/?workbench=1#/artifact-review`,
     dailyEntry: '', // unmapped
-    targets: ['Artifacts and review', '附件成果與審閱', 'Artifacts', '附件成果'],
+    h1: {
+      en: 'Artifacts and review',
+      'zh-TW': '附件成果與審閱',
+    },
+    scroller: 'document',
     otherEntry: 'today',
   },
 ];
 
-for (const lang of ['en', 'zh-TW']) {
+for (const lang of ['en', 'zh-TW'] as const) {
   for (const width of [1440, 390]) {
     test(`UX-A05: legacy deep links in preview mode ${lang} ${width}`, async ({page}) => {
       await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), lang);
@@ -246,14 +305,15 @@ for (const lang of ['en', 'zh-TW']) {
 
         // Navigate directly to route with ?workbench=1
         await page.goto(route.url);
-        await page.waitForTimeout(150);
+        const expectedHash = new URL(route.url, 'http://dummy').hash;
+        await expect.poll(() => page.evaluate(() => location.hash)).toBe(expectedHash);
 
         // 1. Right entry:
         if (route.dailyEntry) {
           const entry = page.locator(`.wc-daily a[data-daily="${route.dailyEntry}"]`);
           await expect(entry, `Daily entry "${route.dailyEntry}" should be aria-current=page`).toHaveAttribute('aria-current', 'page');
         } else {
-          // If the mapping gives no entry for a route, assert that the route still renders
+          // If the mapping gives no entry for a route, assert that all daily entries are aria-current=false
           const allDaily = page.locator('.wc-daily a');
           const count = await allDaily.count();
           for (let i = 0; i < count; i++) {
@@ -262,99 +322,93 @@ for (const lang of ['en', 'zh-TW']) {
           await expect(page.locator('#main')).toBeVisible();
         }
 
-        async function checkTargetVisible(targets: string[]) {
-          for (const target of targets) {
-            const locMain = page.locator('#main').getByText(target, {exact: false});
-            const countMain = await locMain.count();
-            for (let i = 0; i < countMain; i++) {
-              if (await locMain.nth(i).isVisible().catch(() => false)) return true;
-            }
-            const locPage = page.getByText(target, {exact: false});
-            const countPage = await locPage.count();
-            for (let i = 0; i < countPage; i++) {
-              if (await locPage.nth(i).isVisible().catch(() => false)) return true;
-            }
-          }
-          return false;
+        // 2. Same object: exact #main h1 and object title/ID inside #main
+        await expect(page.locator('#main h1').first()).toHaveText(route.h1[lang]);
+        if (route.objectSelector && route.objectText) {
+          const expectedText = typeof route.objectText === 'string' ? route.objectText : route.objectText[lang];
+          await expect(page.locator(route.objectSelector).first()).toContainText(expectedText);
         }
-
-        // 2. Same object: target object shown with its title or ID
-        await expect(async () => {
-          const foundTarget = await checkTargetVisible(route.targets);
-          expect(foundTarget, `Route ${route.id} should show target object in [${route.targets.join(', ')}]`).toBe(true);
-        }).toPass({timeout: 4000});
 
         // 3. Nothing dispatched: no non-GET requests
         expect(f.nonGetDispatches.length, `No non-GET requests dispatched on route ${route.id}`).toBe(startNonGetCount);
 
         // 4. Back works:
-        // Scroll the page partway
-        const beforeScroll = await page.evaluate(() => {
-          const conv = document.querySelector('.conversation-scroll');
-          if (conv && conv.scrollHeight > conv.clientHeight) {
-            const max = conv.scrollHeight - conv.clientHeight;
-            // Scroll safely above the 48px atBottom threshold
-            const target = Math.max(10, Math.min(100, max - 60));
-            conv.scrollTop = target;
-            return {type: 'conv', val: conv.scrollTop, max};
-          }
-          const trans = document.querySelector('.pd-transcript');
-          if (trans && trans.scrollHeight > trans.clientHeight) {
-            const max = trans.scrollHeight - trans.clientHeight;
-            trans.scrollTop = Math.min(50, Math.floor(max / 2));
-            return {type: 'trans', val: trans.scrollTop, max};
-          }
-          const list = document.querySelector('.pm-workspace-list');
-          if (list && list.scrollHeight > list.clientHeight) {
-            const max = list.scrollHeight - list.clientHeight;
-            list.scrollTop = Math.min(50, Math.floor(max / 2));
-            return {type: 'list', val: list.scrollTop, max};
-          }
-          const doc = document.scrollingElement || document.documentElement;
-          const max = doc.scrollHeight - doc.clientHeight;
-          if (max > 0) {
-            window.scrollTo(0, Math.min(50, Math.floor(max / 2)));
-            return {type: 'doc', val: window.scrollY, max};
-          }
-          return {type: 'none', val: 0, max: 0};
-        });
+        if (route.contentSelector) {
+          await expect(page.locator(route.contentSelector).first()).toBeVisible();
+        }
 
-        // Open a different entry
-        await ensureDrawerOpen(page, width);
-        const otherEntry = page.locator(`.wc-daily a[data-daily="${route.otherEntry}"]`);
-        await otherEntry.click();
-        await ensureDrawerClosed(page, width);
-        await page.waitForTimeout(150);
+        // Measure scroller
+        const scrollInfo = await page.evaluate(selector => {
+          if (selector === 'document') {
+            const doc = document.scrollingElement || document.documentElement;
+            const max = doc.scrollHeight - window.innerHeight;
+            return {max: Math.max(0, max), current: window.scrollY};
+          }
+          const el = document.querySelector(selector);
+          if (!el) return {max: 0, current: 0};
+          const max = el.scrollHeight - el.clientHeight;
+          return {max: Math.max(0, max), current: el.scrollTop};
+        }, route.scroller);
 
-        // Press Back
-        await page.goBack();
-        await page.waitForTimeout(250);
+        if (scrollInfo.max === 0) {
+          // If a route really has nothing to scroll at a width, assert that its maximum is 0
+          expect(scrollInfo.max, `Route ${route.id} at width ${width} has nothing to scroll (max === 0)`).toBe(0);
+        } else {
+          // Scroll it to at least 200 px, or 40 % of its maximum when that is smaller
+          const target = Math.max(1, Math.min(200, Math.floor(scrollInfo.max * 0.4)));
+          await page.evaluate(({selector, target}) => {
+            if (selector === 'document') {
+              window.scrollTo(0, target);
+            } else {
+              const el = document.querySelector(selector);
+              if (el) el.scrollTop = target;
+            }
+          }, {selector: route.scroller, target});
 
-        // Returns to the same route and object
-        await expect(async () => {
-          const returnedTarget = await checkTargetVisible(route.targets);
-          expect(returnedTarget, `After goBack, route ${route.id} should return to target object`).toBe(true);
-        }).toPass({timeout: 4000});
-
-        // Scroll position is within 8px of where it was
-        const afterScroll = await page.evaluate(type => {
-          if (type === 'conv') {
-            const el = document.querySelector('.conversation-scroll');
+          const savedScroll = await page.evaluate(selector => {
+            if (selector === 'document') return window.scrollY;
+            const el = document.querySelector(selector);
             return el ? el.scrollTop : 0;
-          }
-          if (type === 'trans') {
-            const el = document.querySelector('.pd-transcript');
-            return el ? el.scrollTop : 0;
-          }
-          if (type === 'list') {
-            const el = document.querySelector('.pm-workspace-list');
-            return el ? el.scrollTop : 0;
-          }
-          return window.scrollY;
-        }, beforeScroll.type);
+          }, route.scroller);
 
-        const delta = Math.abs(afterScroll - beforeScroll.val);
-        expect(delta, `Scroll delta on ${route.id} (${beforeScroll.type}) should be within 8px (was ${delta}px)`).toBeLessThanOrEqual(8);
+          await ensureDrawerOpen(page, width);
+          const otherEntry = page.locator(`.wc-daily a[data-daily="${route.otherEntry}"]`);
+          await expect(otherEntry).toBeVisible();
+          await otherEntry.click();
+          await ensureDrawerClosed(page, width);
+
+          // Wait for hash to change away and the destination view to settle
+          await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
+          await expect(otherEntry).toHaveAttribute('aria-current', 'page');
+          await expect(page.locator('#main h1').first()).toBeVisible();
+
+          // Press Back
+          await page.goBack();
+
+          // Returns to the same route and object
+          await expect.poll(() => page.evaluate(() => location.hash)).toBe(expectedHash);
+          await expect(page.locator('#main h1').first()).toHaveText(route.h1[lang]);
+          if (route.objectSelector && route.objectText) {
+            const expectedText = typeof route.objectText === 'string' ? route.objectText : route.objectText[lang];
+            await expect(page.locator(route.objectSelector).first()).toContainText(expectedText);
+          }
+          if (route.contentSelector) {
+            await expect(page.locator(route.contentSelector).first()).toBeVisible();
+          }
+
+          // Scroll position lands within 8px of saved position
+          await expect.poll(async () => {
+            const current = await page.evaluate(selector => {
+              if (selector === 'document') return window.scrollY;
+              const el = document.querySelector(selector);
+              return el ? el.scrollTop : 0;
+            }, route.scroller);
+            return Math.abs(current - savedScroll);
+          }, {
+            message: `Scroll position on ${route.id} (${route.scroller}) should restore within 8px of ${savedScroll}`,
+            timeout: 5000
+          }).toBeLessThanOrEqual(8);
+        }
       }
     });
   }
@@ -364,11 +418,26 @@ for (const lang of ['en', 'zh-TW']) {
 // UX-A07: The feature map (EN and zh-TW at 1440, EN at 390)
 // --------------------------------------------------------------------------
 
+interface CollectedDestination {
+  id: string;
+  label: string;
+  href: string;
+  source: 'pm-views' | 'tools-menu' | 'classic-nav';
+  classicHeading: string;
+}
+
+const pmViewSelectors: Record<string, string> = {
+  overview: '[data-pm-overview]',
+  discussions: '[data-discussions]',
+  requirements: '[data-pm-rtm]',
+  board: '[data-pm-kanban]',
+};
+
 const featureMapMatrix = [
   {lang: 'en', width: 1440},
   {lang: 'zh-TW', width: 1440},
   {lang: 'en', width: 390},
-];
+] as const;
 
 for (const {lang, width} of featureMapMatrix) {
   test(`UX-A07: feature map classic to preview ${lang} ${width}`, async ({page}) => {
@@ -378,147 +447,232 @@ for (const {lang, width} of featureMapMatrix) {
     const f = createLegacyFixture(lang);
     await mountAttention(page, false, {...f.ws.fixture, caps: f.combinedCaps}, f.dispatch);
 
-    // 1. Collect destinations programmatically from classic mode DOM (no ?workbench=1)
+    // 1. Record classic destinations and their headings through classic UI controls
     await page.goto(`/dashboard/#/pm/${fixtureWorkspaceId}/overview`);
-    await page.waitForTimeout(200);
+    await expect(page.locator('#main h1').first()).toBeVisible();
 
-    // Open mobile drawer if on mobile viewport to reveal navigation
+    const destinations: CollectedDestination[] = [];
+
+    // A. Record PM view destinations via .pm-project-views buttons
     await ensureDrawerOpen(page, width);
+    const pmButtons = page.locator('.pm-project-views button[data-pm-view]');
+    const pmCount = await pmButtons.count();
+    const pmViews: Array<{view: string; label: string}> = [];
+    for (let i = 0; i < pmCount; i++) {
+      const btn = pmButtons.nth(i);
+      const view = await btn.getAttribute('data-pm-view') || '';
+      const label = (await btn.textContent())?.trim() || '';
+      pmViews.push({view, label});
+    }
 
-    // Classic navigation items
-    const navItems = await page.evaluate(() => {
-      const items: Array<{id: string, label: string, href: string, source: string}> = [];
-      const pending = document.querySelector('a[data-shell-pending]');
-      if (pending) items.push({id: 'pending', label: pending.textContent?.trim() || 'Pending', href: pending.getAttribute('href') || '', source: 'classic-nav'});
-      const settings = document.querySelector('a[data-shell-settings]');
-      if (settings) items.push({id: 'settings', label: settings.textContent?.trim() || 'Settings', href: settings.getAttribute('href') || '', source: 'classic-nav'});
-      for (const a of Array.from(document.querySelectorAll('.workspace-nav-footer > a, .workspace-tree a, .workspace-session-tree a, .shell-all-projects, [data-project-create]'))) {
-        const href = a.getAttribute('href');
-        const label = a.textContent?.trim() || '';
-        if (href && !items.some(i => i.href === href)) {
-          items.push({id: href.replace(/^#\//, '').replace(/\//g, '-'), label, href, source: 'classic-nav'});
-        }
+    for (const {view, label} of pmViews) {
+      await ensureDrawerOpen(page, width);
+      const btn = page.locator(`.pm-project-views button[data-pm-view="${view}"]`);
+      await btn.click();
+      await ensureDrawerClosed(page, width);
+      await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/pm/${fixtureWorkspaceId}/${view}`);
+      if (pmViewSelectors[view]) {
+        await expect(page.locator(pmViewSelectors[view]).first()).toBeVisible();
       }
-      return items;
-    });
+      await expect(page.locator('#main h1').first()).toBeVisible();
+      const classicHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
+      destinations.push({
+        id: `pm-${view}`,
+        label,
+        href: `#/pm/${fixtureWorkspaceId}/${view}`,
+        source: 'pm-views',
+        classicHeading,
+      });
+    }
 
-    // Tools menu items
-    const toolsButton = page.locator('[data-shell-tools]');
-    await toolsButton.click();
-    await page.waitForTimeout(100);
-    const toolsItems = await page.evaluate(() => {
-      const btn = document.querySelector('[data-shell-tools]');
-      const panelId = btn?.getAttribute('aria-controls');
-      const panel = panelId ? document.getElementById(panelId) : null;
-      const items: Array<{id: string, label: string, href: string, source: string}> = [];
-      if (panel) {
-        for (const a of Array.from(panel.querySelectorAll('[role="menuitem"]'))) {
-          const href = a.getAttribute('href') || '';
-          const key = a.getAttribute('data-menu-key') || '';
-          if (key === 'workbench') continue; // Skip preview layout switch
-          items.push({
-            id: key || href.replace(/^#\//, '').replace(/\//g, '-'),
-            label: a.textContent?.trim() || '',
-            href,
-            source: 'tools-menu'
-          });
-        }
-      }
-      return items;
-    });
-    await toolsButton.click(); // Close tools menu
+    // B. Record Tools menu items via [data-shell-tools]
+    await ensureDrawerOpen(page, width);
+    const toolsBtn = page.locator('[data-shell-tools]');
+    await toolsBtn.click();
+    const menuItemsLoc = page.locator('.ui-menu:has([data-shell-tools]) .ui-menu-panel [role="menuitem"]');
+    await expect(menuItemsLoc.first()).toBeVisible();
+    const toolsCount = await menuItemsLoc.count();
+    const toolsItems: Array<{key: string; label: string; href: string}> = [];
+    for (let i = 0; i < toolsCount; i++) {
+      const item = menuItemsLoc.nth(i);
+      // Skip hidden items (e.g. create-workspace when workspace is present)
+      if (await item.isHidden()) continue;
+      const key = await item.getAttribute('data-menu-key') || '';
+      if (key === 'workbench') continue; // Skip workbench layout toggle
+      const href = await item.getAttribute('href') || '';
+      const label = (await item.textContent())?.trim() || '';
+      toolsItems.push({key, label, href});
+    }
+    // Close tools menu
+    await page.keyboard.press('Escape');
     await ensureDrawerClosed(page, width);
 
-    // Project management selector options / buttons
-    const pmViews = await page.evaluate(wsId => {
-      const items: Array<{id: string, label: string, href: string, source: string}> = [];
-      for (const btn of Array.from(document.querySelectorAll('.pm-project-views button[data-pm-view]'))) {
-        const view = btn.getAttribute('data-pm-view') || '';
-        items.push({
-          id: `pm-${view}`,
-          label: btn.textContent?.trim() || '',
-          href: `#/pm/${wsId}/${view}`,
-          source: 'pm-views'
-        });
-      }
-      return items;
-    }, fixtureWorkspaceId);
+    for (const {key, label, href} of toolsItems) {
+      await closeAnyOpenDialog(page);
+      await ensureDrawerOpen(page, width);
+      await page.locator('[data-shell-tools]').click();
+      const item = page.locator(`.ui-menu:has([data-shell-tools]) .ui-menu-panel [role="menuitem"][href="${href}"]`);
+      await item.click();
+      await ensureDrawerClosed(page, width);
+      await expect(page.locator('#main h1').first()).toBeVisible();
+      const classicHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
+      destinations.push({
+        id: key || href.replace(/^#\//, ''),
+        label,
+        href,
+        source: 'tools-menu',
+        classicHeading,
+      });
+      await closeAnyOpenDialog(page);
+    }
 
-    const allDestinations = [...navItems, ...toolsItems, ...pmViews];
-    expect(allDestinations.length, 'Should programmatically gather destinations from classic mode').toBeGreaterThan(5);
+    // C. Record classic navigation items
+    // Pending
+    await ensureDrawerOpen(page, width);
+    const pendingLink = page.locator('a[data-shell-pending]');
+    const pendingLabel = (await pendingLink.textContent())?.trim() || 'Pending';
+    await pendingLink.click();
+    await ensureDrawerClosed(page, width);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/home');
+    await expect(page.locator('#main h1').first()).toBeVisible();
+    const pendingHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
+    destinations.push({
+      id: 'pending',
+      label: pendingLabel,
+      href: '#/home',
+      source: 'classic-nav',
+      classicHeading: pendingHeading,
+    });
 
-    // 2. Check each destination in preview mode (?workbench=1)
+    // Settings
+    await ensureDrawerOpen(page, width);
+    const settingsLink = page.locator('a[data-shell-settings]');
+    const settingsLabel = (await settingsLink.textContent())?.trim() || 'Settings';
+    await settingsLink.click();
+    await ensureDrawerClosed(page, width);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/settings');
+    await expect(page.locator('#main h1').first()).toBeVisible();
+    const settingsHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
+    destinations.push({
+      id: 'settings',
+      label: settingsLabel,
+      href: '#/settings',
+      source: 'classic-nav',
+      classicHeading: settingsHeading,
+    });
+
+    // All projects
+    await ensureDrawerOpen(page, width);
+    const projectsLink = page.locator('.shell-all-projects, a[href="#/projects"]').first();
+    const projectsLabel = (await projectsLink.textContent())?.trim() || 'Projects';
+    await projectsLink.click();
+    await ensureDrawerClosed(page, width);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe('#/projects');
+    await expect(page.locator('#main h1').first()).toBeVisible();
+    const projectsHeading = (await page.locator('#main h1').first().textContent())?.trim() || '';
+    destinations.push({
+      id: 'projects',
+      label: projectsLabel,
+      href: '#/projects',
+      source: 'classic-nav',
+      classicHeading: projectsHeading,
+    });
+
+    expect(destinations.length, 'Should programmatically gather destinations from classic mode').toBeGreaterThan(5);
+
+    // 2. Reach each destination in preview mode (?workbench=1) through UI only
     await page.goto(`/dashboard/?workbench=1#/pm/${fixtureWorkspaceId}/overview`);
-    await page.waitForTimeout(200);
+    await expect.poll(() => page.evaluate(() => location.hash)).toBe(`#/pm/${fixtureWorkspaceId}/overview`);
+    await expect(page.locator('#main h1').first()).toBeVisible();
 
-    for (const dest of allDestinations) {
+    for (const dest of destinations) {
       let reached = false;
-      let method = '';
+      let uiMethod = '';
 
-      // Close any modal dialog from previous steps (e.g. New Workspace dialog)
       await closeAnyOpenDialog(page);
 
-      // Check if reachable via daily entry
+      // Check if reachable via Daily Entry
       await ensureDrawerOpen(page, width);
       const dailyEntry = page.locator(`.wc-daily a[href="${dest.href}"]`).first();
-      if (await dailyEntry.count() > 0 && await dailyEntry.isVisible().catch(() => false)) {
-        await dailyEntry.evaluate((el: HTMLElement) => el.click());
+      // Optional probe: check if daily entry link with matching href is present and visible
+      if (await dailyEntry.isVisible().catch(() => false)) {
+        await dailyEntry.click();
         await ensureDrawerClosed(page, width);
         reached = true;
-        method = 'daily';
+        uiMethod = 'daily-entry';
       }
 
-      // Check if reachable via management selector
+      // Check if reachable via Management Selector
       if (!reached && dest.source === 'pm-views') {
         await ensureDrawerClosed(page, width);
-        const view = dest.id.replace(/^pm-/, '');
-        const select = page.locator('select[data-workbench-management]');
-        if (await select.count() > 0 && await select.isVisible().catch(() => false)) {
-          const option = select.locator(`option[value="${view}"]`);
-          if (await option.count() > 0) {
-            await select.selectOption(view);
-            reached = true;
-            method = 'management-selector';
-          }
+        // If not in PM workspace, use Projects daily entry to return to workspace
+        const mgmtSelect = page.locator('select[data-workbench-management]');
+        // Optional probe: check if workbench management select is visible
+        if (!await mgmtSelect.isVisible().catch(() => false)) {
+          await ensureDrawerOpen(page, width);
+          await page.locator('.wc-daily a[data-daily="projects"]').click();
+          await ensureDrawerClosed(page, width);
         }
+        await expect(mgmtSelect).toBeVisible();
+        const view = dest.id.replace(/^pm-/, '');
+        await mgmtSelect.selectOption(view);
+        if (pmViewSelectors[view]) {
+          await expect(page.locator(pmViewSelectors[view]).first()).toBeVisible();
+        }
+        reached = true;
+        uiMethod = 'management-selector';
       }
 
-      // Check if reachable via Tools menu
+      // Check if reachable via Tools Menu
       if (!reached) {
         await ensureDrawerOpen(page, width);
         const tools = page.locator('[data-shell-tools]');
-        if (await tools.isVisible().catch(() => false)) {
-          await tools.evaluate((el: HTMLElement) => el.click());
-          await page.waitForTimeout(100);
-          const menuItem = page.locator(`.ui-menu-panel [role="menuitem"][href="${dest.href}"]`).first();
-          if (await menuItem.count() > 0 && await menuItem.isVisible().catch(() => false)) {
-            await menuItem.evaluate((el: HTMLElement) => el.click());
-            await ensureDrawerClosed(page, width);
-            reached = true;
-            method = 'tools-menu';
-          } else {
-            await page.keyboard.press('Escape'); // Close menu
-            await page.waitForTimeout(50);
-          }
+        await expect(tools).toBeVisible();
+        await tools.click();
+        const menuItem = page.locator(`.ui-menu:has([data-shell-tools]) .ui-menu-panel [role="menuitem"][href="${dest.href}"]`).first();
+        // Optional probe: check if tools menuitem with target href is present and visible
+        if (await menuItem.isVisible().catch(() => false)) {
+          await menuItem.click();
+          await ensureDrawerClosed(page, width);
+          reached = true;
+          uiMethod = 'tools-menu';
+        } else {
+          await page.keyboard.press('Escape');
+          await ensureDrawerClosed(page, width);
         }
-        await ensureDrawerClosed(page, width);
       }
 
-      // Check if reachable via legacy direct link
-      if (!reached && dest.href) {
-        await page.goto(`/dashboard/?workbench=1${dest.href}`);
-        reached = true;
-        method = 'legacy-link';
+      // Check if reachable via Project Switcher / Catalog link (.shell-all-projects)
+      if (!reached && dest.href === '#/projects') {
+        await ensureDrawerOpen(page, width);
+        const catalogLink = page.locator('.shell-all-projects, a[href="#/projects"]').first();
+        // Optional probe: check if catalog link is visible in sidebar/drawer
+        if (await catalogLink.isVisible().catch(() => false)) {
+          await catalogLink.click();
+          await ensureDrawerClosed(page, width);
+          reached = true;
+          uiMethod = 'catalog-link';
+        }
       }
 
-      // Fail clearly with destination name if missing
-      expect(reached, `Destination "${dest.label}" (${dest.href}) must be reachable in preview mode`).toBe(true);
+      // Check if reachable via Settings link in nav footer
+      if (!reached && dest.href === '#/settings') {
+        await ensureDrawerOpen(page, width);
+        const settingsLink = page.locator('a[data-shell-settings]').first();
+        // Optional probe: check if settings link is visible in sidebar/drawer
+        if (await settingsLink.isVisible().catch(() => false)) {
+          await settingsLink.click();
+          await ensureDrawerClosed(page, width);
+          reached = true;
+          uiMethod = 'settings-link';
+        }
+      }
 
-      // Opening it must show that view's heading
-      const heading = page.locator('#main h1, .ui-page-header h1, .ui-page-heading h1').first();
-      await expect(heading, `Opening destination "${dest.label}" (${dest.href}) must show view heading`).toBeVisible();
-      const headingText = await heading.textContent();
-      expect(headingText?.trim().length, `Destination "${dest.label}" heading text must not be empty`).toBeGreaterThan(0);
+      // Fail clearly with destination name if not reachable through UI
+      expect(reached, `Destination "${dest.label}" (${dest.href}) must be reachable through the UI in preview mode (attempted ${uiMethod || 'none'})`).toBe(true);
+
+      // 3. Compare headings: preview's #main h1 text must equal classic heading
+      await expect(page.locator('#main h1').first(), `Destination "${dest.label}" heading should equal classic heading`).toHaveText(dest.classicHeading);
     }
   });
 }
