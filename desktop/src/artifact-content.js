@@ -62,8 +62,9 @@ async function browserPreview(bytes) {
   return {text};
 }
 
-// Tab or a click elsewhere is the person's focus. Hiding the pressed control
-// moves focus to the body; only that case is handed to the next control.
+// A key or a pointer records that the person moved. Settle moves focus only
+// when it is still on the pressed button, the body, or nowhere. Hiding that
+// button moves focus to the body, and that case still reaches the successor.
 export function retainFocus(button) {
   if (!(button instanceof HTMLElement) || document.activeElement !== button) return () => {};
   let moved = false;
@@ -80,6 +81,8 @@ export function retainFocus(button) {
     document.removeEventListener('keydown', onKeyDown, true);
     document.removeEventListener('pointerdown', onPointerDown, true);
     if (!alive || moved) return;
+    const active = document.activeElement;
+    if (active !== button && active !== document.body && active !== null) return;
     const usable = node => Boolean(node && node.isConnected && !node.closest('[hidden]') && !node.disabled);
     const target = usable(button) ? button : usable(successor) ? successor : fallback;
     if (!target || !target.isConnected) return;
@@ -91,7 +94,7 @@ export function retainFocus(button) {
 export function artifactContent({h, t, api, guard, getArtifact, canRead, validArtifact, readBrowser}) {
   const status = h('p', {class: 'muted', role: 'status'}), transfers = h('div'), preview = h('div', {class: 'file-preview', hidden: true});
   const box = h('div', {class: 'artifact-content'}), receipts = new Map(), controller = new AbortController();
-  let current = null, busy = false, disposed = false, timer, readingStatus = null;
+  let current = null, busy = false, disposed = false, timer, readingStatus = null, pressed = null;
   const live = expected => {
     guard();
     if (disposed || !canRead() || expected && !same(expected, getArtifact())) throw new Error(t('ar_content_changed'));
@@ -150,8 +153,9 @@ export function artifactContent({h, t, api, guard, getArtifact, canRead, validAr
   }
   async function perform(action) {
     const button = action === 'preview' ? peek : save;
-    if (busy || button.getAttribute('aria-disabled') === 'true') return;
+    if (busy || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
     const settle = retainFocus(button);
+    pressed = button;
     busy = true; update(); status.textContent = t('ar_content_reading');
     try {
       const row = await fresh(), ref = reference(row);
@@ -185,7 +189,7 @@ export function artifactContent({h, t, api, guard, getArtifact, canRead, validAr
         link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
         status.textContent = t('ar_content_downloaded');
       }
-    } catch (error) {fail(error);} finally {busy = false; update(); settle(null, status, !disposed);}
+    } catch (error) {fail(error);} finally {busy = false; pressed = null; update(); settle(null, status, !disposed);}
   }
   const peek = h('button', {class: 'secondary', onclick: () => perform('preview')}, t('files_preview'));
   const save = h('button', {class: 'secondary', onclick: () => perform('save')}, t(nativeDesktop ? 'files_save' : 'ar_content_download'));
@@ -197,10 +201,11 @@ export function artifactContent({h, t, api, guard, getArtifact, canRead, validAr
     box.hidden = !next;
     const blocked = !next || !canRead() || nativeDesktop && !nativeFileSupport;
     for (const button of [peek, save]) {
-      if (busy) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
+      if (button === pressed || busy && !blocked) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
       else {button.removeAttribute('aria-disabled'); button.disabled = blocked;}
     }
-    if (busy) status.setAttribute('aria-busy', 'true'); else status.removeAttribute('aria-busy');
+    if ([peek, save].some(button => button.getAttribute('aria-disabled') === 'true' && !button.closest('[hidden]'))) status.setAttribute('aria-busy', 'true');
+    else status.removeAttribute('aria-busy');
     if (next && nativeDesktop && !nativeFileSupport) status.textContent = t('ar_content_native_unavailable');
     if (changed && next && nativeDesktop && nativeFileSupport) queueMicrotask(() => refresh().catch(fail));
   }

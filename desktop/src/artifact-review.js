@@ -66,7 +66,8 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   main.append(container);
   let raw; try {raw = JSON.parse(localStorage.getItem(storageKey));} catch { /* keep a new draft */ }
   let saved = restore(raw), source = null, artifact = null, busy = false, readFailed = false, disposed = false;
-  let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0;
+  let refreshing = null, submission = null, revision = 0, catalogCursor = null, catalogReading = null, catalogPages = 0, executionReads = 0;
+  const pressed = new Set();
   let catalogRows = new Map();
   const operations = {capture: null, accept: null}, candidates = new Map(), pages = new Map();
   const notice = h('div', {role: 'status'}), sourceBox = h('div'), evidence = h('div'), outcome = h('div');
@@ -84,7 +85,9 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   const currentView = () => {try {guard(); return !disposed;} catch {return false;}};
   const inert = button => button.getAttribute('aria-disabled') === 'true';
   function gate(button, flight, blocked) {
-    if (flight) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
+    // The pressed control stays focusable until its own work ends. Every other
+    // control that a static reason blocks stays disabled for the whole read.
+    if (pressed.has(button) || flight && !blocked) {button.disabled = false; button.setAttribute('aria-disabled', 'true');}
     else {button.removeAttribute('aria-disabled'); button.disabled = Boolean(blocked);}
   }
   const persist = (required = false) => {guard(); try {localStorage.setItem(storageKey, JSON.stringify(saved)); return true;}
@@ -159,6 +162,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
     if (busy || refreshing || readFailed || !saved[kind]?.request) return;
     const button = kind === 'capture' ? capture : accept;
     const settle = retainFocus(button);
+    pressed.add(button);
     try {
       guard(); busy = true; update();
       let finish; submission = new Promise(resolve => {finish = resolve;});
@@ -174,8 +178,9 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
         if (!saved[kind].operation_id && error.status >= 400 && error.status < 500 && safe.includes(error.code)) saved[kind].refused = error.code;
         persist(); showError(error);
         if (kind === 'capture' && error.status === 403) notice.append(h('p', {class: 'muted'}, t('ar_original_credential')));
-      } finally {busy = false; finish(); submission = null; if (currentView()) render();}
+      } finally {busy = false; pressed.delete(button); finish(); submission = null; if (currentView()) render();}
     } finally {
+      pressed.delete(button);
       const successor = saved[kind]?.operation_id ? check : saved[kind]?.refused ? (kind === 'capture' ? reset : newReview) : null;
       settle(successor, notice, currentView());
     }
@@ -183,6 +188,7 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   const preview = h('button', {class: 'secondary', onclick: async () => {
     if (inert(preview) || busy || frozen() || !source || !scope('observe') || !supported() || !safePath(path.value) || !selectorValid(saved.selector)) return;
     const settle = retainFocus(preview);
+    pressed.add(preview);
     try {
       guard(); const ticket = ++revision, fixed = structuredClone(input()); busy = true; saved.preview = null; reviewed.checked = false; update();
       try {
@@ -192,8 +198,8 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
         if (!validPreview(doc, fixed)) throw new Error(t('capture_invalid_preview'));
         saved.preview = doc; readFailed = false; persist(); notice.replaceChildren();
       } catch (error) {if (ticket === revision) showError(error);}
-      finally {busy = false; if (currentView()) render();}
-    } finally {settle(null, notice, currentView());}
+      finally {busy = false; pressed.delete(preview); if (currentView()) render();}
+    } finally {pressed.delete(preview); settle(null, notice, currentView());}
   }}, t('capture_preview'));
   const capture = h('button', {class: 'primary', onclick: () => {
     if (inert(capture) || busy || refreshing || readFailed || !mayCapture() || saved.capture?.operation_id || saved.capture?.refused) return;
@@ -217,19 +223,22 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   const check = h('button', {class: 'secondary', onclick: () => {
     if (inert(check)) return;
     const settle = retainFocus(check);
-    refresh(true).catch(showError).finally(() => settle(null, notice, currentView()));
+    pressed.add(check);
+    refresh(true).catch(showError).finally(() => {pressed.delete(check); if (currentView()) update(); settle(null, notice, currentView());});
   }}, t('ar_check'));
   const reload = h('button', {class: 'secondary', onclick: async () => {
     if (inert(reload) || busy || refreshing || frozen()) return;
     const settle = retainFocus(reload);
+    pressed.add(reload);
     busy = true; update();
     try {await loadSource(); guard(); readFailed = false; notice.replaceChildren();}
     catch (error) {showError(error);}
-    finally {busy = false; const alive = currentView(); if (alive) render(); settle(null, notice, alive);}
+    finally {busy = false; pressed.delete(reload); const alive = currentView(); if (alive) render(); settle(null, notice, alive);}
   }}, t('ar_refresh_sources'));
   const reset = h('button', {class: 'secondary', onclick: async () => {
     if (inert(reset)) return;
     const settle = retainFocus(reset);
+    pressed.add(reset);
     try {
       guard(); if (busy || refreshing || readFailed || active('capture') || active('accept')) return;
       saved = {relative_path: path.value, selector: null, reviewText: ''}; artifact = source = null;
@@ -238,8 +247,8 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
       persist(); notice.replaceChildren(); renderChoice(); busy = true; render();
       try {await loadSource();}
       catch (error) {showError(error);}
-      finally {busy = false; if (currentView()) render();}
-    } finally {settle(choice, notice, currentView());}
+      finally {busy = false; pressed.delete(reset); if (currentView()) render();}
+    } finally {pressed.delete(reset); settle(choice, notice, currentView());}
   }}, t('capture_new'));
   const newReview = h('button', {class: 'secondary', onclick: () => {
     if (inert(newReview)) return;
@@ -252,7 +261,8 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   const moreExecutions = h('button', {class: 'secondary', onclick: () => {
     if (inert(moreExecutions)) return;
     const settle = retainFocus(moreExecutions);
-    loadExecutions(true).catch(showError).finally(() => settle(null, notice, currentView()));
+    pressed.add(moreExecutions);
+    loadExecutions(true).catch(showError).finally(() => {pressed.delete(moreExecutions); if (currentView()) update(); settle(null, notice, currentView());});
   }}, t('ar_more_executions'));
   const content = artifactContent({h, t, api, guard, getArtifact: () => artifact, canRead: () => scope('observe') && !readFailed, validArtifact, readBrowser});
   const reviewPanel = h('section', {class: 'panel', 'data-artifact-accept': ''}, h('h2', {}, t('ar_review_title')), reviewFacts,
@@ -265,7 +275,8 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   const moreArtifacts = h('button', {class: 'secondary', hidden: true, onclick: () => {
     if (inert(moreArtifacts)) return;
     const settle = retainFocus(moreArtifacts);
-    loadCatalog(true).catch(e => catalogNotice.replaceChildren(errorBox(e, {within:catalogNotice}))).finally(() => settle(null, notice, currentView()));
+    pressed.add(moreArtifacts);
+    loadCatalog(true).catch(e => catalogNotice.replaceChildren(errorBox(e, {within:catalogNotice}))).finally(() => {pressed.delete(moreArtifacts); if (currentView()) update(); settle(null, notice, currentView());});
   }}, t('more'));
   const catalogPanel = h('section', {class: 'panel'}, h('h2', {}, t('ar_catalog')), catalog, catalogNotice, h('div', {class: 'actions'}, moreArtifacts));
   container.append(pageHeader({title: t('ar_title')}), disclosure({label: t('global_details'), body: h('p', {}, t('ar_help'))}), capturePanel, reviewPanel,
@@ -291,12 +302,15 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
     gate(check, flight, false);
     reset.hidden = !saved.capture; gate(reset, flight, readFailed || Boolean(active('capture') || active('accept')));
     newReview.hidden = !saved.accept; gate(newReview, flight, readFailed || Boolean(active('accept')));
-    gate(moreExecutions, busy, frozen());
+    gate(moreExecutions, busy || executionReads > 0, frozen());
     gate(reload, busy, frozen());
     moreExecutions.hidden = ![...pages.values()].some(value => value !== null);
     gate(moreArtifacts, Boolean(catalogReading), false);
-    if (flight) notice.setAttribute('aria-busy', 'true'); else notice.removeAttribute('aria-busy');
-    if (catalogReading) catalogPanel.setAttribute('aria-busy', 'true'); else catalogPanel.removeAttribute('aria-busy');
+    const shownBusy = button => button.getAttribute('aria-disabled') === 'true' && !button.closest('[hidden]');
+    const panelBusy = panel => [...panel.querySelectorAll('button')].some(shownBusy);
+    if (panelBusy(capturePanel) || panelBusy(reviewPanel) || shownBusy(check)) notice.setAttribute('aria-busy', 'true');
+    else notice.removeAttribute('aria-busy');
+    if (shownBusy(moreArtifacts)) catalogPanel.setAttribute('aria-busy', 'true'); else catalogPanel.removeAttribute('aria-busy');
   }
   function render() {
     if (!currentView()) return;
@@ -325,22 +339,26 @@ export async function mountArtifactReview({main, h, t, api, caps, guard, onEvent
   }
   async function loadExecutions(more = false) {
     if (!source || frozen()) return;
-    const results = await Promise.all(executions.map(async action => {
-      if (more && pages.get(action) === null) return;
-      const before = more ? pages.get(action) : null;
-      return {action, data: await api('GET', `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ''}`)};
-    })); guard();
-    if (frozen()) return;
-    for (const result of results.filter(Boolean)) {
-      pages.set(result.action, result.data.next_before ?? null);
-      for (const op of result.data.operations || []) {
-        const bound = sourceFromOperation(op);
-        if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
-          const selector = {execution_operation_id: op.operation_id}; candidates.set(stable(selector), {selector, label: `${actionLabel(op.action)} · ${op.operation_id}`});
+    executionReads++;
+    try {
+      if (currentView()) update();
+      const results = await Promise.all(executions.map(async action => {
+        if (more && pages.get(action) === null) return;
+        const before = more ? pages.get(action) : null;
+        return {action, data: await api('GET', `/operations?status=succeeded&action=${action}&limit=50${before ? `&before=${before}` : ''}`)};
+      })); guard();
+      if (frozen()) return;
+      for (const result of results.filter(Boolean)) {
+        pages.set(result.action, result.data.next_before ?? null);
+        for (const op of result.data.operations || []) {
+          const bound = sourceFromOperation(op);
+          if (managedCaptureExecution(op) && bound?.host === source.host && bound.session_id === source.session_id) {
+            const selector = {execution_operation_id: op.operation_id}; candidates.set(stable(selector), {selector, label: `${actionLabel(op.action)} · ${op.operation_id}`});
+          }
         }
       }
-    }
-    renderChoice(); update();
+      renderChoice();
+    } finally {executionReads--; if (currentView()) update();}
   }
   async function loadSource() {
     let task, data, bound;

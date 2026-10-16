@@ -35,13 +35,17 @@ read back under existing observe policy. No credential material enters this modu
 Only a matching terminal receipt or an explicit pre-admission refusal permits a new
 intent. Uncertain outcomes retain their IDs and links to operation controls. Failed
 event reads block acknowledgment; focused text and fixed previews survive refreshes.
-While a preview, save, review, source reload, catalog page, or file read is in
-progress, the pressed control stays in the tab order and looks unavailable
-(`aria-disabled`); the region that reports that work is `aria-busy`. A second
-press does nothing. When the pressed control closes, focus moves to Check
-original operations, Capture another file, Record another review, the execution
-list, or the review text, unless focus has already moved. A reply that arrives
-after the view changes does not move focus.
+While a preview, save, review, execution page, source reload, catalog page, or
+file read is in progress, the pressed control stays in the tab order and looks
+unavailable (`aria-disabled`); a second press does nothing. A control that
+cannot be used stays `disabled` and out of the tab order for the whole time,
+including while another read is in progress. The region that reports the work
+is `aria-busy` only while one of its shown controls is in that in-flight
+state. When the pressed control closes, focus moves to Check original
+operations, Capture another file, Record another review, the execution list,
+or the review text, and only if focus is still on the pressed control or has
+fallen back to the page. A reply that arrives after the view changes does not
+move focus.
 
 The native bridge permits only the fixed managed-preview route and typed source,
 relative file and exactly one central selector; no path transport, force or supplied
