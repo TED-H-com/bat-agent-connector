@@ -1865,4 +1865,104 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(diffDetailsZh.locator('.pm-work-result-diff-pre')).toBeVisible();
     await contextZh.close();
   });
+
+  test('27. Part B: 14. Multiple open diffs (release order B then A, and A then B)', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const commit = 'abcdef1234567890abcdef1234567890abcdef12';
+    const fileA = 'src/fileA.ts';
+    const fileB = 'src/fileB.ts';
+    const fileC = 'src/fileC.ts';
+    const fileD = 'src/fileD.ts';
+    const keyA = `${commit}:${fileA}`;
+    const keyB = `${commit}:${fileB}`;
+    const keyC = `${commit}:${fileC}`;
+    const keyD = `${commit}:${fileD}`;
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: commit,
+      summary: {
+        commits: [commit],
+        files: [
+          {path: fileA, status: 'M', additions: 1, deletions: 0, commits_touched: [commit]},
+          {path: fileB, status: 'M', additions: 2, deletions: 0, commits_touched: [commit]},
+          {path: fileC, status: 'M', additions: 3, deletions: 0, commits_touched: [commit]},
+          {path: fileD, status: 'M', additions: 4, deletions: 0, commits_touched: [commit]},
+        ],
+      },
+    });
+
+    f.state.diffResponses.set(keyA, buildDiffResponse({commit, path: fileA, diff: 'DIFF_CONTENT_A'}));
+    f.state.diffResponses.set(keyB, buildDiffResponse({commit, path: fileB, diff: 'DIFF_CONTENT_B'}));
+    f.state.diffResponses.set(keyC, buildDiffResponse({commit, path: fileC, diff: 'DIFF_CONTENT_C'}));
+    f.state.diffResponses.set(keyD, buildDiffResponse({commit, path: fileD, diff: 'DIFF_CONTENT_D'}));
+
+    // 1. First order: release B then A
+    let releaseA: () => void = () => {};
+    let releaseB: () => void = () => {};
+    f.state.holdDiffByKey.set(keyA, new Promise<void>(resolve => { releaseA = resolve; }));
+    f.state.holdDiffByKey.set(keyB, new Promise<void>(resolve => { releaseB = resolve; }));
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    const diffDetailsA = resultSection.locator('.pm-work-result-diff-details').first();
+    const diffDetailsB = resultSection.locator('.pm-work-result-diff-details').nth(1);
+    const diffDetailsC = resultSection.locator('.pm-work-result-diff-details').nth(2);
+    const diffDetailsD = resultSection.locator('.pm-work-result-diff-details').nth(3);
+
+    f.state.expectedDiff = 2;
+    // Open A, then open B
+    await diffDetailsA.locator('summary').click();
+    await diffDetailsB.locator('summary').click();
+
+    // Release B first
+    releaseB();
+    f.state.holdDiffByKey.delete(keyB);
+    await expect(diffDetailsB.locator('.pm-work-result-diff-pre')).toContainText('DIFF_CONTENT_B');
+
+    // Release A second (must not be stranded by B's ticket)
+    releaseA();
+    f.state.holdDiffByKey.delete(keyA);
+    await expect(diffDetailsA.locator('.pm-work-result-diff-pre')).toContainText('DIFF_CONTENT_A');
+
+    expect(f.state.diffCallsByFile.get(keyA)).toBe(1);
+    expect(f.state.diffCallsByFile.get(keyB)).toBe(1);
+
+    // 2. Second order: release C then D (forward order)
+    let releaseC: () => void = () => {};
+    let releaseD: () => void = () => {};
+    f.state.holdDiffByKey.set(keyC, new Promise<void>(resolve => { releaseC = resolve; }));
+    f.state.holdDiffByKey.set(keyD, new Promise<void>(resolve => { releaseD = resolve; }));
+
+    f.state.expectedDiff = 4;
+    // Open C, then open D
+    await diffDetailsC.locator('summary').click();
+    await diffDetailsD.locator('summary').click();
+
+    // Release C first
+    releaseC();
+    f.state.holdDiffByKey.delete(keyC);
+    await expect(diffDetailsC.locator('.pm-work-result-diff-pre')).toContainText('DIFF_CONTENT_C');
+
+    // Release D second
+    releaseD();
+    f.state.holdDiffByKey.delete(keyD);
+    await expect(diffDetailsD.locator('.pm-work-result-diff-pre')).toContainText('DIFF_CONTENT_D');
+
+    expect(f.state.diffCallsByFile.get(keyC)).toBe(1);
+    expect(f.state.diffCallsByFile.get(keyD)).toBe(1);
+  });
 });
+

@@ -280,6 +280,7 @@ export function workResultFixture() {
     holdChangesAttemptId: null as string | null,
     holdDiff: null as Promise<void> | null,
     holdDiffKey: null as string | null,
+    holdDiffByKey: new Map<string, Promise<void>>(),
     changesResponse: null as any,
     changesStatus: null as number | null,
     diffResponses: new Map<string, any>(),
@@ -359,7 +360,9 @@ export function workResultFixture() {
       state.diffCount++;
       state.diffCallsByFile.set(key, (state.diffCallsByFile.get(key) || 0) + 1);
 
-      if (state.holdDiff && (!state.holdDiffKey || state.holdDiffKey === key)) {
+      if (state.holdDiffByKey.has(key)) {
+        await state.holdDiffByKey.get(key);
+      } else if (state.holdDiff && (!state.holdDiffKey || state.holdDiffKey === key)) {
         await state.holdDiff;
       }
       if (state.diffStatusByFile.has(key)) {
