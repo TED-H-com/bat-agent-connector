@@ -44745,6 +44745,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 							});
 						},
 						onSaved: (result) => {
+							if (threadId === "new") titleSession.open = false;
 							alive();
 							location.replace(`#/pm/${encodeURIComponent(workspaceId)}/discussions/${encodeURIComponent(result.thread_id)}`);
 						},
