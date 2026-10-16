@@ -11948,7 +11948,7 @@ function menu({ button: trigger, items }) {
 	root.dispose = () => close(false);
 	return root;
 }
-var focusables = (root) => [...root.querySelectorAll("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex=\"0\"]")].filter((node) => node.getClientRects().length && !node.closest("[hidden], [inert]"));
+var focusables = (root) => [...root.querySelectorAll("a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex=\"0\"]")].filter((node) => node.getClientRects().length && !node.closest("[hidden], [inert]") && getComputedStyle(node).visibility === "visible");
 function trapFocus(root, event) {
 	if (event.key !== "Tab") return;
 	const nodes = focusables(root), first = nodes[0], last = nodes.at(-1);
