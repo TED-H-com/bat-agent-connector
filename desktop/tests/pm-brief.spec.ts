@@ -49,6 +49,7 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
     const f=fixture();await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadBrief(page);f.state.lost=true;
     await form(page).getByRole('button',{name:'Save report',exact:true}).click();await expect(form(page)).toContainText('Reply unavailable');
     f.state.headVersion=4;await page.reload();await openThreadBrief(page);await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.snapshots).toHaveLength(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
@@ -99,6 +100,7 @@ test('legacy workspace brief keeps its complete snapshot form in Report and reco
   await expect(form(page)).toContainText('Reply unavailable');f.state.headVersion=4;
   await page.reload();await page.locator('[data-pm-report-menu]').click();await page.locator('[data-menu-key=save]').click();
   await form(page).getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.snapshots).toHaveLength(1);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
   expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
 });

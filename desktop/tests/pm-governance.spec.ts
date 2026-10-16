@@ -78,6 +78,7 @@ test('lost decision reply preserves key and original version across changed stat
   await action(page, 'decide').getByRole('button', {name: 'Save direction decision', exact: true}).click(); await expect(action(page, 'decide')).toContainText('Reply unavailable');
   const request = structuredClone(f.state.writes[0]); await page.reload(); await boot(page);
   await action(page, 'decide').getByRole('button', {name: 'Check original request', exact: true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes[1]).toEqual(request); expect(f.state.ops.size).toBe(1);
 });
 test('changed plan head freezes unsent creation and preserves draft until explicit baseline review', async ({page}) => {
@@ -87,7 +88,9 @@ test('changed plan head freezes unsent creation and preserves draft until explic
   await expect(action(page, 'record').getByLabel('Finding title', {exact: true})).toHaveValue('Verify the recovery mail route');
   await expect(action(page, 'record').getByRole('button', {name: 'Save finding', exact: true})).toBeDisabled();
   await page.getByRole('button', {name: 'Review updated baseline', exact: true}).click(); await openAction(page, 'record');
-  await action(page, 'record').getByRole('button', {name: 'Save finding', exact: true}).click(); expect(f.state.writes[0].body.preconditions).toEqual({expected_plan_version: 9});
+  await action(page, 'record').getByRole('button', {name: 'Save finding', exact: true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.preconditions).toEqual({expected_plan_version: 9});
 });
 test('read failure hides source facts while keeping local draft for later authorized recovery', async ({page}) => {
   const f = governanceFixture(); await mount(page, f); await reason(page, 'revise', 'Keep this reasoning'); f.state.failRead = true;
@@ -165,7 +168,9 @@ test('new proposed plan must be inspected before recording and does not silently
   await editor.getByLabel('Kind', {exact: true}).selectOption('change'); await editor.getByText('Alternatives & related', {exact: true}).click();
   await editor.getByLabel('Proposed plan version', {exact: true}).fill(proposedId);
   await expect(editor.getByRole('button', {name: 'Save finding', exact: true})).toBeDisabled(); await editor.getByRole('button', {name: 'Read proposed revision', exact: true}).click();
-  await editor.getByRole('button', {name: 'Save finding', exact: true}).click(); expect(f.state.writes[0].body.params.proposed_revision_id).toBe(proposedId);
+  await editor.getByRole('button', {name: 'Save finding', exact: true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
+  expect(f.state.writes[0].body.params.proposed_revision_id).toBe(proposedId);
   expect(f.state.writes[0].body.params).not.toHaveProperty('scope_applied'); expect(f.state.writes[0].body.params).not.toHaveProperty('decision');
 });
 test('reported drift requires both observed evidence and fixed plan source plus dimension', async ({page}) => {
@@ -174,6 +179,7 @@ test('reported drift requires both observed evidence and fixed plan source plus 
   await expect(editor.getByRole('button', {name: 'Save finding', exact: true})).toBeDisabled();
   await editor.getByText('Response & impact', {exact: true}).click(); await editor.getByLabel('Affected dimension', {exact: true}).selectOption('quality');
   await editor.getByRole('checkbox', {name: /^Evidence ·/}).check(); await editor.getByRole('button', {name: 'Save finding', exact: true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.dimension).toBe('quality'); expect(f.state.writes[0].body.params.source_refs.map((row: any) => row.kind)).toEqual(['plan_input', 'evidence']);
 });
 test('same root cause shows existing fact without claiming the new wording was applied', async ({page}) => {
@@ -219,6 +225,7 @@ for (const locale of ['en', 'zh-TW']) test(`expanded governance form at mobile w
   const when=editor.getByLabel('Review time',{exact:true}); await expect(when).toHaveAttribute('type','datetime-local'); await when.fill('2026-11-01T14:30');
   await expect(editor.locator('time')).toBeVisible(); expect(f.state.writes).toEqual([]);
   await editor.getByRole('button',{name:'Save finding',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.affected_requirement_ids).toEqual(['account.recovery']);
   expect(f.state.writes[0].body.params.review_at).toMatch(/^2026-11-01T.*Z$/);
  });

@@ -56,6 +56,7 @@ test('a lost completion reply recovers the exact request after completed state a
   await expect(action(page,'complete')).toContainText('Reply unavailable');expect(f.state.meetings[0].meeting.status).toBe('completed');
   const original=structuredClone(f.state.writes.at(-1));await page.reload();await boot(page);
   await action(page,'complete').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(4);
   expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(3);
   await expect(action(page,'complete').getByRole('button',{name:'Check original request',exact:true})).toHaveCount(0);
   await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();
@@ -91,6 +92,7 @@ test('new source versions preserve typed text and fixed context until explicit u
   await reason(page,'context.revise');
   if(await page.getByRole('button',{name:'Update baseline',exact:true}).isVisible())await page.getByRole('button',{name:'Update baseline',exact:true}).click();
   await openAction(page,'context.revise');await action(page,'context.revise').getByRole('button',{name:'Save context',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes.at(-1).body.preconditions).toEqual({expected_version:1,expected_sprint_version:5});
   expect(f.state.meetings[0].context.document.snapshot_ref.snapshot_id).toBe('pmsnap_'+'9'.repeat(32));
 });
@@ -121,6 +123,7 @@ test('follow-up result is an unverified record on the original assignment',async
   await action(page,'follow_up.record').getByLabel('Reported status',{exact:true}).selectOption('reported_done');
   await action(page,'follow_up.record').getByLabel('Result and remaining uncertainty',{exact:true}).fill('The handoff was reviewed; impact remains unmeasured');
   await reason(page,'follow_up.record');await action(page,'follow_up.record').getByRole('button',{name:'Record follow-up result',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params).toMatchObject({follow_up_id:'handoff',status:'reported_done'});expect(f.state.writes[0].body.params).not.toHaveProperty('snapshot_id');
   await expect(action(page,'follow_up.record').getByLabel('Result and remaining uncertainty',{exact:true})).toHaveValue('');
   await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();
@@ -143,6 +146,7 @@ test('source choices keep exact IDs and render untrusted strings as text',async(
   await action(page,'note').getByRole('checkbox',{name:/literal evidence/}).check();
   await action(page,'note').getByLabel('Discussion note',{exact:true}).fill('Evidence is incomplete');await reason(page,'note');
   await action(page,'note').getByRole('button',{name:'Save discussion note',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.source_refs).toEqual([{kind:'evidence',id:'pme_'+'7'.repeat(32)}]);
   await expect(page.locator('[data-pm-meetings] img')).toHaveCount(0);
 });
@@ -163,7 +167,9 @@ test('non-latest meeting selection survives reload with its original lost note r
   await page.getByLabel('Meeting',{exact:true}).selectOption(first);await expect(page.locator('[data-pm-meeting-selected]')).toHaveAttribute('data-pm-meeting-selected',first);
   await expect(page.getByLabel('Meeting',{exact:true})).toBeEnabled();f.state.lost=true;await saveNote(page,false);await expect(action(page,'note')).toContainText('Reply unavailable');
   const original=structuredClone(f.state.writes[0]);await page.reload();await boot(page);await expect(page.getByLabel('Meeting',{exact:true})).toHaveValue(first);
-  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
+  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
+  expect(f.state.writes.at(-1)).toEqual(original);expect(f.state.ops.size).toBe(1);
 });
 test('zero cursor offers standalone history when detail budget includes no notes',async({page})=>{
   const f=meetingFixture();f.state.meetings[0].history_next_cursors.notes=0;await mount(page,f);
@@ -190,12 +196,15 @@ test('mismatched receipt and lost acknowledgement remain locked after scope revo
   f.state.manage=false;await page.evaluate(()=>(window as any).refreshMeetings());
   await expect(action(page,'note')).toHaveCount(0);expect(await stored()).toEqual(pending);expect(f.state.writes).toHaveLength(1);
   f.state.manage=true;f.state.mismatch=false;await page.evaluate(()=>(window as any).refreshMeetings());
-  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();expect(f.state.writes.at(-1)).toEqual(original);
+  await action(page,'note').getByRole('button',{name:'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
+  expect(f.state.writes.at(-1)).toEqual(original);
 });
 test('creating Review uses an existing started Sprint and a chosen saved snapshot',async({page})=>{
   const f=meetingFixture();await mount(page,f);await openAction(page,'create');const editor=action(page,'create');
   await editor.getByLabel('Meeting title',{exact:true}).fill('Review observed account recovery');await editor.getByLabel('Discussion type',{exact:true}).selectOption('review');await reason(page,'create');
   await editor.getByRole('button',{name:'Create meeting draft',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params).toMatchObject({kind:'review',snapshot_id:snapshotId});expect(f.state.writes[0].body.preconditions).toEqual({expected_sprint_version:4});
   expect(f.state.meetings.at(-1).meeting.status).toBe('draft');
 });
