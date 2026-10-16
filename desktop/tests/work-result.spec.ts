@@ -159,7 +159,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const updatedEnvelope = buildResultEnvelope({
       attempt_id: attId,
       state: 'turn-ended',
-      stage: 'completed',
+      stage: 'started',
       results: [
         {result_id: 'res_01', turn_marker: 'turn_01', head_commit: '1111222233334444555566667777888899990000', observed_at: 1791705600},
         {result_id: 'res_02', turn_marker: 'turn_02', head_commit: 'aaaabbbbccccddddeeeeffff0000111122223333', observed_at: 1791705500},
@@ -174,11 +174,42 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(turnsDisclosure).toHaveAttribute('open', '');
     await expect(turnsSummary).toBeFocused();
 
+    // Static result is still hidden
+    await expect(inspector.locator('[data-work-section="result"]')).toBeHidden();
+
+    // Result content is rendered correctly
+    await expect(resultSection.locator('.pm-work-result-summary-box')).toContainText('Implemented login flow and validated credentials handling.');
+    await expect(resultSection.locator('.pm-work-result-checks [data-check="verification"]')).toHaveText('Not verified');
+    const turnRows = resultSection.locator('.pm-work-result-turn-row');
+    await expect(turnRows).toHaveCount(2);
+    await expect(turnRows.nth(0)).toContainText('111122223333');
+    await expect(turnRows.nth(0)).toContainText('latest');
+    await expect(turnRows.nth(1)).toContainText('aaaabbbbcccc');
+
     // Section order remains unchanged after event
     const sectionKeysAfter = await inspector.locator('.ui-inspector-body > [data-work-section]').evaluateAll(nodes =>
       nodes.map(n => n.getAttribute('data-work-section')).filter(Boolean)
     );
     expect(sectionKeysAfter).toEqual(sectionKeysBefore);
+
+    // Event refresh: emit event again with same attempt/result
+    f.emitResultRecorded(attId, updatedEnvelope);
+
+    // After event refresh: section order remains identical
+    const sectionKeysAfterRefresh = await inspector.locator('.ui-inspector-body > [data-work-section]').evaluateAll(nodes =>
+      nodes.map(n => n.getAttribute('data-work-section')).filter(Boolean)
+    );
+    expect(sectionKeysAfterRefresh).toEqual(sectionKeysBefore);
+
+    // Static result remains hidden
+    await expect(inspector.locator('[data-work-section="result"]')).toBeHidden();
+
+    // Result content remains identical after event refresh
+    await expect(resultSection.locator('.pm-work-result-state')).toContainText('Turn ended');
+    await expect(resultSection.locator('.pm-work-result-summary-box')).toContainText('Implemented login flow and validated credentials handling.');
+    await expect(resultSection.locator('.pm-work-result-checks [data-check="verification"]')).toHaveText('Not verified');
+    await expect(turnRows).toHaveCount(2);
+    await expect(turnsDisclosure).toHaveAttribute('open', '');
   });
 
   test('3. Unknown and failed reasons', async ({page}) => {
@@ -552,7 +583,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     expect(f.state.resultRequests.length).toBe(0);
   });
 
-  test('10. Work switching & immediate withdrawal', async ({page}) => {
+  test('10. Work switching & stale attempt failure must not withdraw current result', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
     activeFixture = f;
@@ -566,7 +597,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
       workspace_id: workspaceId,
       work_item_id: workId(2),
       start_operation_id: 'op_' + '2'.repeat(32),
-      stage: 'completed',
+      stage: 'started',
       status: 'succeeded',
       session: {host: 'fixture-host', session_id: 'session-456'},
       created_at: 1791705600,
@@ -585,52 +616,39 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
 
-    // 1. Select Work 1 and verify its result appears
     const card1 = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
-    await card1.locator('[data-board-open]').click();
-
+    const card2 = page.locator(`[data-pm-kanban-work="${workId(2)}"]`);
     const inspector = page.locator('[data-work-inspector]');
     const attemptResult = inspector.locator('[data-work-section="attempt-result"]');
     const staticResult = inspector.locator('[data-work-section="result"]');
 
-    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary for Work 1 ONLY');
-    await expect(attemptResult).toBeVisible();
-    await expect(staticResult).toBeHidden();
-
-    const requestsForA = f.state.resultRequests.filter(r => r.attempt_id === att1).length;
-
-    // 2. Prepare hold on Work 2 attempts read
-    let releaseAttempts: () => void = () => {};
-    f.state.holdAttemptsWorkId = workId(2);
+    // 1. Open Work A with its /attempts read held
+    let releaseA: () => void = () => {};
+    f.state.holdAttemptsWorkId = workId(1);
     f.state.holdAttempts = new Promise<void>(resolve => {
-      releaseAttempts = resolve;
+      releaseA = resolve;
     });
-
-    // 3. Switch to Work 2
-    const card2 = page.locator(`[data-pm-kanban-work="${workId(2)}"]`);
-    await card2.locator('[data-board-open]').click();
-
-    // Immediately assert: Work 1 result is NOT visible, attempt-result is hidden, static result visible
-    await expect(attemptResult).toBeHidden();
-    await expect(staticResult).toBeVisible();
-    // Zero new /result requests for Work 1
-    const newRequestsForA = f.state.resultRequests.filter(r => r.attempt_id === att1).length;
-    expect(newRequestsForA).toBe(requestsForA);
-
-    // 4. Release attempts read for Work 2: Work 2 result appears
-    releaseAttempts();
-    f.state.holdAttempts = null;
-
-    await expect(attemptResult).toBeVisible();
-    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary for Work 2 ONLY');
-    await expect(attemptResult.locator('.pm-work-result-summary-box')).not.toContainText('Summary for Work 1 ONLY');
-
-    // 5. Switch to a work item whose attempts read fails: no result shown
-    f.state.attemptsFailWorkId = workId(1);
     await card1.locator('[data-board-open]').click();
 
-    await expect(attemptResult).toBeHidden();
-    await expect(staticResult).toBeVisible();
+    // 2. Switch to Work B and wait for B's Result
+    await card2.locator('[data-board-open]').click();
+    await expect(attemptResult).toBeVisible();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary for Work 2 ONLY');
+    await expect(staticResult).toBeHidden();
+
+    // 3. Fail A's held read
+    f.state.attemptsFailWorkId = workId(1);
+    releaseA();
+    f.state.holdAttempts = null;
+
+    // 4. B's Result stays visible, with its content, and B's panel shows no error from A
+    await expect(attemptResult).toBeVisible();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary for Work 2 ONLY');
+    await expect(inspector.locator('[data-work-section="start"] .error, [data-work-section="start"] [data-alert-kind="error"]')).toHaveCount(0);
+
+    // Re-check "no new /result for A"
+    const requestsForA = f.state.resultRequests.filter(r => r.attempt_id === att1).length;
+    expect(requestsForA).toBe(0);
   });
 
   test('11. Plain text summary (no HTML / XSS)', async ({page}) => {

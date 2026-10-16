@@ -4,18 +4,32 @@ import {workResultFixture, buildResultEnvelope, workspaceId, workId, route} from
 import * as path from 'path';
 import * as fs from 'fs';
 
-const SHOTS_DIR = process.env.BATC_WORK_RESULT_SCREENSHOTS || path.join(process.env.TMPDIR || '/tmp', 'shots');
+const SHOTS_DIR = process.env.BATC_WORK_RESULT_SCREENSHOTS;
 
 test.describe('Work Result Screenshots', () => {
   test.beforeEach(() => {
-    test.skip(!process.env.BATC_WORK_RESULT_SCREENSHOTS, 'Screenshots are opt-in via BATC_WORK_RESULT_SCREENSHOTS');
-    fs.mkdirSync(SHOTS_DIR, {recursive: true});
+    test.skip(!SHOTS_DIR, 'Screenshots are opt-in via BATC_WORK_RESULT_SCREENSHOTS');
+    fs.mkdirSync(SHOTS_DIR!, {recursive: true});
   });
 
   // 1. en-1440-turn-ended.png: viewport 1440x2400 to show full inspector (Start above Result, static Result hidden)
   test('en-1440-turn-ended', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 2400});
     const f = workResultFixture();
+    const attId = 'att_' + '1'.repeat(32);
+    f.state.currentEnvelope = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'turn-ended',
+      stage: 'started',
+      pull_requests: [
+        {
+          pull_number: 10,
+          repository: 'example/library',
+          publication_operation_id: 'op_' + '1'.repeat(32),
+        },
+      ],
+      merge_status: 'merged',
+    });
 
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
@@ -34,18 +48,19 @@ test.describe('Work Result Screenshots', () => {
     // Built-in static Result is hidden
     await expect(inspector.locator('[data-work-section="result"]')).toBeHidden();
 
-    await inspector.screenshot({path: path.join(SHOTS_DIR, 'en-1440-turn-ended.png')});
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'en-1440-turn-ended.png')});
   });
 
-  // 2. en-1440-partial.png: viewport 1440x900, en-US, partial changes envelope showing uncommitted warning and files list
+  // 2. en-1440-partial.png: viewport 1440x1600, en-US, partial changes envelope showing uncommitted warning, reasons and files list
   test('en-1440-partial', async ({page}) => {
-    await page.setViewportSize({width: 1440, height: 900});
+    await page.setViewportSize({width: 1440, height: 1600});
     const f = workResultFixture();
     const attId = 'att_' + '1'.repeat(32);
 
     f.state.currentEnvelope = buildResultEnvelope({
       attempt_id: attId,
       state: 'turn-ended',
+      stage: 'started',
       uncommitted: {
         count: 'unknown',
         files: 'unknown',
@@ -94,7 +109,7 @@ test.describe('Work Result Screenshots', () => {
     }
 
     await resultSection.scrollIntoViewIfNeeded();
-    await inspector.screenshot({path: path.join(SHOTS_DIR, 'en-1440-partial.png')});
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'en-1440-partial.png')});
   });
 
   // 3. zh-TW-390-turn-ended.png: viewport 390x844, zh-TW, turn-ended envelope
@@ -119,7 +134,7 @@ test.describe('Work Result Screenshots', () => {
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('本輪已結束');
 
     await resultSection.scrollIntoViewIfNeeded();
-    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-turn-ended.png')});
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'zh-TW-390-turn-ended.png')});
     await context.close();
   });
 
@@ -176,7 +191,7 @@ test.describe('Work Result Screenshots', () => {
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('未知');
 
     await resultSection.scrollIntoViewIfNeeded();
-    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-unknown.png')});
+    await inspector.screenshot({path: path.join(SHOTS_DIR!, 'zh-TW-390-unknown.png')});
     await context.close();
   });
 });
