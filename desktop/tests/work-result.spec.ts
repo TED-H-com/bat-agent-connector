@@ -1728,4 +1728,48 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const allMatches = await resultSection.getByText('BAT is not reachable.').count();
     expect(allMatches).toBe(1);
   });
+
+  test('25. Part B: 12. Commits ordered oldest first', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workResultFixture();
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+    const c1 = '1111111111111111111111111111111111111111';
+    const c2 = '2222222222222222222222222222222222222222';
+    const filePath = 'src/multi-commit.ts';
+
+    f.state.changesResponse = buildChangesResponse({
+      attempt_id: attId,
+      live_head_commit: c2,
+      summary: {
+        aggregation: 'per_commit',
+        commits: [c1, c2], // c1 is older, c2 is newer
+        commit_count: 2,
+        files: [
+          {path: filePath, status: 'M', additions: 3, deletions: 1, commits_touched: [c1, c2]},
+        ],
+        file_count: 1,
+        additions: 3,
+        deletions: 1,
+        complete: true,
+      },
+    });
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    f.state.expectedChanges = 1;
+    await resultSection.locator('.pm-work-result-read-changes').click();
+
+    const summaries = resultSection.locator('.pm-work-result-diff-details summary');
+    await expect(summaries).toHaveCount(2);
+    // Oldest commit c1 must appear before newer commit c2
+    await expect(summaries.first()).toContainText('111111111111');
+    await expect(summaries.nth(1)).toContainText('222222222222');
+  });
 });
