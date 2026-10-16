@@ -485,6 +485,50 @@ def get_profile(db, principal: Principal, workspace_id: str, profile_id: str) ->
     return _project(db, row, _current_default_id(db, workspace_id))
 
 
+def _changed(revision: int) -> OperationError:
+    error = _bad("PM_WORK_PROFILE_CHANGED", f"Work profile changed; current revision is {revision}", 409)
+    error.revision = revision
+    return error
+
+
+def pinned_revision(db, principal, workspace_id, profile_id, revision, *, digest=None, admission=False):
+    """Load one revision only when it is still the latest. Membership is checked before the row.
+
+    A stale pin is PM_WORK_PROFILE_CHANGED even when the latest row is withdrawn. The current
+    revision is on the error; the document is not. Preview uses 404 for a withdrawn latest and
+    admission uses 409. This read does not write.
+    """
+    require_member(db, principal, workspace_id)
+    if not isinstance(profile_id, str) or not _PROFILE_ID.fullmatch(profile_id):
+        raise _bad("INVALID_PARAMS", "profile_id must be a wpf_ identifier")
+    if type(revision) is not int or revision < 1:
+        raise _bad("INVALID_PARAMS", "profile_revision must be the current revision")
+    if not _table(db, "work_profiles"):
+        raise _bad("NOT_FOUND", "Work profile not found", 404)
+    latest = _latest(db, workspace_id, profile_id)
+    if latest is None:
+        raise _bad("NOT_FOUND", "Work profile not found", 404)
+    if latest["revision"] != revision:
+        raise _changed(int(latest["revision"]))
+    if latest["withdrawn"]:
+        raise _bad("PM_WORK_PROFILE_WITHDRAWN", "Work profile is withdrawn", 409 if admission else 404)
+    if digest is not None and digest != latest["digest"]:
+        raise _changed(int(latest["revision"]))
+    document = json.loads(latest["document"])
+    delivery = document.get("delivery_policy_ref") if isinstance(document, dict) else None
+    binding = document.get("binding") if isinstance(document, dict) else None
+    return {
+        "profile_id": latest["profile_id"],
+        "revision": int(latest["revision"]),
+        "digest": latest["digest"],
+        "document": document,
+        "binding": binding if isinstance(binding, dict) else {},
+        "agent": document.get("agent") if isinstance(document, dict) else None,
+        "model": document.get("model") if isinstance(document, dict) else None,
+        "delivery_goal": delivery.get("goal") if isinstance(delivery, dict) else None,
+    }
+
+
 def readiness(ops, principal: Principal, workspace_id: str, profile_id: str) -> dict:
     """Member and withdrawal gate, then a local readiness document. No BAT call and no write."""
     row = _require_live(ops.db, principal, workspace_id, profile_id)

@@ -905,10 +905,14 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                                     code_target: dict[str, Any] | None = None,
                                     delivery: str | None = None,
                                     requirement_ids: list[str] | None = None,
-                                    instruction: str | None = None) -> dict[str, Any]:
+                                    instruction: str | None = None,
+                                    profile_id: str | None = None,
+                                    profile_revision: int | None = None) -> dict[str, Any]:
         """Preview code basis, package plan, readiness and exact preconditions before work.start; read-only."""
         body = {k: v for k, v in {"code_target": code_target, "delivery": delivery,
-                                  "requirement_ids": requirement_ids, "instruction": instruction}.items() if v is not None}
+                                  "requirement_ids": requirement_ids, "instruction": instruction,
+                                  "profile_id": profile_id,
+                                  "profile_revision": profile_revision}.items() if v is not None}
         return await pm_daemon("pm_work_start_preview", workspace_id=workspace_id, work_item_id=work_item_id, body=body)
 
     async def pm_work_attempts_list(workspace_id: str, work_item_id: str, after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:

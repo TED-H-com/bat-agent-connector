@@ -9,12 +9,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from bat_agent_connector import pm_lifecycle, pm_work_profiles, pm_workspace
+from bat_agent_connector import pm_lifecycle, pm_work_profiles, pm_work_start, pm_workspace
 from bat_agent_connector.api_auth import Principal
 from bat_agent_connector.config import GitHubConfig, GitHubRepo, RepositorySyncConfig
 from bat_agent_connector.operations import ActionDef, OpContext, OperationError, OperationService
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
+from tests.test_pm_work_start import STARTER_OWNER
+from tests.test_pm_work_start import pm as _pm_fixture
+from tests.test_pm_work_start import ready as _ready_fixture
+from tests.test_pm_work_start import start_ready as _start_ready_fixture
+from tests.test_pm_work_start import world as _world_fixture
+
+world = _world_fixture
+pm = _pm_fixture
+ready = _ready_fixture
+start_ready = _start_ready_fixture
 
 WS = "ws_" + "a" * 32
 OWNER = Principal("alice", frozenset({"observe", "manage"}))
@@ -254,7 +264,7 @@ async def test_save_refuses_forbidden_key_oversize_and_budget(ops):
     assert _counts(ops) == (1, 0)
 
 
-async def test_save_checks_binding_not_workspace_repository_list(ops):
+async def test_save_checks_binding_not_workspace_repository_list(ops, start_ready):
     repositories = ops.db.execute(
         "SELECT repositories FROM pm_workspaces WHERE workspace_id=?", (WS,)
     ).fetchone()[0]
@@ -272,6 +282,38 @@ async def test_save_checks_binding_not_workspace_repository_list(ops):
     assert unbound.value.code == "REPOSITORY_NOT_BOUND" and unbound.value.status == 403
     assert unbound.value.message == "no explicit repository/host/workspace binding"
     assert _counts(ops) == before
+
+    started = start_ready
+    sops = started["d"].ops
+    sops.context["fleet"].config.github.repos["other/repo"] = GitHubRepo(
+        "other/repo",
+        sync=RepositorySyncConfig("https://example.invalid/other.git", (("h1", "ws-other"),)),
+    )
+    listed = sops.db.execute(
+        "SELECT repositories FROM pm_workspaces WHERE workspace_id=?", (started["workspace_id"],)
+    ).fetchone()[0]
+    assert "other/repo" not in listed.lower()
+    profile = await _save_start(started, _start_doc(
+        binding={"repository": "Other/Repo", "host": "h1", "workspace_id": "ws-other"},
+    ))
+    project_repos = sops.db.execute(
+        """SELECT repositories FROM projects WHERE project_id=(
+               SELECT project_id FROM work_items WHERE work_item_id=?)""",
+        (started["target"]["work_item_id"],),
+    ).fetchone()[0]
+    assert "other/repo" not in project_repos.lower()
+    plain = await _view(started, {})
+    children = _child_count(sops)
+    starts = _start_count(sops)
+    with pytest.raises(OperationError) as project_gate:
+        _open_start(
+            started, plain, profile,
+            code_target={"repository": "Other/Repo", "host": "h1", "workspace_id": "ws-other"},
+        )
+    assert project_gate.value.code == "PROJECT_REPOSITORY_CHANGED"
+    assert project_gate.value.status == 409
+    assert _child_count(sops) == children
+    assert _start_count(sops) == starts
 
 
 async def test_default_change_is_one_transaction(ops):
@@ -615,3 +657,419 @@ async def test_manual_session_does_not_satisfy_continue(ops):
     assert body["states"]["can_continue_own"]["verified"] is None
     assert body["coding_route_ready"] is False
     assert invokes["n"] == 0
+
+
+_CODE = {"repository": "o/r", "host": "h1", "workspace_id": "ws-1"}
+_PLAIN_PRECONDITIONS = (
+    "expected_work_item_fingerprint",
+    "expected_work_version",
+    "expected_binding_id",
+    "expected_scope_revision",
+    "expected_previous_package_id",
+    "expected_project_version",
+    "repository_id",
+    "binding_digest",
+    "expected_source_sha",
+    "expected_latest_attempt_id",
+)
+_PREVIEW_KEYS = {
+    "workspace_id", "work_item_id", "code_target", "candidates", "source",
+    "binding", "package_plan", "readiness", "preconditions", "observed_at",
+}
+_PREVIEW_MESSAGE = "start preview accepts code_target, delivery, requirement_ids and instruction"
+
+
+def _start_doc(**overrides):
+    document = {
+        "version": 1,
+        "binding": dict(_CODE),
+        "agent": "claude",
+        "delivery_policy_ref": {"goal": "pull_request"},
+    }
+    document.update(overrides)
+    return document
+
+
+async def _save_start(w, document=None, *, who=None, profile_id=_UNSET, expected_revision=_UNSET,
+                      withdrawn=_UNSET, make_default=_UNSET, expected_default_sequence=_UNSET):
+    ops = w["d"].ops
+    pm_work_profiles.install(ops)
+    params = {"document": _start_doc() if document is None else document}
+    if profile_id is not _UNSET:
+        params["profile_id"] = profile_id
+    if expected_revision is not _UNSET:
+        params["expected_revision"] = expected_revision
+    if withdrawn is not _UNSET:
+        params["withdrawn"] = withdrawn
+    if make_default is not _UNSET:
+        params["make_default"] = make_default
+    if expected_default_sequence is not _UNSET:
+        params["expected_default_sequence"] = expected_default_sequence
+    operation, _created = ops.create(
+        who or STARTER_OWNER, action=pm_work_profiles.ACTION, target={"workspace_id": w["workspace_id"]},
+        params=params, preconditions={}, idempotency_key=uuid.uuid4().hex,
+    )
+    await settle_operations(ops)
+    result = ops.get(operation["operation_id"])
+    assert result["status"] == "succeeded", result
+    return result["result"]
+
+
+def _child_count(ops):
+    present = ops.db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='pm_work_start_children'"
+    ).fetchone()
+    if present is None:
+        return 0
+    return ops.db.execute("SELECT COUNT(*) FROM pm_work_start_children").fetchone()[0]
+
+
+def _start_count(ops):
+    return ops.db.execute("SELECT COUNT(*) FROM operations WHERE action='work.start'").fetchone()[0]
+
+
+def _body(profile, **changes):
+    body = {
+        "profile_id": profile["profile_id"],
+        "profile_revision": profile["revision"],
+        "code_target": dict(_CODE),
+        "delivery": "pull_request",
+    }
+    body.update(changes)
+    return body
+
+
+async def _view(w, body, who=None):
+    return await pm_work_start.preview(
+        w["d"].ops, who or STARTER_OWNER, w["workspace_id"], w["target"]["work_item_id"], body,
+    )
+
+
+def _open_start(w, preview, profile, *, who=None, agent="claude", delivery="pull_request", model=_UNSET,
+                code_target=None, revision=None, digest=None, include_profile=True):
+    params = {
+        "instruction": "Implement credential validation and tests.",
+        "agent": agent,
+        "delivery": delivery,
+        "code_target": dict(preview["code_target"]),
+    }
+    if code_target:
+        params["code_target"].update(code_target)
+    if model is not _UNSET:
+        params["model"] = model
+    pre = {key: preview["preconditions"][key] for key in _PLAIN_PRECONDITIONS}
+    if include_profile:
+        params["profile_id"] = profile["profile_id"]
+        pre["expected_profile_revision"] = profile["revision"] if revision is None else revision
+        pre["expected_profile_digest"] = profile["digest"] if digest is None else digest
+    return w["d"].ops.create(
+        who or STARTER_OWNER, action="work.start",
+        target={"workspace_id": w["workspace_id"], "work_item_id": w["target"]["work_item_id"]},
+        params=params, preconditions=pre, idempotency_key=uuid.uuid4().hex,
+    )
+
+
+def _profile_rows(ops, profile_id):
+    return ops.db.execute(
+        "SELECT COUNT(*) FROM work_profiles WHERE profile_id=?", (profile_id,)
+    ).fetchone()[0]
+
+
+async def test_work_start_pins_profile_revision_and_refuses_when_it_changes(start_ready):
+    w = start_ready
+    ops = w["d"].ops
+    saved = await _save_start(w)
+    viewed = await _view(w, _body(saved, instruction="Pin this revision."))
+    assert viewed["profile"] == {
+        "profile_id": saved["profile_id"],
+        "revision": saved["revision"],
+        "digest": saved["digest"],
+        "delivery_goal": "pull_request",
+    }
+    assert viewed["preconditions"]["expected_profile_revision"] == saved["revision"]
+    assert viewed["preconditions"]["expected_profile_digest"] == saved["digest"]
+
+    outsider = Principal("outsider-pin", frozenset({"observe", "manage", "start"}))
+    with pytest.raises(OperationError) as hidden:
+        await _view(w, _body(saved), outsider)
+    assert hidden.value.code == "NOT_FOUND" and hidden.value.message == "Workspace not found"
+
+    children, starts = _child_count(ops), _start_count(ops)
+    with pytest.raises(OperationError) as digest_mismatch:
+        _open_start(w, viewed, saved, digest="ab" * 32)
+    assert digest_mismatch.value.code == "PM_WORK_PROFILE_CHANGED"
+    assert digest_mismatch.value.revision == saved["revision"]
+    assert saved["digest"] not in digest_mismatch.value.message
+    assert _child_count(ops) == children and _start_count(ops) == starts
+
+    updated = await _save_start(
+        w, _start_doc(model="next"), profile_id=saved["profile_id"], expected_revision=saved["revision"],
+    )
+    assert updated["revision"] == saved["revision"] + 1
+    with pytest.raises(OperationError) as stale_preview:
+        await _view(w, _body(saved))
+    assert stale_preview.value.code == "PM_WORK_PROFILE_CHANGED"
+    assert stale_preview.value.status == 409
+    assert stale_preview.value.revision == updated["revision"]
+    assert updated["digest"] not in stale_preview.value.message
+
+    with pytest.raises(OperationError) as stale_start:
+        _open_start(w, viewed, saved)
+    assert stale_start.value.code == "PM_WORK_PROFILE_CHANGED"
+    assert stale_start.value.revision == updated["revision"]
+    assert _child_count(ops) == children and _start_count(ops) == starts
+
+    other = await _save_start(w, _start_doc(agent="codex"))
+    withdrawn = await _save_start(
+        w, _start_doc(agent="codex"), profile_id=other["profile_id"], expected_revision=other["revision"],
+        withdrawn=True,
+    )
+    with pytest.raises(OperationError) as preview_withdrawn:
+        await _view(w, _body(withdrawn))
+    assert preview_withdrawn.value.code == "PM_WORK_PROFILE_WITHDRAWN"
+    assert preview_withdrawn.value.status == 404
+    with pytest.raises(OperationError) as admit_withdrawn:
+        _open_start(w, viewed, withdrawn)
+    assert admit_withdrawn.value.code == "PM_WORK_PROFILE_WITHDRAWN"
+    assert admit_withdrawn.value.status == 409
+    with pytest.raises(OperationError) as older:
+        _open_start(w, viewed, withdrawn, revision=other["revision"], digest=other["digest"])
+    assert older.value.code == "PM_WORK_PROFILE_CHANGED"
+    assert older.value.revision == withdrawn["revision"]
+    assert _child_count(ops) == children and _start_count(ops) == starts
+
+    current = await _view(w, _body(updated))
+    operation, created = _open_start(w, current, updated, model="next")
+    assert created is True and operation["status"] == "accepted"
+
+
+async def test_default_change_keeps_pinned_start(start_ready):
+    w = start_ready
+    ops = w["d"].ops
+    document = _start_doc()
+    first = await _save_start(w, document)
+    await _save_start(w, document, profile_id=first["profile_id"], expected_revision=1)
+    third = await _save_start(w, document, profile_id=first["profile_id"], expected_revision=2)
+    assert third["revision"] == 3 and third["digest"] == first["digest"]
+    viewed = await _view(w, _body(third))
+    rows = _profile_rows(ops, first["profile_id"])
+
+    editor = Principal("profile-editor", frozenset({"observe", "manage"}))
+    current = pm_workspace.get_workspace(ops.db, STARTER_OWNER, w["workspace_id"])
+    member, _created = ops.create(
+        STARTER_OWNER, action="pm.workspace.member.set", target={"workspace_id": w["workspace_id"]},
+        params={"actor": editor.actor, "role": "contributor"},
+        preconditions={"expected_version": current["version"]}, idempotency_key=uuid.uuid4().hex,
+    )
+    await settle_operations(ops)
+    assert ops.get(member["operation_id"])["status"] == "succeeded"
+
+    await _save_start(
+        w, _start_doc(agent="codex"), who=editor, make_default=True, expected_default_sequence=None,
+    )
+    latest = ops.db.execute(
+        "SELECT revision, digest FROM work_profiles WHERE profile_id=? ORDER BY revision DESC LIMIT 1",
+        (first["profile_id"],),
+    ).fetchone()
+    assert latest["revision"] == 3 and latest["digest"] == first["digest"]
+    assert _profile_rows(ops, first["profile_id"]) == rows
+    operation, created = _open_start(w, viewed, third)
+    assert created is True and operation["status"] == "accepted"
+    assert operation["error_code"] != "PM_WORK_PROFILE_CHANGED"
+
+
+async def test_profile_target_mismatch_reports_the_step(start_ready, mock, monkeypatch):
+    calls = {"n": 0}
+    real = pm_work_start.evaluate_package_plan
+
+    def wrapped(*args, **kwargs):
+        calls["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(pm_work_start, "evaluate_package_plan", wrapped)
+    w = start_ready
+    ops = w["d"].ops
+    saved = await _save_start(w, _start_doc(
+        model="haiku", delivery_policy_ref={"goal": "reviewable_changes"},
+    ))
+    github = len(w["gh"].requests)
+    bat = len(mock.invokes)
+    preview_cases = (
+        ({"code_target": {**_CODE, "repository": "other/repo"}, "delivery": "reviewable_changes"}, "code_target.repository"),
+        ({"code_target": {**_CODE, "host": "h2"}, "delivery": "reviewable_changes"}, "code_target.host"),
+        ({"code_target": {**_CODE, "workspace_id": "ws-2"}, "delivery": "reviewable_changes"}, "code_target.workspace_id"),
+        ({"delivery": "pull_request"}, "delivery"),
+    )
+    for changes, step in preview_cases:
+        with pytest.raises(OperationError) as mismatch:
+            await _view(w, _body(saved, **changes))
+        assert mismatch.value.code == "PM_WORK_PROFILE_TARGET_MISMATCH"
+        assert mismatch.value.status == 409
+        assert step in mismatch.value.message
+    assert calls["n"] == 0
+    assert len(w["gh"].requests) == github and len(mock.invokes) == bat
+
+    viewed = await _view(w, _body(saved, delivery="reviewable_changes"))
+    assert calls["n"] == 1
+    children, starts = _child_count(ops), _start_count(ops)
+    admission_cases = (
+        ({"agent": "codex", "delivery": "reviewable_changes", "model": "haiku"}, "agent"),
+        ({"delivery": "reviewable_changes"}, "model"),
+        ({"delivery": "reviewable_changes", "model": "sonnet"}, "model"),
+        ({"delivery": "pull_request", "model": "haiku"}, "delivery"),
+        ({"delivery": "reviewable_changes", "model": "haiku", "code_target": {"repository": "other/repo"}}, "code_target.repository"),
+        ({"delivery": "reviewable_changes", "model": "haiku", "code_target": {"host": "h2"}}, "code_target.host"),
+        ({"delivery": "reviewable_changes", "model": "haiku", "code_target": {"workspace_id": "ws-2"}}, "code_target.workspace_id"),
+    )
+    for changes, step in admission_cases:
+        with pytest.raises(OperationError) as mismatch:
+            _open_start(w, viewed, saved, **changes)
+        assert mismatch.value.code == "PM_WORK_PROFILE_TARGET_MISMATCH"
+        assert step in mismatch.value.message
+        assert calls["n"] == 1
+    assert _child_count(ops) == children and _start_count(ops) == starts
+
+
+async def test_preview_omitted_delivery_with_profile_goal_is_invalid_params(start_ready, mock, monkeypatch):
+    calls = {"n": 0}
+    real = pm_work_start.evaluate_package_plan
+
+    def wrapped(*args, **kwargs):
+        calls["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(pm_work_start, "evaluate_package_plan", wrapped)
+    w = start_ready
+    saved = await _save_start(w, _start_doc(delivery_policy_ref={"goal": "reviewable_changes"}))
+    github, bat = len(w["gh"].requests), len(mock.invokes)
+    omitted = _body(saved)
+    omitted.pop("delivery")
+    for body in (omitted, _body(saved, delivery=None)):
+        with pytest.raises(OperationError) as invalid:
+            await _view(w, body)
+        assert invalid.value.code == "INVALID_PARAMS" and invalid.value.status == 422
+        assert invalid.value.message == "delivery must be reviewable_changes"
+    assert calls["n"] == 0
+    assert len(w["gh"].requests) == github and len(mock.invokes) == bat
+
+    optional = await _save_start(w, _start_doc(delivery_policy_ref=None))
+    body = _body(optional)
+    body.pop("delivery")
+    viewed = await _view(w, body)
+    assert viewed["profile"]["delivery_goal"] is None
+    assert viewed["package_plan"]["description"]["delivery"]["goal"] == "pull_request"
+
+
+async def test_profile_preconditions_are_twelve_and_plain_start_stays_ten(start_ready):
+    w = start_ready
+    ops = w["d"].ops
+    saved = await _save_start(w)
+    viewed = await _view(w, _body(saved))
+    assert set(viewed["preconditions"]) == set(_PLAIN_PRECONDITIONS) | {
+        "expected_profile_revision", "expected_profile_digest",
+    }
+    assert viewed["preconditions"]["expected_profile_revision"] == saved["revision"]
+    assert viewed["preconditions"]["expected_profile_digest"] == saved["digest"]
+
+    plain = await _view(w, {
+        "code_target": dict(_CODE),
+        "delivery": "pull_request",
+        "requirement_ids": ["member.login"],
+        "instruction": "Plain start.",
+    })
+    assert set(plain) == _PREVIEW_KEYS
+    assert set(plain["preconditions"]) == set(_PLAIN_PRECONDITIONS)
+    assert "profile" not in plain
+
+    sync = ops.context["fleet"].config.github.repos["o/r"].sync
+    original = sync.bindings
+    try:
+        object.__setattr__(sync, "bindings", original + (("h1", "ws-2"),))
+        blocked = await _view(w, {})
+        assert blocked["preconditions"] is None
+    finally:
+        object.__setattr__(sync, "bindings", original)
+
+    ops.context["fleet"].config.github.repos["other/repo"] = GitHubRepo(
+        "other/repo", sync=RepositorySyncConfig("https://example.invalid/other.git", (("h1", "ws-other"),)),
+    )
+    other = await _save_start(w, _start_doc(
+        binding={"repository": "other/repo", "host": "h1", "workspace_id": "ws-other"},
+    ))
+    blocked_profile = await _view(w, _body(other, code_target={
+        "repository": "other/repo", "host": "h1", "workspace_id": "ws-other",
+    }))
+    assert blocked_profile["preconditions"] is None
+    assert blocked_profile["package_plan"] is None
+    assert "profile" not in blocked_profile
+
+
+async def test_preview_rejects_non_object_and_half_profile_key(start_ready):
+    w = start_ready
+    ops = w["d"].ops
+    for bad in (1, "profile_id", ["profile_id"]):
+        with pytest.raises(OperationError) as invalid:
+            await pm_work_start.preview(
+                ops, STARTER_OWNER, w["workspace_id"], w["target"]["work_item_id"], bad,
+            )
+        assert invalid.value.code == "INVALID_PARAMS" and invalid.value.status == 422
+        assert invalid.value.message == _PREVIEW_MESSAGE
+    for half in ({"profile_id": "wpf_" + "ab" * 16}, {"profile_revision": 1}):
+        with pytest.raises(OperationError) as invalid:
+            await _view(w, half)
+        assert invalid.value.code == "INVALID_PARAMS" and invalid.value.status == 422
+        assert invalid.value.message == "profile_id and profile_revision are required together"
+    empty = await _view(w, None)
+    again = await _view(w, {})
+    assert {key: value for key, value in empty.items() if key != "observed_at"} == {
+        key: value for key, value in again.items() if key != "observed_at"
+    }
+
+
+async def test_work_start_without_profile_matches_existing_contract(start_ready):
+    w = start_ready
+    ops = w["d"].ops
+    pm_work_profiles.install(ops)
+    assert ops.db.execute("SELECT COUNT(*) FROM work_profiles").fetchone()[0] == 0
+    viewed = await _view(w, {
+        "code_target": dict(_CODE),
+        "delivery": "pull_request",
+        "requirement_ids": ["member.login"],
+        "instruction": "Keep today's start.",
+    })
+    assert set(viewed) == _PREVIEW_KEYS
+    assert "profile" not in viewed
+    assert set(viewed["preconditions"]) == set(_PLAIN_PRECONDITIONS)
+
+    children, starts = _child_count(ops), _start_count(ops)
+    extra = dict(viewed["preconditions"])
+    extra["expected_profile_revision"] = 1
+    with pytest.raises(OperationError) as rejected:
+        ops.create(
+            STARTER_OWNER, action="work.start",
+            target={"workspace_id": w["workspace_id"], "work_item_id": w["target"]["work_item_id"]},
+            params={
+                "instruction": "Implement credential validation and tests.",
+                "agent": "claude",
+                "delivery": "pull_request",
+                "code_target": viewed["code_target"],
+            },
+            preconditions=extra, idempotency_key=uuid.uuid4().hex,
+        )
+    assert rejected.value.code == "PRECONDITION_REQUIRED"
+    assert rejected.value.message == "work.start requires all ten preview preconditions"
+    assert _child_count(ops) == children and _start_count(ops) == starts
+
+    operation, created = ops.create(
+        STARTER_OWNER, action="work.start",
+        target={"workspace_id": w["workspace_id"], "work_item_id": w["target"]["work_item_id"]},
+        params={
+            "instruction": "Implement credential validation and tests.",
+            "agent": "claude",
+            "delivery": "pull_request",
+            "code_target": viewed["code_target"],
+        },
+        preconditions=viewed["preconditions"], idempotency_key=uuid.uuid4().hex,
+    )
+    assert created is True and operation["status"] == "accepted"
+    assert ops.db.execute("SELECT COUNT(*) FROM work_profiles").fetchone()[0] == 0

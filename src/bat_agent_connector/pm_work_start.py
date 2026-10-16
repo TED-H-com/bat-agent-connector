@@ -53,7 +53,7 @@ PRECONDITIONS = frozenset({
     "expected_latest_attempt_id",
 })
 PARAMS_REQUIRED = frozenset({"instruction", "agent", "delivery", "code_target"})
-PARAMS_OPTIONAL = frozenset({"model", "requirement_ids"})
+PARAMS_OPTIONAL = frozenset({"model", "requirement_ids", "profile_id"})
 CODE_TARGET_KEYS = ("repository", "host", "workspace_id", "source_ref")
 DELIVERY_GOALS = frozenset({"pull_request", "reviewable_changes"})
 AGENTS = frozenset({"claude", "codex"})
@@ -708,6 +708,22 @@ def _validate_preconditions_shape(pre: dict) -> None:
         raise _bad("PRECONDITION_REQUIRED", "Supply valid preview preconditions for work.start", 422)
 
 
+def _validate_profile_preconditions(pre: dict) -> None:
+    expected = PRECONDITIONS | {"expected_profile_revision", "expected_profile_digest"}
+    if not isinstance(pre, dict) or set(pre) != expected:
+        raise _bad("PRECONDITION_REQUIRED", "work.start requires all ten preview preconditions", 422)
+    _validate_preconditions_shape({key: pre[key] for key in PRECONDITIONS})
+    revision = pre["expected_profile_revision"]
+    digest = pre["expected_profile_digest"]
+    if (
+        type(revision) is not int
+        or revision < 1
+        or not isinstance(digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", digest)
+    ):
+        raise _bad("PRECONDITION_REQUIRED", "Supply valid preview preconditions for work.start", 422)
+
+
 def _check_admission(ops, principal: Principal, target: dict, params: dict, pre: dict) -> dict:
     if not isinstance(target, dict) or set(target) != {"workspace_id", "work_item_id"}:
         raise _bad("INVALID_TARGET", "Exact workspace_id and work_item_id are required", 422)
@@ -724,7 +740,10 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
         or set(params) - PARAMS_REQUIRED - PARAMS_OPTIONAL
     ):
         raise _bad("INVALID_PARAMS", "Supply exact work.start parameters", 422)
-    _validate_preconditions_shape(pre)
+    if "profile_id" in params:
+        _validate_profile_preconditions(pre)
+    else:
+        _validate_preconditions_shape(pre)
     instruction = pm_plans._text(params.get("instruction"), "instruction", 4000)
     if not _bind_rationale(instruction):
         raise _bad("INVALID_PARAMS", "instruction must contain non-whitespace characters", 422)
@@ -780,6 +799,13 @@ def _check_admission(ops, principal: Principal, target: dict, params: dict, pre:
     if bind_needed:
         _member(ops, principal, wid, write=True, decide=True)
 
+    if "profile_id" in params:
+        from .pm_work_profiles import pinned_revision
+        pinned = pinned_revision(
+            ops.db, principal, wid, params.get("profile_id"), pre["expected_profile_revision"],
+            digest=pre["expected_profile_digest"], admission=True,
+        )
+        _profile_admission_target(params, code_target, delivery_goal, pinned)
     if code_target["repository"].lower() not in {r.lower() for r in project["repositories"]}:
         raise _bad("PROJECT_REPOSITORY_CHANGED", "Selected repository does not belong to this work item's project", 409)
     target_3 = {k: code_target[k] for k in ("repository", "host", "workspace_id")}
@@ -1743,6 +1769,43 @@ def _load_preview_local(ops, principal: Principal, wid: str, wi_id: str, body: d
     return work, project, binding, current_plan, plan_ref, latest_package_id, requirement_ids, bind_needed
 
 
+def _profile_code_target(raw_target: dict, pinned: dict) -> None:
+    for key in ("repository", "host", "workspace_id"):
+        if not isinstance(raw_target.get(key), str) or not raw_target[key].strip():
+            raise _bad("INVALID_PARAMS", "code_target requires repository, host and workspace_id", 422)
+    binding = pinned["binding"]
+    if raw_target["repository"].strip().lower() != str(binding.get("repository", "")).lower():
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "code_target.repository does not match the work profile", 409)
+    if raw_target["host"].strip() != binding.get("host"):
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "code_target.host does not match the work profile", 409)
+    if raw_target["workspace_id"].strip() != binding.get("workspace_id"):
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "code_target.workspace_id does not match the work profile", 409)
+
+
+def _delivery_for_profile(body: dict, goal) -> str:
+    sent = body.get("delivery")
+    if goal is None:
+        delivery_goal = sent if sent is not None else "pull_request"
+        if not isinstance(delivery_goal, str) or delivery_goal not in DELIVERY_GOALS:
+            raise _bad("INVALID_PARAMS", "delivery must be pull_request or reviewable_changes", 422)
+        return delivery_goal
+    if sent is None:
+        raise _bad("INVALID_PARAMS", f"delivery must be {goal}", 422)
+    if sent != goal:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "delivery does not match the work profile", 409)
+    return goal
+
+
+def _profile_admission_target(params: dict, code_target: dict, delivery_goal: str, pinned: dict) -> None:
+    if params.get("agent") != pinned["agent"]:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "agent does not match the work profile", 409)
+    if pinned["model"] is not None and params.get("model") != pinned["model"]:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "model does not match the work profile", 409)
+    if pinned["delivery_goal"] is not None and delivery_goal != pinned["delivery_goal"]:
+        raise _bad("PM_WORK_PROFILE_TARGET_MISMATCH", "delivery does not match the work profile", 409)
+    _profile_code_target(code_target, pinned)
+
+
 async def preview(
     ops,
     principal: Principal,
@@ -1752,11 +1815,20 @@ async def preview(
 ) -> dict:
     """Read-only start preview: resolve candidate bindings, default branch and SHA, package plan, readiness and preconditions."""
     body = {} if body is None else body
-    if not isinstance(body, dict) or set(body) - {"code_target", "delivery", "requirement_ids", "instruction"}:
+    if not isinstance(body, dict):
         raise _bad("INVALID_PARAMS", "start preview accepts code_target, delivery, requirement_ids and instruction", 422)
-    delivery_goal = body.get("delivery") if body.get("delivery") is not None else "pull_request"
-    if not isinstance(delivery_goal, str) or delivery_goal not in DELIVERY_GOALS:
-        raise _bad("INVALID_PARAMS", "delivery must be pull_request or reviewable_changes", 422)
+    allowed = {"code_target", "delivery", "requirement_ids", "instruction"}
+    if "profile_id" in body or "profile_revision" in body:
+        allowed |= {"profile_id", "profile_revision"}
+    if set(body) - allowed:
+        raise _bad("INVALID_PARAMS", "start preview accepts code_target, delivery, requirement_ids and instruction", 422)
+    if ("profile_id" in body) != ("profile_revision" in body):
+        raise _bad("INVALID_PARAMS", "profile_id and profile_revision are required together", 422)
+    profile_requested = "profile_id" in body
+    if not profile_requested:
+        delivery_goal = body.get("delivery") if body.get("delivery") is not None else "pull_request"
+        if not isinstance(delivery_goal, str) or delivery_goal not in DELIVERY_GOALS:
+            raise _bad("INVALID_PARAMS", "delivery must be pull_request or reviewable_changes", 422)
     raw_target = body.get("code_target") if body.get("code_target") is not None else {}
     if not isinstance(raw_target, dict) or set(raw_target) - set(CODE_TARGET_KEYS):
         raise _bad("INVALID_PARAMS", "code_target may only contain repository, host, workspace_id and source_ref", 422)
@@ -1772,6 +1844,7 @@ async def preview(
     else:
         instruction_override = None
 
+    profile = None
     with snapshots._snapshot(ops.db):
         (
             work,
@@ -1783,6 +1856,13 @@ async def preview(
             requirement_ids,
             bind_needed,
         ) = _load_preview_local(ops, principal, workspace_id, work_item_id, body)
+        if profile_requested:
+            from .pm_work_profiles import pinned_revision
+            profile = pinned_revision(
+                ops.db, principal, workspace_id, body.get("profile_id"), body.get("profile_revision"),
+            )
+            _profile_code_target(raw_target, profile)
+            delivery_goal = _delivery_for_profile(body, profile["delivery_goal"])
         proj_repos = {r.lower() for r in project["repositories"]}
         all_candidates = [
             b for b in repository_sync.capabilities(ops) if b["repository"].lower() in proj_repos
@@ -1912,7 +1992,10 @@ async def preview(
             "expected_source_sha": source["source_sha"],
             "expected_latest_attempt_id": latest_attempt_id(ops.db, workspace_id, work_item_id),
         }
-        return {
+        if profile is not None:
+            preconditions["expected_profile_revision"] = profile["revision"]
+            preconditions["expected_profile_digest"] = profile["digest"]
+        response = {
             "workspace_id": workspace_id,
             "work_item_id": work_item_id,
             "code_target": full_code_target,
@@ -1924,6 +2007,14 @@ async def preview(
             "preconditions": preconditions,
             "observed_at": time.time(),
         }
+        if profile is not None:
+            response["profile"] = {
+                "profile_id": profile["profile_id"],
+                "revision": profile["revision"],
+                "digest": profile["digest"],
+                "delivery_goal": profile["delivery_goal"],
+            }
+        return response
 
 
 def capabilities(ops=None) -> dict:
