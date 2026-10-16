@@ -34197,6 +34197,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				readResult();
 			}
 		});
+		retryBtn.setAttribute("data-work-result-retry", "result");
 		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
 		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
 		else {
@@ -34207,6 +34208,11 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	function formatCount(val) {
 		if (val === "unknown" || val == null) return t("wres_unknown");
 		return String(val);
+	}
+	function elementByAttr(root, name, value) {
+		if (!root || value == null) return null;
+		for (const node of root.querySelectorAll(`[${name}]`)) if (node.getAttribute(name) === value) return node;
+		return null;
 	}
 	function saveFocus() {
 		const active = document.activeElement;
@@ -34223,6 +34229,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				type: "diff-region",
 				key: active.dataset.workResultDiffRegion
 			};
+			if (active.getAttribute("data-work-result-retry") === "result") return { type: "retry-result" };
 			if (active.getAttribute("data-work-result-retry") === "changes") return { type: "retry-changes" };
 			if (active.getAttribute("data-work-result-retry-diff")) return {
 				type: "retry-diff",
@@ -34230,7 +34237,6 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			};
 			if (active.classList.contains("pm-work-result-read-changes")) return { type: "read-changes" };
 			if (active.classList.contains("pm-work-result-read-again")) return { type: "read-again" };
-			if (active.classList.contains("pm-work-result-retry")) return { type: "retry" };
 			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
 				const details = active.parentElement;
 				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
@@ -34242,14 +34248,14 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	}
 	function restoreFocus(token) {
 		if (!token) return;
-		if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
-		else if (token.type === "diff-summary") panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`)?.focus();
-		else if (token.type === "diff-region") panelElement.querySelector(`[data-work-result-diff-region="${token.key}"]`)?.focus();
+		if (token.type === "attr") elementByAttr(panelElement, "data-work-result-focus", token.value)?.focus();
+		else if (token.type === "diff-summary") elementByAttr(panelElement, "data-work-result-diff-summary", token.key)?.focus();
+		else if (token.type === "diff-region") elementByAttr(panelElement, "data-work-result-diff-region", token.key)?.focus();
 		else if (token.type === "read-changes") (panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
 		else if (token.type === "read-again") (panelElement.querySelector(".pm-work-result-read-again") || panelElement.querySelector(".pm-work-result-read-changes") || panelElement.querySelector("[data-work-result-retry=\"changes\"]"))?.focus();
 		else if (token.type === "retry-changes") (panelElement.querySelector("[data-work-result-retry=\"changes\"]") || panelElement.querySelector(".pm-work-result-read-changes"))?.focus();
-		else if (token.type === "retry-diff") (panelElement.querySelector(`[data-work-result-retry-diff="${token.key}"]`) || panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`))?.focus();
-		else if (token.type === "retry") panelElement.querySelector(".pm-work-result-retry")?.focus();
+		else if (token.type === "retry-diff") (elementByAttr(panelElement, "data-work-result-retry-diff", token.key) || elementByAttr(panelElement, "data-work-result-diff-summary", token.key))?.focus();
+		else if (token.type === "retry-result") elementByAttr(panelElement, "data-work-result-retry", "result")?.focus();
 		else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
 		else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
 		else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
@@ -34701,8 +34707,9 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		const keyTicket = (diffKeySerials.get(key) || 0) + 1;
 		diffKeySerials.set(key, keyTicket);
 		const attemptId = activeAttempt?.attempt_id;
-		const hadFocusInContainer = Boolean(document.activeElement && (container.contains(document.activeElement) || document.activeElement === summaryNode));
-		if (hadFocusInContainer) summaryNode.focus();
+		const activeAtStart = document.activeElement;
+		const startedFromRetry = Boolean(activeAtStart && activeAtStart.getAttribute("data-work-result-retry-diff") === key);
+		if (Boolean(activeAtStart && (container.contains(activeAtStart) || activeAtStart === summaryNode))) summaryNode.focus();
 		renderDiffContent(container, commit, path, key, summaryNode);
 		try {
 			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/diff?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
@@ -34725,13 +34732,9 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			if (generation === diffGeneration && diffKeySerials.get(key) === keyTicket) {
 				diffLoading.delete(key);
 				if (activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
-					if (hadFocusInContainer && !diffErrors.has(key)) summaryNode.focus();
 					renderDiffContent(container, commit, path, key, summaryNode);
-					if (hadFocusInContainer && diffErrors.has(key)) {
-						const retry = container.querySelector(`[data-work-result-retry-diff="${key}"]`);
-						if (retry) retry.focus();
-						else summaryNode.focus();
-					}
+					const activeNow = document.activeElement;
+					if (Boolean(activeNow && (activeNow === summaryNode && summaryNode.isConnected || panelElement.contains(activeNow) && activeNow.getAttribute("data-work-result-diff-summary") === key)) && startedFromRetry && diffErrors.has(key)) elementByAttr(container, "data-work-result-retry-diff", key)?.focus();
 				}
 			}
 		}
