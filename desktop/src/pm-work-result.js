@@ -63,6 +63,22 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
   let detailsOpen = false;
   let filesOpen = false;
 
+  // Part B state: current changes and diffs
+  let currentChanges = null;
+  let currentChangesError = null;
+  let changesBusy = false;
+  let isOutOfDate = false;
+  let changesSerial = 0;
+  let diffSerial = 0;
+  const diffCache = new Map();
+  const diffErrors = new Map();
+  const diffLoading = new Set();
+  const openDiffs = new Set();
+
+  const getCaps = () => (typeof caps === 'function' ? caps() : caps);
+  const canChanges = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.changes);
+  const canDiff = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.diff);
+
   const panelElement = h('div', {class: 'pm-work-result-panel', 'data-work-result': ''});
   panelElement.hidden = true;
 
@@ -73,10 +89,20 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
 
   function withdraw() {
     readSerial++;
+    changesSerial++;
+    diffSerial++;
     lastEnvelope = null;
     lastNormalized = null;
     lastStale = false;
     lastError = null;
+    currentChanges = null;
+    currentChangesError = null;
+    changesBusy = false;
+    isOutOfDate = false;
+    diffCache.clear();
+    diffErrors.clear();
+    diffLoading.clear();
+    openDiffs.clear();
     turnsOpen = false;
     detailsOpen = false;
     filesOpen = false;
@@ -154,6 +180,9 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       const isUnchanged = lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized);
 
       if (!isUnchanged || lastStale) {
+        if (!isUnchanged && currentChanges) {
+          isOutOfDate = true;
+        }
         lastEnvelope = data;
         lastNormalized = normalized;
         lastStale = false;
@@ -217,6 +246,21 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       if (active.dataset?.workResultFocus) {
         return {type: 'attr', value: active.dataset.workResultFocus};
       }
+      if (active.dataset?.workResultDiffSummary) {
+        return {type: 'diff-summary', key: active.dataset.workResultDiffSummary};
+      }
+      if (active.dataset?.workResultDiffRegion) {
+        return {type: 'diff-region', key: active.dataset.workResultDiffRegion};
+      }
+      if (active.classList.contains('pm-work-result-read-changes')) {
+        return {type: 'read-changes'};
+      }
+      if (active.classList.contains('pm-work-result-read-again')) {
+        return {type: 'read-again'};
+      }
+      if (active.classList.contains('pm-work-result-retry')) {
+        return {type: 'retry'};
+      }
       if (active.tagName === 'SUMMARY' && active.parentElement?.tagName === 'DETAILS') {
         const details = active.parentElement;
         if (details.dataset.workResultTurns !== undefined) return {type: 'turns'};
@@ -233,6 +277,16 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       if (token.type === 'attr') {
         const target = panelElement.querySelector(`[data-work-result-focus="${token.value}"]`);
         target?.focus();
+      } else if (token.type === 'diff-summary') {
+        panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`)?.focus();
+      } else if (token.type === 'diff-region') {
+        panelElement.querySelector(`[data-work-result-diff-region="${token.key}"]`)?.focus();
+      } else if (token.type === 'read-changes') {
+        panelElement.querySelector('.pm-work-result-read-changes')?.focus();
+      } else if (token.type === 'read-again') {
+        panelElement.querySelector('.pm-work-result-read-again')?.focus();
+      } else if (token.type === 'retry') {
+        panelElement.querySelector('.pm-work-result-retry')?.focus();
       } else if (token.type === 'turns') {
         panelElement.querySelector('[data-work-result-turns] > summary')?.focus();
       } else if (token.type === 'details') {
@@ -253,8 +307,21 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     if (existingDetails) detailsOpen = existingDetails.open;
     const existingFiles = panelElement.querySelector('.pm-work-result-files');
     if (existingFiles) filesOpen = existingFiles.open;
+    for (const dt of panelElement.querySelectorAll('.pm-work-result-diff-details[open]')) {
+      const sum = dt.querySelector('[data-work-result-diff-summary]');
+      if (sum?.dataset.workResultDiffSummary) {
+        openDiffs.add(sum.dataset.workResultDiffSummary);
+      }
+    }
+    for (const dt of panelElement.querySelectorAll('.pm-work-result-diff-details:not([open])')) {
+      const sum = dt.querySelector('[data-work-result-diff-summary]');
+      if (sum?.dataset.workResultDiffSummary) {
+        openDiffs.delete(sum.dataset.workResultDiffSummary);
+      }
+    }
 
     const sections = [];
+    const panelReasons = new Set();
     const unlistedFacets = [];
     const unlistedFileStatuses = [];
 
@@ -283,6 +350,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     // State reason or attention
     if (exec.state_reason) {
       const reason = exec.state_reason;
+      panelReasons.add(reason);
       if (reason === 'agent_error') {
         sections.push(h('p', {class: 'muted pm-work-result-reason'}, t('wres_agent_error')));
       } else if (KNOWN_REASONS.has(reason)) {
@@ -327,7 +395,12 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       linkItems.push(h('a', {href: opHash, 'data-work-result-focus': 'operation'}, t('wres_view_operation')));
     }
     if (linkItems.length > 0) {
-      sections.push(h('div', {class: 'pm-work-result-links'}, ...linkItems));
+      const linksContainer = h('div', {class: 'pm-work-result-links'});
+      for (let i = 0; i < linkItems.length; i++) {
+        if (i > 0) linksContainer.append(' · ');
+        linksContainer.append(linkItems[i]);
+      }
+      sections.push(linksContainer);
     }
 
     // 2. The agent's own summary
@@ -482,10 +555,16 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
       changesBox.append(partlyText);
 
       const changeReasons = [];
-      if (summary.reason) changeReasons.push(summary.reason);
+      if (summary.reason && !panelReasons.has(summary.reason)) {
+        changeReasons.push(summary.reason);
+        panelReasons.add(summary.reason);
+      }
       if (Array.isArray(summary.reasons)) {
         for (const r of summary.reasons) {
-          if (!changeReasons.includes(r)) changeReasons.push(r);
+          if (!changeReasons.includes(r) && !panelReasons.has(r)) {
+            changeReasons.push(r);
+            panelReasons.add(r);
+          }
         }
       }
       if (changeReasons.length > 0) {
@@ -500,6 +579,11 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         }
         changesBox.append(reasonsList);
       }
+    }
+
+    // Current changes (Part B)
+    if (canChanges()) {
+      changesBox.append(renderCurrentChangesBlock());
     }
 
     // File list
@@ -593,7 +677,11 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
         compDiv.append(h('span', {class: 'ui-pill tone-bad', 'data-status': 'unavailable'}, t('wres_status_unavailable')));
       }
 
-      const reasons = completeness.reasons || [];
+      const reasons = (completeness.reasons || []).filter(code => {
+        if (panelReasons.has(code)) return false;
+        panelReasons.add(code);
+        return true;
+      });
       if (reasons.length > 0) {
         const reasonList = h('ul', {class: 'pm-work-result-completeness-reasons'});
         for (const code of reasons) {
@@ -702,6 +790,401 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     updateVisibility(true);
 
     restoreFocus(focusToken);
+  }
+
+  function sortCommitsOldestFirst(commitsTouched, allCommits) {
+    if (!Array.isArray(commitsTouched)) return [];
+    if (!Array.isArray(allCommits) || allCommits.length === 0) return [...commitsTouched];
+    const order = new Map();
+    allCommits.forEach((sha, idx) => order.set(sha, idx));
+    return [...commitsTouched].sort((a, b) => {
+      const idxA = order.has(a) ? order.get(a) : -1;
+      const idxB = order.has(b) ? order.get(b) : -1;
+      return idxB - idxA;
+    });
+  }
+
+  function renderDiffContent(container, commit, path, key, summaryNode) {
+    container.replaceChildren();
+
+    if (diffLoading.has(key)) {
+      container.append(h('p', {class: 'muted pm-work-result-diff-loading'}, t('ui_loading') || 'Loading…'));
+      return;
+    }
+
+    const err = diffErrors.get(key);
+    if (err) {
+      if (err.status === 404 || err.code === 'PM_DIFF_NOT_FOUND') {
+        container.append(h('p', {class: 'muted pm-work-result-diff-notice'}, t('error_code_PM_DIFF_NOT_FOUND')));
+      } else {
+        const errBoxNode = errorBox ? errorBox(err, {within: container}) : h('div', {class: 'error'}, err?.message || String(err));
+        const retryBtn = button({
+          label: t('wres_try_again'),
+          class: 'ui-button secondary ui-sm pm-work-result-retry',
+          onClick: () => { void loadDiff(commit, path, key, container, summaryNode); },
+        });
+        container.append(h('div', {class: 'pm-work-result-error-box'}, errBoxNode, retryBtn));
+      }
+      return;
+    }
+
+    const data = diffCache.get(key);
+    if (!data) return;
+
+    // Stats: +A −D
+    const stats = data.stats || {};
+    const adds = stats.additions === 'unknown' || stats.additions == null ? '?' : `+${stats.additions}`;
+    const dels = stats.deletions === 'unknown' || stats.deletions == null ? '?' : `−${stats.deletions}`;
+    container.append(h('p', {class: 'pm-work-result-diff-stats mono'}, `${adds} ${dels}`));
+
+    // Notices
+    if (data.truncated === true) {
+      const noticeP = h('p', {class: 'muted pm-work-result-diff-notice'});
+      const rawText = t('wres_diff_truncated');
+      if (rawText.includes('256 KiB')) {
+        const [before, after] = rawText.split('256 KiB');
+        noticeP.append(before, h('span', {class: 'mono'}, '256 KiB'), after);
+      } else {
+        noticeP.textContent = rawText;
+      }
+      container.append(noticeP);
+    }
+
+    if (data.available === false) {
+      let reasonText = '';
+      if (data.reason === 'diff_exceeded_pipe_limit') {
+        reasonText = t('wres_reason_diff_exceeded_pipe_limit');
+      } else if (data.reason && t(`wres_reason_${data.reason}`) !== `wres_reason_${data.reason}`) {
+        reasonText = t(`wres_reason_${data.reason}`);
+      } else if (data.reason && t(`error_code_${data.reason}`) !== `error_code_${data.reason}`) {
+        reasonText = t(`error_code_${data.reason}`);
+      } else {
+        reasonText = t('wres_reason_generic_limit');
+      }
+      container.append(h('p', {class: 'muted pm-work-result-diff-notice'}, reasonText));
+    } else if (typeof data.diff === 'string') {
+      const pre = h('pre', {
+        class: 'pm-work-result-diff-pre mono',
+        tabindex: '0',
+        role: 'region',
+        'aria-label': t('wres_diff_region_label', {path, sha: commit.slice(0, 12)}),
+        'data-work-result-diff-region': key,
+      });
+      pre.textContent = data.diff;
+      container.append(pre);
+    }
+  }
+
+  async function loadDiff(commit, path, key, container, summaryNode) {
+    if (diffLoading.has(key)) return;
+    diffLoading.add(key);
+    diffErrors.delete(key);
+    const ticket = ++diffSerial;
+    const attemptId = activeAttempt?.attempt_id;
+    renderDiffContent(container, commit, path, key, summaryNode);
+
+    try {
+      const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/diff?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
+      try { alive?.(); } catch { return; }
+      if (ticket !== diffSerial || activeAttempt?.attempt_id !== attemptId) return;
+      diffCache.set(key, data);
+    } catch (err) {
+      try { alive?.(); } catch { return; }
+      if (ticket !== diffSerial || activeAttempt?.attempt_id !== attemptId) return;
+      diffErrors.set(key, err);
+    } finally {
+      diffLoading.delete(key);
+      if (ticket === diffSerial && activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
+        renderDiffContent(container, commit, path, key, summaryNode);
+        if (document.activeElement === summaryNode || container.contains(document.activeElement)) {
+          summaryNode.focus();
+        }
+      }
+    }
+  }
+
+  async function readCurrentChanges(isReadAgain = false) {
+    if (changesBusy) return;
+    changesBusy = true;
+    const ticket = ++changesSerial;
+    const attemptId = activeAttempt?.attempt_id;
+
+    if (isReadAgain) {
+      diffCache.clear();
+      diffErrors.clear();
+      diffLoading.clear();
+      openDiffs.clear();
+      for (const dt of panelElement.querySelectorAll('.pm-work-result-diff-details[open]')) {
+        dt.open = false;
+      }
+    }
+
+    currentChangesError = null;
+    if (lastEnvelope && activeAttempt) {
+      renderEnvelope(lastEnvelope, activeAttempt);
+    }
+
+    try {
+      const data = await api('GET', `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/changes`);
+      try { alive?.(); } catch { return; }
+      if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+
+      currentChanges = data;
+      isOutOfDate = false;
+      currentChangesError = null;
+    } catch (err) {
+      try { alive?.(); } catch { return; }
+      if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+      currentChangesError = err;
+    } finally {
+      changesBusy = false;
+      if (ticket === changesSerial && activeAttempt?.attempt_id === attemptId && lastEnvelope) {
+        renderEnvelope(lastEnvelope, activeAttempt);
+      }
+    }
+  }
+
+  function renderCurrentChangesBlock() {
+    const block = h('div', {
+      class: 'pm-work-result-current-changes',
+      'data-work-result-current-changes': '',
+    });
+    if (changesBusy) {
+      block.setAttribute('aria-busy', 'true');
+    }
+
+    if (currentChangesError) {
+      const errBoxNode = errorBox ? errorBox(currentChangesError, {within: block}) : h('div', {class: 'error'}, currentChangesError?.message || String(currentChangesError));
+      const retryBtn = button({
+        label: t('wres_try_again'),
+        class: 'ui-button secondary ui-sm pm-work-result-retry',
+        onClick: () => { void readCurrentChanges(false); },
+      });
+      block.append(h('div', {class: 'pm-work-result-error-box'}, errBoxNode, retryBtn));
+      return block;
+    }
+
+    if (isOutOfDate) {
+      const outPill = h('span', {class: 'ui-pill tone-warn', 'data-status': 'out-of-date'}, t('wres_out_of_date'));
+      const readAgainBtn = button({
+        label: t('wres_read_again'),
+        class: 'ui-button secondary ui-sm pm-work-result-read-again',
+        onClick: () => { void readCurrentChanges(true); },
+      });
+      if (changesBusy) {
+        readAgainBtn.setAttribute('aria-disabled', 'true');
+      }
+      block.append(h('div', {class: 'pm-work-result-out-of-date-banner'}, outPill, ' ', readAgainBtn));
+    } else {
+      const readBtn = button({
+        label: t('wres_read_current_changes'),
+        class: 'ui-button secondary ui-sm pm-work-result-read-changes',
+        onClick: () => { void readCurrentChanges(false); },
+      });
+      if (changesBusy) {
+        readBtn.setAttribute('aria-disabled', 'true');
+      }
+      block.append(readBtn);
+    }
+
+    if (!currentChanges) {
+      return block;
+    }
+
+    // Head commit
+    const headSha = currentChanges.live_head_commit;
+    const headP = h('p', {class: 'pm-work-result-head'});
+    headP.append(h('strong', {}, `${t('wres_head')}: `));
+    if (headSha && headSha !== 'unknown') {
+      headP.append(h('span', {class: 'mono'}, headSha.slice(0, 12)));
+    } else {
+      headP.append(t('wres_unknown'));
+    }
+    block.append(headP);
+
+    // Freshness
+    const freshness = currentChanges.head_freshness;
+    let freshnessKey = 'wres_freshness_unavailable';
+    if (freshness === 'live') freshnessKey = 'wres_freshness_live';
+    else if (freshness === 'cached_receipt') freshnessKey = 'wres_freshness_cached_receipt';
+    block.append(h('p', {class: 'muted pm-work-result-freshness'}, t(freshnessKey)));
+
+    // Summary line
+    const curSummary = currentChanges.summary || {};
+    const isCurComplete = curSummary.complete === true && (!curSummary.unavailable || curSummary.unavailable.length === 0);
+    const curFilesCountNum = Number.isSafeInteger(curSummary.file_count)
+      ? curSummary.file_count
+      : (Array.isArray(curSummary.files) ? curSummary.files.length : null);
+    const curCommitsCountNum = Number.isSafeInteger(curSummary.commit_count)
+      ? curSummary.commit_count
+      : (Array.isArray(curSummary.commits) ? curSummary.commits.length : null);
+
+    let curSummaryKey = 'wres_changes_summary';
+    if (curFilesCountNum === 1 && curCommitsCountNum === 1) curSummaryKey = 'wres_changes_summary_one';
+    else if (curFilesCountNum === 1) curSummaryKey = 'wres_changes_summary_one_file';
+    else if (curCommitsCountNum === 1) curSummaryKey = 'wres_changes_summary_one_commit';
+
+    const curSummaryText = t(curSummaryKey, {
+      files: formatCount(curFilesCountNum),
+      commits: formatCount(curCommitsCountNum),
+      additions: formatCount(curSummary.additions),
+      deletions: formatCount(curSummary.deletions),
+    });
+
+    if (isCurComplete) {
+      block.append(h('p', {class: 'pm-work-result-changes-summary'}, curSummaryText));
+    } else {
+      block.append(h('p', {class: 'pm-work-result-changes-summary'}, t('wres_changes_partly_read')));
+    }
+
+    // Reason deduplication within Current changes block
+    const blockReasons = new Set();
+    if (!isCurComplete) {
+      const curChangeReasons = [];
+      if (curSummary.reason) {
+        curChangeReasons.push(curSummary.reason);
+        blockReasons.add(curSummary.reason);
+      }
+      if (Array.isArray(curSummary.reasons)) {
+        for (const r of curSummary.reasons) {
+          if (!curChangeReasons.includes(r) && !blockReasons.has(r)) {
+            curChangeReasons.push(r);
+            blockReasons.add(r);
+          }
+        }
+      }
+      if (curChangeReasons.length > 0) {
+        const reasonsList = h('ul', {class: 'pm-work-result-changes-reasons'});
+        for (const code of curChangeReasons) {
+          const key = `wres_reason_${code}`;
+          let text = t(key);
+          if (!text || text === key) text = t('wres_reason_generic_limit');
+          reasonsList.append(h('li', {}, text));
+        }
+        block.append(reasonsList);
+      }
+    }
+
+    const curCompleteness = currentChanges.completeness;
+    const curCompStatus = curCompleteness?.status;
+    if (curCompStatus && curCompStatus !== 'complete') {
+      const compDiv = h('div', {class: 'pm-work-result-completeness'});
+      if (curCompStatus === 'partial') {
+        compDiv.append(statusPill('partial'));
+      } else {
+        compDiv.append(h('span', {class: 'ui-pill tone-bad', 'data-status': 'unavailable'}, t('wres_status_unavailable')));
+      }
+      const compReasons = (curCompleteness.reasons || []).filter(code => {
+        if (blockReasons.has(code)) return false;
+        blockReasons.add(code);
+        return true;
+      });
+      if (compReasons.length > 0) {
+        const reasonList = h('ul', {class: 'pm-work-result-completeness-reasons'});
+        for (const code of compReasons) {
+          const key = `wres_reason_${code}`;
+          let text = t(key);
+          if (!text || text === key) text = t('wres_reason_generic_limit');
+          reasonList.append(h('li', {}, text));
+        }
+        compDiv.append(reasonList);
+      }
+      block.append(compDiv);
+    }
+
+    // File rows
+    const curFiles = curSummary.files || [];
+    if (curFiles.length > 0) {
+      const curFileList = h('ul', {class: 'pm-work-result-file-list'});
+      for (const f of curFiles) {
+        let statusLabel = t('wres_unknown');
+        if (f.status === 'M' || f.status === 'modified') statusLabel = t('wres_file_modified');
+        else if (f.status === 'A' || f.status === 'added') statusLabel = t('wres_file_added');
+        else if (f.status === 'D' || f.status === 'deleted') statusLabel = t('wres_file_deleted');
+        else if (typeof f.status === 'string' && (f.status.startsWith('R') || f.status === 'renamed')) statusLabel = t('wres_file_renamed');
+
+        const adds = f.additions === 'unknown' || f.additions == null ? '?' : `+${f.additions}`;
+        const dels = f.deletions === 'unknown' || f.deletions == null ? '?' : `−${f.deletions}`;
+
+        const row = h('li', {class: 'pm-work-result-file-row'},
+          h('span', {class: 'pm-work-result-file-path mono'}, f.path),
+          ' ',
+          h('span', {class: 'pm-work-result-file-status muted'}, statusLabel),
+          ' ',
+          h('span', {class: 'pm-work-result-file-diff mono'}, `${adds} ${dels}`),
+        );
+
+        if (canDiff()) {
+          const commits = sortCommitsOldestFirst(f.commits_touched, curSummary.commits);
+          for (const commit of commits) {
+            const key = `${commit}:${f.path}`;
+            const isOpen = openDiffs.has(key);
+            const sha12 = commit.slice(0, 12);
+
+            const summaryNode = h('summary', {
+              'data-work-result-diff-summary': key,
+              tabindex: '0',
+            }, t('wres_show_diff_label'), ' · ', h('span', {class: 'mono'}, sha12));
+
+            const bodyContainer = h('div', {class: 'pm-work-result-diff-body'});
+            renderDiffContent(bodyContainer, commit, f.path, key, summaryNode);
+
+            const diffDetails = disclosure({
+              element: h('details', {class: 'pm-work-result-diff-details', open: isOpen}, summaryNode, bodyContainer),
+            });
+
+            diffDetails.addEventListener('toggle', () => {
+              if (diffDetails.open) {
+                openDiffs.add(key);
+                if (!diffCache.has(key) && !diffLoading.has(key)) {
+                  void loadDiff(commit, f.path, key, bodyContainer, summaryNode);
+                }
+              } else {
+                openDiffs.delete(key);
+              }
+            });
+
+            row.append(diffDetails);
+          }
+        }
+        curFileList.append(row);
+      }
+      block.append(curFileList);
+    }
+
+    // Uncommitted
+    const curUncommitted = currentChanges.uncommitted || {};
+    const uncommittedBox = h('div', {class: 'pm-work-result-uncommitted-box'});
+    if (curUncommitted.count === 'unknown') {
+      uncommittedBox.append(h('p', {class: 'muted pm-work-result-uncommitted'}, t('wres_uncommitted_unknown')));
+    } else if (Number.isSafeInteger(curUncommitted.count) && curUncommitted.count > 0) {
+      uncommittedBox.append(h('p', {class: 'pm-work-result-uncommitted'},
+        t('wres_uncommitted_changes', {n: curUncommitted.count}),
+      ));
+      if (Array.isArray(curUncommitted.files) && curUncommitted.files.length > 0) {
+        const uncommittedList = h('ul', {class: 'pm-work-result-file-list pm-work-result-uncommitted-list'});
+        for (const uf of curUncommitted.files) {
+          const p = typeof uf === 'string' ? uf : uf?.path;
+          const s = typeof uf === 'object' && uf?.status ? uf.status : null;
+          const li = h('li', {class: 'pm-work-result-file-row'},
+            h('span', {class: 'pm-work-result-file-path mono'}, p),
+          );
+          if (s) {
+            let statusLabel = s;
+            if (s === 'M' || s === 'modified') statusLabel = t('wres_file_modified');
+            else if (s === 'A' || s === 'added') statusLabel = t('wres_file_added');
+            else if (s === 'D' || s === 'deleted') statusLabel = t('wres_file_deleted');
+            li.append(' ', h('span', {class: 'pm-work-result-file-status muted'}, statusLabel));
+          }
+          uncommittedList.append(li);
+        }
+        uncommittedBox.append(uncommittedList);
+      }
+    }
+    uncommittedBox.append(h('p', {class: 'muted pm-work-result-uncommitted-no-diff'}, t('wres_uncommitted_no_diff')));
+    block.append(uncommittedBox);
+
+    return block;
   }
 
   return {
