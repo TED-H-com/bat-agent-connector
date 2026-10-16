@@ -46,10 +46,10 @@ import {workspaceEvidence} from './pm-evidence.js';
 import {planRevisions} from './pm-plans.js';
 import {pmWorktreeChoice} from './pm-worktree-choice.js';
 import {nativeRunState, pmDiscussionMessage, pmDiscussionRequest, pmNativeAnalysis} from './pm-native-analysis.js';
+import {retiredView as retired} from './pm-retired.js';
 const same = (a, b) => a === b || (a && b && typeof a === 'object' && typeof b === 'object'
   && Array.isArray(a) === Array.isArray(b) && Object.keys(a).length === Object.keys(b).length
   && Object.keys(a).every(key => Object.hasOwn(b, key) && same(a[key], b[key])));
-const retired = error => ['VIEW_CHANGED', 'CONNECTION_CHANGED', 'PM_DISPOSED'].includes(error.code);
 // A remounted form can recover an acknowledged ID without resending an unknown
 // POST. Notifications contain no result; the active form reads with current access.
 const receiptSubscribers = new Map();
