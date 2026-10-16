@@ -13,7 +13,9 @@ import base64
 import contextlib
 import hashlib
 import json
+import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from . import confinement, registry, service
@@ -29,6 +31,7 @@ MATERIAL = ("workspace", "workspace_id", "title", "cwd", "agent_kind", "agent_pr
             "fields_stale", "field_evidence", "sdk_session_id", "native_input_state", "registry_origin")
 GONE_AFTER_MISSES = 2
 MAX_PAGE = 200
+COLLECT_PASS_BUDGET_S = 40.0
 CURSOR_ERROR = "cursor does not match these filters; start again without it"
 
 
@@ -95,6 +98,8 @@ class Inventory:
         self._scans: dict[str, dict] = {}
         self._runs: dict[str, int] = {}
         self._next_at: dict[str, float] = {}
+        self.after_refresh: list[Callable[[str, dict], Awaitable[None]]] = []
+        self.after_refresh_budget_s: float = COLLECT_PASS_BUDGET_S
 
     # ------------------------------------------------------------------ refresh
     async def refresh_host(self, host: str) -> dict:
@@ -326,7 +331,7 @@ class Inventory:
     async def refresh_all(self) -> list[dict]:
         return list(await asyncio.gather(*(self.refresh_host(h) for h in self.config.hosts)))
 
-    async def _refresh_scheduled(self, host: str) -> None:
+    async def _refresh_scheduled(self, host: str) -> dict:
         try:
             result = await self.refresh_host(host)
         except Exception:  # noqa: BLE001 - refresh_host records its own failures; this is a last resort
@@ -335,8 +340,15 @@ class Inventory:
         delay = (self.settings.interval_s if not failures
                  else min(self.settings.max_backoff_s, self.settings.interval_s * 2 ** min(failures, 6)))
         self._next_at[host] = time.time() + delay
+        if result.get("reachable"):
+            for hook in list(self.after_refresh):
+                try:
+                    await asyncio.wait_for(hook(host, result), timeout=self.after_refresh_budget_s)
+                except Exception as exc:  # noqa: BLE001 - hooks must never change inventory result, schedule or backoff
+                    logging.warning("inventory after_refresh hook for %s failed: %s", host, type(exc).__name__)
         with contextlib.suppress(Exception):
             await self.fleet.client(host).close()  # do not hold an idle socket between refreshes
+        return result
 
     async def loop(self) -> None:
         """Refresh each host on its own schedule, independently: a slow host never delays the others.

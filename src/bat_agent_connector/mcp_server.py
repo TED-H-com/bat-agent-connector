@@ -70,6 +70,7 @@ READ_TOOLS = [
     "pm_governance_list", "pm_governance_get", "pm_governance_history_list",
     "pm_work_packages_list", "pm_work_package_get", "pm_work_package_readiness_get",
     "pm_work_start_preview", "pm_work_attempts_list", "pm_work_attempt_get",
+    "pm_work_attempt_result_get", "pm_work_attempt_changes_get", "pm_work_attempt_diff_get",
     "pm_issue_mappings_list", "pm_issue_mapping_get",
 
     "pm_work_deliveries_list",
@@ -905,6 +906,25 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
         """Read one immutable work.start attempt record, child operations, package and execution session."""
         return await pm_daemon("pm_work_attempt_get", workspace_id=workspace_id, attempt_id=attempt_id)
 
+    async def pm_work_attempt_result_get(workspace_id: str, attempt_id: str, cursor: StrictInt | None = None,
+                                         wait_ms: StrictInt = 0) -> dict[str, Any]:
+        """Read the bounded pm-work-attempt-result/v1 envelope for one attempt; zero BAT calls, zero DB writes."""
+        params: dict[str, Any] = {"workspace_id": workspace_id, "attempt_id": attempt_id, "wait_ms": wait_ms}
+        if cursor is not None:
+            params["cursor"] = cursor
+        return await pm_daemon("pm_work_attempt_result_get", **params)
+
+    async def pm_work_attempt_changes_get(workspace_id: str, attempt_id: str, max_commits: StrictInt = 30,
+                                          max_files: StrictInt = 80) -> dict[str, Any]:
+        """Read the managed worktree live HEAD, uncommitted status and per-commit changeset summary; read-only."""
+        return await pm_daemon("pm_work_attempt_changes_get", workspace_id=workspace_id, attempt_id=attempt_id,
+                               max_commits=max_commits, max_files=max_files)
+
+    async def pm_work_attempt_diff_get(workspace_id: str, attempt_id: str, commit: str, path: str) -> dict[str, Any]:
+        """Read one file's bounded unified diff for a commit in the attempt's (base_commit..head_commit] range; read-only."""
+        return await pm_daemon("pm_work_attempt_diff_get", workspace_id=workspace_id, attempt_id=attempt_id,
+                               commit=commit, path=path)
+
     async def pm_conversation_proposals_list(workspace_id: str, thread_id: str | None = None, after: StrictInt = 0, limit: StrictInt = 50) -> dict[str, Any]:
         """List sourced conversation proposal metadata; no adoption or execution."""
         return await pm_daemon("pm_conversation_proposals_list", workspace_id=workspace_id, thread_id=thread_id, after=after, limit=limit)
@@ -1139,6 +1159,7 @@ def build_server(config: Config, *, read_only: bool = False, principal_only: boo
                pm_governance_list, pm_governance_get, pm_governance_history_list,
                pm_work_packages_list, pm_work_package_get, pm_work_package_readiness_get,
                pm_work_start_preview, pm_work_attempts_list, pm_work_attempt_get,
+               pm_work_attempt_result_get, pm_work_attempt_changes_get, pm_work_attempt_diff_get,
                pm_issue_mappings_list, pm_issue_mapping_get,
 
                pm_work_deliveries_list,
