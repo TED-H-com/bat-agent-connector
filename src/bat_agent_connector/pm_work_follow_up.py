@@ -1066,8 +1066,12 @@ def prepare_send(ctx: OpContext) -> dict[str, Any]:
             delay_s=WORK_FOLLOW_UP_HEAD_POLL_S,
         )
 
-    # Check work item is still active before dispatching a new frame
+    # Check work item is still active before dispatching a new frame.
+    # Writer membership is re-checked here, before ctx.step, so a removed member
+    # fails with require_member's NOT_FOUND rather than the lineage effect guard
+    # that runs when the step starts. The send gate checks again at the frame.
     work_items._get_item(db, wi_id, active=True)
+    _require_current_writer(ctx)
 
     return {
         "workspace_id": wid,
@@ -1104,6 +1108,7 @@ async def execute_send_step(
         ctx.check_cancel()
         incarnation_holder["incarnation"] = check_controller_binding_fn(ctx, target)
         pm_lifecycle_gates.require_local(ctx.service.db, ctx.operation_id)
+        _require_current_writer(ctx)
 
     def _on_streaming(meta: dict[str, Any]) -> None:
         if schedule == "after_current":
@@ -1187,6 +1192,18 @@ async def execute_send_step(
     if accepted is False:
         raise StepFailed("NOT_ACCEPTED", "BAT rejected the message")
     return r
+
+
+def _require_current_writer(ctx: OpContext) -> None:
+    """Refuse the frame unless the admitted principal is still a writer.
+
+    The stored controller authority is unscoped, so ``require_binding`` does not
+    call ``require_member``. Read visibility of the lineage is not write access.
+    """
+    principal = pm_workspace.admitted_principal(ctx)
+    meta = _follow_up_meta(ctx.op)
+    workspace_id = meta.get("workspace_id") or (ctx.op.get("target") or {}).get("workspace_id")
+    pm_workspace.require_member(ctx.service.db, principal, workspace_id, write=True)
 
 
 def operation_visible(db, principal: Principal, operation: dict[str, Any]) -> bool:

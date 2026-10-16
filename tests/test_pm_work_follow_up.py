@@ -767,6 +767,80 @@ async def test_controller_mismatch_refused(start_ready, mock):
     assert len(mock.invokes) == before_calls
 
 
+async def test_writer_membership_rechecked_before_every_frame(start_ready, mock):
+    """A queued follow-up is refused at the frame if the admitted writer lost write access."""
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key="p5-writer-recheck")  # gitleaks:allow (test idempotency key)
+    second = Principal("pm-second-owner", frozenset({"observe", "manage", "start", "operate"}))
+    second_tok = token(w["d"], second.actor, "observe", "manage", "start", "operate")
+    current = pm_workspace.get_workspace(ops.db, STARTER_OWNER, att["workspace_id"])
+    await pkg_action(
+        w, "pm.workspace.member.set", {"workspace_id": att["workspace_id"]},
+        {"actor": second.actor, "role": "owner"}, {"expected_version": current["version"]},
+        who=STARTER_OWNER,
+    )
+
+    async def set_member(actor, role):
+        viewed = pm_workspace.get_workspace(ops.db, second, att["workspace_id"])
+        await pkg_action(
+            w, "pm.workspace.member.set", {"workspace_id": att["workspace_id"]},
+            {"actor": actor, "role": role}, {"expected_version": viewed["version"]},
+            who=second,
+        )
+
+    await _refresh(w, mock, att, att["turn_marker"], streaming=True)
+    demoted_id = await _queue(w, mock, att, "queued before demotion", "p5-writer-demote")  # gitleaks:allow (test idempotency key)
+    queued = await _get_op(w, demoted_id)
+    assert queued["status"] == "waiting_external", queued
+    assert queued["input_receipt"]["state"] == "queued"
+    assert _frames(mock, f"batc-{demoted_id}") == []
+
+    await set_member(STARTER_OWNER.actor, "reader")
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    await _settle(ops, demoted_id)
+    refused = await _get_op(w, demoted_id)
+    assert refused["status"] == "failed", refused
+    assert refused["error_code"] == "FORBIDDEN", refused
+    assert refused.get("status_reason") == "[FORBIDDEN] Workspace membership does not permit this action", refused
+    assert refused["input_receipt"]["state"] == "failed"
+    assert refused["input_receipt"]["error_code"] == "FORBIDDEN"
+    assert _frames(mock, f"batc-{demoted_id}") == []
+
+    await set_member(STARTER_OWNER.actor, "owner")
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    later_id = await _queue(w, mock, att, "writer still sends", "p5-writer-later")  # gitleaks:allow (test idempotency key)
+    await _settle(ops, later_id)
+    later = await _get_op(w, later_id)
+    assert later["status"] == "succeeded", later
+    assert later["input_receipt"]["state"] == "sent"
+    assert len(_frames(mock, f"batc-{later_id}")) == 1
+
+    await _refresh(w, mock, att, f"batc-{later_id}", streaming=True)
+    removed_id = await _queue(w, mock, att, "queued before removal", "p5-writer-remove")  # gitleaks:allow (test idempotency key)
+    assert (await _get_op(w, removed_id))["status"] == "waiting_external"
+    assert _frames(mock, f"batc-{removed_id}") == []
+    await set_member(STARTER_OWNER.actor, None)
+    await _refresh(w, mock, att, f"batc-{later_id}", streaming=False)
+    await _settle(ops, removed_id)
+    # The admitted actor is no longer a member, so their own token cannot read the receipt.
+    gone = await _get_op(w, removed_id, tok=second_tok)
+    assert gone["status"] == "failed", gone
+    assert gone["error_code"] == "NOT_FOUND", gone
+    assert gone.get("status_reason") == "[NOT_FOUND] Workspace not found", gone
+    assert gone["input_receipt"]["state"] == "failed"
+    assert gone["input_receipt"]["error_code"] == "NOT_FOUND"
+    assert _frames(mock, f"batc-{removed_id}") == []
+
+    await set_member(STARTER_OWNER.actor, "contributor")
+    await _refresh(w, mock, att, f"batc-{later_id}", streaming=False)
+    restored_id = await _queue(w, mock, att, "restored writer sends once", "p5-writer-restored")  # gitleaks:allow (test idempotency key)
+    await _settle(ops, restored_id)
+    restored = await _get_op(w, restored_id)
+    assert restored["status"] == "succeeded", restored
+    assert len(_frames(mock, f"batc-{restored_id}")) == 1
+
+
 # --------------------------------------------------------------------------- 10
 
 
