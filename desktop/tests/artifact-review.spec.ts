@@ -332,7 +332,7 @@ test('refused capture moves focus to new capture', async ({page}) => {
   state.releaseWrite();
   await expect(page.getByRole('button', {name: 'Capture another file', exact: true})).toBeFocused();
   expect(state.writes).toHaveLength(1);
-  await expect(page.getByText('PREVIEW_EXPIRED', {exact: true})).toBeVisible();
+  await expect(page.locator('p.muted').filter({hasText: /^PREVIEW_EXPIRED$/})).toBeVisible();
   expect(state.errors).toEqual([]);
 });
 
