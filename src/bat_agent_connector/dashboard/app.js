@@ -15267,7 +15267,8 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 //#endregion
 //#region src/pr-selector.js
 function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
-	let page = 1, serial = 0, cached = [], scope = "", nextPage = null, busy = false, stale = false, error = "";
+	let page = 1, serial = 0, cached = [], scope = "", nextPage = null, busy = false, listStale = false, error = "";
+	let pressedKey = null;
 	const alive = () => {
 		try {
 			guard();
@@ -15293,21 +15294,102 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	const refresh = iconButton({
 		icon: "refresh-cw",
 		label: t("delivery_refresh_prs"),
-		onClick: () => loadList()
+		onClick: () => activate({ kind: "refresh" }, 1)
 	});
 	const list = h("div", {
 		class: "pr-list",
 		"aria-live": "polite"
 	});
 	const container = h("div", { class: "pr-selector" }, h("div", { class: "filters" }, searchField(search), filter, refresh), list);
+	const shownEnabled = (node) => node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	const keyOf = (node) => {
+		if (!node || node.nodeType !== 1) return null;
+		const pageKey = node.getAttribute("data-pr-page");
+		if (pageKey) return {
+			attr: "data-pr-page",
+			value: pageKey
+		};
+		const number = node.getAttribute("data-pr-number");
+		if (number) return {
+			attr: "data-pr-number",
+			value: number
+		};
+		return null;
+	};
+	const sameKey = (node, key) => Boolean(key) && (key.kind === "refresh" ? node === refresh : node.getAttribute(key.attr) === key.value);
+	const isPressed = (node) => pressedKey ? sameKey(node, pressedKey) : false;
+	function arm(button, blocked) {
+		if (busy && (isPressed(button) || !blocked)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
+	function fallback(from) {
+		const controls = [...container.querySelectorAll("button, input, select")];
+		const index = from ? controls.indexOf(from) : -1;
+		const nextControl = controls.slice(index + 1).find(shownEnabled);
+		if (nextControl) {
+			nextControl.focus({ preventScroll: true });
+			return;
+		}
+		list.tabIndex = -1;
+		list.focus({ preventScroll: true });
+	}
+	function successor(key) {
+		const buttons = [...list.querySelectorAll("button")];
+		const previous = buttons.find((node) => node.getAttribute("data-pr-page") === "previous");
+		const next = buttons.find((node) => node.getAttribute("data-pr-page") === "next");
+		if (key?.attr === "data-pr-page" && key.value === "next") {
+			if (shownEnabled(previous)) {
+				previous.focus({ preventScroll: true });
+				return;
+			}
+			fallback(next || previous);
+			return;
+		}
+		if (key?.attr === "data-pr-page" && key.value === "previous") {
+			if (shownEnabled(next)) {
+				next.focus({ preventScroll: true });
+				return;
+			}
+			const first = buttons.find((node) => node.hasAttribute("data-pr-number") && shownEnabled(node));
+			if (first) {
+				first.focus({ preventScroll: true });
+				return;
+			}
+			if (shownEnabled(refresh)) {
+				refresh.focus({ preventScroll: true });
+				return;
+			}
+			fallback(previous || next);
+			return;
+		}
+		fallback(refresh);
+	}
+	function restoreFocus(key) {
+		if (!key) return;
+		const match = [...list.querySelectorAll("button")].find((node) => sameKey(node, key));
+		if (match && shownEnabled(match)) {
+			match.focus({ preventScroll: true });
+			return;
+		}
+		const active = document.activeElement;
+		if (active && active !== document.body && active.isConnected) return;
+		successor(key);
+	}
 	function render() {
 		if (!alive()) return;
+		const active = document.activeElement;
+		const key = list.contains(active) ? keyOf(active) : null;
 		list.replaceChildren();
-		refresh.disabled = busy;
+		arm(refresh, false);
 		if (busy) list.append(skeleton(2));
 		if (error) list.append(h("p", { class: "note warn" }, error));
 		if (scope) list.append(h("p", { class: "muted" }, `${scope} · ${t("delivery_pr_page", { page })}`));
-		if (stale && cached.length) list.append(h("p", { class: "note warn" }, t("delivery_pr_stale")));
+		if (listStale && cached.length) list.append(h("p", { class: "note warn" }, t("delivery_pr_stale")));
 		const query = search.value.trim().toLocaleLowerCase();
 		const rows = cached.filter((pr) => pr.title.toLocaleLowerCase().includes(query) || String(pr.number).includes(query));
 		if (!rows.length && !busy) list.append(emptyState({
@@ -15319,35 +15401,57 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 			const select = h("button", {
 				type: "button",
 				class: "secondary",
-				disabled: busy || stale,
+				"data-pr-number": String(pr.number),
 				onclick: () => {
-					if (!alive() || busy || stale || revision !== serial || loaded !== scope) return;
+					if (!alive() || busy || listStale || revision !== serial || loaded !== scope) return;
 					repoInput.value = loaded;
 					numInput.value = String(pr.number);
 					onSelect();
 				}
 			}, `#${pr.number} ${pr.title}`);
+			arm(select, listStale);
 			list.append(h("div", { class: "row" }, select, h("span", { class: "muted" }, t("pr_state_" + pr.state), pr.draft ? ` · ${t("pr_draft")}` : "")));
 		}
-		if (scope) list.append(h("div", { class: "actions" }, h("button", {
-			type: "button",
-			class: "secondary",
-			disabled: busy || stale || page <= 1,
-			onclick: () => loadList(page - 1)
-		}, t("pagination_prev")), h("button", {
-			type: "button",
-			class: "secondary",
-			disabled: busy || stale || !nextPage,
-			onclick: () => loadList(nextPage)
-		}, t("pagination_next"))));
+		if (scope) {
+			const previous = h("button", {
+				type: "button",
+				class: "secondary",
+				"data-pr-page": "previous",
+				onclick: () => activate({
+					attr: "data-pr-page",
+					value: "previous"
+				}, page - 1)
+			}, t("pagination_prev"));
+			const next = h("button", {
+				type: "button",
+				class: "secondary",
+				"data-pr-page": "next",
+				onclick: () => activate({
+					attr: "data-pr-page",
+					value: "next"
+				}, nextPage)
+			}, t("pagination_next"));
+			arm(previous, listStale || page <= 1);
+			arm(next, listStale || !nextPage);
+			list.append(h("div", { class: "actions" }, previous, next));
+		}
+		restoreFocus(key);
+		if ([refresh, ...list.querySelectorAll("button")].some((button) => button.getAttribute("aria-disabled") === "true")) list.setAttribute("aria-busy", "true");
+		else list.removeAttribute("aria-busy");
 	}
-	async function loadList(wanted = 1) {
+	function activate(press, wanted) {
+		if (busy) return;
+		loadList(wanted, press);
+	}
+	async function loadList(wanted = 1, press = null) {
 		if (!alive()) return;
 		const mine = ++serial, repository = repoInput.value.trim(), selectedState = filter.value;
-		stale = true;
+		pressedKey = press;
 		error = "";
 		if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
 			busy = false;
+			listStale = true;
+			pressedKey = null;
 			error = t("delivery_choose_repository");
 			render();
 			return;
@@ -15367,13 +15471,15 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 			scope = result.loaded_scope;
 			cached = result.pulls;
 			nextPage = result.has_more && wanted < 1e3 && result.next_page === wanted + 1 ? result.next_page : null;
-			stale = false;
+			listStale = false;
 		} catch (failure) {
 			if (!alive() || mine !== serial) return;
 			error = failure.message || String(failure);
+			listStale = true;
 		} finally {
 			if (alive() && mine === serial) {
 				busy = false;
+				pressedKey = null;
 				render();
 			}
 		}
@@ -15381,7 +15487,8 @@ function prSelector({ api, h, t, guard, repoInput, numInput, onSelect }) {
 	repoInput.addEventListener("input", () => {
 		serial++;
 		busy = false;
-		stale = true;
+		listStale = true;
+		pressedKey = null;
 		render();
 	});
 	return {
@@ -48252,7 +48359,7 @@ function modelChoice({ h, t, api, caps, guard, host, agent, model, submit = null
 	};
 }
 function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onEvents, errorBox }) {
-	let doc = null, draft = null, intent = null, busy = false, serial = 0, loadedHost = "";
+	let doc = null, draft = null, intent = null, busy = false, serial = 0, loadedHost = "", refreshing = false, pressed = null;
 	let drafts = {};
 	try {
 		drafts = JSON.parse(localStorage.getItem(storageKey) || "{}");
@@ -48316,7 +48423,18 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		label: t("models_refresh"),
 		class: "secondary",
 		type: "button",
-		onclick: () => load(true)
+		onclick: () => {
+			if (busy || refreshing) return;
+			refreshing = true;
+			pressed = refresh;
+			Promise.resolve(load(true)).finally(() => {
+				refreshing = false;
+				const button = pressed;
+				pressed = null;
+				update();
+				settle(button);
+			});
+		}
 	});
 	const reset = h("button", {
 		class: "secondary",
@@ -48358,8 +48476,10 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		class: "primary",
 		type: "button",
 		onclick: async () => {
-			if (busy || !draft || !doc || doc.host !== host.value) return;
+			if (busy || refreshing) return;
+			if (!draft || !doc || doc.host !== host.value) return;
 			busy = true;
+			pressed = save;
 			try {
 				guard();
 				intent ||= {
@@ -48397,7 +48517,10 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 				} catch {}
 			} finally {
 				busy = false;
+				const button = pressed;
+				pressed = null;
 				update();
+				settle(button);
 			}
 		}
 	}, t("save"));
@@ -48405,16 +48528,55 @@ function modelPreferencesPanel({ h, t, api, caps, guard, submit, storageKey, onE
 		class: "panel model-preferences",
 		"data-model-preferences": ""
 	}, h("summary", {}, t("models_title")), h("p", { class: "muted" }, t("models_personal", { actor: caps()?.actor || "" })), h("div", { class: "capture-fields" }, h("label", {}, t("models_host"), host), h("label", {}, t("models_catalog_agent"), catalogAgent)), h("div", { class: "actions" }, refresh), status, statusDetails, evidence, form, rows, h("div", { class: "actions" }, save, reset, discard), h("h2", {}, t("models_usage")), usage);
+	function shownEnabled(node) {
+		return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	}
+	function arm(button, blocked) {
+		if ((busy || refreshing) && (button === pressed || !blocked)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
+	function settle(button) {
+		try {
+			guard();
+		} catch {
+			return;
+		}
+		if (!box.isConnected || !button) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (!button.hidden && !button.disabled) return;
+		if (button === save) {
+			status.tabIndex = -1;
+			status.focus({ preventScroll: true });
+			return;
+		}
+		const group = button.closest(".actions") || button.parentElement;
+		const controls = group ? [...group.querySelectorAll("button, input, select, a")] : [];
+		const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+		if (next) {
+			next.focus({ preventScroll: true });
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus({ preventScroll: true });
+	}
 	function update() {
 		const locked = busy || Boolean(intent), coherent = doc?.host === host.value;
 		for (const input of Object.values(inputs)) input.disabled = locked || !draft || !coherent;
 		host.disabled = locked;
 		catalogAgent.disabled = busy;
-		save.disabled = busy || !draft || !coherent || !caps()?.actions?.some((action) => action.action === "preferences.models.update" && action.allowed);
 		save.textContent = t(intent ? "permissions_retry" : "save");
+		arm(save, !draft || !coherent || !caps()?.actions?.some((action) => action.action === "preferences.models.update" && action.allowed));
 		reset.disabled = discard.disabled = locked || !draft || !coherent;
-		refresh.disabled = busy || !host.value;
+		arm(refresh, !host.value);
 		for (const input of rows.querySelectorAll("input,button")) input.disabled = locked || !coherent || input.dataset.boundary === "true";
+		if ([refresh, save].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 	}
 	function renderRows() {
 		const focused = document.activeElement?.dataset.modelControl;
@@ -48572,7 +48734,7 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		const raw = JSON.parse(localStorage.getItem(storageKey));
 		if (raw && typeof raw.host === "string" && typeof raw.workspace === "string" && raw.drafts && typeof raw.drafts === "object" && !Array.isArray(raw.drafts)) saved = raw;
 	} catch {}
-	let doc = null, draft = null, busy = false, discovery = 0, serial = 0, discoveredHost = "", discoveryReady = false;
+	let doc = null, draft = null, busy = false, discovery = 0, serial = 0, discoveredHost = "", discoveryReady = false, refreshing = false, pressed = null;
 	const host = h("select", { "aria-label": t("host") }, h("option", { value: "" }, t("start_choose_host")), ...(caps()?.hosts || []).map((value) => h("option", { value: value.host }, value.host)));
 	if (![...host.options].some((option) => option.value === saved.host)) saved.host = "";
 	host.value = saved.host;
@@ -48599,7 +48761,18 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		label: t("skills_refresh"),
 		class: "secondary",
 		type: "button",
-		onclick: () => discover(true)
+		onclick: () => {
+			if (busy || refreshing) return;
+			refreshing = true;
+			pressed = refresh;
+			discover(true).finally(() => {
+				refreshing = false;
+				const button = pressed;
+				pressed = null;
+				update();
+				settle(button);
+			});
+		}
 	});
 	const discard = h("button", {
 		class: "secondary",
@@ -48626,9 +48799,11 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		class: "primary",
 		type: "button",
 		onclick: async () => {
-			if (busy || !draft || !coherent()) return;
+			if (busy || refreshing) return;
+			if (!draft || !coherent()) return;
 			if (!draft.intent && (doc.catalog.stale || doc.catalog.status !== "available")) return;
 			busy = true;
+			pressed = save;
 			try {
 				guard();
 				draft.intent ||= {
@@ -48683,7 +48858,10 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 				} catch {}
 			} finally {
 				busy = false;
+				const button = pressed;
+				pressed = null;
 				update();
+				settle(button);
 			}
 		}
 	}, t("skills_save"));
@@ -48691,15 +48869,54 @@ function projectSkillsPanel({ h, t, api, caps, guard, submit, projectId, storage
 		class: "panel project-skills",
 		"data-project-skills": ""
 	}, h("summary", {}, t("skills_title")), h("p", { class: "note" }, t("skills_not_applied")), h("div", { class: "capture-fields" }, h("label", {}, t("host"), host), h("label", {}, t("start_workspace"), workspace)), h("div", { class: "actions" }, refresh), status, statusDetails, source, list, h("div", { class: "actions" }, save, discard));
+	function shownEnabled(node) {
+		return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	}
+	function arm(button, blocked) {
+		if ((busy || refreshing) && (button === pressed || !blocked)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = Boolean(blocked);
+		}
+	}
+	function settle(button) {
+		try {
+			guard();
+		} catch {
+			return;
+		}
+		if (!box.isConnected || !button) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (!button.hidden && !button.disabled) return;
+		if (button === save) {
+			status.tabIndex = -1;
+			status.focus({ preventScroll: true });
+			return;
+		}
+		const group = button.closest(".actions") || button.parentElement;
+		const controls = group ? [...group.querySelectorAll("button, input, select, a")] : [];
+		const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+		if (next) {
+			next.focus({ preventScroll: true });
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus({ preventScroll: true });
+	}
 	function update() {
 		const locked = busy || Boolean(draft?.intent), valid = coherent();
 		host.disabled = locked;
 		workspace.disabled = locked || !discoveryReady;
-		refresh.disabled = busy || !saved.host;
 		save.textContent = t(draft?.intent ? "permissions_retry" : "skills_save");
-		save.disabled = busy || !valid || !draft || !draft.intent && (doc.catalog.status !== "available" || doc.catalog.stale) || !caps()?.actions?.some((action) => action.action === "project.skills.update" && action.allowed);
+		arm(refresh, !saved.host);
+		arm(save, !valid || !draft || !draft.intent && (doc.catalog.status !== "available" || doc.catalog.stale) || !caps()?.actions?.some((action) => action.action === "project.skills.update" && action.allowed));
 		discard.disabled = locked || !valid || !draft;
 		for (const control of list.querySelectorAll("input,button")) control.disabled = locked || !valid || control.dataset.unavailable === "true";
+		if ([refresh, save].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
 	}
 	function render() {
 		if (!coherent() || !draft) {
@@ -48858,7 +49075,7 @@ var itemHref = (item) => `#/item/${encodeURIComponent(item.work_item_id)}`;
 var artifactHref = (artifact) => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
 var date = (value) => timeStamp(value);
 function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents, errorBox }) {
-	let doc = null, serial = 0, children = [], refreshing = null;
+	let doc = null, serial = 0, children = [], refreshing = null, pressed = null;
 	const warning = h("div", { "data-child-warning": "" }), status = h("p", {
 		class: "muted",
 		role: "status"
@@ -48868,13 +49085,21 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		label: t("results_refresh"),
 		class: "mini",
 		type: "button",
-		onclick: () => load()
+		onclick: () => {
+			if (refreshing) return;
+			pressed = refresh;
+			load();
+		}
 	});
 	const more = h("button", {
 		class: "secondary",
 		type: "button",
 		hidden: true,
-		onclick: () => load(doc?.children_next_cursor)
+		onclick: () => {
+			if (refreshing) return;
+			pressed = more;
+			load(doc?.children_next_cursor);
+		}
 	}, t("results_more"));
 	const box = h("section", {
 		class: "result-sources panel",
@@ -48915,13 +49140,22 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		return own ? content : h("details", { "data-result-child": item.work_item_id }, h("summary", {}, item.title), h("p", {}, h("a", { href: itemHref(item) }, t("results_open_child"))), content);
 	}
 	function render() {
-		const focused = document.activeElement?.getAttribute("href"), opens = new Set([...body.querySelectorAll("details[open][data-result-child]")].map((node) => node.dataset.resultChild));
+		const active = document.activeElement;
+		const focused = active?.getAttribute?.("href");
+		const focusedChild = [...body.querySelectorAll("details[data-result-child]")].find((child) => [...child.children].some((node) => node.tagName === "SUMMARY" && node === active));
+		const focusedChildId = focusedChild ? focusedChild.getAttribute("data-result-child") : "";
+		const opens = new Set([...body.querySelectorAll("details[open][data-result-child]")].map((node) => node.dataset.resultChild));
 		const unfinished = children.filter((child) => !child.archived && !child.completion.approved);
 		warning.replaceChildren(...unfinished.length ? [h("p", { class: "note warn" }, t("results_unfinished", { count: unfinished.length }), " ", ...unfinished.flatMap((child, index) => [index ? " · " : "", h("a", { href: itemHref(child) }, child.title)]))] : []);
 		if (doc.children_next_cursor) warning.append(h("p", { class: "muted" }, t("results_children_partial")));
 		body.replaceChildren(h("p", { class: "muted" }, t("results_independent")), ...[doc.parent && ["results_parent", doc.parent], doc.derived_from && ["derived_from", doc.derived_from]].filter(Boolean).map(([label, item]) => h("p", {}, t(label), ": ", h("a", { href: itemHref(item) }, item.title))), renderSource(doc.item, true), ...children.map((child) => renderSource(child)));
 		for (const node of body.querySelectorAll("details[data-result-child]")) node.open = opens.has(node.dataset.resultChild);
 		if (focused) [...body.querySelectorAll("a")].find((node) => node.getAttribute("href") === focused)?.focus({ preventScroll: true });
+		if (focusedChildId) {
+			const match = [...body.querySelectorAll("details")].find((node) => node.getAttribute("data-result-child") === focusedChildId);
+			const summary = match && [...match.children].find((node) => node.tagName === "SUMMARY");
+			if (summary) summary.focus({ preventScroll: true });
+		}
 		status.replaceChildren(timeLabel(t, "models_source", {
 			source: doc.source,
 			time: date(doc.read_at)
@@ -48929,23 +49163,85 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 		statusDetails.replaceChildren();
 		more.hidden = !doc.children_next_cursor;
 	}
+	function shownEnabled(node) {
+		return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+	}
+	function arm() {
+		const flight = Boolean(refreshing);
+		for (const button of [refresh, more]) if (flight && (button === pressed || !button.hidden)) {
+			button.disabled = false;
+			button.setAttribute("aria-disabled", "true");
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = false;
+		}
+		if ([refresh, more].some((button) => button.getAttribute("aria-disabled") === "true")) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+	}
+	function settle(button, result) {
+		try {
+			guard();
+		} catch {
+			return;
+		}
+		if (!box.isConnected || !button) return;
+		const active = document.activeElement;
+		if (active !== button && active !== document.body) return;
+		if (!button.hidden && !button.disabled) return;
+		if (button === more && more.hidden) {
+			const match = result.addedId ? [...body.querySelectorAll("details")].find((node) => node.getAttribute("data-result-child") === result.addedId) : null;
+			const summary = match && [...match.children].find((node) => node.tagName === "SUMMARY");
+			if (summary) {
+				summary.focus({ preventScroll: true });
+				return;
+			}
+			refresh.focus({ preventScroll: true });
+			return;
+		}
+		const group = button.parentElement;
+		const controls = group ? [...group.querySelectorAll("button, input, select, a")] : [];
+		const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+		if (next) {
+			next.focus({ preventScroll: true });
+			return;
+		}
+		status.tabIndex = -1;
+		status.focus({ preventScroll: true });
+	}
 	function load(after = "") {
 		if (refreshing) return refreshing.then(() => load(after));
-		refreshing = loadNow(after).finally(() => {
-			refreshing = null;
+		let resolve;
+		const done = new Promise((finish) => {
+			resolve = finish;
 		});
-		return refreshing;
+		const result = {
+			current: false,
+			addedId: null
+		};
+		refreshing = done;
+		arm();
+		loadNow(after, result).finally(() => {
+			const button = pressed;
+			pressed = null;
+			refreshing = null;
+			arm();
+			if (result.current && box.isConnected) settle(button, result);
+			resolve();
+		});
+		return done;
 	}
-	async function loadNow(after) {
+	async function loadNow(after, result) {
 		const request = ++serial;
-		refresh.disabled = more.disabled = true;
 		try {
 			const next = await api("GET", `/work-items/${encodeURIComponent(workItemId)}/result-sources?limit=50${after ? `&after=${encodeURIComponent(after)}` : ""}`);
 			guard();
 			if (request !== serial) return;
 			if (next.version !== 1 || next.item?.work_item_id !== workItemId || !Array.isArray(next.children)) throw Error(t("results_invalid"));
+			const previous = new Set(children.map((child) => child.work_item_id));
 			doc = next;
 			children = after ? [...new Map([...children, ...next.children].map((child) => [child.work_item_id, child])).values()] : next.children;
+			result.addedId = next.children.find((child) => !previous.has(child.work_item_id))?.work_item_id || null;
+			result.current = true;
 			render();
 		} catch (error) {
 			try {
@@ -48955,10 +49251,9 @@ function resultSourcesPanel({ h, t, api, guard, workItemId, linkTarget, onEvents
 					const presentation = errorPresentation(error, t);
 					status.textContent = `${t("models_not_refreshed")} ${presentation.summary}`;
 					statusDetails.replaceChildren(errorDetails(presentation) || "");
+					result.current = true;
 				}
 			} catch {}
-		} finally {
-			refresh.disabled = more.disabled = false;
 		}
 	}
 	const off = onEvents((event) => [
