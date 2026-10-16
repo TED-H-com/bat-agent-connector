@@ -10,6 +10,7 @@ import pytest
 
 from bat_agent_connector import (
     checkpoints,
+    dashboard_sync,
     mcp_server,
     pm_attempt_result_reads,
     pm_attempt_results,
@@ -18,12 +19,14 @@ from bat_agent_connector import (
     pm_quality_reviews,
     pm_work_start,
     pm_workspace,
+    pr_publication,
     registry,
+    service,
     verification,
     work_items,
 )
 from bat_agent_connector.errors import BatError, ConnectionLost, InvokeTimeout
-from bat_agent_connector.operations import OperationError, OperationService
+from bat_agent_connector.operations import OperationError, OperationService, Uncertain
 from tests.operation_helpers import settle_operations
 from tests.test_api_v1 import http, token
 from tests.test_checkpoints import RealGitLog
@@ -838,12 +841,53 @@ async def test_git_status_failure_or_empty_list_yields_unknown_never_clean(start
     ]
 
 
-async def test_bounded_wait_returns_on_event_times_out_and_rejects_expired_cursor(start_ready, mock):
+async def test_bounded_wait_returns_on_event_times_out_and_rejects_expired_cursor(start_ready, mock, monkeypatch):
     w = start_ready
     d = w["d"]
+    orig_api_event = d.journal.api_event
+    monkeypatch.setattr(d.journal, "api_event", lambda *a, **kw: 0)
     att = await _start_managed_attempt(w, mock, key="e04-bounded-wait")  # gitleaks:allow (test idempotency key)
+    monkeypatch.setattr(d.journal, "api_event", orig_api_event)
     wid, aid, sid, wt = att["workspace_id"], att["attempt_id"], att["session_id"], att["worktree_path"]
     _seed_worktree_commits(mock, wt, att["base_sha"])
+
+    # 0. Append 500 unrelated events through the public journal API, then 1 related event; read with cursor=0&wait_ms=0.
+    with d.journal.tx():
+        for i in range(500):
+            d.journal.api_event("task", f"unrelated-{i}", "task.updated", {"i": i}, actor=STARTER_OWNER.actor)
+        rel_seq = d.journal.api_event(
+            "pm_work_attempt",
+            aid,
+            "work.attempt.result_recorded",
+            {
+                "workspace_id": wid,
+                "work_item_id": att["work_item_id"],
+                "attempt_id": aid,
+                "operation_id": att["start_operation_id"],
+                "execution_operation_id": att["handoff_operation_id"],
+            },
+            actor="connector",
+        )
+
+    orig_event_page = dashboard_sync.event_page
+    event_page_calls: list[dict] = []
+
+    def counting_event_page(journal, principal, after, limit=100, **kwargs):
+        event_page_calls.append({"after": after, "limit": limit, **kwargs})
+        return orig_event_page(journal, principal, after, limit, **kwargs)
+
+    monkeypatch.setattr(dashboard_sync, "event_page", counting_event_page)
+    st_500, res_500 = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result?cursor=0&wait_ms=0",
+        tok=w["owner_token"],
+    )
+    monkeypatch.setattr(dashboard_sync, "event_page", orig_event_page)
+    assert st_500 == 200
+    assert res_500["wait"]["matched_seq"] == rel_seq
+    assert len(event_page_calls) <= 4 * pm_attempt_result_reads.WAIT_MAX_PAGES_PER_RESOURCE
+    assert all(bool(c.get("resource_type")) for c in event_page_calls)
 
     # 1. Small wait_ms with no new events times out cleanly with timed_out=True and retry_after_ms=1000.
     cur0 = d.journal.api_head()
@@ -1084,8 +1128,11 @@ def _assert_action_registry_invariants(ops: OperationService, payload: dict) -> 
         if entry.get("kind") == "action":
             act = entry["action"]
             assert act in ops.actions, act
-            assert ops.actions[act].scope in entry["required_scopes"], (act, entry["required_scopes"])
+            adef = ops.actions[act]
+            assert adef.scope in entry["required_scopes"], (act, entry["required_scopes"])
             assert "observe" in entry["required_scopes"], (act, entry["required_scopes"])
+            if adef.target_keys:
+                assert set(entry["target"]) == set(adef.target_keys), (act, entry["target"], adef.target_keys)
     for b in payload["blocked_actions"]:
         assert b["action"] in ops.actions, b
 
@@ -1164,11 +1211,18 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     }
 
     # 3. Next allowed actions for controller with integrate + operate + manage scopes at turn-ended:
-    # session.send and pm.execution.verify carry 'operate' from the registry; github.pr.publish carries sorted scopes.
+    # session.send, pm.execution.verify, and session.record_verification carry targets matching ActionDef.target_keys.
     send_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "session.send")
     assert send_act["required_scopes"] == ["observe", "operate"]
     ver_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "pm.execution.verify")
     assert ver_act["required_scopes"] == ["observe", "operate"]
+    sess_ver_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "session.record_verification")
+    assert sess_ver_act["target"] == {"host": "h1", "session_id": sid}
+    qr_create_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "pm.quality.review.create")
+    assert qr_create_act["target"] == {"workspace_id": wid, "work_item_id": att["work_item_id"]}
+    # Without a current quality review for this execution, pm.quality.review.record is not offered.
+    assert all(a.get("action") != "pm.quality.review.record" for a in res["next_allowed_actions"])
+    assert all(b.get("action") != "pm.quality.review.record" for b in res["blocked_actions"])
 
     pr_act = next(a for a in res["next_allowed_actions"] if a.get("action") == "github.pr.publish")
     assert pr_act == {
@@ -1246,7 +1300,84 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     assert "scopes" not in res_reader["identity"]["controller"]
     assert "admin" not in res_reader["identity"]["controller"]
     assert {"action": "pm.quality.review.create", "reason": "not_writer_member"} in res_reader["blocked_actions"]
-    assert {"action": "pm.quality.review.record", "reason": "not_writer_member"} in res_reader["blocked_actions"]
+    assert all(b.get("action") != "pm.quality.review.record" for b in res_reader["blocked_actions"])
+
+    # When a current quality review exists for this execution, pm.quality.review.record is offered with {workspace_id, review_id}.
+    orig_qr_for_work = pm_quality_reviews.for_work
+    monkeypatch.setattr(
+        pm_quality_reviews,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid: {
+            "reviews": [
+                {
+                    "review_id": "qrev_cur_1",
+                    "version": 1,
+                    "assessment": {"kind": "assessment"},
+                    "qualified": True,
+                    "acceptance": "accepted",
+                    "dod": "satisfied",
+                    "updated_at": 600.0,
+                    "context": {"execution_operation_id": att["handoff_operation_id"]},
+                }
+            ],
+            "next_cursor": None,
+            "visibility_filtered": False,
+        },
+    )
+    _, res_with_rev = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    _assert_action_registry_invariants(ops, res_with_rev)
+    qr_rec_act = next(a for a in res_with_rev["next_allowed_actions"] if a.get("action") == "pm.quality.review.record")
+    assert qr_rec_act["target"] == {"workspace_id": wid, "review_id": "qrev_cur_1"}
+
+    _, res_reader_with_rev = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=reader_tok,
+    )
+    _assert_action_registry_invariants(ops, res_reader_with_rev)
+    assert {"action": "pm.quality.review.record", "reason": "not_writer_member"} in res_reader_with_rev["blocked_actions"]
+    monkeypatch.setattr(pm_quality_reviews, "for_work", orig_qr_for_work)
+
+    # Waiting state offers only session.answer (never session.approve_pending or session.permissions),
+    # and live pending sets execution.state='waiting' without changing self_reported to 'reported_blocker'.
+    _set_turn_messages(
+        mock,
+        sid,
+        att["turn_marker"],
+        streaming=True,
+        pending_ask={"toolUseId": "tu-1", "questions": [{"question": "Proceed with migration?"}]},
+        assistant_text="All done! Implemented login and tests pass.",
+    )
+    await d.inventory.refresh_host("h1")
+    _, res_waiting = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    _assert_action_registry_invariants(ops, res_waiting)
+    assert res_waiting["execution"]["state"] == "waiting"
+    assert res_waiting["execution"]["pending"] is not None
+    assert res_waiting["execution"]["state_facets"]["self_reported"] == "claimed_done"
+    assert [
+        a["action"] for a in res_waiting["next_allowed_actions"] if a.get("kind") == "action"
+    ] == ["session.answer"]
+    # Restore turn-ended state on the session.
+    _set_turn_messages(
+        mock,
+        sid,
+        att["turn_marker"],
+        streaming=False,
+        pending_ask=None,
+        assistant_text="All done! Implemented login and tests pass.",
+    )
+    await d.inventory.refresh_host("h1")
 
     # 4. needs_attention on a second work item maps to 'accepted' (never 'failed') with resume & cancel endpoints.
     base_work = work_items._get_item(ops.db, w["target"]["work_item_id"])
@@ -1345,6 +1476,44 @@ async def test_state_facets_next_actions_and_links_invariants(start_ready, mock,
     assert [a.get("endpoint") for a in res_unk["next_allowed_actions"]] == ["cancel"]
     assert {"action": "work.start", "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in res_unk["blocked_actions"]
 
+    # 5b. Parent work.start in operation_status=='uncertain' (before start_unknown stage) also yields state=='unknown',
+    # 'start_outcome_uncertain' in completeness.reasons, cancel offered, and work.start blocked.
+    wi_punc = (
+        await pkg_action(
+            w,
+            "work_item.create",
+            {"project_id": base_work["project_id"]},
+            {"title": "Uncertain parent work.start item", "goal": "Goal", "acceptance": "Acceptance"},
+        )
+    )["work_item_id"]
+    orig_admit_child = pm_work_start._admit_child
+
+    def admit_child_raises_uncertain(*_a, **_kw):
+        raise Uncertain("prepare", "Simulated uncertain parent work.start step")
+
+    monkeypatch.setattr(pm_work_start, "_admit_child", admit_child_raises_uncertain)
+    env_punc = await _start_envelope(w, work_item_id=wi_punc, key="e04-punc")  # gitleaks:allow (test idempotency key)
+    op_punc, _ = ops.create(STARTER_OWNER, **env_punc)
+    aid_punc = op_punc["result"]["attempt_id"]
+    ops.wake(op_punc["operation_id"])
+    await settle_operations(ops)
+    monkeypatch.setattr(pm_work_start, "_admit_child", orig_admit_child)
+    assert ops.get(op_punc["operation_id"])["status"] == "uncertain"
+
+    _, res_punc = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid_punc}/result",
+        tok=w["owner_token"],
+    )
+    _assert_action_registry_invariants(ops, res_punc)
+    assert res_punc["execution"]["operation_status"] == "uncertain"
+    assert res_punc["execution"]["stage"] == "preparing"
+    assert res_punc["execution"]["state"] == "unknown"
+    assert "start_outcome_uncertain" in res_punc["completeness"]["reasons"]
+    assert [a.get("endpoint") for a in res_punc["next_allowed_actions"]] == ["cancel"]
+    assert {"action": "work.start", "reason": "WAIT_ORIGINAL_OPERATION_RECONCILE"} in res_punc["blocked_actions"]
+
     # 6. Without a recorded delivery goal, delivery_goal is 'unknown' and github.pr.publish is not offered.
     orig_get_attempt = pm_work_start.get_attempt
     orig_ops_get = ops.get
@@ -1437,11 +1606,11 @@ async def test_cursor_before_snapshot_missing_turn_fields_and_zh_tw_self_reporte
     assert res1["cursor"] < injected_seq[0]
     assert res1["execution"]["state_facets"]["self_reported"] == "claimed_done"
 
-    # Next read with that cursor and wait_ms=100 immediately sees the event in wait.matched_seq.
+    # Next read with that cursor and wait_ms=0 immediately sees the event in wait.matched_seq.
     st_r2, res2 = await http(
         w["port"],
         "GET",
-        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result?cursor={res1['cursor']}&wait_ms=100",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result?cursor={res1['cursor']}&wait_ms=0",
         tok=w["owner_token"],
     )
     assert st_r2 == 200
@@ -1467,33 +1636,93 @@ async def test_cursor_before_snapshot_missing_turn_fields_and_zh_tw_self_reporte
     )
     assert res_benign["execution"]["state_facets"]["self_reported"] == "claimed_done"
 
-    # 4. Missing (None) turn fields in current receipt return 'unknown' (never True, False, 'terminal', or 'correlated').
-    def receipts_with_missing_turn_fields(db, workspace_id, attempt_id, **kwargs):
-        data = orig_receipts(db, workspace_id, attempt_id, **kwargs)
-        for row in data["receipts"]:
-            doc = dict(row["document"])
-            doc.pop("turn_started", None)
-            doc.pop("turn_done", None)
-            doc.pop("turn_phase", None)
-            doc.pop("turn_attribution", None)
-            doc["turn_progress"] = {}
-            doc["boundary"] = "agent_error"
-            row["document"] = doc
-        return data
+    # 4. Real collector path when service.session_read omits turn_started/turn_done/turn_phase/turn_attribution:
+    # the stored receipt holds None (not True/'terminal'/'correlated') and /result returns 'unknown'.
+    orig_session_read = service.session_read
 
-    monkeypatch.setattr(pm_attempt_results, "receipts", receipts_with_missing_turn_fields)
+    async def session_read_without_turn_fields(*args, **kwargs):
+        out = dict(await orig_session_read(*args, **kwargs))
+        for k in ("turn_started", "turn_done", "turn_phase", "turn_attribution"):
+            out.pop(k, None)
+        return out
+
+    monkeypatch.setattr(service, "session_read", session_read_without_turn_fields)
+    _set_turn_messages(
+        mock,
+        sid,
+        att["turn_marker"],
+        streaming=False,
+        assistant_id="m-asst-3",
+        assistant_text="Completed another turn without turn metadata.",
+        last_data_at=1_790_001_080_000,
+    )
+    await d.inventory._refresh_scheduled("h1")
+    monkeypatch.setattr(service, "session_read", orig_session_read)
+
+    latest_stored_doc = pm_attempt_results.receipts(d.ops.db, wid, aid)["receipts"][0]["document"]
+    assert latest_stored_doc["last_message_id"] == "m-asst-3"
+    assert latest_stored_doc["turn_started"] is None
+    assert latest_stored_doc["turn_done"] is None
+    assert latest_stored_doc["turn_phase"] is None
+    assert latest_stored_doc["turn_attribution"] is None
+    assert latest_stored_doc["turn_progress"] == {
+        "turn_started": None,
+        "turn_done": None,
+        "turn_phase": None,
+        "turn_attribution": None,
+        "boundary": "turn_done",
+    }
+
     _, res_missing = await http(
         w["port"],
         "GET",
         f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
         tok=w["owner_token"],
     )
-    monkeypatch.setattr(pm_attempt_results, "receipts", orig_receipts)
     assert res_missing["conversation"]["turn_started"] == "unknown"
     assert res_missing["conversation"]["turn_done"] == "unknown"
     assert res_missing["conversation"]["turn_phase"] == "unknown"
     assert res_missing["conversation"]["turn_attribution"] == "unknown"
-    assert res_missing["execution"]["state_facets"]["self_reported"] == "reported_blocker"
+    assert res_missing["execution"]["state_facets"]["self_reported"] == "none"
+
+    # 5. Receipt with boundary == 'agent_error' sets self_reported == 'reported_blocker' and execution.state == 'failed'.
+    err_doc = pm_attempt_results.build_result_document(
+        result_id="res_" + "e" * 32,
+        turn_marker=att["turn_marker"],
+        last_message_id="m-asst-err",
+        slice_items=[{"id": "m-asst-err", "role": "assistant", "tool": "", "text": "Agent runtime error"}],
+        boundary="agent_error",
+    )
+    pm_attempt_results.record_receipt(
+        d.journal,
+        workspace_id=wid,
+        attempt_id=aid,
+        source_key=f"bat:h1:{sid}",
+        source_generation=pm_attempt_results.source_generation_from_registry("h1", sid, registry.get("h1", sid)),
+        turn_marker=att["turn_marker"],
+        last_message_id="m-asst-err",
+        digest=pm_attempt_results.compute_digest(
+            source_key=f"bat:h1:{sid}",
+            source_generation=pm_attempt_results.source_generation_from_registry("h1", sid, registry.get("h1", sid)),
+            turn_marker=att["turn_marker"],
+            last_message_id="m-asst-err",
+            turn_items=[{"id": "m-asst-err", "role": "assistant", "tool": "", "text": "Agent runtime error"}],
+        ),
+        document=err_doc,
+        observed_at=1_790_001_090.0,
+        operation_id=att["handoff_operation_id"],
+        start_operation_id=att["start_operation_id"],
+        result_id="res_" + "e" * 32,
+    )
+    _, res_err = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_err["execution"]["state"] == "failed"
+    assert res_err["execution"]["state_reason"] == "agent_error"
+    assert res_err["execution"]["state_facets"]["self_reported"] == "reported_blocker"
 
 
 async def test_verification_latest_timestamp_unknown_status_review_matching_and_coverage(
@@ -1507,7 +1736,18 @@ async def test_verification_latest_timestamp_unknown_status_review_matching_and_
     _set_turn_messages(mock, sid, att["turn_marker"], streaming=False)
     await d.inventory._refresh_scheduled("h1")
 
-    # 1. Record a session_verification with an unmapped status -> maps to 'unknown', never 'failed'.
+    # 0. EXPLAIN QUERY PLAN of the exact verification query uses pm_execution_verify_by_attempt.
+    eqp_rows = [
+        tuple(r)
+        for r in d.ops.db.execute(
+            f"EXPLAIN QUERY PLAN {pm_attempt_result_reads.VERIFY_OPS_SQL}",
+            (wid, att["handoff_operation_id"]),
+        ).fetchall()
+    ]
+    print(f"EXPLAIN_QUERY_PLAN_VERIFY_OPS={eqp_rows}")
+    assert any("USING INDEX pm_execution_verify_by_attempt" in str(r[-1]) for r in eqp_rows), eqp_rows
+
+    # 1. Record a session_verification with an unmapped status -> maps to 'unknown', never 'failed', and operation_id is None.
     monkeypatch.setattr(
         verification,
         "get",
@@ -1530,6 +1770,8 @@ async def test_verification_latest_timestamp_unknown_status_review_matching_and_
     )
     assert res_unmapped["verification"]["status"] == "unknown"
     assert res_unmapped["execution"]["state_facets"]["verification"] == "unknown"
+    assert res_unmapped["verification"]["runs"][0]["kind"] == "session_verification"
+    assert res_unmapped["verification"]["runs"][0]["operation_id"] is None
 
     # 2. When two verification runs exist across kinds, overall status comes from the latest recorded_at timestamp.
     ver_op_id = "op_" + "a" * 32
@@ -1585,6 +1827,56 @@ async def test_verification_latest_timestamp_unknown_status_review_matching_and_
     assert res_latest_wins["execution"]["state_facets"]["verification"] == "verified"
     assert [r["status"] for r in res_latest_wins["verification"]["runs"]] == ["failed", "verified"]
 
+    # 2b. With 52 runs where only the newest (52nd) is verified, status is 'verified' and coverage.verification is 'partial'.
+    monkeypatch.setattr(verification, "get", lambda _h, _s: None)
+    newest_ver_op_id = f"op_ver52_{51:024d}"
+    with d.journal.tx():
+        for idx in range(52):
+            oid_idx = f"op_ver52_{idx:024d}"
+            ts_idx = 1000.0 + idx
+            d.ops.db.execute(
+                """INSERT INTO operations
+                   (operation_id, actor, entry, idem_key, request_hash, action, target, params, preconditions, status, created_at, updated_at)
+                   VALUES (?, ?, 'operations.create', ?, 'hash', ?, ?, ?, '{}', 'succeeded', ?, ?)""",
+                (
+                    oid_idx,
+                    STARTER_OWNER.actor,
+                    f"e04-ver52-{idx}",
+                    pm_execution_verification.ACTION,
+                    json.dumps({"workspace_id": wid, "execution_operation_id": att["handoff_operation_id"]}),
+                    json.dumps({"candidate_commit": c2}),
+                    ts_idx,
+                    ts_idx,
+                ),
+            )
+
+    def get_ver_52(_ops, _p, _wid, oid):
+        is_newest = oid == newest_ver_op_id
+        idx_num = int(oid.split("_")[-1]) if oid.startswith("op_ver52_") else 0
+        return {
+            "operation_status": "succeeded",
+            "verification": {
+                "status": "passed" if is_newest else "failed",
+                "exit_code": 0 if is_newest else 1,
+                "created_at": 1000.0 + idx_num if oid.startswith("op_ver52_") else 200.0,
+                "reference": {"candidate_commit": c2},
+            },
+        }
+
+    monkeypatch.setattr(pm_execution_verification, "get_verification", get_ver_52)
+    _, res_52 = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_52["verification"]["status"] == "verified"
+    assert res_52["execution"]["state_facets"]["verification"] == "verified"
+    assert res_52["completeness"]["coverage"]["verification"] == "partial"
+    assert len(res_52["verification"]["runs"]) == 50
+    assert res_52["verification"]["runs"][-1]["operation_id"] == newest_ver_op_id
+    assert res_52["verification"]["runs"][-1]["status"] == "verified"
+
     # 3. Quality review for a different execution_operation_id does not apply to this attempt.
     monkeypatch.setattr(
         pm_quality_reviews,
@@ -1615,7 +1907,259 @@ async def test_verification_latest_timestamp_unknown_status_review_matching_and_
     assert res_other_rev["execution"]["state_facets"]["review_decision"]["kind"] == "unassessed"
     assert res_other_rev["execution"]["state_facets"]["acceptance"]["status"] == "unassessed"
 
-    # 4. Visibility-filtered verification or delivery sets coverage.verification / coverage.delivery to 'partial'.
+    # 4. Delivery lineage attribution & fixed_result_commit priority-1 timestamp tie-breaking:
+    # Clear the verification rows first so priority-3 (verification) does not mask priority-4 (turn_end_observation).
+    with d.journal.tx():
+        d.ops.db.execute("DELETE FROM operations WHERE action=?", (pm_execution_verification.ACTION,))
+
+    # 4a. Another attempt's merge and integration change nothing for this attempt.
+    monkeypatch.setattr(
+        pm_delivery_lineage,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid, **_kw: {
+            "deliveries": [
+                {
+                    "operation_id": "op_dlv_other_integ",
+                    "action": "integration.apply",
+                    "status": "succeeded",
+                    "created_at": 300.0,
+                    "updated_at": 300.0,
+                    "target": {"repository": "o/r", "pull_number": 99},
+                    "integration": {
+                        "sources": [
+                            {
+                                "source_kind": "execution",
+                                "source_id": "op_other_attempt_handoff",
+                                "candidate_sha": "8" * 40,
+                                "delivered_sha": "7" * 40,
+                            }
+                        ]
+                    },
+                    "requirement_acceptance": "not_evaluated_by_delivery",
+                },
+                {
+                    "operation_id": "op_dlv_other_merge",
+                    "action": "delivery.merge_pr",
+                    "status": "succeeded",
+                    "created_at": 310.0,
+                    "updated_at": 310.0,
+                    "target": {"repository": "o/r", "pull_number": 99},
+                    "merge": {
+                        "merged": True,
+                        "merged_sha": "9" * 40,
+                        "head_sha": "7" * 40,
+                    },
+                    "requirement_acceptance": "not_evaluated_by_delivery",
+                },
+            ],
+            "next_after": None,
+            "source_visibility_filtered": False,
+        },
+    )
+    _, res_other_dlv = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_other_dlv["delivery"]["pull_requests"] == []
+    assert res_other_dlv["delivery"]["integrations"] == []
+    assert res_other_dlv["delivery"]["merges"] == []
+    assert res_other_dlv["execution"]["state_facets"]["merge"] == "not_started"
+    assert res_other_dlv["changes"]["fixed_result_commit"]["source_kind"] == "turn_end_observation"
+    assert res_other_dlv["changes"]["fixed_result_commit"]["commit_sha"] == c2
+
+    # 4b. An integration.preview for this attempt is listed under delivery.integrations, merge stays not_started, pull_requests is [].
+    monkeypatch.setattr(
+        pm_delivery_lineage,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid, **_kw: {
+            "deliveries": [
+                {
+                    "operation_id": "op_dlv_preview_1",
+                    "action": "integration.preview",
+                    "status": "succeeded",
+                    "created_at": 350.0,
+                    "updated_at": 350.0,
+                    "target": {"repository": "o/r", "pull_number": 42},
+                    "integration": {
+                        "sources": [
+                            {
+                                "source_kind": "execution",
+                                "source_id": att["handoff_operation_id"],
+                                "candidate_sha": c2,
+                            }
+                        ]
+                    },
+                    "requirement_acceptance": "not_evaluated_by_delivery",
+                }
+            ],
+            "next_after": None,
+            "source_visibility_filtered": False,
+        },
+    )
+    _, res_prev_dlv = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_prev_dlv["delivery"]["pull_requests"] == []
+    assert len(res_prev_dlv["delivery"]["integrations"]) == 1
+    assert res_prev_dlv["delivery"]["integrations"][0]["action"] == "integration.preview"
+    assert res_prev_dlv["delivery"]["integrations"][0]["operation_id"] == "op_dlv_preview_1"
+    assert res_prev_dlv["execution"]["state_facets"]["merge"] == "not_started"
+    assert res_prev_dlv["changes"]["fixed_result_commit"]["source_kind"] == "turn_end_observation"
+    assert res_prev_dlv["changes"]["fixed_result_commit"]["commit_sha"] == c2
+
+    # 4c. An attributed integration.apply with delivered_sha becomes fixed_result_commit;
+    # and an attributed github.pr.publish receipt has no invented state/html_url/draft fields.
+    delivered_sha = "4" * 40
+    monkeypatch.setattr(
+        pr_publication,
+        "list_creation_receipts",
+        lambda _ops, _p, _wid, child_op_id: {
+            "creation_receipts": [
+                {
+                    "receipt": {
+                        "publication_operation_id": "op_pub_pr_42",
+                        "workspace_id": wid,
+                        "child_operation_id": child_op_id,
+                        "repair_parent_id": None,
+                        "provider_origin": "https://github.com",
+                        "repository": "o/r",
+                        "repository_id": 123,
+                        "pull_number": 42,
+                        "native_pr_id": 4200,
+                        "native_pr_node_id": "PR_kwDO42",
+                        "branch_ref": "refs/heads/bat/att",
+                        "candidate_sha": c2,
+                        "base_ref": "refs/heads/main",
+                        "base_sha": att["base_sha"],
+                        "observed_head_sha": c2,
+                        "observed_base_sha": att["base_sha"],
+                        "target_verified": True,
+                        "quality_ref": None,
+                        "created_at": 360.0,
+                        "requirement_acceptance": "not_evaluated_by_delivery",
+                    }
+                }
+            ],
+            "next_after": None,
+        },
+    )
+    monkeypatch.setattr(
+        pm_delivery_lineage,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid, **_kw: {
+            "deliveries": [
+                {
+                    "operation_id": "op_dlv_apply_1",
+                    "action": "integration.apply",
+                    "status": "succeeded",
+                    "created_at": 370.0,
+                    "updated_at": 370.0,
+                    "target": {"repository": "o/r", "pull_number": 42},
+                    "integration": {
+                        "sources": [
+                            {
+                                "source_kind": "execution",
+                                "source_id": att["handoff_operation_id"],
+                                "candidate_sha": c2,
+                                "delivered_sha": delivered_sha,
+                            }
+                        ]
+                    },
+                    "requirement_acceptance": "not_evaluated_by_delivery",
+                }
+            ],
+            "next_after": None,
+            "source_visibility_filtered": False,
+        },
+    )
+    _, res_apply_dlv = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    pr_row = res_apply_dlv["delivery"]["pull_requests"][0]
+    assert pr_row["pull_number"] == 42
+    assert "state" not in pr_row
+    assert "html_url" not in pr_row
+    assert "draft" not in pr_row
+    assert res_apply_dlv["execution"]["state_facets"]["merge"] == "pr_open"
+    assert res_apply_dlv["changes"]["fixed_result_commit"] == {
+        "commit_sha": delivered_sha,
+        "source_kind": "integration",
+        "source_id": "op_dlv_apply_1",
+        "recorded_by": None,
+        "recorded_at": 370.0,
+        "uncommitted": "unknown",
+    }
+
+    # 4d. An attributed merge after the integration wins fixed_result_commit by timestamp.
+    merged_sha = "5" * 40
+    monkeypatch.setattr(
+        pm_delivery_lineage,
+        "for_work",
+        lambda _ops, _p, _wid, _wiid, **_kw: {
+            "deliveries": [
+                {
+                    "operation_id": "op_dlv_apply_1",
+                    "action": "integration.apply",
+                    "status": "succeeded",
+                    "created_at": 370.0,
+                    "updated_at": 370.0,
+                    "target": {"repository": "o/r", "pull_number": 42},
+                    "integration": {
+                        "sources": [
+                            {
+                                "source_kind": "execution",
+                                "source_id": att["handoff_operation_id"],
+                                "candidate_sha": c2,
+                                "delivered_sha": delivered_sha,
+                            }
+                        ]
+                    },
+                    "requirement_acceptance": "not_evaluated_by_delivery",
+                },
+                {
+                    "operation_id": "op_dlv_merge_1",
+                    "action": "delivery.merge_pr",
+                    "status": "succeeded",
+                    "created_at": 450.0,
+                    "updated_at": 450.0,
+                    "target": {"repository": "o/r", "pull_number": 42},
+                    "merge": {
+                        "merged": True,
+                        "merged_sha": merged_sha,
+                        "head_sha": delivered_sha,
+                    },
+                    "requirement_acceptance": "not_evaluated_by_delivery",
+                },
+            ],
+            "next_after": None,
+            "source_visibility_filtered": False,
+        },
+    )
+    _, res_merge_dlv = await http(
+        w["port"],
+        "GET",
+        f"/api/v1/pm/workspaces/{wid}/work-attempts/{aid}/result",
+        tok=w["owner_token"],
+    )
+    assert res_merge_dlv["execution"]["state_facets"]["merge"] == "merged"
+    assert res_merge_dlv["changes"]["fixed_result_commit"] == {
+        "commit_sha": merged_sha,
+        "source_kind": "integration",
+        "source_id": "op_dlv_merge_1",
+        "recorded_by": None,
+        "recorded_at": 450.0,
+        "uncommitted": "unknown",
+    }
+
+    # 5. Visibility-filtered verification or delivery sets coverage.verification / coverage.delivery to 'partial'.
     monkeypatch.setattr(
         pm_quality_reviews,
         "for_work",

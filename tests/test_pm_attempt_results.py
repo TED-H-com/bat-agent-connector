@@ -214,6 +214,17 @@ def test_schema_idempotent_no_user_version_and_append_only_triggers(start_ready)
         slice_items=[{"id": "m-1", "role": "assistant", "tool": "", "text": "Done"}],
         boundary="turn_done",
     )
+    assert doc["turn_started"] is None
+    assert doc["turn_done"] is None
+    assert doc["turn_phase"] is None
+    assert doc["turn_attribution"] is None
+    assert doc["turn_progress"] == {
+        "turn_started": None,
+        "turn_done": None,
+        "turn_phase": None,
+        "turn_attribution": None,
+        "boundary": "turn_done",
+    }
     stored, inserted = record_receipt(
         ops.journal,
         workspace_id=start_ready["workspace_id"],
