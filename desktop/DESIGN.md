@@ -23,6 +23,12 @@ management views, discussions and bound work. A form submission is not evidence 
 completion. Unknown, partial, stale and withdrawn states must remain distinguishable.
 Never substitute zero for missing data or count a loaded page as a complete inventory.
 
+Durable PM forms retain keyboard focus on the submit button while an action is in flight
+or being checked automatically via `aria-disabled="true"` and an `aria-busy="true"` status region,
+preventing focus ejection to `<body>`. Submitting from a field shifts focus to the submit
+button before locking fields, duplicate submissions while busy or during automatic checks
+are ignored, and terminal failures or admission refusals move focus to the reset button.
+
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.

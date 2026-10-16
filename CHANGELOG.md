@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- PM forms keep keyboard focus on the submit button while an operation is in flight
+  or being checked automatically, instead of dropping focus to the page. Pressing
+  Enter from a field moves focus to the submit button before fields are locked,
+  duplicate submissions are ignored, and a terminal failure or refusal moves focus
+  to "New request".
+
 - Refresh in a project no longer stays disabled when the project changes while
   it is refreshing.
 

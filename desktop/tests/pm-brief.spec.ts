@@ -67,7 +67,7 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
     const title=editor.getByLabel('Report title',{exact:true});await title.fill('Original review title');
     hold=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();
     try{
-      await expect.poll(()=>held).toBe(true);await expect(button).toBeDisabled();await expect(button).toBeHidden();
+      await expect.poll(()=>held).toBe(true);await expect(button).toBeDisabled();await expect(button).toBeHidden();await expect(button).toHaveAttribute('hidden','');
       await expect(title).toBeDisabled();await expect(title).toHaveValue('Original review title');
       await editor.evaluate((node:HTMLFormElement)=>node.requestSubmit());
       expect(f.state.writes).toHaveLength(0);
@@ -79,7 +79,11 @@ for(const native of [false,true])test.describe(native?'native Brief':'web Brief'
   test('reader sees fixed Brief without permission to save a new snapshot',async({page})=>{
     const f=fixture();f.state.snapshots.push(f.make());f.base.state.role='reader';f.base.state.manage=false;
     await mountConversation(page,native,f.dispatch);await page.goto(pmRoute);await openThreadBrief(page);
-    await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);await expect(form(page).getByRole('button',{name:'Save report',exact:true,includeHidden:true})).toBeDisabled();await expect(form(page)).toBeHidden();
+    await expect(page.locator('[data-pm-brief-section]')).toHaveCount(5);
+    const saveButton=form(page).getByRole('button',{name:'Save report',exact:true,includeHidden:true});
+    await expect(saveButton).toBeDisabled();
+    await expect(saveButton).toHaveAttribute('hidden','');
+    await expect(form(page)).toBeHidden();
     expect(f.state.writes).toHaveLength(0);
   });
 });
