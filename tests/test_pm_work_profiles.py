@@ -1677,3 +1677,57 @@ async def test_non_string_agent_and_goal_are_invalid_params(world):
     for label, value in shapes:
         await reject(_shape_document(agent=value), f"bad-agent-{label}")
         await reject(_shape_document(goal=value), f"bad-goal-{label}")
+
+
+async def test_token_probe_does_not_hide_an_unexpected_error(world):
+    from tests.test_api_v1 import http, token
+
+    daemon = world["d"]
+    ops = daemon.ops
+    owner = Principal("profile-owner", frozenset({"observe", "manage"}))
+    auth = token(daemon, owner.actor, "observe", "manage")
+    created, inserted = ops.create(
+        owner, action="pm.workspace.create", params={"name": "Token probe"},
+        idempotency_key="token-probe",
+    )
+    assert inserted
+    await settle_operations(ops)
+    workspace = ops.get(created["operation_id"])
+    assert workspace["status"] == "succeeded", workspace
+    wid = workspace["result"]["workspace"]["workspace_id"]
+    status, saved = await http(
+        world["port"], "POST", "/api/v1/operations", tok=auth,
+        body={
+            "action": pm_work_profiles.ACTION,
+            "target": {"workspace_id": wid},
+            "params": {"document": _shape_document()},
+            "preconditions": {},
+        },
+        headers={"Idempotency-Key": "token-probe-save"},
+    )
+    assert status == 202, saved
+    await settle_operations(ops)
+    done = ops.get(saved["operation"]["operation_id"])
+    assert done["status"] == "succeeded", done
+    profile_id = done["result"]["profile_id"]
+    secret = "secret-token-text-should-not-leak"
+
+    def explode():
+        raise RuntimeError(secret)
+
+    daemon.fleet.config.hosts["h1"].token_available = explode
+    path = f"/api/v1/pm/workspaces/{wid}/work-profiles/{profile_id}/readiness"
+    status, http_body = await http(world["port"], "GET", path, tok=auth)
+    assert status == 500, http_body
+    assert http_body["error"]["code"] == "INTERNAL"
+    assert http_body["error"]["message"] == "RuntimeError"
+    rpc_status, rpc_body = await http(world["port"], "POST", "/rpc", tok=auth, body={
+        "method": "pm_work_profile_readiness_get",
+        "params": {"workspace_id": wid, "profile_id": profile_id},
+    })
+    assert rpc_body == {"error": "RuntimeError"}, rpc_body
+    assert rpc_status == 400
+    for body in (http_body, rpc_body):
+        raw = json.dumps(body)
+        assert secret not in raw
+        assert "CREDENTIAL_REQUIRED" not in raw

@@ -11,6 +11,7 @@ import uuid
 
 from . import pm_source_reads
 from .api_auth import Principal
+from .errors import TokenUnavailable
 from .host_git import LOCAL_GIT_REASONS
 from .operations import ActionDef, OperationError
 from .pm_workspace import admitted_principal, principal_binding, require_member
@@ -614,7 +615,7 @@ def _token_available(host_cfg) -> bool:
         return False
     try:
         return bool(method())
-    except Exception:  # noqa: BLE001 - a token failure is only a boolean, never an exception message
+    except TokenUnavailable:
         return False
 
 
