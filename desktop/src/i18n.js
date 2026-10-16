@@ -25,11 +25,13 @@ import {pmPackageHandoffStrings} from './pm-package-handoff-strings.js';
 import {pmStrings} from "./pm-strings.js";
 import {instructionReceiptStrings} from './instruction-receipts-strings.js';
 import {createRecordStrings} from './create-record-strings.js';
+import {workStartStrings} from './pm-work-start-strings.js';
 // Display labels only. Logic and CSS never key on these strings (machine enums come from /api/v1).
 export const STRINGS = {
   "zh-TW": {
     ...workbenchStrings["zh-TW"],
     ...diagnosticsStrings["zh-TW"],
+    ...workStartStrings["zh-TW"],
     ...pmStrings["zh-TW"],
     ...createRecordStrings["zh-TW"],
     ...uiStrings["zh-TW"],
@@ -1053,6 +1055,7 @@ export const STRINGS = {
   en: {
     ...workbenchStrings.en,
     ...diagnosticsStrings.en,
+    ...workStartStrings.en,
     ...pmStrings.en,
     ...createRecordStrings.en,
     ...uiStrings.en,

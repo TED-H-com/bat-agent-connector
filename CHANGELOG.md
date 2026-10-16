@@ -2,6 +2,15 @@
 
 ## Next release (unreleased)
 
+- The PM Work inspector adds a Start work panel and header action to start
+  eligible Work cards. The panel previews readiness facts, explains candidate
+  code targets or offers a selector when multiple match, and displays requirement
+  selection for cards needing plan re-binding. Stale preview guards require re-checking
+  after instruction, delivery, requirement or target edits before enabling submission.
+  The attempts timeline renders live progress states with links to the operation
+  or session output, preserving user drafts and requests across reloads and lost replies
+  in English and zh-TW.
+
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow
   .NET exception unwinds.

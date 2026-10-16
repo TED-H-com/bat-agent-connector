@@ -7,6 +7,7 @@ import {kanbanObservation} from './pm-kanban-observation.js';
 import {runtimeCompletion} from './pm-runtime-completion.js';
 import {firstLabel, joinLabel, labelSegment} from './label-text.js';
 import {workInspector, workStatusLabel, workStatusPill, blockedWork, blockerText, workAgents, prGroups, readWorkSources, deliveryCoverage, elapsed, readEarlierPlans} from './pm-work-inspector.js';
+import {workStartPanel} from './pm-work-start.js';
 
 // Central management columns stay separate from execution, quality and delivery.
 export function workspaceKanban({t, api, alive, namespace = '', workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false}) {
@@ -18,6 +19,47 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   let failureSignature = '';
   const observers = new Map();
   const withdrawObservers = () => {for (const observer of observers.values()) observer.withdraw();};
+  let startPanel = null;
+  const updateHeaderButton = startable => {
+    if (!detail.element) return;
+    const actionRow = detail.element.querySelector('[data-work-actions]');
+    if (!actionRow) return;
+    let btn = actionRow.querySelector('[data-work-start-open]');
+    if (startable && startPanel) {
+      if (!btn) {
+        btn = button({
+          variant: 'primary',
+          size: 'sm',
+          label: t('wst_start_open'),
+          'data-work-start-open': '',
+          onClick: () => {
+            startPanel.focus();
+          },
+        });
+        const discuss = actionRow.querySelector('[data-work-discuss]');
+        if (discuss) {
+          actionRow.insertBefore(btn, discuss);
+        } else {
+          actionRow.prepend(btn);
+        }
+      }
+    } else if (btn) {
+      btn.remove();
+    }
+  };
+  const ensureStartPanel = () => {
+    if (!startPanel && form) {
+      const cap = caps()?.features?.pm_workspaces?.work_start;
+      if (cap?.version === 1 && cap.available === true && cap.action === 'work.start') {
+        startPanel = workStartPanel({
+          h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: () => plan,
+          onStartableChange: updateHeaderButton,
+        });
+      }
+    }
+    return startPanel;
+  };
+  ensureStartPanel();
   const meta = h('span'), status = h('div', {role: 'status'}), list = h('div', {class: 'pm-kanban-list'}), boardInfo = h('div');
   const refreshButton = iconButton({icon: 'refresh-cw', label: t('wv_refresh'), onClick: () => void refresh()});
   const more = h('button', {type: 'button', class: 'ui-button secondary', hidden: true, onclick: () => void loadMore()}, t('pm_kanban_more'));
@@ -36,6 +78,8 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       disclosure({label: t('pm_kanban_board_details'), body: h('div', {}, boardInfo, h('p', {}, t('pm_kanban_wip_basis')), h('p', {}, t('pm_kanban_quality')), h('p', {}, t('pm_kanban_limits')))})));
   const detail = workInspector({t, workspaceId, from: 'board', mount: layout, tools: () => toolItems(), returnFocus: () => rows.get(selected)?.node.querySelector('[data-board-open]') || viewHeading(), onClose: () => {
     withdrawObservers();
+    startPanel?.withdraw();
+    updateHeaderButton(false);
     detailSerial++; if (!preserveSelection) {selected = null; preference.selected = null; writeSelection(null); markSelection();}
     requestAnimationFrame(updateEdges);
   }});
@@ -250,6 +294,24 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
     detail.show({title: card.work.title, card, plan: card.binding.plan_revision_id === plan?.revision_id ? plan : earlierPlans.get(card.binding.plan_revision_id), earlierPlan: card.binding.plan_revision_id !== plan?.revision_id, requirements: requirements(card),
     milestones: milestones.filter(row => row.plan_revision_id === card.binding.plan_revision_id && row.requirement_ids?.some(id => card.binding.requirement_ids?.includes(id))), source: sources.get(card.work_item_id),
     onMore: () => {deliveryPages++; void select(card.work_item_id, true);}});
+    const panel = ensureStartPanel();
+    if (panel) {
+      const statusSection = detail.element.body.querySelector('[data-work-section="status"]');
+      let startSection = detail.element.body.querySelector('[data-work-section="start"]');
+      if (!startSection) {
+        startSection = h('section', {'data-work-section': 'start'});
+        if (statusSection && statusSection.nextSibling) {
+          detail.element.body.insertBefore(startSection, statusSection.nextSibling);
+        } else {
+          detail.element.body.append(startSection);
+        }
+      }
+      if (!startSection.contains(panel.element)) {
+        startSection.replaceChildren(panel.element);
+      }
+      panel.setWork(card);
+      updateHeaderButton(panel.startable());
+    }
     if (form && caps()?.actions?.some(row => row.action === 'pm.session.quiescence.observe')) {
       let observer = observers.get(card.work_item_id);
       if (!observer) {
@@ -265,7 +327,7 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   }
   async function select(id, retain = false) {
     const current = rows.get(id); if (!current) return;
-    if (selected !== id || !retain) withdrawObservers();
+    if (selected !== id || !retain) { withdrawObservers(); updateHeaderButton(false); }
     if (selected !== id) deliveryPages = 1;
     selected = id; preference.selected = id; writeSelection(id); markSelection();
     const generation = serial, ticket = ++detailSerial;
@@ -382,5 +444,5 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
       return read;
     }
   }
-  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {window.removeEventListener('scroll', onScroll); resize.disconnect(); withdraw({forgetRoute: false});}};
+  return {element, box: element, meta, refresh, titleFor, withdraw, setActive, hideInspector: closeRetaining, setTools: value => {toolItems = value;}, dispose: () => {window.removeEventListener('scroll', onScroll); startPanel?.dispose(); startPanel = null; resize.disconnect(); withdraw({forgetRoute: false});}};
 }
