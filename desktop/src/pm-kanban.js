@@ -353,13 +353,13 @@ export function workspaceKanban({t, api, alive, namespace = '', workspaceId, err
   const resize = new ResizeObserver(() => {updateEdges(); if (detail.element && selected) {const node = rows.get(selected)?.node; if (node) requestAnimationFrame(() => revealCard(node));}}); resize.observe(list);
   list.addEventListener('scroll', () => {preference.laneScroll = list.scrollLeft; updateEdges();});
   const onScroll = () => {
-    if (active && !reading && !element.closest('[hidden]') && window.scrollY > 0) preference.scroll = window.scrollY;
+    if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
   window.addEventListener('scroll', onScroll, {passive: true});
   function setActive(value) {
     const routeId = new URLSearchParams(location.hash.split('?')[1]).get('select');
     if (active === value) {if (value && routeId && routeId !== selected) void select(routeId); return;} active = value;
-    if (!value) {stale = true; serial++; detailSerial++; if (!element.closest('[hidden]')) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
     else {
       const generation = ++scrollGeneration;
       const read = stale || !page ? refresh() : null;

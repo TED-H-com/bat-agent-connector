@@ -22141,7 +22141,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		}
 	}
 	const onScroll = () => {
-		if (visible && !busy && !element.closest("[hidden]") && window.scrollY > 0) preference.scroll = window.scrollY;
+		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
 	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
@@ -22159,7 +22159,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (!element.closest("[hidden]")) preference.scroll = window.scrollY;
+			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -33419,7 +33419,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		updateEdges();
 	});
 	const onScroll = () => {
-		if (active && !reading && !element.closest("[hidden]") && window.scrollY > 0) preference.scroll = window.scrollY;
+		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
 	window.addEventListener("scroll", onScroll, { passive: true });
 	function setActive(value) {
@@ -33433,7 +33433,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (!element.closest("[hidden]")) preference.scroll = window.scrollY;
+			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;

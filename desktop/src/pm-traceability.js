@@ -313,13 +313,13 @@ export function workspaceTraceability({t, api, alive, namespace, workspaceId, ca
     }}
   }
   const onScroll = () => {
-    if (visible && !busy && !element.closest('[hidden]') && window.scrollY > 0) preference.scroll = window.scrollY;
+    if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
   };
   window.addEventListener('scroll', onScroll, {passive: true});
   function setActive(value) {
     if (visible === value) {if (value && signature) {const id = new URLSearchParams(location.hash.split('?')[1]).get('select'); if (!id) currentMilestone = null; if (id && id !== currentMilestone && (id !== selected || !detail.element)) void select(id, id !== selected);} return;}
     visible = value;
-    if (!value) {active = false; stale = true; serial++; detailSerial++; if (!element.closest('[hidden]')) preference.scroll = window.scrollY; closeRetaining();}
+    if (!value) {active = false; stale = true; serial++; detailSerial++; if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY; closeRetaining();}
     else {
       const generation = ++scrollGeneration; const read = activate(); if (!stale && selected && cards.length) void select(selected, false, true);
       let restoreY = 0;

@@ -408,6 +408,42 @@ for (const lang of ['en', 'zh-TW'] as const) {
             message: `Scroll position on ${route.id} (${route.scroller}) should restore within 8px of ${savedScroll}`,
             timeout: 5000
           }).toBeLessThanOrEqual(8);
+
+          // For Requirements and Board at 390, assert deliberate scroll back to 0 restores to 0
+          if (width === 390 && ['requirements', 'board'].includes(route.id)) {
+            const currentMax = await page.evaluate(() => {
+              const doc = document.scrollingElement || document.documentElement;
+              return Math.max(0, doc.scrollHeight - window.innerHeight);
+            });
+            const target200 = Math.min(200, currentMax);
+            await page.evaluate(target => window.scrollTo(0, target), target200);
+            await page.evaluate(() => window.scrollTo(0, 0));
+
+            await ensureDrawerOpen(page, width);
+            const other = page.locator(`.wc-daily a[data-daily="${route.otherEntry}"]`);
+            await expect(other).toBeVisible();
+            await other.click();
+            await ensureDrawerClosed(page, width);
+
+            await expect.poll(() => page.evaluate(() => location.hash)).not.toBe(expectedHash);
+            await expect(other).toHaveAttribute('aria-current', 'page');
+            await expect(page.locator('#main h1').first()).toBeVisible();
+
+            await page.goBack();
+
+            await expect.poll(() => page.evaluate(() => location.hash)).toBe(expectedHash);
+            await expect(page.locator('#main h1').first()).toHaveText(route.h1[lang]);
+            if (route.contentSelector) {
+              await expect(page.locator(route.contentSelector).first()).toBeVisible();
+            }
+
+            await expect.poll(async () => {
+              return await page.evaluate(() => window.scrollY);
+            }, {
+              message: `Scroll position on ${route.id} should restore within 8px of 0 after deliberate scroll to top`,
+              timeout: 5000
+            }).toBeLessThanOrEqual(8);
+          }
         }
       }
     });
