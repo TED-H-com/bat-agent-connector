@@ -5,13 +5,20 @@ export function diagnosticsDialog({h, t, load, save, onClose}) {
   const summary = h('div', {'data-diagnostics-summary':''});
   const pre = h('pre', {class:'diagnostics-json', tabindex:0, 'aria-label':t('diag_json'), 'data-diagnostics-json':''});
   const status = h('p', {class:'muted',role:'status'}, t('diag_loading'));
-  let content = '', filename = '', serial = 0;
+  let content = '', filename = '', serial = 0, saving = false;
   const close = () => {serial++; dialog.close(); dialog.remove(); onClose(); if (origin?.isConnected) origin.focus();};
   const saved = button({variant:'primary',label:t('diag_save'),disabled:true,onClick:async () => {
-    const current=serial; saved.disabled=true;
-    try {const result=await save(content,filename); if (current===serial && result) status.textContent=t(result === true ? 'diag_download_started' : 'diag_saved');}
-    catch {if(current===serial)status.textContent=t('diag_save_failed');}
-    finally {if(current===serial)saved.disabled=false;}
+    if (saving || !dialog.isConnected) return;
+    const current=serial;
+    saving=true; saved.disabled=false; saved.setAttribute('aria-disabled','true'); status.setAttribute('aria-busy','true');
+    try {const result=await save(content,filename); if (current===serial && dialog.isConnected && result) status.textContent=t(result === true ? 'diag_download_started' : 'diag_saved');}
+    catch {if(current===serial && dialog.isConnected)status.textContent=t('diag_save_failed');}
+    finally {
+      if (current!==serial || !dialog.isConnected) return;
+      saving=false; saved.removeAttribute('aria-disabled'); status.removeAttribute('aria-busy');
+      saved.disabled=!content || new TextEncoder().encode(content).length>256*1024;
+      if (!saved.disabled && (document.activeElement===document.body || document.activeElement===dialog)) saved.focus();
+    }
   }});
   const copy = button({label:t('diag_copy'),disabled:true,onClick:async () => {
     const current=serial;
@@ -26,12 +33,13 @@ export function diagnosticsDialog({h, t, load, save, onClose}) {
   // Explicit wrap supplements showModal's inert background on each WebView.
   dialog.addEventListener('keydown',event=>{
     if(event.key!=='Tab')return;
-    const nodes=[pre,saved,copy,closing].filter(node=>!node.disabled && !node.hidden), first=nodes[0],last=nodes.at(-1);
+    const nodes=[pre,saved,copy,closing].filter(node=>!node.hidden && (!node.disabled || node.getAttribute('aria-disabled')==='true')), first=nodes[0],last=nodes.at(-1);
+    if(!first||!last)return;
     if(event.shiftKey && (document.activeElement===first || document.activeElement===dialog)){event.preventDefault();last.focus();}
     else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}
   });
   document.body.append(dialog);dialog.showModal();closing.focus();
-  const withdraw=(force=false)=>{if(!content && !force)return;serial++;content='';summary.replaceChildren();pre.textContent='';saved.disabled=copy.disabled=true;status.textContent=t('diag_withdrawn');};
+  const withdraw=(force=false)=>{if(!content && !force)return;serial++;content='';summary.replaceChildren();pre.textContent='';saved.disabled=copy.disabled=true;saved.removeAttribute('aria-disabled');status.removeAttribute('aria-busy');status.textContent=t('diag_withdrawn');};
   const current=serial;
   load().then(bundle=>{
     if(current!==serial || !dialog.isConnected)return;

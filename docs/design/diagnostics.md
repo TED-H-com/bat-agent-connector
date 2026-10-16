@@ -24,6 +24,9 @@ without reasons, including an absent `reading` object, replaces it with unknown.
 Message content is never cached here.
 Revocation clears cached counts and the preview; a revision fence rejects late
 reads. Connection changes clear the failure ring and retire previews.
+Save keeps keyboard focus while its write runs, and Tab still reaches it; a
+second press does nothing. A preview over 256 KiB, and withdrawal, leave Save
+disabled outside that write.
 
 Never copied: tokens/secret refs, fingerprints, hostnames/endpoints/SSH aliases,
 paths/managed roots, titles/messages/prompts/drafts, repositories/remotes/branches,

@@ -6,6 +6,9 @@ installation, unknown status, sign-in needed, device approval needed, stopped,
 starting and running. Running is Tailscale's observation, never BAT/Connector readiness.
 The explicit **Open Tailscale** action starts its existing Windows tray application;
 the user chooses Log in there. Focus/visibility return and Refresh only reread status.
+Keyboard focus stays on the pressed Tailscale action while that read or opening
+runs, and moves to the next opening action only when the pressed one ends
+disabled or hidden.
 There is no automatic application launch, login CLI, network repair or AuthURL opener.
 
 Native-only discovery uses the OS Program Files directory and exactly

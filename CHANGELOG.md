@@ -2,6 +2,13 @@
 
 ## Next release (unreleased)
 
+- Tailscale, Desktop updates, diagnostics Save, and Open in BAT keep the
+  keyboard on the button you pressed while that action runs. The button looks
+  unavailable, a second press does nothing, and Tab still reaches Save. Focus
+  moves on when that action ends on a different control: another Tailscale
+  opening, Install after a verified download, or the BAT launch button after
+  review.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
