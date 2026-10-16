@@ -1,4 +1,5 @@
 import {panelActorLabel} from './pm-governance-strings.js';
+import {retiredView} from './pm-retired.js';
 import {disclosure, statusPill, inlineError} from './ui/components.js';
 import {timeStamp} from './ui/stamps.js';
 // Assessments quote one immutable intake. A valid response format is not verified advice.
@@ -125,7 +126,7 @@ export function followUpAssessments({h,t,api,alive,workspaceId,caps,errorBox,onA
     try{const data=page(await api('GET',path(0)),0);if(!current(ticket))return;
       rows=data.assessments;next=data.next_cursor;navigation();status.replaceChildren();
       if(selected)await read(selected);else if(rows.length)detail.append(note('pm_fa_select'));
-    }catch(error){if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error.message===t('pm_fa_mismatch')?Error(t('pm_fa_read_failed')):error);}
   }
   async function showResult(result){
     const id=result?.outcome?.assessment_id;

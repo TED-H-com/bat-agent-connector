@@ -4,6 +4,7 @@ import {panelActorLabel} from './pm-governance-strings.js';
 // Saved discussion preparation. Model execution and adopted scope remain separate.
 import {followUpAssessments} from './pm-follow-up-analysis.js';
 import {followUpAnalysisRequest} from './pm-follow-up-request.js';
+import {retiredView} from './pm-retired.js';
 export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox,caps,namespace,pageSize=20}) {
   const endpoint=`/pm/workspaces/${encodeURIComponent(workspaceId)}`, actor=caps()?.actor;
   const domains=['governance','scope','schedule','finance','stakeholders','resources','risk','quality'];
@@ -315,7 +316,7 @@ export function workspaceFollowUp({h,t,api,alive,workspaceId,permitted,form,inpu
       if(sourceUnavailable)view.replaceChildren(inlineError({error:t(selected?'pm_fu_selected_unavailable':'pm_fu_latest_unavailable')}),fold('pm_fu_details',note('pm_fu_readable_history')));
       else render(detail?.intake);
       renderNavigation();editor.update();if(prepareOpen)await loadSources();
-    }catch(error){if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)unavailable(error);}
   }
   return {element,box:element,refresh,openRef:async target=>{
     const id=target?.intake_id || target?.follow_up_id;

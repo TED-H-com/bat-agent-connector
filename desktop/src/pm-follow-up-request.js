@@ -1,4 +1,5 @@
 import {disclosure} from './ui/components.js';
+import {retiredView} from './pm-retired.js';
 // The central service checks the explicitly selected runtime against a fixed intake.
 import {structuredAnalysis} from './pm-structured-analysis.js';
 export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespace,form,input,labelled,permitted,errorBox,onSaved,onAccessFailure=()=>{}}) {
@@ -95,7 +96,7 @@ export function followUpAnalysisRequest({h,t,api,alive,workspaceId,caps,namespac
       capability=data;rows=[];next=null;
       if(intake.document.thread_ref){choices.set(intake.intake_id,intake.document.thread_ref.thread_id);await readThread();}
       else {const saved=savedTarget();targetLocked=saved.locked;saveTarget(saved.id);await readThreads();}
-    }catch(error){if(ticket===serial)fail(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)fail(error);}
   }
   chooser.addEventListener('change',()=>{
     if(!intake||targetLocked||request?.locked()){if(intake)navigation();return;}

@@ -1,5 +1,6 @@
 import {emptyState, disclosure, statusPill} from './ui/components.js';
 import {timeStamp, timeLabel} from './ui/stamps.js';
+import {retiredView} from './pm-retired.js';
 // Source records share a readable surface; the full identity remains copyable in Details.
 export function proof({h, t, value, name, kind}) {
   const records = Array.isArray(value) ? value : [value];
@@ -153,7 +154,7 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
       head=current.head;status.replaceChildren();
       const next=JSON.stringify([latest,listing]);if(signature!==next){signature=next;render(latest);renderHistory(listing);}
       create.update();
-    }catch(error){if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)unavailable(error);}
   }
   return {box,refresh,withdraw};
 }

@@ -1,4 +1,5 @@
 import {nativeRunState} from './pm-native-analysis.js';
+import {retiredView} from './pm-retired.js';
 import {actionLabel, operationStatusLabel} from './global-labels.js';
 import {emptyState, skeleton} from './ui/components.js';
 import {phaseVocabulary} from './ui/ui-strings.js';
@@ -180,7 +181,7 @@ export function workspaceLifecycle({h,t,api,alive,workspaceId,caps,permitted,for
         verifyRows(page,0);rows=page.inflight;cursor=page.next_cursor;workFiltered=Boolean(page.visibility_filtered);
       }
       ready=true;status.replaceChildren();render();if(history.open)await loadHistory();
-    }catch(error){if(ticket===serial)unavailable(error);}
+    }catch(error){if(retiredView(error))return;if(ticket===serial)unavailable(error);}
   }
   async function loadHistory(after=0){
     if(!current||historyRequest===serial)return;const ticket=serial;historyRequest=ticket;

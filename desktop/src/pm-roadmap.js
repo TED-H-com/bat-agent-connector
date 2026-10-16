@@ -1,4 +1,5 @@
 import {emptyState} from './ui/components.js';
+import {retiredView} from './pm-retired.js';
 import {timeStamp} from './ui/stamps.js';
 // One scheduling baseline, explicit forecasts and fixed source observations.
 export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input,labelled,errorBox}) {
@@ -238,7 +239,7 @@ export function workspaceRoadmap({h,t,api,alive,workspaceId,permitted,form,input
         options(snapshot,(snapshots.snapshots||[]).map(row=>[row.snapshot_id,row.title]));initializeEditor();}
       baselineForm.update();forecast.update();observe.update();
       if(historyVersion!==data.head.version){historyLoaded=false;if(history.open)void loadHistory();}
-    }catch(error){if(ticket===serial){current=null;signature='';view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error, {within:status}));baselineForm.update();forecast.update();observe.update();}}
+    }catch(error){if(retiredView(error))return;if(ticket===serial){current=null;signature='';view.replaceChildren();historyBody.replaceChildren();historyLoaded=false;status.replaceChildren(errorBox(error, {within:status}));baselineForm.update();forecast.update();observe.update();}}
   }
   return{box,refresh};
 }

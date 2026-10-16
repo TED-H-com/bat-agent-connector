@@ -1,4 +1,5 @@
 import {button, iconButton, emptyState} from './ui/components.js';
+import {retiredView} from './pm-retired.js';
 // A saved candidate is a fixed source. Only the destination and topic are chosen here.
 export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,labelled,event,errorBox,namespace}) {
   let dead=false,ticket=0,loaded=false,reading=false,thread=null,request=null,rows=[],next=null;
@@ -62,7 +63,7 @@ export function reviewCandidateToIdea({h,t,api,alive,workspaceId,caps,can,form,l
       rows=more?[...rows,...data.threads.filter(row=>!rows.some(old=>old.thread_id===row.thread_id))]:data.threads;next=data.next_cursor;loaded=true;navigation();
       if(!rows.some(row=>row.mode==='idea')&&!selected)status.replaceChildren(emptyState({title:t('pmrv_idea_empty')}));
       if(selected&&!more)await choose();
-    }catch(error){if(n===ticket&&!dead){thread=null;request?.update();status.replaceChildren(errorBox(error, {within:status}));}}
+    }catch(error){if(retiredView(error))return;if(n===ticket&&!dead){thread=null;request?.update();status.replaceChildren(errorBox(error, {within:status}));}}
     finally{reading=false;update();}
   }
   chooser.addEventListener('change',()=>{guard();if(request?.locked())return;selected=chooser.value;try{localStorage.setItem(key,selected);}catch{}void choose();});

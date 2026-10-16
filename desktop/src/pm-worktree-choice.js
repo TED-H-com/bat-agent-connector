@@ -1,3 +1,4 @@
+import {retiredView} from './pm-retired.js';
 // A PM worktree uses the existing repository preview and exact published SHA.
 export function pmWorktreeChoice({h, t, api, alive, input, labelled, capability, scopes, editable, errorBox}) {
   let form = null, reading = false, sequence = 0;
@@ -20,7 +21,7 @@ export function pmWorktreeChoice({h, t, api, alive, input, labelled, capability,
       form.set('repository_selection', JSON.stringify({...target, ...Object.fromEntries(
         ['source_ref', 'source_sha', 'repository_id', 'binding_digest'].map(key => [key, value[key]]))}));
       renderProof();
-    } catch (error) {if (ticket === sequence) proof.replaceChildren(errorBox(error, {within:proof}));}
+    } catch (error) {if (retiredView(error)) return; if (ticket === sequence) proof.replaceChildren(errorBox(error, {within:proof}));}
     finally {if (ticket === sequence) {reading = false; update();}}
   }}, t('pm_preview_worktree'));
   const controls = h('div', {class: 'pm-fields'}, labelled('pub_ref', source), preview);

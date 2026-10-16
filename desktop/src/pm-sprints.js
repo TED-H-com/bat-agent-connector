@@ -1,4 +1,5 @@
 import {button, disclosure, emptyState, iconButton, menu, sectionCard} from './ui/components.js';
+import {retiredView} from './pm-retired.js';
 import {timeStamp, timeText} from './ui/stamps.js';
 // Central Sprint management, with fixed references and the shared durable operation forms.
 import {fixedQualityPicker,qualityFact} from './pm-quality-projections.js';
@@ -471,7 +472,7 @@ export function workspaceSprints({h, t, api, alive, workspaceId, workspace, perm
       if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {
         focused.focus({preventScroll: true}); if (selection) focused.setSelectionRange(...selection);
       }
-    } catch (error) {if (ticket === serial) unavailable(error);}
+    } catch (error) {if (retiredView(error)) return; if (ticket === serial) unavailable(error);}
   }
   return {box, refresh, update};
 }

@@ -1,4 +1,5 @@
 import {timeStamp} from './ui/stamps.js';
+import {retiredView} from './pm-retired.js';
 import {panelActorLabel} from './pm-governance-strings.js';
 import {iconButton, button, sectionCard, statusPill, disclosure, emptyState} from './ui/components.js';
 // Sourced management findings and explicit direction decisions share one journal.
@@ -446,7 +447,7 @@ export function workspaceGovernance({h, t, api, alive, namespace, workspaceId, w
       }
       if (ticket !== serial || !loaded) return; signature = next; editors.hidden = false; update(); relabel();
       if (focused?.isConnected && !focused.disabled && document.activeElement === document.body) {focused.focus({preventScroll: true}); if (selection) focused.setSelectionRange(...selection);}
-    } catch (error) {if (ticket === serial) unavailable(error);}
+    } catch (error) {if (retiredView(error)) return; if (ticket === serial) unavailable(error);}
   }
   async function openRef(ref, {form: requested = 'revise'} = {}) {
     if (ref.kind !== 'governance') return;
