@@ -309,7 +309,7 @@ test('attachment Retry keeps focus, and Remove waits until the upload finishes',
     const retry = row.getByRole('button', {name: 'Retry', exact: true});
     await expect.poll(() => state.uploads).toBe(1);
     await expect(retry).toBeVisible();
-    // The first failure shows Retry while it is still uploading. Wait until that upload has settled.
+    // The first upload hides Retry until it fails. Wait until that failure has put an enabled Retry back.
     await expect.poll(() => retry.getAttribute('aria-disabled')).toBeNull();
     await retry.focus();
     await page.keyboard.press('Enter');
@@ -329,6 +329,37 @@ test('attachment Retry keeps focus, and Remove waits until the upload finishes',
       };
     })).toEqual({landed: true, inRow: true, retries: 0});
     expect(state.uploads).toBe(2);
+    expect(harness.errors).toEqual([]);
+  } finally {held.release(); await harness.context.close();}
+});
+
+test('a file\'s first upload shows no Retry', async ({browser}) => {
+  const held = gate();
+  const harness = await itemPage(browser, async (input, _url, state) => {
+    if (input.method === 'POST' && input.body?.action === 'artifact.upload') {
+      state.uploads += 1;
+      await held.promise;
+      return {status: 200, data: {operation: {operation_id: uploadId, status: 'succeeded', result: ref}}};
+    }
+  });
+  try {
+    const {page, state} = harness;
+    await page.getByRole('button', {name: 'More', exact: true}).click();
+    const drawer = page.locator('.drawer:not([hidden])');
+    await drawer.locator('input[type="file"]').setInputFiles({name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello')});
+    const row = drawer.locator('.attachment-row', {hasText: 'notes.txt'});
+    await expect.poll(() => state.uploads).toBe(1);
+    await expect.poll(() => row.evaluate(node => {
+      const buttons = [...node.querySelectorAll('button')];
+      const remove = buttons.find(item => (item.textContent || '').trim() === 'Remove') as HTMLButtonElement | undefined;
+      return {
+        retries: buttons.filter(item => (item.textContent || '').trim() === 'Retry').length,
+        removeAriaDisabled: remove?.getAttribute('aria-disabled') ?? null,
+      };
+    })).toEqual({retries: 0, removeAriaDisabled: 'true'});
+    held.release();
+    await expect(row).toContainText(aid);
+    expect(state.uploads).toBe(1);
     expect(harness.errors).toEqual([]);
   } finally {held.release(); await harness.context.close();}
 });
