@@ -130,8 +130,19 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       saved = {version: 1, values: capture()}; persist(); operation = null; initialChecking = false; status.replaceChildren(); receipt.replaceChildren(); update();
     } catch (error) {if (!retired(error)) status.replaceChildren(errorBox(error, {within:status}));}
   }}, t('pm_edit_request'));
+  const isFieldFocused = () => Object.values(fields).some(f => f === document.activeElement || f.contains?.(document.activeElement));
   const button = h('button', {type: 'submit', class: 'ui-button primary'}, t(label));
-  const form = h('form', {'data-pm-action': action, onsubmit: event => {event.preventDefault(); void run();}},
+  button.addEventListener('click', event => {
+    if (busy || (initialChecking && (busy || receiptTimer !== null))) {
+      event.preventDefault();
+    }
+  });
+  const form = h('form', {'data-pm-action': action, onsubmit: event => {
+    event.preventDefault();
+    if (busy || (initialChecking && (busy || receiptTimer !== null))) return;
+    if (isFieldFocused()) button.focus();
+    void run();
+  }},
     extra, h('div', {class: 'actions'}, button, reset), status, receipt);
   function pollReceipt() {
     // Only an acknowledged original ID may be checked automatically. An unknown
@@ -146,10 +157,15 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
     }, receiptDelays[receiptAttempt++]);
   }
   function update() {
-    if (disposed || !form.isConnected) return;
+    if (disposed || !form.isConnected) {
+      button.removeAttribute('aria-disabled');
+      status.removeAttribute('aria-busy');
+      return;
+    }
     pollReceipt();
     if (!busy && receiptTimer === null) initialChecking = false;
     const autoChecking = initialChecking && (busy || receiptTimer !== null);
+    const inFlight = busy || autoChecking;
     const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
     for (const input of Object.values(fields)) {
       // A restored title draft must receive Escape while initial reads gate Save.
@@ -157,19 +173,39 @@ function durableForm({h, t, api, caps, guard, namespace, action, target, fields,
       input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
       if (readOnlyWhenUnavailable) input.readOnly = locked;
     }
-    button.disabled = busy || autoChecking || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
-    button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+    const hadFocus = document.activeElement === button;
+    const hadResetFocus = document.activeElement === reset;
+    if (inFlight) {
+      button.setAttribute('aria-disabled', 'true');
+      button.disabled = false;
+    } else {
+      button.removeAttribute('aria-disabled');
+      button.disabled = damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+    }
+    if (busy) status.setAttribute('aria-busy', 'true'); else status.removeAttribute('aria-busy');
+    button.hidden = !inFlight && (terminal() || Boolean(saved.intent?.initialAdmissionRefused));
     button.textContent = t(saved.intent && !autoChecking ? 'pm_check_original' : label);
-    reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
+    reset.hidden = inFlight || (!terminal() && !saved.intent?.initialAdmissionRefused);
     reset.disabled = busy || !allowed();
+    if (hadFocus && (button.hidden || button.disabled)) {
+      if (!reset.hidden && !reset.disabled) reset.focus();
+      else if (document.activeElement === document.body || document.activeElement === button) {
+        status.tabIndex = -1;
+        status.focus();
+      }
+    } else if (hadResetFocus && reset.hidden && !button.hidden && !button.disabled) {
+      button.focus();
+    }
     onStateChange();
   }
   async function run(automatic = false) {
-    if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+    if (disposed || busy || damaged || (!automatic && initialChecking && (busy || receiptTimer !== null))
+      || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
     if (!allowed() || !sendReady()) {
       if (!automatic) {status.replaceChildren(h('p', {class: 'muted'}, t('pm_action_unavailable'))); update();}
       return;
     }
+    if (!automatic && isFieldFocused()) button.focus();
     stopTimer();
     if (!automatic) {receiptAttempt = 0; receiptPolling = true;}
     let firstAttempt = stagedHere; stagedHere = false;

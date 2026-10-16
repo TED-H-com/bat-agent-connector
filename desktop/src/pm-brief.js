@@ -48,8 +48,8 @@ export function projectBrief({h, t, api, alive, workspaceId, workspace, permitte
     // Hide unavailable write entry points. A retained original request keeps
     // its recovery controls and draft, including while a fresh head is read.
     create.box.hidden = !recovering && (!head || !canCreate());
-    submit.hidden = !recovering && !create.canSubmit();
-    pending.hidden = create.box.hidden || submit.hidden || !submit.disabled;
+    const unavailable = submit.disabled || submit.getAttribute('aria-disabled') === 'true';
+    pending.hidden = create.box.hidden || submit.hidden || !unavailable;
     pending.textContent = t(create.checking() ? 'pd_report_pending' : 'pd_report_unavailable');
     if (!pending.hidden) submit.setAttribute('aria-describedby',pending.id);
     else submit.removeAttribute('aria-describedby');
