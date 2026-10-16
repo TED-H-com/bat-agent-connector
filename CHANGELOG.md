@@ -11,6 +11,11 @@
   or session output, preserving user drafts and requests across reloads and lost replies
   in English and zh-TW.
 
+- The PM Work inspector on the board adds a read-only Result section (Part A)
+  displaying the latest attempt's execution state, agent summary, state facets
+  (verification, review, acceptance, PR, deployment), commit statistics, and
+  recorded turns directly from Connector's database with 0 BAT calls.
+
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow
   .NET exception unwinds.
