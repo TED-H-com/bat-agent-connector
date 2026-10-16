@@ -2887,6 +2887,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     let release: () => void = () => {};
     f.state.holdResult = new Promise<void>(resolve => {release = resolve;});
 
+    await installBodyCompletedCounter(page);
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
@@ -2905,9 +2906,11 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await inspector.getByRole('button', {name: 'Close', exact: true}).click();
     await expect(inspector).toHaveCount(0);
 
+    const beforeResult = await countCompletedBodies(page, '/result');
     release();
     f.state.holdResult = null;
     await pending;
+    await syncHeldBodyCompletion(page, '/result', beforeResult);
     const rendered = await page.evaluate(() => {
       const node = (window as any).__heldResult as HTMLElement | null;
       return {
