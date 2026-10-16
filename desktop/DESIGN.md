@@ -1284,7 +1284,8 @@ keeps keyboard focus until the write finishes, and a second press is ignored.
 Escape closes, and focus returns to the trigger.
 English and zh-TW share behavior. Only loaded session reads and an operation page
 are counted; unavailable sources remain unknown. Withdrawal clears preview facts
-and disables export actions together. A preview over 256 KiB, and withdrawal,
+and disables export actions together. If Save or Copy had focus, or focus had
+already left the controls, it moves to Close. A preview over 256 KiB, and withdrawal,
 leave Save disabled outside that write. See [the diagnostics contract](../docs/design/diagnostics.md).
 
 Diagnostics export stays inside error Details as a ghost action. Error renderers

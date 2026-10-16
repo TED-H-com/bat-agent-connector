@@ -157,21 +157,8 @@ export function sessionBatPanel({h, t, guard, storageKey, session}) {
     if (intent && (!intent.attempted || terminal())) buttons.push(button(intent.attempted?"bat_new":"cancel", intent.attempted?"new":"cancel", ()=>run(intent.attempted?"new":"cancel", resetBody)));
     lines.push(h("div",{class:"actions"},...buttons),h("p",{class:"muted"},t("bat_preferences")," ",h("a",{href:"#/settings","data-bat-action":"settings"},t("nav_settings"))));
     content.replaceChildren(...lines);
-    // An empty status is display:none, so it leaves the accessibility tree. Keep a
-    // clipped mark while a button is aria-disabled so aria-busy stays observable.
-    if (flying) {
-      if (!message.textContent) message.textContent = "\u2060";
-      message.setAttribute("aria-busy","true");
-    } else {
-      message.removeAttribute("aria-busy");
-      if (message.textContent === "\u2060") message.textContent = "";
-    }
-    const parked = message.textContent === "\u2060";
-    message.style.position = parked ? "absolute" : "";
-    message.style.width = parked ? "1px" : "";
-    message.style.height = parked ? "1px" : "";
-    message.style.overflow = parked ? "hidden" : "";
-    message.style.clipPath = parked ? "inset(50%)" : "";
+    if (flying) message.setAttribute("aria-busy", "true");
+    else message.removeAttribute("aria-busy");
     if (key) placeFocus(key);
     displaced = null;
   };

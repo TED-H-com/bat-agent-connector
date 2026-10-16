@@ -2,6 +2,10 @@
 
 ## Next release (unreleased)
 
+- Diagnostics withdrawal keeps the keyboard inside the dialog. If Save or Copy
+  had focus, or focus had already left the controls, it moves to Close. A save
+  that finishes afterwards does not move focus or replace the withdrawn notice.
+
 - Tailscale, Desktop updates, diagnostics Save, and Open in BAT keep the
   keyboard on the button you pressed while that action runs. The button looks
   unavailable, a second press does nothing, and Tab still reaches Save. Focus

@@ -39,7 +39,14 @@ export function diagnosticsDialog({h, t, load, save, onClose}) {
     else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}
   });
   document.body.append(dialog);dialog.showModal();closing.focus();
-  const withdraw=(force=false)=>{if(!content && !force)return;serial++;content='';summary.replaceChildren();pre.textContent='';saved.disabled=copy.disabled=true;saved.removeAttribute('aria-disabled');status.removeAttribute('aria-busy');status.textContent=t('diag_withdrawn');};
+  const withdraw=(force=false)=>{
+    if(!content && !force)return;
+    serial++;content='';summary.replaceChildren();pre.textContent='';
+    const focused=document.activeElement, losing=focused===saved||focused===copy;
+    saved.disabled=copy.disabled=true;saved.removeAttribute('aria-disabled');status.removeAttribute('aria-busy');
+    status.textContent=t('diag_withdrawn');
+    if(losing || document.activeElement===document.body)closing.focus({preventScroll:true});
+  };
   const current=serial;
   load().then(bundle=>{
     if(current!==serial || !dialog.isConnected)return;

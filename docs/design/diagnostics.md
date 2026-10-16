@@ -26,7 +26,8 @@ Revocation clears cached counts and the preview; a revision fence rejects late
 reads. Connection changes clear the failure ring and retire previews.
 Save keeps keyboard focus while its write runs, and Tab still reaches it; a
 second press does nothing. A preview over 256 KiB, and withdrawal, leave Save
-disabled outside that write.
+disabled outside that write. Withdrawal moves focus to Close when Save or Copy
+had it, or when focus had already left the dialog controls.
 
 Never copied: tokens/secret refs, fingerprints, hostnames/endpoints/SSH aliases,
 paths/managed roots, titles/messages/prompts/drafts, repositories/remotes/branches,
