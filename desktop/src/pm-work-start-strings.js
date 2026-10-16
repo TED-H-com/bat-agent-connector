@@ -57,6 +57,8 @@ export const workStartStrings = {
     wst_readiness_blocked: '就緒檢查未通過。',
     wst_readiness_checked: '就緒狀態已檢查',
     wst_requirements_to_bind: '要綁定的需求',
+    wst_instruction_required: '請輸入工作指示。',
+    wst_not_ready_to_start: '開始前請先檢查就緒狀態。',
 
     // Error strings for work.start admission refusals and failed operations
     error_code_PM_WORK_ATTEMPT_CHANGED: '此工作已有較新的開始記錄。請先檢視該記錄，再重新檢查就緒狀態。',
@@ -135,6 +137,8 @@ export const workStartStrings = {
     wst_readiness_blocked: 'Readiness checks are blocked.',
     wst_readiness_checked: 'Readiness checked',
     wst_requirements_to_bind: 'Requirements to bind',
+    wst_instruction_required: 'Enter an instruction.',
+    wst_not_ready_to_start: 'Check readiness before starting.',
 
     // Error strings for work.start admission refusals and failed operations
     error_code_PM_WORK_ATTEMPT_CHANGED: 'This Work has a newer start. Review it, then check readiness again.',

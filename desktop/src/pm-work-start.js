@@ -341,7 +341,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       const reqs = isBindNeeded(activeCard) ? JSON.parse(requirementsInput.value || '[]') : null;
       const targetChoice = chosenCandidate ? `${chosenCandidate.repository}:${chosenCandidate.host}:${chosenCandidate.workspace_id}` : null;
       return JSON.stringify({
-        instruction: instruction.value.trim(),
+        instruction: instruction.value,
         delivery: delivery.value,
         requirement_ids: reqs,
         target_choice: targetChoice,
@@ -492,6 +492,13 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
 
     async function inspectReadiness() {
       if (checking || loading || !writer(card)) return;
+      const text = instruction.value;
+      if (!text.trim()) {
+        errorStatusBox.replaceChildren(h('p', {class: 'error'}, t('wst_instruction_required')));
+        errorStatusBox.hidden = false;
+        instruction.focus();
+        return;
+      }
       const ticket = ++serial;
       checking = true;
       factsBox.replaceChildren();
@@ -503,16 +510,11 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       updateUI();
 
       try {
-        const text = instruction.value.trim();
-        if (!text) {
-          instruction.focus();
-          return;
-        }
         const body = {
           instruction: text,
           delivery: delivery.value,
         };
-        if (bindNeeded) {
+        if (isBindNeeded(activeCard)) {
           const reqs = JSON.parse(requirementsInput.value || '[]');
           if (!reqs.length) {
             throw Error(t('wst_requirements_required'));
@@ -700,7 +702,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           code_target: rev.code_target,
         };
         if (rev.requirement_ids) {
-          p.requirement_ids = JSON.parse(values.requirements || '[]');
+          p.requirement_ids = rev.requirement_ids;
         }
         if (values.model?.trim()) {
           p.model = values.model.trim();
