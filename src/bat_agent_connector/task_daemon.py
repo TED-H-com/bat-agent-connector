@@ -29,6 +29,7 @@ from . import (
     deployment,
     integration,
     platform_files,
+    pm_operation_loop,
     pr_delivery,
     registry,
     service,
@@ -424,9 +425,11 @@ class TaskDaemon:
                 # The MCP/RPC response uses current membership and original source
                 # visibility even if the admitted operation has already completed.
                 op = self.ops.get(op["operation_id"], principal=principal)
+            op = await pm_operation_loop.attach(self.ops, principal, op)
             return {"operation": op, "created": created}
         if method == "op_get":
-            return {"operation": self.ops.get(str(params.get("operation_id")), principal=principal)}
+            loaded = self.ops.get(str(params.get("operation_id")), principal=principal)
+            return {"operation": await pm_operation_loop.attach(self.ops, principal, loaded)}
         if method == "op_list":
             statuses = params.get("statuses")
             return self.ops.list(statuses=statuses if isinstance(statuses, list) else None,
@@ -435,9 +438,10 @@ class TaskDaemon:
         if method == "op_cancel":
             op = self.ops.cancel(principal, str(params.get("operation_id")))
             await self.artifact_store.reap_best_effort(op["operation_id"])
-            return {"operation": op}
+            return {"operation": await pm_operation_loop.attach(self.ops, principal, op)}
         if method == "op_resume":
-            return {"operation": self.ops.resume(principal, str(params.get("operation_id")))}
+            resumed = self.ops.resume(principal, str(params.get("operation_id")))
+            return {"operation": await pm_operation_loop.attach(self.ops, principal, resumed)}
         if method == "api_events":
             from .pm_access import filter_events
             limit = params.get("limit")

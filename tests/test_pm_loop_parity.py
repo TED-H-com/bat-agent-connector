@@ -1,7 +1,7 @@
-"""Field rules for the E10 operation loop projection.
+"""Field rules and public exits for the E10 operation loop projection.
 
-Parity tests that compare HTTP and MCP stay on the public routes. These tests
-call ``attach`` only for the projection's own field rules.
+Parity tests that compare HTTP and MCP stay on the public routes. Field-rule
+tests call ``attach`` directly. Exit tests use the HTTP app and the RPC door.
 """
 from __future__ import annotations
 
@@ -16,6 +16,11 @@ from bat_agent_connector.pm_delivery_lineage import ACTIONS as DELIVERY_ACTIONS
 from bat_agent_connector.pm_operation_loop import LOOP_ACTIONS, attach
 from bat_agent_connector.task_journal import Journal
 from tests.operation_helpers import settle_operations
+from tests.test_api_v1 import daemon as daemon_fixture
+from tests.test_api_v1 import http, token
+from tests.test_api_v1 import served as served_fixture
+
+daemon, served = daemon_fixture, served_fixture
 
 OWNER = Principal("loop-owner", frozenset({"observe", "manage", "start", "operate"}))
 WS = "ws_" + "ab" * 16
@@ -317,3 +322,123 @@ async def test_delivery_work_id_is_exactly_one_visible_lineage_row(tmp_path):
     assert repair_loop["completeness"] == {"status": "complete", "reason": None}
     assert publish_loop["dashboard_hash"] == "#/op/op_publish"
     journal.close()
+
+
+def _loop_of(operation):
+    assert "loop" in operation
+    assert operation["loop"]["operation_id"] == operation["operation_id"]
+    return operation["loop"]
+
+
+async def test_single_operation_exits_attach_loop_and_lists_do_not(served):
+    daemon, port = served
+    auth = token(daemon, "loop-exit", "observe", "manage")
+    outsider = token(daemon, "loop-outsider", "observe", "manage")
+
+    async def post(body, key, *, wait=None):
+        path = "/api/v1/operations" if wait is None else f"/api/v1/operations?wait={wait}"
+        return await http(port, "POST", path, tok=auth, body=body, headers={"Idempotency-Key": key})
+
+    async def rpc(method, params):
+        return await http(port, "POST", "/rpc", tok=auth, body={"method": method, "params": params})
+
+    status, workspace = await post(
+        {"action": "pm.workspace.create", "params": {"name": "A useful product"}}, "loop-workspace")
+    assert status == 202 and workspace["created"] is True
+    assert "loop" not in workspace["operation"]
+    await settle_operations(daemon.ops)
+    workspace_id = workspace["operation"]["operation_id"]
+    stored = daemon.ops.get(workspace_id)
+    assert "loop" not in stored and stored["status"] == "succeeded"
+    wid = stored["result"]["workspace"]["workspace_id"]
+    version = stored["result"]["workspace"]["version"]
+    status, got = await http(port, "GET", "/api/v1/operations/" + workspace_id, tok=auth)
+    assert status == 200
+    assert set(got) == {"operation", "work_items", "cleanup_receipts"}
+    assert "loop" not in got["operation"]
+
+    def thread_body(title):
+        return {"action": "pm.thread.create", "target": {"workspace_id": wid}, "params": {"title": title},
+                "preconditions": {"expected_version": version}}
+
+    status, created = await post(thread_body("Cancel on HTTP"), "loop-http-cancel")
+    assert status == 202 and created["created"] is True
+    http_id = created["operation"]["operation_id"]
+    _loop_of(created["operation"])
+    assert "loop" not in daemon.ops.get(http_id)
+    status, cancelled = await http(port, "POST", f"/api/v1/operations/{http_id}/cancel", tok=auth)
+    assert status == 200 and cancelled["operation"]["status"] == "cancelled"
+    _loop_of(cancelled["operation"])
+    before = daemon.ops.db.total_changes
+    status, again = await http(port, "GET", "/api/v1/operations/" + http_id, tok=auth)
+    assert status == 200 and daemon.ops.db.total_changes == before
+    assert set(again) == {"operation", "work_items", "cleanup_receipts"}
+    assert _loop_of(again["operation"])["state"]["operation_status"] == "cancelled"
+    status, via_rpc = await rpc("op_get", {"operation_id": http_id})
+    assert status == 200
+    assert _loop_of(via_rpc["result"]["operation"]) == again["operation"]["loop"]
+    assert "loop" not in daemon.ops.get(http_id)
+
+    status, submitted = await rpc("op_submit", {**thread_body("Cancel on RPC"), "idempotency_key": "loop-rpc-cancel"})
+    assert status == 200 and submitted["result"]["created"] is True
+    rpc_id = submitted["result"]["operation"]["operation_id"]
+    _loop_of(submitted["result"]["operation"])
+    status, rpc_cancelled = await rpc("op_cancel", {"operation_id": rpc_id})
+    assert status == 200 and rpc_cancelled["result"]["operation"]["status"] == "cancelled"
+    _loop_of(rpc_cancelled["result"]["operation"])
+
+    replay = thread_body("Replay after wait")
+    status, first = await post(replay, "loop-replay")
+    assert status == 202 and _loop_of(first["operation"])
+    await settle_operations(daemon.ops)
+    assert daemon.ops.get(first["operation"]["operation_id"])["status"] == "succeeded"
+    status, waited = await post(replay, "loop-replay", wait=1)
+    assert status == 200 and waited["created"] is False
+    assert waited["operation"]["status"] == "succeeded"
+    _loop_of(waited["operation"])
+    assert "loop" not in daemon.ops.get(waited["operation"]["operation_id"])
+    status, rpc_waited = await rpc("op_submit", {**replay, "idempotency_key": "loop-replay", "wait_s": 1})
+    assert status == 200 and rpc_waited["result"]["created"] is False
+    assert _loop_of(rpc_waited["result"]["operation"]) == waited["operation"]["loop"]
+
+    status, attention = await post(thread_body("Resume on HTTP"), "loop-http-resume")
+    attention_id = attention["operation"]["operation_id"]
+    daemon.ops.db.execute("UPDATE operations SET status='needs_attention' WHERE operation_id=?", (attention_id,))
+    status, resumed = await http(port, "POST", f"/api/v1/operations/{attention_id}/resume", tok=auth)
+    assert status == 200 and resumed["operation"]["status"] == "running"
+    assert _loop_of(resumed["operation"])["state"]["operation_status"] == "running"
+    assert "loop" not in daemon.ops.get(attention_id)
+
+    status, rpc_attention = await rpc(
+        "op_submit", {**thread_body("Resume on RPC"), "idempotency_key": "loop-rpc-resume"})
+    rpc_attention_id = rpc_attention["result"]["operation"]["operation_id"]
+    daemon.ops.db.execute(
+        "UPDATE operations SET status='needs_attention' WHERE operation_id=?", (rpc_attention_id,))
+    status, rpc_resumed = await rpc("op_resume", {"operation_id": rpc_attention_id})
+    assert status == 200 and rpc_resumed["result"]["operation"]["status"] == "running"
+    _loop_of(rpc_resumed["result"]["operation"])
+
+    status, listed = await http(port, "GET", "/api/v1/operations", tok=auth)
+    assert status == 200 and listed["operations"]
+    assert all("loop" not in item for item in listed["operations"])
+    status, rpc_listed = await rpc("op_list", {})
+    assert status == 200 and rpc_listed["result"]["operations"]
+    assert all("loop" not in item for item in rpc_listed["result"]["operations"])
+
+    status, hidden = await http(port, "GET", "/api/v1/operations/" + http_id, tok=outsider)
+    assert status == 404 and hidden["error"]["code"] == "NOT_FOUND" and "operation" not in hidden
+    status, rpc_hidden = await http(port, "POST", "/rpc", tok=outsider,
+                                    body={"method": "op_get", "params": {"operation_id": http_id}})
+    assert status == 400 and rpc_hidden["error"] == "NOT_FOUND" and "operation" not in rpc_hidden
+    missing = "op_" + "ab" * 16
+    status, absent = await http(port, "GET", "/api/v1/operations/" + missing, tok=auth)
+    assert status == 404 and absent["error"]["code"] == "NOT_FOUND" and "operation" not in absent
+
+    status, refused = await post(
+        {"action": "pm.thread.create", "target": {}, "params": {"title": "No workspace"},
+         "preconditions": {"expected_version": version}}, "loop-refused")
+    assert "operation" not in refused and refused["error"]["admission_refused"] is True
+    status, rpc_refused = await rpc("op_submit", {
+        "action": "pm.thread.create", "target": {}, "params": {"title": "No workspace"},
+        "preconditions": {"expected_version": version}, "idempotency_key": "loop-rpc-refused"})
+    assert status == 400 and "operation" not in rpc_refused and isinstance(rpc_refused["error"], str)
