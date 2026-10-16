@@ -4,8 +4,11 @@ import {workStartFixture, workspaceId, workId, route} from './work-start-fixture
 import * as path from 'path';
 import * as fs from 'fs';
 
-const SHOTS_DIR = path.resolve(process.env.HOME || '/home/ted-h', 'agent-work/tmp/work-start-ui/shots/r3');
-fs.mkdirSync(SHOTS_DIR, {recursive: true});
+const SHOTS_DIR = process.env.BATC_WORK_START_SCREENSHOTS || path.join('test-results', 'work-start-shots');
+
+test.beforeAll(() => {
+  fs.mkdirSync(SHOTS_DIR, {recursive: true});
+});
 
 async function ensureScrolled(locator: any) {
   await locator.evaluate((el: HTMLElement) => {
@@ -17,7 +20,7 @@ async function ensureScrolled(locator: any) {
   });
 }
 
-test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
+test.describe('Work Start Screenshots', () => {
   // 1. Initial form before checking
   test('en-1440-form', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
@@ -73,8 +76,8 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
     const submitBtn = startSection.locator('[data-pm-action="work.start"] button[type="submit"]');
     await expect(submitBtn).toBeDisabled();
 
-    await ensureScrolled(startSection);
-    await startSection.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-form.png')});
+    await startSection.scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-form.png')});
     await context.close();
   });
 
@@ -125,8 +128,10 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
     await expect(submitBtn).toBeEnabled();
     await expect(startSection.locator('[data-work-start-facts]')).toBeVisible();
 
-    await ensureScrolled(startSection);
-    await startSection.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-ready.png')});
+    // Scroll Start button into view inside the inspector body
+    await submitBtn.scrollIntoViewIfNeeded();
+    await expect(submitBtn).toBeVisible();
+    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-ready.png')});
     await context.close();
   });
 
@@ -177,10 +182,20 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
 
     await checkBtn.click();
     await expect(submitBtn).toBeDisabled();
-    await expect(startSection.locator('[data-pm-wp-checks]')).toBeVisible();
 
-    await ensureScrolled(startSection);
-    await startSection.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-blocked.png')});
+    const checksList = startSection.locator('[data-pm-wp-checks]');
+    await expect(checksList).toBeVisible();
+
+    const blockedRow = checksList.locator('[data-readiness-check="acceptance:membership.login"]');
+    await expect(blockedRow).toBeVisible();
+    // Scroll the failing check row into view within the inspector body
+    await blockedRow.scrollIntoViewIfNeeded();
+    await page.evaluate(() => {
+      const container = document.querySelector('.ui-inspector-body');
+      if (container) container.scrollTop += 50;
+    });
+
+    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-blocked.png')});
     await context.close();
   });
 
@@ -241,8 +256,8 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
     await expect(staleNotice).toBeVisible();
     await expect(submitBtn).toBeDisabled();
 
-    await ensureScrolled(startSection);
-    await startSection.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-stale.png')});
+    await staleNotice.scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-stale.png')});
     await context.close();
   });
 
@@ -291,12 +306,12 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
     const submitBtn = startSection.locator('[data-pm-action="work.start"] button[type="submit"]');
     await expect(submitBtn).toBeDisabled();
 
-    await ensureScrolled(startSection);
-    await startSection.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-bind-needed.png')});
+    await startSection.locator('.pm-work-start-reqs').scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-bind-needed.png')});
     await context.close();
   });
 
-  // 6. Latest attempt row with Details disclosure open
+  // 6. Latest attempt row with Details disclosure open (unknown stage)
   test('en-1440-attempt', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workStartFixture();
@@ -304,8 +319,8 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
       attempt_id: 'att_' + '1'.repeat(32),
       workspace_id: workspaceId,
       work_item_id: workId(1),
+      stage: 'future_stage',
       status: 'running',
-      stage: 'preparing',
       start_operation_id: 'op_' + '1'.repeat(32),
       created_at: 1791705600,
       updated_at: 1791705600,
@@ -320,11 +335,14 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
 
     const inspector = page.locator('[data-work-inspector]');
     const startSection = inspector.locator('[data-work-section="start"]');
-    const details = startSection.locator('.pm-work-start-attempt details');
-    await expect(details).toBeVisible();
+    const attempt = startSection.locator('.pm-work-start-attempt');
+    await expect(attempt.locator('.pm-work-start-attempt-status strong')).toHaveText('Unknown');
 
+    const details = attempt.locator('details');
+    await expect(details).toBeVisible();
     await details.locator('summary').click();
     await expect(details).toHaveAttribute('open', '');
+    await expect(details).toContainText('future_stage');
 
     await ensureScrolled(startSection);
     await startSection.screenshot({path: path.join(SHOTS_DIR, 'en-1440-attempt.png')});
@@ -338,8 +356,8 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
       attempt_id: 'att_' + '1'.repeat(32),
       workspace_id: workspaceId,
       work_item_id: workId(1),
+      stage: 'future_stage',
       status: 'running',
-      stage: 'preparing',
       start_operation_id: 'op_' + '1'.repeat(32),
       created_at: 1791705600,
       updated_at: 1791705600,
@@ -355,14 +373,17 @@ test.describe('Work Start Screenshots (Round 3 - 12 captures)', () => {
 
     const inspector = page.locator('[data-work-inspector]');
     const startSection = inspector.locator('[data-work-section="start"]');
-    const details = startSection.locator('.pm-work-start-attempt details');
-    await expect(details).toBeVisible();
+    const attempt = startSection.locator('.pm-work-start-attempt');
+    await expect(attempt.locator('.pm-work-start-attempt-status strong')).toHaveText('未知');
 
+    const details = attempt.locator('details');
+    await expect(details).toBeVisible();
     await details.locator('summary').click();
     await expect(details).toHaveAttribute('open', '');
+    await expect(details).toContainText('future_stage');
 
-    await ensureScrolled(startSection);
-    await startSection.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-attempt.png')});
+    await attempt.scrollIntoViewIfNeeded();
+    await inspector.screenshot({path: path.join(SHOTS_DIR, 'zh-TW-390-attempt.png')});
     await context.close();
   });
 });

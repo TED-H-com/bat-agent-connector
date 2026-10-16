@@ -515,10 +515,39 @@ test.describe('Work Start UI (v1.3 P3)', () => {
       status: 'running',
       created_at: 1791705600,
     });
-    const futureStatus = attemptRow.locator('.pm-work-start-attempt-status');
-    await expect(futureStatus).toContainText('future_stage');
-    await expect(futureStatus).toContainText('running');
-    await expect(futureStatus).not.toContainText(workStartStrings.en.wst_start_failed_generic);
+    const futureStatus = attemptRow.locator('.pm-work-start-attempt-status strong');
+    await expect(futureStatus).toHaveText('Unknown');
+    await assertExclusivelyInDetails('future_stage');
+    await assertExclusivelyInDetails('running');
+    await expect(attemptRow).not.toContainText(workStartStrings.en.wst_start_failed_generic);
+
+    // Verify zh-TW renders 未知 for unknown stage and does not leak machine stage to visible text
+    const zhContext = await page.context().browser()!.newContext({locale: 'zh-TW', viewport: {width: 1440, height: 900}});
+    const zhPage = await zhContext.newPage();
+    const zhF = workStartFixture();
+    zhF.state.attempts = [{
+      attempt_id: 'att_' + '7'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '7'.repeat(32),
+      stage: 'future_stage',
+      status: 'running',
+      created_at: 1791705600,
+    }];
+    await mountConversation(zhPage, false, zhF.dispatch);
+    await zhPage.goto(route);
+    await zhPage.locator('[data-pm-view="board"]').click();
+    await zhPage.locator(`[data-pm-kanban-work="${workId(1)}"] [data-board-open]`).click();
+
+    const zhAttemptRow = zhPage.locator('[data-work-inspector] .pm-work-start-attempt');
+    await expect(zhAttemptRow.locator('.pm-work-start-attempt-status strong')).toHaveText('未知');
+    const zhOutsideDetails = await zhAttemptRow.evaluate((el: HTMLElement) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.querySelector('details')?.remove();
+      return clone.textContent || '';
+    });
+    expect(zhOutsideDetails).not.toContain('future_stage');
+    await zhContext.close();
   });
 
   test('9. Observer and capability visibility', async ({page}) => {
@@ -925,6 +954,61 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     // Verify no horizontal overflow in start section
     const isOverflowing = await startSection.evaluate((el: HTMLElement) => el.scrollWidth > el.clientWidth + 2);
     expect(isOverflowing).toBe(false);
+
+    await context.close();
+  });
+
+  test('12. zh-TW at 390 width: ready Start button visible and blocked check row layout', async ({browser}) => {
+    const context = await browser.newContext({locale: 'zh-TW', viewport: {width: 390, height: 844}});
+    const page = await context.newPage();
+    const f = workStartFixture();
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('#workspace-menu').click();
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    const startSection = inspector.locator('[data-work-section="start"]');
+    const checkBtn = startSection.locator('[data-work-start-check]');
+    const submitBtn = startSection.locator('[data-pm-action="work.start"] button[type="submit"]');
+
+    // 1. After a passing check: Start is enabled and visible after scrollIntoViewIfNeeded()
+    await checkBtn.click();
+    await expect(submitBtn).toBeEnabled();
+    await submitBtn.scrollIntoViewIfNeeded();
+    await expect(submitBtn).toBeVisible();
+
+    // 2. In the blocked state:
+    f.state.readinessStatus = 'blocked';
+    await checkBtn.click();
+    await expect(submitBtn).toBeDisabled();
+
+    const checksList = startSection.locator('[data-pm-wp-checks]');
+    await expect(checksList).toBeVisible();
+
+    const blockedRow = checksList.locator('[data-readiness-check="acceptance:membership.login"]');
+    await expect(blockedRow).toBeVisible();
+    await blockedRow.scrollIntoViewIfNeeded();
+
+    // - the failing row's help text is visible
+    const helpText = blockedRow.locator('p.muted');
+    await expect(helpText).toBeVisible();
+    await expect(helpText).toContainText('每個原始接受條件都需有預定驗證方式；這些方法尚未執行。');
+
+    // - the row has no horizontal overflow
+    const isRowOverflowing = await blockedRow.evaluate((el: HTMLElement) => el.scrollWidth > el.clientWidth + 1);
+    expect(isRowOverflowing).toBe(false);
+
+    // - the checks list's bottom is at or above the next section's top
+    const nextSection = inspector.locator('[data-work-section="result"]');
+    await expect(nextSection).toBeVisible();
+    const checksBottom = await checksList.evaluate((el: HTMLElement) => el.getBoundingClientRect().bottom);
+    const nextTop = await nextSection.evaluate((el: HTMLElement) => el.getBoundingClientRect().top);
+    expect(checksBottom).toBeLessThanOrEqual(nextTop);
 
     await context.close();
   });
