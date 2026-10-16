@@ -1518,18 +1518,18 @@ async def test_child_outcome_mapping_failed_needs_attention_and_guard_pause(star
     env1 = await _start_envelope(w, key="outcome-map-1")
     op1, _ = ops.create(STARTER_OWNER, **env1)
 
-    # 1. Pre-child _guard failure pauses parent in 'needs_attention' so the user can fix the precondition and resume.
+    # 1. Pre-child _guard failure pauses parent in 'needs_attention' with the slot's in-progress stage ('preparing').
     ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (wi_id,))
     await ops._execute(op1["operation_id"])
     paused_guard = ops.get(op1["operation_id"])
     assert paused_guard["status"] == "needs_attention"
     assert paused_guard["error_code"] == "WORK_ITEM_CHANGED"
-    assert paused_guard["result"]["stage"] == "start_failed"
+    assert paused_guard["result"]["stage"] == "preparing"
     assert paused_guard["result"]["children"]["package"] is None
     ops.db.execute("UPDATE work_items SET version=1 WHERE work_item_id=?", (wi_id,))
     ops.resume(STARTER_OWNER, op1["operation_id"])
 
-    # 2. If a child stops in 'needs_attention', parent also stops in 'needs_attention'.
+    # 2. If a child stops in 'needs_attention', parent also stops in 'needs_attention' with that slot's in-progress stage.
     pkg_act = ops.actions["pm.work_package.create"]
     should_pause_pkg = True
 
@@ -1553,11 +1553,11 @@ async def test_child_outcome_mapping_failed_needs_attention_and_guard_pause(star
         done_na = await _advance_start(ops, op1["operation_id"])
         assert done_na["status"] == "needs_attention"
         assert done_na["error_code"] == "PKG_TEMP_PAUSE"
-        assert done_na["result"]["stage"] == "start_failed"
+        assert done_na["result"]["stage"] == "preparing"
         pkg_child_id = done_na["result"]["children"]["package"]
         assert ops.get(pkg_child_id)["status"] == "needs_attention"
 
-        # 3. If the child is cancelled (or fails) with no unproven external step, waking the parent ends parent as 'failed'.
+        # 3. If the child is cancelled (or fails) with no unproven external step, waking the parent ends parent as 'failed' with stage='start_failed'.
         ops.cancel(STARTER_OWNER, pkg_child_id)
         assert ops.get(pkg_child_id)["status"] == "cancelled"
         ops.resume(STARTER_OWNER, op1["operation_id"])
@@ -1567,6 +1567,37 @@ async def test_child_outcome_mapping_failed_needs_attention_and_guard_pause(star
         assert done_failed["result"]["stage"] == "start_failed"
     finally:
         ops.actions["pm.work_package.create"] = pkg_act
+
+    # 4. Handoff child in 'needs_attention' keeps stage='starting' on the needs_attention parent.
+    handoff_act = ops.actions["repository.continue"]
+    should_pause_handoff = True
+
+    async def handoff_run_pause_once(ctx):
+        nonlocal should_pause_handoff
+        if should_pause_handoff:
+            should_pause_handoff = False
+            raise NeedsAttention("HANDOFF_TEMP_PAUSE", "Temporary handoff pause")
+        return await handoff_act.run(ctx)
+
+    ops.actions["repository.continue"] = ActionDef(
+        handoff_act.name,
+        handoff_act.scope,
+        handoff_act.summary,
+        handoff_run_pause_once,
+        handoff_act.admit,
+        handoff_act.target_keys,
+        authorize_existing=handoff_act.authorize_existing,
+    )
+    try:
+        env2 = await _start_envelope(w, key="outcome-map-2")
+        op2, _ = ops.create(STARTER_OWNER, **env2)
+        handoff_na = await _advance_start(ops, op2["operation_id"])
+        assert handoff_na["status"] == "needs_attention"
+        assert handoff_na["error_code"] == "HANDOFF_TEMP_PAUSE"
+        assert handoff_na["result"]["stage"] == "starting"
+        ops.cancel(STARTER_OWNER, op2["operation_id"])
+    finally:
+        ops.actions["repository.continue"] = handoff_act
 
 
 @pytest.mark.parametrize("channel", ["claude:start-session", "claude:send-message"])

@@ -1495,6 +1495,7 @@ def _raise_child_stopped(
     children: dict[str, dict],
     child: dict,
     *,
+    in_progress_stage: str,
     default_code: str,
     fallback: str,
     binding_id: str | None = None,
@@ -1502,7 +1503,8 @@ def _raise_child_stopped(
     session: dict | None = None,
 ) -> None:
     is_uncertain = child["status"] == "uncertain" or _uncertain(ctx.service, child)
-    stage = "start_unknown" if is_uncertain else "start_failed"
+    is_failed = not is_uncertain and child["status"] in {"failed", "cancelled"}
+    stage = "start_unknown" if is_uncertain else ("start_failed" if is_failed else in_progress_stage)
     _save_progress(
         ctx,
         _build_state(
@@ -1519,7 +1521,7 @@ def _raise_child_stopped(
     if is_uncertain:
         code = child["error_code"] or "UNCERTAIN_UNRESOLVED"
         raise NeedsAttention(code, reason)
-    if child["status"] in {"failed", "cancelled"}:
+    if is_failed:
         code = child["error_code"] or ("CANCELLED" if child["status"] == "cancelled" else default_code)
         raise _bad(code, reason, 409)
     code = child["error_code"] or default_code
@@ -1540,7 +1542,7 @@ async def _run(ctx):
                 _guard(ctx.service, parent)
                 _admit_child(ctx, "bind", _bind_request(ctx.operation_id, intent))
             except OperationError as exc:
-                _save_progress(ctx, _build_state(parent, intent, children, stage="start_failed"))
+                _save_progress(ctx, _build_state(parent, intent, children, stage="preparing"))
                 raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
             children = _children(ctx.service, parent)
             bind_child = children["bind"]
@@ -1554,12 +1556,13 @@ async def _run(ctx):
                 intent,
                 children,
                 bind_child,
+                in_progress_stage="preparing",
                 default_code="PM_WORK_BIND_FAILED",
                 fallback="Work binding did not complete",
             )
         binding_id = (bind_child.get("result") or {}).get("binding_id")
         if not isinstance(binding_id, str):
-            _save_progress(ctx, _build_state(parent, intent, children, stage="start_failed"))
+            _save_progress(ctx, _build_state(parent, intent, children, stage="preparing"))
             raise NeedsAttention("PM_WORK_START_CHILD_CHANGED", "Work binding child did not return binding_id")
     else:
         binding_id = intent["expected_binding_id"]
@@ -1589,7 +1592,7 @@ async def _run(ctx):
             except OperationError as exc:
                 _save_progress(
                     ctx,
-                    _build_state(parent, intent, children, stage="start_failed", binding_id=binding_id),
+                    _build_state(parent, intent, children, stage="preparing", binding_id=binding_id),
                 )
                 raise NeedsAttention(exc.code, _failure_message(exc.code, exc.message)) from exc
             children = _children(ctx.service, parent)
@@ -1607,6 +1610,7 @@ async def _run(ctx):
                 intent,
                 children,
                 pkg_child,
+                in_progress_stage="preparing",
                 default_code="PM_WORK_PACKAGE_FAILED",
                 fallback="Work package creation did not complete",
                 binding_id=binding_id,
@@ -1617,7 +1621,7 @@ async def _run(ctx):
         if not isinstance(package_id, str) or not isinstance(doc_digest, str):
             _save_progress(
                 ctx,
-                _build_state(parent, intent, children, stage="start_failed", binding_id=binding_id),
+                _build_state(parent, intent, children, stage="preparing", binding_id=binding_id),
             )
             raise NeedsAttention("PM_WORK_START_CHILD_CHANGED", "Work package child did not return package identity")
         package_ref = {
@@ -1651,7 +1655,7 @@ async def _run(ctx):
                     parent,
                     intent,
                     children,
-                    stage="start_failed",
+                    stage="starting",
                     binding_id=binding_id,
                     package_id=package_id,
                 ),
@@ -1690,6 +1694,7 @@ async def _run(ctx):
             intent,
             children,
             handoff_child,
+            in_progress_stage="starting",
             default_code="PM_HANDOFF_FAILED",
             fallback="Repository handoff did not complete",
             binding_id=binding_id,
@@ -1979,7 +1984,7 @@ def _attempt_view(ops, row: dict) -> dict:
         stage = res["stage"]
     elif parent["status"] == "succeeded":
         stage = "started"
-    elif parent["status"] in {"failed", "needs_attention"}:
+    elif parent["status"] == "failed":
         stage = "start_failed"
     elif handoff_child is not None:
         stage = "start_unknown" if _uncertain(ops, handoff_child) else "starting"
