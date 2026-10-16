@@ -731,29 +731,21 @@ for (const {lang, width} of featureMapMatrix) {
         if (width >= 1000) {
           await ensureDrawerClosed(page, width);
           const switcherBtn = page.locator('.shell-workspace-switch').first();
-          // Optional probe: check if switcher button is visible
-          if (await switcherBtn.isVisible()) {
-            await switcherBtn.click();
-            const switcherItem = page.locator('.ui-menu:has(.shell-workspace-switch) .ui-menu-panel [role="menuitem"][href="#/projects"]').first();
-            // Optional probe: check if switcher item is visible
-            if (await switcherItem.isVisible()) {
-              await switcherItem.click();
-              reached = true;
-              uiMethod = 'switcher-menu';
-            } else {
-              await page.keyboard.press('Escape');
-            }
-          }
+          await expect(switcherBtn).toBeVisible();
+          await switcherBtn.click();
+          const switcherItem = page.locator('.ui-menu:has(.shell-workspace-switch) .ui-menu-panel [role="menuitem"][href="#/projects"]').first();
+          await expect(switcherItem).toBeVisible();
+          await switcherItem.click();
+          reached = true;
+          uiMethod = 'switcher-menu';
         } else {
           await ensureDrawerOpen(page, width);
           const catalogLink = page.locator('.shell-all-projects').first();
-          // Optional probe: check if catalog link is visible in sidebar/drawer
-          if (await catalogLink.isVisible()) {
-            await catalogLink.click();
-            await ensureDrawerClosed(page, width);
-            reached = true;
-            uiMethod = 'catalog-link';
-          }
+          await expect(catalogLink).toBeVisible();
+          await catalogLink.click();
+          await ensureDrawerClosed(page, width);
+          reached = true;
+          uiMethod = 'catalog-link';
         }
       }
 
