@@ -4,16 +4,17 @@ import {workResultFixture, buildResultEnvelope, workspaceId, workId, route} from
 import * as path from 'path';
 import * as fs from 'fs';
 
-const SHOTS_DIR = process.env.BATC_WORK_RESULT_SCREENSHOTS || path.join('test-results', 'work-result-shots');
-
-test.beforeAll(() => {
-  fs.mkdirSync(SHOTS_DIR, {recursive: true});
-});
+const SHOTS_DIR = process.env.BATC_WORK_RESULT_SCREENSHOTS || path.join(process.env.TMPDIR || '/tmp', 'shots');
 
 test.describe('Work Result Screenshots', () => {
-  // 1. en-1440-turn-ended.png: viewport 1440x900, en-US, turn-ended envelope with changes summary and commits
+  test.beforeEach(() => {
+    test.skip(!process.env.BATC_WORK_RESULT_SCREENSHOTS, 'Screenshots are opt-in via BATC_WORK_RESULT_SCREENSHOTS');
+    fs.mkdirSync(SHOTS_DIR, {recursive: true});
+  });
+
+  // 1. en-1440-turn-ended.png: viewport 1440x2400 to show full inspector (Start above Result, static Result hidden)
   test('en-1440-turn-ended', async ({page}) => {
-    await page.setViewportSize({width: 1440, height: 900});
+    await page.setViewportSize({width: 1440, height: 2400});
     const f = workResultFixture();
 
     await mountConversation(page, false, f.dispatch);
@@ -26,11 +27,13 @@ test.describe('Work Result Screenshots', () => {
     const inspector = page.locator('[data-work-inspector]');
     await expect(inspector).toBeVisible();
 
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
     await expect(resultSection).toBeVisible();
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('Turn ended');
 
-    await resultSection.scrollIntoViewIfNeeded();
+    // Built-in static Result is hidden
+    await expect(inspector.locator('[data-work-section="result"]')).toBeHidden();
+
     await inspector.screenshot({path: path.join(SHOTS_DIR, 'en-1440-turn-ended.png')});
   });
 
@@ -81,7 +84,7 @@ test.describe('Work Result Screenshots', () => {
     const inspector = page.locator('[data-work-inspector]');
     await expect(inspector).toBeVisible();
 
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
     await expect(resultSection).toBeVisible();
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('Turn ended');
 
@@ -111,7 +114,7 @@ test.describe('Work Result Screenshots', () => {
     const inspector = page.locator('[data-work-inspector]');
     await expect(inspector).toBeVisible();
 
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
     await expect(resultSection).toBeVisible();
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('本輪已結束');
 
@@ -120,7 +123,7 @@ test.describe('Work Result Screenshots', () => {
     await context.close();
   });
 
-  // 4. zh-TW-390-unknown.png: viewport 390x844, zh-TW, unknown/reason envelope
+  // 4. zh-TW-390-unknown.png: viewport 390x844, zh-TW, realistic unknown/reason envelope when no turn end is recorded
   test('zh-TW-390-unknown', async ({browser}) => {
     const context = await browser.newContext({locale: 'zh-TW', viewport: {width: 390, height: 844}});
     const page = await context.newPage();
@@ -130,11 +133,31 @@ test.describe('Work Result Screenshots', () => {
     f.state.currentEnvelope = buildResultEnvelope({
       attempt_id: attId,
       state: 'unknown',
-      state_reason: 'bat_unreachable',
+      state_reason: 'turn_boundary_not_collected',
       summary_text: null,
-      changes_summary: null,
+      results: [],
+      self_reported: 'none',
+      fixed_commit: null,
+      head_commit: 'unknown',
+      uncommitted: {
+        count: 'unknown',
+        files: 'unknown',
+        evidence: 'unproven',
+        reason: 'turn_boundary_not_collected',
+      },
+      changes_summary: {
+        aggregation: 'per_commit',
+        commits: [],
+        files: [],
+        additions: 'unknown',
+        deletions: 'unknown',
+        unavailable: [],
+        complete: false,
+        reason: 'turn_boundary_not_collected',
+        cached_from_result_id: null,
+      },
       completeness_status: 'partial',
-      completeness_reasons: ['bat_unreachable', 'observation_stale'],
+      completeness_reasons: ['turn_boundary_not_collected'],
     });
 
     await mountConversation(page, false, f.dispatch);
@@ -148,7 +171,7 @@ test.describe('Work Result Screenshots', () => {
     const inspector = page.locator('[data-work-inspector]');
     await expect(inspector).toBeVisible();
 
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
     await expect(resultSection).toBeVisible();
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('未知');
 

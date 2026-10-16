@@ -4,6 +4,7 @@ import {workResultFixture, buildResultEnvelope, workspaceId, workId, route} from
 import {workResultStrings} from '../src/pm-work-result-strings.js';
 
 let pageErrors: string[] = [];
+let activeFixture: any = null;
 
 function recordPageErrors(p: any) {
   if (!p || p._recordingPageErrors) return;
@@ -14,17 +15,23 @@ function recordPageErrors(p: any) {
 test.describe('Work Result UI (v1.3 E03 Part A)', () => {
   test.beforeEach(async ({page, context}) => {
     pageErrors = [];
+    activeFixture = null;
     recordPageErrors(page);
     context.on('page', recordPageErrors);
   });
 
   test.afterEach(async () => {
     expect(pageErrors).toEqual([]);
+    if (activeFixture) {
+      expect(activeFixture.state.changesCount).toBe(0);
+      expect(activeFixture.state.diffCount).toBe(0);
+    }
   });
 
-  test('1. en 1440, turn ended', async ({page}) => {
+  test('1. en 1440, turn ended & section placement', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
@@ -36,8 +43,27 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const inspector = page.locator('[data-work-inspector]');
     await expect(inspector).toBeVisible();
 
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
     await expect(resultSection).toBeVisible();
+
+    // Verify section order in the inspector DOM
+    const sectionKeys = await inspector.locator('.ui-inspector-body > [data-work-section]').evaluateAll(nodes =>
+      nodes.map(n => n.getAttribute('data-work-section')).filter(Boolean)
+    );
+    expect(sectionKeys).toEqual([
+      'requirements',
+      'status',
+      'start',
+      'attempt-result',
+      'result',
+      'blocker',
+      'delivery',
+      'details',
+    ]);
+
+    // Built-in static "Latest result" is hidden while attempt-result is visible
+    const staticResultSection = inspector.locator('[data-work-section="result"]');
+    await expect(staticResultSection).toBeHidden();
 
     // 1. State line: "Turn ended"
     const stateLine = resultSection.locator('.pm-work-result-state');
@@ -74,7 +100,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(fileRows.nth(0)).toContainText('+8 −1');
 
     // Commits
-    const commitsBox = resultSection.locator('.pm-work-result-commits');
+    const commitsBox = resultSection.locator('.pm-work-result-changes');
     await expect(commitsBox).toContainText('Base: 1234567890ab');
     await expect(commitsBox).toContainText('Result commit: abcdef123456');
     await expect(commitsBox).toContainText('seen at the end of a turn');
@@ -86,15 +112,12 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     // 5. Zero forbidden words in the section
     const sectionText = await resultSection.innerText();
     expect(sectionText).not.toMatch(/\b(Finished|Done)\b/);
-
-    // Verify zero BAT calls
-    expect(f.state.changesCount).toBe(0);
-    expect(f.state.diffCount).toBe(0);
   });
 
-  test('2. Active, then an event', async ({page}) => {
+  test('2. Active, then an event preserves focus and open disclosures', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
 
     // Initial state: active
@@ -116,18 +139,21 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await card.locator('[data-board-open]').click();
 
     const inspector = page.locator('[data-work-inspector]');
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('Working');
 
-    // Open turns disclosure and focus link
+    // Open turns disclosure and focus its summary element
     const turnsDisclosure = resultSection.locator('[data-work-result-turns]');
-    await turnsDisclosure.locator('summary').click();
+    const turnsSummary = turnsDisclosure.locator('summary');
+    await turnsSummary.click();
     await expect(turnsDisclosure).toHaveAttribute('open', '');
+    await turnsSummary.focus();
+    await expect(turnsSummary).toBeFocused();
 
-    const turnLink = turnsDisclosure.locator('[data-work-result-focus="turn-1"]');
-    await expect(turnLink).toBeVisible();
-    await turnLink.focus();
-    await expect(turnLink).toBeFocused();
+    // Check section order before event
+    const sectionKeysBefore = await inspector.locator('.ui-inspector-body > [data-work-section]').evaluateAll(nodes =>
+      nodes.map(n => n.getAttribute('data-work-section')).filter(Boolean)
+    );
 
     // Emit event: updated to turn-ended
     const updatedEnvelope = buildResultEnvelope({
@@ -144,15 +170,21 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     // State becomes Turn ended
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('Turn ended');
 
-    // Disclosure stays open and focus stays put
+    // Disclosure stays open and focus is preserved
     await expect(turnsDisclosure).toHaveAttribute('open', '');
-    const activeLink = turnsDisclosure.locator('[data-work-result-focus="turn-1"]');
-    await expect(activeLink).toBeFocused();
+    await expect(turnsSummary).toBeFocused();
+
+    // Section order remains unchanged after event
+    const sectionKeysAfter = await inspector.locator('.ui-inspector-body > [data-work-section]').evaluateAll(nodes =>
+      nodes.map(n => n.getAttribute('data-work-section')).filter(Boolean)
+    );
+    expect(sectionKeysAfter).toEqual(sectionKeysBefore);
   });
 
   test('3. Unknown and failed reasons', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
 
     const testCases = [
@@ -210,7 +242,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await card.locator('[data-board-open]').click();
 
     const inspector = page.locator('[data-work-inspector]');
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
 
     for (const tc of testCases) {
       const env = buildResultEnvelope({
@@ -229,9 +261,10 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     }
   });
 
-  test('4. Waiting with pending', async ({page}) => {
+  test('4. Waiting with pending & needs attention', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
 
     f.state.currentEnvelope = buildResultEnvelope({
@@ -247,18 +280,32 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await card.locator('[data-board-open]').click();
 
-    const resultSection = page.locator('[data-work-inspector] [data-work-section="result"]');
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
     await expect(resultSection.locator('.pm-work-result-state')).toContainText('Waiting for an answer or permission');
     await expect(resultSection.locator('.pm-work-result-reason')).toContainText('Answer it in the live output.');
 
     const liveLink = resultSection.locator('[data-work-result-focus="live-output"]');
     await expect(liveLink).toBeVisible();
     await expect(liveLink).toHaveText('Open live output');
+
+    // Test attention state
+    const attentionEnv = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'turn-ended',
+      attention: {code: 'OP_PAUSED', message: 'Paused by user', resumable: true},
+    });
+    f.emitResultRecorded(attId, attentionEnv);
+
+    await expect(resultSection.locator('.pm-work-result-attention')).toContainText('Needs attention: open the operation to resume or cancel it.');
+    const opLink = resultSection.locator('[data-work-result-focus="operation"]');
+    await expect(opLink).toBeVisible();
+    await expect(opLink).toHaveText('View operation');
   });
 
-  test('5. Partial changes', async ({page}) => {
+  test('5. Partial changes & uncommitted warning', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
 
     f.state.currentEnvelope = buildResultEnvelope({
@@ -291,11 +338,17 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await card.locator('[data-board-open]').click();
 
-    const resultSection = page.locator('[data-work-inspector] [data-work-section="result"]');
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
 
     // Partial changes line
     const changesSummary = resultSection.locator('.pm-work-result-changes-summary');
     await expect(changesSummary).toContainText('Changes were only partly read');
+
+    // Partial changes reasons list
+    const changesReasons = resultSection.locator('.pm-work-result-changes-reasons');
+    await expect(changesReasons).toBeVisible();
+    await expect(changesReasons).toContainText('BAT is not reachable.');
+    await expect(changesReasons).toContainText('Another limit applies');
 
     // File with ? counts
     const fileRow = resultSection.locator('.pm-work-result-file-row');
@@ -314,19 +367,31 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(details).toContainText('custom_unlisted_reason_xyz');
   });
 
-  test('6. Recorded turns', async ({page}) => {
+  test('6. Singular forms and recorded turns', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
 
+    // Envelope with exactly 1 file, 1 commit, and 1 recorded turn
     f.state.currentEnvelope = buildResultEnvelope({
       attempt_id: attId,
+      changes_summary: {
+        aggregation: 'per_commit',
+        base_commit: '1234567890abcdef1234567890abcdef12345678',
+        head_commit: 'abcdef1234567890abcdef1234567890abcdef12',
+        commits: [{commit_sha: 'abcdef1234567890abcdef1234567890abcdef12'}],
+        commit_count: 1,
+        files: [{path: 'src/single.ts', status: 'M', additions: 5, deletions: 1}],
+        file_count: 1,
+        additions: 5,
+        deletions: 1,
+        complete: true,
+      },
       results: [
-        {result_id: 'res_03', turn_marker: 'turn_03', head_commit: '3333333333334444555566667777888899990000', observed_at: 1791705600},
-        {result_id: 'res_02', turn_marker: 'turn_02', head_commit: '2222222222224444555566667777888899990000', observed_at: 1791705500},
-        {result_id: 'res_01', turn_marker: 'turn_01', head_commit: '1111111111114444555566667777888899990000', observed_at: 1791705400},
+        {result_id: 'res_01', turn_marker: 'turn_01', head_commit: 'abcdef1234567890abcdef1234567890abcdef12', observed_at: 1791705600},
       ],
-      results_has_more: true,
+      results_has_more: false,
     });
 
     await mountConversation(page, false, f.dispatch);
@@ -336,25 +401,45 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await card.locator('[data-board-open]').click();
 
-    const resultSection = page.locator('[data-work-inspector] [data-work-section="result"]');
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+
+    // Singular changes summary: "1 file changed in 1 commit, +5 −1"
+    const changesSummary = resultSection.locator('.pm-work-result-changes-summary');
+    await expect(changesSummary).toContainText('1 file changed in 1 commit, +5 −1');
+
+    // Singular recorded turn: "Recorded turn (1)"
     const turnsDisclosure = resultSection.locator('[data-work-result-turns]');
+    await expect(turnsDisclosure).toContainText('Recorded turn (1)');
+
+    // Now emit 3 turns with results_has_more: true
+    const multiEnv = buildResultEnvelope({
+      attempt_id: attId,
+      results: [
+        {result_id: 'res_03', turn_marker: 'turn_03', head_commit: '3333333333334444555566667777888899990000', observed_at: 1791705600},
+        {result_id: 'res_02', turn_marker: 'turn_02', head_commit: '2222222222224444555566667777888899990000', observed_at: 1791705500},
+        {result_id: 'res_01', turn_marker: 'turn_01', head_commit: '1111111111114444555566667777888899990000', observed_at: 1791705400},
+      ],
+      results_has_more: true,
+    });
+    f.emitResultRecorded(attId, multiEnv);
+
+    // Plural turns count: "Recorded turns (3)"
     await expect(turnsDisclosure).toContainText('Recorded turns (3)');
     await turnsDisclosure.locator('summary').click();
 
     const turnRows = turnsDisclosure.locator('.pm-work-result-turn-row');
     await expect(turnRows).toHaveCount(3);
-
-    // Newest is first and marked "latest"
     await expect(turnRows.nth(0)).toContainText('333333333333');
     await expect(turnRows.nth(0)).toContainText('latest');
 
-    // results_has_more note
+    // Note for results_has_more
     await expect(turnsDisclosure).toContainText('Showing the latest 20.');
   });
 
   test('7. Invalid envelope', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
 
     f.state.currentEnvelope = buildResultEnvelope({
@@ -369,7 +454,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await card.locator('[data-board-open]').click();
 
-    const resultSection = page.locator('[data-work-inspector] [data-work-section="result"]');
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
     await expect(resultSection.locator('.pm-work-result-invalid')).toHaveText('This result could not be read.');
     await expect(resultSection.locator('.pm-work-result-state')).toHaveCount(0);
     await expect(resultSection.locator('.pm-work-result-checks')).toHaveCount(0);
@@ -378,6 +463,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
   test('8. Errors (403, 404, 500)', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
 
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
@@ -386,19 +472,24 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await card.locator('[data-board-open]').click();
 
-    const resultSection = page.locator('[data-work-inspector] [data-work-section="result"]');
-    await expect(resultSection).toBeVisible();
+    const inspector = page.locator('[data-work-inspector]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
+    const staticResultSection = inspector.locator('[data-work-section="result"]');
 
-    // 1. 403 hides section
+    await expect(resultSection).toBeVisible();
+    await expect(staticResultSection).toBeHidden();
+
+    // 1. 403 withdraws content and hides section, showing static result
     f.state.resultStatus = 403;
     f.emitResultRecorded('att_' + '1'.repeat(32));
     await expect(resultSection).toBeHidden();
-    await expect(resultSection).toHaveCount(0);
+    await expect(staticResultSection).toBeVisible();
 
-    // 2. Restore 200
+    // 2. Restore 200: attempt-result shows again, static result hides
     f.state.resultStatus = null;
     f.emitResultRecorded('att_' + '1'.repeat(32));
     await expect(resultSection).toBeVisible();
+    await expect(staticResultSection).toBeHidden();
 
     // 3. 500 shows stale pill and errorBox with Try again
     f.state.resultStatus = 500;
@@ -421,6 +512,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
   test('9. No section without capability or session', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
 
     // Case A: Without capability
     f.state.work_attempt_results_available = false;
@@ -434,12 +526,13 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
 
     const inspector = page.locator('[data-work-inspector]');
     await expect(inspector).toBeVisible();
-    await expect(inspector.locator('[data-work-section="result"]')).toHaveCount(0);
+    // Static result is shown, attempt-result is not shown
+    await expect(inspector.locator('[data-work-section="attempt-result"]')).toBeHidden();
+    await expect(inspector.locator('[data-work-section="result"]')).toBeVisible();
     expect(f.state.resultRequests.length).toBe(0);
 
     // Case B: With capability, but attempt has no session
     f.state.work_attempt_results_available = true;
-    // Set attempt with null session for workId(2)
     f.state.attempts.push({
       attempt_id: 'att_' + '2'.repeat(32),
       workspace_id: workspaceId,
@@ -454,13 +547,15 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const card2 = page.locator(`[data-pm-kanban-work="${workId(2)}"]`);
     await card2.locator('[data-board-open]').click();
 
-    await expect(inspector.locator('[data-work-section="result"]')).toHaveCount(0);
+    await expect(inspector.locator('[data-work-section="attempt-result"]')).toBeHidden();
+    await expect(inspector.locator('[data-work-section="result"]')).toBeVisible();
     expect(f.state.resultRequests.length).toBe(0);
   });
 
-  test('10. Late reply', async ({page}) => {
+  test('10. Work switching & immediate withdrawal', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
 
     // Work 1 has attempt 1
     const att1 = 'att_' + '1'.repeat(32);
@@ -490,33 +585,58 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await page.goto(route);
     await page.locator('[data-pm-view="board"]').click();
 
-    // Select Work 1 but hold /result read
-    let releaseHold: () => void = () => {};
-    f.state.holdResultAttemptId = att1;
-    f.state.holdResult = new Promise<void>(resolve => {
-      releaseHold = resolve;
-    });
-
+    // 1. Select Work 1 and verify its result appears
     const card1 = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await card1.locator('[data-board-open]').click();
 
-    // Switch to Work 2
+    const inspector = page.locator('[data-work-inspector]');
+    const attemptResult = inspector.locator('[data-work-section="attempt-result"]');
+    const staticResult = inspector.locator('[data-work-section="result"]');
+
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary for Work 1 ONLY');
+    await expect(attemptResult).toBeVisible();
+    await expect(staticResult).toBeHidden();
+
+    const requestsForA = f.state.resultRequests.filter(r => r.attempt_id === att1).length;
+
+    // 2. Prepare hold on Work 2 attempts read
+    let releaseAttempts: () => void = () => {};
+    f.state.holdAttemptsWorkId = workId(2);
+    f.state.holdAttempts = new Promise<void>(resolve => {
+      releaseAttempts = resolve;
+    });
+
+    // 3. Switch to Work 2
     const card2 = page.locator(`[data-pm-kanban-work="${workId(2)}"]`);
     await card2.locator('[data-board-open]').click();
 
-    // Release held read for Work 1
-    releaseHold();
-    f.state.holdResult = null;
+    // Immediately assert: Work 1 result is NOT visible, attempt-result is hidden, static result visible
+    await expect(attemptResult).toBeHidden();
+    await expect(staticResult).toBeVisible();
+    // Zero new /result requests for Work 1
+    const newRequestsForA = f.state.resultRequests.filter(r => r.attempt_id === att1).length;
+    expect(newRequestsForA).toBe(requestsForA);
 
-    // Verify Work 2 content is shown and nothing from Work 1 is shown
-    const resultSection = page.locator('[data-work-inspector] [data-work-section="result"]');
-    await expect(resultSection.locator('.pm-work-result-summary-box')).toContainText('Summary for Work 2 ONLY');
-    await expect(resultSection.locator('.pm-work-result-summary-box')).not.toContainText('Summary for Work 1 ONLY');
+    // 4. Release attempts read for Work 2: Work 2 result appears
+    releaseAttempts();
+    f.state.holdAttempts = null;
+
+    await expect(attemptResult).toBeVisible();
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).toContainText('Summary for Work 2 ONLY');
+    await expect(attemptResult.locator('.pm-work-result-summary-box')).not.toContainText('Summary for Work 1 ONLY');
+
+    // 5. Switch to a work item whose attempts read fails: no result shown
+    f.state.attemptsFailWorkId = workId(1);
+    await card1.locator('[data-board-open]').click();
+
+    await expect(attemptResult).toBeHidden();
+    await expect(staticResult).toBeVisible();
   });
 
   test('11. Plain text summary (no HTML / XSS)', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
 
     f.state.currentEnvelope = buildResultEnvelope({
@@ -531,7 +651,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
     await card.locator('[data-board-open]').click();
 
-    const resultSection = page.locator('[data-work-inspector] [data-work-section="result"]');
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
     const summaryBox = resultSection.locator('.pm-work-result-summary-box');
     await expect(summaryBox).toBeVisible();
 
@@ -551,11 +671,86 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     expect(scriptResult.y).toBeUndefined();
   });
 
-  test('12. No BAT reads across all tests', async () => {
-    // Asserted in test 1 and globally verified that changesCount and diffCount stay 0
+  test('12. Missing and unlisted values show Unknown and route to Details', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
     const f = workResultFixture();
-    expect(f.state.changesCount).toBe(0);
-    expect(f.state.diffCount).toBe(0);
+    activeFixture = f;
+    const attId = 'att_' + '1'.repeat(32);
+
+    // Envelope with missing and unlisted facet values
+    f.state.currentEnvelope = buildResultEnvelope({
+      attempt_id: attId,
+      state: 'turn-ended',
+      execution: {
+        state: 'turn-ended',
+        stage: 'completed',
+        operation_status: 'succeeded',
+        state_facets: {
+          self_reported: 'claimed_done',
+          verification: 'unverified',
+          // review_decision with custom unlisted kind
+          review_decision: {kind: 'custom_reviewer_kind'},
+          // acceptance with unlisted status
+          acceptance: {status: 'in_limbo'},
+          // merge with unlisted status
+          merge: 'unheard_of_merge_status',
+          // deployment with unlisted state
+          deployment: {state: 'orbiting_mars', verified: false, is_current: null},
+        },
+      },
+      delivery: {
+        delivery_goal: 'custom_target_goal',
+        pull_requests: [],
+      },
+      changes: {
+        base_commit: '1234567890abcdef1234567890abcdef12345678',
+        fixed_result_commit: null,
+        uncommitted: {count: 'unknown', reason: 'bat_empty_status_not_clean_proof'},
+        summary: {
+          complete: true,
+          commit_count: 1,
+          file_count: 1,
+          additions: 1,
+          deletions: 0,
+          files: [
+            {path: 'src/odd.ts', status: 'Z', additions: 1, deletions: 0},
+          ],
+        },
+      },
+    });
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const resultSection = page.locator('[data-work-inspector] [data-work-section="attempt-result"]');
+    await expect(resultSection).toBeVisible();
+
+    // Checks dl: unlisted or missing values show "Unknown"
+    const checksDl = resultSection.locator('.pm-work-result-checks');
+    await expect(checksDl.locator('[data-check="review"]')).toHaveText('Unknown');
+    await expect(checksDl.locator('[data-check="acceptance"]')).toHaveText('Unknown');
+    await expect(checksDl.locator('[data-check="pr"]')).toContainText('Unknown');
+    await expect(checksDl.locator('[data-check="deployment"]')).toHaveText('Unknown');
+    await expect(checksDl.locator('[data-check="delivery-goal"]')).toHaveText('Unknown');
+
+    // File with unlisted status letter 'Z' shows "Unknown"
+    const fileRow = resultSection.locator('.pm-work-result-file-row');
+    await expect(fileRow).toContainText('src/odd.ts');
+    await expect(fileRow).toContainText('Unknown');
+
+    // Details disclosure routes raw values into unlisted facets & statuses rows
+    const details = resultSection.locator('[data-work-result-details]');
+    await details.locator('summary').click();
+    await expect(details).toContainText('custom_reviewer_kind');
+    await expect(details).toContainText('in_limbo');
+    await expect(details).toContainText('unheard_of_merge_status');
+    await expect(details).toContainText('orbiting_mars');
+    await expect(details).toContainText('custom_target_goal');
+    await expect(details).toContainText('src/odd.ts: Z');
   });
 
   test('13. zh-TW at 390 width (main and partial)', async ({browser}) => {
@@ -563,7 +758,12 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     const page = await context.newPage();
     recordPageErrors(page);
     const f = workResultFixture();
+    activeFixture = f;
     const attId = 'att_' + '1'.repeat(32);
+    f.state.currentEnvelope = buildResultEnvelope({
+      attempt_id: attId,
+      summary_text: '已實作登入流程並驗證憑證處理。',
+    });
 
     await mountConversation(page, false, f.dispatch);
     await page.goto(route);
@@ -574,7 +774,7 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await card.locator('[data-board-open]').click();
 
     const inspector = page.locator('[data-work-inspector]');
-    const resultSection = inspector.locator('[data-work-section="result"]');
+    const resultSection = inspector.locator('[data-work-section="attempt-result"]');
     await expect(resultSection).toBeVisible();
 
     // Check main case text
@@ -583,15 +783,22 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     expect(textContent).not.toContain('undefined');
     expect(textContent).not.toContain('null');
 
-    // No raw keys or English leftovers
-    const allowedEnglish = new Set(['PR', 'BAT', 'commit', 'SHA']);
-    for (const [key, enVal] of Object.entries(workResultStrings.en)) {
-      if (typeof enVal !== 'string') continue;
-      if (allowedEnglish.has(enVal)) continue;
-      if (enVal.length > 3) {
-        expect(textContent, `Found English string "${enVal}" (${key}) in zh-TW panel`).not.toContain(enVal);
-      }
-    }
+    // Assert no Latin words outside allow-list (PR, BAT, commit, SHA), ignoring code, .mono, and summary box
+    const getDisallowedLatinWords = async (locator: any) => {
+      return await locator.evaluate((el: HTMLElement) => {
+        const allowed = new Set(['PR', 'BAT', 'COMMIT', 'SHA']);
+        const clone = el.cloneNode(true) as HTMLElement;
+        for (const node of clone.querySelectorAll('code, .mono, .pm-work-result-summary-box')) {
+          node.remove();
+        }
+        const text = clone.innerText || '';
+        const words = text.match(/[A-Za-z]+/g) || [];
+        return words.filter(w => !allowed.has(w.toUpperCase()));
+      });
+    };
+
+    const disallowedWords = await getDisallowedLatinWords(resultSection);
+    expect(disallowedWords, `Found unexpected Latin words in zh-TW panel: ${disallowedWords.join(', ')}`).toEqual([]);
 
     // Check no horizontal overflow
     const isOverflowing = await resultSection.evaluate((el: HTMLElement) => el.scrollWidth > el.clientWidth + 2);
@@ -613,6 +820,9 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(resultSection.locator('.pm-work-result-changes-summary')).toContainText('修改只讀取到一部分');
     const isPartialOverflowing = await resultSection.evaluate((el: HTMLElement) => el.scrollWidth > el.clientWidth + 2);
     expect(isPartialOverflowing).toBe(false);
+
+    const partialDisallowedWords = await getDisallowedLatinWords(resultSection);
+    expect(partialDisallowedWords, `Found unexpected Latin words in partial zh-TW panel: ${partialDisallowedWords.join(', ')}`).toEqual([]);
 
     await context.close();
   });

@@ -174,6 +174,9 @@ export function workResultFixture() {
     resultRequests: [] as Array<{method: string; path: string; attempt_id: string}>,
     holdResult: null as Promise<void> | null,
     holdResultAttemptId: null as string | null,
+    holdAttempts: null as Promise<void> | null,
+    holdAttemptsWorkId: null as string | null,
+    attemptsFailWorkId: null as string | null,
     resultStatus: null as number | null,
     resultStatusCount: 0,
     resultEnvelopes: new Map<string, any>(),
@@ -213,8 +216,14 @@ export function workResultFixture() {
 
     // Attempts endpoint: filter by wid
     if (input.method === 'GET' && path.endsWith('/attempts')) {
-      const res = await sf.dispatch(input);
       const wid = path.split('/').at(-2);
+      if (state.holdAttempts && (!state.holdAttemptsWorkId || state.holdAttemptsWorkId === wid)) {
+        await state.holdAttempts;
+      }
+      if (state.attemptsFailWorkId && state.attemptsFailWorkId === wid) {
+        return {status: 500, data: {error: {message: 'Failed to read attempts'}}};
+      }
+      const res = await sf.dispatch(input);
       if (res.data?.attempts && wid) {
         res.data.attempts = res.data.attempts.filter((a: any) => a.work_item_id === wid);
       }
