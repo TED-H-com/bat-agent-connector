@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- A workspace can save a work profile for one repository binding, agent and
+  delivery, and can read whether that coding route is ready without contacting
+  the host. Starting work can name one saved revision. Starting work without a
+  profile is unchanged.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
