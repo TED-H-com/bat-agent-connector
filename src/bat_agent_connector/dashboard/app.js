@@ -8194,7 +8194,25 @@ var workResultStrings = {
 		wres_usage_context_tokens: "上下文詞元",
 		wres_usage_context_window: "上下文視窗",
 		wres_usage_num_turns: "回合數",
-		wres_exit_code_not_exposed: "結束碼：BAT 不提供"
+		wres_exit_code_not_exposed: "結束碼：BAT 不提供",
+		wres_current_changes: "目前修改",
+		wres_read_current_changes: "讀取目前修改",
+		wres_read_again: "重新讀取",
+		wres_out_of_date: "可能已過期",
+		wres_freshness_live: "剛剛自 BAT 讀取",
+		wres_freshness_cached_receipt: "無法讀取 BAT。顯示最後記錄的回合。",
+		wres_freshness_unavailable: "無法提供",
+		wres_head: "最新 commit",
+		wres_show_diff: "顯示差異 · {sha}",
+		wres_show_diff_label: "顯示差異",
+		wres_diff_region_label: "{path} 於 {sha} 的差異",
+		wres_diff_truncated: "僅顯示此差異的前 256 KiB。",
+		wres_diff_not_found: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
+		wres_uncommitted_no_diff: "BAT 不提供未提交檔案的差異。",
+		wres_reason_uncommitted_diff_not_supported_by_bat: "BAT 不提供未提交檔案的差異。",
+		wres_reason_changeset_file_limit_exceeded: "變更檔案數超出上限。",
+		error_code_PM_DIFF_NOT_FOUND: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
+		error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。"
 	},
 	en: {
 		wres_heading: "Result",
@@ -8316,7 +8334,25 @@ var workResultStrings = {
 		wres_usage_context_tokens: "Context tokens",
 		wres_usage_context_window: "Context window",
 		wres_usage_num_turns: "Turns",
-		wres_exit_code_not_exposed: "Exit code: not exposed by BAT"
+		wres_exit_code_not_exposed: "Exit code: not exposed by BAT",
+		wres_current_changes: "Current changes",
+		wres_read_current_changes: "Read current changes",
+		wres_read_again: "Read again",
+		wres_out_of_date: "May be out of date",
+		wres_freshness_live: "Read from BAT just now",
+		wres_freshness_cached_receipt: "BAT could not be read. Showing the last recorded turn.",
+		wres_freshness_unavailable: "Not available",
+		wres_head: "Head",
+		wres_show_diff: "Show diff · {sha}",
+		wres_show_diff_label: "Show diff",
+		wres_diff_region_label: "Diff for {path} at {sha}",
+		wres_diff_truncated: "Showing the first 256 KiB of this diff.",
+		wres_diff_not_found: "This commit or file is no longer in this attempt's range. Read current changes again.",
+		wres_uncommitted_no_diff: "BAT does not show diffs of uncommitted files.",
+		wres_reason_uncommitted_diff_not_supported_by_bat: "BAT does not show diffs of uncommitted files.",
+		wres_reason_changeset_file_limit_exceeded: "Changeset exceeded file limit.",
+		error_code_PM_DIFF_NOT_FOUND: "This commit or file is no longer in this attempt's range. Read current changes again.",
+		error_code_PM_DIFF_UNAVAILABLE: "Worktree diff could not be read from BAT."
 	}
 };
 //#endregion
@@ -8433,6 +8469,8 @@ var STRINGS = {
 		error_code_TIMEOUT: "連線逾時，請查回原請求。",
 		error_code_CENTRAL_OFFLINE: "Connector 離線，請恢復連線後再試。",
 		error_code_UNAUTHORIZED: "請先提供有效的 API 權杖。",
+		error_code_PM_DIFF_NOT_FOUND: "此 commit 或檔案已不在本嘗試的範圍內。請重新讀取目前修改。",
+		error_code_PM_DIFF_UNAVAILABLE: "無法自 BAT 讀取工作樹差異。",
 		connection_scope_observe: "檢視",
 		connection_scope_operate: "操作",
 		connection_scope_manage: "管理",
@@ -10080,6 +10118,8 @@ var STRINGS = {
 		error_code_TIMEOUT: "The connection timed out. Check the original request.",
 		error_code_CENTRAL_OFFLINE: "Reconnect to Connector before trying again.",
 		error_code_UNAUTHORIZED: "Provide a valid API token first.",
+		error_code_PM_DIFF_NOT_FOUND: "This commit or file is no longer in this attempt's range. Read current changes again.",
+		error_code_PM_DIFF_UNAVAILABLE: "Worktree diff could not be read from BAT.",
 		connection_scope_observe: "View",
 		connection_scope_operate: "Operate",
 		connection_scope_manage: "Manage",
@@ -34028,6 +34068,19 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	let turnsOpen = false;
 	let detailsOpen = false;
 	let filesOpen = false;
+	let currentChanges = null;
+	let currentChangesError = null;
+	let changesBusy = false;
+	let isOutOfDate = false;
+	let changesSerial = 0;
+	let diffSerial = 0;
+	const diffCache = new Map();
+	const diffErrors = new Map();
+	const diffLoading = new Set();
+	const openDiffs = new Set();
+	const getCaps = () => typeof caps === "function" ? caps() : caps;
+	const canChanges = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.changes);
+	const canDiff = () => Boolean(getCaps()?.features?.pm_workspaces?.work_attempt_results?.routes?.diff);
 	const panelElement = h("div", {
 		class: "pm-work-result-panel",
 		"data-work-result": ""
@@ -34039,9 +34092,19 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 	}
 	function withdraw() {
 		readSerial++;
+		changesSerial++;
+		diffSerial++;
 		lastEnvelope = null;
 		lastNormalized = null;
 		lastStale = false;
+		currentChanges = null;
+		currentChangesError = null;
+		changesBusy = false;
+		isOutOfDate = false;
+		diffCache.clear();
+		diffErrors.clear();
+		diffLoading.clear();
+		openDiffs.clear();
 		turnsOpen = false;
 		detailsOpen = false;
 		filesOpen = false;
@@ -34093,7 +34156,9 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				return;
 			}
 			const normalized = normalizeForComparison(data);
-			if (!(lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized)) || lastStale) {
+			const isUnchanged = lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized);
+			if (!isUnchanged || lastStale) {
+				if (!isUnchanged && currentChanges) isOutOfDate = true;
 				lastEnvelope = data;
 				lastNormalized = normalized;
 				lastStale = false;
@@ -34146,6 +34211,17 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				type: "attr",
 				value: active.dataset.workResultFocus
 			};
+			if (active.dataset?.workResultDiffSummary) return {
+				type: "diff-summary",
+				key: active.dataset.workResultDiffSummary
+			};
+			if (active.dataset?.workResultDiffRegion) return {
+				type: "diff-region",
+				key: active.dataset.workResultDiffRegion
+			};
+			if (active.classList.contains("pm-work-result-read-changes")) return { type: "read-changes" };
+			if (active.classList.contains("pm-work-result-read-again")) return { type: "read-again" };
+			if (active.classList.contains("pm-work-result-retry")) return { type: "retry" };
 			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
 				const details = active.parentElement;
 				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
@@ -34159,6 +34235,11 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		if (!token) return;
 		requestAnimationFrame(() => {
 			if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
+			else if (token.type === "diff-summary") panelElement.querySelector(`[data-work-result-diff-summary="${token.key}"]`)?.focus();
+			else if (token.type === "diff-region") panelElement.querySelector(`[data-work-result-diff-region="${token.key}"]`)?.focus();
+			else if (token.type === "read-changes") panelElement.querySelector(".pm-work-result-read-changes")?.focus();
+			else if (token.type === "read-again") panelElement.querySelector(".pm-work-result-read-again")?.focus();
+			else if (token.type === "retry") panelElement.querySelector(".pm-work-result-retry")?.focus();
 			else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
 			else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
 			else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
@@ -34172,7 +34253,16 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		if (existingDetails) detailsOpen = existingDetails.open;
 		const existingFiles = panelElement.querySelector(".pm-work-result-files");
 		if (existingFiles) filesOpen = existingFiles.open;
+		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) {
+			const sum = dt.querySelector("[data-work-result-diff-summary]");
+			if (sum?.dataset.workResultDiffSummary) openDiffs.add(sum.dataset.workResultDiffSummary);
+		}
+		for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details:not([open])")) {
+			const sum = dt.querySelector("[data-work-result-diff-summary]");
+			if (sum?.dataset.workResultDiffSummary) openDiffs.delete(sum.dataset.workResultDiffSummary);
+		}
 		const sections = [];
+		const panelReasons = new Set();
 		const unlistedFacets = [];
 		const unlistedFileStatuses = [];
 		const heading = h("h3", {}, t("wres_heading"));
@@ -34193,6 +34283,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		sections.push(stateP);
 		if (exec.state_reason) {
 			const reason = exec.state_reason;
+			panelReasons.add(reason);
 			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
 			else if (KNOWN_REASONS.has(reason)) {
 				const textKey = `wres_reason_${reason}`;
@@ -34229,7 +34320,14 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			href: opHash,
 			"data-work-result-focus": "operation"
 		}, t("wres_view_operation")));
-		if (linkItems.length > 0) sections.push(h("div", { class: "pm-work-result-links" }, ...linkItems));
+		if (linkItems.length > 0) {
+			const linksContainer = h("div", { class: "pm-work-result-links" });
+			for (let i = 0; i < linkItems.length; i++) {
+				if (i > 0) linksContainer.append(" · ");
+				linksContainer.append(linkItems[i]);
+			}
+			sections.push(linksContainer);
+		}
 		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
 		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
 		if (exec.state_facets?.self_reported === "claimed_done") {
@@ -34356,9 +34454,15 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
 			changesBox.append(partlyText);
 			const changeReasons = [];
-			if (summary.reason) changeReasons.push(summary.reason);
+			if (summary.reason && !panelReasons.has(summary.reason)) {
+				changeReasons.push(summary.reason);
+				panelReasons.add(summary.reason);
+			}
 			if (Array.isArray(summary.reasons)) {
-				for (const r of summary.reasons) if (!changeReasons.includes(r)) changeReasons.push(r);
+				for (const r of summary.reasons) if (!changeReasons.includes(r) && !panelReasons.has(r)) {
+					changeReasons.push(r);
+					panelReasons.add(r);
+				}
 			}
 			if (changeReasons.length > 0) {
 				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
@@ -34371,6 +34475,7 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				changesBox.append(reasonsList);
 			}
 		}
+		if (canChanges()) changesBox.append(renderCurrentChangesBlock());
 		const files = summary.files || [];
 		if (files.length > 0) {
 			const renderFileRow = (f) => {
@@ -34423,7 +34528,11 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 				class: "ui-pill tone-bad",
 				"data-status": "unavailable"
 			}, t("wres_status_unavailable")));
-			const reasons = completeness.reasons || [];
+			const reasons = (completeness.reasons || []).filter((code) => {
+				if (panelReasons.has(code)) return false;
+				panelReasons.add(code);
+				return true;
+			});
 			if (reasons.length > 0) {
 				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
 				for (const code of reasons) {
@@ -34497,6 +34606,334 @@ function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisi
 		panelElement.replaceChildren(...sections);
 		updateVisibility(true);
 		restoreFocus(focusToken);
+	}
+	function sortCommitsOldestFirst(commitsTouched, allCommits) {
+		if (!Array.isArray(commitsTouched)) return [];
+		if (!Array.isArray(allCommits) || allCommits.length === 0) return [...commitsTouched];
+		const order = new Map();
+		allCommits.forEach((sha, idx) => order.set(sha, idx));
+		return [...commitsTouched].sort((a, b) => {
+			const idxA = order.has(a) ? order.get(a) : -1;
+			return (order.has(b) ? order.get(b) : -1) - idxA;
+		});
+	}
+	function renderDiffContent(container, commit, path, key, summaryNode) {
+		container.replaceChildren();
+		if (diffLoading.has(key)) {
+			container.append(h("p", { class: "muted pm-work-result-diff-loading" }, t("ui_loading") || "Loading…"));
+			return;
+		}
+		const err = diffErrors.get(key);
+		if (err) {
+			if (err.status === 404 || err.code === "PM_DIFF_NOT_FOUND") container.append(h("p", { class: "muted pm-work-result-diff-notice" }, t("error_code_PM_DIFF_NOT_FOUND")));
+			else {
+				const errBoxNode = errorBox ? errorBox(err, { within: container }) : h("div", { class: "error" }, err?.message || String(err));
+				const retryBtn = button({
+					label: t("wres_try_again"),
+					class: "ui-button secondary ui-sm pm-work-result-retry",
+					onClick: () => {
+						loadDiff(commit, path, key, container, summaryNode);
+					}
+				});
+				container.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
+			}
+			return;
+		}
+		const data = diffCache.get(key);
+		if (!data) return;
+		const stats = data.stats || {};
+		const adds = stats.additions === "unknown" || stats.additions == null ? "?" : `+${stats.additions}`;
+		const dels = stats.deletions === "unknown" || stats.deletions == null ? "?" : `−${stats.deletions}`;
+		container.append(h("p", { class: "pm-work-result-diff-stats mono" }, `${adds} ${dels}`));
+		if (data.truncated === true) {
+			const noticeP = h("p", { class: "muted pm-work-result-diff-notice" });
+			const rawText = t("wres_diff_truncated");
+			if (rawText.includes("256 KiB")) {
+				const [before, after] = rawText.split("256 KiB");
+				noticeP.append(before, h("span", { class: "mono" }, "256 KiB"), after);
+			} else noticeP.textContent = rawText;
+			container.append(noticeP);
+		}
+		if (data.available === false) {
+			let reasonText = "";
+			if (data.reason === "diff_exceeded_pipe_limit") reasonText = t("wres_reason_diff_exceeded_pipe_limit");
+			else if (data.reason && t(`wres_reason_${data.reason}`) !== `wres_reason_${data.reason}`) reasonText = t(`wres_reason_${data.reason}`);
+			else if (data.reason && t(`error_code_${data.reason}`) !== `error_code_${data.reason}`) reasonText = t(`error_code_${data.reason}`);
+			else reasonText = t("wres_reason_generic_limit");
+			container.append(h("p", { class: "muted pm-work-result-diff-notice" }, reasonText));
+		} else if (typeof data.diff === "string") {
+			const pre = h("pre", {
+				class: "pm-work-result-diff-pre mono",
+				tabindex: "0",
+				role: "region",
+				"aria-label": t("wres_diff_region_label", {
+					path,
+					sha: commit.slice(0, 12)
+				}),
+				"data-work-result-diff-region": key
+			});
+			pre.textContent = data.diff;
+			container.append(pre);
+		}
+	}
+	async function loadDiff(commit, path, key, container, summaryNode) {
+		if (diffLoading.has(key)) return;
+		diffLoading.add(key);
+		diffErrors.delete(key);
+		const ticket = ++diffSerial;
+		const attemptId = activeAttempt?.attempt_id;
+		renderDiffContent(container, commit, path, key, summaryNode);
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/diff?commit=${encodeURIComponent(commit)}&path=${encodeURIComponent(path)}`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== diffSerial || activeAttempt?.attempt_id !== attemptId) return;
+			diffCache.set(key, data);
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== diffSerial || activeAttempt?.attempt_id !== attemptId) return;
+			diffErrors.set(key, err);
+		} finally {
+			diffLoading.delete(key);
+			if (ticket === diffSerial && activeAttempt?.attempt_id === attemptId && panelElement.contains(container)) {
+				renderDiffContent(container, commit, path, key, summaryNode);
+				if (document.activeElement === summaryNode || container.contains(document.activeElement)) summaryNode.focus();
+			}
+		}
+	}
+	async function readCurrentChanges(isReadAgain = false) {
+		if (changesBusy) return;
+		changesBusy = true;
+		const ticket = ++changesSerial;
+		const attemptId = activeAttempt?.attempt_id;
+		if (isReadAgain) {
+			diffCache.clear();
+			diffErrors.clear();
+			diffLoading.clear();
+			openDiffs.clear();
+			for (const dt of panelElement.querySelectorAll(".pm-work-result-diff-details[open]")) dt.open = false;
+		}
+		currentChangesError = null;
+		if (lastEnvelope && activeAttempt) renderEnvelope(lastEnvelope, activeAttempt);
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/changes`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+			currentChanges = data;
+			isOutOfDate = false;
+			currentChangesError = null;
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== changesSerial || activeAttempt?.attempt_id !== attemptId) return;
+			currentChangesError = err;
+		} finally {
+			changesBusy = false;
+			if (ticket === changesSerial && activeAttempt?.attempt_id === attemptId && lastEnvelope) renderEnvelope(lastEnvelope, activeAttempt);
+		}
+	}
+	function renderCurrentChangesBlock() {
+		const block = h("div", {
+			class: "pm-work-result-current-changes",
+			"data-work-result-current-changes": ""
+		});
+		if (changesBusy) block.setAttribute("aria-busy", "true");
+		if (currentChangesError) {
+			const errBoxNode = errorBox ? errorBox(currentChangesError, { within: block }) : h("div", { class: "error" }, currentChangesError?.message || String(currentChangesError));
+			const retryBtn = button({
+				label: t("wres_try_again"),
+				class: "ui-button secondary ui-sm pm-work-result-retry",
+				onClick: () => {
+					readCurrentChanges(false);
+				}
+			});
+			block.append(h("div", { class: "pm-work-result-error-box" }, errBoxNode, retryBtn));
+			return block;
+		}
+		if (isOutOfDate) {
+			const outPill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "out-of-date"
+			}, t("wres_out_of_date"));
+			const readAgainBtn = button({
+				label: t("wres_read_again"),
+				class: "ui-button secondary ui-sm pm-work-result-read-again",
+				onClick: () => {
+					readCurrentChanges(true);
+				}
+			});
+			if (changesBusy) readAgainBtn.setAttribute("aria-disabled", "true");
+			block.append(h("div", { class: "pm-work-result-out-of-date-banner" }, outPill, " ", readAgainBtn));
+		} else {
+			const readBtn = button({
+				label: t("wres_read_current_changes"),
+				class: "ui-button secondary ui-sm pm-work-result-read-changes",
+				onClick: () => {
+					readCurrentChanges(false);
+				}
+			});
+			if (changesBusy) readBtn.setAttribute("aria-disabled", "true");
+			block.append(readBtn);
+		}
+		if (!currentChanges) return block;
+		const headSha = currentChanges.live_head_commit;
+		const headP = h("p", { class: "pm-work-result-head" });
+		headP.append(h("strong", {}, `${t("wres_head")}: `));
+		if (headSha && headSha !== "unknown") headP.append(h("span", { class: "mono" }, headSha.slice(0, 12)));
+		else headP.append(t("wres_unknown"));
+		block.append(headP);
+		const freshness = currentChanges.head_freshness;
+		let freshnessKey = "wres_freshness_unavailable";
+		if (freshness === "live") freshnessKey = "wres_freshness_live";
+		else if (freshness === "cached_receipt") freshnessKey = "wres_freshness_cached_receipt";
+		block.append(h("p", { class: "muted pm-work-result-freshness" }, t(freshnessKey)));
+		const curSummary = currentChanges.summary || {};
+		const isCurComplete = curSummary.complete === true && (!curSummary.unavailable || curSummary.unavailable.length === 0);
+		const curFilesCountNum = Number.isSafeInteger(curSummary.file_count) ? curSummary.file_count : Array.isArray(curSummary.files) ? curSummary.files.length : null;
+		const curCommitsCountNum = Number.isSafeInteger(curSummary.commit_count) ? curSummary.commit_count : Array.isArray(curSummary.commits) ? curSummary.commits.length : null;
+		let curSummaryKey = "wres_changes_summary";
+		if (curFilesCountNum === 1 && curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one";
+		else if (curFilesCountNum === 1) curSummaryKey = "wres_changes_summary_one_file";
+		else if (curCommitsCountNum === 1) curSummaryKey = "wres_changes_summary_one_commit";
+		const curSummaryText = t(curSummaryKey, {
+			files: formatCount(curFilesCountNum),
+			commits: formatCount(curCommitsCountNum),
+			additions: formatCount(curSummary.additions),
+			deletions: formatCount(curSummary.deletions)
+		});
+		if (isCurComplete) block.append(h("p", { class: "pm-work-result-changes-summary" }, curSummaryText));
+		else block.append(h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read")));
+		const blockReasons = new Set();
+		if (!isCurComplete) {
+			const curChangeReasons = [];
+			if (curSummary.reason) {
+				curChangeReasons.push(curSummary.reason);
+				blockReasons.add(curSummary.reason);
+			}
+			if (Array.isArray(curSummary.reasons)) {
+				for (const r of curSummary.reasons) if (!curChangeReasons.includes(r) && !blockReasons.has(r)) {
+					curChangeReasons.push(r);
+					blockReasons.add(r);
+				}
+			}
+			if (curChangeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of curChangeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				block.append(reasonsList);
+			}
+		}
+		const curCompleteness = currentChanges.completeness;
+		const curCompStatus = curCompleteness?.status;
+		if (curCompStatus && curCompStatus !== "complete") {
+			const compDiv = h("div", { class: "pm-work-result-completeness" });
+			if (curCompStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
+			const compReasons = (curCompleteness.reasons || []).filter((code) => {
+				if (blockReasons.has(code)) return false;
+				blockReasons.add(code);
+				return true;
+			});
+			if (compReasons.length > 0) {
+				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
+				for (const code of compReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonList.append(h("li", {}, text));
+				}
+				compDiv.append(reasonList);
+			}
+			block.append(compDiv);
+		}
+		const curFiles = curSummary.files || [];
+		if (curFiles.length > 0) {
+			const curFileList = h("ul", { class: "pm-work-result-file-list" });
+			for (const f of curFiles) {
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
+				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
+				const row = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
+				if (canDiff()) {
+					const commits = sortCommitsOldestFirst(f.commits_touched, curSummary.commits);
+					for (const commit of commits) {
+						const key = `${commit}:${f.path}`;
+						const isOpen = openDiffs.has(key);
+						const sha12 = commit.slice(0, 12);
+						const summaryNode = h("summary", {
+							"data-work-result-diff-summary": key,
+							tabindex: "0"
+						}, t("wres_show_diff_label"), " · ", h("span", { class: "mono" }, sha12));
+						const bodyContainer = h("div", { class: "pm-work-result-diff-body" });
+						renderDiffContent(bodyContainer, commit, f.path, key, summaryNode);
+						const diffDetails = disclosure({ element: h("details", {
+							class: "pm-work-result-diff-details",
+							open: isOpen
+						}, summaryNode, bodyContainer) });
+						diffDetails.addEventListener("toggle", () => {
+							if (diffDetails.open) {
+								openDiffs.add(key);
+								if (!diffCache.has(key) && !diffLoading.has(key)) loadDiff(commit, f.path, key, bodyContainer, summaryNode);
+							} else openDiffs.delete(key);
+						});
+						row.append(diffDetails);
+					}
+				}
+				curFileList.append(row);
+			}
+			block.append(curFileList);
+		}
+		const curUncommitted = currentChanges.uncommitted || {};
+		const uncommittedBox = h("div", { class: "pm-work-result-uncommitted-box" });
+		if (curUncommitted.count === "unknown") uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(curUncommitted.count) && curUncommitted.count > 0) {
+			uncommittedBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: curUncommitted.count })));
+			if (Array.isArray(curUncommitted.files) && curUncommitted.files.length > 0) {
+				const uncommittedList = h("ul", { class: "pm-work-result-file-list pm-work-result-uncommitted-list" });
+				for (const uf of curUncommitted.files) {
+					const p = typeof uf === "string" ? uf : uf?.path;
+					const s = typeof uf === "object" && uf?.status ? uf.status : null;
+					const li = h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, p));
+					if (s) {
+						let statusLabel = s;
+						if (s === "M" || s === "modified") statusLabel = t("wres_file_modified");
+						else if (s === "A" || s === "added") statusLabel = t("wres_file_added");
+						else if (s === "D" || s === "deleted") statusLabel = t("wres_file_deleted");
+						li.append(" ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel));
+					}
+					uncommittedList.append(li);
+				}
+				uncommittedBox.append(uncommittedList);
+			}
+		}
+		uncommittedBox.append(h("p", { class: "muted pm-work-result-uncommitted-no-diff" }, t("wres_uncommitted_no_diff")));
+		block.append(uncommittedBox);
+		return block;
 	}
 	return {
 		element: panelElement,
