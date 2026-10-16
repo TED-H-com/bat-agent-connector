@@ -1518,7 +1518,7 @@ class AttemptResultCollector:
             source_generation=source_generation,
             turn_marker=turn_marker,
             last_message_id=last_message_id,
-            turn_slice_items=slice_items,
+            turn_items=slice_items,
             decoder_version=self.decoder_version,
         )
         self.last_digest_bytes = digest_bytes
