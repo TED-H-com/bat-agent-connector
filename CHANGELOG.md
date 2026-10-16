@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Keyboard focus stays inside an inspector while its content is still loading, instead of leaving the dialog for the page.
+
 - Add the `work.start` compound action, read-only `pm_work_start_preview` and
   immutable `work_attempts` reads (`pm_work_attempts_list`, `pm_work_attempt_get`)
   to start a bound Work item in its own managed BAT worktree and session from a

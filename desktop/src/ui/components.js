@@ -234,7 +234,7 @@ export function menu({button: trigger, items}) {
   trigger.addEventListener('keydown', event => {if (['ArrowDown', 'ArrowUp'].includes(event.key)) {event.preventDefault(); open(event.key === 'ArrowUp');}});
   root.close = close; root.dispose = () => close(false); return root;
 }
-const focusables = root => [...root.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]')].filter(node => node.getClientRects().length && !node.closest('[hidden], [inert]'));
+const focusables = root => [...root.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]')].filter(node => node.getClientRects().length && !node.closest('[hidden], [inert]') && getComputedStyle(node).visibility === 'visible');
 export function trapFocus(root, event) {
   if (event.key !== 'Tab') return;
   const nodes = focusables(root), first = nodes[0], last = nodes.at(-1);
