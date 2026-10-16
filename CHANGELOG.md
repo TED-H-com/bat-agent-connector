@@ -2,6 +2,12 @@
 
 ## Next release (unreleased)
 
+- Result sources, the pull request list, project skills and model preferences keep
+  the keyboard on Refresh, More, Previous, Next or Save while that action runs.
+  The control looks unavailable and a second press does nothing. When More,
+  Previous, Next or Save cannot keep focus, it moves to the new child, the other
+  page control, or the status line.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.

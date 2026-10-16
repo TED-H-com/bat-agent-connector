@@ -5,10 +5,16 @@ const itemHref = item => `#/item/${encodeURIComponent(item.work_item_id)}`;
 const artifactHref = artifact => `#/artifact-review/artifact/${encodeURIComponent(artifact.artifact_id)}/${artifact.revision}`;
 const date = value => timeStamp(value);
 export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, onEvents, errorBox}) {
-  let doc = null, serial = 0, children = [], refreshing = null;
+  let doc = null, serial = 0, children = [], refreshing = null, pressed = null;
   const warning = h('div', {'data-child-warning': ''}), status = h('p', {class: 'muted', role: 'status'}), statusDetails = h('div'), body = h('div');
-  const refresh = iconButton({icon:'refresh-cw', label:t('results_refresh'), ...{class: 'mini', type: 'button', onclick: () => load()}});
-  const more = h('button', {class: 'secondary', type: 'button', hidden: true, onclick: () => load(doc?.children_next_cursor)}, t('results_more'));
+  const refresh = iconButton({icon:'refresh-cw', label:t('results_refresh'), ...{class: 'mini', type: 'button', onclick: () => {
+    if (refreshing) return;
+    pressed = refresh; load();
+  }}});
+  const more = h('button', {class: 'secondary', type: 'button', hidden: true, onclick: () => {
+    if (refreshing) return;
+    pressed = more; load(doc?.children_next_cursor);
+  }}, t('results_more'));
   const details = h('details', {}, h('summary', {}, t('results_title')), status, statusDetails, h('div', {class: 'actions'}, refresh), body, more);
   const box = h('section', {class: 'result-sources panel', 'data-result-sources': ''}, warning, details);
   function renderSource(item, own = false) {
@@ -53,7 +59,11 @@ export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, on
       h('p', {}, h('a', {href: itemHref(item)}, t('results_open_child'))), content);
   }
   function render() {
-    const focused = document.activeElement?.getAttribute('href'), opens = new Set([...body.querySelectorAll('details[open][data-result-child]')].map(node => node.dataset.resultChild));
+    const active = document.activeElement;
+    const focused = active?.getAttribute?.('href');
+    const focusedChild = [...body.querySelectorAll('details[data-result-child]')].find(child => [...child.children].some(node => node.tagName === 'SUMMARY' && node === active));
+    const focusedChildId = focusedChild ? focusedChild.getAttribute('data-result-child') : '';
+    const opens = new Set([...body.querySelectorAll('details[open][data-result-child]')].map(node => node.dataset.resultChild));
     const unfinished = children.filter(child => !child.archived && !child.completion.approved);
     warning.replaceChildren(...(unfinished.length ? [h('p', {class: 'note warn'}, t('results_unfinished', {count: unfinished.length}), ' ',
       ...unfinished.flatMap((child, index) => [index ? ' · ' : '', h('a', {href: itemHref(child)}, child.title)]))] : []));
@@ -64,30 +74,87 @@ export function resultSourcesPanel({h, t, api, guard, workItemId, linkTarget, on
       renderSource(doc.item, true), ...children.map(child => renderSource(child)));
     for (const node of body.querySelectorAll('details[data-result-child]')) node.open = opens.has(node.dataset.resultChild);
     if (focused) [...body.querySelectorAll('a')].find(node => node.getAttribute('href') === focused)?.focus({preventScroll: true});
+    if (focusedChildId) {
+      const match = [...body.querySelectorAll('details')].find(node => node.getAttribute('data-result-child') === focusedChildId);
+      const summary = match && [...match.children].find(node => node.tagName === 'SUMMARY');
+      if (summary) summary.focus({preventScroll: true});
+    }
     status.replaceChildren(timeLabel(t, 'models_source', {source: doc.source, time: date(doc.read_at)}));
     statusDetails.replaceChildren();
     more.hidden = !doc.children_next_cursor;
   }
+  function shownEnabled(node) {
+    return node && !node.disabled && !node.hidden && node.getClientRects().length > 0;
+  }
+  function arm() {
+    const flight = Boolean(refreshing);
+    for (const button of [refresh, more]) {
+      if (flight && (button === pressed || !button.hidden)) {
+        button.disabled = false;
+        button.setAttribute('aria-disabled', 'true');
+      } else {
+        button.removeAttribute('aria-disabled');
+        button.disabled = false;
+      }
+    }
+    if ([refresh, more].some(button => button.getAttribute('aria-disabled') === 'true')) status.setAttribute('aria-busy', 'true');
+    else status.removeAttribute('aria-busy');
+  }
+  function settle(button, result) {
+    try {guard();} catch {return;}
+    if (!box.isConnected || !button) return;
+    const active = document.activeElement;
+    if (active !== button && active !== document.body) return;
+    if (!button.hidden && !button.disabled) return;
+    if (button === more && more.hidden) {
+      const match = result.addedId ? [...body.querySelectorAll('details')].find(node => node.getAttribute('data-result-child') === result.addedId) : null;
+      const summary = match && [...match.children].find(node => node.tagName === 'SUMMARY');
+      if (summary) {summary.focus({preventScroll: true}); return;}
+      refresh.focus({preventScroll: true});
+      return;
+    }
+    const group = button.parentElement;
+    const controls = group ? [...group.querySelectorAll('button, input, select, a')] : [];
+    const next = controls.slice(controls.indexOf(button) + 1).find(shownEnabled);
+    if (next) {next.focus({preventScroll: true}); return;}
+    status.tabIndex = -1;
+    status.focus({preventScroll: true});
+  }
   function load(after = '') {
     if (refreshing) return refreshing.then(() => load(after));
-    refreshing = loadNow(after).finally(() => {refreshing = null;});
-    return refreshing;
+    let resolve;
+    const done = new Promise(finish => {resolve = finish;});
+    const result = {current: false, addedId: null};
+    refreshing = done;
+    arm();
+    loadNow(after, result).finally(() => {
+      const button = pressed;
+      pressed = null;
+      refreshing = null;
+      arm();
+      if (result.current && box.isConnected) settle(button, result);
+      resolve();
+    });
+    return done;
   }
-  async function loadNow(after) {
-    const request = ++serial; refresh.disabled = more.disabled = true;
+  async function loadNow(after, result) {
+    const request = ++serial;
     try {
       const next = await api('GET', `/work-items/${encodeURIComponent(workItemId)}/result-sources?limit=50${after ? `&after=${encodeURIComponent(after)}` : ''}`);
       guard(); if (request !== serial) return;
       if (next.version !== 1 || next.item?.work_item_id !== workItemId || !Array.isArray(next.children)) throw Error(t('results_invalid'));
+      const previous = new Set(children.map(child => child.work_item_id));
       doc = next; children = after ? [...new Map([...children, ...next.children].map(child => [child.work_item_id, child])).values()] : next.children;
+      result.addedId = next.children.find(child => !previous.has(child.work_item_id))?.work_item_id || null;
+      result.current = true;
       render();
     } catch (error) {try {guard(); if (request === serial) {
       errorBox?.(error);
       const presentation = errorPresentation(error, t);
       status.textContent = `${t('models_not_refreshed')} ${presentation.summary}`;
       statusDetails.replaceChildren(errorDetails(presentation) || '');
+      result.current = true;
     }} catch { /* retired */ }}
-    finally {refresh.disabled = more.disabled = false;}
   }
   const off = onEvents(event => ['work_item', 'integration', 'artifact', 'operation', 'session'].includes(event.resource_type) ? load() : undefined);
   load(); return {box, dispose() {serial++; off();}};
