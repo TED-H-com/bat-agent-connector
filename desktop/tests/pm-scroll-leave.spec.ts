@@ -80,10 +80,13 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
   let holdPathPrefix: string | null = null;
   let threadsCallCount = 0;
   let heldReleaseCount = 0;
+  let heldSerial = 0;
+  let lastHeldToken: string | null = null;
 
   const holdNext = (pathPrefix: string) => {
     holdPathPrefix = pathPrefix;
     readStarted = false;
+    lastHeldToken = null;
     heldPromise = new Promise<void>(resolve => {
       releaseHeld = resolve;
     });
@@ -109,30 +112,40 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
       return ws.dispatch(input);
     }
 
+    // One token identifies this response after the body is parsed. A later read of the
+    // same path (Requirements catalogues /kanban; the Board reads /plans/accepted)
+    // must not be mistaken for the read this fixture held.
+    let heldToken: string | null = null;
     if (holdPathPrefix && path.startsWith(holdPathPrefix) && heldPromise) {
       readStarted = true;
       holdPathPrefix = null;
+      heldToken = String(++heldSerial);
+      lastHeldToken = heldToken;
       await heldPromise;
       heldReleaseCount++;
     }
+    const finish = (result: any) => {
+      if (!heldToken || !result || typeof result !== 'object') return result;
+      return {...result, headers: {...(result.headers || {}), 'x-batc-held-read': heldToken}};
+    };
 
     if (path.endsWith('/threads') && path.includes('/pm/workspaces/')) {
       threadsCallCount++;
     }
 
-    if (path === '/capabilities') return {status: 200, data: combinedCaps()};
+    if (path === '/capabilities') return finish({status: 200, data: combinedCaps()});
     if (path === '/bootstrap') {
-      return {
+      return finish({
         status: 200,
         data: {
           capabilities: combinedCaps(),
           sync: {version: 1, server_id: 'scroll-fixture', principal_id: ws.fixture.data.principal, checkpoint: {cursor: 0, token: 'w-0'}}
         }
-      };
+      });
     }
 
     if (path === `/pm/workspaces/${fixtureWorkspaceId}/lifecycle`) {
-      return {
+      return finish({
         status: 200,
         data: {
           workspace_id: fixtureWorkspaceId,
@@ -152,17 +165,17 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
           maintenance: {available: false, reason: 'release_baseline_and_policy_required'},
           inflight_summary: {visible_unresolved: 0, visible_retained: 0, visibility_filtered: false}
         }
-      };
+      });
     }
 
     if (path.endsWith('/projects') && path.includes('/pm/workspaces/')) {
-      return {status: 200, data: {workspace_id: fixtureWorkspaceId, bindings: [], next_cursor: null}};
+      return finish({status: 200, data: {workspace_id: fixtureWorkspaceId, bindings: [], next_cursor: null}});
     }
     if (path.endsWith('/work') && path.includes('/pm/workspaces/')) {
-      return {status: 200, data: {workspace_id: fixtureWorkspaceId, bindings: [], next_cursor: null}};
+      return finish({status: 200, data: {workspace_id: fixtureWorkspaceId, bindings: [], next_cursor: null}});
     }
     if (path === `/pm/workspaces/${fixtureWorkspaceId}/overview`) {
-      return {
+      return finish({
         status: 200,
         data: {
           workspace_id: fixtureWorkspaceId,
@@ -171,14 +184,14 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
           milestones: [],
           recent_deliveries: [],
         }
-      };
+      });
     }
 
     if (path.startsWith('/pm/')) {
-      return pm.dispatch(input);
+      return finish(await pm.dispatch(input));
     }
 
-    return ws.dispatch(input);
+    return finish(await ws.dispatch(input));
   };
 
   return {
@@ -189,6 +202,7 @@ function createScrollFixture(locale = 'en', {withLifecycle = false} = {}) {
     holdNext,
     release,
     isReadStarted: () => readStarted,
+    heldToken: () => lastHeldToken,
     threadsCount: () => threadsCallCount,
     heldResolvedCount: () => heldReleaseCount,
   };
@@ -541,31 +555,30 @@ test.describe('PM Scroll Leave & Restore', () => {
     });
   }
 
-  async function countCompletedBodies(page: Page, prefix: string): Promise<number> {
-    return await page.evaluate(p => {
-      const urls = (window as any).__bodyCompletedUrls || [];
-      return urls.filter((u: string) => u.includes(p)).length;
-    }, prefix);
+  // The held response carries x-batc-held-read. Counting every body whose URL contains
+  // that path is not the same read: Requirements catalogues /kanban while a Board read
+  // of that path is held, and the Board reads /plans/accepted while a Requirements read
+  // of that path is held. Those bodies can finish in one frame and skip an exact count.
+  async function installHeldBodyProbe(page: Page) {
+    await page.addInitScript(() => {
+      const originalFetch = window.fetch;
+      (window as any).__heldBodyTokens = [];
+      window.fetch = async function(...args) {
+        const response = await originalFetch.apply(this, args);
+        const held = response.headers.get('x-batc-held-read');
+        const originalJson = response.json.bind(response);
+        response.json = async function() {
+          const data = await originalJson();
+          if (held) (window as any).__heldBodyTokens.push(held);
+          return data;
+        };
+        return response;
+      };
+    });
   }
 
-  /**
-   * Waits until the completed body count for holdPath is exactly one higher than beforeCount,
-   * then waits one animation frame.
-   *
-   * Assumption: no other read of holdPath completes between the count and the release of the held read.
-   * - In board to requirements: Board is hidden (setActive(false)), its controls are disabled,
-   *   and no background polling requests /kanban.
-   * - In requirements to board: Requirements view was unmounted during load and retired; no background
-   *   polling requests /plans/accepted, and the held read is the only one in flight.
-   */
-  async function syncHeldBodyCompletion(page: Page, holdPath: string, beforeCount: number): Promise<void> {
-    await page.waitForFunction(
-      ({prefix, target}) => {
-        const urls = (window as any).__bodyCompletedUrls || [];
-        return urls.filter((u: string) => u.includes(prefix)).length === target;
-      },
-      {prefix: holdPath, target: beforeCount + 1}
-    );
+  async function syncHeldBodyCompletion(page: Page, token: string): Promise<void> {
+    await page.waitForFunction(expected => ((window as any).__heldBodyTokens || []).includes(expected), token);
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(resolve)));
   }
 
@@ -574,21 +587,7 @@ test.describe('PM Scroll Leave & Restore', () => {
     test(`hidden view keeps its hands off the window: board to requirements (en ${width})`, async ({page}) => {
       const height = width === 1440 ? 900 : 844;
       await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), 'en');
-      await page.addInitScript(() => {
-        const originalFetch = window.fetch;
-        (window as any).__bodyCompletedUrls = [];
-        window.fetch = async function(...args) {
-          const response = await originalFetch.apply(this, args);
-          const url = typeof args[0] === 'string' ? args[0] : (args[0] && (args[0] as any).url) || '';
-          const originalJson = response.json.bind(response);
-          response.json = async function() {
-            const data = await originalJson();
-            (window as any).__bodyCompletedUrls.push(url);
-            return data;
-          };
-          return response;
-        };
-      });
+      await installHeldBodyProbe(page);
       await page.setViewportSize({width, height});
 
       const f = createScrollFixture('en');
@@ -619,6 +618,8 @@ test.describe('PM Scroll Leave & Restore', () => {
         location.hash = `#/pm/${wsId}/board`;
       }, {wsId: fixtureWorkspaceId});
       await expect.poll(() => f.isReadStarted()).toBe(true);
+      const held = f.heldToken();
+      expect(held).toBeTruthy();
       await expect(page.locator('#main h1').first()).toHaveText('Board');
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
@@ -635,12 +636,9 @@ test.describe('PM Scroll Leave & Restore', () => {
       await expect(page.locator('button[data-pm-refresh]')).toBeEnabled();
       await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(200);
 
-      // 6. Release the read, sync, and expect 200.
-      // Assumption: no other read of holdPath completes between the count and f.release().
-      // Why this holds: Board is hidden (setActive(false)), its controls are disabled, and no background polling requests /kanban.
-      const beforeCount = await countCompletedBodies(page, holdPath);
+      // 6. Release the held Board read. Wait for that body, then one frame. The window stays at 200.
       f.release();
-      await syncHeldBodyCompletion(page, holdPath, beforeCount);
+      await syncHeldBodyCompletion(page, held!);
 
       await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(200);
     });
@@ -648,21 +646,7 @@ test.describe('PM Scroll Leave & Restore', () => {
     test(`hidden view keeps its hands off the window: requirements to board (en ${width})`, async ({page}) => {
       const height = width === 1440 ? 900 : 844;
       await page.addInitScript(l => Object.defineProperty(navigator, 'language', {value: l}), 'en');
-      await page.addInitScript(() => {
-        const originalFetch = window.fetch;
-        (window as any).__bodyCompletedUrls = [];
-        window.fetch = async function(...args) {
-          const response = await originalFetch.apply(this, args);
-          const url = typeof args[0] === 'string' ? args[0] : (args[0] && (args[0] as any).url) || '';
-          const originalJson = response.json.bind(response);
-          response.json = async function() {
-            const data = await originalJson();
-            (window as any).__bodyCompletedUrls.push(url);
-            return data;
-          };
-          return response;
-        };
-      });
+      await installHeldBodyProbe(page);
       await page.setViewportSize({width, height});
 
       const f = createScrollFixture('en');
@@ -689,6 +673,8 @@ test.describe('PM Scroll Leave & Restore', () => {
       f.holdNext(holdPath);
       await page.goBack();
       await expect.poll(() => f.isReadStarted()).toBe(true);
+      const held = f.heldToken();
+      expect(held).toBeTruthy();
 
       // Switch to Board and wait for it to render and settle.
       await page.evaluate(({wsId}) => {
@@ -702,12 +688,9 @@ test.describe('PM Scroll Leave & Restore', () => {
       const expectedScrollY = await page.evaluate(() => window.scrollY);
       expect(expectedScrollY).toBe(0);
 
-      // Release the held read, sync, and expect the window to stay at the second view's position (0).
-      // Assumption: no other read of holdPath completes between the count and f.release().
-      // Why this holds: Requirements view was unmounted during load and retired; no background polling requests /plans/accepted.
-      const beforeCount = await countCompletedBodies(page, holdPath);
+      // Release the held Requirements read. Wait for that body, then one frame. The window stays put.
       f.release();
-      await syncHeldBodyCompletion(page, holdPath, beforeCount);
+      await syncHeldBodyCompletion(page, held!);
 
       await expect.poll(async () => page.evaluate(() => window.scrollY)).toBe(expectedScrollY);
     });
