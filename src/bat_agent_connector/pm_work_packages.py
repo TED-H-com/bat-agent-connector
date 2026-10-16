@@ -477,6 +477,40 @@ def list_packages(ops, principal, workspace_id, *, work_item_id=None, after=0, l
         return _checked(result)
 
 
+def document_readiness_checks(doc, *, accepted_dependencies=frozenset()):
+    checks = []
+
+    def check(name, passed, detail):
+        checks.append({"check": name, "status": "passed" if passed else "blocked", "detail": detail})
+
+    code = doc["code_source"]
+    check("design", doc["design"]["status"] != "unresolved", "Engineering design may be proportionate or explicitly not applicable.")
+    check("delivery_plan", all(doc["delivery"][aspect]["status"] != "unresolved"
+          for aspect in ("migration", "rollout", "rollback", "observation")),
+          "Migration, rollout, rollback and observation need descriptions or explicit tailoring rationales.")
+    check("unresolved", not doc["unresolved"], "Unresolved engineering questions are retained and block this handoff.")
+    check("spec_code_alignment", all(ref["commit_sha"] == code["source_sha"] for ref in doc["source_refs"]),
+          "Different spec and code commits remain distinct; compatibility has not been assessed in this slice.")
+    requirement_ids = {r["id"] for r in doc["requirements"]}
+    check("task_coverage", requirement_ids <= {rid for task in doc["tasks"] for rid in task["requirement_ids"]},
+          "Every selected requirement needs at least one technical task.")
+    for requirement in doc["requirements"]:
+        rid = requirement["id"]
+        refs = {entry["source_input_id"] for entry in requirement["acceptance"]}
+        mapped = {ref for item in doc["verification"] if item["requirement_id"] == rid for ref in item["acceptance_input_ids"]}
+        check("acceptance:" + rid, bool(refs) and refs <= mapped,
+              "Every original acceptance condition needs a proposed verification method; methods have not run.")
+        check("source_status:" + rid, requirement["source_status"] == "user_confirmed"
+              and all(entry["source_status"] == "user_confirmed" for entry in requirement["acceptance"]),
+              "Unconfirmed, assumed or conflicting source statements are preserved; adoption alone does not confirm them.")
+        if requirement["depends_on"]:
+            qualified = set(requirement["depends_on"]) <= accepted_dependencies
+            checks.append({"check": "dependency:" + rid, "status": "passed" if qualified else "blocked", "assessment": "accepted" if qualified else "unknown",
+                           "requirement_ids": requirement["depends_on"],
+                           "detail": "Declared prerequisites have explicit original qualified assessments." if qualified else "Required outcomes have not been evaluated; work claims and checkboxes do not prove readiness."})
+    return checks
+
+
 def readiness(ops, principal, workspace_id, package_id, *, quality_refs=None):
     """Current local handoff checks; never a runtime or delivery authorization."""
     with ops.journal.tx():
@@ -509,30 +543,7 @@ def readiness(ops, principal, workspace_id, package_id, *, quality_refs=None):
         check("code_configuration", configured, "Published head and adapter readiness are not refreshed by this local read.")
         check("project_repository", code["repository"].lower() in {name.lower() for name in project["repositories"]},
               "The current work project must still name the selected code repository.")
-        check("design", doc["design"]["status"] != "unresolved", "Engineering design may be proportionate or explicitly not applicable.")
-        check("delivery_plan", all(doc["delivery"][aspect]["status"] != "unresolved"
-              for aspect in ("migration", "rollout", "rollback", "observation")),
-              "Migration, rollout, rollback and observation need descriptions or explicit tailoring rationales.")
-        check("unresolved", not doc["unresolved"], "Unresolved engineering questions are retained and block this handoff.")
-        check("spec_code_alignment", all(ref["commit_sha"] == code["source_sha"] for ref in doc["source_refs"]),
-              "Different spec and code commits remain distinct; compatibility has not been assessed in this slice.")
-        requirement_ids = {r["id"] for r in doc["requirements"]}
-        check("task_coverage", requirement_ids <= {rid for task in doc["tasks"] for rid in task["requirement_ids"]},
-              "Every selected requirement needs at least one technical task.")
-        for requirement in doc["requirements"]:
-            rid = requirement["id"]
-            refs = {entry["source_input_id"] for entry in requirement["acceptance"]}
-            mapped = {ref for item in doc["verification"] if item["requirement_id"] == rid for ref in item["acceptance_input_ids"]}
-            check("acceptance:" + rid, bool(refs) and refs <= mapped,
-                  "Every original acceptance condition needs a proposed verification method; methods have not run.")
-            check("source_status:" + rid, requirement["source_status"] == "user_confirmed"
-                  and all(entry["source_status"] == "user_confirmed" for entry in requirement["acceptance"]),
-                  "Unconfirmed, assumed or conflicting source statements are preserved; adoption alone does not confirm them.")
-            if requirement["depends_on"]:
-                qualified = set(requirement["depends_on"]) <= accepted_dependencies
-                checks.append({"check": "dependency:" + rid, "status": "passed" if qualified else "blocked", "assessment": "accepted" if qualified else "unknown",
-                               "requirement_ids": requirement["depends_on"],
-                               "detail": "Declared prerequisites have explicit original qualified assessments." if qualified else "Required outcomes have not been evaluated; work claims and checkboxes do not prove readiness."})
+        checks.extend(document_readiness_checks(doc, accepted_dependencies=accepted_dependencies))
         return _checked({"version": 1, "workspace_id": workspace_id, "package_id": package_id,
             "document_digest": package["document_digest"], "status": "ready" if all(c["status"] == "passed" for c in checks) else "blocked",
             "ready_for": "engineering_handoff_review", "checks": checks,

@@ -109,6 +109,9 @@ def _visible(db, principal, operation):
     if operation.get('action') == 'github.pr.publish':
         from .pr_publication import operation_visible
         return operation_visible(db, principal, operation)
+    if operation.get("action") == "work.start":
+        from .pm_work_start import operation_visible
+        return operation_visible(db, principal, operation)
     if not operation.get("action", "").startswith("pm."):
         return True
     from .pm_workspace import operation_visible
@@ -128,9 +131,14 @@ def event_visible(db, principal, event):
         row = db.execute("SELECT operation_id,actor,action,target,result FROM operations WHERE operation_id=?",
                          (event["resource_id"],)).fetchone()
         if row is None:
-            return not event.get("body", {}).get("action", "").startswith("pm.")
+            action = event.get("body", {}).get("action", "")
+            return not action.startswith("pm.") and action != "work.start"
         return visible(db, principal, {**dict(row), "target": json.loads(row["target"]),
                                       "result": json.loads(row["result"]) if row["result"] else None})
+    if event["resource_type"] == "pm_work_attempt" or event["kind"].startswith("work.start."):
+        from .pm_work_start import operation_visible
+        operation_id = event.get("body", {}).get("operation_id")
+        return bool(operation_id) and operation_visible(db, principal, {"operation_id": operation_id})
     if event["kind"].startswith("pm.dependencies."):
         from .pm_dependencies import operation_visible
         operation_id = event.get("body", {}).get("operation_id")

@@ -98,6 +98,7 @@ API_RPC = {"worktree_merge": "integrate", "session_record_verification": "operat
            "pm_release_baseline_sources_list": "observe", "pm_release_baseline_releases_list": "observe",
            "pm_release_baseline_deployments_list": "observe", "pm_release_baseline_preview": "observe",
            "pm_work_packages_list": "observe", "pm_work_package_get": "observe", "pm_work_package_readiness_get": "observe",
+           "pm_work_start_preview": "observe", "pm_work_attempts_list": "observe", "pm_work_attempt_get": "observe",
            "pm_issue_mappings_list": "observe", "pm_issue_mapping_get": "observe",
            "pm_follow_up_assessments_list": "observe", "pm_follow_up_assessment_get": "observe",
            "pm_conversation_proposals_list": "observe", "pm_conversation_proposal_get": "observe",
@@ -343,6 +344,18 @@ class TaskDaemon:
         if method in {"pm_execution_verification_configuration", "pm_execution_verification_get"}:
             from .pm_execution_reads import read
             return await read(self.ops, principal, method, params)
+        if method == "pm_work_start_preview":
+            from . import pm_work_start
+            params = dict(params)
+            wid = params.pop("workspace_id", None)
+            wi_id = params.pop("work_item_id", None)
+            body = params.pop("body", None)
+            if body is not None:
+                if params:
+                    raise OperationError("INVALID_PARAMS", "Supply preview fields either in body or as top-level params", 422)
+            else:
+                body = params
+            return await pm_work_start.preview(self.ops, principal, wid, wi_id, body)
         if method.startswith("pm_"):
             from .pm_reads import read
             return read(self.ops, principal, method, params)
