@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Refresh in a project no longer stays disabled when the project changes while
+  it is refreshing.
+
 - The PM Work inspector adds a Start work panel and header action to start
   eligible Work cards. The panel previews readiness facts, explains candidate
   code targets or offers a selector when multiple match, and displays requirement
