@@ -10,9 +10,14 @@ async function setup(page:Page, native=true, options:any={}) {
   Object.defineProperty(navigator, 'clipboard', {value:{writeText:async(text:string)=>env.copies.push(text)}});
   const read=(path:string)=> {
    const p=new URL(path,'http://fixture').pathname;
+   if(p==='/events'){
+    const after=Number(new URL(path,'http://fixture').searchParams.get('after')||0);
+    const event=env.event;
+    if(event&&event.seq>after)return {events:[event],head_cursor:event.seq,next_cursor:event.seq,has_more:false,sync:{checkpoint:{cursor:event.seq,token:'proof'}}};
+    return {events:[],head_cursor:after,next_cursor:after,has_more:false,sync:{checkpoint:{cursor:after,token:'proof'}}};
+   }
    return p==='/capabilities'?caps:p==='/bootstrap'?{capabilities:caps,sync:{version:1,server_id:'fixture-server',principal_id:sessionStorage.getItem('fixture-principal')||env.principal||'fixture-principal',checkpoint:{cursor:0,token:'proof'}}}
-    :p==='/events'?{events:[],head_cursor:0,next_cursor:0,has_more:false,sync:{checkpoint:{cursor:0,token:'proof'}}}
-    :p===`/sessions/demo/${sid}`?{session:{host:'demo',session_id:sid,title,provenance:'manual',api_access:'read_only',workspace:'/not/a/profile/mapping',agent_kind:'claude'}}
+    :p===`/sessions/demo/${sid}`?{session:{host:'demo',session_id:sid,title:env.sessionTitle||title,provenance:'manual',api_access:'read_only',workspace:'/not/a/profile/mapping',agent_kind:'claude'}}
     :{messages:[],checkpoints:[],operations:[],hosts:[],sessions:[],work_items:[],links:[],history:[]};
   };
   env.read=read;
@@ -25,7 +30,7 @@ async function setup(page:Page, native=true, options:any={}) {
    if(command==='fleet_availability')return {configured:!env.missing,platform_supported:true,native_controls:true};
    if(command!=='fleet_control')throw new Error('Unexpected '+command);
    const input=structuredClone(args.input);env.calls.push(input);
-   if(input.action==='overview')return {control_version:1,configuration:{binding:'a'.repeat(64),valid:true},profiles:[{id:'profile-1',label:'Explicit remote choice',connection:'node-1'},{id:'default',label:'Local BAT',connection:null}],selection:{connections:['node-1'],profiles:[],dashboard:false},pending_migration:null,monitor:{state:'running',controllable:true}};
+   if(input.action==='overview'){if(env.holdOverview){env.heldOverview=(env.heldOverview||0)+1;if(env.heldOverview===1)await new Promise(resolve=>{env.releaseOverview=resolve;});}return {control_version:1,configuration:{binding:'a'.repeat(64),valid:true},profiles:[{id:'profile-1',label:'Explicit remote choice',connection:'node-1'},{id:'default',label:'Local BAT',connection:null}],selection:{connections:['node-1'],profiles:[],dashboard:false},pending_migration:null,monitor:{state:'running',controllable:true}};}
    if(input.action==='preview_profile'){
     if(env.previewError)throw new Error(env.previewError);
     env.profile=input.profile_id;env.preview_id=sessionStorage.getItem('fixture-preview-id')||'1'.repeat(32);
@@ -156,6 +161,62 @@ for(const locale of ['en-US','zh-TW']) for(const width of [390,768,1440]) test(`
  mkdirSync('/tmp/bac-session-bat-after',{recursive:true});await page.screenshot({path:`/tmp/bac-session-bat-after/${locale}-${width}.png`,fullPage:true});await context.close();
 });
 
+const bat=(page:Page)=>page.locator('.session-bat');
+test('busy focus: Read keeps the keyboard while the overview is held',async({page})=>{
+ await setup(page);await openMore(page);await page.getByRole('menuitem',{name:'Open in BAT',exact:true}).click();
+ const read=bat(page).getByRole('button',{name:'Read original launch',exact:true});
+ await expect(read).toBeEnabled();
+ const before=(await calls(page,'overview')).length;
+ await page.evaluate(()=>{(window as any).__sessionBat.holdOverview=true;});
+ await read.focus();
+ await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>typeof (window as any).__sessionBat.releaseOverview==='function');
+ await expect(read).toBeFocused();
+ await expect(read).toHaveAttribute('aria-disabled','true');
+ await expect(bat(page).getByRole('status')).toHaveAttribute('aria-busy','true');
+ const held=(await calls(page,'overview')).length;
+ expect(held).toBe(before+1);
+ await page.keyboard.press('Enter');
+ await page.evaluate(()=>{const env=(window as any).__sessionBat;env.holdOverview=false;env.releaseOverview();});
+ await expect(read).toBeEnabled();
+ await expect(read).toBeFocused();
+ expect(await calls(page,'overview')).toHaveLength(held);
+});
+test('busy focus: Review stays disabled without a chosen profile',async({page})=>{
+ await setup(page);await openMore(page);await page.getByRole('menuitem',{name:'Open in BAT',exact:true}).click();
+ const review=bat(page).getByRole('button',{name:'Review selected profile',exact:true});
+ const read=bat(page).getByRole('button',{name:'Read original launch',exact:true});
+ await expect(review).toBeDisabled();
+ await page.evaluate(()=>{(window as any).__sessionBat.holdOverview=true;});
+ await read.focus();
+ await page.keyboard.press('Enter');
+ await page.waitForFunction(()=>typeof (window as any).__sessionBat.releaseOverview==='function');
+ await expect(review).toBeDisabled();
+ await expect(review).not.toHaveAttribute('aria-disabled');
+});
+test('busy focus: Review moves to Launch',async({page})=>{
+ await setup(page);await openMore(page);await page.getByRole('menuitem',{name:'Open in BAT',exact:true}).click();
+ const picker=page.getByRole('combobox',{name:'BAT profile',exact:true});
+ await expect(picker).toBeEnabled();
+ await picker.selectOption('profile-1');
+ const review=bat(page).getByRole('button',{name:'Review selected profile',exact:true});
+ await review.focus();
+ await page.keyboard.press('Enter');
+ const launch=bat(page).getByRole('button',{name:'Open selected profile',exact:true});
+ await expect(launch).toBeFocused();
+ expect(await calls(page,'preview_profile')).toEqual([{action:'preview_profile',profile_id:'profile-1'}]);
+ expect(await calls(page,'launch')).toHaveLength(0);
+});
+test('busy focus: session re-render keeps Read',async({page})=>{
+ await setup(page);await openMore(page);await page.getByRole('menuitem',{name:'Open in BAT',exact:true}).click();
+ const read=bat(page).getByRole('button',{name:'Read original launch',exact:true});
+ await expect(read).toBeEnabled();
+ await read.focus();
+ await expect(read).toBeFocused();
+ await page.evaluate(id=>{(window as any).__sessionBat.sessionTitle='Session reread after event';(window as any).__sessionBat.event={seq:1,kind:'session.updated',resource_type:'session',resource_id:`demo/${id}`};},sid);
+ await expect(page.getByRole('heading',{name:'Session reread after event'})).toBeVisible();
+ await expect(read).toBeFocused();
+});
 test('a different verified central principal cannot load the previous session launch',async({page})=>{
  await setup(page,true,{lose:true});await review(page);await page.getByRole('button',{name:'Open selected profile',exact:true}).click();
  await expect(page.getByText(/Lost reply/)).toBeVisible();
