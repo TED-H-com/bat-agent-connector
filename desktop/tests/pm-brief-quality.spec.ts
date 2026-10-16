@@ -73,6 +73,7 @@ for(const native of [false,true])for(const locale of ['en','zh-TW'])test(`origin
   await page.reload();await openPmSection(page, 'requirements', 'ui_evidence');await page.getByLabel(zh?'Connector 專案':'Connector project',{exact:true}).selectOption(projectId);
   await page.locator('[data-pm-work]>summary').click();
   await capture.getByRole('button',{name:zh?'查回原請求':'Check original request',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(2);
   expect(f.state.writes[1]).toEqual(original);expect(original.body.params.quality_ref).toEqual(f.ref);
   await openPmSection(page, 'overview');await openReportTask(page, 'save');
   await expect(page.getByRole('heading',{name:zh?'儲存報告':'Save report',exact:true})).toBeVisible();

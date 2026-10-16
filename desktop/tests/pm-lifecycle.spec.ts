@@ -138,6 +138,7 @@ for(const native of [false,true])test.describe(native?'native lifecycle':'web li
     const original=structuredClone(f.state.writes[0]);
     await page.reload();await openPmPanel(page,'ui_change_phase');await edit(page,'set_stage');
     await action(page,'set_stage').getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.writes).toHaveLength(2);expect(f.state.writes[1]).toEqual(original);
     expect(original.body.params.stage).toBe('planning');
   });
@@ -265,6 +266,7 @@ test('a newer Maintain observation requires explicit review before a fresh decis
   f.state.maintenance.snapshot_digest='6'.repeat(64);f.base.state.cursor++;
   await expect(editor.getByRole('button',{name:'Record phase',exact:true})).toBeDisabled({timeout:10000});
   await editor.getByRole('button',{name:'Review current activity state',exact:true}).click();await editor.getByRole('button',{name:'Record phase',exact:true}).click();
+  await expect.poll(() => f.state.writes.length).toBe(1);
   expect(f.state.writes[0].body.params.maintenance_ref).toEqual(f.state.maintenance);
 });
 

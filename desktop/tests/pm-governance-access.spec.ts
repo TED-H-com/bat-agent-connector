@@ -24,6 +24,7 @@ for (const native of [false, true]) test.describe(native ? 'native source withdr
     f.state.hiddenRecords = []; await refresh(page);
     await page.locator(`[data-pm-governance-row="${a.record.record_id}"]`).getByRole('button').click();
     await action(page, 'revise').getByRole('button', {name: 'Check original request', exact: true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.writes.at(-1)).toEqual(original); expect(f.state.ops.size).toBe(1);
   });
   test('a readable selection beyond the first page is retained', async ({page}) => {

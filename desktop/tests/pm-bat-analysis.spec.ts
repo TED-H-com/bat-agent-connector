@@ -63,6 +63,7 @@ for (const native of [false,true]) test.describe(native ? 'native BAT analysis' 
     await expect(selector(page)).toHaveValue('bat_analysis');await expect(submit(page)).toBeDisabled();
     await selector(page).selectOption('native_analysis');
     await form(page,false).getByRole('button',{name:'Check original request',exact:true}).click();
+    await expect.poll(() => f.state.writes.length).toBe(2);
     expect(f.state.writes).toHaveLength(2);expect(f.state.writes[1].body).toEqual(f.state.writes[0].body);
     expect(f.state.writes[1].idempotency_key).toBe(f.state.writes[0].idempotency_key);
   });
