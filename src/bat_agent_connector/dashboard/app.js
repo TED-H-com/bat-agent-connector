@@ -15517,6 +15517,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 			return selection;
 		},
 		setAttemptResultVisible(visible) {
+			if (!panel) return;
 			const res = panel.body.querySelector("[data-work-section=\"result\"]");
 			if (res) res.hidden = Boolean(visible);
 		}
