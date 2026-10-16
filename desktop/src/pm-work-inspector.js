@@ -302,6 +302,8 @@ export function workInspector({t, workspaceId, from, mount, onClose = () => {}, 
     get element() {return panel;},
     get selection() {return selection;},
     setAttemptResultVisible(visible) {
+      // Close and board disposal null this panel before Result reports visibility.
+      if (!panel) return;
       const res = panel.body.querySelector('[data-work-section="result"]');
       if (res) res.hidden = Boolean(visible);
     },

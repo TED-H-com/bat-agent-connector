@@ -2822,6 +2822,107 @@ test.describe('Work Result UI (v1.3 E03 Part A)', () => {
     await expect(result.locator('.pm-work-result-stale-banner [data-work-result-retry="result"]')).toBeVisible();
     await expectFocus(page, {tag: 'BUTTON', retry: 'result', disabled: false, ariaDisabled: null});
   });
+
+  async function openShownResult(page: any, f: any) {
+    await page.setViewportSize({width: 1440, height: 900});
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await expect(card).toBeVisible();
+    await card.locator('[data-board-open]').click();
+    const inspector = page.locator('[data-work-inspector]');
+    await expect(inspector).toBeVisible();
+    await expect(inspector.locator('[data-work-section="attempt-result"]')).toBeVisible();
+    await expect(inspector.locator('[data-work-section="result"]')).toBeHidden();
+    return {card, inspector};
+  }
+
+  async function expectResultShownAgain(page: any) {
+    const inspector = page.locator('[data-work-inspector]');
+    await expect(inspector).toBeVisible();
+    await expect(inspector.locator('[data-work-section="attempt-result"]')).toBeVisible();
+    await expect(inspector.locator('[data-work-section="result"]')).toBeHidden();
+    await expect(inspector.locator('.pm-work-result-summary-box')).toContainText('Implemented login flow and validated credentials handling.');
+    expect(pageErrors).toEqual([]);
+  }
+
+  test('14. Close the inspector while a Result is shown, then open the same Work', async ({page}) => {
+    const f = workResultFixture();
+    activeFixture = f;
+    const {card, inspector} = await openShownResult(page, f);
+
+    await inspector.getByRole('button', {name: 'Close', exact: true}).click();
+    await expect(inspector).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+
+    await card.locator('[data-board-open]').click();
+    await expectResultShownAgain(page);
+
+    const reopened = page.locator('[data-work-inspector]');
+    await expect(reopened.getByRole('button', {name: 'Close', exact: true})).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(reopened).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+
+    await card.locator('[data-board-open]').click();
+    await expectResultShownAgain(page);
+  });
+
+  test('15. Leave the board for Discussions while a Result is shown', async ({page}) => {
+    const f = workResultFixture();
+    activeFixture = f;
+    await openShownResult(page, f);
+
+    await page.locator('[data-pm-view="discussions"]').click();
+    await expect(page.locator('[data-pm-region="discussions"] .pd-new-layout')).toBeVisible();
+    await expect(page.locator('[data-work-inspector]')).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test('16. A held Result read released after close renders nothing', async ({page}) => {
+    const f = workResultFixture();
+    activeFixture = f;
+    await page.setViewportSize({width: 1440, height: 900});
+    let release: () => void = () => {};
+    f.state.holdResult = new Promise<void>(resolve => {release = resolve;});
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await expect(card).toBeVisible();
+    await card.locator('[data-board-open]').click();
+    const inspector = page.locator('[data-work-inspector]');
+    await expect(inspector).toBeVisible();
+    await expect.poll(() => f.state.resultRequests.length).toBeGreaterThan(0);
+    expect(await page.locator('[data-work-result]').count()).toBe(1);
+
+    await page.evaluate(() => {
+      (window as any).__heldResult = document.querySelector('[data-work-result]');
+    });
+    const pending = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/result'));
+    await inspector.getByRole('button', {name: 'Close', exact: true}).click();
+    await expect(inspector).toHaveCount(0);
+
+    release();
+    f.state.holdResult = null;
+    await pending;
+    const rendered = await page.evaluate(() => {
+      const node = (window as any).__heldResult as HTMLElement | null;
+      return {
+        captured: Boolean(node),
+        connected: Boolean(node?.isConnected),
+        text: node?.textContent || '',
+        inDocument: Boolean(document.querySelector('[data-work-inspector], [data-work-result]')),
+      };
+    });
+    expect(rendered.captured).toBe(true);
+    expect(rendered.connected).toBe(false);
+    expect(rendered.text).toBe('');
+    expect(rendered.inDocument).toBe(false);
+    expect(pageErrors).toEqual([]);
+  });
 });
 
 

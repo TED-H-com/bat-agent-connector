@@ -90,6 +90,57 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of [1440, 390]) 
     await expect(page.locator('[data-settings-pm-agent] code')).toHaveCount(0);
     expect(s.writes).toHaveLength(0); await s.context.close();
   });
+  test(`Agents Tab during initial eligibility check ${locale} ${width}`, async ({browser}) => {
+    const s = await pathsFixture(browser, {locale, width}); const {page} = s;
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    s.overrides.unshift(async (_input, url) => {
+      if (url.pathname !== '/pm/installation-capabilities') return;
+      await held;
+      return undefined;
+    });
+    await page.goto('/dashboard/#/settings?section=agents');
+    await expect.poll(() => s.reads('/pm/installation-capabilities')).toBe(1);
+    await expect(page.locator('[data-agents-heading]')).toBeFocused();
+    await page.keyboard.press('Tab');
+    const check = page.locator('[data-pm-eligibility-check]');
+    await expect(check).toBeFocused();
+    release();
+    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_ready);
+    await expect(check).toBeFocused();
+    expect(s.writes).toHaveLength(0); await s.context.close();
+  });
+  test(`Agents Enter on check again ${locale} ${width}`, async ({browser}) => {
+    const s = await pathsFixture(browser, {locale, width}); const {page} = s;
+    let holdNext = false;
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    s.overrides.unshift(async (_input, url) => {
+      if (url.pathname !== '/pm/installation-capabilities') return;
+      if (!holdNext) return;
+      await held;
+      return undefined;
+    });
+    await page.goto('/dashboard/#/settings?section=agents');
+    const check = page.locator('[data-pm-eligibility-check]');
+    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_ready);
+    await check.focus();
+    await expect(check).toBeFocused();
+    holdNext = true;
+    const readsBefore = s.reads('/pm/installation-capabilities');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => s.reads('/pm/installation-capabilities')).toBe(readsBefore + 1);
+    await expect(check).toBeFocused();
+    await page.keyboard.press('Enter');
+    await check.click({force: true});
+    expect(s.reads('/pm/installation-capabilities')).toBe(readsBefore + 1);
+    await expect(check).toBeFocused();
+    release();
+    await expect(page.locator('[data-pm-eligibility]')).toHaveText(copy.agents_ready);
+    await expect(check).toBeFocused();
+    expect(s.reads('/pm/installation-capabilities')).toBe(readsBefore + 1);
+    expect(s.writes).toHaveLength(0); await s.context.close();
+  });
   test(`Agents return route ${locale} ${width}`, async ({browser}) => {
     const s = await pathsFixture(browser, {locale, width}); const {page, ids} = s;
     const discussion = `#/pm/${ids.workspaceId}/discussions/${ids.threadIdea}`;
