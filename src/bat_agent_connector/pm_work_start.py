@@ -1480,6 +1480,44 @@ def _finish(ctx, state: dict) -> dict:
     return ctx.effect("work.start.finish", record, receipt_only=True)
 
 
+def _raise_child_stopped(
+    ctx,
+    parent: dict,
+    intent: dict,
+    children: dict[str, dict],
+    child: dict,
+    *,
+    default_code: str,
+    fallback: str,
+    binding_id: str | None = None,
+    package_id: str | None = None,
+    session: dict | None = None,
+) -> None:
+    is_uncertain = child["status"] == "uncertain" or _uncertain(ctx.service, child)
+    stage = "start_unknown" if is_uncertain else "start_failed"
+    _save_progress(
+        ctx,
+        _build_state(
+            parent,
+            intent,
+            children,
+            stage=stage,
+            binding_id=binding_id,
+            package_id=package_id,
+            session=session,
+        ),
+    )
+    reason = _failure_reason(child, fallback)
+    if is_uncertain:
+        code = child["error_code"] or "UNCERTAIN_UNRESOLVED"
+        raise NeedsAttention(code, reason)
+    if child["status"] in {"failed", "cancelled"}:
+        code = child["error_code"] or ("CANCELLED" if child["status"] == "cancelled" else default_code)
+        raise _bad(code, reason, 409)
+    code = child["error_code"] or default_code
+    raise NeedsAttention(code, reason)
+
+
 async def _run(ctx):
     parent = _op(ctx.service.db, ctx.operation_id)
     intent = _intent(parent)
@@ -1502,9 +1540,15 @@ async def _run(ctx):
             _save_progress(ctx, _build_state(parent, intent, children, stage="preparing"))
             raise Wait("waiting_external", "Waiting for work binding child operation", delay_s=1.0)
         if bind_child["status"] != "succeeded":
-            _save_progress(ctx, _build_state(parent, intent, children, stage="start_failed"))
-            code = bind_child["error_code"] or "PM_WORK_BIND_FAILED"
-            raise NeedsAttention(code, _failure_reason(bind_child, "Work binding did not complete"))
+            _raise_child_stopped(
+                ctx,
+                parent,
+                intent,
+                children,
+                bind_child,
+                default_code="PM_WORK_BIND_FAILED",
+                fallback="Work binding did not complete",
+            )
         binding_id = (bind_child.get("result") or {}).get("binding_id")
         if not isinstance(binding_id, str):
             _save_progress(ctx, _build_state(parent, intent, children, stage="start_failed"))
@@ -1549,12 +1593,16 @@ async def _run(ctx):
             )
             raise Wait("waiting_external", "Waiting for work package creation child operation", delay_s=1.0)
         if pkg_child["status"] != "succeeded":
-            _save_progress(
+            _raise_child_stopped(
                 ctx,
-                _build_state(parent, intent, children, stage="start_failed", binding_id=binding_id),
+                parent,
+                intent,
+                children,
+                pkg_child,
+                default_code="PM_WORK_PACKAGE_FAILED",
+                fallback="Work package creation did not complete",
+                binding_id=binding_id,
             )
-            code = pkg_child["error_code"] or "PM_WORK_PACKAGE_FAILED"
-            raise NeedsAttention(code, _failure_reason(pkg_child, "Work package creation did not complete"))
         pkg_res = pkg_child.get("result") or {}
         package_id = pkg_res.get("package_id")
         doc_digest = pkg_res.get("document_digest")
@@ -1628,21 +1676,18 @@ async def _run(ctx):
         raise Wait("waiting_external", reason, delay_s=1.0)
 
     if handoff_child["status"] != "succeeded":
-        stage = "start_unknown" if is_uncertain else "start_failed"
-        _save_progress(
+        _raise_child_stopped(
             ctx,
-            _build_state(
-                parent,
-                intent,
-                children,
-                stage=stage,
-                binding_id=binding_id,
-                package_id=package_id,
-                session=session,
-            ),
+            parent,
+            intent,
+            children,
+            handoff_child,
+            default_code="PM_HANDOFF_FAILED",
+            fallback="Repository handoff did not complete",
+            binding_id=binding_id,
+            package_id=package_id,
+            session=session,
         )
-        code = handoff_child["error_code"] or ("UNCERTAIN_UNRESOLVED" if is_uncertain else "PM_HANDOFF_FAILED")
-        raise NeedsAttention(code, _failure_reason(handoff_child, "Repository handoff did not complete"))
 
     final_state = _save_progress(
         ctx,

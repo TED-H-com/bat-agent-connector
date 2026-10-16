@@ -1395,7 +1395,7 @@ async def test_failed_handoff_preserves_package_and_retry_reuses_it(start_ready,
     monkeypatch.setattr(repository_sync, "source_preview", move_after_package_preview)
     op1, _ = ops.create(STARTER_OWNER, **env1)
     done1 = await _advance_start(ops, op1["operation_id"])
-    assert done1["status"] == "needs_attention", done1
+    assert done1["status"] == "failed", done1
     assert done1["error_code"] == "REPOSITORY_BINDING_CHANGED"
     res1 = done1["result"]
     assert res1["stage"] == "start_failed"
@@ -1406,9 +1406,8 @@ async def test_failed_handoff_preserves_package_and_retry_reuses_it(start_ready,
     assert not bat_writes(mock)
     assert pm_work_packages._latest(ops.db, wid, wi_id) == created_pkg_id
 
-    # Restore workspace folder and mark first attempt failed so a fresh start attempt can be submitted.
+    # Restore workspace folder; op1 reached terminal 'failed' on its own so a fresh start attempt can be submitted directly.
     mock.ws_doc["workspaces"][0]["folderPath"] = orig_folder
-    ops._transition(op1["operation_id"], "failed", error_code="REPOSITORY_BINDING_CHANGED", reason="Binding moved")
 
     # Second start with same inputs and updated expected_previous_package_id reuses the package.
     env2 = await _start_envelope(w, key="start-retry-reuse-2")
@@ -1461,7 +1460,7 @@ async def test_published_head_move_requires_re_review_and_new_start_creates_pack
         w["state"]["sha"] = new_sha
         op1, _ = ops.create(STARTER_OWNER, **env1)
         done1 = await _advance_start(ops, op1["operation_id"])
-        assert done1["status"] == "needs_attention", done1
+        assert done1["status"] == "failed", done1
         assert done1["error_code"] == "PM_PACKAGE_CODE_SOURCE_CHANGED"
         assert "review again" in done1["status_reason"].lower()
         assert done1["result"]["stage"] == "start_failed"
@@ -1472,7 +1471,7 @@ async def test_published_head_move_requires_re_review_and_new_start_creates_pack
     w["runner"].before["fetch"] = lambda _: w["state"].__setitem__("sha", new_sha)
     op1, _ = ops.create(STARTER_OWNER, **env1)
     done1 = await _advance_start(ops, op1["operation_id"])
-    assert done1["status"] == "needs_attention", done1
+    assert done1["status"] == "failed", done1
     assert done1["error_code"] == "REPOSITORY_REF_CHANGED"
     assert "review again" in done1["status_reason"].lower()
     assert done1["result"]["stage"] == "start_failed"
@@ -1480,8 +1479,7 @@ async def test_published_head_move_requires_re_review_and_new_start_creates_pack
     assert isinstance(first_pkg_id, str) and first_pkg_id.startswith("pmwp_")
     assert not bat_writes(mock)
 
-    # Transition op1 to terminal failed so the user can start again with the reviewed new SHA.
-    ops._transition(op1["operation_id"], "failed", error_code="REPOSITORY_REF_CHANGED", reason=done1["status_reason"])
+    # op1 reached terminal 'failed' on its own so the user can start again with the reviewed new SHA.
     env2 = await _start_envelope(w, source_sha=new_sha, key="start-move-before_handoff-2")
     assert env2["preconditions"]["expected_previous_package_id"] == first_pkg_id
     op2, _ = ops.create(STARTER_OWNER, **env2)
@@ -1499,6 +1497,65 @@ async def test_published_head_move_requires_re_review_and_new_start_creates_pack
     assert pkg1["document"]["code_source"]["source_sha"] == w["sha"]
     assert pkg2["document"]["code_source"]["source_sha"] == new_sha
     assert pkg2["previous_package_id"] == first_pkg_id
+
+
+async def test_child_outcome_mapping_failed_needs_attention_and_guard_pause(start_ready, mock, monkeypatch):
+    w = start_ready
+    ops = w["d"].ops
+    wi_id = w["target"]["work_item_id"]
+
+    env1 = await _start_envelope(w, key="outcome-map-1")
+    op1, _ = ops.create(STARTER_OWNER, **env1)
+
+    # 1. Pre-child _guard failure pauses parent in 'needs_attention' so the user can fix the precondition and resume.
+    ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (wi_id,))
+    await ops._execute(op1["operation_id"])
+    paused_guard = ops.get(op1["operation_id"])
+    assert paused_guard["status"] == "needs_attention"
+    assert paused_guard["error_code"] == "WORK_ITEM_CHANGED"
+    assert paused_guard["result"]["stage"] == "start_failed"
+    assert paused_guard["result"]["children"]["package"] is None
+    ops.db.execute("UPDATE work_items SET version=1 WHERE work_item_id=?", (wi_id,))
+    ops.resume(STARTER_OWNER, op1["operation_id"])
+
+    # 2. If a child stops in 'needs_attention', parent also stops in 'needs_attention'.
+    pkg_act = ops.actions["pm.work_package.create"]
+    should_pause_pkg = True
+
+    async def pkg_run_pause_once(ctx):
+        nonlocal should_pause_pkg
+        if should_pause_pkg:
+            should_pause_pkg = False
+            raise NeedsAttention("PKG_TEMP_PAUSE", "Temporary package pause")
+        return await pkg_act.run(ctx)
+
+    ops.actions["pm.work_package.create"] = ActionDef(
+        pkg_act.name,
+        pkg_act.scope,
+        pkg_act.summary,
+        pkg_run_pause_once,
+        pkg_act.admit,
+        pkg_act.target_keys,
+        authorize_existing=pkg_act.authorize_existing,
+    )
+    try:
+        done_na = await _advance_start(ops, op1["operation_id"])
+        assert done_na["status"] == "needs_attention"
+        assert done_na["error_code"] == "PKG_TEMP_PAUSE"
+        assert done_na["result"]["stage"] == "start_failed"
+        pkg_child_id = done_na["result"]["children"]["package"]
+        assert ops.get(pkg_child_id)["status"] == "needs_attention"
+
+        # 3. If the child is cancelled (or fails) with no unproven external step, waking the parent ends parent as 'failed'.
+        ops.cancel(STARTER_OWNER, pkg_child_id)
+        assert ops.get(pkg_child_id)["status"] == "cancelled"
+        ops.resume(STARTER_OWNER, op1["operation_id"])
+        done_failed = await _advance_start(ops, op1["operation_id"])
+        assert done_failed["status"] == "failed", done_failed
+        assert done_failed["error_code"] == "CANCELLED"
+        assert done_failed["result"]["stage"] == "start_failed"
+    finally:
+        ops.actions["pm.work_package.create"] = pkg_act
 
 
 @pytest.mark.parametrize("channel", ["claude:start-session", "claude:send-message"])
@@ -1941,7 +1998,7 @@ async def test_visibility_events_and_late_child_guard(start_ready, mock):
     w["runner"].after["fetch"] = mutate_work_mid_handoff
     op_guard, _ = ops.create(STARTER_OWNER, **env_guard)
     done_guard = await _advance_start(ops, op_guard["operation_id"])
-    assert done_guard["status"] == "needs_attention", done_guard
+    assert done_guard["status"] == "failed", done_guard
     assert done_guard["error_code"] == "WORK_ITEM_CHANGED"
     assert done_guard["result"]["stage"] == "start_failed"
     assert mock.channels().count("claude:start-session") == starts_before
