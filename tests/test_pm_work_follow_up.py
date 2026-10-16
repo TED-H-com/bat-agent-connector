@@ -59,7 +59,7 @@ from tests.test_pm_work_attempt_result import (
 from tests.test_pm_work_packages import action as pkg_action
 from tests.test_pm_work_packages import add_task_evidence
 from tests.test_pm_work_packages import create as create_package
-from tests.test_pm_work_start import STARTER_OWNER
+from tests.test_pm_work_start import STARTER_OWNER, _start_envelope
 
 _INSTRUCTION_KEYS = {
     "operation_id", "host", "session_id", "actor", "operation_status", "error_code",
@@ -896,6 +896,20 @@ async def test_writer_membership_rechecked_before_every_frame(start_ready, mock)
 # --------------------------------------------------------------------------- 10
 
 
+def _row_counts(ops):
+    return (
+        ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0],
+        ops.db.execute("SELECT COUNT(*) FROM work_inputs").fetchone()[0],
+    )
+
+
+def _assert_refused(ops, mock, status, body, *, code, http_status, before_ops, before_inputs, before_invokes):
+    assert status == http_status, body
+    assert body["error"]["code"] == code, body
+    assert body["error"]["admission_refused"] is True, body
+    assert _row_counts(ops) == (before_ops, before_inputs)
+    assert len(mock.invokes) == before_invokes
+
 async def test_manual_and_foreign_sessions_not_targetable(start_ready, mock):
     w = start_ready
     att = await _start_managed_attempt(w, mock, key="p5-manual")  # gitleaks:allow (test idempotency key)
@@ -1430,3 +1444,137 @@ async def test_setup_admission_refusal_preserves_admission_refused(start_ready, 
     assert status == 422, body
     assert body["error"]["admission_refused"] is True
     assert body["error"]["code"] == "INVALID_PARAMS"
+
+# --------------------------------------------------------------------------- admission order
+
+
+_ADMISSION_ORDER = {
+    "controller_before_attempt": ("PM_WORK_CONTROLLER_CONFLICT", 409),
+    "attempt_before_in_progress": ("PM_WORK_ATTEMPT_CHANGED", 409),
+    "in_progress_before_not_started": ("PM_WORK_START_IN_PROGRESS", 409),
+    "unknown_host_before_not_managed": ("UNKNOWN_HOST", 404),
+    "unknown_host_before_codex": ("UNKNOWN_HOST", 404),
+    "unknown_host_before_ended": ("UNKNOWN_HOST", 404),
+    "tier_before_not_managed": ("TIER_DISABLED", 403),
+    "tier_before_codex": ("TIER_DISABLED", 403),
+    "tier_before_ended": ("TIER_DISABLED", 403),
+    "not_managed_before_codex": ("PM_WORK_SESSION_NOT_MANAGED", 409),
+    "not_managed_before_ended": ("PM_WORK_SESSION_NOT_MANAGED", 409),
+    "codex_before_ended": ("PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED", 409),
+    "codex_before_lifecycle": ("PM_WORK_CODEX_FOLLOW_UP_UNSUPPORTED", 409),
+    "ended_before_lifecycle": ("PM_WORK_SESSION_ENDED", 409),
+}
+
+
+def _mark_codex(mock, att):
+    registry.update(att["host"], att["session_id"], agent_preset="codex")
+    for terminal in mock.ws_doc.get("terminals", []):
+        if terminal.get("id") == att["session_id"]:
+            terminal["agentPreset"] = "codex"
+
+
+async def _begin_unsettled_start(w):
+    """Admit work.start and leave it unsettled. The fixture does not run the operation loop."""
+    from bat_agent_connector import work_items
+
+    ops = w["d"].ops
+    base = work_items._get_item(ops.db, w["target"]["work_item_id"])
+    created = await pkg_action(
+        w, "work_item.create", {"project_id": base["project_id"]},
+        {
+            "title": "Admission order slice",
+            "goal": "Authenticate members",
+            "acceptance": "Valid credentials pass, invalid fail",
+        },
+        who=STARTER_OWNER,
+    )
+    env = await _start_envelope(w, work_item_id=created["work_item_id"], key="p5-order-start")  # gitleaks:allow (test idempotency key)
+    key = env.pop("idempotency_key")
+    status, body = await http(
+        w["port"], "POST", "/api/v1/operations", tok=w["owner_token"],
+        body={
+            "action": env["action"], "target": env["target"],
+            "params": env["params"], "preconditions": env["preconditions"],
+        },
+        headers={"Idempotency-Key": key},
+    )
+    assert status == 202, body
+    parent = ops.get(body["operation"]["operation_id"])
+    assert parent["status"] not in {"succeeded", "failed", "cancelled"}, parent
+    return {"workspace_id": w["workspace_id"], "work_item_id": created["work_item_id"]}
+
+
+async def _arm_admission_case(w, mock, att, case):
+    """Turn on both refusals for one pair. Return (preconditions, token, restore)."""
+    ops = w["d"].ops
+    host, sid = att["host"], att["session_id"]
+    restores = []
+    pre = None
+    tok = None
+    needs_codex = "codex" in case
+    needs_ended = "ended" in case
+    if needs_codex:
+        _mark_codex(mock, att)
+    if needs_ended:
+        mock.metas[sid]["runtimeStatus"] = "exited"
+    if needs_codex or needs_ended:
+        await w["d"].inventory._refresh_scheduled(host)
+    if "not_managed" in case:
+        registry.update(host, sid, start_operation_id="op_foreign_not_this_attempt")
+    if case.startswith("unknown_host"):
+        saved = w["d"].fleet.config.hosts.pop(host)
+
+        def restore_host(saved_host=saved):
+            w["d"].fleet.config.hosts[host] = saved_host
+
+        restores.append(restore_host)
+    if case.startswith("tier"):
+        w["d"].fleet.read_only = True
+
+        def restore_tier():
+            w["d"].fleet.read_only = False
+
+        restores.append(restore_tier)
+    if case.endswith("lifecycle"):
+        await decide(ops, att["workspace_id"], "pause", who=STARTER_OWNER)
+    if case == "controller_before_attempt":
+        current = pm_workspace.get_workspace(ops.db, STARTER_OWNER, att["workspace_id"])
+        await pkg_action(
+            w, "pm.workspace.member.set", {"workspace_id": att["workspace_id"]},
+            {"actor": "colleague", "role": "contributor"}, {"expected_version": current["version"]},
+            who=STARTER_OWNER,
+        )
+        tok = token(w["d"], "colleague", "observe", "manage", "operate", "integrate")
+        pre = {"expected_attempt_id": "att_" + "ab" * 16}
+    return pre, tok, restores
+
+
+@pytest.mark.parametrize("case", list(_ADMISSION_ORDER))
+async def test_admission_order_returns_the_earlier_code(start_ready, mock, case):
+    w = start_ready
+    ops = w["d"].ops
+    code, http_status = _ADMISSION_ORDER[case]
+    restores = []
+    if case in {"attempt_before_in_progress", "in_progress_before_not_started"}:
+        target = await _begin_unsettled_start(w)
+        pre = {"expected_attempt_id": "att_" + "ab" * 16} if case == "attempt_before_in_progress" else None
+        tok = None
+    else:
+        att = await _start_managed_attempt(w, mock, key=f"p5-order-{case}")  # gitleaks:allow (test idempotency key)
+        pre, tok, restores = await _arm_admission_case(w, mock, att, case)
+        target = att
+    before_ops, before_inputs = _row_counts(ops)
+    before_invokes = len(mock.invokes)
+    try:
+        status, body = await _post(
+            w, target, "both refusals",
+            key=f"p5-order-send-{case}",  # gitleaks:allow (test idempotency key)
+            pre=pre, tok=tok,
+        )
+        _assert_refused(
+            ops, mock, status, body, code=code, http_status=http_status,
+            before_ops=before_ops, before_inputs=before_inputs, before_invokes=before_invokes,
+        )
+    finally:
+        for restore in reversed(restores):
+            restore()
