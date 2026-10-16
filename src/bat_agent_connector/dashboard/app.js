@@ -21634,7 +21634,7 @@ function requirementReviews(plan, requirement, reviews) {
 	if (!ids.length || ids.some((id) => !id) || !plan.document_digest || !plan.adoption?.scope_revision) return [];
 	return reviews.filter((row) => row.qualified === true && row.applicable === true && row.assessment?.document?.qualified === true && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption?.scope_revision && ids.every((id) => row.assessment.document.criteria?.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === "accepted")));
 }
-function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
+function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled = () => Promise.resolve() }) {
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
 	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
@@ -21802,6 +21802,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 		} catch {
+			++scrollGeneration;
 			return;
 		}
 		errorBox(error);
@@ -22325,6 +22326,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -22344,7 +22348,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -22357,7 +22362,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -22448,12 +22453,14 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		focusRequirement,
 		labelFor,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		activate,
 		setTools: (value) => {
 			tools = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			Object.assign(preference, {
 				selected,
@@ -33730,7 +33737,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 }
 //#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
+function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
@@ -34527,6 +34534,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -34542,7 +34552,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -34556,7 +34567,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -34570,11 +34581,13 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		titleFor,
 		withdraw,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		setTools: (value) => {
 			toolItems = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			startPanel?.dispose();
 			startPanel = null;
@@ -42083,7 +42096,24 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return;
 	}
 	if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, "discussions");
-	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = true, sequence = 0, threadPages = 1, lifecycle = null;
+	let headerReads = 0, initialHeaderSettled = false, settleResolvers = [];
+	function resolveSettleWaiters() {
+		if (headerReads === 0) {
+			initialHeaderSettled = true;
+			const resolvers = settleResolvers;
+			settleResolvers = [];
+			for (const resolve of resolvers) resolve();
+		}
+	}
+	function settleReadComplete() {
+		if (headerReads > 0) headerReads--;
+		if (headerReads === 0) resolveSettleWaiters();
+	}
+	function workspaceSettled() {
+		if (disposed || initialHeaderSettled && headerReads === 0) return Promise.resolve();
+		return new Promise((resolve) => settleResolvers.push(resolve));
+	}
 	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
 	const uiState = viewState(namespace, workspaceId, "discussions");
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
@@ -42682,7 +42712,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps,
 		permitted,
 		form,
-		embedded: true
+		embedded: true,
+		workspaceSettled
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);
 	const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints ? workspaceSprints({
@@ -42970,7 +43001,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace,
 		workspaceId,
 		caps,
-		errorBox
+		errorBox,
+		workspaceSettled
 	}) : null;
 	if (traceability) body.insertBefore(traceability.element, content);
 	const resources = workspaceId && !threadId && caps()?.features?.pm_resources ? workspaceResources({
@@ -43451,6 +43483,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			beforeSelect: (id, previous) => {
 				maskStaleView(id);
 				if (previous === "overview") brief?.setActive?.(false);
+				if (previous === "board") kanban?.rememberScroll?.();
+				if (previous === "requirements") traceability?.rememberScroll?.();
 			},
 			onSelect: (id) => {
 				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
@@ -44417,6 +44451,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refreshing = true;
 		earlier.disabled = true;
 		refresh.disabled = true;
+		headerReads++;
 		try {
 			alive();
 			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
@@ -44451,6 +44486,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refresh.disabled = false;
 				earlier.disabled = !loaded;
 			}
+			settleReadComplete();
 		}
 	}
 	function filterThreads() {
@@ -44513,6 +44549,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			qualityReviews?.withdraw();
 			qualitySelections.clear();
 		}
+		headerReads++;
 		try {
 			alive();
 			const list = event ? { workspaces: lastList } : await api("GET", "/pm/workspaces");
@@ -44833,6 +44870,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refreshing = false;
 				refresh.disabled = false;
 			}
+			settleReadComplete();
 		}
 	}
 	await load();
@@ -44873,6 +44911,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let authorityTool = null;
 	async function refreshAuthority() {
 		const ticket = ++sequence;
+		headerReads++;
 		try {
 			const detail = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`);
 			alive();
@@ -44925,6 +44964,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			updateForms();
 			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
+		} finally {
+			settleReadComplete();
 		}
 	}
 	let contextSequence = 0;
@@ -45033,6 +45074,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return settleRefreshes(reads).then(refreshNames);
 	});
 	const dispose = () => {
+		if (workbench?.selected() === "board") kanban?.rememberScroll?.();
+		if (workbench?.selected() === "requirements") traceability?.rememberScroll?.();
 		uiState.listScroll = workspaceList.scrollTop;
 		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
 		disposed = true;
@@ -45060,6 +45103,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		ahp?.dispose();
 		for (const control of viewToolMenus.values()) control.dispose();
 		for (const value of forms) value.dispose();
+		refreshing = false;
+		initialHeaderSettled = true;
+		headerReads = 0;
+		resolveSettleWaiters();
 	};
 	dispose.navigate = (nextWorkspace, nextThread, nextView) => {
 		if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;
