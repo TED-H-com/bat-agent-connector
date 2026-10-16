@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Projects and work items: Tab reaches Add while a creation request is sending,
+  and pressing it keeps keyboard focus on the button. The button looks unavailable
+  until the request finishes, and a second press is ignored. A failed or refused
+  request moves focus to Edit request.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
