@@ -1614,3 +1614,66 @@ async def test_readiness_skips_continue_receipts_the_caller_cannot_see(start_rea
         raw = json.dumps(body)
         assert direct_id in raw
         assert handoff_id not in raw
+
+
+def _shape_document(*, agent="claude", goal="pull_request"):
+    document = {
+        "version": 1,
+        "binding": {"repository": "o/r", "host": "h1", "workspace_id": "ws-1"},
+        "agent": agent,
+        "delivery_policy_ref": {"goal": goal},
+    }
+    return document
+
+
+async def test_non_string_agent_and_goal_are_invalid_params(world):
+    from tests.test_api_v1 import http, token
+
+    daemon = world["d"]
+    ops = daemon.ops
+    owner = Principal("profile-owner", frozenset({"observe", "manage"}))
+    auth = token(daemon, owner.actor, "observe", "manage")
+    created, inserted = ops.create(
+        owner, action="pm.workspace.create", params={"name": "Typed profiles"},
+        idempotency_key="typed-profiles",
+    )
+    assert inserted
+    await settle_operations(ops)
+    workspace = ops.get(created["operation_id"])
+    assert workspace["status"] == "succeeded", workspace
+    wid = workspace["result"]["workspace"]["workspace_id"]
+    shapes = (
+        ("list", ["claude"]),
+        ("object", {"name": "claude"}),
+        ("number", 1),
+        ("null", None),
+    )
+
+    async def reject(document, key):
+        before = ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0]
+        body = {
+            "action": pm_work_profiles.ACTION,
+            "target": {"workspace_id": wid},
+            "params": {"document": document},
+            "preconditions": {},
+        }
+        status, http_body = await http(
+            world["port"], "POST", "/api/v1/operations", tok=auth, body=body,
+            headers={"Idempotency-Key": key},
+        )
+        assert status == 422, http_body
+        assert http_body["error"]["code"] == "INVALID_PARAMS"
+        assert "unhashable" not in http_body["error"]["message"]
+        rpc_status, rpc_body = await http(world["port"], "POST", "/rpc", tok=auth, body={
+            "method": "op_submit",
+            "params": {**body, "idempotency_key": key + "-rpc"},
+        })
+        assert rpc_body["error"] == "INVALID_PARAMS", rpc_body
+        assert "message" in rpc_body and "unhashable" not in rpc_body["message"]
+        assert "TypeError" not in json.dumps(rpc_body)
+        assert rpc_status == 400
+        assert ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0] == before
+
+    for label, value in shapes:
+        await reject(_shape_document(agent=value), f"bad-agent-{label}")
+        await reject(_shape_document(goal=value), f"bad-goal-{label}")

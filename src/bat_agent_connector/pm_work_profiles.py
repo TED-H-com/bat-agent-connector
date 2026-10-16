@@ -167,9 +167,11 @@ def _delivery(value):
     from .pm_work_start import DELIVERY_GOALS
     if value is None:
         return None
-    if not isinstance(value, dict) or set(value) != {"goal"} or value.get("goal") not in DELIVERY_GOALS:
+    goal = value.get("goal") if isinstance(value, dict) else None
+    if (not isinstance(value, dict) or set(value) != {"goal"}
+            or not isinstance(goal, str) or goal not in DELIVERY_GOALS):
         raise _bad("INVALID_PARAMS", "delivery_policy_ref must be null or a known delivery goal")
-    return {"goal": value["goal"]}
+    return {"goal": goal}
 
 
 def normalize_document(document) -> dict:
@@ -189,7 +191,7 @@ def normalize_document(document) -> dict:
     if not isinstance(binding, dict) or set(binding) != {"repository", "host", "workspace_id"}:
         raise _bad("INVALID_PARAMS", "binding must be repository, host and workspace_id")
     agent = document.get("agent")
-    if agent not in _AGENTS:
+    if not isinstance(agent, str) or agent not in _AGENTS:
         raise _bad("INVALID_PARAMS", "agent must be claude or codex")
     if "model" in document and document["model"] is not None:
         model = document["model"]
