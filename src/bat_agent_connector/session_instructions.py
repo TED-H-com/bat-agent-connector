@@ -99,7 +99,16 @@ def read(ops, principal, host, session_id, *, limit=30, cursor=None):
     more, page = len(rows) > limit, rows[:limit]
     next_cursor = (base64.urlsafe_b64encode(json.dumps([host, session_id, page[-1]["created_at"],
                    page[-1]["operation_id"]], separators=(",", ":")).encode()).decode().rstrip("=") if more else None)
+    # Work rows are filtered inside the already selected page. Other session.send
+    # rows, and the cursor taken from that unfiltered page, stay unchanged.
+    from .pm_work_follow_up import is_work_follow_up, operation_visible
+    instructions = []
+    for row in page:
+        op = ops._decode(row)
+        if is_work_follow_up(op) and not operation_visible(ops.db, principal, op):
+            continue
+        instructions.append(_item(ops, row, host, session_id))
     return {"version": 1, "host": host, "session_id": session_id, "source": "central_operation_journal", "read_at": time.time(),
-            "instructions": [_item(ops, row, host, session_id) for row in page], "next_cursor": next_cursor,
+            "instructions": instructions, "next_cursor": next_cursor,
             "live_queue_available": False, "per_message_cancel": False,
             "interrupt_scope": "session", "queue_receipt_semantics": "queued_at_submission_not_current_position"}

@@ -57,7 +57,17 @@ from tests.test_pm_work_attempt_result import (
     start_ready,
 )
 from tests.test_pm_work_packages import action as pkg_action
+from tests.test_pm_work_packages import add_task_evidence
+from tests.test_pm_work_packages import create as create_package
 from tests.test_pm_work_start import STARTER_OWNER
+
+_INSTRUCTION_KEYS = {
+    "operation_id", "host", "session_id", "actor", "operation_status", "error_code",
+    "created_at", "updated_at", "phase", "message_id", "command_id", "text_excerpt",
+    "text_truncated", "queue_requested", "accepted", "was_queued", "receipt_recorded_at",
+    "turn_attribution", "cancel_requested", "queue_position", "live_queue_status",
+    "per_message_cancel", "operation_url",
+}
 
 world = handoff_world_fixture
 pm = handoff_pm_fixture
@@ -1115,6 +1125,13 @@ async def test_work_follow_up_visibility(start_ready, mock):
     ):
         status, body = await http(w["port"], "GET", path, tok=outsider_tok)
         assert status == 404, (path, body)
+    status, body = await http(
+        w["port"], "GET",
+        f"/api/v1/sessions/{att['host']}/{att['session_id']}/instructions",
+        tok=outsider_tok,
+    )
+    assert status == 404, body
+    assert "members only" not in json.dumps(body)
     status, body = await _post(w, att, "outsider send", key="p5-visibility-send", tok=outsider_tok)  # gitleaks:allow (test idempotency key)
     assert status == 404, body
     listed, events, boot = await asyncio.gather(
@@ -1151,6 +1168,121 @@ async def test_work_follow_up_visibility(start_ready, mock):
     assert pm_work_follow_up.missing_row_event_visible(ops.db, STARTER_OWNER, real_missing_row) is True
     assert pm_work_follow_up.missing_row_event_visible(ops.db, outsider, real_missing_row) is False
 
+
+
+async def _instructions(w, att, *, limit=None, cursor=None, tok=None):
+    query = []
+    if limit is not None:
+        query.append(f"limit={limit}")
+    if cursor is not None:
+        query.append("cursor=" + cursor)
+    suffix = ("?" + "&".join(query)) if query else ""
+    return await http(
+        w["port"], "GET",
+        f"/api/v1/sessions/{att['host']}/{att['session_id']}/instructions{suffix}",
+        tok=tok or w["owner_token"],
+    )
+
+
+async def test_instructions_filter_hides_a_work_row_inside_the_selected_page(start_ready, mock):
+    """Drop a hidden Work row inside the selected page. Keep the unfiltered cursor.
+
+    Removing the member never reaches the filter: require_session answers 404
+    NOT_FOUND ("Original resource sources are unavailable") first. The split
+    that still opens the session is a Work item whose current project has no
+    workspace binding. project_id is not a public item field (work_items.py:55)
+    and pm.project.bind only inserts (pm_evidence.py:230-234), so the unbound
+    project is created through project.create and the item is pointed at it.
+    """
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key="p5-instructions-page")  # gitleaks:allow (test idempotency key)
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    status, body = await _post(
+        w, att, "legacy instruction stays",
+        key="p5-instructions-legacy",  # gitleaks:allow (test idempotency key)
+        target={"host": att["host"], "session_id": att["session_id"]},
+        params={"text": "legacy instruction stays"},
+    )
+    assert status == 202, body
+    await _settle(ops, body["operation"]["operation_id"])
+    await _refresh(w, mock, att, att["turn_marker"], streaming=True)
+    work_id = await _queue(w, mock, att, "work input secret excerpt", "p5-instructions-work")  # gitleaks:allow (test idempotency key)
+    status, page = await _instructions(w, att, limit=1)
+    assert status == 200, page
+    assert [item["text_excerpt"] for item in page["instructions"]] == ["work input secret excerpt"]
+    assert page["next_cursor"]
+    assert set(page["instructions"][0]) == _INSTRUCTION_KEYS
+
+    created = await pkg_action(
+        w, "project.create", {},
+        {"name": "Unbound instruction page", "repositories": ["o/r"]},
+        who=STARTER_OWNER,
+    )
+    with ops.journal.tx():
+        ops.db.execute(
+            "UPDATE work_items SET project_id=? WHERE work_item_id=?",
+            (created["project_id"], att["work_item_id"]),
+        )
+
+    status, hidden = await _instructions(w, att, limit=1)
+    assert status == 200, hidden
+    assert hidden["instructions"] == []
+    assert hidden["next_cursor"]
+    status, older = await _instructions(w, att, limit=1, cursor=hidden["next_cursor"])
+    assert status == 200, older
+    excerpts = [item["text_excerpt"] for item in older["instructions"]]
+    assert excerpts == ["legacy instruction stays"]
+    assert "work input secret excerpt" not in json.dumps(older)
+    assert all(set(item) == _INSTRUCTION_KEYS for item in older["instructions"])
+    listed, missing = await _inputs(w, att)
+    assert listed == 404, missing
+    assert missing["error"]["code"] == "WORK_ITEM_NOT_FOUND"
+    assert "work input secret excerpt" not in json.dumps(missing)
+    op_status, op_body = await http(w["port"], "GET", f"/api/v1/operations/{work_id}", tok=w["owner_token"])
+    assert op_status == 404, op_body
+    assert "work input secret excerpt" not in json.dumps(op_body)
+
+
+async def test_withdrawn_source_hides_follow_up_list_and_receipt(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+    task, evidence = await add_task_evidence(w)
+    await create_package(w, evidence_refs=[evidence])
+    att = await _start_managed_attempt(w, mock, key="p5-withdrawn-source")  # gitleaks:allow (test idempotency key)
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    status, body = await _post(
+        w, att, "legacy beside withdrawn work",
+        key="p5-withdrawn-legacy",  # gitleaks:allow (test idempotency key)
+        target={"host": att["host"], "session_id": att["session_id"]},
+        params={"text": "legacy beside withdrawn work"},
+    )
+    assert status == 202, body
+    await _settle(ops, body["operation"]["operation_id"])
+    await _refresh(w, mock, att, att["turn_marker"], streaming=True)
+    op_id = await _queue(w, mock, att, "withdrawn source excerpt", "p5-withdrawn-work")  # gitleaks:allow (test idempotency key)
+    listed, page = await _inputs(w, att)
+    assert listed == 200, page
+    assert any(item["operation_id"] == op_id for item in page["items"])
+    visible = await _get_op(w, op_id)
+    assert "withdrawn source excerpt" in visible["input_receipt"]["text_excerpt"]
+    status, ledger = await _instructions(w, att, limit=1)
+    assert status == 200, ledger
+    assert ledger["instructions"][0]["text_excerpt"] == "withdrawn source excerpt"
+
+    with ops.journal.tx():
+        ops.db.execute("UPDATE tasks SET controller_authority='{}' WHERE task_id=?", (task["task_id"],))
+
+    listed, missing = await _inputs(w, att)
+    assert listed == 404, missing
+    op_status, op_body = await http(w["port"], "GET", f"/api/v1/operations/{op_id}", tok=w["owner_token"])
+    assert op_status == 404, op_body
+    assert "withdrawn source excerpt" not in json.dumps(op_body)
+    status, ledger = await _instructions(w, att, limit=1)
+    # require_session rejects before the page filter once a shared source root is hidden.
+    assert status == 404, ledger
+    assert ledger["error"]["code"] == "NOT_FOUND"
+    assert "withdrawn source excerpt" not in json.dumps(ledger)
 
 # --------------------------------------------------------------------------- 14
 
