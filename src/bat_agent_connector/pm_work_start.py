@@ -1347,6 +1347,14 @@ def resume_children(ops, principal: Principal, op: dict) -> None:
             ops.resume(principal, child["operation_id"])
 
 
+def cancel_children(ops, principal: Principal, op: dict) -> None:
+    if op["action"] != ACTION or not installed(ops.db):
+        return
+    for child in _children(ops, op).values():
+        if child["status"] not in OP_TERMINAL:
+            ops.cancel(principal, child["operation_id"])
+
+
 def _admit_child(ctx, slot: str, request: dict) -> dict:
     def admit():
         parent = _op(ctx.service.db, ctx.operation_id)

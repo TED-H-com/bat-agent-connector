@@ -702,6 +702,9 @@ class OperationService:
         if op["action"] in {"pm.run.prepare", "pm.plan.adopt"}:
             from .pm_run_operations import cancel
             return cancel(self, principal, op)
+        if op["action"] == "work.start":
+            from .pm_work_start import cancel_children as cancel_work_start_children
+            cancel_work_start_children(self, principal, op)
         self.db.execute("UPDATE operations SET cancel_requested=1,updated_at=? WHERE operation_id=?",
                         (time.time(), operation_id))
         if not self._running(operation_id):

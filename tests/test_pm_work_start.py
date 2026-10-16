@@ -10,7 +10,7 @@ import pytest
 
 from bat_agent_connector import controller_authority, pm_work_start, pm_workspace
 from bat_agent_connector.api_auth import Principal
-from bat_agent_connector.operations import ActionDef, NeedsAttention, OperationError, OperationService
+from bat_agent_connector.operations import ActionDef, NeedsAttention, OperationError, OperationService, Wait
 from bat_agent_connector.task_journal import Journal
 
 OWNER = Principal("alice", frozenset({"observe", "manage", "start", "operate"}))
@@ -50,6 +50,8 @@ def _service(tmp_path) -> OperationService:
     async def run(ctx):
         if ctx.params.get("pause"):
             raise NeedsAttention("PAUSED_FOR_TEST", "Paused for controller test")
+        if ctx.params.get("wait_s"):
+            raise Wait("waiting_external", "Waiting for child", delay_s=float(ctx.params["wait_s"]))
         return {"ok": True}
 
     ops.register(
@@ -134,8 +136,8 @@ def test_insert_hook_predecessor_chain_and_controller_rollback(tmp_path):
     assert ops.db.execute("SELECT COUNT(*) FROM operations").fetchone()[0] == ops_after_first
     assert ops.db.execute("SELECT COUNT(*) FROM work_attempts").fetchone()[0] == 1
 
-    # Once first reaches a terminal state, a new start is admitted and links predecessor_attempt_id.
-    ops._transition(first["operation_id"], "failed", error_code="TEST_FAIL", reason="Terminal failure")
+    # Once first reaches a terminal state via public cancel, a new start is admitted and links predecessor_attempt_id.
+    ops.cancel(OWNER, first["operation_id"])
     second, _ = ops.create(
         OWNER,
         action="work.start",
@@ -273,16 +275,21 @@ async def test_authorize_controller_blocks_different_actor_cancel_and_resume(tmp
     assert cancelled["status"] == "cancelled"
 
 
-def test_child_settled_trigger_wakes_waiting_parent(tmp_path):
+@pytest.mark.asyncio
+async def test_child_settled_trigger_wakes_waiting_parent(tmp_path):
     ops = _service(tmp_path)
-    ops.register(ActionDef("dummy.child", "start", "Dummy child", lambda ctx: None))
+
+    async def run_child(ctx):
+        return {"done": True}
+
+    ops.register(ActionDef("dummy.child", "start", "Dummy child", run_child))
     ws = "ws_" + "1" * 32
     wi = "wi_" + "2" * 20
     parent, _ = ops.create(
         OWNER,
         action="work.start",
         target={"workspace_id": ws, "work_item_id": wi},
-        params={"instruction": "Wait on child"},
+        params={"instruction": "Wait on child", "wait_s": 3600.0},
         preconditions={},
         idempotency_key="k-wake",
     )
@@ -294,18 +301,17 @@ def test_child_settled_trigger_wakes_waiting_parent(tmp_path):
         preconditions={},
         idempotency_key="k-child",
     )
-    due = time.time() + 3600
     with ops.journal.tx():
         ops.db.execute(
             "INSERT INTO pm_work_start_children VALUES(?,?,?,?,?,?,?)",
             (parent["operation_id"], "bind", 0, child["operation_id"], "{}", "d" * 64, time.time()),
         )
-        ops._transition(parent["operation_id"], "running")
-        ops._transition(parent["operation_id"], "waiting_external", reason="Waiting for child", next_run_at=due)
-    assert ops.get(parent["operation_id"])["next_run_at"] == due
-    ops._transition(child["operation_id"], "running")
-    assert ops.get(parent["operation_id"])["next_run_at"] == due
-    ops._transition(child["operation_id"], "succeeded", result={"done": True})
+    await ops._execute(parent["operation_id"])
+    waiting_parent = ops.get(parent["operation_id"])
+    assert waiting_parent["status"] == "waiting_external"
+    assert waiting_parent["next_run_at"] > time.time() + 1000
+    await ops._execute(child["operation_id"])
+    assert ops.get(child["operation_id"])["status"] == "succeeded"
     assert ops.get(parent["operation_id"])["next_run_at"] == 0
 
 
@@ -961,7 +967,8 @@ def test_admission_scopes_membership_preconditions_and_lifecycle_gates(tmp_path)
     assert ops.db.execute("SELECT stage FROM pm_lifecycle_heads WHERE workspace_id=?", (ws,)).fetchone()[0] == "idea"
 
 
-def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(tmp_path):
+@pytest.mark.asyncio
+async def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(tmp_path):
     from types import SimpleNamespace
 
     from bat_agent_connector import api_auth, pm_plans, pm_work_packages
@@ -992,9 +999,11 @@ def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(
     assert resolved_admin.admin is True
     assert resolved_admin.actor == api_auth.ADMIN_ACTOR
 
-    # Transition to needs_attention and verify admin can resume.
-    ops._transition(op_admin["operation_id"], "running")
-    ops._transition(op_admin["operation_id"], "needs_attention", error_code="TEST_PAUSE", reason="Paused")
+    # Trigger a real _guard pause into needs_attention via _execute, then restore and verify admin can resume.
+    ops.db.execute("UPDATE work_items SET version=version+1 WHERE work_item_id=?", (ctx["work_item_id"],))
+    await ops._execute(op_admin["operation_id"])
+    assert ops.get(op_admin["operation_id"])["status"] == "needs_attention"
+    ops.db.execute("UPDATE work_items SET version=1 WHERE work_item_id=?", (ctx["work_item_id"],))
     resumed = ops.resume(minimal_admin, op_admin["operation_id"])
     assert resumed["status"] == "running"
 
@@ -1024,9 +1033,11 @@ def test_admin_principal_and_concurrent_start_rejection_and_reuse_after_failure(
     assert fresh_replay is False
     assert replay["operation_id"] == op_admin["operation_id"]
 
-    # 3. Once the first start is in a terminal failure state, a new start is allowed, links predecessor_attempt_id,
+    # 3. Once the first start is settled in a terminal state, a new start is allowed, links predecessor_attempt_id,
     # and reuses a matching package when present.
-    ops._transition(op_admin["operation_id"], "failed", error_code="START_FAILED", reason="Terminal failure")
+    await ops._execute(op_admin["operation_id"])
+    ops.cancel(minimal_admin, op_admin["operation_id"])
+    assert ops.get(op_admin["operation_id"])["status"] == "cancelled"
     plan = pm_plans.accepted_plan(ops, minimal_admin, ws)["plan"]
     plan_ref = pm_work_packages._plan_ref(plan)
     code_source = {
@@ -1653,7 +1664,7 @@ async def test_restart_mid_chain_and_parent_cancellation_preserve_child_authorit
         == 3
     )
 
-    # 2. Cancelling parent after bind child is created stops new child creation while bind child still finishes.
+    # 2. Cancelling parent after bind child is created cancels the unfinished bind child and stops new child creation.
     wi_cancel = (
         await pkg_action(
             w,
@@ -1670,15 +1681,63 @@ async def test_restart_mid_chain_and_parent_cancellation_preserve_child_authorit
     cancelled = ops.cancel(STARTER_OWNER, op_cancel["operation_id"])
     assert cancelled["status"] == "cancelled"
     assert cancelled["result"]["existing_sessions"] == "continue_under_original_authority"
-    # Already-admitted bind child continues and finishes under its own operation, while no package/handoff child is created.
-    await settle_operations(ops)
-    assert ops.get(cancel_bind_id)["status"] == "succeeded"
+    # Unfinished bind child is cascaded to cancelled and no package/handoff child is created.
+    assert ops.get(cancel_bind_id)["status"] == "cancelled"
     assert (
         ops.db.execute(
             "SELECT COUNT(*) FROM pm_work_start_children WHERE parent_id=?", (op_cancel["operation_id"],)
         ).fetchone()[0]
         == 1
     )
+
+
+async def test_cancel_parent_cancels_needs_attention_child_and_allows_new_start(start_ready, mock):
+    w = start_ready
+    ops = w["d"].ops
+
+    pkg_act = ops.actions["pm.work_package.create"]
+    should_pause_pkg = True
+
+    async def pkg_run_pause_once(ctx):
+        nonlocal should_pause_pkg
+        if should_pause_pkg:
+            should_pause_pkg = False
+            raise NeedsAttention("PKG_TEMP_PAUSE", "Temporary package pause")
+        return await pkg_act.run(ctx)
+
+    ops.actions["pm.work_package.create"] = ActionDef(
+        pkg_act.name,
+        pkg_act.scope,
+        pkg_act.summary,
+        pkg_run_pause_once,
+        pkg_act.admit,
+        pkg_act.target_keys,
+        authorize_existing=pkg_act.authorize_existing,
+    )
+    try:
+        env1 = await _start_envelope(w, key="cancel-na-parent-1")
+        op1, _ = ops.create(STARTER_OWNER, **env1)
+        paused = await _advance_start(ops, op1["operation_id"])
+        assert paused["status"] == "needs_attention"
+        pkg_child_id = paused["result"]["children"]["package"]
+        assert ops.get(pkg_child_id)["status"] == "needs_attention"
+
+        # Cancelling the needs_attention parent cascades to the needs_attention child (no unproven step)
+        # so the attempt is completely settled and a new start can proceed immediately.
+        cancelled_parent = ops.cancel(STARTER_OWNER, op1["operation_id"])
+        assert cancelled_parent["status"] == "cancelled"
+        assert ops.get(pkg_child_id)["status"] == "cancelled"
+
+        env2 = await _start_envelope(w, key="cancel-na-parent-2")
+        assert env2["preconditions"]["expected_latest_attempt_id"] == "att_" + op1["operation_id"][3:]
+        op2, fresh2 = ops.create(STARTER_OWNER, **env2)
+        assert fresh2 is True
+        done2 = await _advance_start(ops, op2["operation_id"])
+        assert done2["status"] == "succeeded", done2
+        assert done2["result"]["predecessor_attempt_id"] == "att_" + op1["operation_id"][3:]
+        assert done2["result"]["session"]["session_id"]
+    finally:
+        ops.actions["pm.work_package.create"] = pkg_act
 
 
 async def test_lost_ack_after_fast_reuse_start_refused_by_expected_latest_attempt_id(start_ready, mock):
@@ -1796,11 +1855,16 @@ async def test_unsettled_latest_attempt_blocks_new_start_for_parent_child_and_un
     # and subsequent read-backs (workspace:get-state) also time out while BAT is unreachable.
     ops.resume(STARTER_OWNER, op1["operation_id"])
     client = w["d"].fleet.client("h1")
-    invoke = client.invoke
+    invoke, lost = client.invoke, False
 
     async def lose_start_and_readback(name, *args, **kwargs):
-        if name == "claude:start-session":
+        nonlocal lost
+        if name == "claude:start-session" and not lost:
+            await invoke(name, *args, **kwargs)
+            lost = True
             raise InvokeTimeout("Simulated lost ACK on claude:start-session")
+        if lost and name == "claude:get-session-meta":
+            raise InvokeTimeout("Simulated read-back timeout on claude:get-session-meta")
         return await invoke(name, *args, **kwargs)
 
     monkeypatch.setattr(client, "invoke", lose_start_and_readback)
@@ -2294,7 +2358,7 @@ async def test_work_attempts_list_get_visibility_and_capabilities(world, mock):
     await ops._execute(op2["operation_id"])
     handoff_id = ops.get(op2["operation_id"])["result"]["children"]["handoff"]
     assert handoff_id is not None
-    # Mark handoff child succeeded with a session result and wake parent to complete attempt 2 cleanly without git I/O.
+    # Execute handoff child with a stubbed handler returning a session receipt (avoiding slow git clone in read-model test).
     handoff_res = {
         "host": "h1",
         "workspace_id": "ws-1",
@@ -2305,8 +2369,24 @@ async def test_work_attempts_list_get_visibility_and_capabilities(world, mock):
         "source_ref": "refs/heads/main",
         "source_sha": w["sha"],
     }
-    ops._transition(handoff_id, "running")
-    ops._transition(handoff_id, "succeeded", result=handoff_res)
+    orig_handoff_act = ops.actions["repository.continue"]
+
+    async def stub_handoff_run(_ctx):
+        return handoff_res
+
+    ops.actions["repository.continue"] = ActionDef(
+        orig_handoff_act.name,
+        orig_handoff_act.scope,
+        orig_handoff_act.summary,
+        stub_handoff_run,
+        orig_handoff_act.admit,
+        orig_handoff_act.target_keys,
+        authorize_existing=orig_handoff_act.authorize_existing,
+    )
+    try:
+        await ops._execute(handoff_id)
+    finally:
+        ops.actions["repository.continue"] = orig_handoff_act
     await ops._execute(op2["operation_id"])
     done2 = ops.get(op2["operation_id"])
     assert done2["status"] == "succeeded", done2
