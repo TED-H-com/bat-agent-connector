@@ -13582,7 +13582,7 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		class: "muted",
 		role: "status"
 	}, t("diag_loading"));
-	let content = "", filename = "", serial = 0;
+	let content = "", filename = "", serial = 0, saving = false;
 	const close = () => {
 		serial++;
 		dialog.close();
@@ -13595,15 +13595,24 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		label: t("diag_save"),
 		disabled: true,
 		onClick: async () => {
+			if (saving || !dialog.isConnected) return;
 			const current = serial;
-			saved.disabled = true;
+			saving = true;
+			saved.disabled = false;
+			saved.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
 			try {
 				const result = await save(content, filename);
-				if (current === serial && result) status.textContent = t(result === true ? "diag_download_started" : "diag_saved");
+				if (current === serial && dialog.isConnected && result) status.textContent = t(result === true ? "diag_download_started" : "diag_saved");
 			} catch {
-				if (current === serial) status.textContent = t("diag_save_failed");
+				if (current === serial && dialog.isConnected) status.textContent = t("diag_save_failed");
 			} finally {
-				if (current === serial) saved.disabled = false;
+				if (current !== serial || !dialog.isConnected) return;
+				saving = false;
+				saved.removeAttribute("aria-disabled");
+				status.removeAttribute("aria-busy");
+				saved.disabled = !content || new TextEncoder().encode(content).length > 262144;
+				if (!saved.disabled && (document.activeElement === document.body || document.activeElement === dialog)) saved.focus();
 			}
 		}
 	});
@@ -13643,7 +13652,8 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 			saved,
 			copy,
 			closing
-		].filter((node) => !node.disabled && !node.hidden), first = nodes[0], last = nodes.at(-1);
+		].filter((node) => !node.hidden && (!node.disabled || node.getAttribute("aria-disabled") === "true")), first = nodes[0], last = nodes.at(-1);
+		if (!first || !last) return;
 		if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
 			event.preventDefault();
 			last.focus();
@@ -13662,6 +13672,8 @@ function diagnosticsDialog({ h, t, load, save, onClose }) {
 		summary.replaceChildren();
 		pre.textContent = "";
 		saved.disabled = copy.disabled = true;
+		saved.removeAttribute("aria-disabled");
+		status.removeAttribute("aria-busy");
 		status.textContent = t("diag_withdrawn");
 	};
 	const current = serial;
@@ -50945,7 +50957,7 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 	});
 	panel.append(h("h2", {}, t("tailscale_title")), content, message);
 	main.append(panel);
-	let disposed = false, busy = false, pending = false, readable = false, snapshot, intent, receipt, damaged = false;
+	let disposed = false, busy = false, pending = false, readable = false, snapshot, intent, receipt, damaged = false, pressed = null;
 	const alive = () => !disposed && panel.isConnected;
 	const hex = (value, size) => typeof value === "string" && new RegExp(`^[0-9a-f]{${size}}$`).test(value);
 	const validReceipt = (value) => value && hex(value.request_id, 32) && [
@@ -50962,52 +50974,93 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 		if (intent) localStorage.setItem(key(), JSON.stringify({ request_id: intent }));
 		else localStorage.removeItem(key());
 	};
+	const placeFocus = (key) => {
+		if (!alive() || !key) return;
+		const nodes = [...content.querySelectorAll("[data-tailscale-action]")];
+		const find = (name) => nodes.find((node) => node.getAttribute("data-tailscale-action") === name);
+		const usable = (node) => node && !node.disabled && !node.closest("[hidden]");
+		const current = find(key);
+		if (usable(current)) {
+			current.focus({ preventScroll: true });
+			return;
+		}
+		const named = key === "open" || key === "retry" ? usable(find("new")) ? find("new") : find("refresh") : key === "new" ? usable(find("open")) ? find("open") : find("refresh") : null;
+		if (usable(named)) {
+			named.focus({ preventScroll: true });
+			return;
+		}
+		const group = [...content.querySelectorAll(".actions button")].filter(usable);
+		if (group.length) {
+			group[0].focus({ preventScroll: true });
+			return;
+		}
+		const any = nodes.filter(usable);
+		if (any.length) {
+			any[0].focus({ preventScroll: true });
+			return;
+		}
+		message.tabIndex = -1;
+		message.focus({ preventScroll: true });
+	};
 	const render = () => {
 		if (!alive()) return;
+		const active = document.activeElement;
+		const key = active instanceof Element && content.contains(active) ? active.getAttribute("data-tailscale-action") : null;
 		const native = nativeDesktop && snapshot?.supported === true;
 		const state = !nativeDesktop ? "browser" : snapshot?.supported === false ? "unsupported" : !readable ? "unknown" : snapshot.installation !== "available" ? snapshot.installation : snapshot.login;
 		const unknown = intent && (!receipt || receipt.phase === "uncertain");
+		let flying = false;
+		const gate = (name, staticBlocked) => {
+			const blocked = Boolean(staticBlocked) && pressed !== name;
+			const soft = busy && !blocked;
+			if (soft) flying = true;
+			return {
+				disabled: blocked || null,
+				"aria-disabled": soft ? "true" : null
+			};
+		};
+		const action = (name, label, staticBlocked, onclick) => h("button", {
+			type: "button",
+			class: "secondary",
+			"data-tailscale-action": name,
+			...gate(name, staticBlocked),
+			onclick
+		}, label);
 		content.replaceChildren(...[
 			h("p", {}, t("tailscale_" + state)),
 			native ? h("p", { class: "muted" }, t("tailscale_help")) : null,
 			intent ? h("p", { class: "muted" }, t("tailscale_" + (receipt?.phase || "uncertain"))) : null,
-			intent ? h("details", {}, h("summary", {}, t("tailscale_request")), h("code", {}, intent)) : null,
+			intent ? h("details", {}, h("summary", { "data-tailscale-action": "request" }, t("tailscale_request")), h("code", {}, intent)) : null,
 			damaged ? h("p", { class: "error" }, t("tailscale_damaged")) : null,
-			nativeDesktop ? h("div", { class: "actions" }, h("button", {
-				class: "secondary",
-				disabled: busy || !native || !readable || !snapshot.can_open || damaged || !!intent,
-				onclick: () => run(async () => {
-					intent = crypto.randomUUID().replaceAll("-", "");
-					receipt = null;
+			nativeDesktop ? h("div", { class: "actions" }, action("open", t("tailscale_open"), !native || !readable || !snapshot.can_open || damaged || !!intent, () => run("open", async () => {
+				intent = crypto.randomUUID().replaceAll("-", "");
+				receipt = null;
+				save();
+				await open();
+			})), unknown && !receipt && !damaged ? action("retry", t("tailscale_retry"), !readable || !snapshot?.can_open, () => run("retry", open)) : null, receipt && receipt.phase !== "uncertain" ? action("new", t("tailscale_new"), false, () => run("new", async () => {
+				const previous = intent;
+				intent = null;
+				try {
 					save();
-					await open();
-				})
-			}, t("tailscale_open")), unknown && !receipt && !damaged ? h("button", {
-				class: "secondary",
-				disabled: busy || !readable || !snapshot?.can_open,
-				onclick: () => run(open)
-			}, t("tailscale_retry")) : null, receipt && receipt.phase !== "uncertain" ? h("button", {
-				class: "secondary",
-				disabled: busy,
-				onclick: () => run(async () => {
-					const previous = intent;
-					intent = null;
-					try {
-						save();
-					} catch (error) {
-						intent = previous;
-						throw error;
-					}
-					receipt = null;
-				})
-			}, t("tailscale_new")) : null, iconButton({
+				} catch (error) {
+					intent = previous;
+					throw error;
+				}
+				receipt = null;
+			})) : null, iconButton({
 				icon: "refresh-cw",
 				label: t("tailscale_refresh"),
-				class: "secondary",
-				disabled: busy,
-				onclick: refresh
+				"data-tailscale-action": "refresh",
+				...gate("refresh", false),
+				onclick: () => {
+					if (busy || !alive()) return;
+					refresh();
+				}
 			})) : null
 		].filter(Boolean));
+		if (flying) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		if (key) placeFocus(key);
 	};
 	const read = async () => {
 		const value = await tailscaleControl({ action: "status" });
@@ -51065,9 +51118,10 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 		accept(value, scope, id);
 		pending = true;
 	};
-	const run = async (action) => {
+	const run = async (name, action) => {
 		if (!alive() || busy) return;
 		busy = true;
+		pressed = name;
 		message.textContent = "";
 		render();
 		try {
@@ -51079,6 +51133,8 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 			}
 		} finally {
 			busy = false;
+			pressed = null;
+			if (!alive()) return;
 			render();
 			if (pending && alive()) {
 				pending = false;
@@ -51091,7 +51147,7 @@ function mountTailscale(main, { h, t, presentation } = {}) {
 			pending = true;
 			return;
 		}
-		return run(read);
+		return run("refresh", read);
 	};
 	const returned = () => {
 		if (document.visibilityState === "visible" && alive()) refresh();
@@ -51123,7 +51179,7 @@ async function mountUpdates(main, { h, t }) {
 	});
 	panel.append(h("h2", {}, t("update_title")), content, message);
 	main.append(panel);
-	let disposed = false, busy = false, readable = false, value;
+	let disposed = false, busy = false, readable = false, value, pressed = null;
 	const active = () => !disposed && panel.isConnected;
 	const phases = new Set([
 		"idle",
@@ -51137,51 +51193,80 @@ async function mountUpdates(main, { h, t }) {
 		"stopping_fleet",
 		"installation_unknown"
 	]);
-	const render = () => {
-		if (!active()) return;
-		if (!value) {
-			content.replaceChildren(h("button", {
-				class: "secondary",
-				disabled: busy,
-				onclick: () => request({ action: "status" })
-			}, t("update_read")));
+	const placeFocus = (key) => {
+		if (!active() || !key) return;
+		const nodes = [...content.querySelectorAll("[data-update-action]")];
+		const find = (name) => nodes.find((node) => node.getAttribute("data-update-action") === name);
+		const usable = (node) => node && !node.disabled && !node.closest("[hidden]");
+		const current = find(key);
+		if (usable(current)) {
+			current.focus({ preventScroll: true });
 			return;
 		}
-		const blocked = busy || !readable || !value.available || [
-			"checking",
-			"downloading",
-			"stopping_fleet",
-			"installation_unknown"
-		].includes(value.phase);
-		const candidate = value.candidate;
-		content.replaceChildren(h("p", {}, t("update_current", { version: value.current_version })), h("p", { class: "muted" }, !value.available ? t(value.code === "UPDATE_PLATFORM_UNSUPPORTED" ? "update_platform" : "update_unsigned") : t("update_phase_" + value.phase)), ...candidate ? [h("dl", { class: "kv" }, h("dt", {}, t("update_candidate")), h("dd", {}, candidate.version), h("dt", {}, t("pub_sha")), h("dd", { class: "mono" }, candidate.source_sha))] : [], ...value.installation ? [h("p", {}, t("update_requested", { version: value.installation.to_version }))] : [], ...value.available ? [h("p", { class: "muted" }, t("update_help")), h("div", { class: "actions" }, h("button", {
-			class: candidate ? "secondary" : "primary",
-			disabled: blocked,
-			onclick: () => request({ action: "check" })
-		}, t("update_check")), ...candidate ? [h("button", {
-			class: "primary",
-			disabled: blocked || value.phase === "verified",
-			onclick: () => request({
+		const named = key === "download" ? usable(find("install")) ? find("install") : find("read") : find("read");
+		if (usable(named)) {
+			named.focus({ preventScroll: true });
+			return;
+		}
+		const group = [...content.querySelectorAll(".actions button")].filter(usable);
+		if (group.length) {
+			group[0].focus({ preventScroll: true });
+			return;
+		}
+		const any = nodes.filter(usable);
+		if (any.length) {
+			any[0].focus({ preventScroll: true });
+			return;
+		}
+		message.tabIndex = -1;
+		message.focus({ preventScroll: true });
+	};
+	const render = () => {
+		if (!active()) return;
+		const focused = document.activeElement;
+		const key = focused instanceof Element && content.contains(focused) ? focused.getAttribute("data-update-action") : null;
+		let flying = false;
+		const gate = (name, staticBlocked) => {
+			const blocked = Boolean(staticBlocked) && pressed !== name;
+			const soft = busy && !blocked;
+			if (soft) flying = true;
+			return {
+				disabled: blocked || null,
+				"aria-disabled": soft ? "true" : null
+			};
+		};
+		const action = (name, label, className, staticBlocked, onclick) => h("button", {
+			type: "button",
+			class: className,
+			"data-update-action": name,
+			...gate(name, staticBlocked),
+			onclick
+		}, label);
+		if (!value) content.replaceChildren(action("read", t("update_read"), "secondary", false, () => request({ action: "status" })));
+		else {
+			const staticActions = !readable || !value.available || [
+				"checking",
+				"downloading",
+				"stopping_fleet",
+				"installation_unknown"
+			].includes(value.phase);
+			const candidate = value.candidate;
+			content.replaceChildren(h("p", {}, t("update_current", { version: value.current_version })), h("p", { class: "muted" }, !value.available ? t(value.code === "UPDATE_PLATFORM_UNSUPPORTED" ? "update_platform" : "update_unsigned") : t("update_phase_" + value.phase)), ...candidate ? [h("dl", { class: "kv" }, h("dt", {}, t("update_candidate")), h("dd", {}, candidate.version), h("dt", {}, t("pub_sha")), h("dd", { class: "mono" }, candidate.source_sha))] : [], ...value.installation ? [h("p", {}, t("update_requested", { version: value.installation.to_version }))] : [], ...value.available ? [h("p", { class: "muted" }, t("update_help")), h("div", { class: "actions" }, action("check", t("update_check"), candidate ? "secondary" : "primary", staticActions, () => request({ action: "check" })), ...candidate ? [action("download", t("update_download"), "primary", staticActions || value.phase === "verified", () => request({
 				action: "download",
 				candidate_id: candidate.candidate_id
-			})
-		}, t("update_download")), h("button", {
-			class: value.phase === "verified" ? "primary" : "secondary",
-			disabled: blocked || value.phase !== "verified",
-			onclick: () => request({
+			})), action("install", t("update_install"), value.phase === "verified" ? "primary" : "secondary", staticActions || value.phase !== "verified", () => request({
 				action: "install",
 				candidate_id: candidate.candidate_id
-			})
-		}, t("update_install"))] : [], h("button", {
-			class: "secondary",
-			disabled: busy,
-			onclick: () => request({ action: "status" })
-		}, t("update_read")))] : []);
+			}))] : [], action("read", t("update_read"), "secondary", false, () => request({ action: "status" })))] : []);
+		}
+		if (flying) message.setAttribute("aria-busy", "true");
+		else message.removeAttribute("aria-busy");
+		if (key) placeFocus(key);
 	};
 	const request = async (input) => {
 		if (busy || !active()) return;
 		busy = true;
-		readable = false;
+		pressed = input.action === "status" ? "read" : input.action;
 		message.textContent = "";
 		render();
 		try {
@@ -51196,9 +51281,14 @@ async function mountUpdates(main, { h, t }) {
 			readable = true;
 			if (next.code && next.available && !next.installation) message.textContent = `${t("update_problem")} ${next.code}`;
 		} catch {
-			if (active()) message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed");
+			if (active()) {
+				readable = false;
+				message.textContent = t(input.action === "install" ? "update_unknown" : "update_read_failed");
+			}
 		} finally {
 			busy = false;
+			pressed = null;
+			if (!active()) return;
 			render();
 		}
 	};
@@ -53031,7 +53121,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		class: "muted",
 		role: "status"
 	}), copyFallback = h("div");
-	let disposed = false, busy = false, expanded = false, readable = false, overview, chosen = "", intent, receipt, restoredPreview = false, damaged = false;
+	let disposed = false, busy = false, expanded = false, readable = false, overview, chosen = "", intent, receipt, restoredPreview = false, damaged = false, pressed = null, displaced = null;
 	const alive = () => {
 		if (disposed) return false;
 		try {
@@ -53077,9 +53167,51 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		].includes(value.state) || value.summary && !summaryMatches(value.summary, intent)) throw new Error(t("bat_wrong_receipt"));
 		receipt = value;
 	};
-	const run = async (fn) => {
+	const onFocusOut = (event) => {
+		const from = event.target;
+		if (!(from instanceof Element) || !box.contains(from)) return;
+		const next = event.relatedTarget;
+		if (next instanceof Node && box.contains(next)) return;
+		const lost = from.getAttribute("data-bat-action");
+		if (!lost) return;
+		displaced = lost;
+		queueMicrotask(() => {
+			if (displaced === lost) displaced = null;
+		});
+	};
+	document.addEventListener("focusout", onFocusOut, true);
+	const placeFocus = (key) => {
+		if (!alive() || !key) return;
+		const nodes = [...content.querySelectorAll("[data-bat-action]")];
+		const find = (name) => nodes.find((node) => node.getAttribute("data-bat-action") === name);
+		const usable = (node) => node && !node.disabled && !node.closest("[hidden]");
+		const current = find(key);
+		if (usable(current)) {
+			current.focus({ preventScroll: true });
+			return;
+		}
+		const named = key === "review" || key === "review-again" ? find("launch") : key === "launch" || key === "retry" ? usable(find("new")) ? find("new") : find("read") : key === "cancel" || key === "new" ? find("profile") : null;
+		if (usable(named)) {
+			named.focus({ preventScroll: true });
+			return;
+		}
+		const group = [...content.querySelectorAll(".actions button, .actions a")].filter(usable);
+		if (group.length) {
+			group[0].focus({ preventScroll: true });
+			return;
+		}
+		const any = nodes.filter(usable);
+		if (any.length) {
+			any[0].focus({ preventScroll: true });
+			return;
+		}
+		message.tabIndex = -1;
+		message.focus({ preventScroll: true });
+	};
+	const run = async (name, fn) => {
 		if (!alive() || busy) return;
 		busy = true;
+		pressed = name;
 		message.textContent = "";
 		render();
 		try {
@@ -53088,6 +53220,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			if (alive()) message.textContent = `${t("bat_problem")} ${String(error)}`;
 		} finally {
 			busy = false;
+			pressed = null;
 			if (alive()) render();
 		}
 	};
@@ -53103,16 +53236,22 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 		}
 	};
 	const read = async () => {
-		readable = false;
-		const available = await fleetAvailability();
-		if (!alive()) return;
-		if (!available.configured || !available.platform_supported || !available.native_controls) throw new Error(t("bat_missing"));
-		const value = await fleetControl({ action: "overview" });
-		if (!alive()) return;
-		if (value?.control_version !== 1 || !binding(value.configuration?.binding) || !Array.isArray(value.profiles) || value.profiles.length > 1001 || value.profiles.some((p) => !profile(p.id) || typeof p.label !== "string" || !(p.connection === null || typeof p.connection === "string")) || new Set(value.profiles.map((p) => p.id)).size !== value.profiles.length || !Array.isArray(value.selection?.connections)) throw new Error(t("bat_missing"));
-		overview = value;
-		readable = value.configuration.valid === true && !value.pending_migration;
-		await readReceipt();
+		let committed = false;
+		try {
+			const available = await fleetAvailability();
+			if (!alive()) return;
+			if (!available.configured || !available.platform_supported || !available.native_controls) throw new Error(t("bat_missing"));
+			const value = await fleetControl({ action: "overview" });
+			if (!alive()) return;
+			if (value?.control_version !== 1 || !binding(value.configuration?.binding) || !Array.isArray(value.profiles) || value.profiles.length > 1001 || value.profiles.some((p) => !profile(p.id) || typeof p.label !== "string" || !(p.connection === null || typeof p.connection === "string")) || new Set(value.profiles.map((p) => p.id)).size !== value.profiles.length || !Array.isArray(value.selection?.connections)) throw new Error(t("bat_missing"));
+			overview = value;
+			readable = value.configuration.valid === true && !value.pending_migration;
+			committed = true;
+			await readReceipt();
+		} catch (error) {
+			if (!committed && alive()) readable = false;
+			throw error;
+		}
 	};
 	const copy = async (field) => {
 		if (!alive()) return;
@@ -53131,7 +53270,7 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			input.select();
 		}
 	};
-	const review = () => run(async () => {
+	const reviewBody = async () => {
 		if (!readable || intent && (!restoredPreview || intent.attempted) || damaged || !profile(chosen)) return;
 		const previous = intent?.preview_id, selected = intent?.profile_id || chosen;
 		const value = await fleetControl({
@@ -53156,8 +53295,8 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			action: "discard",
 			preview_id: previous
 		});
-	});
-	const launch = () => run(async () => {
+	};
+	const launchBody = async () => {
 		if (!intent || damaged || restoredPreview || intent.summary.already_running || receipt) return;
 		const next = {
 			...intent,
@@ -53171,8 +53310,8 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			preview_id: intent.preview_id
 		});
 		if (alive()) acceptReceipt(value);
-	});
-	const reset = () => run(async () => {
+	};
+	const resetBody = async () => {
 		if (!intent || intent.attempted && !terminal()) return;
 		localStorage.removeItem(storageKey);
 		const old = intent.preview_id;
@@ -53183,19 +53322,36 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			action: "discard",
 			preview_id: old
 		});
-	});
+	};
 	const render = () => {
 		if (!alive()) return;
-		const button = (key, fn, disabled = false) => h("button", {
-			class: "secondary",
-			disabled: busy || disabled,
-			onclick: fn
-		}, t(key));
+		const active = document.activeElement;
+		let key = active instanceof Element && content.contains(active) ? active.getAttribute("data-bat-action") : null;
+		if (!key && (active === document.body || !active) && displaced) key = displaced;
+		displaced = null;
 		content.hidden = !expanded;
-		if (!expanded) return;
+		if (!expanded) {
+			message.removeAttribute("aria-busy");
+			return;
+		}
+		let flying = false;
+		const button = (label, action, fn, staticDisabled = false) => {
+			const blocked = Boolean(staticDisabled) && pressed !== action;
+			const soft = busy && !blocked;
+			if (soft) flying = true;
+			return h("button", {
+				type: "button",
+				class: "secondary",
+				"data-bat-action": action,
+				disabled: blocked || null,
+				"aria-disabled": soft ? "true" : null,
+				onclick: fn
+			}, t(label));
+		};
 		const fixed = !!intent || damaged;
 		const picker = h("select", {
 			"aria-label": t("bat_profile"),
+			"data-bat-action": "profile",
 			disabled: busy || fixed || !readable,
 			onchange: (e) => {
 				chosen = e.target.value;
@@ -53214,28 +53370,47 @@ function sessionBatPanel({ h, t, guard, storageKey, session }) {
 			if (intent.summary.bat_may_open_local_window) lines.push(h("p", { class: "muted" }, t("fleet_local_anchor")));
 		}
 		if (damaged) lines.push(h("p", { class: "error" }, t("bat_saved_invalid")));
-		const buttons = [button("bat_read", () => run(read))];
-		if (!fixed) buttons.unshift(button("bat_review", review, !readable || !chosen));
-		if (restoredPreview) buttons.unshift(button("bat_review_again", review, !readable));
-		if (intent && !restoredPreview && !receipt && !intent.summary.already_running) buttons.unshift(button(intent.attempted ? "bat_retry" : "bat_launch", launch, !readable));
-		if (intent && (!intent.attempted || terminal())) buttons.push(button(intent.attempted ? "bat_new" : "cancel", reset));
-		lines.push(h("div", { class: "actions" }, ...buttons), h("p", { class: "muted" }, t("bat_preferences"), " ", h("a", { href: "#/settings" }, t("nav_settings"))));
+		const buttons = [button("bat_read", "read", () => run("read", read))];
+		if (!fixed) buttons.unshift(button("bat_review", "review", () => run("review", reviewBody), !readable || !chosen));
+		if (restoredPreview) buttons.unshift(button("bat_review_again", "review-again", () => run("review-again", reviewBody), !readable));
+		if (intent && !restoredPreview && !receipt && !intent.summary.already_running) buttons.unshift(button(intent.attempted ? "bat_retry" : "bat_launch", intent.attempted ? "retry" : "launch", () => run(intent.attempted ? "retry" : "launch", launchBody), !readable));
+		if (intent && (!intent.attempted || terminal())) buttons.push(button(intent.attempted ? "bat_new" : "cancel", intent.attempted ? "new" : "cancel", () => run(intent.attempted ? "new" : "cancel", resetBody)));
+		lines.push(h("div", { class: "actions" }, ...buttons), h("p", { class: "muted" }, t("bat_preferences"), " ", h("a", {
+			href: "#/settings",
+			"data-bat-action": "settings"
+		}, t("nav_settings"))));
 		content.replaceChildren(...lines);
+		if (flying) {
+			if (!message.textContent) message.textContent = "⁠";
+			message.setAttribute("aria-busy", "true");
+		} else {
+			message.removeAttribute("aria-busy");
+			if (message.textContent === "⁠") message.textContent = "";
+		}
+		const parked = message.textContent === "⁠";
+		message.style.position = parked ? "absolute" : "";
+		message.style.width = parked ? "1px" : "";
+		message.style.height = parked ? "1px" : "";
+		message.style.overflow = parked ? "hidden" : "";
+		message.style.clipPath = parked ? "inset(50%)" : "";
+		if (key) placeFocus(key);
+		displaced = null;
 	};
 	box.append(content, copyFallback, message);
 	render();
-	if (nativeDesktop && expanded) queueMicrotask(() => run(read));
+	if (nativeDesktop && expanded) queueMicrotask(() => run("read", read));
 	return {
 		box,
 		update: render,
 		dispose: () => {
 			disposed = true;
+			document.removeEventListener("focusout", onFocusOut, true);
 		},
 		copyTitle: () => copy("title"),
 		copyId: () => copy("id"),
 		open: () => {
 			expanded = true;
-			run(read);
+			run("read", read);
 		}
 	};
 }
