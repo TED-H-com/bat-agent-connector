@@ -417,6 +417,9 @@ class OperationService:
                                        {"action": row["action"], "from": old, "to": status,
                                         "error_code": error_code, "reason": (reason or "")[:200] or None},
                                        actor=actor or row["actor"])
+        if status != old and status in TERMINAL | {"needs_attention"}:
+            # A compound action may have made its parent due in the same commit.
+            self.kick()
         return self._row(operation_id)
 
     def _merge_refs(self, operation_id: str, refs: dict) -> None:
