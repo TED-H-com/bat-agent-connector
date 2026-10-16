@@ -591,7 +591,9 @@ async def test_effective_git_diff_programs_refuse_before_bat_status(daemon, mock
     script.write_text('touch ' + shlex.quote(str(marker)) + '\nprintf fixture\n')
     key = 'diff.external' if program == 'external' else 'diff.proof.' + program
     if program != 'external':
-        (origin / '.git' / 'info' / 'attributes').write_text('feature diff=proof\n')
+        attributes = origin / '.git' / 'info' / 'attributes'
+        attributes.parent.mkdir(parents=True, exist_ok=True)
+        attributes.write_text('feature diff=proof\n')
     args = []
     if location == 'include':
         config = tmp_path / 'included-diff.conf'

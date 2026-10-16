@@ -560,7 +560,9 @@ async def test_e01_lost_replies_reconcile_each_cleanup_phase(daemon, mock, monke
     principal = DISCARDER if loss_phase == "discard" else CLEANER
     if phase == "discard.replica":
         wt = Path(op["result"]["worktree_path"])
-        (Path(op["external_refs"]["clone_path"]) / ".git/info/exclude").write_text(".batc-inputs/\n")
+        exclude = Path(op["external_refs"]["clone_path"]) / ".git/info/exclude"
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        exclude.write_text(".batc-inputs/\n")
         (wt / ".batc-inputs").mkdir()
         (wt / ".batc-inputs/attachment.txt").write_text("original")
         attachment_evidence(monkeypatch, wt, [".batc-inputs/attachment.txt"])
@@ -702,7 +704,9 @@ async def test_e01_attachment_replicas_are_removed_without_discard_scope(daemon,
     cp, op = await setup_work(daemon, mock)
     wt = Path(op["result"]["worktree_path"])
     clone = Path(op["external_refs"]["clone_path"])
-    (clone / ".git/info/exclude").write_text(".batc-inputs/\n")
+    exclude = clone / ".git/info/exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.write_text(".batc-inputs/\n")
     replicas = wt / ".batc-inputs"
     replicas.mkdir()
     (replicas / "attachment.txt").write_text("replica; original in artifact store")
@@ -728,7 +732,9 @@ async def test_e01_attachment_replicas_are_removed_without_discard_scope(daemon,
 async def test_e01_edited_or_extra_replica_content_counts_as_uncommitted(daemon, mock, monkeypatch):
     cp, op = await setup_work(daemon, mock)
     wt = Path(op["result"]["worktree_path"])
-    (Path(op["external_refs"]["clone_path"]) / ".git/info/exclude").write_text(".batc-inputs/\n")
+    exclude = Path(op["external_refs"]["clone_path"]) / ".git/info/exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.write_text(".batc-inputs/\n")
     (wt / ".batc-inputs").mkdir()
     (wt / ".batc-inputs/attachment.txt").write_text("original")
     attachment_evidence(monkeypatch, wt, [".batc-inputs/attachment.txt"])
@@ -754,7 +760,9 @@ async def test_e01_edited_or_extra_replica_content_counts_as_uncommitted(daemon,
 async def test_e01_replicas_without_manifest_are_ordinary_content(daemon, mock):
     cp, op = await setup_work(daemon, mock)
     wt = Path(op["result"]["worktree_path"])
-    (Path(op["external_refs"]["clone_path"]) / ".git/info/exclude").write_text(".batc-inputs/\n")
+    exclude = Path(op["external_refs"]["clone_path"]) / ".git/info/exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.write_text(".batc-inputs/\n")
     (wt / ".batc-inputs").mkdir()
     (wt / ".batc-inputs/attachment.txt").write_text("no materialization evidence yet")
     (wt / ".batc-inputs/.owner").write_text("no evidence for helper names either")
@@ -771,7 +779,9 @@ async def test_e01_replicas_without_manifest_are_ordinary_content(daemon, mock):
 async def test_e01_replica_edit_after_preview_is_stale(daemon, mock, monkeypatch):
     cp, op = await setup_work(daemon, mock)
     wt = Path(op["result"]["worktree_path"])
-    (Path(op["external_refs"]["clone_path"]) / ".git/info/exclude").write_text(".batc-inputs/\n")
+    exclude = Path(op["external_refs"]["clone_path"]) / ".git/info/exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.write_text(".batc-inputs/\n")
     (wt / ".batc-inputs").mkdir()
     (wt / ".batc-inputs/attachment.txt").write_text("original")
     attachment_evidence(monkeypatch, wt, [".batc-inputs/attachment.txt"])
@@ -789,7 +799,9 @@ async def test_e01_replica_edit_after_preview_is_stale(daemon, mock, monkeypatch
 async def test_e01_replica_anomalies_require_reviewed_discard(daemon, mock, monkeypatch, tmp_path, anomaly):
     cp, op = await setup_work(daemon, mock)
     wt = Path(op["result"]["worktree_path"])
-    (Path(op["external_refs"]["clone_path"]) / ".git/info/exclude").write_text(".batc-inputs/\n")
+    exclude = Path(op["external_refs"]["clone_path"]) / ".git/info/exclude"
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    exclude.write_text(".batc-inputs/\n")
     (wt / ".batc-inputs").mkdir()
     replica = wt / ".batc-inputs/attachment.txt"
     replica.write_text("original content")
