@@ -23,6 +23,12 @@ management views, discussions and bound work. A form submission is not evidence 
 completion. Unknown, partial, stale and withdrawn states must remain distinguishable.
 Never substitute zero for missing data or count a loaded page as a complete inventory.
 
+Durable PM forms retain keyboard focus on the submit button while an action is in flight
+or being checked automatically via `aria-disabled="true"` and an `aria-busy="true"` status region,
+preventing focus ejection to `<body>`. Submitting from a field shifts focus to the submit
+button before locking fields, duplicate submissions while busy or during automatic checks
+are ignored, and terminal failures or admission refusals move focus to the reset button.
+
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
@@ -594,8 +600,10 @@ on larger viewports. Its entire header is hidden; the wide table retains its hea
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
 ordered work sections: Requirements served; Status & ownership; Start work (when the
-`features.pm_workspaces.work_start` capability is available); Latest result;
-Blocker & next step; Delivery; Details. When the card is startable, the inspector
+`features.pm_workspaces.work_start` capability is available); Result (when
+`features.pm_workspaces.work_attempt_results` is available, replacing static result evidence
+with the latest attempt's live result envelope using 0 BAT calls); Blocker & next step;
+Delivery; Details. When the card is startable, the inspector
 header offers a Start work action alongside Discuss that scrolls and focuses the instruction
 field. The Start work panel previews readiness facts, candidate code targets, and requirement
 selection for cards needing plan rebinding with workspace owner permission; durable submissions
@@ -624,13 +632,17 @@ Existing quality, evidence, specs, package, handoff and publication controls mov
 intact into drawers reached from the Requirements overflow and work inspector;
 Board's overflow opens Batches. Drafts, original request keys and recovery controls
 remain owned by their existing modules. Both work inspectors expose the same
-Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh.
+Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh; whichever read completes with the current sequence resets the busy state so Refresh does not stay disabled when an event arrives during a refresh.
 `requirements?select=<work_item_id|requirement_id>` expands and scrolls to the
 selection, clearing a previous search when following an explicit selection link.
 Overview and Issues links preserve the exact revision, expand the destination row with
 `aria-current`, and focus its visible target. Work links focus the shared sheet title
 on narrow screens. Explicit destinations cancel queued scroll restoration; revisiting
-a view restores its own scroll. Unassigned work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
+a view restores its own scroll. Board and Requirements record their scroll position before
+a view switch hides them or on route departure (including during in-flight reads). The restore
+waits until the workspace header has settled. A hidden view, or a view retired before its mount
+finished, never moves the window. Unassigned
+work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
 The package entry preserves the existing read-only catalogue. This foundation has
@@ -1235,7 +1247,10 @@ its original mapping identity stays in Details. Projects and Resources Work item
 share a creation disclosure, starting closed behind New project or New work item.
 Cancel sits after Add and Review, before the draft note; it closes the form and
 returns focus without discarding the draft. A pending original request stays open
-for receipt recovery. A verified project creation opens its project page for Quick
+for receipt recovery. While Add is sending, it stays in the tab order and keeps
+keyboard focus; it looks unavailable, and a second press does not send another
+request. Enter in a field moves focus to Add before those fields lock. A failed
+or refused request moves focus to Edit request. A verified project creation opens its project page for Quick
 project dispatch. A verified work-item creation refreshes the same list, closes the
 form and returns focus to New work item. Source withdrawal
 hides the form and action together. Project header chips center beside touch-sized

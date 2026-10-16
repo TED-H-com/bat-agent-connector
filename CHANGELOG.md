@@ -7,6 +7,22 @@
   cannot be used stays unavailable. When Save closes, or Capture another file
   starts over, focus moves to the next available control.
 
+- The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
+
+- Projects and work items: Tab reaches Add while a creation request is sending,
+  and pressing it keeps keyboard focus on the button. The button looks unavailable
+  until the request finishes, and a second press is ignored. A failed or refused
+  request moves focus to Edit request.
+
+- PM forms keep keyboard focus on the submit button while an operation is in flight
+  or being checked automatically, instead of dropping focus to the page. Pressing
+  Enter from a field moves focus to the submit button before fields are locked,
+  duplicate submissions are ignored, and a terminal failure or refusal moves focus
+  to "New request".
+
+- Refresh in a project no longer stays disabled when the project changes while
+  it is refreshing.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
@@ -19,6 +35,12 @@
   The attempts timeline renders live progress states with links to the operation
   or session output, preserving user drafts and requests across reloads and lost replies
   in English and zh-TW.
+
+- The PM Work inspector on the board adds a read-only Result section (v1.3 E03 Part A)
+  for finished and in-progress work attempts. It presents the agent's summary alongside
+  its observed progress, separate indicators for verification, review, requirement
+  acceptance, pull requests and deployment, summary statistics for touched files and
+  commits, uncommitted change warnings, and recorded turns in English and zh-TW.
 
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow
@@ -58,6 +80,12 @@
 - Conversation adoption advances as each original child operation finishes,
   removing the fixed one-second pause between completed steps. Child failures
   still stop the adoption; recovery keeps the original requests and receipts.
+
+- Board and Requirements now return to where you left them when you switch to
+  another project view or leave the project while they are still loading. On
+  narrow windows they no longer land about 50 px further down when the page
+  header finishes loading after the view. A view you switch away from while it
+  is still loading no longer moves the page when its read finishes.
 
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results

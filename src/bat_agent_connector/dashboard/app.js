@@ -8072,12 +8072,261 @@ var workStartStrings = {
 	}
 };
 //#endregion
+//#region src/pm-work-result-strings.js
+var workResultStrings = {
+	"zh-TW": {
+		wres_heading: "成果",
+		wres_invalid_envelope: "無法讀取這份成果。",
+		wres_state_accepted: "已受理",
+		wres_state_starting: "啟動中",
+		wres_state_active: "執行中",
+		wres_state_waiting: "等待回答或權限",
+		wres_state_turn_ended: "本輪已結束",
+		wres_state_process_ended: "工作階段已結束",
+		wres_state_failed: "失敗",
+		wres_state_unknown: "未知",
+		wres_reason_handoff_outcome_uncertain: "開始可能已開啟工作階段，再次開始前請先查看 BAT。",
+		wres_reason_bat_unreachable: "無法連到 BAT。",
+		wres_reason_observation_stale: "最後一次觀察已過時。",
+		wres_reason_unloaded_history_session: "BAT 尚未載入這個工作階段。",
+		wres_reason_turn_boundary_not_collected: "尚未記錄這一輪的結束。",
+		wres_reason_turn_marker_not_visible: "尚未記錄這一輪的結束。",
+		wres_reason_session_not_managed_by_attempt: "這個工作階段不是此次開始所管理的，只能檢視。",
+		wres_agent_error: "代理回報了錯誤。",
+		wres_waiting_pending: "請在即時輸出中回答。",
+		wres_status_needs_attention: "需要處理：請開啟操作以繼續或取消。",
+		wres_open_live_output: "開啟即時輸出",
+		wres_view_operation: "查看操作",
+		wres_try_again: "再試一次",
+		wres_agent_summary_label: "代理自述（未經驗證）",
+		wres_no_recorded_turn: "尚未記錄已結束的回合。",
+		wres_pill_claimed_done: "代理表示已完成",
+		wres_check_verification: "驗證",
+		wres_verification_unverified: "未驗證",
+		wres_verification_running: "驗證中",
+		wres_verification_verified: "已驗證",
+		wres_verification_failed: "驗證失敗",
+		wres_verification_stale: "驗證的是較舊的 commit",
+		wres_check_review: "審閱",
+		wres_review_unassessed: "尚未審閱",
+		wres_review_accepted: "審閱已接受",
+		wres_review_rejected: "審閱未接受",
+		wres_review_revocation: "審閱已撤回",
+		wres_check_acceptance: "需求驗收",
+		wres_acceptance_passed: "已驗收",
+		wres_acceptance_blocked: "未通過驗收",
+		wres_acceptance_unassessed: "尚未驗收",
+		wres_check_pr: "PR",
+		wres_merge_not_started: "尚未建立 PR",
+		wres_merge_pr_open: "PR 已開啟",
+		wres_merge_pr_closed_unmerged: "已關閉，未合併",
+		wres_merge_merge_pending: "合併中",
+		wres_merge_merged: "已合併",
+		wres_check_deployment: "部署",
+		wres_deploy_not_deployed: "尚未部署",
+		wres_deploy_pending: "等待部署",
+		wres_deploy_running: "部署中",
+		wres_deploy_succeeded: "已部署",
+		wres_deploy_and_verified: "並已驗證",
+		wres_deploy_succeeded_verified: "已部署並已驗證",
+		wres_deploy_failed: "部署失敗",
+		wres_deploy_needs_attention: "部署需要處理",
+		wres_deploy_cancelled: "部署已取消",
+		wres_check_delivery_goal: "交付目標",
+		wres_goal_pr: "PR",
+		wres_goal_reviewable_changes: "可審閱修改",
+		wres_unknown: "未知",
+		wres_changes_summary: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one_file: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_summary_one_commit: "{commits} 個 commit 共修改 {files} 個檔案，+{additions} −{deletions}",
+		wres_changes_partly_read: "修改只讀取到一部分",
+		wres_as_of_last_turn: "以最後記錄的回合為準",
+		wres_file_added: "新增",
+		wres_file_modified: "修改",
+		wres_file_deleted: "刪除",
+		wres_file_renamed: "重新命名",
+		wres_show_all_files: "顯示全部 {n} 個檔案",
+		wres_show_all_files_one: "顯示 1 個檔案",
+		wres_base_commit: "基準",
+		wres_result_commit: "成果 commit",
+		wres_source_turn_end_observation: "回合結束時觀察到",
+		wres_source_verified_commit: "已驗證的 commit",
+		wres_source_delivered_commit: "已交付的 commit",
+		wres_uncommitted_changes: "未提交的修改：{n}",
+		wres_uncommitted_unknown: "未知：BAT 無法證明工作樹沒有未提交的修改。",
+		wres_status_unavailable: "不可用",
+		wres_reason_session_not_found: "找不到工作階段。",
+		wres_reason_transcript_truncated_by_size: "對話記錄因大小限制已截斷。",
+		wres_reason_archived_messages_omitted: "已略過封存的訊息。",
+		wres_reason_parse_error: "解析工作階段資料失敗。",
+		wres_reason_session_not_started_yet: "工作階段尚未開始。",
+		wres_reason_start_outcome_uncertain: "啟動結果尚未確定。",
+		wres_reason_turn_slice_bounded: "回合切片受到筆數上限限制。",
+		wres_reason_result_document_bounded: "成果文件受到大小上限限制。",
+		wres_reason_worktree_unreachable: "無法存取工作樹。",
+		wres_reason_bat_empty_status_not_clean_proof: "BAT 無法證明工作樹沒有未提交的修改。",
+		wres_reason_diff_exceeded_pipe_limit: "差異超出管道緩衝區上限。",
+		wres_reason_commit_limit_exceeded: "commit 數量超出上限。",
+		wres_reason_changeset_time_budget_exceeded: "收集變更摘要超時。",
+		wres_reason_base_commit_not_ancestor: "基準 commit 不是 head 的祖先。",
+		wres_reason_source_digest_conflict: "同一回合位置觀察到不同的內容。",
+		wres_reason_generic_limit: "另有其他限制",
+		wres_recorded_turns_count: "已記錄的回合（{n}）",
+		wres_recorded_turns_count_one: "已記錄的回合（1）",
+		wres_latest_turn: "最新",
+		wres_showing_latest_20: "僅顯示最新 20 筆。",
+		wres_details: "詳細資料",
+		wres_attempt_id: "嘗試代號",
+		wres_result_id: "成果代號",
+		wres_start_operation_id: "啟動操作",
+		wres_execution_operation_id: "執行操作",
+		wres_source_key: "來源鍵",
+		wres_digest: "摘要雜湊",
+		wres_collection_outcome: "收集結果",
+		wres_raw_state: "原始狀態",
+		wres_raw_stage: "原始階段",
+		wres_raw_reasons: "原因",
+		wres_unlisted_completeness_reasons: "未列出的完整度原因",
+		wres_unlisted_facets: "未列出的狀態",
+		wres_unlisted_file_statuses: "未列出的檔案狀態",
+		wres_usage: "用量",
+		wres_usage_context_tokens: "上下文詞元",
+		wres_usage_context_window: "上下文視窗",
+		wres_usage_num_turns: "回合數",
+		wres_exit_code_not_exposed: "結束碼：BAT 不提供"
+	},
+	en: {
+		wres_heading: "Result",
+		wres_invalid_envelope: "This result could not be read.",
+		wres_state_accepted: "Accepted",
+		wres_state_starting: "Starting",
+		wres_state_active: "Working",
+		wres_state_waiting: "Waiting for an answer or permission",
+		wres_state_turn_ended: "Turn ended",
+		wres_state_process_ended: "Session ended",
+		wres_state_failed: "Failed",
+		wres_state_unknown: "Unknown",
+		wres_reason_handoff_outcome_uncertain: "The start may have opened a session; check BAT before starting again.",
+		wres_reason_bat_unreachable: "BAT is not reachable.",
+		wres_reason_observation_stale: "The last observation is out of date.",
+		wres_reason_unloaded_history_session: "BAT has not loaded this session.",
+		wres_reason_turn_boundary_not_collected: "The end of this turn has not been recorded yet.",
+		wres_reason_turn_marker_not_visible: "The end of this turn has not been recorded yet.",
+		wres_reason_session_not_managed_by_attempt: "This session is not managed by this attempt; it is shown read-only.",
+		wres_agent_error: "The agent reported an error.",
+		wres_waiting_pending: "Answer it in the live output.",
+		wres_status_needs_attention: "Needs attention: open the operation to resume or cancel it.",
+		wres_open_live_output: "Open live output",
+		wres_view_operation: "View operation",
+		wres_try_again: "Try again",
+		wres_agent_summary_label: "The agent's summary (not verified)",
+		wres_no_recorded_turn: "No turn has been recorded yet.",
+		wres_pill_claimed_done: "The agent says it is done",
+		wres_check_verification: "Verification",
+		wres_verification_unverified: "Not verified",
+		wres_verification_running: "Verifying",
+		wres_verification_verified: "Verified",
+		wres_verification_failed: "Verification failed",
+		wres_verification_stale: "Verified an older commit",
+		wres_check_review: "Review",
+		wres_review_unassessed: "Not reviewed",
+		wres_review_accepted: "Accepted in review",
+		wres_review_rejected: "Rejected in review",
+		wres_review_revocation: "Review withdrawn",
+		wres_check_acceptance: "Requirement acceptance",
+		wres_acceptance_passed: "Accepted",
+		wres_acceptance_blocked: "Not accepted",
+		wres_acceptance_unassessed: "Not assessed",
+		wres_check_pr: "Pull request",
+		wres_merge_not_started: "No pull request",
+		wres_merge_pr_open: "Pull request open",
+		wres_merge_pr_closed_unmerged: "Closed without merging",
+		wres_merge_merge_pending: "Merging",
+		wres_merge_merged: "Merged",
+		wres_check_deployment: "Deployment",
+		wres_deploy_not_deployed: "Not deployed",
+		wres_deploy_pending: "Waiting to deploy",
+		wres_deploy_running: "Deploying",
+		wres_deploy_succeeded: "Deployed",
+		wres_deploy_and_verified: "and verified",
+		wres_deploy_succeeded_verified: "Deployed and verified",
+		wres_deploy_failed: "Deployment failed",
+		wres_deploy_needs_attention: "Deployment needs attention",
+		wres_deploy_cancelled: "Deployment cancelled",
+		wres_check_delivery_goal: "Delivery goal",
+		wres_goal_pr: "Pull request",
+		wres_goal_reviewable_changes: "Reviewable changes",
+		wres_unknown: "Unknown",
+		wres_changes_summary: "{files} files changed in {commits} commits, +{additions} −{deletions}",
+		wres_changes_summary_one: "1 file changed in 1 commit, +{additions} −{deletions}",
+		wres_changes_summary_one_file: "1 file changed in {commits} commits, +{additions} −{deletions}",
+		wres_changes_summary_one_commit: "{files} files changed in 1 commit, +{additions} −{deletions}",
+		wres_changes_partly_read: "Changes were only partly read",
+		wres_as_of_last_turn: "As of the last recorded turn",
+		wres_file_added: "added",
+		wres_file_modified: "modified",
+		wres_file_deleted: "deleted",
+		wres_file_renamed: "renamed",
+		wres_show_all_files: "Show all {n} files",
+		wres_show_all_files_one: "Show 1 file",
+		wres_base_commit: "Base",
+		wres_result_commit: "Result commit",
+		wres_source_turn_end_observation: "seen at the end of a turn",
+		wres_source_verified_commit: "the verified commit",
+		wres_source_delivered_commit: "the delivered commit",
+		wres_uncommitted_changes: "Uncommitted changes: {n}",
+		wres_uncommitted_unknown: "Unknown: BAT cannot prove the working tree has no uncommitted changes.",
+		wres_status_unavailable: "Unavailable",
+		wres_reason_session_not_found: "The session was not found.",
+		wres_reason_transcript_truncated_by_size: "The transcript was truncated due to size limits.",
+		wres_reason_archived_messages_omitted: "Archived messages were omitted.",
+		wres_reason_parse_error: "Failed to parse session data.",
+		wres_reason_session_not_started_yet: "The session has not started yet.",
+		wres_reason_start_outcome_uncertain: "The start outcome is uncertain.",
+		wres_reason_turn_slice_bounded: "The turn slice was bounded by item limits.",
+		wres_reason_result_document_bounded: "The result document was bounded by size limits.",
+		wres_reason_worktree_unreachable: "The worktree is not reachable.",
+		wres_reason_bat_empty_status_not_clean_proof: "BAT cannot prove the working tree has no uncommitted changes.",
+		wres_reason_diff_exceeded_pipe_limit: "The diff exceeded the pipe buffer limit.",
+		wres_reason_commit_limit_exceeded: "The commit count exceeded the limit.",
+		wres_reason_changeset_time_budget_exceeded: "Changeset collection timed out.",
+		wres_reason_base_commit_not_ancestor: "The base commit is not an ancestor of head.",
+		wres_reason_source_digest_conflict: "Different content was observed for the same turn position.",
+		wres_reason_generic_limit: "Another limit applies",
+		wres_recorded_turns_count: "Recorded turns ({n})",
+		wres_recorded_turns_count_one: "Recorded turn (1)",
+		wres_latest_turn: "latest",
+		wres_showing_latest_20: "Showing the latest 20.",
+		wres_details: "Details",
+		wres_attempt_id: "Attempt",
+		wres_result_id: "Result ID",
+		wres_start_operation_id: "Start operation",
+		wres_execution_operation_id: "Execution operation",
+		wres_source_key: "Source key",
+		wres_digest: "Digest",
+		wres_collection_outcome: "Collection outcome",
+		wres_raw_state: "Raw state",
+		wres_raw_stage: "Raw stage",
+		wres_raw_reasons: "Reasons",
+		wres_unlisted_completeness_reasons: "Unlisted completeness reasons",
+		wres_unlisted_facets: "Unlisted state facets",
+		wres_unlisted_file_statuses: "Unlisted file statuses",
+		wres_usage: "Usage",
+		wres_usage_context_tokens: "Context tokens",
+		wres_usage_context_window: "Context window",
+		wres_usage_num_turns: "Turns",
+		wres_exit_code_not_exposed: "Exit code: not exposed by BAT"
+	}
+};
+//#endregion
 //#region src/i18n.js
 var STRINGS = {
 	"zh-TW": {
 		...workbenchStrings$1["zh-TW"],
 		...diagnosticsStrings["zh-TW"],
 		...workStartStrings["zh-TW"],
+		...workResultStrings["zh-TW"],
 		...pmStrings["zh-TW"],
 		...createRecordStrings["zh-TW"],
 		...uiStrings["zh-TW"],
@@ -9724,6 +9973,7 @@ var STRINGS = {
 		...workbenchStrings$1.en,
 		...diagnosticsStrings.en,
 		...workStartStrings.en,
+		...workResultStrings.en,
 		...pmStrings.en,
 		...createRecordStrings.en,
 		...uiStrings.en,
@@ -15242,6 +15492,7 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		details.dataset.workSection = "details";
 		const keys = new Set([...sections, details].map((node) => node.dataset.workSection));
 		if (panel.body.querySelector("[data-work-section=\"start\"]")) keys.add("start");
+		if (panel.body.querySelector("[data-work-section=\"attempt-result\"]")) keys.add("attempt-result");
 		for (const node of panel.body.querySelectorAll("[data-work-section]")) if (!keys.has(node.dataset.workSection)) node.remove();
 		for (const node of [...sections, details]) {
 			const previous = panel.body.querySelector(`[data-work-section="${node.dataset.workSection}"]`);
@@ -15251,6 +15502,9 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 				else previous.replaceChildren(...node.childNodes);
 			}
 		}
+		const attemptResult = panel.body.querySelector("[data-work-section=\"attempt-result\"]");
+		const staticResult = panel.body.querySelector("[data-work-section=\"result\"]");
+		if (staticResult) staticResult.hidden = Boolean(attemptResult && !attemptResult.hidden);
 	}
 	return {
 		show,
@@ -15261,6 +15515,11 @@ function workInspector({ t, workspaceId, from, mount, onClose = () => {}, tools 
 		},
 		get selection() {
 			return selection;
+		},
+		setAttemptResultVisible(visible) {
+			if (!panel) return;
+			const res = panel.body.querySelector("[data-work-section=\"result\"]");
+			if (res) res.hidden = Boolean(visible);
 		}
 	};
 }
@@ -17513,7 +17772,8 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		const submit = create.box.querySelector("button[type=submit]"), recovering = create.locked();
 		create.box.hidden = !recovering && (!head || !canCreate());
 		submit.hidden = !recovering && !create.canSubmit();
-		pending.hidden = create.box.hidden || submit.hidden || !submit.disabled;
+		const unavailable = submit.disabled || submit.getAttribute("aria-disabled") === "true";
+		pending.hidden = create.box.hidden || submit.hidden || !unavailable;
 		pending.textContent = t(create.checking() ? "pd_report_pending" : "pd_report_unavailable");
 		if (!pending.hidden) submit.setAttribute("aria-describedby", pending.id);
 		else submit.removeAttribute("aria-describedby");
@@ -21634,7 +21894,7 @@ function requirementReviews(plan, requirement, reviews) {
 	if (!ids.length || ids.some((id) => !id) || !plan.document_digest || !plan.adoption?.scope_revision) return [];
 	return reviews.filter((row) => row.qualified === true && row.applicable === true && row.assessment?.document?.qualified === true && row.context?.plan_ref?.revision_id === plan.revision_id && row.context.plan_ref.document_digest === plan.document_digest && row.context.plan_ref.scope_revision === plan.adoption?.scope_revision && ids.every((id) => row.assessment.document.criteria?.some((result) => result.criterion?.kind === "acceptance" && result.criterion.requirement_id === requirement.id && result.criterion.input_id === id && result.status === "accepted")));
 }
-function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox }) {
+function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, errorBox, workspaceSettled = () => Promise.resolve() }) {
 	const preference = viewState(namespace, workspaceId, "requirements"), endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`;
 	let serial = 0, detailSerial = 0, active = false, visible = false, busy = false, plan = null, cards = [], issues = [], reviews = [], milestones = [], sources = new Map(), earlierPlans = new Map();
 	let pendingFocus = null, pendingNavigation = null, currentRequirement = null, currentMilestone = null, scrollGeneration = 0;
@@ -21802,6 +22062,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			alive();
 			if (ticket !== serial) return;
 		} catch {
+			++scrollGeneration;
 			return;
 		}
 		errorBox(error);
@@ -22325,6 +22586,9 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			}
 		}
 	}
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (visible && !busy && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -22344,7 +22608,8 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -22357,7 +22622,7 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -22448,12 +22713,14 @@ function workspaceTraceability({ t, api, alive, namespace, workspaceId, caps, er
 		focusRequirement,
 		labelFor,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		activate,
 		setTools: (value) => {
 			tools = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			Object.assign(preference, {
 				selected,
@@ -32881,7 +33148,7 @@ var PRECONDITION_KEYS = [
 	"expected_source_sha",
 	"expected_latest_attempt_id"
 ];
-function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: getPlan, onStartableChange = () => {} }) {
+function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: getPlan, onStartableChange = () => {}, onLatestAttempt = () => {} }) {
 	const panelErrorBox = (err, opts = {}) => {
 		const code = err?.code || "";
 		const panelKey = `wst_error_${code}`;
@@ -33603,8 +33870,12 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
 			const editor = editors.get(workId);
 			if (editor?.locked()) editor.recheck();
+			onLatestAttempt(latestAttempt);
 		} catch (err) {
-			if (validAttempts(ticket, workId)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+			if (validAttempts(ticket, workId)) {
+				statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
+				onLatestAttempt(null);
+			}
 		}
 	}
 	function updateUI() {
@@ -33635,6 +33906,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 		attemptsView.replaceChildren();
 		editorView.replaceChildren();
 		statusView.replaceChildren();
+		onLatestAttempt(null);
 		updateUI();
 	}
 	async function setWork(card) {
@@ -33659,6 +33931,7 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 			partialAttempts = false;
 			attemptsView.replaceChildren();
 			statusView.replaceChildren();
+			onLatestAttempt(null);
 		}
 		const ticket = ++workSerial;
 		updateUI();
@@ -33676,18 +33949,8 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 				}
 			}
 			if (!validWork(ticket, card.work_item_id)) return;
-			const editor = getEditor(card);
-			editor?.checkPlanChange();
-			const attemptsTicket = ++attemptsSerial;
-			const attemptsData = await fetchAttempts(card.work_item_id, attemptsTicket);
-			if (!validAttempts(attemptsTicket, card.work_item_id)) return;
-			if (attemptsData) {
-				attempts = attemptsData.attempts;
-				visibilityFiltered = attemptsData.visibilityFiltered;
-				partialAttempts = attemptsData.partial;
-				latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-			}
-			if (editor?.locked()) editor.recheck();
+			getEditor(card)?.checkPlanChange();
+			await refreshAttempts();
 		} catch (err) {
 			if (validWork(ticket, card.work_item_id)) statusView.replaceChildren(panelErrorBox(err, { within: statusView }));
 		} finally {
@@ -33729,8 +33992,540 @@ function workStartPanel({ h, t, api, alive, namespace, workspaceId, caps, permit
 	};
 }
 //#endregion
+//#region src/pm-work-result.js
+var KNOWN_STATES = new Set([
+	"accepted",
+	"starting",
+	"active",
+	"waiting",
+	"turn-ended",
+	"process-ended",
+	"failed",
+	"unknown"
+]);
+var KNOWN_REASONS = new Set([
+	"bat_unreachable",
+	"observation_stale",
+	"session_not_found",
+	"transcript_truncated_by_size",
+	"archived_messages_omitted",
+	"parse_error",
+	"session_not_started_yet",
+	"start_outcome_uncertain",
+	"handoff_outcome_uncertain",
+	"unloaded_history_session",
+	"turn_marker_not_visible",
+	"turn_boundary_not_collected",
+	"session_not_managed_by_attempt",
+	"turn_slice_bounded",
+	"result_document_bounded",
+	"worktree_unreachable",
+	"bat_empty_status_not_clean_proof",
+	"diff_exceeded_pipe_limit",
+	"commit_limit_exceeded",
+	"changeset_time_budget_exceeded",
+	"base_commit_not_ancestor",
+	"source_digest_conflict"
+]);
+function normalizeForComparison(envelope) {
+	if (!envelope || typeof envelope !== "object") return null;
+	const clone = JSON.parse(JSON.stringify(envelope));
+	delete clone.cursor;
+	delete clone.events_read;
+	delete clone.wait;
+	if (clone.collection) delete clone.collection.checked_at;
+	return clone;
+}
+function workResultPanel({ h, t, api, alive, workspaceId, caps, errorBox, onVisibility = () => {} }) {
+	let activeAttempt = null;
+	let readSerial = 0;
+	let lastEnvelope = null;
+	let lastNormalized = null;
+	let lastStale = false;
+	let turnsOpen = false;
+	let detailsOpen = false;
+	let filesOpen = false;
+	const panelElement = h("div", {
+		class: "pm-work-result-panel",
+		"data-work-result": ""
+	});
+	panelElement.hidden = true;
+	function updateVisibility(visible) {
+		panelElement.hidden = !visible;
+		onVisibility(visible);
+	}
+	function withdraw() {
+		readSerial++;
+		lastEnvelope = null;
+		lastNormalized = null;
+		lastStale = false;
+		turnsOpen = false;
+		detailsOpen = false;
+		filesOpen = false;
+		panelElement.replaceChildren();
+		updateVisibility(false);
+	}
+	function dispose() {
+		activeAttempt = null;
+		withdraw();
+	}
+	async function setAttempt(attempt) {
+		if (!attempt || !attempt.attempt_id) {
+			activeAttempt = null;
+			withdraw();
+			return;
+		}
+		if (!Boolean(attempt.session?.session_id || attempt.native_session?.session_id || attempt.session_id)) {
+			activeAttempt = attempt;
+			withdraw();
+			return;
+		}
+		if (activeAttempt?.attempt_id !== attempt.attempt_id) withdraw();
+		activeAttempt = attempt;
+		await readResult();
+	}
+	async function refresh() {
+		if (!activeAttempt) return;
+		if (!Boolean(activeAttempt.session?.session_id || activeAttempt.native_session?.session_id || activeAttempt.session_id)) return;
+		await readResult();
+	}
+	async function readResult() {
+		if (!activeAttempt) return;
+		const ticket = ++readSerial;
+		const attemptId = activeAttempt.attempt_id;
+		const currentAttempt = activeAttempt;
+		try {
+			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/work-attempts/${encodeURIComponent(attemptId)}/result`);
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			if (!(data && typeof data === "object" && data.contract === "pm-work-attempt-result/v1" && data.workspace_id === workspaceId && data.attempt_id === attemptId && data.execution && KNOWN_STATES.has(data.execution.state))) {
+				lastEnvelope = null;
+				lastNormalized = null;
+				lastStale = false;
+				renderInvalid();
+				return;
+			}
+			const normalized = normalizeForComparison(data);
+			if (!(lastNormalized && JSON.stringify(lastNormalized) === JSON.stringify(normalized)) || lastStale) {
+				lastEnvelope = data;
+				lastNormalized = normalized;
+				lastStale = false;
+				renderEnvelope(data, currentAttempt);
+			}
+		} catch (err) {
+			try {
+				alive?.();
+			} catch {
+				return;
+			}
+			if (ticket !== readSerial || activeAttempt?.attempt_id !== attemptId) return;
+			const status = err?.status;
+			if (status === 401 || status === 403 || status === 404) {
+				withdraw();
+				return;
+			}
+			lastStale = true;
+			renderError(err, currentAttempt);
+		}
+	}
+	function renderInvalid() {
+		panelElement.replaceChildren(h("h3", {}, t("wres_heading")), h("p", { class: "pm-work-result-invalid" }, t("wres_invalid_envelope")));
+		updateVisibility(true);
+	}
+	function renderError(err, attempt) {
+		const heading = h("h3", {}, t("wres_heading"));
+		const retryBtn = button({
+			label: t("wres_try_again"),
+			class: "ui-button secondary ui-sm pm-work-result-retry",
+			onClick: () => {
+				readResult();
+			}
+		});
+		const errorContainer = h("div", { class: "pm-work-result-error-box" }, errorBox ? errorBox(err, { within: panelElement }) : h("div", { class: "error" }, err?.message || String(err)), retryBtn);
+		if (lastEnvelope) renderEnvelope(lastEnvelope, attempt, errorContainer);
+		else {
+			panelElement.replaceChildren(heading, errorContainer);
+			updateVisibility(true);
+		}
+	}
+	function formatCount(val) {
+		if (val === "unknown" || val == null) return t("wres_unknown");
+		return String(val);
+	}
+	function saveFocus() {
+		const active = document.activeElement;
+		if (active && panelElement.contains(active)) {
+			if (active.dataset?.workResultFocus) return {
+				type: "attr",
+				value: active.dataset.workResultFocus
+			};
+			if (active.tagName === "SUMMARY" && active.parentElement?.tagName === "DETAILS") {
+				const details = active.parentElement;
+				if (details.dataset.workResultTurns !== void 0) return { type: "turns" };
+				if (details.dataset.workResultDetails !== void 0) return { type: "details" };
+				if (details.classList.contains("pm-work-result-files")) return { type: "files" };
+			}
+		}
+		return null;
+	}
+	function restoreFocus(token) {
+		if (!token) return;
+		requestAnimationFrame(() => {
+			if (token.type === "attr") panelElement.querySelector(`[data-work-result-focus="${token.value}"]`)?.focus();
+			else if (token.type === "turns") panelElement.querySelector("[data-work-result-turns] > summary")?.focus();
+			else if (token.type === "details") panelElement.querySelector("[data-work-result-details] > summary")?.focus();
+			else if (token.type === "files") panelElement.querySelector(".pm-work-result-files > summary")?.focus();
+		});
+	}
+	function renderEnvelope(envelope, attempt, errorBoxNode = null) {
+		const focusToken = saveFocus();
+		const existingTurns = panelElement.querySelector("[data-work-result-turns]");
+		if (existingTurns) turnsOpen = existingTurns.open;
+		const existingDetails = panelElement.querySelector("[data-work-result-details]");
+		if (existingDetails) detailsOpen = existingDetails.open;
+		const existingFiles = panelElement.querySelector(".pm-work-result-files");
+		if (existingFiles) filesOpen = existingFiles.open;
+		const sections = [];
+		const unlistedFacets = [];
+		const unlistedFileStatuses = [];
+		const heading = h("h3", {}, t("wres_heading"));
+		sections.push(heading);
+		if (errorBoxNode) {
+			const stalePill = h("span", {
+				class: "ui-pill tone-warn",
+				"data-status": "stale"
+			}, t("ui_status_stale"));
+			sections.push(h("div", { class: "pm-work-result-stale-banner" }, stalePill, errorBoxNode));
+		}
+		const exec = envelope.execution || {};
+		const stateKey = `wres_state_${exec.state?.replace(/-/g, "_")}`;
+		const stateLabel = t(stateKey) !== stateKey ? t(stateKey) : t("wres_unknown");
+		const stateP = h("p", { class: "pm-work-result-state" });
+		stateP.append(h("strong", {}, stateLabel));
+		if (exec.observed_at) stateP.append(" · ", timeStamp(exec.observed_at));
+		sections.push(stateP);
+		if (exec.state_reason) {
+			const reason = exec.state_reason;
+			if (reason === "agent_error") sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_agent_error")));
+			else if (KNOWN_REASONS.has(reason)) {
+				const textKey = `wres_reason_${reason}`;
+				if (t(textKey) !== textKey) sections.push(h("p", { class: "muted pm-work-result-reason" }, t(textKey)));
+			} else if (exec.state === "failed") {
+				const wstKey = `wst_error_${reason}`;
+				const errKey = `error_code_${reason}`;
+				let failText = "";
+				if (t(wstKey) !== wstKey) failText = t(wstKey);
+				else if (t(errKey) !== errKey) failText = t(errKey);
+				if (failText) sections.push(h("p", { class: "muted pm-work-result-reason" }, failText));
+			}
+		} else if (exec.state === "waiting" && exec.pending != null) sections.push(h("p", { class: "muted pm-work-result-reason" }, t("wres_waiting_pending")));
+		if (exec.attention) {
+			let attnText = t("wres_status_needs_attention");
+			if (exec.attention.message) attnText += ` ${exec.attention.message}`;
+			sections.push(h("p", { class: "muted pm-work-result-attention" }, attnText));
+		}
+		const linkItems = [];
+		const sess = attempt?.session || attempt?.native_session;
+		if (sess?.session_id && sess?.host) {
+			const liveHref = sessionHref$1({
+				host: sess.host,
+				sessionId: sess.session_id,
+				from: "board"
+			});
+			linkItems.push(h("a", {
+				href: liveHref,
+				"data-work-result-focus": "live-output"
+			}, t("wres_open_live_output")));
+		}
+		const opHash = envelope.links?.start_operation_hash || (envelope.identity?.start_operation_id ? `#/op/${envelope.identity.start_operation_id}` : null);
+		if (opHash) linkItems.push(h("a", {
+			href: opHash,
+			"data-work-result-focus": "operation"
+		}, t("wres_view_operation")));
+		if (linkItems.length > 0) sections.push(h("div", { class: "pm-work-result-links" }, ...linkItems));
+		const summaryHeader = h("div", { class: "pm-work-result-summary-header" });
+		summaryHeader.append(h("h4", {}, t("wres_agent_summary_label")));
+		if (exec.state_facets?.self_reported === "claimed_done") {
+			const pill = h("span", {
+				class: "ui-pill tone-neutral",
+				"data-work-result-pill": "claimed_done"
+			}, t("wres_pill_claimed_done"));
+			summaryHeader.append(" ", pill);
+		}
+		sections.push(summaryHeader);
+		const summaryText = envelope.conversation?.latest_assistant_summary?.text;
+		if (summaryText && typeof summaryText === "string") {
+			const summaryBox = h("div", {
+				role: "region",
+				tabindex: "0",
+				"aria-label": t("wres_agent_summary_label"),
+				class: "pm-work-result-summary-box",
+				"data-work-result-focus": "summary-box"
+			});
+			summaryBox.textContent = summaryText;
+			sections.push(summaryBox);
+		} else sections.push(h("p", { class: "muted pm-work-result-empty-summary" }, t("wres_no_recorded_turn")));
+		const dl = h("dl", { class: "pm-work-result-checks" });
+		const verifStatus = exec.state_facets?.verification || envelope.verification?.status;
+		let verifText = t("wres_unknown");
+		if (verifStatus && [
+			"unverified",
+			"running",
+			"verified",
+			"failed",
+			"stale",
+			"unknown"
+		].includes(verifStatus)) verifText = t(`wres_verification_${verifStatus}`);
+		else if (verifStatus) unlistedFacets.push(`verification: ${verifStatus}`);
+		dl.append(h("dt", {}, t("wres_check_verification")), h("dd", { "data-check": "verification" }, verifText));
+		const reviewDecision = exec.state_facets?.review_decision || envelope.verification?.quality_reviews?.current?.decision;
+		let reviewText = t("wres_unknown");
+		if (typeof reviewDecision === "string") {
+			if (reviewDecision === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision === "revocation") reviewText = t("wres_review_revocation");
+			else unlistedFacets.push(`review_decision: ${reviewDecision}`);
+		} else if (reviewDecision && typeof reviewDecision === "object") {
+			if (reviewDecision.kind === "unassessed") reviewText = t("wres_review_unassessed");
+			else if (reviewDecision.kind === "revocation") reviewText = t("wres_review_revocation");
+			else if (reviewDecision.kind === "assessment" || reviewDecision.acceptance) {
+				if (reviewDecision.acceptance === "accepted") reviewText = t("wres_review_accepted");
+				else if (reviewDecision.acceptance === "rejected") reviewText = t("wres_review_rejected");
+				else if (reviewDecision.acceptance === "unassessed") reviewText = t("wres_review_unassessed");
+				else if (reviewDecision.acceptance) unlistedFacets.push(`review_acceptance: ${reviewDecision.acceptance}`);
+			} else if (reviewDecision.kind) unlistedFacets.push(`review_kind: ${reviewDecision.kind}`);
+		}
+		dl.append(h("dt", {}, t("wres_check_review")), h("dd", { "data-check": "review" }, reviewText));
+		const acceptStatus = (exec.state_facets?.acceptance)?.status;
+		let acceptText = t("wres_unknown");
+		if (acceptStatus === "passed") acceptText = t("wres_acceptance_passed");
+		else if (acceptStatus === "blocked") acceptText = t("wres_acceptance_blocked");
+		else if (acceptStatus === "unassessed") acceptText = t("wres_acceptance_unassessed");
+		else if (acceptStatus) unlistedFacets.push(`acceptance_status: ${acceptStatus}`);
+		dl.append(h("dt", {}, t("wres_check_acceptance")), h("dd", { "data-check": "acceptance" }, acceptText));
+		const mergeStatus = exec.state_facets?.merge;
+		let mergeText = t("wres_unknown");
+		if ([
+			"not_started",
+			"not_merged",
+			"pr_open",
+			"pr_closed_unmerged",
+			"merge_pending",
+			"merged"
+		].includes(mergeStatus)) mergeText = t(`wres_merge_${mergeStatus}`);
+		else if (mergeStatus) unlistedFacets.push(`merge: ${mergeStatus}`);
+		const prDd = h("dd", { "data-check": "pr" });
+		prDd.append(h("span", { class: "pm-work-result-pr-status" }, mergeText));
+		const prs = envelope.delivery?.pull_requests || [];
+		if (prs.length > 0) {
+			const prList = h("ul", { class: "pm-work-result-pr-list" });
+			for (const pr of prs) {
+				const link = h("a", { href: `#/op/${encodeURIComponent(pr.publication_operation_id)}` }, `PR #${pr.pull_number} · ${pr.repository}`);
+				prList.append(h("li", {}, link));
+			}
+			prDd.append(prList);
+		}
+		dl.append(h("dt", {}, t("wres_check_pr")), prDd);
+		const deployObj = exec.state_facets?.deployment;
+		const deployState = deployObj?.state;
+		const deployVerified = deployObj?.verified === true;
+		let deployText = t("wres_unknown");
+		if ([
+			"not_deployed",
+			"pending",
+			"running",
+			"failed",
+			"needs_attention",
+			"cancelled"
+		].includes(deployState)) deployText = t(`wres_deploy_${deployState}`);
+		else if (deployState === "succeeded") deployText = deployVerified ? t("wres_deploy_succeeded_verified") : t("wres_deploy_succeeded");
+		else if (deployState) unlistedFacets.push(`deployment_state: ${deployState}`);
+		dl.append(h("dt", {}, t("wres_check_deployment")), h("dd", { "data-check": "deployment" }, deployText));
+		const goal = envelope.delivery?.delivery_goal;
+		let goalText = t("wres_unknown");
+		if (goal === "pull_request") goalText = t("wres_goal_pr");
+		else if (goal === "reviewable_changes") goalText = t("wres_goal_reviewable_changes");
+		else if (goal && goal !== "unknown") unlistedFacets.push(`delivery_goal: ${goal}`);
+		dl.append(h("dt", {}, t("wres_check_delivery_goal")), h("dd", { "data-check": "delivery-goal" }, goalText));
+		sections.push(dl);
+		const changesBox = h("div", { class: "pm-work-result-changes" });
+		const ch = envelope.changes || {};
+		const summary = ch.summary || {};
+		const isComplete = summary.complete === true && (!summary.unavailable || summary.unavailable.length === 0);
+		const filesCountNum = Number.isSafeInteger(summary.file_count) ? summary.file_count : Array.isArray(summary.files) ? summary.files.length : null;
+		const commitsCountNum = Number.isSafeInteger(summary.commit_count) ? summary.commit_count : Array.isArray(summary.commits) ? summary.commits.length : null;
+		if (isComplete) {
+			let summaryKey = "wres_changes_summary";
+			if (filesCountNum === 1 && commitsCountNum === 1) summaryKey = "wres_changes_summary_one";
+			else if (filesCountNum === 1) summaryKey = "wres_changes_summary_one_file";
+			else if (commitsCountNum === 1) summaryKey = "wres_changes_summary_one_commit";
+			const summaryText = t(summaryKey, {
+				files: formatCount(filesCountNum),
+				commits: formatCount(commitsCountNum),
+				additions: formatCount(summary.additions),
+				deletions: formatCount(summary.deletions)
+			});
+			changesBox.append(h("p", { class: "pm-work-result-changes-summary" }, summaryText, " · ", t("wres_as_of_last_turn")));
+		} else {
+			const partlyText = h("p", { class: "pm-work-result-changes-summary" }, t("wres_changes_partly_read"), " · ", t("wres_as_of_last_turn"));
+			changesBox.append(partlyText);
+			const changeReasons = [];
+			if (summary.reason) changeReasons.push(summary.reason);
+			if (Array.isArray(summary.reasons)) {
+				for (const r of summary.reasons) if (!changeReasons.includes(r)) changeReasons.push(r);
+			}
+			if (changeReasons.length > 0) {
+				const reasonsList = h("ul", { class: "pm-work-result-changes-reasons" });
+				for (const code of changeReasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonsList.append(h("li", {}, text));
+				}
+				changesBox.append(reasonsList);
+			}
+		}
+		const files = summary.files || [];
+		if (files.length > 0) {
+			const renderFileRow = (f) => {
+				let statusLabel = t("wres_unknown");
+				if (f.status === "M" || f.status === "modified") statusLabel = t("wres_file_modified");
+				else if (f.status === "A" || f.status === "added") statusLabel = t("wres_file_added");
+				else if (f.status === "D" || f.status === "deleted") statusLabel = t("wres_file_deleted");
+				else if (typeof f.status === "string" && (f.status.startsWith("R") || f.status === "renamed")) statusLabel = t("wres_file_renamed");
+				else if (f.status) unlistedFileStatuses.push(`${f.path}: ${f.status}`);
+				const adds = f.additions === "unknown" || f.additions == null ? "?" : `+${f.additions}`;
+				const dels = f.deletions === "unknown" || f.deletions == null ? "?" : `−${f.deletions}`;
+				return h("li", { class: "pm-work-result-file-row" }, h("span", { class: "pm-work-result-file-path mono" }, f.path), " ", h("span", { class: "pm-work-result-file-status muted" }, statusLabel), " ", h("span", { class: "pm-work-result-file-diff mono" }, `${adds} ${dels}`));
+			};
+			const fileList = h("ul", { class: "pm-work-result-file-list" }, ...files.slice(0, 20).map(renderFileRow));
+			changesBox.append(fileList);
+			if (files.length > 20) {
+				const remainingFiles = files.slice(20);
+				const remainingList = h("ul", { class: "pm-work-result-file-list" }, ...remainingFiles.map(renderFileRow));
+				const filesDisclosure = disclosure({
+					label: remainingFiles.length === 1 ? t("wres_show_all_files_one") : t("wres_show_all_files", { n: files.length }),
+					body: remainingList,
+					open: filesOpen
+				});
+				filesDisclosure.classList.add("pm-work-result-files");
+				changesBox.append(filesDisclosure);
+			}
+		}
+		if (ch.base_commit) changesBox.append(h("p", { class: "pm-work-result-base-commit" }, h("strong", {}, `${t("wres_base_commit")}: `), h("span", { class: "mono" }, ch.base_commit.slice(0, 12))));
+		const fixedCommit = ch.fixed_result_commit;
+		if (fixedCommit && fixedCommit.commit_sha) {
+			const srcKind = fixedCommit.source_kind;
+			let srcText = "";
+			if (srcKind === "turn_end_observation") srcText = t("wres_source_turn_end_observation");
+			else if (srcKind === "execution_verification" || srcKind === "session_verification") srcText = t("wres_source_verified_commit");
+			else if (srcKind === "integration") srcText = t("wres_source_delivered_commit");
+			const commitP = h("p", { class: "pm-work-result-commit" }, h("strong", {}, `${t("wres_result_commit")}: `), h("span", { class: "mono" }, fixedCommit.commit_sha.slice(0, 12)));
+			if (srcText) commitP.append(" · ", srcText);
+			changesBox.append(commitP);
+		}
+		const uncommitted = ch.uncommitted || {};
+		if (uncommitted.count === "unknown") changesBox.append(h("p", { class: "muted pm-work-result-uncommitted" }, t("wres_uncommitted_unknown")));
+		else if (Number.isSafeInteger(uncommitted.count) && uncommitted.count > 0) changesBox.append(h("p", { class: "pm-work-result-uncommitted" }, t("wres_uncommitted_changes", { n: uncommitted.count })));
+		sections.push(changesBox);
+		const completeness = envelope.completeness;
+		const completenessStatus = completeness?.status;
+		if (completenessStatus && completenessStatus !== "complete") {
+			const compDiv = h("div", { class: "pm-work-result-completeness" });
+			if (completenessStatus === "partial") compDiv.append(statusPill("partial"));
+			else compDiv.append(h("span", {
+				class: "ui-pill tone-bad",
+				"data-status": "unavailable"
+			}, t("wres_status_unavailable")));
+			const reasons = completeness.reasons || [];
+			if (reasons.length > 0) {
+				const reasonList = h("ul", { class: "pm-work-result-completeness-reasons" });
+				for (const code of reasons) {
+					const key = `wres_reason_${code}`;
+					let text = t(key);
+					if (!text || text === key) text = t("wres_reason_generic_limit");
+					reasonList.append(h("li", {}, text));
+				}
+				compDiv.append(reasonList);
+			}
+			sections.push(compDiv);
+		}
+		const results = envelope.results || [];
+		if (results.length > 0) {
+			const turnsBody = h("div", { class: "pm-work-result-turns-body" });
+			if (envelope.results_has_more) turnsBody.append(h("p", { class: "muted pm-work-result-more-turns" }, t("wres_showing_latest_20")));
+			const turnsList = h("ul", { class: "pm-work-result-turns-list" });
+			for (let i = 0; i < results.length; i++) {
+				const turn = results[i];
+				const row = h("li", { class: "pm-work-result-turn-row" });
+				if (turn.observed_at) row.append(timeStamp(turn.observed_at), " ");
+				const sha = turn.head_commit ? turn.head_commit.slice(0, 12) : "—";
+				row.append(h("span", { class: "mono" }, sha));
+				if (i === 0) row.append(" ", h("span", {
+					class: "ui-pill tone-neutral ui-xs",
+					"data-work-result-pill": "latest_turn"
+				}, t("wres_latest_turn")));
+				turnsList.append(row);
+			}
+			turnsBody.append(turnsList);
+			const turnsDisclosure = disclosure({
+				label: results.length === 1 ? t("wres_recorded_turns_count_one") : t("wres_recorded_turns_count", { n: results.length }),
+				body: turnsBody,
+				open: turnsOpen
+			});
+			turnsDisclosure.dataset.workResultTurns = "";
+			sections.push(turnsDisclosure);
+		}
+		const detailsBody = h("div", { class: "pm-work-result-details-body" });
+		const addDetailRow = (label, value) => {
+			if (value === void 0) return;
+			detailsBody.append(h("p", {}, h("strong", {}, `${label}: `), h("span", { class: "mono" }, String(value == null ? "—" : value))));
+		};
+		addDetailRow(t("wres_attempt_id"), envelope.attempt_id);
+		addDetailRow(t("wres_result_id"), envelope.sources?.result_id);
+		addDetailRow(t("wres_start_operation_id"), envelope.identity?.start_operation_id);
+		addDetailRow(t("wres_execution_operation_id"), envelope.identity?.execution_operation_id);
+		addDetailRow(t("wres_source_key"), envelope.sources?.source_key);
+		addDetailRow(t("wres_digest"), envelope.sources?.digest ? envelope.sources.digest.slice(0, 16) : null);
+		addDetailRow(t("wres_collection_outcome"), envelope.collection?.outcome);
+		addDetailRow(t("wres_raw_state"), exec.state);
+		addDetailRow(t("wres_raw_stage"), exec.stage);
+		if (exec.state_reason) addDetailRow(t("wres_raw_reasons"), exec.state_reason);
+		if (unlistedFacets.length > 0) addDetailRow(t("wres_unlisted_facets"), unlistedFacets.join(", "));
+		if (unlistedFileStatuses.length > 0) addDetailRow(t("wres_unlisted_file_statuses"), unlistedFileStatuses.join(", "));
+		const unlistedReasons = (completeness?.reasons || []).filter((r) => !KNOWN_REASONS.has(r));
+		if (unlistedReasons.length > 0) addDetailRow(t("wres_unlisted_completeness_reasons"), unlistedReasons.join(", "));
+		const usage = envelope.usage || {};
+		const formatUsageVal = (val) => val == null || val === "unknown" ? t("ui_status_unknown") : String(val);
+		addDetailRow(t("wres_usage_context_tokens"), formatUsageVal(usage.context_tokens));
+		addDetailRow(t("wres_usage_context_window"), formatUsageVal(usage.context_window));
+		addDetailRow(t("wres_usage_num_turns"), formatUsageVal(usage.num_turns));
+		detailsBody.append(h("p", { class: "muted" }, t("wres_exit_code_not_exposed")));
+		const detailsDisclosure = disclosure({
+			label: t("wres_details"),
+			body: detailsBody,
+			open: detailsOpen
+		});
+		detailsDisclosure.dataset.workResultDetails = "";
+		sections.push(detailsDisclosure);
+		panelElement.replaceChildren(...sections);
+		updateVisibility(true);
+		restoreFocus(focusToken);
+	}
+	return {
+		element: panelElement,
+		setAttempt,
+		refresh,
+		withdraw,
+		dispose
+	};
+}
+//#endregion
 //#region src/pm-kanban.js
-function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false }) {
+function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox, permitted, form, projectId = null, pageSize = 20, caps = () => null, embedded = false, workspaceSettled = () => Promise.resolve() }) {
 	const endpoint = `/pm/workspaces/${encodeURIComponent(workspaceId)}`, preference = viewState(namespace, workspaceId, "board");
 	const integer = (value) => Number.isSafeInteger(value) && value >= 0;
 	if (!integer(pageSize) || pageSize < 1 || pageSize > 100) throw Error("Invalid Kanban page size");
@@ -33742,6 +34537,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		for (const observer of observers.values()) observer.withdraw();
 	};
 	let startPanel = null;
+	let resultPanel = null;
 	const updateHeaderButton = (startable) => {
 		if (!detail.element) return;
 		const actionRow = detail.element.querySelector("[data-work-actions]");
@@ -33767,20 +34563,39 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 	const ensureStartPanel = () => {
 		if (!startPanel && form) {
 			const cap = caps()?.features?.pm_workspaces?.work_start;
-			if (cap?.version === 1 && cap.available === true && cap.action === "work.start") startPanel = workStartPanel({
-				h: h$1,
-				t,
-				api,
-				alive,
-				namespace,
-				workspaceId,
-				caps,
-				permitted,
-				form,
-				errorBox,
-				plan: () => plan,
-				onStartableChange: updateHeaderButton
-			});
+			if (cap?.version === 1 && cap.available === true && cap.action === "work.start") {
+				if ((caps()?.features?.pm_workspaces?.work_attempt_results)?.version === 1) resultPanel = workResultPanel({
+					h: h$1,
+					t,
+					api,
+					alive,
+					workspaceId,
+					caps,
+					errorBox,
+					onVisibility: (visible) => {
+						const attemptSection = detail.element?.body?.querySelector("[data-work-section=\"attempt-result\"]");
+						if (attemptSection) attemptSection.hidden = !visible;
+						detail.setAttemptResultVisible?.(visible);
+					}
+				});
+				startPanel = workStartPanel({
+					h: h$1,
+					t,
+					api,
+					alive,
+					namespace,
+					workspaceId,
+					caps,
+					permitted,
+					form,
+					errorBox,
+					plan: () => plan,
+					onStartableChange: updateHeaderButton,
+					onLatestAttempt: (attempt) => {
+						resultPanel?.setAttempt(attempt);
+					}
+				});
+			}
 		}
 		return startPanel;
 	};
@@ -33862,6 +34677,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		onClose: () => {
 			withdrawObservers();
 			startPanel?.withdraw();
+			resultPanel?.withdraw();
 			updateHeaderButton(false);
 			detailSerial++;
 			if (!preserveSelection) {
@@ -34282,6 +35098,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 				else detail.element.body.append(startSection);
 			}
 			if (!startSection.contains(panel.element)) startSection.replaceChildren(panel.element);
+			if (resultPanel) {
+				let attemptResultSection = detail.element.body.querySelector("[data-work-section=\"attempt-result\"]");
+				if (!attemptResultSection) {
+					attemptResultSection = h$1("section", { "data-work-section": "attempt-result" });
+					attemptResultSection.hidden = true;
+					if (startSection && startSection.nextSibling) detail.element.body.insertBefore(attemptResultSection, startSection.nextSibling);
+					else detail.element.body.append(attemptResultSection);
+				}
+				if (!attemptResultSection.contains(resultPanel.element)) attemptResultSection.replaceChildren(resultPanel.element);
+				attemptResultSection.hidden = resultPanel.element.hidden;
+				detail.setAttemptResultVisible?.(!attemptResultSection.hidden);
+			}
 			panel.setWork(card);
 			updateHeaderButton(panel.startable());
 		}
@@ -34527,6 +35355,9 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		preference.laneScroll = list.scrollLeft;
 		updateEdges();
 	});
+	function rememberScroll() {
+		if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+	}
 	const onScroll = () => {
 		if (active && !reading && element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
 	};
@@ -34542,7 +35373,8 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 			stale = true;
 			serial++;
 			detailSerial++;
-			if (element.isConnected && element.getClientRects().length > 0) preference.scroll = window.scrollY;
+			++scrollGeneration;
+			rememberScroll();
 			closeRetaining();
 		} else {
 			const generation = ++scrollGeneration;
@@ -34556,7 +35388,7 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 					restoreY = window.scrollY;
 				}
 			});
-			if (read?.then) read.then(() => {
+			Promise.all([read, workspaceSettled()]).then(() => {
 				if (generation === scrollGeneration && window.scrollY === restoreY) window.scrollTo(0, preference.scroll || 0);
 			});
 			return read;
@@ -34570,14 +35402,18 @@ function workspaceKanban({ t, api, alive, namespace = "", workspaceId, errorBox,
 		titleFor,
 		withdraw,
 		setActive,
+		rememberScroll,
 		hideInspector: closeRetaining,
 		setTools: (value) => {
 			toolItems = value;
 		},
 		dispose: () => {
+			rememberScroll();
 			window.removeEventListener("scroll", onScroll);
 			startPanel?.dispose();
 			startPanel = null;
+			resultPanel?.dispose();
+			resultPanel = null;
 			resize.disconnect();
 			withdraw({ forgetRoute: false });
 		}
@@ -41820,14 +42656,20 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			}
 		}
 	}, t("pm_edit_request"));
+	const isFieldFocused = () => Object.values(fields).some((f) => f === document.activeElement || f.contains?.(document.activeElement));
 	const button = h("button", {
 		type: "submit",
 		class: "ui-button primary"
 	}, t(label));
+	button.addEventListener("click", (event) => {
+		if (busy || initialChecking && (busy || receiptTimer !== null)) event.preventDefault();
+	});
 	const form = h("form", {
 		"data-pm-action": action,
 		onsubmit: (event) => {
 			event.preventDefault();
+			if (busy || initialChecking && (busy || receiptTimer !== null)) return;
+			if (isFieldFocused()) button.focus();
 			run();
 		}
 	}, extra, h("div", { class: "actions" }, button, reset), status, receipt);
@@ -41853,24 +42695,46 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		}, receiptDelays[receiptAttempt++]);
 	}
 	function update() {
-		if (disposed || !form.isConnected) return;
+		if (disposed || !form.isConnected) {
+			button.removeAttribute("aria-disabled");
+			status.removeAttribute("aria-busy");
+			return;
+		}
 		pollReceipt();
 		if (!busy && receiptTimer === null) initialChecking = false;
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
+		const inFlight = busy || autoChecking;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
 		for (const input of Object.values(fields)) {
 			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
 			if (readOnlyWhenUnavailable) input.readOnly = locked;
 		}
-		button.disabled = busy || autoChecking || damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
-		button.hidden = terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		const hadFocus = document.activeElement === button;
+		const hadResetFocus = document.activeElement === reset;
+		if (inFlight) {
+			button.setAttribute("aria-disabled", "true");
+			button.disabled = false;
+		} else {
+			button.removeAttribute("aria-disabled");
+			button.disabled = damaged || !allowed() || !sendReady() || terminal() || Boolean(saved.intent?.initialAdmissionRefused);
+		}
+		if (busy) status.setAttribute("aria-busy", "true");
+		else status.removeAttribute("aria-busy");
+		button.hidden = !inFlight && (terminal() || Boolean(saved.intent?.initialAdmissionRefused));
 		button.textContent = t(saved.intent && !autoChecking ? "pm_check_original" : label);
-		reset.hidden = !terminal() && !saved.intent?.initialAdmissionRefused;
+		reset.hidden = inFlight || !terminal() && !saved.intent?.initialAdmissionRefused;
 		reset.disabled = busy || !allowed();
+		if (hadFocus && (button.hidden || button.disabled)) {
+			if (!reset.hidden && !reset.disabled) reset.focus();
+			else if (document.activeElement === document.body || document.activeElement === button) {
+				status.tabIndex = -1;
+				status.focus();
+			}
+		} else if (hadResetFocus && reset.hidden && !button.hidden && !button.disabled) button.focus();
 		onStateChange();
 	}
 	async function run(automatic = false) {
-		if (disposed || busy || damaged || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
+		if (disposed || busy || damaged || !automatic && initialChecking && (busy || receiptTimer !== null) || automatic && (!saved.intent?.operation_id || !form.isConnected)) return;
 		if (!allowed() || !sendReady()) {
 			if (!automatic) {
 				status.replaceChildren(h("p", { class: "muted" }, t("pm_action_unavailable")));
@@ -41878,6 +42742,7 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 			}
 			return;
 		}
+		if (!automatic && isFieldFocused()) button.focus();
 		stopTimer();
 		if (!automatic) {
 			receiptAttempt = 0;
@@ -42083,7 +42948,24 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return;
 	}
 	if (workspaceId && threadId) rememberProjectView(namespace, workspaceId, "discussions");
-	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = false, sequence = 0, threadPages = 1, lifecycle = null;
+	let disposed = false, workspace = null, threadData = null, loaded = false, initialReadComplete = false, refreshing = true, sequence = 0, threadPages = 1, lifecycle = null;
+	let headerReads = 0, initialHeaderSettled = false, settleResolvers = [];
+	function resolveSettleWaiters() {
+		if (headerReads === 0) {
+			initialHeaderSettled = true;
+			const resolvers = settleResolvers;
+			settleResolvers = [];
+			for (const resolve of resolvers) resolve();
+		}
+	}
+	function settleReadComplete() {
+		if (headerReads > 0) headerReads--;
+		if (headerReads === 0) resolveSettleWaiters();
+	}
+	function workspaceSettled() {
+		if (disposed || initialHeaderSettled && headerReads === 0) return Promise.resolve();
+		return new Promise((resolve) => settleResolvers.push(resolve));
+	}
 	const launch = parseDiscussRefs(location.hash.split("?")[1] || "");
 	const uiState = viewState(namespace, workspaceId, "discussions");
 	const handoffKey = `batc.pm.${namespace}.discussion-send.${workspaceId}`;
@@ -42682,7 +43564,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		caps,
 		permitted,
 		form,
-		embedded: true
+		embedded: true,
+		workspaceSettled
 	}) : null;
 	if (kanban) body.insertBefore(kanban.element, content);
 	const sprints = workspaceId && !threadId && caps()?.features?.pm_workspaces?.sprints ? workspaceSprints({
@@ -42970,7 +43853,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		namespace,
 		workspaceId,
 		caps,
-		errorBox
+		errorBox,
+		workspaceSettled
 	}) : null;
 	if (traceability) body.insertBefore(traceability.element, content);
 	const resources = workspaceId && !threadId && caps()?.features?.pm_resources ? workspaceResources({
@@ -43451,6 +44335,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			beforeSelect: (id, previous) => {
 				maskStaleView(id);
 				if (previous === "overview") brief?.setActive?.(false);
+				if (previous === "board") kanban?.rememberScroll?.();
+				if (previous === "requirements") traceability?.rememberScroll?.();
 			},
 			onSelect: (id) => {
 				if (shownView === "issues" && id !== "issues") register?.rememberScroll();
@@ -44417,6 +45303,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		refreshing = true;
 		earlier.disabled = true;
 		refresh.disabled = true;
+		headerReads++;
 		try {
 			alive();
 			const data = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}/threads/${encodeURIComponent(threadId)}?before_message=${historyCursor}`);
@@ -44451,6 +45338,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refresh.disabled = false;
 				earlier.disabled = !loaded;
 			}
+			settleReadComplete();
 		}
 	}
 	function filterThreads() {
@@ -44513,6 +45401,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			qualityReviews?.withdraw();
 			qualitySelections.clear();
 		}
+		headerReads++;
 		try {
 			alive();
 			const list = event ? { workspaces: lastList } : await api("GET", "/pm/workspaces");
@@ -44833,6 +45722,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 				refreshing = false;
 				refresh.disabled = false;
 			}
+			settleReadComplete();
 		}
 	}
 	await load();
@@ -44873,6 +45763,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 	let authorityTool = null;
 	async function refreshAuthority() {
 		const ticket = ++sequence;
+		headerReads++;
 		try {
 			const detail = await api("GET", `/pm/workspaces/${encodeURIComponent(workspaceId)}`);
 			alive();
@@ -44925,6 +45816,12 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 			updateForms();
 			status.replaceChildren(errorBox(error, { within: status }));
 			throw error;
+		} finally {
+			if (ticket === sequence) {
+				refreshing = false;
+				refresh.disabled = false;
+			}
+			settleReadComplete();
 		}
 	}
 	let contextSequence = 0;
@@ -45033,6 +45930,8 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		return settleRefreshes(reads).then(refreshNames);
 	});
 	const dispose = () => {
+		if (workbench?.selected() === "board") kanban?.rememberScroll?.();
+		if (workbench?.selected() === "requirements") traceability?.rememberScroll?.();
 		uiState.listScroll = workspaceList.scrollTop;
 		threadState.scroll = content.querySelector(".pd-transcript")?.scrollTop || 0;
 		disposed = true;
@@ -45060,6 +45959,10 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 		ahp?.dispose();
 		for (const control of viewToolMenus.values()) control.dispose();
 		for (const value of forms) value.dispose();
+		refreshing = false;
+		initialHeaderSettled = true;
+		headerReads = 0;
+		resolveSettleWaiters();
 	};
 	dispose.navigate = (nextWorkspace, nextThread, nextView) => {
 		if (disposed || nextWorkspace !== workspaceId || (nextThread || null) !== (threadId || null) || !workbench) return false;
@@ -49572,6 +50475,7 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 	const run = async () => {
 		if (busy || damaged || !allowed || !permitted()) return;
 		if (!saved.intent && !form.reportValidity()) return;
+		if ([...fields.values()].some((input) => input === document.activeElement)) create.focus();
 		busy = true;
 		update();
 		status.replaceChildren();
@@ -49621,6 +50525,9 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		type: "submit",
 		label: t(project ? "add_project" : "add_item")
 	});
+	create.addEventListener("click", (event) => {
+		if (busy) event.preventDefault();
+	});
 	const review = button({
 		variant: "secondary",
 		hidden: true,
@@ -49649,15 +50556,33 @@ function createRecordForm({ h, t, api, caps, guard, namespace, kind, projectId =
 		"data-create-record": kind,
 		onsubmit: (event) => {
 			event.preventDefault();
+			if (busy) return;
 			run();
 		}
 	}, showScope ? scope : null, compact, advanced, h("div", { class: "actions" }, create, review, unsaved), status, receipt);
 	function update() {
+		const hadCreateFocus = document.activeElement === create;
 		for (const input of fields.values()) input.disabled = !allowed || !permitted() || busy || !!saved.intent || damaged;
-		create.disabled = !allowed || !permitted() || busy || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
+		const blocked = !allowed || !permitted() || damaged || !!saved.intent?.initialAdmissionRefused || !!saved.intent && terminal$7(operation);
+		if (busy) {
+			create.disabled = false;
+			create.setAttribute("aria-disabled", "true");
+			status.setAttribute("aria-busy", "true");
+		} else {
+			create.removeAttribute("aria-disabled");
+			status.removeAttribute("aria-busy");
+			create.disabled = blocked;
+		}
 		create.textContent = t(saved.intent ? "create_check_original" : project ? "add_project" : "add_item");
 		review.hidden = !(saved.intent?.initialAdmissionRefused || saved.intent && terminal$7(operation) && operation.status !== "succeeded");
 		review.disabled = busy || !allowed || !permitted();
+		if (hadCreateFocus && (create.disabled || create.hidden)) {
+			if (!review.hidden && !review.disabled) review.focus();
+			else if (document.activeElement === document.body || document.activeElement === create) {
+				status.tabIndex = -1;
+				status.focus();
+			}
+		}
 		onStateChange();
 	}
 	if (damaged) status.replaceChildren(h("p", { class: "error" }, t("create_invalid_draft")));
