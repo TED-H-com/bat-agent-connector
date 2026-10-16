@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test';
 import {mountConversation} from './conversation-fixture.ts';
 import {workStartFixture, workspaceId, workId, route, revisionId} from './work-start-fixture.ts';
+import {workStartStrings} from '../src/pm-work-start-strings.js';
 
 const REFUSAL_CODES = [
   'PM_WORK_ATTEMPT_CHANGED',
@@ -221,7 +222,8 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
     const blockedCheck = inspector.locator('[data-readiness-check="acceptance:membership.login"]');
     await expect(blockedCheck).toBeVisible();
-    await expect(blockedCheck).toContainText('Acceptance criteria not met');
+    await expect(blockedCheck).toContainText('Each original acceptance condition needs a proposed method');
+    await expect(blockedCheck).not.toContainText('Acceptance criteria not met');
   });
 
   test('5. Candidates dropdown allows selection and 0 candidates shows explanation', async ({page}) => {
@@ -327,6 +329,26 @@ test.describe('Work Start UI (v1.3 P3)', () => {
       const errorMsg = inspector.locator('[data-work-section="start"] form .error');
       await expect(errorMsg).toBeVisible();
 
+      // Assert exact localized summary for each code: panel key for shared, global key for start-only
+      const isShared = [
+        'WORK_ITEM_CHANGED',
+        'PROJECT_CHANGED',
+        'PM_PACKAGE_SCOPE_CHANGED',
+        'PM_PACKAGE_VERSION_CONFLICT',
+        'PM_WORK_BINDING_CHANGED',
+        'PROJECT_REPOSITORY_CHANGED',
+        'REPOSITORY_REF_CHANGED',
+        'PM_ADOPTED_PLAN_REQUIRED',
+        'PM_LIFECYCLE_STOPPED',
+        'PM_HANDOFF_TOO_LARGE',
+      ].includes(refusalCode);
+      const expectedSummary = isShared
+        ? workStartStrings.en[`wst_error_${refusalCode}`]
+        : workStartStrings.en[`error_code_${refusalCode}`];
+      expect(expectedSummary).toBeTruthy();
+      await expect(errorMsg).toContainText(expectedSummary);
+      await expect(errorMsg).not.toContainText(`Operation refused with ${refusalCode}`);
+
       // "New request" button appears
       const resetBtn = inspector.locator('[data-work-section="start"] form').getByRole('button', {name: 'New request'});
       await expect(resetBtn).toBeVisible();
@@ -380,7 +402,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     });
     await expect(inspector.locator('.pm-work-start-attempt-status')).toContainText('Needs attention: open the operation to resume or cancel it.');
 
-    // Move to start_unknown
+    // Move to start_unknown: assert no editor and no header button
     f.emitAttempt({
       attempt_id: 'att_' + '2'.repeat(32),
       workspace_id: workspaceId,
@@ -391,6 +413,8 @@ test.describe('Work Start UI (v1.3 P3)', () => {
       created_at: 1791705600,
     });
     await expect(inspector.locator('.pm-work-start-attempt')).toContainText("Check this Work's sessions on BAT before starting again.");
+    await expect(inspector.locator('[data-work-start-editor]')).toBeHidden();
+    await expect(inspector.locator('[data-work-start-open]')).toHaveCount(0);
   });
 
   test('9. Observer and capability visibility', async ({page}) => {
@@ -422,7 +446,121 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     await expect(inspectorNoCap.locator('[data-work-start-open]')).toHaveCount(0);
   });
 
-  test('10. Focus, caret and text survive event refresh', async ({page}) => {
+  test('New test: failed operation', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workStartFixture();
+    f.state.failHandoff = true;
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    await inspector.locator('[data-work-start-check]').click();
+
+    const submitBtn = inspector.locator('[data-work-section="start"] [data-pm-action="work.start"] button[type="submit"]');
+    await expect(submitBtn).toBeEnabled();
+    await submitBtn.click();
+
+    // Exactly one write
+    expect(f.state.writes).toHaveLength(1);
+
+    // Localized text displayed
+    const errorMsg = inspector.locator('[data-work-section="start"] form .error');
+    await expect(errorMsg).toBeVisible();
+    await expect(errorMsg).toContainText(workStartStrings.en.error_code_PM_HANDOFF_FAILED);
+
+    // "New request" button appears
+    const resetBtn = inspector.locator('[data-work-section="start"] form').getByRole('button', {name: 'New request'});
+    await expect(resetBtn).toBeVisible();
+    await resetBtn.click();
+
+    // Start disabled until readiness is checked again
+    await expect(submitBtn).toBeDisabled();
+
+    // No second write
+    expect(f.state.writes).toHaveLength(1);
+  });
+
+  test('New test: start_failed fallbacks', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workStartFixture();
+    const customReason = 'Unrecognized internal error code';
+    f.state.attempts = [{
+      attempt_id: 'att_' + '8'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '8'.repeat(32),
+      stage: 'custom_unknown_stage',
+      status: 'start_failed',
+      status_reason: customReason,
+      created_at: 1791705600,
+    }];
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    const attemptRow = inspector.locator('.pm-work-start-attempt');
+    await expect(attemptRow).toBeVisible();
+
+    // Unknown stage shows "Unknown"
+    const stageWord = attemptRow.locator('.pm-work-start-attempt-status strong');
+    await expect(stageWord).toHaveText('Unknown');
+
+    // Generic fallback wst_start_failed_generic shown in row
+    await expect(attemptRow).toContainText(workStartStrings.en.wst_start_failed_generic);
+
+    // Inside Details disclosure, status_reason is present
+    const details = attemptRow.locator('details');
+    await expect(details).toBeVisible();
+    await details.locator('summary').click();
+    await expect(details).toContainText(customReason);
+
+    // status_reason is NOT shown outside Details
+    const outsideDetails = await attemptRow.evaluate((el: HTMLElement) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.querySelector('details')?.remove();
+      return clone.textContent || '';
+    });
+    expect(outsideDetails).not.toContain(customReason);
+  });
+
+  test('New test: whitespace-only instruction', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workStartFixture();
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    const instruction = inspector.locator('[data-work-start-instruction]');
+    await instruction.fill('   \n  \t  ');
+
+    const checkBtn = inspector.locator('[data-work-start-check]');
+    await checkBtn.click();
+
+    // wst_instruction_required message shown
+    const errorNotice = inspector.locator('[data-work-start-error]');
+    await expect(errorNotice).toBeVisible();
+    await expect(errorNotice).toHaveText(workStartStrings.en.wst_instruction_required);
+
+    // No preview request sent
+    expect(f.state.previews).toHaveLength(0);
+  });
+
+  test('10. Focus, caret and text survive event refresh with held read', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workStartFixture();
 
@@ -436,34 +574,125 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     const inspector = page.locator('[data-work-inspector]');
     const instruction = inspector.locator('[data-work-start-instruction]');
     await instruction.focus();
-    await instruction.fill('Typing custom instructions here...');
-    await instruction.evaluate((node: HTMLTextAreaElement) => {
-      node.setSelectionRange(7, 13);
+    await instruction.fill('');
+    await page.keyboard.type('First part');
+
+    // Hold the read
+    let releaseAttempts!: () => void;
+    f.state.holdAttempts = new Promise<void>(resolve => {
+      releaseAttempts = resolve;
     });
 
-    const initialSelection = await instruction.evaluate((node: HTMLTextAreaElement) => ({
-      start: node.selectionStart,
-      end: node.selectionEnd,
-      value: node.value,
-      isFocused: document.activeElement === node,
-    }));
-
-    // Trigger an event refresh
+    const before = f.state.attemptsReads;
+    // Bump cursor to trigger event refresh
     f.base.state.cursor++;
-    await page.evaluate(() => window.dispatchEvent(new CustomEvent('batc-test-refresh')));
-    await page.waitForTimeout(500);
+    await expect.poll(() => f.state.attemptsReads).toBeGreaterThan(before);
 
-    const postSelection = await instruction.evaluate((node: HTMLTextAreaElement) => ({
+    // Type more characters while the read is held
+    await page.keyboard.type(' and second part');
+
+    // Assert textarea is not disabled
+    await expect(instruction).not.toBeDisabled();
+
+    // Release the read
+    releaseAttempts();
+    f.state.holdAttempts = null;
+
+    // Assert afterwards: every typed character is present, caret is where typing left it, and focus is unchanged
+    await expect(instruction).toHaveValue('First part and second part');
+    const caretInfo = await instruction.evaluate((node: HTMLTextAreaElement) => ({
       start: node.selectionStart,
       end: node.selectionEnd,
-      value: node.value,
       isFocused: document.activeElement === node,
     }));
+    expect(caretInfo.isFocused).toBe(true);
+    expect(caretInfo.start).toBe('First part and second part'.length);
+    expect(caretInfo.end).toBe('First part and second part'.length);
+  });
 
-    expect(postSelection.value).toBe(initialSelection.value);
-    expect(postSelection.start).toBe(initialSelection.start);
-    expect(postSelection.end).toBe(initialSelection.end);
-    expect(postSelection.isFocused).toBe(true);
+  test('10. Bind-needed: checkboxes and draft survive refresh and reload', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workStartFixture();
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    // workId(3) has bind_needed because its binding.plan_revision_id is from an older plan
+    const card = page.locator(`[data-pm-kanban-work="${workId(3)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    const checkboxes = inspector.locator('.pm-work-start-reqs input[type="checkbox"]');
+    await expect(checkboxes).toHaveCount(2);
+
+    const loginCb = inspector.locator('input[type="checkbox"][value="membership.login"]');
+    const recoveryCb = inspector.locator('input[type="checkbox"][value="membership.recovery"]');
+    await expect(loginCb).toBeChecked();
+    await expect(recoveryCb).not.toBeChecked();
+
+    // Change checked requirements: check recovery
+    await recoveryCb.check();
+    await expect(recoveryCb).toBeChecked();
+
+    // Trigger event refresh
+    const beforeReads = f.state.attemptsReads;
+    f.base.state.cursor++;
+    await expect.poll(() => f.state.attemptsReads).toBeGreaterThan(beforeReads);
+
+    // Assert checkboxes survive refresh
+    await expect(loginCb).toBeChecked();
+    await expect(recoveryCb).toBeChecked();
+
+    // Reload page
+    await page.reload();
+    await page.locator('[data-pm-view="board"]').click();
+    await page.locator(`[data-pm-kanban-work="${workId(3)}"] [data-board-open]`).click();
+
+    // Assert checkboxes match the restored draft
+    const reloadedInspector = page.locator('[data-work-inspector]');
+    const reloadedLogin = reloadedInspector.locator('input[type="checkbox"][value="membership.login"]');
+    const reloadedRecovery = reloadedInspector.locator('input[type="checkbox"][value="membership.recovery"]');
+    await expect(reloadedLogin).toBeChecked();
+    await expect(reloadedRecovery).toBeChecked();
+  });
+
+  test('10. Attempt details disclosure open state survives event refresh', async ({page}) => {
+    await page.setViewportSize({width: 1440, height: 900});
+    const f = workStartFixture();
+    f.state.attempts = [{
+      attempt_id: 'att_' + '7'.repeat(32),
+      workspace_id: workspaceId,
+      work_item_id: workId(1),
+      start_operation_id: 'op_' + '7'.repeat(32),
+      stage: 'starting',
+      status: 'running',
+      created_at: 1791705600,
+    }];
+
+    await mountConversation(page, false, f.dispatch);
+    await page.goto(route);
+    await page.locator('[data-pm-view="board"]').click();
+
+    const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+    await card.locator('[data-board-open]').click();
+
+    const inspector = page.locator('[data-work-inspector]');
+    const details = inspector.locator('.pm-work-start-attempt details');
+    await expect(details).toBeVisible();
+    await expect(details).not.toHaveAttribute('open', '');
+
+    // Open Details disclosure
+    await details.locator('summary').click();
+    await expect(details).toHaveAttribute('open', '');
+
+    // Trigger event refresh
+    const beforeReads = f.state.attemptsReads;
+    f.base.state.cursor++;
+    await expect.poll(() => f.state.attemptsReads).toBeGreaterThan(beforeReads);
+
+    // Assert details disclosure is still open
+    await expect(details).toHaveAttribute('open', '');
   });
 
   test('11. zh-TW at 390 width: no raw keys, no English leftovers, no overflow', async ({browser}) => {
@@ -494,7 +723,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     // Facts in Traditional Chinese
     const facts = inspector.locator('[data-work-start-facts]');
     await expect(facts).toBeVisible();
-    await expect(facts).toContainText('準備新的工作依據套件');
+    await expect(facts).toContainText('準備新的工作包');
 
     // Submit button in Traditional Chinese
     const submitBtn = inspector.locator('[data-work-section="start"] [data-pm-action="work.start"] button[type="submit"]');

@@ -209,19 +209,6 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
           break;
         case 'start_failed':
           statusWord = t('wst_status_start_failed');
-          if (attempt.error_code) {
-            const panelKey = 'wst_error_' + attempt.error_code;
-            const globalKey = 'error_code_' + attempt.error_code;
-            if (t(panelKey) !== panelKey) {
-              extraText = t(panelKey);
-            } else if (t(globalKey) !== globalKey) {
-              extraText = t(globalKey);
-            } else {
-              extraText = t('wst_start_failed_generic');
-            }
-          } else {
-            extraText = t('wst_start_failed_generic');
-          }
           break;
         case 'cancelled':
           statusWord = t('wst_status_cancelled');
@@ -229,6 +216,22 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
         default:
           statusWord = t('ui_status_unknown');
           break;
+      }
+    }
+
+    if (attempt.status === 'start_failed' || attempt.stage === 'start_failed') {
+      if (attempt.error_code) {
+        const panelKey = 'wst_error_' + attempt.error_code;
+        const globalKey = 'error_code_' + attempt.error_code;
+        if (t(panelKey) !== panelKey) {
+          extraText = t(panelKey);
+        } else if (t(globalKey) !== globalKey) {
+          extraText = t(globalKey);
+        } else {
+          extraText = t('wst_start_failed_generic');
+        }
+      } else {
+        extraText = t('wst_start_failed_generic');
       }
     }
 
@@ -447,6 +450,11 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       const updateSelectedReqs = () => {
         const selected = checkboxes.filter(cb => cb.checked).map(cb => cb.value);
         requirementsInput.value = JSON.stringify(selected);
+        if (editorInstance) {
+          editorInstance.set('requirements', JSON.stringify(selected));
+        } else {
+          requirementsInput.dispatchEvent(new Event('input'));
+        }
         reqWarning.hidden = selected.length > 0;
         onFingerprintChanged();
       };
@@ -511,7 +519,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       if (checking || loading || !writer(card)) return;
       const text = instruction.value;
       if (!text.trim()) {
-        errorStatusBox.replaceChildren(h('p', {class: 'error'}, t('wst_instruction_required')));
+        errorStatusBox.replaceChildren(h('p', {class: 'error', 'data-work-start-error': ''}, t('wst_instruction_required')));
         errorStatusBox.hidden = false;
         instruction.focus();
         return;
@@ -780,11 +788,19 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       },
       onError: error => {
         prepared = null;
-        if (!editorInstance.locked()) {
-          editorInstance.set('review', '');
+        if (!editorInstance?.locked()) {
+          editorInstance?.set('review', '');
         }
         void refreshAttempts();
         updateUI();
+        if (error && (error.code || error.message)) {
+          const statusBox = editorInstance?.box?.querySelector(':scope > [role="status"]');
+          if (statusBox) {
+            statusBox.hidden = false;
+            statusBox.replaceChildren(panelErrorBox(error, {within: statusBox}));
+            return true;
+          }
+        }
         return false;
       },
       extra,

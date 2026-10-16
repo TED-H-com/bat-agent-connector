@@ -3,13 +3,7 @@ import {test} from 'node:test';
 import {workStartStrings} from '../src/pm-work-start-strings.js';
 import {STRINGS} from '../src/i18n.js';
 
-const REQUIRED_ERROR_CODES = [
-  'PM_WORK_ATTEMPT_CHANGED',
-  'PM_WORK_START_IN_PROGRESS',
-  'PM_WORK_START_OUTCOME_UNPROVEN',
-  'PM_WORK_START_NOT_READY',
-  'PM_WORK_START_PREREQUISITES',
-  'PM_WORK_CONTROLLER_CONFLICT',
+const SHARED_ERROR_CODES = [
   'WORK_ITEM_CHANGED',
   'PROJECT_CHANGED',
   'PM_PACKAGE_SCOPE_CHANGED',
@@ -20,6 +14,15 @@ const REQUIRED_ERROR_CODES = [
   'PM_ADOPTED_PLAN_REQUIRED',
   'PM_LIFECYCLE_STOPPED',
   'PM_HANDOFF_TOO_LARGE',
+];
+
+const START_ONLY_ERROR_CODES = [
+  'PM_WORK_ATTEMPT_CHANGED',
+  'PM_WORK_START_IN_PROGRESS',
+  'PM_WORK_START_OUTCOME_UNPROVEN',
+  'PM_WORK_START_NOT_READY',
+  'PM_WORK_START_PREREQUISITES',
+  'PM_WORK_CONTROLLER_CONFLICT',
   'PM_WORK_BIND_FAILED',
   'PM_WORK_PACKAGE_FAILED',
   'PM_HANDOFF_FAILED',
@@ -39,10 +42,23 @@ test('every work.start string exists in both en and zh-TW and is non-empty', () 
   }
 });
 
-test('all 19 work.start error codes exist in both locales and in STRINGS', () => {
-  assert.equal(REQUIRED_ERROR_CODES.length, 19);
+test('workStartStrings defines no error_code_ key for shared codes, and defines wst_error_ in both locales', () => {
+  assert.equal(SHARED_ERROR_CODES.length, 10);
 
-  for (const code of REQUIRED_ERROR_CODES) {
+  for (const code of SHARED_ERROR_CODES) {
+    assert.equal(workStartStrings.en[`error_code_${code}`], undefined, `shared code ${code} must not define error_code_ in en`);
+    assert.equal(workStartStrings['zh-TW'][`error_code_${code}`], undefined, `shared code ${code} must not define error_code_ in zh-TW`);
+
+    const wstKey = `wst_error_${code}`;
+    assert.ok(typeof workStartStrings.en[wstKey] === 'string' && workStartStrings.en[wstKey].length > 0, `en missing ${wstKey}`);
+    assert.ok(typeof workStartStrings['zh-TW'][wstKey] === 'string' && workStartStrings['zh-TW'][wstKey].length > 0, `zh-TW missing ${wstKey}`);
+  }
+});
+
+test('all 9 start-only error codes exist in both locales and in STRINGS', () => {
+  assert.equal(START_ONLY_ERROR_CODES.length, 9);
+
+  for (const code of START_ONLY_ERROR_CODES) {
     const key = `error_code_${code}`;
     assert.ok(workStartStrings['zh-TW'][key], `workStartStrings['zh-TW'] missing ${key}`);
     assert.ok(workStartStrings.en[key], `workStartStrings.en missing ${key}`);

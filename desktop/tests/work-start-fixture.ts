@@ -31,6 +31,9 @@ export function workStartFixture() {
     refusalCode: null as string | null,
     lostReply: false,
     failHandoff: false,
+    holdAttempts: null as Promise<void> | null,
+    attemptsReads: 0,
+    previews: [] as any[],
     writes: [] as any[],
     ops: new Map<string, any>(),
   };
@@ -97,6 +100,7 @@ export function workStartFixture() {
 
     // POST start-preview
     if (input.method === 'POST' && path.endsWith('/start-preview')) {
+      state.previews.push(structuredClone(input));
       const parts = path.split('/');
       const wid = parts[parts.indexOf('work') + 1];
 
@@ -214,6 +218,10 @@ export function workStartFixture() {
 
     // GET attempts
     if (input.method === 'GET' && path.endsWith('/attempts')) {
+      state.attemptsReads++;
+      if (state.holdAttempts) {
+        await state.holdAttempts;
+      }
       const wid = path.split('/').at(-2);
       return {
         status: 200,
