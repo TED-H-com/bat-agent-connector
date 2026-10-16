@@ -23,6 +23,12 @@ management views, discussions and bound work. A form submission is not evidence 
 completion. Unknown, partial, stale and withdrawn states must remain distinguishable.
 Never substitute zero for missing data or count a loaded page as a complete inventory.
 
+Durable PM forms retain keyboard focus on the submit button while an action is in flight
+or being checked automatically via `aria-disabled="true"` and an `aria-busy="true"` status region,
+preventing focus ejection to `<body>`. Submitting from a field shifts focus to the submit
+button before locking fields, duplicate submissions while busy or during automatic checks
+are ignored, and terminal failures or admission refusals move focus to the reset button.
+
 Keep existing drafts, stable IDs, operation keys, receipt recovery and read-only
 manual resources. A source withdrawal removes its facts, counts and inspector;
 late responses cannot restore them. View changes do not start another event reader.
@@ -594,8 +600,10 @@ on larger viewports. Its entire header is hidden; the wide table retains its hea
 
 `pm-work-inspector.js` supplies both views (and the future Schedule caller) with
 ordered work sections: Requirements served; Status & ownership; Start work (when the
-`features.pm_workspaces.work_start` capability is available); Latest result;
-Blocker & next step; Delivery; Details. When the card is startable, the inspector
+`features.pm_workspaces.work_start` capability is available); Result (when
+`features.pm_workspaces.work_attempt_results` is available, replacing static result evidence
+with the latest attempt's live result envelope using 0 BAT calls); Blocker & next step;
+Delivery; Details. When the card is startable, the inspector
 header offers a Start work action alongside Discuss that scrolls and focuses the instruction
 field. The Start work panel previews readiness facts, candidate code targets, and requirement
 selection for cards needing plan rebinding with workspace owner permission; durable submissions
@@ -1015,7 +1023,12 @@ out-of-sync observations, and managed failure or attention states. Unloaded tabs
 stay quiet and say Not open in BAT / BAT 中未開啟 in Details; loaded tabs with no
 reported activity say BAT did not report activity / BAT 未回報活動狀態 there.
 A manual or unconfirmed session has one Read-only line and no send, answer, or
-interrupt control. Details label Session ID / 工作階段 ID and Workspace / 工作區
+interrupt control. Capture a remote file, on that session or beside an attachment
+draft, keeps the pressed button focusable while its preview or save is in
+progress. That button looks unavailable and a second press does nothing. A
+button that cannot be used stays unavailable. When Save closes, or Capture
+another file starts over, focus moves to the next available control. A reply
+that arrives after the panel is gone does not move focus. Details label Session ID / 工作階段 ID and Workspace / 工作區
 and show each observed time once, formatted with the shared time stamp.
 On mobile, the Session title and metadata use the full header width, with actions
 on the next row. Wider fonts must not turn the title into a tall narrow column
@@ -1234,7 +1247,10 @@ its original mapping identity stays in Details. Projects and Resources Work item
 share a creation disclosure, starting closed behind New project or New work item.
 Cancel sits after Add and Review, before the draft note; it closes the form and
 returns focus without discarding the draft. A pending original request stays open
-for receipt recovery. A verified project creation opens its project page for Quick
+for receipt recovery. While Add is sending, it stays in the tab order and keeps
+keyboard focus; it looks unavailable, and a second press does not send another
+request. Enter in a field moves focus to Add before those fields lock. A failed
+or refused request moves focus to Edit request. A verified project creation opens its project page for Quick
 project dispatch. A verified work-item creation refreshes the same list, closes the
 form and returns focus to New work item. Source withdrawal
 hides the form and action together. Project header chips center beside touch-sized
