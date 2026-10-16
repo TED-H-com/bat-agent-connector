@@ -797,6 +797,7 @@ async def test_git_status_failure_or_empty_list_yields_unknown_never_clean(start
         "reason": "bat_empty_status_not_clean_proof",
     }
     assert res["changes"]["fixed_result_commit"]["commit_sha"] == c2
+    assert res["changes"]["fixed_result_commit"]["source_kind"] == "turn_end_observation"
     assert res["changes"]["fixed_result_commit"]["uncommitted"] == "unknown"
     assert "bat_empty_status_not_clean_proof" in res["completeness"]["reasons"]
 

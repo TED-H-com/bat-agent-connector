@@ -17,6 +17,20 @@ for (const locale of ['en', 'zh-TW'] as const) for (const width of (process.env.
       await expect(page.locator('[data-agents-heading]')).toBeFocused();
       await expect(page.locator('[data-pm-eligibility]')).toHaveText(workPathsStrings[locale].agents_ready);
       await shot('agents');
+      let holdNext = false;
+      let releaseCheck!: () => void;
+      const heldCheck = new Promise<void>(resolve => { releaseCheck = resolve; });
+      s.overrides.unshift(async (_input, url) => {
+        if (url.pathname !== '/pm/installation-capabilities' || !holdNext) return;
+        await heldCheck;
+        return undefined;
+      });
+      holdNext = true;
+      await page.locator('[data-pm-eligibility-check]').click();
+      await expect(page.locator('[data-pm-eligibility-check]')).toHaveAttribute('aria-disabled', 'true');
+      await shot('agents-checking');
+      releaseCheck();
+      await expect(page.locator('[data-pm-eligibility]')).toHaveText(workPathsStrings[locale].agents_ready);
       await go(page, '#/sessions');
       await expect(page.locator('.session-entry').first()).toBeVisible();
       await expect(page.locator('[data-session-paths]')).toBeHidden();

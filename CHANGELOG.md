@@ -2,6 +2,19 @@
 
 ## Next release (unreleased)
 
+- Settings → Agents: Tab reaches Check again while the first check runs, and
+  pressing it keeps keyboard focus on the button. The button looks unavailable
+  until the check finishes, and a second press is ignored.
+
+- The PM Work inspector adds a Start work panel and header action to start
+  eligible Work cards. The panel previews readiness facts, explains candidate
+  code targets or offers a selector when multiple match, and displays requirement
+  selection for cards needing plan re-binding. Stale preview guards require re-checking
+  after instruction, delivery, requirement or target edits before enabling submission.
+  The attempts timeline renders live progress states with links to the operation
+  or session output, preserving user drafts and requests across reloads and lost replies
+  in English and zh-TW.
+
 - The Windows fixture-helper test injects a deterministic clock into its deadline and
   retry helpers, making transient read recovery independent of runner speed and slow
   .NET exception unwinds.
@@ -24,9 +37,28 @@
   on BAT before starting again), alongside unready requirement and foreign
   controller checks.
 
+- Work attempts started with `work.start` keep a fixed Result for each finished
+  turn. Read it with
+  `GET /api/v1/pm/workspaces/{workspace_id}/work-attempts/{attempt_id}/result`
+  or the RPC/MCP read `pm_work_attempt_result_get`, and the attempt's changes
+  and a file's diff with `/changes` (`pm_work_attempt_changes_get`) and `/diff`
+  (`pm_work_attempt_diff_get`), all under the `observe` scope. Connector records
+  a Result only when it sees the attempt's own turn end, the session's process
+  end or an agent error. Turn facts the session read did not report, and an
+  empty BAT status, read as `unknown`, never as done or clean. `/result` reads
+  Connector's database only and can wait up to 10 s for related events after a
+  `cursor`; `/changes` and `/diff` read the managed worktree without writing and
+  make no BAT call for manual, foreign or unknown sessions.
+
 - Conversation adoption advances as each original child operation finishes,
   removing the fixed one-second pause between completed steps. Child failures
   still stop the adoption; recovery keeps the original requests and receipts.
+
+- Board and Requirements now return to where you left them when you switch to
+  another project view or leave the project while they are still loading. On
+  narrow windows they no longer land about 50 px further down when the page
+  header finishes loading after the view. A view you switch away from while it
+  is still loading no longer moves the page when its read finishes.
 
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results
