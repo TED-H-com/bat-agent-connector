@@ -123,6 +123,10 @@ def _canonical(value: Any) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
 
 
+def _workspace_key(action: str) -> bool:
+    return action.startswith("pm.") or action == "work.start"
+
+
 def _pm_key_prefix(target: dict) -> str:
     # The journal is server-scoped and the unique index also includes the actor.
     # Keep legacy keys intact; new PM keys additionally belong to one workspace.
@@ -345,7 +349,7 @@ class OperationService:
         # Keep the old field for readers, but never expose a storage sentinel as a client key.
         if op["idem_key"] == NO_KEY_PREFIX + op["operation_id"]:
             op["idem_key"] = None
-        elif op["action"].startswith("pm.") and op["idem_key"].startswith(_pm_key_prefix(op["target"])):
+        elif _workspace_key(op["action"]) and op["idem_key"].startswith(_pm_key_prefix(op["target"])):
             op["idem_key"] = op["idem_key"][len(_pm_key_prefix(op["target"])):]
         op["idempotency_key"] = op["idem_key"]
         op["idempotency_enabled"] = op["idem_key"] is not None
@@ -466,6 +470,8 @@ class OperationService:
                 from .pm_work_batches import admit_restart
                 require_new_effect(self, operation_id)
                 admit_restart(self, operation_id, name)
+                from .pm_work_start import admit_restart as admit_work_start_restart
+                admit_work_start_restart(self, operation_id, name)
                 from .pm_maintenance_repairs import admit_restart as admit_repair_restart
                 admit_repair_restart(self, operation_id, name, request)
             from .pm_lifecycle_gates import admit_step
@@ -502,7 +508,7 @@ class OperationService:
         if not isinstance(action, str) or not isinstance(idempotency_key, str):
             return False
         key = idempotency_key.strip()
-        if action.startswith("pm."):
+        if _workspace_key(action):
             target = target or {}  # Match create(): omitted workspace-create target is {}.
             if not isinstance(target, dict):
                 return False
@@ -541,11 +547,11 @@ class OperationService:
         except UnicodeEncodeError:
             raise OperationError("INVALID_REQUEST", "request text must contain valid Unicode characters", 422) from None
         key = None if no_key else idempotency_key.strip()
-        if action.startswith("pm."):
+        if _workspace_key(action):
             key = _pm_key_prefix(target) + key
         existing = self.db.execute("SELECT * FROM operations WHERE actor=? AND idem_key=?",
                                    (principal.actor, key)).fetchone()
-        if existing and not action.startswith("pm."):
+        if existing and not _workspace_key(action):
             if existing["request_hash"] != request_hash:
                 raise OperationError("IDEMPOTENCY_CONFLICT",
                                      "this idempotency_key was already used for a different request", 409)
@@ -560,7 +566,7 @@ class OperationService:
             authorize_orchestration_child(self, principal, op, "replay")
         if op and adef.authorize_existing:
             adef.authorize_existing(self, principal, op, "replay")
-        if existing and action.startswith("pm.") and existing["request_hash"] != request_hash:
+        if existing and _workspace_key(action) and existing["request_hash"] != request_hash:
             raise OperationError("IDEMPOTENCY_CONFLICT",
                                  "this idempotency_key was already used for a different request", 409)
         return adef, target, params, preconditions, key, request_hash, op
@@ -617,6 +623,8 @@ class OperationService:
             admit_operation(self.db, operation_id, action, target, binding)
             from .pm_source_lineage import bind_operation
             bind_operation(self.db, operation_id, _resolved_target or target, params, binding)
+            from .pm_work_start import admit_operation as admit_work_start
+            admit_work_start(self.db, operation_id, action, target, binding, now)
             self.journal.api_event("operation", operation_id, "operation.accepted",
                                    {"action": action, "target": target, "entry": entry}, actor=principal.actor)
         self.kick()
@@ -657,7 +665,7 @@ class OperationService:
             return
         if not (action.startswith(("session.", "worktree.", "fanout.", "cleanup."))
                 or action in {"checkpoint.continue", "checkpoint.continue.revalidate",
-                              "repository.continue", "integration.handoff"}):
+                              "repository.continue", "integration.handoff", "work.start"}):
             return
         from . import controller_authority
         saved = controller_authority.operation_binding(op)
@@ -694,6 +702,9 @@ class OperationService:
         if op["action"] in {"pm.run.prepare", "pm.plan.adopt"}:
             from .pm_run_operations import cancel
             return cancel(self, principal, op)
+        if op["action"] == "work.start":
+            from .pm_work_start import cancel_children as cancel_work_start_children
+            cancel_work_start_children(self, principal, op)
         self.db.execute("UPDATE operations SET cancel_requested=1,updated_at=? WHERE operation_id=?",
                         (time.time(), operation_id))
         if not self._running(operation_id):
@@ -740,6 +751,9 @@ class OperationService:
         if op["action"] in {"session.relay", "fanout.plan", "fanout.start"}:
             from .orchestration_operations import resume_children
             resume_children(self, principal, op)
+        if op["action"] == "work.start":
+            from .pm_work_start import resume_children as resume_work_start_children
+            resume_work_start_children(self, principal, op)
         self.kick()
         return op
 

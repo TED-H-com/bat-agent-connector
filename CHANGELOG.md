@@ -9,6 +9,22 @@
   Unknown queue state and source withdrawal remain explicit. The classic layout
   stays the default; this is not the completed v1.3 execution or live acceptance.
 
+- Add the `work.start` compound action, read-only `pm_work_start_preview` and
+  immutable `work_attempts` reads (`pm_work_attempts_list`, `pm_work_attempt_get`)
+  to start a bound Work item in its own managed BAT worktree and session from a
+  reviewed published commit and adopted PM plan. The preview returns all ten
+  preconditions, including `expected_latest_attempt_id`. Existing `pm.work.bind`,
+  `pm.work_package.create` (with deterministic `work_start_thin_v1` composition
+  or package reuse) and `repository.continue` run as durable children under the
+  same controller and original-key recovery rules; definite child failures end
+  `work.start` as `failed`, and cancelling `work.start` also stops its unfinished
+  children. Concurrent or stale starts refuse before any host write with
+  `PM_WORK_ATTEMPT_CHANGED` (follow the named attempt/operation or preview again),
+  `PM_WORK_START_IN_PROGRESS` (follow the named start operation, or cancel and
+  preview again), or `PM_WORK_START_OUTCOME_UNPROVEN` (check the Work's sessions
+  on BAT before starting again), alongside unready requirement and foreign
+  controller checks.
+
 - Existing discussions offer Send to PM for ordinary native or BAT PM analysis,
   Save note only for a stored note, and Make a plan for an explicit proposal.
   Saved PM requests and replies appear together in the transcript. Recovery

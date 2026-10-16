@@ -62,6 +62,8 @@ FIELDS = {
     "pm_work_packages_list": ("workspace_id", "work_item_id", "after", "limit"),
     "pm_work_package_get": ("workspace_id", "package_id"),
     "pm_work_package_readiness_get": ("workspace_id", "package_id", "quality_refs"),
+    "pm_work_attempts_list": ("workspace_id", "work_item_id", "after", "limit"),
+    "pm_work_attempt_get": ("workspace_id", "attempt_id"),
     "pm_conversation_proposals_list": ("workspace_id", "thread_id", "after", "limit"),
     "pm_conversation_proposal_get": ("workspace_id", "proposal_id"),
     "pm_follow_up_assessments_list": ("workspace_id", "intake_id", "after", "limit"),
@@ -280,6 +282,12 @@ def read(ops, principal, method, params):
             return pm_work_packages.readiness(ops, principal, workspace_id, params.get("package_id"), quality_refs=params.get('quality_refs'))
         return pm_work_packages.list_packages(ops, principal, workspace_id, work_item_id=params.get("work_item_id"),
                                               after=params.get("after", 0), limit=params.get("limit", 50))
+    if method in {"pm_work_attempts_list", "pm_work_attempt_get"}:
+        from . import pm_work_start
+        if method == "pm_work_attempt_get":
+            return pm_work_start.get_attempt(ops, principal, workspace_id, params.get("attempt_id"))
+        return pm_work_start.list_attempts(ops, principal, workspace_id, params.get("work_item_id"),
+                                           after=params.get("after", 0), limit=params.get("limit", 50))
     if method in {"pm_conversation_proposals_list", "pm_conversation_proposal_get"}:
         from . import pm_conversation_proposals
         if method == "pm_conversation_proposal_get":
