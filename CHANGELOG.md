@@ -2,9 +2,6 @@
 
 ## Next release (unreleased)
 
-- Design: `docs/design/v1.3-e10-parity.md` specifies MCP/API parity for the
-  v1.3 work loop. This commit does not change the API, MCP tools, or skills.
-
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
