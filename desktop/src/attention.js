@@ -80,8 +80,19 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     const section = h('section', {class: 'global-group', 'aria-label': t('attention_' + key), 'data-inbox-group': key},
       h('div', {class: 'global-group-head'}, h('h2', {}, t('attention_' + key)), badge, viewAll),
       status, list, h('div', {class: 'global-group-foot'}, count, more, quiet));
-    const state = {key, path, field, row, ...options, section, list, status, badge, count, more, pages: 1, size: null, busy: false, readFailed: false};
-    more.onclick = () => refresh(state, state.pages + 1).catch(() => {});
+    const state = {key, path, field, row, ...options, section, list, status, badge, count, more, pages: 1, size: null, busy: false, pressed: false, readFailed: false};
+    more.onclick = () => {
+      if (state.busy || state.pressed) return;
+      state.pressed = true;
+      syncBusy();
+      const previous = new Set([...state.list.querySelectorAll('[data-inbox-key]')].map(node => node.dataset.inboxKey));
+      const release = ownFocus(more);
+      refresh(state, state.pages + 1).finally(() => {
+        state.pressed = false;
+        syncBusy();
+        if (release() && (more.hidden || more.disabled)) (firstAdded(state, previous) || refreshButton).focus();
+      }).catch(() => {});
+    };
     sections.push(state);
     return section;
   };
@@ -106,8 +117,49 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     add('active', '/operations?status=accepted,running,waiting_checks,waiting_external&limit=50', 'operations', opRow,
       {cursor: 'next_before', param: 'before'}),
   ] : [add('unread', '/work-items?unread=true&limit=50', 'work_items', workItemRow)];
-  const refreshButton = iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => refresh().catch(() => {})});
-  const syncBusy = () => { refreshButton.disabled = sections.some(section => section.busy); };
+  let refreshPressed = false;
+  const refreshButton = iconButton({icon: 'refresh-cw', label: t('global_refresh'), onClick: () => {
+    if (refreshPressed || sections.some(section => section.busy || section.pressed)) return;
+    refreshPressed = true;
+    syncBusy();
+    refresh().finally(() => {refreshPressed = false; syncBusy();}).catch(() => {});
+  }});
+  function sectionFlight(section) { return section.busy || section.pressed; }
+  function syncBusy() {
+    if (refreshPressed || sections.some(sectionFlight)) refreshButton.setAttribute('aria-disabled', 'true');
+    else refreshButton.removeAttribute('aria-disabled');
+    refreshButton.disabled = false;
+    for (const section of sections) {
+      if (sectionFlight(section)) {
+        section.more.disabled = false;
+        section.more.setAttribute('aria-disabled', 'true');
+        section.status.setAttribute('aria-busy', 'true');
+      } else {
+        section.more.disabled = false;
+        section.more.removeAttribute('aria-disabled');
+        section.status.removeAttribute('aria-busy');
+      }
+    }
+  }
+  function ownFocus(button) {
+    let owned = document.activeElement === button;
+    const onFocus = event => {
+      const target = event.target;
+      if (target === button) {owned = true; return;}
+      if ((target === document.body || target === document.documentElement) && (button.hidden || button.disabled || !button.isConnected)) return;
+      owned = false;
+    };
+    document.addEventListener('focusin', onFocus, true);
+    return () => {
+      document.removeEventListener('focusin', onFocus, true);
+      const active = document.activeElement;
+      return owned && (active === button || active === document.body || active == null);
+    };
+  }
+  function firstAdded(section, previous) {
+    const added = [...section.list.querySelectorAll('[data-inbox-key]')].filter(node => !previous.has(node.dataset.inboxKey));
+    return added[0]?.querySelector('a, button') || null;
+  }
   column.append(pageAlert, empty, ...groups, notes);
   main.append(pageHeader({title: t('nav_home'), actions: [refreshButton]}), tabs, layout);
   let serial = Promise.resolve();
@@ -120,7 +172,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
     onPending(value);
   };
   const load = async (section, wanted) => {
-    guard(); section.busy = true; section.more.disabled = true; syncBusy();
+    guard(); section.busy = true; syncBusy();
     if (section.size === null) section.status.replaceChildren(skeleton(3));
     const focusKey = section.list.contains(document.activeElement)
       ? document.activeElement.closest('[data-inbox-key]')?.dataset.inboxKey : null;
@@ -179,7 +231,7 @@ export async function attentionView({main, h, t, api, guard, caps, storageKey, r
       }));
       throw error;
     } finally {
-      section.busy = false; section.more.disabled = false; syncBusy();
+      section.busy = false; syncBusy();
     }
   };
   const refresh = (only, wanted) => {
