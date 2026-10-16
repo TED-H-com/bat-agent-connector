@@ -8,6 +8,9 @@
   duplicate submissions are ignored, and a terminal failure or refusal moves focus
   to "New request".
 
+- Refresh in a project no longer stays disabled when the project changes while
+  it is refreshing.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.
@@ -59,6 +62,12 @@
 - Conversation adoption advances as each original child operation finishes,
   removing the fixed one-second pause between completed steps. Child failures
   still stop the adoption; recovery keeps the original requests and receipts.
+
+- Board and Requirements now return to where you left them when you switch to
+  another project view or leave the project while they are still loading. On
+  narrow windows they no longer land about 50 px further down when the page
+  header finishes loading after the view. A view you switch away from while it
+  is still loading no longer moves the page when its read finishes.
 
 - Tools → Workbench preview opens a reversible layout with Today, Projects,
   Work and Resources, a project management selector and an optional Results

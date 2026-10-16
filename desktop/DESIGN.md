@@ -630,13 +630,17 @@ Existing quality, evidence, specs, package, handoff and publication controls mov
 intact into drawers reached from the Requirements overflow and work inspector;
 Board's overflow opens Batches. Drafts, original request keys and recovery controls
 remain owned by their existing modules. Both work inspectors expose the same
-Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh.
+Requirements tools; Batches stays in Board's header overflow. The shell provides the single refresh; whichever read completes with the current sequence resets the busy state so Refresh does not stay disabled when an event arrives during a refresh.
 `requirements?select=<work_item_id|requirement_id>` expands and scrolls to the
 selection, clearing a previous search when following an explicit selection link.
 Overview and Issues links preserve the exact revision, expand the destination row with
 `aria-current`, and focus its visible target. Work links focus the shared sheet title
 on narrow screens. Explicit destinations cancel queued scroll restoration; revisiting
-a view restores its own scroll. Unassigned work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
+a view restores its own scroll. Board and Requirements record their scroll position before
+a view switch hides them or on route departure (including during in-flight reads). The restore
+waits until the workspace header has settled. A hidden view, or a view retired before its mount
+finished, never moves the window. Unassigned
+work remains selectable before plan adoption. Preferences are bounded by connection/principal and workspace; fetched
 facts are reauthorized, never stored in the preference map.
 
 The package entry preserves the existing read-only catalogue. This foundation has
