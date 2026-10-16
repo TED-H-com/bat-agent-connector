@@ -503,7 +503,11 @@ def unsent(ctx: OpContext) -> bool:
 
 
 def latest_sent_turn(db, attempt_id: str) -> tuple[str | None, str | None]:
-    """Return `(message_id, operation_id)` of the highest-position Work follow-up that has crossed the send fence."""
+    """Return `(message_id, operation_id)` of the highest-position follow-up that may have started a turn.
+
+    An operation that ended ``NOT_ACCEPTED`` crossed the fence and was explicitly
+    rejected, so no turn started (§8.2). ``FOLLOW_UP_PROMPT_UNPROVEN`` still counts.
+    """
     if not installed(db):
         return None, None
     rows = db.execute(
@@ -518,10 +522,12 @@ def latest_sent_turn(db, attempt_id: str) -> tuple[str | None, str | None]:
         (attempt_id,),
     ).fetchall()
     for row in rows:
+        if row["error_code"] == "NOT_ACCEPTED":
+            continue
         sent = _fence_sent_from_row(dict(row))
         st = row["status"]
-        # Fence-crossed failures (NOT_ACCEPTED) still count. Pre-fence
-        # cancelled/failed rows do not: the turn never started.
+        # Pre-fence cancelled/failed rows do not count: the turn never started.
+        # Unknown and unproven rows do, because that turn may have started.
         if sent is True or st in {"succeeded", "uncertain", "needs_attention"}:
             return str(row["message_id"]), str(row["operation_id"])
     return None, None

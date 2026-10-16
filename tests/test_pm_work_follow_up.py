@@ -717,6 +717,40 @@ async def test_post_fence_disconnect_busy_reply_and_refusal_reconcile_by_echo(st
     assert blocked["input_receipt"]["blocked_by_operation_id"] == empty_id
 
 
+async def test_rejected_turn_is_not_a_sent_marker(start_ready, mock):
+    """BAT accepted:false proves no turn started, so the Result keeps the predecessor marker."""
+    w = start_ready
+    ops = w["d"].ops
+    att = await _start_managed_attempt(w, mock, key="p5-not-accepted-marker")  # gitleaks:allow (test idempotency key)
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    before = await _result(w, att)
+    assert before["conversation"]["turn_marker"] == att["turn_marker"]
+    assert "turn_marker_not_visible" not in before["completeness"]["reasons"]
+
+    mock.handlers["claude:send-message"] = lambda _params: {"accepted": False, "ok": False}
+    status, body = await _post(w, att, "rejected turn", key="p5-reject-marker")  # gitleaks:allow (test idempotency key)
+    assert status == 202, body
+    rejected_id = body["operation"]["operation_id"]
+    await _settle(ops, rejected_id)
+    rejected = await _get_op(w, rejected_id)
+    assert rejected["status"] == "failed" and rejected["error_code"] == "NOT_ACCEPTED", rejected
+    assert len(_frames(mock, f"batc-{rejected_id}")) == 1
+
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    result = await _result(w, att)
+    assert result["conversation"]["turn_marker"] == att["turn_marker"], result["conversation"]
+    assert result["conversation"]["turn_marker"] != f"batc-{rejected_id}"
+    assert "turn_marker_not_visible" not in result["completeness"]["reasons"], result["completeness"]
+
+    mock.handlers.pop("claude:send-message", None)
+    await _refresh(w, mock, att, att["turn_marker"], streaming=False)
+    nxt = await _queue(w, mock, att, "next still sends", "p5-after-rejected-marker")  # gitleaks:allow (test idempotency key)
+    await _settle(ops, nxt)
+    sent = await _get_op(w, nxt)
+    assert sent["status"] == "succeeded", sent
+    assert len(_frames(mock, f"batc-{nxt}")) == 1
+
+
 # --------------------------------------------------------------------------- 8
 
 
