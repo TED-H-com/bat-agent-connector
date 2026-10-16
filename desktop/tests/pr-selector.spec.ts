@@ -181,3 +181,134 @@ for (const native of [false, true]) {
     await expect(page.getByRole("button", {name: "下一頁"})).toBeVisible();
   });
 }
+
+function pullPage(pageNum: string, lastPage: number) {
+  const page = Number(pageNum || "1");
+  const more = page < lastPage;
+  return {pulls: [{number: page, title: `PR ${page}`, state: "open", draft: false}], has_more: more,
+    next_page: more ? page + 1 : null, loaded_scope: "owner/repo"};
+}
+
+async function openPulls(page: import("@playwright/test").Page, lastPage: number) {
+  let pulls = 0, holding = false, release = () => {};
+  let gate = Promise.resolve();
+  const caps = {actor: "test", scopes: ["observe"], api_version: 1, contract_version: "2026-10-08", hosts: [], repositories: [], features: {}};
+  const dispatch = async (input: any) => {
+    const url = new URL(input.path, "http://fixture");
+    if (input.method === "GET" && input.path === "/capabilities") return {status: 200, data: caps};
+    if (input.method === "GET" && input.path === "/bootstrap") return {status: 200, data: {capabilities: caps, sync: {version: 1, server_id: "server", principal_id: "principal", checkpoint: {cursor: 0, token: "token"}}}};
+    if (input.method === "GET" && url.pathname.includes("/pulls")) {
+      pulls++;
+      if (holding) await gate;
+      const repo = url.pathname.split("/").slice(2, 4).join("/");
+      const body = pullPage(url.searchParams.get("page") || "1", lastPage);
+      body.loaded_scope = repo;
+      return {status: 200, data: body};
+    }
+    return {status: 200, data: {sessions: [], work_items: [], operations: [], hosts: []}};
+  };
+  await page.addInitScript(() => sessionStorage.setItem("batc.dashboard.token", "fixture-token"));
+  await page.route("**/api/v1/**", async route => {
+    const request = route.request(), url = new URL(request.url());
+    const response = await dispatch({method: request.method(), path: url.pathname.slice("/api/v1".length) + url.search});
+    return route.fulfill({status: response.status, json: response.data});
+  });
+  await page.addInitScript(locale => Object.defineProperty(navigator, "language", {value: locale}), "en-US");
+  await page.goto("/dashboard/#/delivery");
+  await expect(page.locator("h2", {hasText: "Pull request"})).toBeVisible();
+  const repoInput = page.getByLabel("Repository");
+  await repoInput.fill("owner/repo");
+  await page.locator("summary", {hasText: "List Pull Requests"}).click();
+  const list = page.locator(".pr-list");
+  const refresh = page.getByRole("button", {name: "Refresh this page of PRs", exact: true});
+  const next = list.getByRole("button", {name: "Next", exact: true});
+  const previous = list.getByRole("button", {name: "Previous", exact: true});
+  const first = list.getByRole("button", {name: "#1 PR 1"});
+  await expect(first).toBeVisible();
+  await expect(first).toBeEnabled();
+  await expect(refresh).toBeEnabled();
+  // The delivery view also loads the list once on a short timer. Finish that
+  // reload before a test presses a control, so the press is not replaced.
+  const settled = pulls;
+  await refresh.click();
+  await expect.poll(() => pulls).toBeGreaterThan(settled);
+  await expect(first).toBeEnabled();
+  await expect(refresh).toBeEnabled();
+  return {repoInput, list, refresh, next, previous, gets: () => pulls, hold() {holding = true; gate = new Promise(resolve => {release = resolve;});}, release() {holding = false; const done = release; release = () => {}; done();}};
+}
+
+async function buttonBusy(button: import("@playwright/test").Locator) {
+  return button.evaluate(node => {
+    const region = node.closest(".pr-selector")?.querySelector(".pr-list");
+    const active = document.activeElement;
+    const activeName = !active ? "" : active === document.body || active === document.documentElement ? active.tagName
+      : active.getAttribute("aria-label") || (active.textContent || "").trim() || active.tagName;
+    return {focused: active === node, active: activeName,
+      ariaDisabled: node.getAttribute("aria-disabled"), disabled: (node as HTMLButtonElement).disabled, ariaBusy: region?.getAttribute("aria-busy") ?? null};
+  });
+}
+
+test("PR buttons stay disabled without aria-disabled while a changed repository reloads", async ({page}) => {
+  const ui = await openPulls(page, 2);
+  const pr = ui.list.getByRole("button", {name: "#1 PR 1"});
+  await ui.repoInput.blur();
+  await expect(pr).toBeEnabled();
+  const before = ui.gets();
+  ui.hold();
+  try {
+    await ui.repoInput.evaluate(node => {node.value = "other/repo"; node.dispatchEvent(new Event("input", {bubbles: true}));});
+    await ui.refresh.click();
+    await expect.poll(() => ui.gets()).toBe(before + 1);
+    expect(await pr.evaluate(node => ({disabled: (node as HTMLButtonElement).disabled, ariaDisabled: node.getAttribute("aria-disabled")}))).toEqual({disabled: true, ariaDisabled: null});
+  } finally {ui.release();}
+});
+
+test("PR next keeps focus and ignores a second press while the next page loads", async ({page}) => {
+  const ui = await openPulls(page, 3);
+  const before = ui.gets();
+  ui.hold();
+  try {
+    await ui.next.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => ui.gets()).toBe(before + 1);
+    expect(await buttonBusy(ui.next)).toEqual({focused: true, active: "Next", ariaDisabled: "true", disabled: false, ariaBusy: "true"});
+    await page.keyboard.press("Enter");
+    ui.release();
+    await expect(ui.list).not.toHaveAttribute("aria-busy", "true");
+    expect(ui.gets()).toBe(before + 1);
+    await expect(ui.next).toBeFocused();
+  } finally {ui.release();}
+});
+
+test("PR next on the last page moves focus to previous", async ({page}) => {
+  const ui = await openPulls(page, 2);
+  await ui.next.focus();
+  await page.keyboard.press("Enter");
+  await expect(ui.list.getByRole("button", {name: "#2 PR 2"})).toBeVisible();
+  await expect(ui.previous).toBeFocused();
+});
+
+test("PR previous on the first page moves focus to next", async ({page}) => {
+  const ui = await openPulls(page, 2);
+  await ui.next.click();
+  await expect(ui.list.getByRole("button", {name: "#2 PR 2"})).toBeVisible();
+  await ui.previous.focus();
+  await page.keyboard.press("Enter");
+  await expect(ui.list.getByRole("button", {name: "#1 PR 1"})).toBeVisible();
+  await expect(ui.next).toBeFocused();
+});
+
+test("PR refresh keeps focus while the list reloads", async ({page}) => {
+  const ui = await openPulls(page, 2);
+  const before = ui.gets();
+  ui.hold();
+  try {
+    await ui.refresh.focus();
+    await page.keyboard.press("Enter");
+    await expect.poll(() => ui.gets()).toBe(before + 1);
+    expect(await buttonBusy(ui.refresh)).toEqual({focused: true, active: "Refresh this page of PRs", ariaDisabled: "true", disabled: false, ariaBusy: "true"});
+    ui.release();
+    await expect(ui.list).not.toHaveAttribute("aria-busy", "true");
+    await expect(ui.refresh).toBeFocused();
+  } finally {ui.release();}
+});
