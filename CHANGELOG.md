@@ -2,9 +2,9 @@
 
 ## Next release (unreleased)
 
-- Pressing Check again in Settings → Agents keeps keyboard focus on the button
-  while the check runs by using `aria-disabled` and exposing `aria-busy` on the
-  eligibility status instead of disabling the button.
+- Settings → Agents: Tab reaches Check again while the first check runs, and
+  pressing it keeps keyboard focus on the button. The button looks unavailable
+  until the check finishes, and a second press is ignored.
 
 - The PM Work inspector adds a Start work panel and header action to start
   eligible Work cards. The panel previews readiness facts, explains candidate
