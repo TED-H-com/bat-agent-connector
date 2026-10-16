@@ -900,8 +900,8 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     } catch (err) {
       if (validAttempts(ticket, workId)) {
         statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
+        onLatestAttempt(null);
       }
-      onLatestAttempt(null);
     }
   }
 
@@ -1000,7 +1000,6 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       if (validWork(ticket, card.work_item_id)) {
         statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
       }
-      onLatestAttempt(null);
     } finally {
       if (!sameWork) {
         loading = false;
