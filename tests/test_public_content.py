@@ -35,7 +35,7 @@ def test_home_paths_and_conversations_report_categories_only():
 
 def test_cli_checks_tracked_config_without_disclosing_values(tmp_path):
     git = shutil.which("git")
-    subprocess.run([git, "init", "-q", str(tmp_path)], check=True)
+    subprocess.run([git, "init", "--template=", "-q", str(tmp_path)], check=True)
     secret = "synthetic-value-that-must-not-be-printed"
     (tmp_path / "hosts.toml").write_text(f'token = "{secret}"\n')
     subprocess.run([git, "-C", str(tmp_path), "add", "hosts.toml"], check=True)

@@ -79,7 +79,7 @@ def host_git_context(tmp_path, monkeypatch):
 def carriers(daemon, mock, tmp_path, host_git_context):
     origin, source = tmp_path / 'clone', tmp_path / 'worktree'
     origin.mkdir()
-    git(origin, 'init', '-b', 'main')
+    git(origin, 'init', '--template=', '-b', 'main')
     git(origin, 'config', 'user.name', 'Fixture')
     git(origin, 'config', 'user.email', 'fixture@example.invalid')
     (origin / 'base').write_text('base')

@@ -966,7 +966,7 @@ def repair_facts(d, cp, op, human):
     d.fleet.config.github.repos["o/r"] = repo
     area = Path(resource_policy.integration_area_path(d.fleet.config.host("h1"), "h1", "o/r", repo.integrate.remote_url))
     area.mkdir(parents=True)
-    git(area, "init", "-q", "--bare", str(area / "repo.git"))
+    git(area, "init", "--template=", "-q", "--bare", str(area / "repo.git"))
     for key, value in {"managed-clone": "true", "role": "integration", "host": "h1", "repository": "o/r",
                        "remote-url": repo.integrate.remote_url}.items():
         git(area / "repo.git", "config", "batc." + key, value)

@@ -14,9 +14,9 @@ from bat_agent_connector import api_auth, artifacts, platform_files
 from tests.mockbat import TOKEN, MockBat
 from tests.operation_helpers import settle_operations
 from tests.test_artifact_capture import daemon as daemon_fixture
-from tests.test_artifact_capture import human as human_fixture
 from tests.test_artifact_managed import execution as execution_fixture
 from tests.test_checkpoints import bat_writes, git, snapshot
+from tests.test_checkpoints import make_human as human_fixture
 
 
 def worktree_snapshot(path):
@@ -63,7 +63,7 @@ async def main():
         os.environ.pop("BATC_DEVICE_ID", None)
         mock = MockBat()
         await mock.start()
-        human = human_fixture.__wrapped__(root)
+        human = human_fixture(root)
         fixture = daemon_fixture.__wrapped__(mock, human, root)
         daemon = await anext(fixture)
         operation, sid, path = (await standalone_execution(daemon, mock, human, root) if "--start" in sys.argv
