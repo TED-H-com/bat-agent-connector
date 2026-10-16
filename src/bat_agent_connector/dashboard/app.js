@@ -15534,6 +15534,7 @@ function discussionTitle({ t, field, form, value, local = false }) {
 		box: h$1("div", { class: "pd-title" }, display, edit),
 		finish,
 		updateState,
+		editing: () => !edit.hidden,
 		update(next) {
 			current = next;
 			title.textContent = next;
@@ -41727,7 +41728,7 @@ if (!customElements.get(formConnectionTag)) customElements.define(formConnection
 	}
 });
 var pmAvailable = (caps) => caps?.features?.pm_workspaces?.version === 1 && caps?.scopes?.includes("observe");
-function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, savedText = "pm_saved", pendingText = "pm_pending" }) {
+function durableForm({ h, t, api, caps, guard, namespace, action, target, fields, params, preconditions, permitted, onSaved, errorBox, label, extra, canSend = () => true, onStateChange = () => {}, onConnectionChange = () => {}, recoverPermitted = permitted, requiredScope = "manage", onBeforeSaved = () => {}, onError = () => false, statusText = operationStatusLabel, pruneEmpty = false, readOnlyWhenUnavailable = false, keepEditable = () => false, savedText = "pm_saved", pendingText = "pm_pending" }) {
 	const storage = `batc.pm.${namespace}.${action}.${JSON.stringify(target)}`;
 	let saved = {
 		version: 1,
@@ -41883,9 +41884,10 @@ function durableForm({ h, t, api, caps, guard, namespace, action, target, fields
 		const autoChecking = initialChecking && (busy || receiptTimer !== null);
 		const inFlight = busy || autoChecking;
 		const frozen = busy || damaged || Boolean(saved.intent), locked = frozen || !allowed();
-		for (const input of Object.values(fields)) {
-			input.disabled = locked && (!readOnlyWhenUnavailable || frozen);
-			if (readOnlyWhenUnavailable) input.readOnly = locked;
+		for (const [name, input] of Object.entries(fields)) {
+			const preserve = !frozen && !damaged && keepEditable(name);
+			input.disabled = !preserve && locked && (!readOnlyWhenUnavailable || frozen);
+			if (readOnlyWhenUnavailable) input.readOnly = locked && !preserve;
 		}
 		const hadFocus = document.activeElement === button;
 		const hadResetFocus = document.activeElement === reset;
@@ -44707,6 +44709,7 @@ async function mountPmWorkspace({ main, h, t, api, caps, guard, namespace, works
 						recoverPermitted: () => permitted(false),
 						label: threadId === "new" ? "pd_send" : "pm_create_thread",
 						onStateChange: () => titleDraft?.updateState(),
+						keepEditable: (name) => name === "title" && Boolean(titleDraft?.editing()),
 						onBeforeSaved: (result, values) => {
 							if (values.content.trim()) localStorage.setItem(handoffKey, JSON.stringify({
 								threadId: result.thread_id,
