@@ -22,7 +22,25 @@ const REFUSAL_CODES = [
   'PM_HANDOFF_TOO_LARGE',
 ];
 
+let pageErrors: string[] = [];
+
+function recordPageErrors(p: any) {
+  if (!p || p._recordingPageErrors) return;
+  p._recordingPageErrors = true;
+  p.on('pageerror', (err: any) => pageErrors.push(err?.message || String(err)));
+}
+
 test.describe('Work Start UI (v1.3 P3)', () => {
+  test.beforeEach(async ({page, context}) => {
+    pageErrors = [];
+    recordPageErrors(page);
+    context.on('page', recordPageErrors);
+  });
+
+  test.afterEach(async () => {
+    expect(pageErrors).toEqual([]);
+  });
+
   test('1. Happy path, en 1440', async ({page}) => {
     await page.setViewportSize({width: 1440, height: 900});
     const f = workStartFixture();
@@ -524,6 +542,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
     // Verify zh-TW renders 未知 for unknown stage and does not leak machine stage to visible text
     const zhContext = await page.context().browser()!.newContext({locale: 'zh-TW', viewport: {width: 1440, height: 900}});
     const zhPage = await zhContext.newPage();
+    recordPageErrors(zhPage);
     const zhF = workStartFixture();
     zhF.state.attempts = [{
       attempt_id: 'att_' + '7'.repeat(32),
@@ -961,6 +980,7 @@ test.describe('Work Start UI (v1.3 P3)', () => {
   test('12. zh-TW at 390 width: ready Start button visible and blocked check row layout', async ({browser}) => {
     const context = await browser.newContext({locale: 'zh-TW', viewport: {width: 390, height: 844}});
     const page = await context.newPage();
+    recordPageErrors(page);
     const f = workStartFixture();
 
     await mountConversation(page, false, f.dispatch);
@@ -1012,4 +1032,59 @@ test.describe('Work Start UI (v1.3 P3)', () => {
 
     await context.close();
   });
+
+  for (const locale of ['en', 'zh-TW']) {
+    test(`13. Leave board and inspector close regression (${locale})`, async ({browser}) => {
+      const context = await browser.newContext({locale, viewport: {width: 1440, height: 900}});
+      const page = await context.newPage();
+      recordPageErrors(page);
+      const f = workStartFixture();
+
+      await mountConversation(page, false, f.dispatch);
+      await page.goto(route);
+      await page.locator('[data-pm-view="board"]').click();
+
+      // 1. Open a startable Work's inspector, so the start panel exists.
+      const card = page.locator(`[data-pm-kanban-work="${workId(1)}"]`);
+      await expect(card).toBeVisible();
+      const openControl = card.locator('[data-board-open]');
+      await openControl.click();
+
+      const inspector = page.locator('[data-work-inspector]');
+      await expect(inspector).toBeVisible();
+      await expect(inspector.locator('[data-work-section="start"]')).toBeVisible();
+      const headerBtn = inspector.locator('[data-work-start-open]');
+      await expect(headerBtn).toBeVisible();
+
+      // 2. Close the inspector with its own control.
+      const closeBtn = inspector.getByRole('button', {name: locale === 'zh-TW' ? '關閉' : 'Close', exact: true});
+      await closeBtn.click();
+
+      // 3. Assert:
+      // - no pageerror was recorded;
+      // - the board selection is cleared, and the header button is back in its closed state (updateHeaderButton(false));
+      // - focus returns to the card's open control.
+      expect(pageErrors).toEqual([]);
+      await expect(inspector).toHaveCount(0);
+      await expect(card.locator('[data-board-open]')).toHaveAttribute('aria-pressed', 'false');
+      await expect(page.locator('[data-board-open][aria-pressed="true"]')).toHaveCount(0);
+      await expect(page.locator('[data-work-start-open]')).toHaveCount(0);
+      await expect(openControl).toBeFocused();
+
+      // 4. Open it again, then leave the board for another view through the product UI, for example Discuss.
+      // Assert that the new view is visible and unmasked, with no [data-pm-source-pending] left after it settles, and still no page error.
+      await openControl.click();
+      await expect(inspector).toBeVisible();
+
+      const discussLink = inspector.locator('[data-work-discuss]');
+      await expect(discussLink).toBeVisible();
+      await discussLink.click();
+
+      await expect(page.locator('.pd-new-layout')).toBeVisible();
+      await expect(page.locator('[data-pm-source-pending]')).toHaveCount(0);
+      expect(pageErrors).toEqual([]);
+
+      await context.close();
+    });
+  }
 });

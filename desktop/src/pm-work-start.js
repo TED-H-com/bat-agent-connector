@@ -927,7 +927,6 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     previewSerial++;
     attemptsSerial++;
     loading = false;
-    checking = false;
     prepared = null;
     attempts = [];
     latestAttempt = null;
