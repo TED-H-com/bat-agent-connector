@@ -815,7 +815,7 @@ export function workResultPanel({h, t, api, alive, workspaceId, caps, errorBox, 
     container.replaceChildren();
 
     if (diffLoading.has(key)) {
-      container.append(h('p', {class: 'muted pm-work-result-diff-loading'}, t('ui_loading') || 'Loading…'));
+      container.append(h('p', {class: 'muted pm-work-result-diff-loading'}, t('wres_diff_loading')));
       return;
     }
 
