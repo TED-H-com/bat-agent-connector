@@ -1,3 +1,4 @@
+import {workbenchEnabled} from './workbench-mode.js';
 import {h} from './ui/dom.js';
 import {t} from './i18n.js';
 import {button, iconButton, menu, trapFocus} from './ui/components.js';
@@ -5,12 +6,26 @@ import {icon} from './ui/icons.js';
 import {lastWorkspace, lastProjectView, rememberWorkspace, forgetWorkspace, viewIcons, availableProjectViews} from './pm-workbench.js';
 
 export function dashboardShell({navigation, namespace, caps, api, guard, onEvents, errorBox}) {
+  const candidate = workbenchEnabled();
   const aside = navigation.box, main = document.getElementById('main'), top = document.querySelector('.top');
   const toggle = document.getElementById('workspace-menu'), crumb = document.getElementById('nav');
   const workspaceBlock = h('div', {class: 'shell-workspace-block'}), projectNav = h('div', {class: 'shell-project-nav'});
   const workTitle = h('div', {class: 'shell-work-header'}, h('h2', {class: 'shell-nav-label'}, t('ui_work')),
     h('a', {class: 'shell-all-projects', href: '#/projects'}, t('ui_all_projects')));
-  aside.prepend(workspaceBlock, projectNav, workTitle);
+  const daily = h('nav', {class: 'wc-daily', 'aria-label': t('wc_candidate'), hidden: !candidate});
+  const contextList = h('section', {class: 'wc-context-list', 'aria-label': t('wc_list'), hidden: true});
+  const contextNodes = candidate ? [workTitle, ...aside.querySelectorAll(':scope > .workspace-nav-heading, :scope > .workspace-search, :scope > .workspace-tree-status, :scope > .workspace-binding-note, :scope > .workspace-tree-scroll')] : [];
+  aside.prepend(workspaceBlock, daily, projectNav, workTitle);
+  if (candidate) {aside.after(contextList); document.body.classList.add('workbench-preview');}
+  function locateContext() {
+    if (!candidate) return;
+    const show = ['session', 'item', 'work', 'sessions'].includes(currentRoute);
+    contextList.hidden = !show || !media.matches;
+    const heading = contextNodes.find(node => node.matches('.workspace-nav-heading'));
+    if (heading) heading.querySelector('strong').textContent = t('wc_work');
+    document.body.classList.toggle('wc-has-list', show);
+    for (const node of contextNodes) (media.matches ? contextList : aside).insertBefore(node, media.matches ? null : aside.querySelector('.workspace-nav-footer'));
+  }
   let workspace = null, workspaces = [], views = [], currentView = '', currentRoute = '', disposed = false, serial = 0;
   let renderSignature = null;
   let menus = [], creator = null, phase = null;
@@ -40,16 +55,17 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     // Capture composing Escape before the legacy navigation's bubbling listener.
     if (event.key === 'Escape' && (event.isComposing || event.keyCode === 229)) {event.stopPropagation(); return;}
     if (event.key === 'Escape' && !event.isComposing && event.keyCode !== 229) {event.preventDefault(); closeDrawer();} else trapFocus(aside, event);}
-  function resize() {if (media.matches) closeDrawer(false);}
+  function resize() {if (media.matches) closeDrawer(false); locateContext();}
   document.addEventListener('keydown', keydown, true); media.addEventListener('change', resize);
   aside.addEventListener('click', event => {if (event.target.closest('a, [data-pm-view]') && !scrim.hidden) {closeDrawer(false); main.focus({preventScroll: true});}});
   const countBadge = () => h('span', {class: 'shell-count', hidden: true, 'data-pending-count': ''});
   const pendingCounts = [countBadge(), countBadge()];
   const pending = h('a', {href: '#/home', class: 'ui-button ghost shell-pending', 'aria-label': t('ui_pending'), title: t('ui_pending')}, icon('inbox'), pendingCounts[0]);
   const right = h('div', {class: 'shell-top-actions'}, pending, document.getElementById('live')); top.append(right);
+  const layoutUrl = new URL(location.href); layoutUrl.searchParams.set('workbench', candidate ? '0' : '1');
   const tools = menu({button: button({variant: 'ghost', icon: 'wrench', label: t('ui_tools'), 'data-shell-tools':''}), items: [
     ['operations', 'nav_operations'], ['delivery', 'nav_delivery'], ['artifact-review', 'ar_nav'], ['cleanup', 'nav_cleanup'], ['sessions', 'nav_sessions'],
-  ].map(([id, key]) => ({label: t(key), href: '#/' + id})).concat(caps()?.features?.pm_workspaces ? [{key: 'create-workspace', label: t('ui_new_workspace'), href: '#/pm/new'}] : [])});
+  ].map(([id, key]) => ({label: t(key), href: '#/' + id})).concat([{key: 'workbench', label: t(candidate ? 'wc_classic' : 'wc_candidate'), href: layoutUrl.href}]).concat(caps()?.features?.pm_workspaces ? [{key: 'create-workspace', label: t('ui_new_workspace'), href: '#/pm/new'}] : [])});
   tools.querySelector(':scope > button').append(icon('chevron-down'));
   aside.querySelector('.workspace-nav-footer').replaceChildren(h('a', {href: '#/home', 'data-shell-pending': '', 'aria-label': t('ui_pending')}, icon('inbox'), h('span', {}, t('ui_pending')), pendingCounts[1]), tools,
     h('a', {href: '#/settings', 'data-shell-settings':''}, icon('settings'), h('span', {}, t('ui_settings'))));
@@ -63,10 +79,22 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     menus.push(control); return control;
   }
   function render() {
+    layoutUrl.hash = location.hash; tools.querySelector('[data-menu-key=workbench]').href = layoutUrl.href;
     const signature = JSON.stringify([workspace, workspaces, views, currentView, currentRoute, phase, threadCount, threadMore]);
     if (signature === renderSignature) return; renderSignature = signature;
     for (const control of menus) control.dispose(); menus = [];
     workspaceBlock.replaceChildren(); projectNav.replaceChildren(); crumb.replaceChildren();
+    if (candidate) {
+      const project = workspace ? `#/pm/${encodeURIComponent(workspace.workspace_id)}/` : '';
+      const current = currentRoute === 'home' ? 'today' : ['session','item','work','sessions'].includes(currentRoute) || currentRoute === 'pm' && currentView === 'board' ? 'work' : currentRoute === 'pm' && currentView === 'agents' ? 'resources' : ['pm','project','projects'].includes(currentRoute) ? 'projects' : '';
+      daily.replaceChildren(...[
+        ['today', 'layout-dashboard', '#/home'],
+        ['projects', 'folder', project ? project + 'overview' : '#/projects'],
+        ['work', 'list-checks', project && views.includes('board') ? project + 'board' : '#/sessions'],
+        ['resources', 'cpu', project && views.includes('agents') ? project + 'agents' : '#/settings?section=connection'],
+      ].map(([id, glyph, href]) => h('a', {class: 'ui-button ghost', href, 'data-daily': id, 'aria-current': id === current ? 'page' : 'false'}, icon(glyph), t('wc_' + id))));
+      locateContext();
+    }
     aside.classList.toggle('has-pm-context', Boolean(workspace)); workTitle.hidden = !workspace;
     const createEntry = tools.querySelector('[data-menu-key=create-workspace]'); if (createEntry) {createEntry.hidden = Boolean(workspace); createEntry.setAttribute('aria-disabled', String(Boolean(workspace)));}
     if (workspace) {
@@ -93,7 +121,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
       item: 'ui_work_item', work: 'workspace_work_details', approvals: 'bulk_title', start: 'start_title_page',
       published: 'pub_title', orchestrate: 'orch_title', op: 'link_operation', host: 'host', task: 'task_title',
       worktree: 'obs_worktree', dispatch: 'dispatch_title'}[currentRoute];
-    const routeTitle = routeKey ? t(routeKey) : '';
+    const routeTitle = candidate && currentRoute === 'home' ? t('wc_today') : routeKey ? t(routeKey) : '';
     const workSession = workspace && ['session', 'item', 'work'].includes(currentRoute);
     if (workSession) crumb.append(h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_work')),
       h('span', {class: 'shell-breadcrumb-divider', 'aria-hidden': 'true'}, '/'), h('span', {class: 'shell-crumb-view'}, t('ui_session')));
@@ -103,7 +131,7 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     }
     crumb.append(h('button', {type: 'button', class: 'shell-mobile-name', title: workspace?.name || routeTitle,
       'aria-label': workspace?.name || routeTitle || t('ui_menu'), 'aria-controls': 'workspace-sidebar', 'aria-expanded': 'false', onclick: openDrawer}, workspace?.name || routeTitle));
-    workspaceBlock.hidden = !workspaceBlock.children.length; projectNav.hidden = !projectNav.children.length;
+    workspaceBlock.hidden = !workspaceBlock.children.length; projectNav.hidden = candidate || !projectNav.children.length;
 
   }
   let threadCount = null, threadMore = false;
@@ -147,6 +175,6 @@ export function dashboardShell({navigation, namespace, caps, api, guard, onEvent
     dispose() {disposed = true; serial++; off(); menus.forEach(control => control.dispose()); tools.dispose(); closeDrawer(false);
       document.removeEventListener('keydown', keydown, true); media.removeEventListener('change', resize); scrim.remove();
       // The static connection control belongs to the application, not this namespace.
-      top.append(document.getElementById('live')); right.remove(); creator = null;},
+      top.append(document.getElementById('live')); right.remove(); creator = null; contextList.remove(); document.body.classList.remove('workbench-preview', 'wc-has-list');},
   };
 }
