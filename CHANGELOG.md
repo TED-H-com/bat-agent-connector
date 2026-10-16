@@ -2,6 +2,8 @@
 
 ## Next release (unreleased)
 
+- Starting a Work now ends failed when that start stops on something resuming cannot pass, such as a paused or reopened workspace, a changed adopted plan, or an edited Work, project, association, or package. After that cause is gone, starting the same Work again is accepted. A stop that can be repaired, such as a withdrawn credential or a lowered workspace role, still waits and can be resumed.
+
 - The hidden Board and Requirements scroll checks wait for the read the test held, so a second read of the same address cannot make that wait miss.
 
 - Projects and work items: Tab reaches Add while a creation request is sending,
