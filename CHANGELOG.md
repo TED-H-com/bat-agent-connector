@@ -2,6 +2,9 @@
 
 ## Next release (unreleased)
 
+- Refresh in a project no longer stays disabled when the project changes while
+  it is refreshing.
+
 - Settings → Agents: Tab reaches Check again while the first check runs, and
   pressing it keeps keyboard focus on the button. The button looks unavailable
   until the check finishes, and a second press is ignored.

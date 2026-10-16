@@ -1688,6 +1688,7 @@ export async function mountPmWorkspace({main, h, t, api, caps, guard, namespace,
       status.replaceChildren(errorBox(error, {within:status}));
       throw error;
     } finally {
+      if (ticket === sequence) {refreshing = false; refresh.disabled = false;}
       settleReadComplete();
     }
   }
