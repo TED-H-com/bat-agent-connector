@@ -17512,6 +17512,7 @@ function projectBrief({ h, t, api, alive, workspaceId, workspace, permitted, for
 		if (!create) return;
 		const submit = create.box.querySelector("button[type=submit]"), recovering = create.locked();
 		create.box.hidden = !recovering && (!head || !canCreate());
+		submit.hidden = !recovering && !create.canSubmit();
 		const unavailable = submit.disabled || submit.getAttribute("aria-disabled") === "true";
 		pending.hidden = create.box.hidden || submit.hidden || !unavailable;
 		pending.textContent = t(create.checking() ? "pd_report_pending" : "pd_report_unavailable");
