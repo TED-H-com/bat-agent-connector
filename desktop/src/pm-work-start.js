@@ -18,7 +18,7 @@ const PRECONDITION_KEYS = [
   'expected_latest_attempt_id',
 ];
 
-export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: getPlan, onStartableChange = () => {}}) {
+export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, permitted, form, errorBox, plan: getPlan, onStartableChange = () => {}, onLatestAttempt = () => {}}) {
   const panelErrorBox = (err, opts = {}) => {
     const code = err?.code || '';
     const panelKey = `wst_error_${code}`;
@@ -896,9 +896,11 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       if (editor?.locked()) {
         editor.recheck();
       }
+      onLatestAttempt(latestAttempt);
     } catch (err) {
       if (validAttempts(ticket, workId)) {
         statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
+        onLatestAttempt(null);
       }
     }
   }
@@ -938,6 +940,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
     attemptsView.replaceChildren();
     editorView.replaceChildren();
     statusView.replaceChildren();
+    onLatestAttempt(null);
     updateUI();
   }
 
@@ -965,6 +968,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       partialAttempts = false;
       attemptsView.replaceChildren();
       statusView.replaceChildren();
+      onLatestAttempt(null);
     }
 
     const ticket = ++workSerial;
@@ -991,19 +995,7 @@ export function workStartPanel({h, t, api, alive, namespace, workspaceId, caps, 
       const editor = getEditor(card);
       editor?.checkPlanChange();
 
-      const attemptsTicket = ++attemptsSerial;
-      const attemptsData = await fetchAttempts(card.work_item_id, attemptsTicket);
-      if (!validAttempts(attemptsTicket, card.work_item_id)) return;
-      if (attemptsData) {
-        attempts = attemptsData.attempts;
-        visibilityFiltered = attemptsData.visibilityFiltered;
-        partialAttempts = attemptsData.partial;
-        latestAttempt = attempts.length > 0 ? attempts[attempts.length - 1] : null;
-      }
-
-      if (editor?.locked()) {
-        editor.recheck();
-      }
+      await refreshAttempts();
     } catch (err) {
       if (validWork(ticket, card.work_item_id)) {
         statusView.replaceChildren(panelErrorBox(err, {within: statusView}));
