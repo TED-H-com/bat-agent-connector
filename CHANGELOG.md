@@ -2,6 +2,11 @@
 
 ## Next release (unreleased)
 
+- Design spec for publishing a Work Result as a pull request
+  (`docs/design/v1.3-e03-publish-pr.md`). The Dashboard still cannot publish:
+  `github.pr.publish` remains a label until that spec is implemented. The spec
+  adds no merge, deploy, or session controls on the Result.
+
 - Capture a remote file: the button you pressed keeps keyboard focus and
   ignores a second press until that preview or save finishes. A button that
   cannot be used stays unavailable. When Save closes, or Capture another file
